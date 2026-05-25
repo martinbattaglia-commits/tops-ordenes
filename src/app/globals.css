@@ -1,0 +1,422 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =========================================================================
+   Logística TOPS — Globals
+   Tokens + base + componentes utilitarios respetando el manual de identidad
+   ========================================================================= */
+
+@layer base {
+  :root {
+    --tops-blue-900: #050555;
+    --tops-blue-700: #214576;
+    --tops-red: #c90812;
+    --neutral-50: #f7f8fb;
+    --neutral-100: #eef1f6;
+    --neutral-200: #dde3ec;
+    --neutral-300: #c2cad6;
+    --neutral-400: #8a94a6;
+    --neutral-500: #5a6577;
+    --neutral-700: #2a3340;
+    --neutral-900: #0b1220;
+    --status-success: #0e7c3a;
+    --status-warning: #b45309;
+    --status-danger: #c90812;
+    --status-info: #214576;
+
+    /* Safe area for iOS notch + home indicator */
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+    --safe-left: env(safe-area-inset-left);
+    --safe-right: env(safe-area-inset-right);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Prevent Safari iOS zoom on input focus when font-size < 16px */
+  }
+
+  body {
+    @apply bg-bg-page text-fg-primary font-sans antialiased;
+    font-feature-settings: "kern", "liga", "tnum";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  /* Inputs nunca menores a 16px en mobile — anti-zoom iOS */
+  input,
+  select,
+  textarea,
+  button {
+    font-family: inherit;
+    font-size: 16px;
+  }
+
+  @media (min-width: 768px) {
+    input,
+    select,
+    textarea {
+      font-size: 14px;
+    }
+  }
+
+  /* tabular numerals for currency / counters */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* =========================================================================
+   Fonts — Gotham con fallback graceful a Montserrat (Google)
+   Si las .otf no están presentes, simplemente cae a Montserrat sin romper.
+   ========================================================================= */
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Book.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Black.otf") format("opentype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer components {
+  /* ---- Buttons ---------------------------------------------------- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-bold leading-none transition-all duration-200;
+    @apply ease-enter select-none whitespace-nowrap;
+    letter-spacing: 0.04em;
+    min-height: 40px;
+  }
+  .btn:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-tops-blue-900 text-white hover:bg-tops-blue-700;
+  }
+  .btn-danger {
+    @apply bg-tops-red text-white hover:opacity-90;
+  }
+  .btn-ghost {
+    @apply bg-white text-fg-primary border border-stroke-soft hover:bg-neutral-50;
+  }
+  .btn-link {
+    @apply text-fg-link bg-transparent hover:underline px-0 py-0 min-h-0;
+  }
+  .btn-sm {
+    @apply text-xs px-3 py-1.5;
+    min-height: 32px;
+  }
+  .btn-lg {
+    @apply text-base px-6 py-3;
+    min-height: 48px;
+  }
+
+  /* ---- Inputs ----------------------------------------------------- */
+  .input {
+    @apply block w-full rounded-md border border-stroke-soft bg-white px-3 py-2.5 text-fg-primary;
+    @apply focus:outline-none focus:border-tops-blue-700 focus:ring-2 focus:ring-tops-blue-700/20;
+    @apply transition-colors duration-150;
+    min-height: 44px;
+  }
+  .input.mono {
+    @apply font-mono;
+  }
+  .input:disabled {
+    @apply bg-neutral-50 text-fg-muted cursor-not-allowed;
+  }
+  .textarea {
+    @apply input min-h-[96px] py-2.5 resize-y;
+  }
+  .field-label {
+    @apply mb-1.5 text-eyebrow-sm uppercase text-fg-secondary;
+  }
+  .field-label .req {
+    @apply ml-1 text-tops-red;
+  }
+
+  /* ---- Cards ------------------------------------------------------ */
+  .card {
+    @apply rounded-lg border border-stroke-soft bg-white shadow-xs;
+  }
+  .card-pad {
+    @apply p-5;
+  }
+  .featured-stroke {
+    @apply relative;
+  }
+  .featured-stroke::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    @apply bg-tops-red rounded-t-lg;
+  }
+
+  /* ---- Badges ----------------------------------------------------- */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs font-bold uppercase;
+    letter-spacing: 0.08em;
+  }
+  .badge .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  .badge-success {
+    background: rgba(14, 124, 58, 0.1);
+    color: var(--status-success);
+  }
+  .badge-warning {
+    background: rgba(180, 83, 9, 0.1);
+    color: var(--status-warning);
+  }
+  .badge-danger {
+    background: rgba(201, 8, 18, 0.1);
+    color: var(--status-danger);
+  }
+  .badge-info {
+    background: rgba(33, 69, 118, 0.1);
+    color: var(--status-info);
+  }
+  .badge-muted {
+    background: rgba(138, 148, 166, 0.12);
+    color: var(--neutral-500);
+  }
+
+  /* ---- Eyebrow / labels ------------------------------------------- */
+  .eyebrow {
+    @apply text-eyebrow uppercase text-tops-red;
+  }
+  .eyebrow-tiny {
+    @apply text-[11px] font-bold uppercase tracking-[0.14em] text-tops-red mb-2;
+  }
+
+  /* ---- Table ------------------------------------------------------ */
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .tbl thead th {
+    @apply text-left text-fg-muted font-bold uppercase text-[10px] tracking-[0.12em];
+    @apply px-4 py-3 border-b border-stroke-soft bg-neutral-50;
+  }
+  .tbl tbody td {
+    @apply px-4 py-3 border-b border-stroke-soft text-fg-primary;
+  }
+  .tbl tbody tr {
+    @apply transition-colors duration-150 cursor-pointer;
+  }
+  .tbl tbody tr:hover {
+    @apply bg-neutral-50;
+  }
+  .tbl .order-num {
+    @apply font-mono font-bold text-tops-blue-900;
+  }
+  .tbl .cell-cliente {
+    @apply flex flex-col;
+  }
+  .tbl .cell-cliente .cuit {
+    @apply text-[11px] text-fg-muted font-mono mt-0.5;
+  }
+
+  /* ---- Layout shell ----------------------------------------------- */
+  .page-header {
+    @apply flex items-start justify-between gap-4 mb-6 flex-wrap;
+  }
+  .page-title {
+    @apply text-3xl font-bold text-fg-brand tracking-tight m-0;
+  }
+  .page-subtitle {
+    @apply text-fg-secondary text-sm mt-1;
+  }
+
+  .kpi-grid {
+    @apply grid gap-4 mb-4;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .kpi {
+    @apply p-5 relative;
+  }
+  .kpi-label {
+    @apply text-eyebrow-sm uppercase text-fg-muted mb-2;
+  }
+  .kpi-value {
+    @apply text-3xl font-bold text-fg-brand tracking-tight tabular;
+  }
+  .kpi-value .unit {
+    @apply text-base font-medium text-fg-muted ml-1;
+  }
+  .kpi-delta {
+    @apply inline-flex items-center gap-1 text-xs font-bold mt-2;
+  }
+  .kpi-delta.up {
+    @apply text-status-success;
+  }
+  .kpi-delta.down {
+    @apply text-tops-red;
+  }
+  .kpi-delta .vs {
+    @apply text-fg-muted font-medium ml-1;
+  }
+  .kpi-spark {
+    @apply absolute right-3 top-3 w-[70px] h-7;
+  }
+
+  /* ---- Sidebar / shell -------------------------------------------- */
+  .sidebar {
+    @apply bg-tops-blue-900 text-white flex flex-col;
+    padding-top: max(20px, var(--safe-top));
+  }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium;
+    @apply text-white/75 hover:text-white hover:bg-white/10 cursor-pointer transition-colors;
+  }
+  .sidebar-link.active {
+    @apply bg-white/10 text-white;
+  }
+  .sidebar-link.danger-accent {
+    @apply relative;
+  }
+  .sidebar-link.danger-accent::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    @apply bg-tops-red rounded-r-md;
+  }
+
+  /* ---- Chips / segmented ------------------------------------------ */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-stroke-soft bg-white px-3 py-2 text-sm font-medium;
+    @apply hover:border-tops-blue-700 transition-colors cursor-pointer;
+  }
+  .chip.selected {
+    @apply bg-tops-blue-900 text-white border-tops-blue-900;
+  }
+  .chip-group {
+    @apply flex flex-wrap gap-2;
+  }
+
+  /* ---- Stepper ---------------------------------------------------- */
+  .stepper {
+    @apply flex items-center gap-1.5 text-xs;
+  }
+  .step-item {
+    @apply flex items-center gap-2 px-3 py-1.5 rounded-md text-fg-muted font-semibold;
+  }
+  .step-item.active {
+    @apply bg-tops-blue-900 text-white;
+  }
+  .step-item.done {
+    @apply text-status-success;
+  }
+  .step-item .num {
+    @apply inline-flex items-center justify-center w-5 h-5 rounded-full border border-current text-[10px] font-bold;
+  }
+  .step-item.active .num {
+    @apply bg-white text-tops-blue-900 border-white;
+  }
+  .step-item.done .num {
+    @apply bg-status-success text-white border-status-success;
+  }
+  .step-sep {
+    @apply inline-block w-6 h-px bg-stroke-soft;
+  }
+
+  /* ---- Scrollarea ------------------------------------------------- */
+  .scroll-area {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* =========================================================================
+   Mobile-first overrides — ≤900px
+   ========================================================================= */
+@media (max-width: 900px) {
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .kpi {
+    padding: 16px;
+  }
+  .kpi-value {
+    font-size: 22px;
+  }
+  .kpi-spark {
+    display: none;
+  }
+  .page-title {
+    font-size: 22px;
+  }
+
+  /* Table → cards on mobile */
+  .tbl-mobile-cards thead {
+    display: none;
+  }
+  .tbl-mobile-cards tbody tr {
+    display: block;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--neutral-200);
+  }
+  .tbl-mobile-cards tbody td {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0 !important;
+    border: none !important;
+    font-size: 13px;
+  }
+  .tbl-mobile-cards tbody td::before {
+    content: attr(data-label);
+    color: var(--neutral-400);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+    align-self: center;
+  }
+}
+
+/* Print: hide chrome, focus on PDF preview */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}

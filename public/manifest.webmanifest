@@ -1,0 +1,40 @@
+{
+  "name": "TOPS Órdenes",
+  "short_name": "TOPS",
+  "description": "Sistema digital de órdenes de servicio · Logística TOPS",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F7F8FB",
+  "theme_color": "#050555",
+  "lang": "es-AR",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nueva orden",
+      "short_name": "Nueva",
+      "url": "/orders/new",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Órdenes",
+      "short_name": "Órdenes",
+      "url": "/orders"
+    }
+  ],
+  "categories": ["business", "productivity", "utilities"]
+}

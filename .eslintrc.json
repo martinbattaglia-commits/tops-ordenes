@@ -1,0 +1,15 @@
+{
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "react/no-unescaped-entities": "off",
+    "@next/next/no-img-element": "off"
+  },
+  "overrides": [
+    {
+      "files": ["src/lib/pdf/**/*.tsx"],
+      "rules": {
+        "jsx-a11y/alt-text": "off"
+      }
+    }
+  ]
+}

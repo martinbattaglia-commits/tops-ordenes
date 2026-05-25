@@ -1,0 +1,65 @@
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { NextResponse, type NextRequest } from "next/server";
+import { env } from "@/lib/env";
+
+/**
+ * Mantiene la sesión refrescada en cada request y bloquea las rutas
+ * privadas si el usuario no está autenticado.
+ *
+ * Rutas:
+ *  - /login        → pública
+ *  - /api/auth/*   → pública
+ *  - todo el resto → requiere sesión (excepto en demo mode)
+ */
+export async function updateSession(request: NextRequest) {
+  const response = NextResponse.next({ request });
+
+  // Sin Supabase configurado dejamos pasar (demo mode).
+  if (!env.supabase.configured) {
+    return response;
+  }
+
+  const supabase = createServerClient(env.supabase.url!, env.supabase.anonKey!, {
+    cookies: {
+      get(name: string) {
+        return request.cookies.get(name)?.value;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        response.cookies.set({ name, value, ...options });
+      },
+      remove(name: string, options: CookieOptions) {
+        response.cookies.set({ name, value: "", ...options });
+      },
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+  const isPublic =
+    pathname === "/login" ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/icons") ||
+    pathname.startsWith("/fonts") ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/sw.js" ||
+    pathname === "/favicon.ico";
+
+  if (!user && !isPublic) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.searchParams.set("from", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (user && pathname === "/login") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
+
+  return response;
+}

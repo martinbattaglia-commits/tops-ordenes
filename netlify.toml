@@ -1,0 +1,45 @@
+# =========================================================================
+# Netlify — TOPS Órdenes
+# Deploy automático del proyecto Next.js. Requiere el plugin
+# @netlify/plugin-nextjs (se instala automáticamente desde el UI).
+# =========================================================================
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NEXT_TELEMETRY_DISABLED = "1"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# ---- PWA: el SW debe responderse SIEMPRE fresco -------------------------
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"
+    Cache-Control = "public, max-age=3600"
+
+# ---- Iconos y assets estáticos ------------------------------------------
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000, immutable"
+
+# ---- Headers de seguridad globales --------------------------------------
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), geolocation=(self), microphone=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
