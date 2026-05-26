@@ -1,11 +1,31 @@
 import { NextResponse } from "next/server";
 import { listOrders } from "@/lib/data/orders";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { fmtDate } from "@/lib/utils";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { rows } = await listOrders({ pageSize: 1000 });
+
+  // Audit log: registrar export
+  if (!env.app.demoMode) {
+    const supabase = createClient();
+    const admin = createAdminClient();
+    if (supabase && admin) {
+      const { data: { user } } = await supabase.auth.getUser();
+      admin
+        .from("audit_log")
+        .insert({
+          user_id: user?.id ?? null,
+          entity: "orders",
+          action: "export_csv",
+          payload: { row_count: rows.length },
+        })
+        .then(() => undefined);
+    }
+  }
 
   const header = [
     "public_id",

@@ -1,11 +1,17 @@
 /**
  * Lectura tipada y centralizada de variables de entorno.
- * Si Supabase no está configurado, la app cae en modo demo automáticamente
- * (queda usable para evaluar la UI sin aprovisionar la DB).
+ *
+ * Reglas de modo:
+ *  - PRODUCCIÓN (default): Supabase es obligatorio. Si falta, los data accessors
+ *    lanzan un error claro en lugar de caer en mock.
+ *  - DEMO MODE: solo se activa si `NEXT_PUBLIC_DEMO_MODE=1` está seteado de
+ *    forma explícita. Útil para evaluación de UI sin DB.
  */
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+const explicitDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "1";
 
 export const env = {
   supabase: {
@@ -15,11 +21,15 @@ export const env = {
     configured: Boolean(supabaseUrl && supabaseAnonKey),
   },
   app: {
-    url: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-    demoMode:
-      process.env.NEXT_PUBLIC_DEMO_MODE === "1" ||
-      !supabaseUrl ||
-      !supabaseAnonKey,
+    url:
+      process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.NODE_ENV === "production"
+        ? "https://tops-ordenes.netlify.app"
+        : "http://localhost:3030"),
+    /** Solo true si fue forzado explícitamente. Sin keys → NO es demo, es error. */
+    demoMode: explicitDemo,
+    /** Para mensajes de error: la DB falta */
+    needsSupabase: !supabaseUrl || !supabaseAnonKey,
   },
   email: {
     resendKey: process.env.RESEND_API_KEY,
@@ -34,5 +44,18 @@ export const env = {
     },
   },
 } as const;
+
+/**
+ * Garantiza que Supabase esté disponible. Llamar al inicio de cualquier
+ * server action o route handler que requiera DB.
+ */
+export function requireSupabase(): void {
+  if (env.app.demoMode) return; // demo explícito: caller decide
+  if (env.app.needsSupabase) {
+    throw new Error(
+      "Supabase no está configurado. Setea NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY y SUPABASE_SERVICE_ROLE_KEY en el entorno. Para evaluación sin DB, podés forzar NEXT_PUBLIC_DEMO_MODE=1."
+    );
+  }
+}
 
 export type Env = typeof env;

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
+import { NotificationsBell } from "@/components/shell/NotificationsBell";
 
 export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const router = useRouter();
@@ -63,13 +64,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span className="capitalize">{fechaHoy}</span>
         </div>
-        <button
-          aria-label="Notificaciones"
-          className="relative inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-neutral-100"
-        >
-          <Icon name="bell" size={17} />
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-tops-red" />
-        </button>
+        <NotificationsBell />
         <Link href="/orders/new" className="btn btn-danger btn-sm">
           <Icon name="plus" size={14} stroke={2.2} />
           <span className="hidden sm:inline">Nueva orden</span>

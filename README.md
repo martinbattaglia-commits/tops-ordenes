@@ -51,18 +51,61 @@ npm run dev
 
 ## Configurar Supabase (producción)
 
-1. Crear un proyecto en [supabase.com](https://supabase.com).
-2. Desde **Settings → API** copiar las claves a `.env.local`:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY` (sólo backend, NO exponer)
-3. Aplicar las migraciones del directorio `supabase/migrations/`:
-   - Opción A (CLI): `supabase db push`
-   - Opción B (UI): copiar y pegar cada `.sql` en el **SQL Editor** del dashboard, en orden.
-4. Crear el primer usuario admin desde **Authentication → Add user**, luego en la
-   tabla `profiles` cambiar su `role` a `admin`.
-5. (Opcional) Configurar **Email templates** propios en Supabase para los
-   magic links y confirmaciones, usando la paleta corporativa.
+### 1 · Crear el proyecto
+
+1. [app.supabase.com](https://app.supabase.com) → **New project**
+   - Name: `tops-ordenes-prod`
+   - Region: **South America (São Paulo)** (latencia ~20 ms a BsAs)
+   - Plan: Free (alcanza para arrancar)
+2. Esperar ~2 min al provisioning.
+3. **Settings → API** → copiar a `.env.local`:
+   ```
+   NEXT_PUBLIC_SUPABASE_URL       = https://<ref>.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY  = eyJhbGc...
+   SUPABASE_SERVICE_ROLE_KEY      = eyJhbGc...   ← jamás exponer al cliente
+   ```
+
+### 2 · Aplicar las 4 migraciones
+
+**Opción A — Supabase CLI (recomendado):**
+```bash
+brew install supabase/tap/supabase
+supabase login
+supabase link --project-ref <YOUR_REF>
+./scripts/setup-supabase.sh
+```
+
+**Opción B — Manual:** copiar y pegar en orden cada archivo de
+`supabase/migrations/` en el **SQL Editor** del dashboard:
+
+| Migración | Crea |
+| --- | --- |
+| `0001_init.sql` | Enums, tablas (profiles, clients, operators, services_catalog, orders, order_services, email_sends, audit_log), índices, RLS por rol, trigger handle_new_user |
+| `0002_seed.sql` | Catálogo de 13 servicios + 4 operadores |
+| `0003_storage.sql` | Buckets `signatures`, `pdfs`, `attachments` con policies |
+| `0004_extended_schema.sql` | `notifications` + `attachments` tables, columnas adicionales, triggers de notification y updated_at, **realtime publication**, vista `v_orders_dashboard` |
+
+### 3 · Crear el primer admin
+
+1. **Authentication → Users → Add user** con email corporativo y password fuerte.
+2. En el **SQL Editor**:
+   ```sql
+   update public.profiles set role = 'admin', active = true
+   where email = 'tu-email@logisticatops.com';
+   ```
+3. Loguearse en la app → el usuario ya tiene permisos full. Desde
+   `/settings/users` puede invitar al resto del equipo (cada uno recibe
+   email con magic link para definir su propia contraseña).
+
+### 4 · (Opcional) Personalizar emails de Supabase
+
+**Authentication → Email Templates** — editar las plantillas de:
+- Invite user
+- Magic Link
+- Reset Password
+- Confirm signup
+
+Aplicar la paleta TOPS (`#050555` / `#C90812`) para que el branding sea consistente.
 
 ### Storage
 
@@ -212,6 +255,50 @@ npm run typecheck    # tsc --noEmit
 ```
 
 ---
+
+## Realtime
+
+La app suscribe a la tabla `orders` y `notifications` vía Supabase Realtime
+(habilitado en `0004_extended_schema.sql`):
+
+- **`<RealtimeRefresher />`** en `/dashboard` y `/orders` ejecuta
+  `router.refresh()` cuando cambia cualquier orden → KPIs y listados se
+  actualizan sin recargar.
+- **`<NotificationsBell />`** en el topbar muestra el badge con unread
+  count y abre un popover con las últimas 15 notificaciones. Cada cambio
+  de estado de orden dispara un trigger PostgreSQL que inserta una
+  notification, que llega al cliente vía WebSocket.
+
+Para sumar más tablas a realtime:
+```sql
+alter publication supabase_realtime add table public.<tabla>;
+```
+
+## Rate limiting
+
+`src/lib/rate-limit.ts` — bucket in-memory por IP/userId.
+
+| Acción | Límite | Ventana |
+| --- | --- | --- |
+| `createOrder` | 10 | 1 minuto |
+| `sendPasswordResetLink` | 5 | 1 hora |
+| `inviteUser` | 20 | 1 hora |
+
+> Para escala multi-instancia (Netlify Functions horizontales) cambiar a un
+> backend centralizado (Upstash Ratelimit / Redis). El in-memory cubre el
+> escenario actual ANNUAL y abuso casual.
+
+## Auditoría
+
+Tabla `audit_log` registra acciones críticas con `user_id`, `entity`,
+`action`, `payload`, `ip`, `ts`. Eventos cubiertos:
+
+- `create_signed` — alta de orden firmada
+- `invite` — invitación de usuario
+- `export_csv` — descarga del CSV de órdenes
+- (extensible para futuros eventos)
+
+Solo `admin` y `supervisor` pueden leerla (policy en `0001_init.sql`).
 
 ## Roadmap inmediato
 

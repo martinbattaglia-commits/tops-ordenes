@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { StatusBadge } from "@/components/StatusBadge";
+import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { listOrders } from "@/lib/data/orders";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import type { OrderStatus, Depot } from "@/lib/types";
@@ -46,6 +47,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
 
   return (
     <div className="p-4 lg:p-8">
+      <RealtimeRefresher />
       <div className="page-header">
         <div>
           <div className="eyebrow-tiny">Historial · {total} órdenes</div>

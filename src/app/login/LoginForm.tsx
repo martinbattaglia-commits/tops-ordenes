@@ -84,14 +84,19 @@ export default function LoginForm({
             Contraseña
             <span className="req">*</span>
           </label>
-          <button
-            type="button"
-            className="text-xs text-fg-link font-semibold hover:underline"
-            onClick={handleMagic}
-            disabled={pending}
-          >
-            Enviarme link de acceso
-          </button>
+          <div className="flex items-center gap-3 text-xs">
+            <a href="/auth/forgot-password" className="text-fg-link font-semibold hover:underline">
+              ¿Olvidaste tu contraseña?
+            </a>
+            <button
+              type="button"
+              className="text-fg-link font-semibold hover:underline"
+              onClick={handleMagic}
+              disabled={pending}
+            >
+              Magic link
+            </button>
+          </div>
         </div>
         <div className="relative">
           <Icon

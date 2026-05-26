@@ -4,8 +4,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { Sparkline } from "@/components/charts/Sparkline";
 import { DepotChart } from "@/components/charts/DepotChart";
 import { ServiceMixDonut } from "@/components/charts/ServiceMixDonut";
+import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { getDashboardKpis, listRecentOrders } from "@/lib/data/orders";
-import { fmtCurrency, fmtDate, monthName } from "@/lib/utils";
+import { fmtCurrency, monthName } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
 
@@ -16,6 +17,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="p-4 lg:p-8">
+      <RealtimeRefresher />
       <div className="page-header">
         <div>
           <div className="eyebrow-tiny">Panel de control · {monthName(now)} {now.getFullYear()}</div>

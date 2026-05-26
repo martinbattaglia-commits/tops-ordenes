@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
 
 const NAV_BOTTOM: NavItem[] = [
   { href: "/templates", label: "Plantillas email", icon: "mail" },
+  { href: "/settings/users", label: "Usuarios", icon: "clients" },
   { href: "/settings", label: "Configuración", icon: "gear" },
 ];
 
