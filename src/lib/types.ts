@@ -14,7 +14,16 @@ export type OrderStatus =
   | "CANCELADA"
   | "OBSERVADA";
 
-export type ServiceUnit = "hs" | "km" | "pal" | "mes" | "un";
+export type ServiceUnit = "hs" | "km" | "pal" | "mes" | "un" | "m3" | "viaje";
+
+/** Categorías visuales del wizard de servicios. */
+export type ServiceCategory =
+  | "personal"
+  | "especial"
+  | "carga"
+  | "desconsolidado"
+  | "admin"
+  | "transporte";
 
 export type UserRole = "admin" | "operaciones" | "supervisor" | "cliente";
 
@@ -36,7 +45,15 @@ export interface ServiceCatalogItem {
   label: string;
   unit: ServiceUnit;
   rate: number;
-  icon: string | null;
+  /** Cantidad mínima a facturar aunque el cliente pida menos. */
+  min_qty?: number;
+  /** Subtotal mínimo en ARS. Si qty*rate cae debajo de esto, se factura este monto. */
+  min_billing?: number;
+  /** Observación visible como tooltip / badge. */
+  observ?: string;
+  /** Categoría visual del wizard. Si está undefined va en "Otros". */
+  category?: ServiceCategory;
+  icon?: string | null;
   active: boolean;
 }
 

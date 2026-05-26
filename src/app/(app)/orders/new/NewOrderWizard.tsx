@@ -6,11 +6,36 @@ import { Icon } from "@/components/Icon";
 import { cn, fmtCurrency, isValidCuit, sha256 } from "@/lib/utils";
 import { createOrder } from "./actions";
 import type { Client, Operator, ServiceCatalogItem } from "@/lib/types";
+import {
+  VEHICLES,
+  getVehicle,
+  getVehicleZone,
+  suggestVehicleByPallets,
+  TRANSPORT_RULES,
+  type VehicleZoneKey,
+  type VehicleSpec,
+} from "@/lib/pricing/vehicles";
+import {
+  computeServiceLine,
+  computeTransportLine,
+  sumLines,
+  ivaEstimate,
+  type LineItem,
+} from "@/lib/pricing/calculator";
+import { SERVICE_CATEGORIES, unitLabel } from "@/lib/services-catalog";
 
 interface Props {
   clients: Client[];
   operators: Operator[];
   catalog: ServiceCatalogItem[];
+}
+
+interface TransportSelection {
+  vehicle_slug: string;
+  zone: VehicleZoneKey;
+  trips: number;
+  second_trip_discount: boolean;
+  surcharge: "none" | "17_19" | "19_21" | "21_plus";
 }
 
 interface WizardState {
@@ -25,6 +50,8 @@ interface WizardState {
   operator_id: string;
   services: string[];
   qty: Record<string, number>;
+  /** Configuración opcional de transporte (1 vehículo + zona por orden). */
+  transport: TransportSelection | null;
   h_start: string;
   h_end: string;
   pallets: number;
@@ -40,7 +67,7 @@ interface WizardState {
 }
 
 const STEPS = ["Cliente", "Operativo", "Servicio", "Firma"];
-const DRAFT_KEY = "tops:new-order:draft:v1";
+const DRAFT_KEY = "tops:new-order:draft:v2";
 
 /** Parsea un value de <input type="number"> a entero ≥ 0. Nunca devuelve NaN. */
 function safeNonNegInt(raw: string): number {
@@ -77,18 +104,48 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
   const update = (patch: Partial<WizardState>) =>
     setData((d) => ({ ...d, ...patch }));
 
-  const total = useMemo(() => {
-    return data.services.reduce((acc, slug) => {
-      const s = catalog.find((c) => c.slug === slug);
+  // ==========================================================================
+  // Motor de Precio Inteligente:
+  //  - Cada servicio seleccionado pasa por computeServiceLine (aplica min_qty
+  //    y min_billing del catálogo).
+  //  - Si hay transporte configurado, computeTransportLine añade el viaje
+  //    con su zona, descuento de segundo viaje y recargos por horario.
+  //  - El total final es la suma de líneas. La UI muestra desglose y badges
+  //    de "mínimo aplicado".
+  // ==========================================================================
+  const lines: LineItem[] = useMemo(() => {
+    const out: LineItem[] = [];
+    for (const slug of data.services) {
+      const svc = catalog.find((c) => c.slug === slug);
+      if (!svc) continue;
       const q = data.qty[slug] ?? 1;
-      return acc + (s ? s.rate * q : 0);
-    }, 0);
-  }, [data.services, data.qty, catalog]);
+      out.push(computeServiceLine(svc, q));
+    }
+    if (data.transport) {
+      const v = getVehicle(data.transport.vehicle_slug);
+      const z = v ? getVehicleZone(v.slug, data.transport.zone) : undefined;
+      if (v && z) {
+        out.push(
+          computeTransportLine({
+            vehicle: v,
+            zone: z,
+            trips: data.transport.trips,
+            secondTripDiscount: data.transport.second_trip_discount,
+            surcharge: data.transport.surcharge,
+          })
+        );
+      }
+    }
+    return out;
+  }, [data.services, data.qty, data.transport, catalog]);
+
+  const total = useMemo(() => sumLines(lines), [lines]);
+  const ivaEst = useMemo(() => ivaEstimate(total), [total]);
 
   const canAdvance = () => {
     if (stepIdx === 0) return data.razon.trim().length > 1 && data.cuit.replace(/\D/g, "").length === 11;
     if (stepIdx === 1) return Boolean(data.depot && data.operator_id);
-    if (stepIdx === 2) return data.services.length > 0;
+    if (stepIdx === 2) return data.services.length > 0 || data.transport !== null;
     return true;
   };
 
@@ -110,22 +167,39 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         return Number.isFinite(n) ? n : def;
       };
 
-      const services = data.services.map((slug) => {
-        const s = catalog.find((c) => c.slug === slug);
-        if (!s) {
-          throw new Error(`Servicio "${slug}" ya no está en el catálogo. Refrescá la página.`);
-        }
-        const qty = Math.max(1, numOrDefault(data.qty[slug], 1));
-        const rate = Math.max(0, numOrDefault(s.rate, 0));
-        return {
-          service_slug: slug,
-          label: s.label,
-          qty,
-          unit: s.unit,
-          rate,
-          subtotal: qty * rate,
-        };
-      });
+      // Convertimos las líneas calculadas (con mínimos aplicados) al formato
+      // OrderService que espera el server. Cada línea ya tiene su subtotal
+      // final correcto — el server confía en estos valores y revalida con Zod.
+      //
+      // Defensa contra DB sin migration 0007: si el enum aún no tiene
+      // 'm3' o 'viaje', los mapeamos a 'un' para que el insert no falle.
+      // El label preserva la unidad real ("Picking · 5 m³" o "Qubo · 1 viaje")
+      // para que el comprobante PDF y el detalle de orden lo muestren bien.
+      const SUPPORTED_UNITS = new Set(["hs", "km", "pal", "mes", "un"]);
+      const normalizeUnit = (u: string): "hs" | "km" | "pal" | "mes" | "un" => {
+        return (SUPPORTED_UNITS.has(u) ? u : "un") as "hs" | "km" | "pal" | "mes" | "un";
+      };
+
+      const services = lines
+        .filter((ln) => ln.service_slug || ln.vehicle_slug)
+        .map((ln) => {
+          const slug = ln.service_slug ?? `transporte:${ln.vehicle_slug}`;
+          const realUnit = ln.unit || "un";
+          // Embebemos la unidad real en el label cuando no es estándar, así
+          // queda visible en el comprobante sin depender de la migration.
+          const isExtendedUnit = !SUPPORTED_UNITS.has(realUnit);
+          const label = isExtendedUnit
+            ? `${ln.label} · ${unitLabel(realUnit)}`
+            : ln.label;
+          return {
+            service_slug: slug,
+            label,
+            qty: Math.max(1, numOrDefault(ln.qty_effective, 1)),
+            unit: normalizeUnit(realUnit),
+            rate: Math.max(0, numOrDefault(ln.rate, 0)),
+            subtotal: Math.max(0, numOrDefault(ln.subtotal, 0)),
+          };
+        });
 
       // Pre-check rápido del lado cliente — evita un round-trip si falta
       // algo obvio. El server siempre vuelve a validar.
@@ -136,7 +210,7 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         return;
       }
       if (services.length === 0) {
-        setError("Seleccioná al menos un servicio antes de confirmar.");
+        setError("Seleccioná al menos un servicio o un transporte antes de confirmar.");
         setSubmitting(false);
         return;
       }
@@ -218,7 +292,14 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
             <StepOperativo operators={operators} data={data} update={update} />
           )}
           {stepIdx === 2 && (
-            <StepServicio catalog={catalog} data={data} update={update} total={total} />
+            <StepServicio
+              catalog={catalog}
+              data={data}
+              update={update}
+              total={total}
+              lines={lines}
+              ivaEst={ivaEst}
+            />
           )}
           {stepIdx === 3 && (
             <StepFirma
@@ -283,7 +364,7 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
           <SummaryCard
             data={data}
             total={total}
-            catalog={catalog}
+            lines={lines}
             operator={operators.find((o) => o.id === data.operator_id)}
           />
         </aside>
@@ -648,11 +729,15 @@ function StepServicio({
   data,
   update,
   total,
+  lines,
+  ivaEst,
 }: {
   catalog: ServiceCatalogItem[];
   data: WizardState;
   update: (p: Partial<WizardState>) => void;
   total: number;
+  lines: LineItem[];
+  ivaEst: number;
 }) {
   const toggle = (slug: string) => {
     const next = data.services.includes(slug)
@@ -663,97 +748,53 @@ function StepServicio({
     update({ services: next, qty });
   };
 
-  const bump = (slug: string, delta: number) => {
-    const cur = data.qty[slug] ?? 1;
-    update({ qty: { ...data.qty, [slug]: Math.max(1, cur + delta) } });
+  const setQty = (slug: string, qty: number) => {
+    update({ qty: { ...data.qty, [slug]: Math.max(1, qty) } });
   };
+
+  // Servicios agrupados por categoría visible.
+  const grouped = useMemo(() => {
+    const byCat: Record<string, ServiceCatalogItem[]> = {};
+    for (const svc of catalog) {
+      if (!svc.active) continue;
+      const cat = svc.category ?? "otros";
+      (byCat[cat] = byCat[cat] || []).push(svc);
+    }
+    return byCat;
+  }, [catalog]);
 
   return (
     <div>
       <div className="eyebrow-tiny">Paso 3 de 4</div>
       <h2 className="text-xl font-bold text-fg-brand mb-1">Detalle del servicio</h2>
       <p className="text-sm text-fg-secondary mb-5">
-        Seleccioná los servicios prestados. La estimación se calcula en tiempo real.
+        Configurá transporte y/o servicios operativos. El precio se calcula en tiempo real
+        con tarifas vigentes 2026.
       </p>
 
-      <Field label="Tipo de servicio" required>
-        <div className="chip-group">
-          {catalog.map((s) => (
-            <button
-              type="button"
-              key={s.slug}
-              onClick={() => toggle(s.slug)}
-              className={cn("chip", data.services.includes(s.slug) && "selected")}
-            >
-              {data.services.includes(s.slug) && (
-                <Icon name="check" size={12} stroke={2.4} />
-              )}
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </Field>
+      {/* ============ TRANSPORTE ============ */}
+      <TransportSection data={data} update={update} />
 
-      <div className="mt-5">
-        <Field label="Cantidades por servicio">
-          <div className="flex flex-col gap-2">
-            {data.services.length === 0 && (
-              <div className="text-sm text-fg-muted italic p-3">
-                Seleccioná al menos un servicio.
-              </div>
-            )}
-            {data.services.map((slug) => {
-              const s = catalog.find((c) => c.slug === slug);
-              if (!s) return null;
-              const q = data.qty[slug] ?? 1;
-              return (
-                <div
-                  key={slug}
-                  className="grid grid-cols-[1fr_auto_auto_auto] sm:grid-cols-[1.4fr_120px_80px_1fr] items-center gap-2 sm:gap-3 px-3 py-2 bg-neutral-50 rounded-md"
-                >
-                  <div className="text-sm font-semibold truncate">{s.label}</div>
-                  <div className="flex items-center gap-1 bg-white border border-stroke-soft rounded-md p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => bump(slug, -1)}
-                      className="w-8 h-8 grid place-items-center text-fg-secondary hover:bg-neutral-100 rounded"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      value={q}
-                      onChange={(e) =>
-                        update({
-                          qty: {
-                            ...data.qty,
-                            [slug]: Math.max(1, parseInt(e.target.value, 10) || 1),
-                          },
-                        })
-                      }
-                      className="w-10 text-center bg-transparent border-none font-bold text-sm outline-none"
-                      style={{ fontSize: "14px" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => bump(slug, 1)}
-                      className="w-8 h-8 grid place-items-center text-fg-secondary hover:bg-neutral-100 rounded"
-                    >
-                      +
-                    </button>
-                  </div>
-                  <div className="text-xs text-fg-muted font-bold">{s.unit}</div>
-                  <div className="text-sm font-bold text-fg-brand text-right tabular">
-                    {fmtCurrency(s.rate * q)}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Field>
-      </div>
+      {/* ============ SERVICIOS POR CATEGORÍA ============ */}
+      {SERVICE_CATEGORIES.map((cat) => {
+        const items = grouped[cat.key] ?? [];
+        if (items.length === 0) return null;
+        return (
+          <CategorySection
+            key={cat.key}
+            title={cat.label}
+            iconName={cat.icon as "user" | "forklift" | "package" | "bill"}
+            items={items}
+            selected={data.services}
+            qty={data.qty}
+            onToggle={toggle}
+            onQty={setQty}
+          />
+        );
+      })}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-5">
+      {/* ============ Datos operativos complementarios ============ */}
+      <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Field label="Hora inicio">
           <input
             className="input"
@@ -770,7 +811,7 @@ function StepServicio({
             onChange={(e) => update({ h_end: e.target.value })}
           />
         </Field>
-        <Field label="Pallets">
+        <Field label="Pallets totales">
           <input
             className="input"
             type="number"
@@ -806,25 +847,415 @@ function StepServicio({
         </Field>
       </div>
 
-      <div className="mt-5 p-4 rounded-lg border border-stroke-soft bg-gradient-to-br from-tops-blue-900/5 to-tops-red/5 flex items-center gap-4">
-        <div className="w-9 h-9 rounded-md bg-tops-blue-900 text-white grid place-items-center shrink-0">
-          <Icon name="sparkle" size={16} stroke={2} />
+      {/* ============ Desglose visual + total ============ */}
+      <BreakdownCard lines={lines} total={total} ivaEst={ivaEst} />
+    </div>
+  );
+}
+
+// ============================================================================
+// Sección: Transporte (vehículos + zonas)
+// ============================================================================
+
+function TransportSection({
+  data,
+  update,
+}: {
+  data: WizardState;
+  update: (p: Partial<WizardState>) => void;
+}) {
+  const [expanded, setExpanded] = useState<boolean>(data.transport !== null);
+
+  const suggested = useMemo(
+    () => (data.pallets > 0 ? suggestVehicleByPallets(data.pallets) : undefined),
+    [data.pallets]
+  );
+
+  const setVehicle = (slug: string) => {
+    if (data.transport?.vehicle_slug === slug) {
+      // toggle off
+      update({ transport: null });
+      return;
+    }
+    update({
+      transport: {
+        vehicle_slug: slug,
+        zone: data.transport?.zone ?? "CABA",
+        trips: data.transport?.trips ?? 1,
+        second_trip_discount: data.transport?.second_trip_discount ?? false,
+        surcharge: data.transport?.surcharge ?? "none",
+      },
+    });
+    setExpanded(true);
+  };
+
+  const patchTransport = (patch: Partial<TransportSelection>) => {
+    if (!data.transport) return;
+    update({ transport: { ...data.transport, ...patch } });
+  };
+
+  const currentVehicle = data.transport ? getVehicle(data.transport.vehicle_slug) : undefined;
+
+  return (
+    <div className="mb-6">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between p-3 rounded-lg bg-tops-blue-900 text-white"
+      >
+        <div className="flex items-center gap-3">
+          <Icon name="truck" size={18} stroke={2} />
+          <div className="text-left">
+            <div className="font-bold text-sm">Transporte por viaje</div>
+            <div className="text-[11px] text-white/70">
+              {data.transport
+                ? `${currentVehicle?.label ?? "—"} · ${getVehicleZone(data.transport.vehicle_slug, data.transport.zone)?.label ?? "—"}`
+                : "Tarifario febrero 2026 · Por viaje (no por hora)"}
+            </div>
+          </div>
+        </div>
+        <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 p-4 rounded-lg border border-stroke-soft bg-white">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-fg-muted mb-2">
+            Seleccioná vehículo
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+            {VEHICLES.map((v) => {
+              const overCap = data.pallets > v.capacity_pallets;
+              const isSelected = data.transport?.vehicle_slug === v.slug;
+              const isSuggested = suggested?.slug === v.slug;
+              return (
+                <button
+                  type="button"
+                  key={v.slug}
+                  onClick={() => setVehicle(v.slug)}
+                  disabled={overCap}
+                  className={cn(
+                    "p-3 rounded-lg border text-left transition-all duration-200 relative",
+                    isSelected
+                      ? "border-tops-red bg-tops-red/5 shadow-ring-brand"
+                      : overCap
+                        ? "border-stroke-soft bg-neutral-50 opacity-50 cursor-not-allowed"
+                        : "border-stroke-soft bg-white hover:border-tops-blue-700/40"
+                  )}
+                  title={overCap ? `${v.label}: capacidad ${v.capacity_pallets} pallets, pediste ${data.pallets}` : undefined}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Icon name="truck" size={14} />
+                    <span className="text-sm font-bold">{v.label}</span>
+                  </div>
+                  <div className="text-[10px] text-fg-muted">{v.brand}</div>
+                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-tops-blue-700/10 text-tops-blue-700">
+                      {v.capacity_pallets} pal
+                    </span>
+                    {isSuggested && !isSelected && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-success/10 text-status-success">
+                        Sugerido
+                      </span>
+                    )}
+                    {overCap && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-danger/10 text-status-danger">
+                        Excede
+                      </span>
+                    )}
+                  </div>
+                  {isSelected && (
+                    <Icon name="check-circle" size={14} className="absolute top-2 right-2 text-tops-red" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {data.transport && currentVehicle && (
+            <>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-fg-muted mb-2">
+                Zona / distancia
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
+                {currentVehicle.zones.map((z) => {
+                  const isSel = data.transport!.zone === z.zone;
+                  return (
+                    <button
+                      type="button"
+                      key={z.zone}
+                      onClick={() => patchTransport({ zone: z.zone })}
+                      className={cn(
+                        "p-2.5 rounded-md border text-left transition-all duration-150",
+                        isSel
+                          ? "border-tops-blue-900 bg-tops-blue-900 text-white"
+                          : "border-stroke-soft bg-white hover:border-tops-blue-700/40"
+                      )}
+                    >
+                      <div className="text-xs font-bold">{z.label}</div>
+                      <div className={cn("text-[11px] tabular font-mono mt-0.5", isSel ? "text-white/85" : "text-fg-muted")}>
+                        {z.price === null ? "A cotizar" : fmtCurrency(z.price)}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                <Field label="Cantidad de viajes">
+                  <input
+                    className="input"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    step={1}
+                    value={data.transport.trips}
+                    onChange={(e) =>
+                      patchTransport({ trips: Math.max(1, safeNonNegInt(e.target.value) || 1) })
+                    }
+                  />
+                </Field>
+                <Field label="Recargo horario (camión)">
+                  <select
+                    className="input"
+                    value={data.transport.surcharge}
+                    onChange={(e) =>
+                      patchTransport({ surcharge: e.target.value as TransportSelection["surcharge"] })
+                    }
+                  >
+                    <option value="none">Horario diurno (sin recargo)</option>
+                    <option value="17_19">17–19 hs (+25%)</option>
+                    <option value="19_21">19–21 hs (+50%)</option>
+                    <option value="21_plus">+21 hs (+100%)</option>
+                  </select>
+                </Field>
+                <Field label="2do viaje al 50%" help="Aplica si hay retorno / vuelta vacío">
+                  <label className="input flex items-center gap-2 cursor-pointer h-[44px]">
+                    <input
+                      type="checkbox"
+                      checked={data.transport.second_trip_discount}
+                      onChange={(e) =>
+                        patchTransport({ second_trip_discount: e.target.checked })
+                      }
+                      className="w-4 h-4 accent-tops-blue-900"
+                    />
+                    <span className="text-sm">Activar descuento</span>
+                  </label>
+                </Field>
+              </div>
+
+              <details className="text-[11px] text-fg-muted">
+                <summary className="cursor-pointer hover:text-fg-primary">
+                  Ver reglas operativas del tarifario
+                </summary>
+                <ul className="mt-2 pl-4 space-y-1 list-disc">
+                  {TRANSPORT_RULES.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </details>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Sección: Categoría de servicios (toggle + qty inline)
+// ============================================================================
+
+function CategorySection({
+  title,
+  iconName,
+  items,
+  selected,
+  qty,
+  onToggle,
+  onQty,
+}: {
+  title: string;
+  iconName: "user" | "forklift" | "package" | "bill";
+  items: ServiceCatalogItem[];
+  selected: string[];
+  qty: Record<string, number>;
+  onToggle: (slug: string) => void;
+  onQty: (slug: string, qty: number) => void;
+}) {
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon name={iconName} size={14} className="text-tops-blue-700" />
+        <div className="text-[11px] font-bold uppercase tracking-wider text-fg-secondary">
+          {title}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-2">
+        {items.map((s) => {
+          const isSel = selected.includes(s.slug);
+          const q = qty[s.slug] ?? 1;
+          return (
+            <div
+              key={s.slug}
+              className={cn(
+                "rounded-md border transition-colors duration-150",
+                isSel
+                  ? "border-tops-blue-700 bg-tops-blue-700/5"
+                  : "border-stroke-soft bg-white hover:border-tops-blue-700/30"
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => onToggle(s.slug)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+              >
+                <div
+                  className={cn(
+                    "w-5 h-5 rounded border-2 grid place-items-center shrink-0",
+                    isSel ? "border-tops-blue-700 bg-tops-blue-700" : "border-stroke-strong"
+                  )}
+                >
+                  {isSel && <Icon name="check" size={11} stroke={2.6} className="text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-fg-primary truncate">{s.label}</div>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    <span className="text-[11px] font-mono text-tops-red font-bold tabular">
+                      {fmtCurrency(s.rate)} <span className="text-fg-muted font-sans font-normal">/ {unitLabel(s.unit)}</span>
+                    </span>
+                    {s.min_qty != null && s.min_qty > 1 && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
+                        Mín {s.min_qty} {unitLabel(s.unit)}
+                      </span>
+                    )}
+                    {s.min_billing != null && s.min_billing > 0 && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
+                        Mín {fmtCurrency(s.min_billing)}
+                      </span>
+                    )}
+                  </div>
+                  {s.observ && (
+                    <div className="text-[11px] text-fg-muted mt-1 italic">{s.observ}</div>
+                  )}
+                </div>
+              </button>
+              {isSel && (
+                <div className="px-3 pb-2.5 flex items-center gap-3 border-t border-stroke-soft pt-2">
+                  <div className="text-[11px] text-fg-muted font-bold uppercase">Cantidad</div>
+                  <div className="flex items-center gap-1 bg-white border border-stroke-soft rounded-md p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onQty(s.slug, q - 1)}
+                      className="w-7 h-7 grid place-items-center text-fg-secondary hover:bg-neutral-100 rounded"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      value={q}
+                      min={1}
+                      step={1}
+                      onChange={(e) =>
+                        onQty(s.slug, Math.max(1, parseInt(e.target.value, 10) || 1))
+                      }
+                      className="w-12 text-center bg-transparent border-none font-bold text-sm outline-none"
+                      style={{ fontSize: "14px" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onQty(s.slug, q + 1)}
+                      className="w-7 h-7 grid place-items-center text-fg-secondary hover:bg-neutral-100 rounded"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-fg-muted">{unitLabel(s.unit)}</div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Card: Desglose visual del precio inteligente
+// ============================================================================
+
+function BreakdownCard({
+  lines,
+  total,
+  ivaEst,
+}: {
+  lines: LineItem[];
+  total: number;
+  ivaEst: number;
+}) {
+  return (
+    <div className="mt-6 rounded-lg border border-stroke-soft bg-gradient-to-br from-tops-blue-900/5 to-tops-red/5 overflow-hidden">
+      <div className="px-4 py-3 border-b border-stroke-soft flex items-center gap-3 bg-white/60">
+        <div className="w-8 h-8 rounded-md bg-tops-blue-900 text-white grid place-items-center shrink-0">
+          <Icon name="sparkle" size={14} stroke={2} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-[11px] font-bold uppercase tracking-[0.06em] text-tops-red">
-            Estimación inteligente
+            Precio Inteligente
           </div>
           <div className="text-xs text-fg-secondary">
-            Basada en tarifas vigentes (mayo {new Date().getFullYear()}).
+            Tarifas oficiales Logística TOPS · ENERO–FEBRERO 2026
           </div>
         </div>
+      </div>
+
+      {lines.length === 0 ? (
+        <div className="p-4 text-center text-sm text-fg-muted italic">
+          Seleccioná al menos un servicio o un transporte para ver el cálculo.
+        </div>
+      ) : (
+        <div className="p-3 space-y-1.5">
+          {lines.map((ln) => (
+            <div
+              key={ln.key}
+              className="grid grid-cols-[1fr_auto] gap-3 items-start px-3 py-2 bg-white/70 rounded-md"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-fg-primary truncate">{ln.label}</div>
+                <div className="text-[11px] text-fg-muted flex items-center gap-1.5 flex-wrap mt-0.5">
+                  <span>
+                    {ln.qty_effective} {unitLabel(ln.unit)} × {fmtCurrency(ln.rate)}
+                  </span>
+                  {ln.min_applied && ln.min_reason && (
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
+                      Mínimo aplicado
+                    </span>
+                  )}
+                </div>
+                {ln.min_reason && (
+                  <div className="text-[11px] text-status-warning mt-0.5">{ln.min_reason}</div>
+                )}
+              </div>
+              <div className="text-sm font-bold text-fg-brand tabular shrink-0 self-center">
+                {fmtCurrency(ln.subtotal)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="px-4 py-3 border-t border-stroke-soft bg-white/40 flex items-center justify-between">
+        <div className="text-xs text-fg-secondary">
+          IVA estimado (21%): <strong className="text-fg-primary">{fmtCurrency(ivaEst)}</strong>
+        </div>
         <div className="text-right">
+          <div className="text-[10px] uppercase tracking-wider text-fg-muted font-bold">
+            Total neto
+          </div>
           <div className="text-2xl font-bold text-fg-brand tabular -tracking-[0.01em]">
             {fmtCurrency(total)}
           </div>
-          <div className="text-[10px] uppercase tracking-wider text-fg-muted">
-            + IVA · neto
-          </div>
+          <div className="text-[10px] uppercase tracking-wider text-fg-muted">+ IVA</div>
         </div>
       </div>
     </div>
@@ -1061,12 +1492,12 @@ function StepFirma({
 function SummaryCard({
   data,
   total,
-  catalog,
+  lines,
   operator,
 }: {
   data: WizardState;
   total: number;
-  catalog: ServiceCatalogItem[];
+  lines: LineItem[];
   operator?: Operator;
 }) {
   return (
@@ -1085,27 +1516,25 @@ function SummaryCard({
 
       <div className="mt-3 pt-3 border-t border-stroke-soft">
         <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-fg-muted mb-2">
-          Servicios
+          Items facturables
         </div>
-        {data.services.length === 0 && (
-          <div className="text-xs text-fg-muted italic">Sin servicios seleccionados.</div>
+        {lines.length === 0 && (
+          <div className="text-xs text-fg-muted italic">Sin items seleccionados.</div>
         )}
-        {data.services.map((slug) => {
-          const s = catalog.find((c) => c.slug === slug);
-          if (!s) return null;
-          const q = data.qty[slug] ?? 1;
-          return (
-            <div
-              key={slug}
-              className="flex justify-between text-xs py-1.5 border-b border-stroke-soft last:border-b-0"
-            >
-              <span className="text-fg-primary">
-                {s.label} · <span className="text-fg-muted">{q} {s.unit}</span>
+        {lines.map((ln) => (
+          <div
+            key={ln.key}
+            className="flex justify-between text-xs py-1.5 border-b border-stroke-soft last:border-b-0 gap-2"
+          >
+            <span className="text-fg-primary min-w-0 truncate">
+              {ln.label}{" "}
+              <span className="text-fg-muted">
+                · {ln.qty_effective} {unitLabel(ln.unit)}
               </span>
-              <span className="font-bold tabular">{fmtCurrency(s.rate * q)}</span>
-            </div>
-          );
-        })}
+            </span>
+            <span className="font-bold tabular shrink-0">{fmtCurrency(ln.subtotal)}</span>
+          </div>
+        ))}
       </div>
 
       <div className="mt-4 p-3 bg-tops-blue-900 text-white rounded-md flex items-center justify-between">
@@ -1176,6 +1605,7 @@ function initial(firstClient?: Client): WizardState {
     operator_id: "",
     services: [],
     qty: {},
+    transport: null,
     h_start: "08:00",
     h_end: "12:00",
     pallets: 0,
