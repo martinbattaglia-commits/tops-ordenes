@@ -8,7 +8,7 @@ import { dataUrlToBytes } from "@/lib/utils";
 import { sendOrderEmail, recipientsFor } from "@/lib/email";
 import { buildOrderPdf } from "@/lib/pdf/build";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
-import { CreateOrderSchema, type CreateOrderInput } from "@/lib/validation/order";
+import { CreateOrderSchema, formatZodIssues, type CreateOrderInput } from "@/lib/validation/order";
 import type { Order, ServiceUnit } from "@/lib/types";
 import { MOCK_ORDERS, MOCK_CLIENTS, MOCK_OPERATORS } from "@/lib/mock-data";
 
@@ -20,7 +20,20 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   // 1. Validar inputs
   const parsed = CreateOrderSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues.map((i) => i.message).join(". ") };
+    // Server-side log con paths + valores para debug
+    console.error(
+      "[createOrder] validation failed",
+      JSON.stringify(
+        parsed.error.issues.map((i) => ({
+          path: i.path.join("."),
+          code: i.code,
+          message: i.message,
+        })),
+        null,
+        2
+      )
+    );
+    return { ok: false, error: formatZodIssues(parsed.error) };
   }
   const data = parsed.data;
 

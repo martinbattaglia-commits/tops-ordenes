@@ -91,42 +91,50 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
     setSubmitting(true);
     setError(null);
     try {
+      // Coerción defensiva: garantizamos que todo número sea Number()
+      // antes de mandarlo al server. Inputs HTML devuelven strings.
       const services = data.services.map((slug) => {
         const s = catalog.find((c) => c.slug === slug)!;
-        const qty = data.qty[slug] ?? 1;
+        const qty = Number(data.qty[slug] ?? 1) || 1;
+        const rate = Number(s.rate) || 0;
         return {
           service_slug: slug,
           label: s.label,
           qty,
           unit: s.unit,
-          rate: s.rate,
-          subtotal: qty * s.rate,
+          rate,
+          subtotal: qty * rate,
         };
       });
+
+      const numOr0 = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+      };
 
       const result = await createOrder({
         client: {
           id: data.client_id,
-          razon: data.razon,
-          cuit: data.cuit,
-          domicilio: data.domicilio,
-          telefono: data.telefono,
-          contacto: data.contacto,
-          email: data.email,
+          razon: data.razon.trim(),
+          cuit: data.cuit.trim(),
+          domicilio: data.domicilio.trim(),
+          telefono: data.telefono.trim(),
+          contacto: data.contacto.trim(),
+          email: data.email.trim(),
         },
         depot: data.depot,
         operator_id: data.operator_id,
         services,
         h_start: data.h_start,
         h_end: data.h_end,
-        pallets: Number(data.pallets) || 0,
-        units: Number(data.units) || 0,
-        km: Number(data.km) || 0,
-        observ: data.observ,
-        total,
+        pallets: numOr0(data.pallets),
+        units: numOr0(data.units),
+        km: numOr0(data.km),
+        observ: data.observ ?? "",
+        total: Number(total) || 0,
         signature: {
-          signed_by: data.signer_name,
-          signed_doc: data.signer_doc || null,
+          signed_by: data.signer_name.trim(),
+          signed_doc: data.signer_doc?.trim() || null,
           data_url: sig.data,
           hash: sig.hash,
           geo_lat: data.geo_lat,
