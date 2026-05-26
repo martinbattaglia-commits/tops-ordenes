@@ -24,6 +24,11 @@ export default function SettingsPage() {
         />
         <Row label="Supabase" value={env.supabase.configured ? "Conectado" : "No configurado"} ok={env.supabase.configured} />
         <Row label="Resend (emails)" value={env.email.resendKey ? "API key presente" : "Sin API key"} ok={Boolean(env.email.resendKey)} />
+        <Row
+          label="Clientify (CRM)"
+          value={env.clientify.configured ? `Conectado · ${env.clientify.baseUrl}` : "No configurado"}
+          ok={env.clientify.configured}
+        />
         <Row label="App URL pública" value={env.app.url} />
       </Section>
 

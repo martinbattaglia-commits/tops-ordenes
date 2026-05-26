@@ -43,6 +43,11 @@ export const env = {
       lujan: process.env.EMAIL_DEPOT_LUJAN ?? "despachos@logisticatops.com",
     },
   },
+  clientify: {
+    apiKey: process.env.CLIENTIFY_API_KEY?.trim() ?? "",
+    baseUrl: process.env.CLIENTIFY_BASE_URL?.trim() || "https://api.clientify.net/v1",
+    configured: Boolean(process.env.CLIENTIFY_API_KEY?.trim()),
+  },
 } as const;
 
 /**
