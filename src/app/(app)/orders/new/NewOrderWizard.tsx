@@ -42,6 +42,14 @@ interface WizardState {
 const STEPS = ["Cliente", "Operativo", "Servicio", "Firma"];
 const DRAFT_KEY = "tops:new-order:draft:v1";
 
+/** Parsea un value de <input type="number"> a entero ≥ 0. Nunca devuelve NaN. */
+function safeNonNegInt(raw: string): number {
+  if (raw === "" || raw == null) return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+}
+
 export default function NewOrderWizard({ clients, operators, catalog }: Props) {
   const router = useRouter();
   const [stepIdx, setStepIdx] = useState(0);
@@ -91,12 +99,24 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      // Coerción defensiva: garantizamos que todo número sea Number()
-      // antes de mandarlo al server. Inputs HTML devuelven strings.
+      // Coerción defensiva: el server ya hace preprocess Zod, pero blindamos
+      // acá también para que el payload viaje limpio y los logs sean claros.
+      const numOr0 = (v: unknown) => {
+        const n = typeof v === "number" ? v : Number(v);
+        return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+      };
+      const numOrDefault = (v: unknown, def: number) => {
+        const n = typeof v === "number" ? v : Number(v);
+        return Number.isFinite(n) ? n : def;
+      };
+
       const services = data.services.map((slug) => {
-        const s = catalog.find((c) => c.slug === slug)!;
-        const qty = Number(data.qty[slug] ?? 1) || 1;
-        const rate = Number(s.rate) || 0;
+        const s = catalog.find((c) => c.slug === slug);
+        if (!s) {
+          throw new Error(`Servicio "${slug}" ya no está en el catálogo. Refrescá la página.`);
+        }
+        const qty = Math.max(1, numOrDefault(data.qty[slug], 1));
+        const rate = Math.max(0, numOrDefault(s.rate, 0));
         return {
           service_slug: slug,
           label: s.label,
@@ -107,10 +127,19 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         };
       });
 
-      const numOr0 = (v: unknown) => {
-        const n = Number(v);
-        return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
-      };
+      // Pre-check rápido del lado cliente — evita un round-trip si falta
+      // algo obvio. El server siempre vuelve a validar.
+      const signerName = data.signer_name.trim();
+      if (signerName.length < 2) {
+        setError("Ingresá el nombre completo del firmante (mínimo 2 caracteres).");
+        setSubmitting(false);
+        return;
+      }
+      if (services.length === 0) {
+        setError("Seleccioná al menos un servicio antes de confirmar.");
+        setSubmitting(false);
+        return;
+      }
 
       const result = await createOrder({
         client: {
@@ -125,25 +154,25 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         depot: data.depot,
         operator_id: data.operator_id,
         services,
-        h_start: data.h_start,
-        h_end: data.h_end,
+        h_start: data.h_start || "08:00",
+        h_end: data.h_end || "12:00",
         pallets: numOr0(data.pallets),
         units: numOr0(data.units),
         km: numOr0(data.km),
-        observ: data.observ ?? "",
-        total: Number(total) || 0,
+        observ: (data.observ ?? "").slice(0, 2000),
+        total: Math.max(0, numOrDefault(total, 0)),
         signature: {
-          signed_by: data.signer_name.trim(),
+          signed_by: signerName,
           signed_doc: data.signer_doc?.trim() || null,
           data_url: sig.data,
           hash: sig.hash,
-          geo_lat: data.geo_lat,
-          geo_lng: data.geo_lng,
+          geo_lat: typeof data.geo_lat === "number" ? data.geo_lat : null,
+          geo_lng: typeof data.geo_lng === "number" ? data.geo_lng : null,
         },
       });
 
       if (!result.ok) {
-        setError(result.error ?? "No pudimos guardar la orden.");
+        setError(result.error ?? "No pudimos guardar la orden. Intentá de nuevo en un momento.");
         setSubmitting(false);
         return;
       }
@@ -154,7 +183,12 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
 
       router.push(`/orders/${result.public_id}?created=1`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error inesperado.");
+      console.error("[NewOrderWizard] submit failed", e);
+      setError(
+        e instanceof Error && e.message
+          ? e.message
+          : "Error inesperado al guardar la orden. Probá nuevamente."
+      );
       setSubmitting(false);
     }
   };
@@ -197,8 +231,28 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
           )}
 
           {error && (
-            <div className="mt-4 rounded-md bg-status-danger/10 text-status-danger text-sm px-3 py-2 border border-status-danger/20">
-              {error}
+            <div
+              role="alert"
+              className="mt-4 rounded-md bg-status-danger/10 text-status-danger text-sm px-3 py-2.5 border border-status-danger/20"
+            >
+              <div className="flex items-start gap-2">
+                <Icon name="x" size={14} className="mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold mb-0.5">No pudimos guardar la orden</div>
+                  {error.split(" · ").map((line, i) => (
+                    <div key={i} className="leading-relaxed">
+                      {line}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setError(null)}
+                  className="text-status-danger/70 hover:text-status-danger text-xs underline shrink-0"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           )}
 
@@ -721,8 +775,10 @@ function StepServicio({
             className="input"
             type="number"
             inputMode="numeric"
+            min={0}
+            step={1}
             value={data.pallets}
-            onChange={(e) => update({ pallets: +e.target.value })}
+            onChange={(e) => update({ pallets: safeNonNegInt(e.target.value) })}
           />
         </Field>
         <Field label="Unidades">
@@ -730,8 +786,10 @@ function StepServicio({
             className="input"
             type="number"
             inputMode="numeric"
+            min={0}
+            step={1}
             value={data.units}
-            onChange={(e) => update({ units: +e.target.value })}
+            onChange={(e) => update({ units: safeNonNegInt(e.target.value) })}
           />
         </Field>
       </div>

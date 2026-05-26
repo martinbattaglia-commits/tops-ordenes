@@ -17,10 +17,22 @@ export type CreateOrderResult =
   | { ok: false; error: string };
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
+  // Top-level try: cualquier excepción no controlada → respuesta tipada.
+  // Nunca el browser ve un stack-trace crudo.
+  try {
+    return await createOrderInner(input);
+  } catch (err) {
+    console.error("[createOrder] unhandled exception", err);
+    const msg =
+      err instanceof Error && err.message ? err.message : "Error inesperado del servidor.";
+    return { ok: false, error: msg };
+  }
+}
+
+async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderResult> {
   // 1. Validar inputs
   const parsed = CreateOrderSchema.safeParse(input);
   if (!parsed.success) {
-    // Server-side log con paths + valores para debug
     console.error(
       "[createOrder] validation failed",
       JSON.stringify(
@@ -60,7 +72,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const supabase = createClient();
   const admin = createAdminClient();
   if (!supabase || !admin) {
-    return { ok: false, error: "Supabase no configurado." };
+    return {
+      ok: false,
+      error:
+        "Supabase no está configurado en el servidor. Avisá al administrador para revisar las variables de entorno.",
+    };
   }
 
   // 4a. Upsert cliente (siempre, así si cambian datos quedan al día)
@@ -81,17 +97,17 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     .select("id, razon, cuit, domicilio, contacto, email, tags")
     .single();
   if (cErr || !clientRow) {
-    return { ok: false, error: cErr?.message ?? "No pudimos guardar el cliente." };
+    console.error("[createOrder] client upsert failed", cErr);
+    return {
+      ok: false,
+      error: cErr?.message ?? "No pudimos guardar los datos del cliente.",
+    };
   }
   const client_id = clientRow.id;
 
-  const hours =
-    data.h_end && data.h_start
-      ? Math.max(
-          1,
-          parseInt(data.h_end.split(":")[0], 10) - parseInt(data.h_start.split(":")[0], 10)
-        )
-      : 1;
+  // Hours: calculado defensivamente. Si las horas son inválidas o invertidas,
+  // mínimo 1h (la orden NO se bloquea por esto — es un dato operativo).
+  const hours = computeHours(data.h_start, data.h_end);
 
   // 4b. Insertar la orden
   const { data: ord, error: oErr } = await supabase
@@ -117,10 +133,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       geo_lng: data.signature.geo_lng,
       ip,
     })
-    .select("id, public_id, depot, short_id, date, total, hours, observ, h_start, h_end, pallets, units, km, signature_hash, signed_by, signed_at, signed_doc, geo_lat, geo_lng, ip, status, created_at")
+    .select(
+      "id, public_id, depot, short_id, date, total, hours, observ, h_start, h_end, pallets, units, km, signature_hash, signed_by, signed_at, signed_doc, geo_lat, geo_lng, ip, status, created_at"
+    )
     .single();
   if (oErr || !ord) {
-    return { ok: false, error: oErr?.message ?? "No pudimos crear la orden." };
+    console.error("[createOrder] order insert failed", oErr);
+    return {
+      ok: false,
+      error: oErr?.message ?? "No pudimos registrar la orden en la base de datos.",
+    };
   }
 
   // 4c. Insertar servicios
@@ -136,12 +158,16 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     }))
   );
   if (sErr) {
+    console.error("[createOrder] order_services insert failed — rolling back order", sErr);
     // rollback best-effort
     await admin.from("orders").delete().eq("id", ord.id);
-    return { ok: false, error: sErr.message };
+    return {
+      ok: false,
+      error: `No pudimos guardar los servicios: ${sErr.message}`,
+    };
   }
 
-  // 4d. Subir firma a storage
+  // 4d. Subir firma a storage (best-effort)
   let signature_url: string | null = null;
   try {
     const { bytes, contentType } = dataUrlToBytes(data.signature.data_url);
@@ -153,9 +179,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     if (!upErr) {
       const { data: pub } = admin.storage.from("signatures").getPublicUrl(sigPath);
       signature_url = pub.publicUrl;
+    } else {
+      console.error("[createOrder] signature upload failed (non-blocking)", upErr);
     }
-  } catch {
-    /* la firma sigue accesible vía hash, no bloquea la orden */
+  } catch (e) {
+    console.error("[createOrder] signature processing failed (non-blocking)", e);
   }
 
   // 4e. Operadores: traer datos para el PDF
@@ -165,7 +193,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     .eq("id", data.operator_id)
     .maybeSingle();
 
-  // 4f. Generar PDF server-side + subir a storage
+  // 4f. Generar PDF server-side + subir a storage (best-effort)
   let pdf_url: string | null = null;
   try {
     const orderForPdf: Order = {
@@ -184,9 +212,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     if (!pdfErr) {
       const { data: pub } = admin.storage.from("pdfs").getPublicUrl(pdfPath);
       pdf_url = pub.publicUrl;
+    } else {
+      console.error("[createOrder] PDF upload failed (non-blocking)", pdfErr);
     }
   } catch (e) {
-    console.error("PDF generation failed", e);
+    console.error("[createOrder] PDF generation failed (non-blocking)", e);
   }
 
   // 4g. Actualizar la orden con las URLs definitivas
@@ -195,31 +225,39 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     .update({ signature_url, pdf_url })
     .eq("id", ord.id);
 
-  // 4h. Audit log
-  await admin.from("audit_log").insert({
-    user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
-    entity: "orders",
-    entity_id: ord.id,
-    action: "create_signed",
-    payload: { signed_by: data.signature.signed_by, total: data.total, depot: data.depot },
-    ip,
-  });
+  // 4h. Audit log (best-effort)
+  try {
+    await admin.from("audit_log").insert({
+      user_id: (await supabase.auth.getUser()).data.user?.id ?? null,
+      entity: "orders",
+      entity_id: ord.id,
+      action: "create_signed",
+      payload: { signed_by: data.signature.signed_by, total: data.total, depot: data.depot },
+      ip,
+    });
+  } catch (e) {
+    console.error("[createOrder] audit_log insert failed (non-blocking)", e);
+  }
 
-  // 4i. Enviar email (best-effort, no bloquea)
-  const publicUrl = `${env.app.url}/orders/${ord.public_id}`;
-  const fakeOrder = {
-    public_id: ord.public_id,
-    depot: ord.depot,
-    date: ord.date,
-    total: data.total,
-    client: { razon: data.client.razon },
-  } as unknown as Order;
-  sendOrderEmail({
-    order: fakeOrder,
-    to: recipientsFor(fakeOrder, data.client.email),
-    pdfUrl: pdf_url ?? undefined,
-    publicUrl,
-  }).catch((err) => console.error("Email send failed", err));
+  // 4i. Enviar email (best-effort, no bloquea — el email JAMÁS rompe la orden)
+  try {
+    const publicUrl = `${env.app.url}/orders/${ord.public_id}`;
+    const fakeOrder = {
+      public_id: ord.public_id,
+      depot: ord.depot,
+      date: ord.date,
+      total: data.total,
+      client: { razon: data.client.razon },
+    } as unknown as Order;
+    sendOrderEmail({
+      order: fakeOrder,
+      to: recipientsFor(fakeOrder, data.client.email),
+      pdfUrl: pdf_url ?? undefined,
+      publicUrl,
+    }).catch((err) => console.error("[createOrder] sendOrderEmail rejected", err));
+  } catch (e) {
+    console.error("[createOrder] email dispatch threw synchronously (non-blocking)", e);
+  }
 
   // 4j. Revalidate caches
   revalidatePath("/orders");
@@ -230,6 +268,22 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
 }
 
 // ----- helpers -----
+
+/** Calcula horas operativas a partir de strings "HH:MM". Nunca devuelve <1. */
+function computeHours(h_start: string, h_end: string): number {
+  const toMin = (t: string): number | null => {
+    if (!/^\d{2}:\d{2}$/.test(t)) return null;
+    const [hh, mm] = t.split(":").map((p) => parseInt(p, 10));
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+    return hh * 60 + mm;
+  };
+  const a = toMin(h_start);
+  const b = toMin(h_end);
+  if (a == null || b == null) return 1;
+  const diffMin = b - a;
+  if (diffMin <= 0) return 1;
+  return Math.max(1, Math.round(diffMin / 60));
+}
 
 function createOrderMock(data: CreateOrderInput, ip: string | null): CreateOrderResult {
   const shortId = 201600 + MOCK_ORDERS.length + 1;
@@ -247,13 +301,7 @@ function createOrderMock(data: CreateOrderInput, ip: string | null): CreateOrder
       tags: [] as string[],
       created_at: new Date().toISOString(),
     };
-  const hours =
-    data.h_end && data.h_start
-      ? Math.max(
-          1,
-          parseInt(data.h_end.split(":")[0], 10) - parseInt(data.h_start.split(":")[0], 10)
-        )
-      : 1;
+  const hours = computeHours(data.h_start, data.h_end);
 
   const order: Order = {
     id: `mock-${shortId}`,
