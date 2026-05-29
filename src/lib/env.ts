@@ -67,9 +67,14 @@ export const env = {
       | "SANDBOX"
       | "HOMOLOGACION"
       | "PRODUCCION",
+    /** CUIT del emisor (sin guiones). Fuente real: fiscal_config.cuit. */
+    cuit: process.env.ARCA_CUIT?.replace(/\D/g, "") ?? "",
     /** Alias/ruta del certificado X.509 en el host (la key jamás en repo/DB). */
     certPath: process.env.ARCA_CERT_PATH?.trim() ?? "",
     keyPath: process.env.ARCA_KEY_PATH?.trim() ?? "",
+    /** True si ARCA_WSAA_URL fue seteada explícitamente (override de ambiente). */
+    wsaaUrlExplicit: Boolean(process.env.ARCA_WSAA_URL?.trim()),
+    wsfev1UrlExplicit: Boolean(process.env.ARCA_WSFEV1_URL?.trim()),
     /** URLs oficiales de WSAA/WSFEv1 (host afip.gov.ar — no cambiar). */
     wsaaUrl:
       process.env.ARCA_WSAA_URL?.trim() ||
@@ -77,6 +82,19 @@ export const env = {
     wsfev1Url:
       process.env.ARCA_WSFEV1_URL?.trim() ||
       "https://servicios1.afip.gov.ar/wsfev1/service.asmx",
+    /**
+     * Margen de seguridad (segundos) para renovar el TA de WSAA antes de su
+     * expiración real. Default 600 s (10 min).
+     */
+    taMarginSeconds:
+      parseInt(process.env.ARCA_TA_MARGIN_SECONDS ?? "600", 10) || 600,
+    /**
+     * Permite el fallback a Mock cuando faltan credenciales en ambientes NO
+     * productivos (útil en dev/preview). NUNCA aplica a PRODUCCION: si el
+     * ambiente es PRODUCCION y faltan credenciales, debe fallar con ConfigError
+     * (jamás simular un CAE real). Default: false.
+     */
+    allowMockFallback: process.env.ARCA_ALLOW_MOCK_FALLBACK === "1",
     /** Credenciales presentes → listo para producción real. */
     configured: Boolean(
       process.env.ARCA_CERT_PATH?.trim() && process.env.ARCA_KEY_PATH?.trim()
