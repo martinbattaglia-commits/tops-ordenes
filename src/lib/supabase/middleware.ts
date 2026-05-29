@@ -40,7 +40,9 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic =
     pathname === "/login" ||
+    pathname === "/drive" ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/drive") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
     pathname.startsWith("/fonts") ||
