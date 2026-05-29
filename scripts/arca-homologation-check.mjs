@@ -5,11 +5,17 @@
  * Verifica, de forma incremental y SIN emitir comprobantes, los prerequisitos
  * del handshake de homologación de ARCA (ex-AFIP):
  *
- *   G1. openssl disponible en el host (necesario para firmar el CMS/PKCS#7).
+ *   G1. openssl en el host (informativo; requerido SOLO si --signer openssl).
  *   G2. Certificado X.509 + clave privada presentes y legibles (paths por env).
  *   G3. Conectividad SOAP a WSFEv1 homologación (FEDummy — NO requiere Auth).
  *   G4. WSAA homologación: TRA → firma CMS → LoginCms → Token+Sign (requiere G2).
  *   G5. WSFEv1 read-only: FECompUltimoAutorizado (requiere G4 + CUIT).
+ *
+ * Firma CMS: por defecto usa el firmador puro-JS REAL `forgeCmsSigner`
+ * (src/lib/arca/cms-forge.ts, validado en F2 / CMS-SIGNING-FINAL-REPORT.md),
+ * transpilado con esbuild → la homologación valida EXACTAMENTE el mismo camino
+ * de firma que iría a producción, sin depender del binario openssl. Con
+ * `--signer openssl` se usa el binario del host (paridad, opt-in).
  *
  * NUNCA llama FECAESolicitar (no se emite ningún comprobante, ni de prueba),
  * salvo que se pase --emit EXPLÍCITO (default OFF). NUNCA usa endpoints de
@@ -21,20 +27,28 @@
  * Uso:
  *   ARCA_CERT_PATH=/host/cert.pem ARCA_KEY_PATH=/host/key.pem ARCA_CUIT=33604896989 \
  *     node scripts/arca-homologation-check.mjs --ptovta 1 --cbtetipo 11
+ *   (opcional) --signer openssl   # firma con el binario en vez de forge
  *
  * Sin credenciales, corre G1 + G3 (lo que es verificable sin cert) y reporta
  * G2/G4/G5 como SKIPPED con instrucciones.
  */
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { mkdtempSync, rmSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const HOMO = {
   wsaa: "https://wsaahomo.afip.gov.ar/ws/services/LoginCms",
   wsfev1: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
 };
 const FEV1_NS = "http://ar.gov.afip.dif.FEV1/";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(__dirname, "..");
 
 const args = process.argv.slice(2);
 const opt = (name, def) => {
@@ -49,6 +63,7 @@ const CUIT = (process.env.ARCA_CUIT || "").replace(/\D/g, "");
 const PTOVTA = Number(opt("ptovta", "1"));
 const CBTETIPO = Number(opt("cbtetipo", "11")); // 11 = Factura C
 const ALLOW_EMIT = has("emit");
+const SIGNER = opt("signer", "forge") === "openssl" ? "openssl" : "forge";
 
 const results = [];
 const log = (gate, status, detail) => {
@@ -142,7 +157,7 @@ function buildTra(service = "wsfe") {
   );
 }
 
-async function signCms(tra) {
+async function signCmsOpenssl(tra) {
   return new Promise((resolve, reject) => {
     const p = spawn("openssl", [
       "smime", "-sign", "-signer", CERT, "-inkey", KEY,
@@ -161,6 +176,46 @@ async function signCms(tra) {
     p.stdin.write(tra);
     p.stdin.end();
   });
+}
+
+// ---- Firma CMS con el firmador puro-JS REAL (src/lib/arca/cms-forge.ts) ----
+// Transpila el módulo real con esbuild (CJS) y usa forgeCmsSigner, de modo que
+// la homologación valida EXACTAMENTE el mismo camino de firma que producción
+// (validado en F2 / CMS-SIGNING-FINAL-REPORT.md). Sin dependencia de openssl.
+let _forgeSigner = null;
+let _forgeWork = null;
+async function signCmsForge(tra) {
+  if (!_forgeSigner) {
+    _forgeWork = mkdtempSync(join(tmpdir(), "arca-homo-forge-"));
+    const bundle = join(_forgeWork, "cms-forge.cjs");
+    const build = spawnSync(
+      join(REPO, "node_modules/.bin/esbuild"),
+      [
+        join(REPO, "src/lib/arca/cms-forge.ts"),
+        "--bundle", "--format=cjs", "--platform=node", `--outfile=${bundle}`,
+      ],
+      { encoding: "utf8" }
+    );
+    if (build.status !== 0)
+      throw new Error("esbuild cms-forge.ts falló: " + (build.stderr || `status ${build.status}`));
+    const mod = await import(bundle);
+    const forgeCmsSigner = mod.forgeCmsSigner ?? mod.default?.forgeCmsSigner;
+    if (typeof forgeCmsSigner !== "function")
+      throw new Error("forgeCmsSigner no exportado por cms-forge.ts");
+    _forgeSigner = forgeCmsSigner(CERT, KEY);
+  }
+  return _forgeSigner.sign(tra);
+}
+function cleanupForge() {
+  if (_forgeWork) {
+    try { rmSync(_forgeWork, { recursive: true, force: true }); } catch {}
+    _forgeWork = null;
+  }
+}
+
+/** Despacha al firmador elegido (default forge puro-JS; openssl opt-in con --signer openssl). */
+async function signCms(tra) {
+  return SIGNER === "openssl" ? signCmsOpenssl(tra) : signCmsForge(tra);
 }
 
 async function wsaaLogin() {
@@ -213,12 +268,16 @@ async function ultimoAutorizado(token, sign) {
 (async () => {
   console.log("=== ARCA Homologación readiness check (sin emisión) ===");
   console.log(`WSAA:   ${HOMO.wsaa}`);
-  console.log(`WSFEv1: ${HOMO.wsfev1}\n`);
+  console.log(`WSFEv1: ${HOMO.wsfev1}`);
+  console.log(`Signer: ${SIGNER} (default forge — puro-JS, validado en F2)\n`);
 
-  // G1
+  // G1 — openssl: requerido solo si --signer openssl; informativo con signer=forge.
   const ov = await checkOpenssl();
   if (ov) log("G1 openssl", "OK", ov);
-  else log("G1 openssl", "FAIL", "no disponible — instalar openssl en el host");
+  else if (SIGNER === "openssl")
+    log("G1 openssl", "FAIL", "requerido por --signer openssl — instalar openssl en el host");
+  else
+    log("G1 openssl", "SKIP", "no instalado; no requerido con signer=forge (puro-JS)");
 
   // G2
   const creds = await checkCreds();
@@ -235,16 +294,18 @@ async function ultimoAutorizado(token, sign) {
     log("G3 FEDummy", "FAIL", e.name === "AbortError" ? "timeout" : e.message);
   }
 
-  // G4 + G5 requieren credenciales
-  if (!creds.ok || !ov) {
-    log("G4 WSAA login", "SKIP", "requiere G1 (openssl) + G2 (cert/key)");
+  // G4 + G5 requieren credenciales. Con signer=forge NO se requiere openssl.
+  const signerReady = SIGNER === "forge" ? creds.ok : creds.ok && ov;
+  if (!signerReady) {
+    const need = SIGNER === "forge" ? "G2 (cert/key)" : "G1 (openssl) + G2 (cert/key)";
+    log("G4 WSAA login", "SKIP", `requiere ${need} [signer=${SIGNER}]`);
     log("G5 FECompUltimoAutorizado", "SKIP", "requiere G4 + ARCA_CUIT");
   } else {
     let ta = null;
     try {
       ta = await wsaaLogin();
       log("G4 WSAA login", "OK",
-        `token len=${ta.token.length} sign len=${ta.sign.length} exp=${ta.exp} cmsHash=${ta.cmsHash}`);
+        `signer=${SIGNER} token len=${ta.token.length} sign len=${ta.sign.length} exp=${ta.exp} cmsHash=${ta.cmsHash}`);
     } catch (e) {
       log("G4 WSAA login", "FAIL", e.message);
     }
@@ -268,5 +329,6 @@ async function ultimoAutorizado(token, sign) {
   const fails = results.filter((r) => r.status === "FAIL").length;
   const skips = results.filter((r) => r.status === "SKIP").length;
   console.log(`\n=== Resumen: ${results.length - fails - skips} OK · ${skips} SKIP · ${fails} FAIL ===`);
+  cleanupForge();
   process.exit(fails > 0 ? 1 : 0);
 })();
