@@ -42,6 +42,10 @@ ellas, pero **el ERP real de proveedores no existe en repo todavía**.
 
 ## 1. Tablas creadas por la migración 0011
 
+> **Estado real (auditoría 2026-05-29):** estas 5 tablas describen lo que la migración
+> 0011 **definiría**; **NO existen en la DB** — `0011` no está aplicada. Evidencia en
+> [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md).
+
 Cinco tablas nuevas, todas en `public`:
 
 | Tabla | PK | Propósito | Cardinalidad esperada |
