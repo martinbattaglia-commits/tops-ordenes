@@ -143,6 +143,7 @@ nativo** (evidencia visual auditable + insumo de compliance ANMAT).
 
 Documentación de arquitectura y consolidación (gobernada por este rector):
 
+- [ERP-FASE0-GOBERNANZA-DB.md](./ERP-FASE0-GOBERNANZA-DB.md) — **FASE 0: gobernanza y trazabilidad de DB**: causa raíz de PARIDAD-3 (bootstrap sin tracker), matriz completa de migraciones (disco/tracker/manual/no-aplicada), estrategia de sincronización segura (`migration repair`) y riesgos de `db push`/migraciones/deploys.
 - [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md) — **auditoría read-only en vivo de la DB**: migraciones aplicadas, tablas/columnas reales, RBAC, buckets, paridad definitiva y plan de remediación PARIDAD-1.
 - [ERP-CONSOLIDACION-DEFINITIVA.md](./ERP-CONSOLIDACION-DEFINITIVA.md) — informe capstone: paridad, divergencia y clasificación main/branch/eliminar/Core.
 - [ERP-ARQUITECTURA-MAESTRA.md](./ERP-ARQUITECTURA-MAESTRA.md) — vista única de los 10 módulos.
