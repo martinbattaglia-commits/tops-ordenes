@@ -16,6 +16,8 @@ import { readFile } from "fs/promises";
 import { createHash } from "crypto";
 import { soapPost, extractTag, escapeXml, unescapeXml } from "./soap";
 import { consoleArcaLogger, maskSecret, type ArcaLogger } from "./logger";
+import { env } from "../env";
+import { forgeCmsSigner } from "./cms-forge";
 
 export interface AccessTicket {
   token: string;
@@ -130,6 +132,18 @@ export function opensslSigner(certPath: string, keyPath: string): CmsSigner {
   };
 }
 
+/**
+ * Selecciona el firmador CMS por defecto según `ARCA_CMS_SIGNER`:
+ *  - `forge` (default): puro-JS (node-forge), portable a serverless sin binario.
+ *  - `openssl`: binario del host (requiere `openssl` disponible en runtime).
+ * Un `signer` inyectado explícitamente en la config tiene prioridad sobre esto.
+ */
+export function defaultCmsSigner(certPath: string, keyPath: string): CmsSigner {
+  return env.arca.cmsSigner === "openssl"
+    ? opensslSigner(certPath, keyPath)
+    : forgeCmsSigner(certPath, keyPath);
+}
+
 /** Envelope SOAP 1.1 para LoginCms. */
 function loginCmsEnvelope(cmsBase64: string): string {
   return (
@@ -222,7 +236,7 @@ export class WsaaClient {
 
   private async login(): Promise<AccessTicket> {
     const t0 = Date.now();
-    const signer = this.cfg.signer ?? opensslSigner(this.cfg.certPath, this.cfg.keyPath);
+    const signer = this.cfg.signer ?? defaultCmsSigner(this.cfg.certPath, this.cfg.keyPath);
     const tra = buildTra(this.cfg.service);
     const cms = await signer.sign(tra);
 

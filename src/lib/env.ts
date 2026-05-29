@@ -72,6 +72,14 @@ export const env = {
     /** Alias/ruta del certificado X.509 en el host (la key jamás en repo/DB). */
     certPath: process.env.ARCA_CERT_PATH?.trim() ?? "",
     keyPath: process.env.ARCA_KEY_PATH?.trim() ?? "",
+    /**
+     * Firmador CMS/PKCS#7 del TRA. `forge` = puro-JS (node-forge), portable a
+     * runtime serverless sin binario externo (default, recomendado por GATE 3).
+     * `openssl` = binario del host (requiere `openssl` disponible en runtime).
+     */
+    cmsSigner: (process.env.ARCA_CMS_SIGNER?.trim().toLowerCase() === "openssl"
+      ? "openssl"
+      : "forge") as "forge" | "openssl",
     /** True si ARCA_WSAA_URL fue seteada explícitamente (override de ambiente). */
     wsaaUrlExplicit: Boolean(process.env.ARCA_WSAA_URL?.trim()),
     wsfev1UrlExplicit: Boolean(process.env.ARCA_WSFEV1_URL?.trim()),
