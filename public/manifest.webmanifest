@@ -1,12 +1,12 @@
 {
-  "name": "TOPS NEXUS — Logistics OS",
-  "short_name": "NEXUS",
-  "description": "Plataforma operativa corporativa de Logística TOPS (Verotin S.A.) — compras, servicios, CRM, CCTV, ANMAT, documental y analytics en un solo Operating System.",
-  "start_url": "/ejecutivo",
+  "name": "TOPS Órdenes",
+  "short_name": "TOPS",
+  "description": "Sistema digital de órdenes de servicio · Logística TOPS",
+  "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#050555",
+  "background_color": "#F7F8FB",
   "theme_color": "#050555",
   "lang": "es-AR",
   "icons": [
@@ -25,31 +25,16 @@
   ],
   "shortcuts": [
     {
-      "name": "Cockpit ejecutivo",
-      "short_name": "Cockpit",
-      "url": "/ejecutivo",
+      "name": "Nueva orden",
+      "short_name": "Nueva",
+      "url": "/orders/new",
       "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Nueva OC",
-      "short_name": "Nueva OC",
-      "url": "/compras/nueva"
-    },
-    {
-      "name": "Nueva OS",
-      "short_name": "Nueva OS",
-      "url": "/orders/new"
-    },
-    {
-      "name": "Centro CCTV",
-      "short_name": "CCTV",
-      "url": "/cctv"
-    },
-    {
-      "name": "ANMAT",
-      "short_name": "ANMAT",
-      "url": "/anmat"
+      "name": "Órdenes",
+      "short_name": "Órdenes",
+      "url": "/orders"
     }
   ],
-  "categories": ["business", "productivity", "logistics", "utilities"]
+  "categories": ["business", "productivity", "utilities"]
 }

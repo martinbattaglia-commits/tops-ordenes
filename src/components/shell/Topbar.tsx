@@ -1,13 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { NotificationsBell } from "@/components/shell/NotificationsBell";
-import { ThemeToggle } from "@/components/shell/ThemeToggle";
-import { PRODUCT } from "@/lib/org";
 
 export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const router = useRouter();
@@ -16,7 +13,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!search.trim()) return;
-    router.push(`/compras/ordenes?search=${encodeURIComponent(search.trim())}`);
+    router.push(`/orders?search=${encodeURIComponent(search.trim())}`);
   };
 
   const fechaHoy = new Date().toLocaleDateString("es-AR", {
@@ -27,7 +24,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   return (
     <header
-      className="sticky top-0 z-30 bg-bg-surface/95 backdrop-blur border-b border-stroke-soft flex items-center gap-3 px-3 lg:px-6"
+      className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-stroke-soft flex items-center gap-3 px-3 lg:px-6"
       style={{ height: "calc(56px + var(--safe-top))", paddingTop: "var(--safe-top)" }}
     >
       <button
@@ -38,28 +35,14 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <Icon name="menu" size={20} />
       </button>
 
-      <Link href="/ejecutivo" className="flex items-center lg:hidden">
-        <Image
-          src="/icons/logo-isologo-primary.png"
-          alt="Logística TOPS"
-          width={500}
-          height={500}
-          priority
-          className="w-auto h-10 object-contain rounded-md"
-        />
+      <Link href="/dashboard" className="flex items-end gap-1.5 lg:hidden">
+        <span className="text-lg font-black uppercase tracking-tight text-tops-blue-900">TOPS</span>
+        <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-tops-red mb-0.5">
+          Órdenes
+        </span>
       </Link>
 
-      {/* Desktop: NEXUS wordmark + module pill */}
-      <div className="hidden lg:flex items-center gap-3">
-        <div className="text-[15px] font-black tracking-[0.18em] text-tops-blue-900">
-          {PRODUCT.name}
-        </div>
-        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-tops-red border border-tops-red/30 bg-tops-red/5 px-2 py-0.5 rounded">
-          {PRODUCT.shortTagline}
-        </span>
-      </div>
-
-      <form onSubmit={submit} className="hidden md:flex flex-1 max-w-md relative ml-auto lg:ml-6">
+      <form onSubmit={submit} className="hidden md:flex flex-1 max-w-md relative">
         <Icon
           name="search"
           size={15}
@@ -67,7 +50,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         />
         <input
           className="input pl-9 pr-12 h-10"
-          placeholder="Buscar OC, OS, proveedor, cliente, CUIT…"
+          placeholder="Buscar orden, cliente, CUIT…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -77,15 +60,14 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </form>
 
       <div className="ml-auto flex items-center gap-2">
-        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-secondary border border-stroke-soft rounded-pill bg-bg-surface">
+        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-secondary border border-stroke-soft rounded-pill bg-white">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           <span className="capitalize">{fechaHoy}</span>
         </div>
-        <ThemeToggle />
         <NotificationsBell />
-        <Link href="/compras/nueva" className="btn btn-danger btn-sm">
+        <Link href="/orders/new" className="btn btn-danger btn-sm">
           <Icon name="plus" size={14} stroke={2.2} />
-          <span className="hidden sm:inline">Nueva OC</span>
+          <span className="hidden sm:inline">Nueva orden</span>
         </Link>
       </div>
     </header>

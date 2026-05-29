@@ -6,7 +6,7 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // TOPS brand (constantes en ambos modos)
+        // TOPS brand
         tops: {
           blue: {
             900: "#050555",
@@ -15,49 +15,46 @@ const config: Config = {
           red: "#C90812",
           white: "#FFFFFF",
         },
-        // Neutrales — mapeados a CSS vars para que dark mode los flippea
+        // Neutrales (derived)
         neutral: {
           0: "#FFFFFF",
-          50: "var(--neutral-50)",
-          100: "var(--neutral-100)",
-          200: "var(--neutral-200)",
-          300: "var(--neutral-300)",
-          400: "var(--neutral-400)",
-          500: "var(--neutral-500)",
-          700: "var(--neutral-700)",
-          900: "var(--neutral-900)",
+          50: "#F7F8FB",
+          100: "#EEF1F6",
+          200: "#DDE3EC",
+          300: "#C2CAD6",
+          400: "#8A94A6",
+          500: "#5A6577",
+          700: "#2A3340",
+          900: "#0B1220",
         },
-        // Semantic (constantes — semáforo intencional)
+        // Semantic
         status: {
           success: "#0E7C3A",
           warning: "#B45309",
           danger: "#C90812",
           info: "#214576",
         },
-        // Foregrounds — usan CSS vars para dark mode
         fg: {
-          DEFAULT: "var(--fg-primary)",
-          primary: "var(--fg-primary)",
-          secondary: "var(--fg-secondary)",
-          muted: "var(--fg-muted)",
+          DEFAULT: "#0B1220",
+          primary: "#0B1220",
+          secondary: "#5A6577",
+          muted: "#8A94A6",
           inverse: "#FFFFFF",
-          brand: "var(--fg-brand)",
+          brand: "#050555",
           accent: "#C90812",
-          link: "var(--fg-link)",
+          link: "#214576",
         },
-        // Backgrounds — usan CSS vars
         bg: {
-          page: "var(--bg-page)",
-          surface: "var(--bg-surface)",
-          "surface-alt": "var(--bg-surface-alt)",
+          page: "#F7F8FB",
+          surface: "#FFFFFF",
+          "surface-alt": "#EEF1F6",
           brand: "#050555",
           "brand-alt": "#214576",
           accent: "#C90812",
         },
-        // Strokes — usan CSS vars
         stroke: {
-          soft: "var(--stroke-soft)",
-          strong: "var(--stroke-strong)",
+          soft: "#DDE3EC",
+          strong: "#C2CAD6",
           brand: "#214576",
         },
       },

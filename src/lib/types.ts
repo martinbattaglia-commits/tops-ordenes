@@ -1,8 +1,6 @@
 /**
- * Tipos del dominio TOPS Órdenes de Servicio (OS) — módulo legacy.
- * Alineados con el schema Supabase de `supabase/migrations` 0001-0007.
- *
- * Para tipos del módulo Órdenes de Compra (OC), ver `src/lib/types-po.ts`.
+ * Tipos del dominio TOPS Órdenes.
+ * Alineados con el schema Supabase de `supabase/migrations`.
  */
 
 export type Depot = "MAGALDI" | "LUJAN";
@@ -47,9 +45,13 @@ export interface ServiceCatalogItem {
   label: string;
   unit: ServiceUnit;
   rate: number;
+  /** Cantidad mínima a facturar aunque el cliente pida menos. */
   min_qty?: number;
+  /** Subtotal mínimo en ARS. Si qty*rate cae debajo de esto, se factura este monto. */
   min_billing?: number;
+  /** Observación visible como tooltip / badge. */
   observ?: string;
+  /** Categoría visual del wizard. Si está undefined va en "Otros". */
   category?: ServiceCategory;
   icon?: string | null;
   active: boolean;
@@ -75,9 +77,9 @@ export interface OrderService {
 
 export interface Order {
   id: string;
-  public_id: string;
+  public_id: string; // OS-201567
   short_id: number;
-  date: string;
+  date: string; // ISO
   depot: Depot;
   status: OrderStatus;
   client_id: string;
@@ -101,6 +103,7 @@ export interface Order {
   ip: string | null;
   created_at: string;
   created_by: string | null;
+  // joins
   client?: Client;
   operator?: Operator;
   services?: OrderService[];
@@ -108,7 +111,7 @@ export interface Order {
 
 export interface NotificationItem {
   id: string;
-  kind: "signed" | "new" | "observed" | "info" | "warn";
+  kind: "signed" | "new" | "observed" | "info";
   title: string;
   message: string;
   created_at: string;
