@@ -287,11 +287,11 @@ function ResultPanel({ result, onReset }: { result: ProcessResult; onReset: () =
           </Section>
         )}
 
-        {/* PDF Link */}
-        {result.publicUrl && (
+        {/* PDF Link — URL firmada temporal (bucket privado) */}
+        {result.signedUrl && (
           <div className="pt-3 border-t border-stroke-soft">
             <a
-              href={result.publicUrl}
+              href={result.signedUrl}
               target="_blank"
               rel="noopener"
               className="btn btn-ghost btn-sm"
@@ -299,6 +299,7 @@ function ResultPanel({ result, onReset }: { result: ProcessResult; onReset: () =
               <Icon name="download" size={14} />
               Ver archivo original
             </a>
+            <span className="ml-2 text-[10px] text-fg-muted">enlace temporal (5 min)</span>
           </div>
         )}
       </div>
