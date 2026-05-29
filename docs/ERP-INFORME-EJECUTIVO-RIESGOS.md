@@ -1,52 +1,66 @@
 # TOPS NEXUS — Informe Ejecutivo de Riesgos y Consolidación
 
-> **Estado:** cierre de auditoría · **Fecha:** 2026-05-29
+> **Estado:** cierre de auditoría · **Fecha:** 2026-05-29 · **Revisión FASE 3**
 > Informe ejecutivo de la consolidación previa a la migración 0012. Sintetiza la
-> auditoría (Fase 1), el mapa de módulos (Fase 2), el RBAC (Fase 3), la
-> versionado de WIP (Fase 4) y el grafo de dependencias (Fase 5).
-> Gobernado por [TOPS-NEXUS-ERP.md](./TOPS-NEXUS-ERP.md). **No** propone aplicar
-> migraciones ni crear tablas: es el gate de decisión.
+> auditoría de repositorio, el mapa de módulos, el RBAC + su versionado, y el
+> grafo de dependencias.
+> Gobernado por [TOPS-NEXUS-ERP.md](./TOPS-NEXUS-ERP.md). Base de evidencia:
+> [ERP-FASE3-AUDITORIA-REPOSITORIO.md](./ERP-FASE3-AUDITORIA-REPOSITORIO.md).
+> **No** propone aplicar migraciones ni crear tablas: es el gate de decisión.
+>
+> **Corrección FASE 3 (importante).** Versiones previas describían *"tres planos
+> que no coinciden"* y *"WIP solo en disco / untracked"*. Eso quedó **obsoleto**:
+> todo `src/` y las 11 migraciones (0001–0011) están **trackeadas** en
+> `feature/documents-enterprise-ready` (HEAD `2326559`, +12/−2 vs `main`). El
+> riesgo de pérdida de disco (G1) está **cerrado**. El único gap real es
+> **Migraciones↔DB**: 0010 (documents) y 0011 (ARCA) versionadas pero **no
+> aplicadas**. El framing de abajo se reescribió a esa realidad verificada.
 
 ---
 
 ## Resumen para dirección (TL;DR)
 
-El ERP **no estaba en riesgo de funcionamiento**, pero **sí de pérdida**: meses
-de desarrollo estratégico (Compras, RBAC, Cockpit, integraciones) vivían **solo
-en un disco**, sin versionar. **Eso ya se cerró**: todo el WIP crítico está hoy
-preservado en `origin/wip/erp-consolidation` y el rediseño en
-`origin/feature/ui-redesign`. Producción (`main`) quedó intacta.
+El ERP **no está en riesgo de funcionamiento ni de pérdida**: todo el desarrollo
+estratégico (Compras, RBAC, Cockpit, integraciones, Documental) está **trackeado
+y versionado** en `feature/documents-enterprise-ready`. El riesgo histórico de
+"código solo en disco" (G1) está **cerrado**. Producción (`main`) está intacta.
 
-Quedan **3 riesgos vivos** que decidir antes de seguir: (1) Facturación ARCA está
+Quedan **4 riesgos vivos** que decidir antes de seguir: (1) Facturación ARCA está
 desplegada **sin sus tablas** (0011 sin aplicar); (2) el RBAC granular está
-**dormido** (nadie asignado); (3) la auditoría es **borrable en cascada**. Ninguno
-bloquea operar hoy, pero los tres deben resolverse antes de Tesorería.
+**dormido** (nadie asignado); (3) la auditoría es **borrable en cascada**; (4) los
+cambios de autorización RBAC **no se versionan** (sin `rbac_audit`, ver
+[RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) §8). Ninguno bloquea operar hoy,
+pero los cuatro deben resolverse antes de Tesorería.
 
 ---
 
 ## 1. Estado real del ERP (la foto honesta)
 
-El ERP vive en **tres planos que no coinciden** (detalle en
-[ERP-MODULE-MAP.md](./ERP-MODULE-MAP.md) §0):
+El ERP vive en **dos planos** (detalle en
+[ERP-MODULE-MAP.md](./ERP-MODULE-MAP.md) §0). El plano de Código es coherente; el
+único desfase es Código↔DB en 2 migraciones:
 
 | Plano | Qué tiene | Salud |
 |-------|-----------|:-----:|
-| **A — Código desplegado** (`main` → Netlify) | core OS (dashboard, clientes, órdenes, reportes, templates) + ARCA | ✅ sólido (ARCA roto en runtime) |
-| **B — DB remoto** (Supabase `arsksytgdnzukbmfgkju`) | migraciones **0001–0009 aplicadas con datos**; **0010 y 0011 NO** | 🟡 adelantada al código en OC/RBAC, atrasada en ARCA |
-| **C — WIP** (antes solo en disco) | Compras, RBAC UI, Cockpit, integraciones | 🟢 **ahora versionado en branch** |
+| **Código** (`feature/documents-enterprise-ready`, todo trackeado) | core OS + Compras/OC + RBAC UI + Cockpit + integraciones + Documental + ARCA | ✅ coherente |
+| **DB remoto** (Supabase `arsksytgdnzukbmfgkju`) | migraciones **0001–0009 aplicadas con datos**; **0010 y 0011 NO aplicadas** | ⚠️ gap de 2 migraciones (documents + ARCA) |
 
-**Datos reales en DB remota (read-only):** vendors=10, products=20, roles=7,
-permissions=22, role_permissions=64, **user_roles=0**, profiles: admin=1,
-operaciones=2, supervisor=3. Buckets: signatures, pdfs, attachments, po-pdfs,
-po-signatures (no existe `invoices`).
+**Datos reales en DB remota (read-only, SELECT-only):** vendors=10, products=20,
+roles=7, **permissions=22 en DB** (catálogo objetivo **24**: 0010 suma 2 sin
+aplicar), role_permissions=64, **user_roles=0**, profiles: admin=1, operaciones=2,
+supervisor=3. Buckets: signatures, pdfs, attachments, po-pdfs, po-signatures
+(**no** existen `documents` ni `invoices` — dependen de 0010/0011).
 
 **Módulos por estado** (detalle en ERP-MODULE-MAP §2–3):
-- ✅ **Desplegados y estables:** Dashboard, Clientes, Órdenes (OS), Reportes, Templates.
-- ⚠️ **Desplegado pero roto en runtime:** Facturación ARCA + Settings/fiscal (código sí, tablas 0011 no).
-- 🟢 **Versionado en branch (antes en riesgo):** Compras/OC + validación pública, Proveedores, RBAC/roles UI, Ejecutivo/Cockpit, Operaciones/mapa, Documental, CCTV, Comercial/Clientify, Drive, WhatsApp, OCR, ANMAT.
+- ✅ **Desplegados y estables (9):** Dashboard, Clientes, Órdenes (OS), Reportes, Compras (OC), Comercial, CCTV, Settings/users, Drive.
+- 🟡 **WIP bloqueado por migración (3):** Facturación ARCA + Settings/fiscal (tablas 0011 no aplicadas), Documental (tabla `documents` 0010 no aplicada).
+- 🟠 **Demo-only por diseño (3):** ANMAT, Operaciones/mapa, Templates.
 
-> **Actualización 2026-05-29 (FASE 1):** PARIDAD-1 cerrada — el SQL `0008`/`0009`/`0010`
-> se promovió a `main` (`b82a5f2`); PARIDAD-3 cerrada — tracker `0001–0009`.
+> **Restricción de infraestructura vigente (FASE 3):** sin Docker ni `psql`, CLI
+> linkeada a producción → aplicar 0010/0011 está **bloqueado** y diferido a
+> GATE 2/3 en staging aislado. **GATE 2 PENDIENTE.** Consecuencia única: las
+> rutas que consultan tablas de 0010/0011 fallan en runtime (mitigado por guards
+> `isMock()`); no afecta al resto de la app.
 
 ---
 
@@ -62,6 +76,7 @@ po-signatures (no existe `invoices`).
 | G6 | Duplicados sin resolver (clientify/drive/types) | alta | bajo | 🟡 vivo |
 | G7 | DB adelantada al código (0008/0009) sin paridad de repo | — | — | ✅ **CERRADO** (0008/0009/0010 en `main` `b82a5f2`; tracker `0001–0009`) |
 | G8 | Stash viejo `stash@{0}` redundante | baja | bajo | 🟢 menor |
+| G9 | **Cambios de autorización RBAC sin versionar** (`profiles.role` se pisa; sin `rbac_audit` ni triggers) | cierta | medio | 🟠 vivo (diseño en RBAC §8) |
 
 ---
 
@@ -103,6 +118,12 @@ en 0012, no ahora).
 > de trabajo. Lo único que vive solo en disco a propósito es `.env.local`
 > (secretos), que **no debe** versionarse.
 >
+> **Nota FASE 3 (branch consolidado):** la tabla anterior es el **registro
+> histórico** del cierre de G1. Hoy todo ese trabajo está consolidado en
+> `feature/documents-enterprise-ready` (que incluye Documental + las 11
+> migraciones); `wip/erp-consolidation` y `feature/ui-redesign` se conservan como
+> ramas previas en `origin`.
+>
 > **Pérdida latente menor:** los **datos en producción** de 0008/0009 no tienen
 > respaldo documentado fuera de Supabase. Recomendado: política de backup del
 > proyecto Supabase (fuera del alcance de esta consolidación de código).
@@ -111,8 +132,8 @@ en 0012, no ahora).
 
 ## 5. Módulos a PRESERVAR (versionar y mantener)
 
-Todos ya preservados en `wip/erp-consolidation`. Prioridad de promoción futura a
-`main` (cuando se decida, con tests):
+Todos ya preservados y trackeados en `feature/documents-enterprise-ready`.
+Prioridad de promoción futura a `main` (cuando se decida, con tests):
 
 1. **Compras / Proveedores / validación pública OC** — estratégico, con datos reales en DB. **Máxima prioridad.**
 2. **RBAC / roles UI** — gobernanza; habilita los 9 roles objetivo.
@@ -159,6 +180,9 @@ Todos ya preservados en `wip/erp-consolidation`. Prioridad de promoción futura 
 3. **Cubrir los 4 roles faltantes** (Facturación, Compras, Auditor, Super Admin
    vs Administración) vía seed en `roles`/`role_permissions` (tablas ya existen).
    Ver [RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) §5.
+   **Versionar RBAC (G9)** en el mismo paquete: tabla `rbac_audit` append-only +
+   triggers + server actions auditados (diseño en RBAC §8). Va atado a 0012 — no
+   tiene sentido auditar tablas hoy vacías.
 4. **Resolver duplicados** (clientify/drive/types) y conciliar `drive/ping`.
    Prerequisito de cualquier merge a `main`.
 5. **FASE 2 — Módulo Documents (`0010`):** diagnóstico/arquitectura/riesgos/plan de
@@ -191,8 +215,10 @@ Todos ya preservados en `wip/erp-consolidation`. Prioridad de promoción futura 
 | Sin dependencias ocultas | ✅ (Fase 5 — grafo explícito) |
 | Sin módulos solo locales | ✅ (todo en `origin`) |
 | Riesgos fiscales identificados | ✅ (C1, C2) |
+| Versionado de RBAC diseñado (G9) | ✅ (RBAC §8 — diseño, sin aplicar) |
 | Decisión de gate Facturación tomada | ⏳ **pendiente del usuario** |
 | `user_roles` poblado | ⏳ pendiente |
+| GATE 2 (staging 0010) | ⏳ **PENDIENTE** (bloqueo de infraestructura) |
 
 **Veredicto:** la **consolidación está completa** y, tras FASE 1, la **paridad
 Código↔Migraciones↔Tracker quedó cerrada** (`0001–0009`). El ERP está auditado,

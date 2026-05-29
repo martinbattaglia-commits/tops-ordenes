@@ -1,11 +1,17 @@
 # TOPS NEXUS — RBAC-ARCHITECTURE
 
-> **Estado:** auditoría + diseño · **Fecha:** 2026-05-29
+> **Estado:** auditoría + diseño · **Fecha:** 2026-05-29 · **Revisión FASE 3**
 > Arquitectura de control de acceso del ERP: roles, permisos, jerarquías,
-> `current_role()`, RLS y seguridad. Documenta el estado **real** (dos sistemas
-> coexistiendo) y el **modelo objetivo** de 9 roles.
-> **No** crea tablas ni migraciones — es documentación de consolidación.
-> Gobernado por [TOPS-NEXUS-ERP.md](./TOPS-NEXUS-ERP.md).
+> `current_role()`, RLS, **versionado/auditoría de RBAC** y seguridad. Documenta
+> el estado **real** (dos sistemas coexistiendo) y el **modelo objetivo** de 9 roles.
+> **No** crea tablas ni migraciones — es documentación de consolidación y diseño.
+> Gobernado por [TOPS-NEXUS-ERP.md](./TOPS-NEXUS-ERP.md). Base de evidencia:
+> [ERP-FASE3-AUDITORIA-REPOSITORIO.md](./ERP-FASE3-AUDITORIA-REPOSITORIO.md).
+>
+> **Corrección FASE 3:** (a) `0009` está **trackeada** (no "untracked" como decían
+> versiones previas); (b) el catálogo de permisos define **24** (22 en 0009 + 2 en
+> 0010), de los cuales solo **22 están en DB** porque 0010 no está aplicada;
+> (c) se agrega §8 **Versionado de RBAC** (diseño, sin migración).
 
 ---
 
@@ -13,9 +19,9 @@
 
 | | Sistema A — **enum simple** | Sistema B — **RBAC granular** |
 |---|---|---|
-| Origen | Migración `0001` (+ hardening `0005`) | Migración `0009` (untracked, **aplicada en DB**) |
+| Origen | Migración `0001` (+ hardening `0005`) | Migración `0009` (**trackeada**, aplicada en DB) + `0010` (2 permisos, **no aplicada**) |
 | Almacén | `profiles.role` (`user_role_t`) | `roles` + `permissions` + `role_permissions` + `user_roles` |
-| Valores | `admin`, `operaciones`, `supervisor`, `cliente` | 7 roles · 22 permisos · 64 mapeos |
+| Valores | `admin`, `operaciones`, `supervisor`, `cliente` | 7 roles · **24 permisos en catálogo** (22 en DB) · mapeos role×permission |
 | Lo consume | **TODA la RLS** vía `current_role()` | `has_permission()` / vista `my_permissions` |
 | Asignaciones reales | 6 usuarios (admin=1, operaciones=2, supervisor=3) | **`user_roles` = 0 filas → NADIE asignado** |
 | Estado efectivo | ✅ **EN USO** (autorización real) | ⚠️ **DORMIDO** (seedeado pero no aplica) |
@@ -60,22 +66,25 @@ public.has_permission(p_slug text) returns boolean   -- une user_roles→role_pe
 
 ---
 
-## 2. Permisos catalogados (Sistema B, 22 en DB)
+## 2. Permisos catalogados (Sistema B — 24 en catálogo, 22 en DB)
 
 Modelo: `permission(module, action)`. Enums `permission_module_t` ×
-`permission_action_t`.
+`permission_action_t`. **22 sembrados en `0009`** + **2 en `0010`**
+(`documental.export`, `documental.admin`). Como 0010 **no está aplicada**, la DB
+real hoy tiene 22; el catálogo objetivo es 24.
 
-| Módulo | Permisos (slug.action) |
-|--------|------------------------|
-| `cockpit` | view, export |
-| `compras` | view, create, edit, sign, export, delete |
-| `servicios` | view, create, sign |
-| `comercial` | view, edit |
-| `compliance` | view, edit |
-| `cctv` | view, admin |
-| `documental` | view, create, delete |
-| `analytics` | view |
-| `sistema` | admin |
+| Módulo | Permisos (slug.action) | Origen |
+|--------|------------------------|--------|
+| `cockpit` | view, export | 0009 |
+| `compras` | view, create, edit, sign, export, delete | 0009 |
+| `servicios` | view, create, sign | 0009 |
+| `comercial` | view, edit | 0009 |
+| `compliance` | view, edit | 0009 |
+| `cctv` | view, admin | 0009 |
+| `documental` | view, create, delete | 0009 |
+| `documental` | **export, admin** | **0010 (pendiente)** |
+| `analytics` | view | 0009 |
+| `sistema` | admin | 0009 |
 
 Acciones disponibles: `view, create, edit, delete, sign, export, admin`.
 
@@ -157,6 +166,7 @@ Reglas RLS observadas (de 0008/0009/0011), todas vía `current_role()`:
 | Bucket fiscal con scoping por cliente | ❌ | bucket `invoices` daría acceso a cualquier `authenticated` (riesgo R4 del informe ERP) |
 | RBAC granular conectado a RLS | ❌ | RLS usa enum simple; `has_permission` sin uso |
 | Asignación de usuarios a roles | ❌ | `user_roles` vacío |
+| **Versionado/auditoría de cambios RBAC** | ❌ | sin `rbac_audit` ni triggers; `profiles.role` se pisa sin historial → ver §8 |
 | Separación de deberes (SoD) | 🟡 | firma OC aislada a `director_ops` ✅; falta rol Auditor y Facturación |
 
 ---
@@ -181,6 +191,148 @@ Reglas RLS observadas (de 0008/0009/0011), todas vía `current_role()`:
 > Mientras tanto, el enum simple sigue siendo la fuente de verdad: **no romper
 > `current_role()`** ni sus propiedades `SECURITY DEFINER`.
 
+---
+
+## 8. Versionado de RBAC (diseño — Prioridad 3, sin migración)
+
+> **Problema a resolver.** Hoy un cambio de autorización es **invisible y
+> destructivo**: `settings/users` reescribe `profiles.role` (un `UPDATE` que
+> pisa el valor anterior, sin historial); `role_permissions`/`user_roles` **no
+> tienen triggers ni auditoría**; `user_roles.assigned_by`/`assigned_at` guardan
+> solo el *último* estado (se sobrescriben al reasignar). No existe forma de
+> responder *"¿quién le dio a Fulano permiso de firmar OC, cuándo y quién lo
+> aprobó?"*. Para un ERP que reemplaza a Neuralsoft y maneja firma fiscal/OC,
+> esto es un **gap de compliance** (SoD, trazabilidad, no-repudio).
+
+### 8.1 Estado actual verificado
+
+| Objeto | Mutado por | Historial | Auditoría |
+|--------|-----------|:---------:|:---------:|
+| `profiles.role` (enum, lo que aplica) | `settings/users/actions.ts` (`UPDATE`) | ❌ se pisa | 🟡 `audit_log` ad-hoc (solo en *invite*, no en cambios posteriores) |
+| `user_roles` (granular) | nada en runtime (UI read-only) | ❌ | ❌ sin trigger |
+| `role_permissions` (granular) | nada en runtime (seed only) | ❌ | ❌ sin trigger |
+| `roles` / `permissions` | seed only | ❌ | ❌ sin trigger |
+
+> `settings/roles` (`src/lib/rbac/data.ts`) es **solo lectura** (`getRoles`,
+> `getRolePermissions`, …); no hay `insert/update/delete` a RBAC. El gap de
+> historial existe **independientemente** de qué modelo (enum vs granular) sea
+> la fuente de verdad.
+
+### 8.2 Patrón de referencia: `documents_audit` (0010)
+
+El versionado de RBAC debe **reusar el patrón ya validado** del Centro Documental
+(append-only + trigger `SECURITY DEFINER` AFTER INSERT/UPDATE/DELETE), no inventar
+uno nuevo:
+
+- Tabla append-only con `INSERT`-only por RLS y **`ON DELETE RESTRICT`** hacia
+  cualquier FK (cerrar el gap CASCADE del §6).
+- Trigger `SECURITY DEFINER` + `set search_path = public, pg_temp`.
+- Captura `auth.uid()` como actor, `now()` como timestamp, y `to_jsonb(OLD)` /
+  `to_jsonb(NEW)` como snapshot diff.
+
+### 8.3 Diseño propuesto (DDL objetivo — NO aplicar hasta GATE financiero)
+
+```sql
+-- Append-only. Una fila por cada cambio de autorización (grant/revoke/role swap).
+create table public.rbac_audit (
+  id            bigserial primary key,
+  ts            timestamptz not null default now(),
+  actor_id      uuid references auth.users(id) on delete set null,  -- quién cambió
+  target_table  text   not null check (target_table in
+                  ('profiles','user_roles','role_permissions','roles','permissions')),
+  op            text   not null check (op in ('INSERT','UPDATE','DELETE')),
+  target_user   uuid,            -- a quién afecta (si aplica)
+  role_slug     text,            -- rol involucrado (denormalizado para lectura)
+  permission_slug text,          -- permiso involucrado (denormalizado)
+  before_state  jsonb,           -- to_jsonb(OLD)
+  after_state   jsonb,           -- to_jsonb(NEW)
+  reason        text             -- justificación opcional (lo setea el server action)
+);
+create index rbac_audit_target_user_idx on public.rbac_audit(target_user, ts desc);
+create index rbac_audit_actor_idx       on public.rbac_audit(actor_id, ts desc);
+```
+
+```sql
+-- Trigger SECURITY DEFINER (mismo molde que tg_documents_audit)
+create or replace function public.tg_rbac_audit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  insert into public.rbac_audit(actor_id, target_table, op,
+                                target_user, before_state, after_state)
+  values (
+    auth.uid(),
+    tg_table_name,
+    tg_op,
+    coalesce( (case when tg_op='DELETE' then OLD else NEW end ->> 'user_id')::uuid, null),
+    case when tg_op in ('UPDATE','DELETE') then to_jsonb(OLD) end,
+    case when tg_op in ('INSERT','UPDATE') then to_jsonb(NEW) end
+  );
+  return case when tg_op = 'DELETE' then OLD else NEW end;
+end $$;
+
+create trigger user_roles_audit
+  after insert or update or delete on public.user_roles
+  for each row execute function public.tg_rbac_audit();
+create trigger role_permissions_audit
+  after insert or update or delete on public.role_permissions
+  for each row execute function public.tg_rbac_audit();
+-- (idem profiles para capturar el cambio de enum, y roles/permissions)
+```
+
+```sql
+-- RLS: append-only, lectura solo admin/auditor
+alter table public.rbac_audit enable row level security;
+create policy rbac_audit_insert on public.rbac_audit
+  for insert to authenticated with check (true);          -- solo vía trigger DEFINER
+create policy rbac_audit_read on public.rbac_audit
+  for select to authenticated using (is_admin());          -- + rol Auditor cuando exista
+-- sin policy de UPDATE/DELETE → inmutable. Las FK NO usan CASCADE.
+```
+
+### 8.4 Capa de aplicación (server actions, hoy inexistentes)
+
+`settings/roles` es read-only; para que el versionado tenga sentido, las
+mutaciones deben pasar por **server actions auditados** (no `UPDATE` directos):
+
+1. `grantPermission(role, permission, reason)` / `revokePermission(...)` →
+   `INSERT`/`DELETE` en `role_permissions`; el trigger registra la fila.
+2. `assignRole(user, role, reason)` / `unassignRole(...)` → `user_roles`.
+3. `setUserBaseRole(user, enumRole, reason)` → reemplaza el `UPDATE` crudo de
+   `settings/users`, escribiendo `reason` y dejando rastro en `rbac_audit`.
+4. Todos: gate `is_admin()` server-side **antes** del write (defensa en
+   profundidad, no confiar solo en RLS).
+
+### 8.5 Versionado del *catálogo* (roles/permisos como código)
+
+Independiente del historial de asignaciones: el **catálogo** de roles y permisos
+(qué permisos existen, qué incluye cada rol) debe versionarse **como migración
+idempotente** (el patrón actual `on conflict do nothing` de 0009/0010 ya lo es).
+Regla: **ningún seed de RBAC se edita in-place en producción** — todo cambio de
+catálogo entra por una migración nueva (0012+), preservando PARIDAD
+Código↔Migración↔DB. El `rbac_audit` cubre los cambios *de datos en runtime*; las
+migraciones cubren los cambios *de catálogo*.
+
+### 8.6 Checklist de cierre (cuándo se considera "versionado")
+
+| Criterio | Estado |
+|----------|:------:|
+| Tabla `rbac_audit` append-only con FK `RESTRICT` | ⬜ diseño |
+| Trigger `tg_rbac_audit` SECURITY DEFINER en las 4+ tablas | ⬜ diseño |
+| Server actions auditados (grant/revoke/assign/setBaseRole) | ⬜ diseño |
+| Vista de lectura para Auditor (`rbac_audit` + join slugs) | ⬜ diseño |
+| Catálogo versionado solo por migración (no in-place) | ✅ ya se cumple (0009/0010 idempotentes) |
+| `reason` obligatorio en cambios sensibles (`*.sign`, `sistema.admin`) | ⬜ diseño |
+
+> **Restricción de fase:** esto es **diseño**. El DDL de §8.3 entra como parte de
+> la **migración financiera/RBAC (0012+)**, no ahora. No aplicar contra producción.
+> Va atado al mismo GATE que la unificación RLS (§7) — versionar primero lo que
+> hoy está dormido sería auditar una tabla vacía.
+
 Documentos relacionados: [ERP-MODULE-MAP.md](./ERP-MODULE-MAP.md) ·
 [ERP-DEPENDENCY-GRAPH.md](./ERP-DEPENDENCY-GRAPH.md) ·
+[ERP-FASE3-AUDITORIA-REPOSITORIO.md](./ERP-FASE3-AUDITORIA-REPOSITORIO.md) ·
 [erp-arquitectura-objetivo.md](./erp-arquitectura-objetivo.md).

@@ -1,42 +1,48 @@
 # TOPS NEXUS — Informe técnico ERP: análisis de migración 0011 y arquitectura objetivo
 
-> **Estado:** análisis · **Fecha:** 2026-05-29
+> **Estado:** análisis · **Fecha:** 2026-05-29 · **Revisión FASE 3** (validado)
 > Analiza en detalle qué crea la migración `0011_arca_billing.sql`, mapea el
 > modelo de datos actual y diseña la **arquitectura ERP final** para reemplazar
 > completamente Neuralsoft (Facturación + Proveedores + Tesorería + Cuentas
 > Corrientes + IVA Débito/Crédito + Retenciones + Balance Anual).
-> Gobernado por [TOPS-NEXUS-ERP.md](./TOPS-NEXUS-ERP.md).
+> Gobernado por [TOPS-NEXUS-ERP.md](./TOPS-NEXUS-ERP.md). Base de evidencia:
+> [ERP-FASE3-AUDITORIA-REPOSITORIO.md](./ERP-FASE3-AUDITORIA-REPOSITORIO.md).
+>
+> **Validación FASE 3 (Prioridad 7).** Esta arquitectura objetivo se **contrastó
+> contra la realidad auditada** y es **coherente**: los dominios que diseña
+> (`supplier_invoices`, `cost_centers`, tesorería, cuentas corrientes, balance,
+> retenciones) están **verificados como inexistentes** (0 matches en código y DB,
+> ver [ERP-MODULE-MAP.md](./ERP-MODULE-MAP.md) §3). El secuenciamiento 0012→0017
+> de §10 se mantiene válido. Lo único corregido es el §0 (framing "untracked"
+> obsoleto) y R8 (§7).
 
 ---
 
-## 0. Hallazgo crítico de estado (leer primero)
+## 0. Estado de paridad (corregido FASE 3)
 
-El árbol desplegado (`origin/main` → Netlify) **no contiene** buena parte del
-código y de las migraciones que el documento rector da por hechas. Verificado
-con `git ls-tree -r origin/main`:
+> **Corrección.** La versión previa de este §0 afirmaba que `0008`–`0010` y los
+> módulos `compras/rbac/cctv/...` estaban *"untracked / WIP local sin versionar /
+> divergencia repo↔producción"*. Eso quedó **obsoleto**: `git ls-files` confirma
+> que **todo `src/` y las 11 migraciones (0001–0011) están trackeadas** en
+> `feature/documents-enterprise-ready`. El riesgo de pérdida está cerrado.
 
-| Artefacto | En disco (local) | En `origin/main` (desplegado) |
-|-----------|:----------------:|:-----------------------------:|
-| Migración `0001`–`0007` (base, clients, orders, RLS, `current_role()`) | ✅ | ✅ |
-| Migración `0008_purchase_orders` (vendors, purchase_orders, po_items) | ✅ | ❌ **untracked** |
-| Migración `0009_rbac` (roles, permissions, user_roles) | ✅ | ❌ **untracked** |
-| Migración `0010_documents` | ✅ | ❌ **untracked** |
-| Migración `0011_arca_billing` (Facturación ARCA) | ✅ | ✅ |
-| Módulos `compras`, `anmat`, `cctv`, `comercial`, `documental`, `ejecutivo`, `operaciones`, `settings/roles` | ✅ | ❌ **untracked** |
-| Módulos `billing`, `clients`, `dashboard`, `orders`, `reports`, `settings`, `templates` | ✅ | ✅ |
+El único desfase real es **Migraciones↔DB**:
 
-**Implicancia:** el módulo de **Proveedores (OC)** y el **RBAC granular** existen
-solo como WIP local sin versionar. La migración `0011` (ARCA) **sí** está
-desplegada y es **autosuficiente**: sus únicas dependencias reales son
-`public.current_role()` (definida en `0001`, endurecida en `0005`) y
-`profiles.client_id` (de `0001`) — ambas presentes en producción. No depende de
-`0008`/`0009`/`0010`. Por lo tanto `0011` puede aplicarse en producción sin
-ellas, pero **el ERP real de proveedores no existe en repo todavía**.
+| Artefacto | Trackeado (código) | Aplicado en DB PROD |
+|-----------|:------------------:|:-------------------:|
+| Migraciones `0001`–`0009` | ✅ | ✅ (con datos) |
+| Migración `0010_documents` | ✅ | ❌ **no aplicada** |
+| Migración `0011_arca_billing` | ✅ | ❌ **no aplicada** |
+| Todos los módulos (`compras`, `rbac`, `documental`, `billing`, …) | ✅ | n/a (código) |
 
-> **Acción recomendada antes de seguir:** versionar (`git add`) las migraciones
-> `0008`–`0010` y los módulos WIP, o decidir explícitamente descartarlos. Hoy
-> hay divergencia entre lo que el rector declara "✅ existe" y lo que está bajo
-> control de versiones.
+**Sobre la autosuficiencia de `0011`:** sus FK de runtime solo dependen de
+`public.current_role()` (0001/0005) y `profiles.client_id` (0001). **Pero** el
+camino de aplicación validado es **secuencial 0010 → 0011** (ver GATE 2): no se
+aplica ninguna de las dos en aislamiento contra producción.
+
+> **Restricción de infraestructura vigente:** sin Docker ni `psql`, CLI linkeada
+> a producción → aplicar 0010/0011 está **bloqueado**. **GATE 2 PENDIENTE.** Este
+> documento es **diseño**: no aplica migraciones ni crea tablas.
 
 ---
 
@@ -146,10 +152,10 @@ por rol ni por dueño del archivo → ver riesgo R4 en §7).
 |---------|-------|--------|---------|--------|
 | `customer_invoices_lock` | `customer_invoices` | BEFORE UPDATE | `tg_lock_authorized_invoice()` | Si `old.estado_arca = 'AUTORIZADO_ARCA'`, bloquea cambios a campos fiscales (`cae`, `numero_comprobante`, `total`, `subtotal`, `iva`, `cbte_tipo_arca`, `punto_venta`, `cuit_cliente`) → obliga NC/ND. Permite anulación lógica, materializar PDF y `updated_at`. |
 
-Triggers relacionados ya existentes en el schema base:
+Triggers relacionados ya existentes en el schema base (todos trackeados):
 - `trg_set_public_id` (`orders`, BEFORE INSERT) → genera `OS-NNNNNN`.
-- `trg_set_po_public_id` (`purchase_orders`, BEFORE INSERT, **untracked**) → `OC-AAAA-NNNN`.
-- `trg_roles_updated_at` (`roles`, **untracked**) → toca `updated_at`.
+- `trg_set_po_public_id` (`purchase_orders`, BEFORE INSERT, **0008 aplicada**) → `OC-AAAA-NNNN`.
+- `trg_roles_updated_at` (`roles`, **0009 aplicada**) → toca `updated_at`.
 
 **Falta (gap):** no hay trigger que bloquee `DELETE` de comprobantes
 autorizados, ni trigger que calcule/valide totales (`total = subtotal + iva +
@@ -169,8 +175,8 @@ de importes depende del código de aplicación.
 5. `punto_venta_tipo_t` — `WEBSERVICE`, `CONTROLADOR_FISCAL`, `MANUAL`.
 
 **Pre-existentes relevantes:** `user_role_t`, `depot_t`, `order_status_t`,
-`service_unit_t` (0001); `po_status_t`, `po_event_kind_t` (0008, untracked);
-`permission_module_t`, `permission_action_t` (0009, untracked).
+`service_unit_t` (0001); `po_status_t`, `po_event_kind_t` (0008, aplicada);
+`permission_module_t`, `permission_action_t` (0009, aplicada).
 
 > **Nota de diseño:** usar enums nativos PG para tipos fiscales es robusto pero
 > rígido — agregar un valor requiere `ALTER TYPE ... ADD VALUE` (no reversible en
@@ -191,7 +197,8 @@ de importes depende del código de aplicación.
 | R5 | **Totales sin validación en DB.** La coherencia `total = Σ` depende del código. Un bug de app puede persistir comprobantes descuadrados. | Media | Trigger de validación de importes en `BEFORE INSERT/UPDATE`, o columna generada. |
 | R6 | **Numeración de comprobantes sin secuencia server-side.** El número viene del CAE de ARCA, pero el unique no previene huecos ni concurrencia en borradores. | Baja | Reservar número solo al obtener CAE (ya es el patrón); documentar y agregar índice parcial `where numero_comprobante is not null`. |
 | R7 | **Dos sistemas de autorización** (enum `user_role_t` vs RBAC `0009`) conviviendo. RLS de 0011 ignora permisos finos. | Media | Unificar: que `current_role()`/RLS consulten `has_permission()` del RBAC. |
-| R8 | **Divergencia repo↔producción** (§0): proveedores/RBAC/módulos sin versionar. | **Alta** | Versionar o descartar explícitamente antes de construir Tesorería encima. |
+| R8 | ~~Divergencia repo↔producción~~ → **CERRADO** (FASE 3): todo trackeado en `feature/documents-enterprise-ready`. Riesgo residual = gap Migraciones↔DB (0010/0011 sin aplicar, GATE 2 PENDIENTE). | Baja (era Alta) | Aplicar 0010→0011 en staging aislado tras desbloquear infraestructura. |
+| R10 | **Cambios de autorización RBAC sin versionar** (`profiles.role` se pisa; sin `rbac_audit`). | Media | Tabla `rbac_audit` append-only + triggers (diseño en [RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) §8); entra con 0012. |
 | R9 | **Moneda y cotización por comprobante pero sin tabla de cotizaciones.** Factura E (export) guarda `moneda`/`cotizacion` sueltos. | Baja | Tabla `tipos_cambio` (fecha, moneda, valor) referenciable; histórico para revalúo. |
 
 ---
@@ -208,9 +215,9 @@ Schema **completo** para emitir. Falta operativamente:
 - Tabla `tipos_cambio` para Factura E.
 - Reintentos idempotentes ante `ERROR_ARCA` (ya hay estado; falta cola/retry).
 
-### 8.2 Proveedores (hoy: solo OC local, untracked)
-Existe `vendors` + `purchase_orders` + `po_items` (en `0008`, **sin desplegar**).
-**Falta el eslabón fiscal-financiero:**
+### 8.2 Proveedores (hoy: solo OC, sin eslabón fiscal)
+Existe `vendors` + `purchase_orders` + `po_items` (en `0008`, **aplicada con
+datos**: vendors=10, products=20). **Falta el eslabón fiscal-financiero:**
 - **`supplier_invoices`** (factura de proveedor / IVA Crédito) — inexistente.
 - **`cost_centers`** (centro de costo) — inexistente.
 - Vínculo OC → factura proveedor → pago (recepción/conciliación de 3 vías:
@@ -346,7 +353,7 @@ tesorería → contabilidad general (GL). Toda operación fluye hacia el GL.
 │  → Mayor · Balance de sumas y saldos · Estado de resultados · BALANCE ANUAL │
 │  → Libro IVA Ventas · Libro IVA Compras · DDJJ IVA · Retenciones            │
 └─────────────────────────────────────────────────────────────────────────────┘
-        TRANSVERSAL: audit_log + *_audit (inmutable) · documents/attachments
+        TRANSVERSAL: audit_log + *_audit + rbac_audit (inmutables) · documents/attachments
         INTEGRACIONES: ARCA (WSAA/WSFEv1) · bancos · Clientify · migración Neuralsoft
 ```
 
@@ -360,9 +367,13 @@ tesorería → contabilidad general (GL). Toda operación fluye hacia el GL.
    `customer_invoices`) se replica en `supplier_invoices` y se complementa con
    guard de DELETE + período contable cerrado (`fiscal_periods`) que bloquea
    cualquier escritura retroactiva.
-3. **Un solo sistema de autorización.** RLS de todo el ERP consulta el RBAC
-   granular (`has_permission`), no el enum simple. Cliente B2B ve solo su
-   dominio (sus OS/OC/facturas/CC) por `profiles.client_id`.
+3. **Un solo sistema de autorización, versionado.** RLS de todo el ERP consulta
+   el RBAC granular (`has_permission`), no el enum simple. Cliente B2B ve solo su
+   dominio (sus OS/OC/facturas/CC) por `profiles.client_id`. **Todo cambio de
+   autorización (grant/revoke/asignación de rol) queda registrado en `rbac_audit`
+   append-only** (diseño en [RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) §8) —
+   no-repudio y trazabilidad de quién habilitó qué permiso sensible (`*.sign`,
+   `sistema.admin`) y cuándo.
 4. **Catálogos versionables, no enums, para lo que cambia** (tipos de
    comprobante, alícuotas, regímenes de retención, plan de cuentas).
 5. **Datos fiscales nunca hardcodeados** (`fiscal_config`); clave X.509 solo en
@@ -375,7 +386,7 @@ tesorería → contabilidad general (GL). Toda operación fluye hacia el GL.
 
 | Migración | Bloque | Habilita | Fase rector |
 |-----------|--------|----------|-------------|
-| 0012 | Catálogos (cost_centers, plan de cuentas, tax_rates, tipos_cambio, fiscal_periods) | Fundación contable | F3/F6 |
+| 0012 | Catálogos (cost_centers, plan de cuentas, tax_rates, tipos_cambio, fiscal_periods) **+ versionado RBAC (`rbac_audit` + triggers)** | Fundación contable + trazabilidad de permisos | F3/F6 |
 | 0013 | `supplier_invoices` + items + FK a OC | Proveedores + IVA Crédito | **F3** |
 | 0014 | `withholdings` | Retenciones/percepciones | F3/F4 |
 | 0015 | Tesorería + Cuentas Corrientes (accounts, payments, collections, checks, allocations) | **F4 + F5** | F4/F5 |
