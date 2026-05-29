@@ -173,13 +173,14 @@ gobiernan datos transaccionales y fiscales; máxima prioridad de paridad y tests
 - ✅ **Verificado en esta sesión:** ramas, HEAD, archivos por rama (`git ls-tree`),
   migraciones en disco por rama, código real de CCTV (ISAPI Hikvision), contenido
   de los 5 docs de auditoría previos y del rector.
-- ⚠️ **No re-verificado en esta sesión:** el estado **vivo** de la DB remota
-  Supabase. Los conteos (vendors=10, roles=7, permissions=22, role_permissions=64,
-  `user_roles`=0, profiles admin=1/operaciones=2/supervisor=3) y "0001–0009
-  aplicadas, 0010/0011 no" provienen del diagnóstico read-only documentado el
-  2026-05-29 (`scripts/supabase-check.mjs`). No hay `supabase/config.toml` ni link
-  de CLI en el repo; re-verificar requiere usar `.env.local` (host-only) contra
-  prod en read-only. **Recomendado re-confirmar antes de ejecutar P1/P3/P4.**
+- ✅ **DB remota RE-VERIFICADA en vivo (2026-05-29):** auditoría read-only vía
+  Supabase Management API (solo `SELECT`). Confirmado: `0001–0009` aplicadas
+  (0006–0009 fuera del tracker), **`0010` y `0011` NO aplicadas**, RBAC dormido
+  (`user_roles`=0; 7 roles/22 perms/64 mapeos), 5 buckets (sin `invoices`), 20 tablas
+  reales. **Hallazgo nuevo:** tracker `schema_migrations` desincronizado (solo conoce
+  0001–0005) → PARIDAD-3. Evidencia completa en
+  [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md).
+  Esta verificación **reemplaza** la advertencia previa de "no re-verificado".
 
 ---
 

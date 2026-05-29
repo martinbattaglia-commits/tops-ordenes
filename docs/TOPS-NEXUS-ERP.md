@@ -57,27 +57,39 @@ desconectadas ni lógica duplicada.
 
 ## 5. Modelo de datos — estado actual vs. objetivo
 
-Tablas creadas (migraciones 0001–0011):
+> **Corrección 2026-05-29 (auditoría read-only en vivo):** esta sección fue
+> rectificada contra la DB real. Versiones previas listaban `documents` y las 5
+> tablas ARCA como creadas — **no existen** en la base. Detalle y evidencia en
+> [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md).
 
-`attachments`, `audit_log`, `clients`, `customer_invoices`, `documents`,
-`email_sends`, `fiscal_config`, `invoice_audit`, `invoice_items`, `notifications`,
+**Tablas REALES en `public` (20, verificadas en DB al 2026-05-29):**
+
+`attachments`, `audit_log`, `clients`, `email_sends`, `notifications`,
 `operators`, `order_services`, `orders`, `permissions`, `po_email_sends`,
-`po_events`, `po_items`, `products`, `profiles`, `puntos_venta`,
-`purchase_orders`, `role_permissions`, `roles`, `services_catalog`,
-`user_roles`, `vendors`.
+`po_events`, `po_items`, `products`, `profiles`, `purchase_orders`,
+`role_permissions`, `roles`, `services_catalog`, `user_roles`, `vendors`.
+**Vistas:** `my_permissions`, `v_orders_dashboard`, `vendor_stats`.
+
+**Tablas que la documentación previa daba por creadas pero NO existen:**
+`documents` (0010 sin aplicar) · `customer_invoices`, `invoice_items`,
+`fiscal_config`, `puntos_venta`, `invoice_audit` (0011 sin aplicar).
+
+**Migraciones — estado efectivo:** `0001–0009` aplicadas (0006–0009 fuera del
+tracker); **`0010` y `0011` NO aplicadas**. El tracker `schema_migrations` solo
+conoce `0001–0005` → **desincronizado**, no usar el CLI a ciegas (PARIDAD-3).
 
 | Objetivo (charter)   | Estado | Mapea a |
 |----------------------|--------|---------|
 | clients              | ✅ | `clients` |
 | providers            | ✅ | `vendors` |
 | service_orders       | ✅ | `orders` + `order_services` |
-| customer_invoices    | ✅ | `customer_invoices` + `invoice_items` |
-| invoice_items        | ✅ | `invoice_items` |
-| users / roles        | ✅ | `profiles` + `user_roles` + `roles` + `permissions` |
-| audit_logs           | ✅ | `audit_log` (+ `invoice_audit`) |
-| documents            | ✅ | `documents` + `attachments` |
+| customer_invoices    | ❌ | — (0011 **NO aplicada** en DB) |
+| invoice_items        | ❌ | — (0011 **NO aplicada** en DB) |
+| users / roles        | ✅ | `profiles` + `user_roles` (0 filas) + `roles` + `permissions` |
+| audit_logs           | ✅ | `audit_log` (`invoice_audit` ausente, 0011) |
+| documents            | ❌ | solo `attachments`; `documents` ausente (0010 **NO aplicada**) |
 | notifications        | ✅ | `notifications` |
-| settings             | 🟡 | `fiscal_config` (falta settings general) |
+| settings             | ❌ | `fiscal_config` ausente (0011); sin settings general |
 | **supplier_invoices**| ❌ | — (Fase 3) |
 | **cost_centers**     | ❌ | — (Fase 3) |
 | **payments**         | ❌ | — (Fase 4) |
@@ -98,8 +110,11 @@ Tablas creadas (migraciones 0001–0011):
 | **6. Inteligencia de Negocio** | Dashboard corporativo | 🟡 parcial — `ejecutivo`/`reports` existen |
 | **7. Integraciones** | Clientify, Google Workspace, WhatsApp, WMS, Hikvision, migración Neuralsoft | 🟡 parcial — código Clientify/Drive/WhatsApp/Hikvision presente; migración Neuralsoft pendiente |
 
-> **Migración 0011 (ARCA):** pendiente de aplicar en producción. Revisión
-> detallada de qué crea/modifica en [migracion-0011-arca-revision.md](./migracion-0011-arca-revision.md).
+> **Migraciones 0010 (documents) y 0011 (ARCA):** ambas **NO aplicadas** en la DB
+> real (verificado 2026-05-29). `/documental` no persiste y `/billing` + `/settings/fiscal`
+> fallan en runtime contra la DB. Revisión de 0011 en
+> [migracion-0011-arca-revision.md](./migracion-0011-arca-revision.md); evidencia del
+> estado real en [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md).
 
 ## 7. Próximo incremento recomendado
 
@@ -128,6 +143,7 @@ nativo** (evidencia visual auditable + insumo de compliance ANMAT).
 
 Documentación de arquitectura y consolidación (gobernada por este rector):
 
+- [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md) — **auditoría read-only en vivo de la DB**: migraciones aplicadas, tablas/columnas reales, RBAC, buckets, paridad definitiva y plan de remediación PARIDAD-1.
 - [ERP-CONSOLIDACION-DEFINITIVA.md](./ERP-CONSOLIDACION-DEFINITIVA.md) — informe capstone: paridad, divergencia y clasificación main/branch/eliminar/Core.
 - [ERP-ARQUITECTURA-MAESTRA.md](./ERP-ARQUITECTURA-MAESTRA.md) — vista única de los 10 módulos.
 - [ERP-MODULO-CCTV.md](./ERP-MODULO-CCTV.md) — incorporación oficial del módulo CCTV.
