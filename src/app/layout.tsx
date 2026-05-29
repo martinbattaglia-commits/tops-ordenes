@@ -17,16 +17,16 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3030"),
   title: {
-    default: "TOPS Órdenes — Logística TOPS",
-    template: "%s · TOPS Órdenes",
+    default: "TOPS NEXUS — Logistics Operating System · Logística TOPS",
+    template: "%s · TOPS NEXUS",
   },
   description:
-    "Sistema digital de órdenes de servicio operativas — Logística TOPS (Verotin S.A.)",
-  applicationName: "TOPS Órdenes",
+    "Plataforma operativa corporativa de Logística TOPS (Verotin S.A.). Compras, servicios, CRM, CCTV, ANMAT, documental y analytics — todo en un único Operating System.",
+  applicationName: "TOPS NEXUS",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "TOPS Órdenes",
+    title: "TOPS NEXUS",
     statusBarStyle: "black-translucent",
   },
   formatDetection: {
@@ -44,10 +44,10 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "es_AR",
-    siteName: "TOPS Órdenes",
-    title: "TOPS Órdenes — Logística TOPS",
+    siteName: "TOPS NEXUS",
+    title: "TOPS NEXUS — Logistics Operating System",
     description:
-      "Sistema digital de órdenes de servicio operativas para Logística TOPS (Verotin S.A.)",
+      "Cockpit corporativo de Logística TOPS (Verotin S.A., desde 1985). Operaciones 3PL, compras, ANMAT compliance, CCTV y documental, todo bajo una identidad enterprise única.",
   },
 };
 
@@ -60,9 +60,19 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+/**
+ * Script "no-FOUC" para dark mode: aplica la clase `dark` en <html>
+ * antes de que React hidrate, evitando flash blanco si el usuario tiene
+ * preferencia oscura guardada.
+ */
+const themeBootstrap = `(function(){try{var t=localStorage.getItem('tops-theme');var d=t==='dark'||(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d){document.documentElement.classList.add('dark');document.documentElement.setAttribute('data-theme','dark')}else{document.documentElement.setAttribute('data-theme','light')}}catch(e){}})();`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={montserrat.variable}>
+    <html lang="es" className={montserrat.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+      </head>
       <body>
         {children}
         <script

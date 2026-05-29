@@ -1,0 +1,279 @@
+/* ==========================================================================
+   Logística Tops — Colors & Type
+   Single source of truth. Import this in every HTML file in the system.
+   ========================================================================== */
+
+/* ---------- Font faces (Gotham — primary corporate typeface) ----------- */
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-Thin.otf') format('opentype');
+  font-weight: 100; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-Light.otf') format('opentype');
+  font-weight: 300; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-Book.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-BookItalic.otf') format('opentype');
+  font-weight: 400; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-Medium.otf') format('opentype');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-Bold.otf') format('opentype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-BoldItalic.otf') format('opentype');
+  font-weight: 700; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham';
+  src: url('./fonts/Gotham-Black.otf') format('opentype');
+  font-weight: 900; font-style: normal; font-display: swap;
+}
+
+/* Gotham Rounded — used sparingly for friendlier UI callouts (coworking,
+   badges). Not in the official brand manual but Tops distributes the file
+   set, so we keep it available as an accent family. */
+@font-face {
+  font-family: 'Gotham Rounded';
+  src: url('./fonts/GothamRnd-Book.otf') format('opentype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham Rounded';
+  src: url('./fonts/GothamRnd-Medium.otf') format('opentype');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Gotham Rounded';
+  src: url('./fonts/GothamRnd-Bold.otf') format('opentype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* ==========================================================================
+   Tokens
+   ========================================================================== */
+:root {
+  /* ------------------- Brand palette (from manual) ------------------- */
+  --tops-blue-900:   #050555;   /* Azul oscuro — master brand color */
+  --tops-blue-700:   #214576;   /* Azul claro — secondary / accent */
+  --tops-red:        #C90812;   /* Rojo — action / highlight */
+  --tops-white:      #FFFFFF;
+
+  /* --------- Extended neutrals (derived from brand blue/white) -------
+     Used for body UI, card surfaces, dividers. Warm-cool neutral ladder
+     so long-form reading sits comfortably against the deep-blue brand. */
+  --neutral-0:   #FFFFFF;
+  --neutral-50:  #F7F8FB;   /* page bg on light surfaces */
+  --neutral-100: #EEF1F6;   /* cards / subtle surface */
+  --neutral-200: #DDE3EC;   /* dividers, input borders */
+  --neutral-300: #C2CAD6;   /* muted strokes */
+  --neutral-400: #8A94A6;   /* placeholder, meta */
+  --neutral-500: #5A6577;   /* secondary text */
+  --neutral-700: #2A3340;   /* body text on light */
+  --neutral-900: #0B1220;   /* near-black / heavy headlines on light */
+
+  /* --------- Tints of brand blue, for layering on dark surfaces ------ */
+  --blue-900-08: rgba(5, 5, 85, 0.08);
+  --blue-900-16: rgba(5, 5, 85, 0.16);
+  --blue-700-24: rgba(33, 69, 118, 0.24);
+  --blue-on-dark-10: rgba(255, 255, 255, 0.08);
+  --blue-on-dark-16: rgba(255, 255, 255, 0.14);
+
+  /* --------- Semantic (foreground / background / stroke) ------------- */
+  --fg-primary:     var(--neutral-900);
+  --fg-secondary:   var(--neutral-500);
+  --fg-muted:       var(--neutral-400);
+  --fg-inverse:     var(--tops-white);
+  --fg-brand:       var(--tops-blue-900);
+  --fg-accent:      var(--tops-red);
+  --fg-link:        var(--tops-blue-700);
+
+  --bg-page:        var(--neutral-50);
+  --bg-surface:     var(--tops-white);
+  --bg-surface-alt: var(--neutral-100);
+  --bg-brand:       var(--tops-blue-900);
+  --bg-brand-alt:   var(--tops-blue-700);
+  --bg-accent:      var(--tops-red);
+
+  --stroke-soft:   var(--neutral-200);
+  --stroke-strong: var(--neutral-300);
+  --stroke-brand:  var(--tops-blue-700);
+
+  /* --------- Status / feedback (tuned to brand palette) -------------- */
+  --status-success: #0E7C3A;   /* ANMAT/certified green — used sparingly */
+  --status-warning: #B45309;
+  --status-danger:  var(--tops-red);
+  --status-info:    var(--tops-blue-700);
+
+  /* ------------------- Elevation & radii ---------------------------- */
+  --radius-xs:  2px;
+  --radius-sm:  4px;
+  --radius-md:  6px;   /* default UI radius — Tops is industrial / crisp */
+  --radius-lg:  10px;
+  --radius-xl:  16px;  /* hero cards, photo frames */
+  --radius-pill: 999px;
+
+  --shadow-xs: 0 1px 2px rgba(5, 5, 85, 0.06);
+  --shadow-sm: 0 2px 6px rgba(5, 5, 85, 0.08);
+  --shadow-md: 0 6px 18px rgba(5, 5, 85, 0.10);
+  --shadow-lg: 0 18px 40px rgba(5, 5, 85, 0.16);
+  --shadow-inset-soft: inset 0 0 0 1px rgba(5, 5, 85, 0.06);
+
+  /* ------------------- Spacing (4px grid) --------------------------- */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* ------------------- Typography ----------------------------------- */
+  --font-primary:   'Gotham', 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+  --font-rounded:   'Gotham Rounded', 'Gotham', 'Montserrat', sans-serif;
+  --font-mono:      ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  /* Display — reserved for hero lockups. Tops uses tight tracking +
+     heavy weight, mirroring the LOGISTICA wordmark. */
+  --display-xl-size:   72px;
+  --display-xl-line:   1.02;
+  --display-xl-weight: 700;
+  --display-xl-track:  -0.02em;
+
+  --display-lg-size:   56px;
+  --display-lg-line:   1.05;
+  --display-lg-weight: 700;
+  --display-lg-track:  -0.015em;
+
+  /* Headings */
+  --h1-size: 40px;   --h1-line: 1.1;   --h1-weight: 700;  --h1-track: -0.01em;
+  --h2-size: 32px;   --h2-line: 1.15;  --h2-weight: 700;  --h2-track: -0.005em;
+  --h3-size: 24px;   --h3-line: 1.2;   --h3-weight: 500;  --h3-track: 0;
+  --h4-size: 20px;   --h4-line: 1.3;   --h4-weight: 500;  --h4-track: 0;
+  --h5-size: 16px;   --h5-line: 1.4;   --h5-weight: 700;  --h5-track: 0.02em;
+
+  /* Body */
+  --body-lg-size: 18px;  --body-lg-line: 1.6;   --body-lg-weight: 400;
+  --body-size:    16px;  --body-line:    1.6;   --body-weight:    400;
+  --body-sm-size: 14px;  --body-sm-line: 1.5;   --body-sm-weight: 400;
+  --caption-size: 12px;  --caption-line: 1.4;   --caption-weight: 400;
+
+  /* Eyebrow — all-caps label used above section titles,
+     echoes the manual's section headings ("Paleta Cromática", etc). */
+  --eyebrow-size:   12px;
+  --eyebrow-line:   1.2;
+  --eyebrow-weight: 700;
+  --eyebrow-track:  0.14em;
+
+  /* Buttons */
+  --btn-size:   15px;
+  --btn-weight: 700;
+  --btn-track:  0.04em;
+}
+
+/* ==========================================================================
+   Base element styles (semantic helpers — opt-in by class or element)
+   ========================================================================== */
+.tops {
+  font-family: var(--font-primary);
+  color: var(--fg-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+.tops .display-xl, .tops h1.display {
+  font: var(--display-xl-weight) var(--display-xl-size)/var(--display-xl-line) var(--font-primary);
+  letter-spacing: var(--display-xl-track);
+  text-transform: uppercase;
+}
+.tops .display-lg {
+  font: var(--display-lg-weight) var(--display-lg-size)/var(--display-lg-line) var(--font-primary);
+  letter-spacing: var(--display-lg-track);
+  text-transform: uppercase;
+}
+.tops h1, .tops .h1 {
+  font: var(--h1-weight) var(--h1-size)/var(--h1-line) var(--font-primary);
+  letter-spacing: var(--h1-track);
+  color: var(--fg-brand);
+  margin: 0 0 var(--space-4);
+}
+.tops h2, .tops .h2 {
+  font: var(--h2-weight) var(--h2-size)/var(--h2-line) var(--font-primary);
+  letter-spacing: var(--h2-track);
+  color: var(--fg-brand);
+  margin: 0 0 var(--space-3);
+}
+.tops h3, .tops .h3 {
+  font: var(--h3-weight) var(--h3-size)/var(--h3-line) var(--font-primary);
+  color: var(--fg-primary);
+  margin: 0 0 var(--space-2);
+}
+.tops h4, .tops .h4 {
+  font: var(--h4-weight) var(--h4-size)/var(--h4-line) var(--font-primary);
+  color: var(--fg-primary);
+  margin: 0 0 var(--space-2);
+}
+.tops h5, .tops .h5 {
+  font: var(--h5-weight) var(--h5-size)/var(--h5-line) var(--font-primary);
+  letter-spacing: var(--h5-track);
+  text-transform: uppercase;
+  color: var(--fg-primary);
+  margin: 0 0 var(--space-2);
+}
+.tops p, .tops .p {
+  font: var(--body-weight) var(--body-size)/var(--body-line) var(--font-primary);
+  color: var(--fg-primary);
+  margin: 0 0 var(--space-4);
+}
+.tops .body-lg {
+  font-size: var(--body-lg-size);
+  line-height: var(--body-lg-line);
+}
+.tops .body-sm, .tops small {
+  font-size: var(--body-sm-size);
+  line-height: var(--body-sm-line);
+  color: var(--fg-secondary);
+}
+.tops .caption {
+  font-size: var(--caption-size);
+  line-height: var(--caption-line);
+  color: var(--fg-muted);
+}
+.tops .eyebrow {
+  font: var(--eyebrow-weight) var(--eyebrow-size)/var(--eyebrow-line) var(--font-primary);
+  letter-spacing: var(--eyebrow-track);
+  text-transform: uppercase;
+  color: var(--tops-red);
+}
+.tops a { color: var(--fg-link); text-decoration: none; }
+.tops a:hover { color: var(--tops-blue-900); text-decoration: underline; text-underline-offset: 3px; }
+.tops code, .tops .mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--neutral-100);
+  padding: 0.1em 0.35em;
+  border-radius: var(--radius-sm);
+}
