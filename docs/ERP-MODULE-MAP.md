@@ -19,7 +19,14 @@ El ERP vive hoy en **tres planos que no coinciden**:
 | **B. DB remoto** | Supabase `arsksytgdnzukbmfgkju` (schema realmente aplicado) | `node scripts/supabase-check.mjs` (read-only) |
 | **C. WIP local** | disco de trabajo (untracked + branches locales) | `git status`, `git branch` |
 
-**Divergencia central detectada:**
+> **Actualización 2026-05-29 (post FASE 1):** la divergencia central de
+> migraciones quedó **resuelta**. El SQL de `0008`/`0009`/`0010` se mergeó a
+> `main` (HEAD `b82a5f2`, **PARIDAD-1 cerrada**) y el tracker se reconcilió a
+> `0001–0009` vía `migration repair` (**PARIDAD-3 cerrada**). El diagrama y las
+> consecuencias de abajo se conservan como **registro histórico** del estado
+> previo. Ver [ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md).
+
+**Divergencia central detectada (estado HISTÓRICO previo a FASE 1):**
 
 ```
             CÓDIGO (origin/main)        DB REMOTO              WIP LOCAL
@@ -31,15 +38,28 @@ El ERP vive hoy en **tres planos que no coinciden**:
 0011 (ARCA) ✅ versionado + desplegado  ❌ NO aplicado         ✅            ← código adelante de la DB
 ```
 
-**Consecuencias inmediatas:**
-1. **Riesgo de pérdida (CRÍTICO):** el SQL que creó las tablas productivas
+**Estado vigente (post FASE 1, 2026-05-29):**
+
+```
+            CÓDIGO (origin/main)        DB REMOTO              TRACKER
+            ────────────────────        ──────────             ───────
+0001-0007   ✅ versionado               ✅ aplicado            ✅ registrado
+0008 (OC)   ✅ versionado (b82a5f2)     ✅ aplicado (datos!)   ✅ registrado
+0009 (RBAC) ✅ versionado (b82a5f2)     ✅ aplicado (datos!)   ✅ registrado
+0010 (docs) ✅ versionado (b82a5f2)     ❌ NO aplicado         ❌ no registrado
+0011 (ARCA) ✅ versionado + desplegado  ❌ NO aplicado         ❌ no registrado
+```
+
+**Consecuencias inmediatas (HISTÓRICAS — 1 y 3 ya mitigadas):**
+1. ~~**Riesgo de pérdida (CRÍTICO):** el SQL que creó las tablas productivas
    `vendors`, `purchase_orders`, `roles`, `permissions` (0008/0009) **no está
-   versionado**. Si se pierde el disco, se pierde la definición del schema que
-   ya tiene datos en producción.
+   versionado**.~~ **MITIGADO:** 0008/0009 ya están en `main` (`b82a5f2`).
 2. **`/billing` y `/settings/fiscal` fallan en runtime:** el código de 0011 está
-   desplegado pero sus tablas no existen en la DB. (No bloquea el resto de la app.)
-3. **Módulos productivos sin desplegar:** `compras` (que usa tablas 0008 con
-   datos reales) existe solo como WIP local untracked.
+   desplegado pero sus tablas no existen en la DB (0011 sin aplicar). (No bloquea
+   el resto de la app.) **VIGENTE.**
+3. ~~**Módulos productivos sin desplegar:** `compras` (que usa tablas 0008 con
+   datos reales) existe solo como WIP local untracked.~~ **MITIGADO:** el SQL de
+   0008 está versionado en `main`.
 
 ---
 
@@ -122,7 +142,7 @@ Tesorería (Fase 4), Cuentas Corrientes (Fase 5), Contabilidad/Balance (Fase 6).
 
 | Ref | Commit | Contenido | Riesgo |
 |-----|--------|-----------|--------|
-| `main` | `a4b24e5` | Producción estable + ARCA + docs | OK (pusheado) |
+| `main` | `b82a5f2` | Producción estable + ARCA + docs + SQL 0008/0009/0010 (PARIDAD-1 cerrada) | OK (pusheado) |
 | `feature/ui-redesign` | `5daeb13` | Rediseño visual + branding (53 archivos) | ⚠️ **solo local** → preservar |
 | `stash@{0}` | `ea295c9` | `wip-design-overhaul` viejo (21 archivos, superseded) | Redundante; evaluar `git stash drop` |
 

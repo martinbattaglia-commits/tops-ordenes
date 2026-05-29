@@ -15,6 +15,15 @@
 > [RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) y
 > [erp-arquitectura-objetivo.md](./erp-arquitectura-objetivo.md).
 
+> **✅ CIERRE POSTERIOR (2026-05-29, FASE 1):** la paridad #1 que este capstone
+> identificó como pendiente **ya fue saldada**. El SQL `0008`/`0009`/`0010` se mergeó
+> a `main` (HEAD `b82a5f2`, **PARIDAD-1 cerrada**) y el tracker se reconcilió a
+> `0001–0009` (`migration repair`, **PARIDAD-3 cerrada**). Las afirmaciones de abajo
+> sobre "0008/0009/0010 solo en `wip`" y "producción no puede reconstruir su schema"
+> son el **diagnóstico previo** que motivó FASE 1; ya no son el estado vigente.
+> `0010`/`0011` siguen **versionadas pero NO aplicadas**. Ver
+> [ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md).
+
 ---
 
 ## 0. TL;DR para dirección
@@ -43,9 +52,9 @@ proviene del diagnóstico read-only documentado (no re-consultado hoy; ver §6).
 | Artefacto | Código en `main` | Código en `wip` | Migración en `main` | Migración en `wip` | DB remota | Documentado | Paridad |
 |-----------|:----------------:|:---------------:|:-------------------:|:------------------:|:---------:|:-----------:|:-------:|
 | Core 0001–0007 (profiles/clients/orders/RLS) | ✅ | ✅ | ✅ | ✅ | ✅ aplicada | ✅ | ✅ **OK** |
-| 0008 Compras/OC (vendors, purchase_orders, po_*) | ❌ | ✅ | ❌ | ✅ | ✅ **con datos** | ✅ | 🔴 **rota** (main sin SQL ni código) |
-| 0009 RBAC (roles/permissions/role_permissions/user_roles) | ❌ | ✅ | ❌ | ✅ | ✅ con datos (`user_roles`=0) | ✅ | 🔴 **rota** (main sin SQL ni código) |
-| 0010 Documents (`documents`) | ❌ | ✅ | ❌ | ✅ | ❌ **no aplicada** | ✅ | 🟠 desalineada |
+| 0008 Compras/OC (vendors, purchase_orders, po_*) | ❌ | ✅ | ✅ (FASE 1) | ✅ | ✅ **con datos** | ✅ | ✅ **SQL en `main`** (`b82a5f2`); falta promover el código del módulo |
+| 0009 RBAC (roles/permissions/role_permissions/user_roles) | ❌ | ✅ | ✅ (FASE 1) | ✅ | ✅ con datos (`user_roles`=0) | ✅ | ✅ **SQL en `main`** (`b82a5f2`); falta promover el código del módulo |
+| 0010 Documents (`documents`) | ❌ | ✅ | ✅ (FASE 1) | ✅ | ❌ **no aplicada** | ✅ | 🟠 SQL en `main`, **NO aplicada** en DB (FASE 2) |
 | 0011 ARCA (customer_invoices, fiscal_config, …) | ✅ desplegado | ✅ | ✅ | ✅ | ❌ **no aplicada** | ✅ | 🟠 **invertida** (código adelante de la DB) |
 | Módulos WIP (compras, cctv, anmat, comercial, documental, ejecutivo, operaciones, rbac UI, drive, whatsapp, ocr) | ❌ | ✅ | — | — | parcial | ✅ | 🟢 versionado (no en main) |
 | Rediseño visual | ❌ | ❌ (`feature/ui-redesign`) | — | — | — | 🟡 | 🟢 preservado aparte |
@@ -65,7 +74,7 @@ proviene del diagnóstico read-only documentado (no re-consultado hoy; ver §6).
 
 | Paso | Acción propuesta | Toca | Reversible | Bloquea a |
 |:----:|------------------|------|:----------:|-----------|
-| P1 | **Llevar SQL 0008/0009/0010 a `main`** (solo archivos, sin re-aplicar; la DB ya los tiene salvo 0010) para restaurar paridad código↔DB de producción | repo `main` (vía merge controlado) | ✅ | toda promoción |
+| ~~P1~~ ✅ | **Llevar SQL 0008/0009/0010 a `main`** — **EJECUTADO en FASE 1** (merge `b82a5f2` + tracker `0001–0009`). Paridad código↔DB↔tracker restaurada para `0001–0009` | repo `main` (merge controlado) | ✅ | toda promoción |
 | P2 | **Resolver duplicados** `clientify.ts`↔`clientify/`, `google-drive.ts`↔`drive/`, conciliar `api/drive/ping`, ubicar `types.ts`↔`types-po.ts` | repo | ✅ | merge a `main` |
 | P3 | **Gate de Facturación ARCA**: feature-flag de `/billing` + `/settings/fiscal` (no toca DB) **o** aplicar 0011 con confirmación | código (flag) o DB (0011) | ✅ flag / ⚠️ 0011 | runtime prod |
 | P4 | **Poblar `user_roles`** (seed, no schema) mapeando los 6 usuarios al RBAC granular | DB (seed) | ✅ | gobernanza/SoD |
@@ -164,7 +173,7 @@ gobiernan datos transaccionales y fiscales; máxima prioridad de paridad y tests
 | C2 | Auditoría borrable por CASCADE (viola inmutabilidad) | 🟠 alto | migración 0012 (no ahora) |
 | G3 | RBAC granular dormido (`user_roles`=0; RLS usa enum simple) | 🟠 | P4 |
 | G6 | Duplicados clientify/drive/types sin resolver | 🟡 | P2 |
-| **PARIDAD-1** | **SQL 0008/0009/0010 ausente en `main`** | 🟠 | P1 |
+| ~~**PARIDAD-1**~~ | ~~SQL 0008/0009/0010 ausente en `main`~~ | ✅ | **CERRADO** (FASE 1: `main` `b82a5f2`; tracker `0001–0009`) |
 
 ---
 
@@ -177,10 +186,14 @@ gobiernan datos transaccionales y fiscales; máxima prioridad de paridad y tests
   Supabase Management API (solo `SELECT`). Confirmado: `0001–0009` aplicadas
   (0006–0009 fuera del tracker), **`0010` y `0011` NO aplicadas**, RBAC dormido
   (`user_roles`=0; 7 roles/22 perms/64 mapeos), 5 buckets (sin `invoices`), 20 tablas
-  reales. **Hallazgo nuevo:** tracker `schema_migrations` desincronizado (solo conoce
-  0001–0005) → PARIDAD-3. Evidencia completa en
+  reales. **Hallazgo (al momento de la auditoría):** tracker `schema_migrations`
+  desincronizado (solo conocía 0001–0005) → PARIDAD-3. Evidencia completa en
   [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md).
   Esta verificación **reemplaza** la advertencia previa de "no re-verificado".
+- ✅ **Cierre posterior (FASE 1, mismo día):** PARIDAD-3 cerrada — tracker reconciliado
+  a `0001–0009` vía `migration repair` (sin tocar el esquema físico). PARIDAD-1 cerrada —
+  SQL `0008`/`0009`/`0010` mergeado a `main` `b82a5f2`. Ver
+  [ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md).
 
 ---
 
@@ -190,6 +203,8 @@ La **Consolidación Arquitectónica está completa a nivel documental**: el ERP 
 auditado, mapeado, su RBAC y arquitectura objetivo documentados, CCTV incorporado
 como módulo nativo, los 10 módulos enumerados y un roadmap de 12 meses trazado.
 
-**No se ejecutó** ninguna acción sobre producción, DB, migraciones o ramas. El
-siguiente movimiento (cuando se apruebe) es **P1 + P2** (paridad y duplicados,
-solo repo, reversibles), seguido de **P3 + P4** (gate ARCA + activar RBAC).
+**A nivel de esta fase no se ejecutó** ninguna acción sobre producción, DB,
+migraciones o ramas. **Actualización FASE 1 (2026-05-29):** P1 (paridad) ya se
+ejecutó vía gates aprobados — `main` `b82a5f2` + tracker `0001–0009`. El siguiente
+movimiento funcional es **FASE 2 — Módulo Documents (`0010`)** (diagnóstico/plan,
+sin aplicar), en paralelo a **P2/P3/P4** (duplicados, gate ARCA, activar RBAC).

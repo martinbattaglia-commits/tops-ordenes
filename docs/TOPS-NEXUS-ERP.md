@@ -74,9 +74,13 @@ desconectadas ni lógica duplicada.
 `documents` (0010 sin aplicar) · `customer_invoices`, `invoice_items`,
 `fiscal_config`, `puntos_venta`, `invoice_audit` (0011 sin aplicar).
 
-**Migraciones — estado efectivo:** `0001–0009` aplicadas (0006–0009 fuera del
-tracker); **`0010` y `0011` NO aplicadas**. El tracker `schema_migrations` solo
-conoce `0001–0005` → **desincronizado**, no usar el CLI a ciegas (PARIDAD-3).
+**Migraciones — estado efectivo (al 2026-05-29, post FASE 1):** `0001–0009`
+aplicadas y **registradas en el tracker** `schema_migrations` (reconciliado vía
+`supabase migration repair`, **PARIDAD-3 cerrada**); **`0010` y `0011` NO
+aplicadas**. El SQL de `0008`/`0009`/`0010` ya está en `main` (**PARIDAD-1
+cerrada**, HEAD `b82a5f2`). Sigue **prohibido `supabase db push`**: ahora
+intentaría aplicar `0010`/`0011` como DDL real (ver
+[ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md) §7.5).
 
 | Objetivo (charter)   | Estado | Mapea a |
 |----------------------|--------|---------|
@@ -103,7 +107,7 @@ conoce `0001–0005` → **desincronizado**, no usar el CLI a ciegas (PARIDAD-3)
 | Fase | Alcance | Estado |
 |------|---------|--------|
 | **1. Operaciones** | OC de servicio, operadores, catálogo de servicios | ✅ existe — optimizar; faltan `warehouses`/`storage_contracts`/`transport_orders` formales |
-| **2. Facturación ARCA** | WSAA/WSFEv1, CAE, QR, PDF fiscal, config, puntos de venta | ✅ completo (SANDBOX/Mock; PRODUCCIÓN bloqueada sin cert) |
+| **2. Facturación ARCA** | WSAA/WSFEv1, CAE, QR, PDF fiscal, config, puntos de venta | 🟡 **código completo, NO operativo** — migración `0011` **no aplicada**: las 5 tablas ARCA no existen en DB ⇒ `/billing` y `/settings/fiscal` fallan en runtime. PRODUCCIÓN además bloqueada sin cert. |
 | **3. Proveedores** | Cargar/aprobar/pagar/auditar facturas; centro de costo, categoría contable, responsable | 🟡 parcial — `vendors` + `purchase_orders`/`po_items` ✓; **faltan `supplier_invoices` + `cost_centers`** |
 | **4. Tesorería** | Caja, bancos, transferencias, cobranzas, pagos, cheques, flujo de fondos; KPIs saldo/proyección/deuda/cobranza | ❌ ausente |
 | **5. Cuentas Corrientes** | Saldos y mora de clientes y proveedores | ❌ ausente |
@@ -118,11 +122,17 @@ conoce `0001–0005` → **desincronizado**, no usar el CLI a ciegas (PARIDAD-3)
 
 ## 7. Próximo incremento recomendado
 
-**Completar Fase 3 — Proveedores:** agregar `supplier_invoices` + `cost_centers`
-(migración 0012) y el módulo asociado. Es el eslabón que conecta las
-`purchase_orders` existentes con la Tesorería (Fase 4): una factura de proveedor
-aprobada genera una obligación de pago. Cada factura se asocia a centro de costo,
-categoría contable y responsable, con auditoría e inmutabilidad lógica.
+**FASE 2 — Módulo Documents (migración `0010`).** Prioridad estratégica vigente
+(post FASE 1.5): el código y la migración `0010` ya están versionados en `main`
+pero **NO aplicados** en DB. La próxima fase es **solo diagnóstico, arquitectura,
+riesgos y plan de implementación** del Módulo Documents — sin ejecutar la migración,
+sin `db push`, con backup previo (RP6) e idempotencia endurecida como pre-requisitos.
+**ARCA (`0011`) no avanza hasta cerrar Documents.** Detalle en
+[ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md](./ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md).
+
+> _Diferido_ — Fase 3 Proveedores (`supplier_invoices` + `cost_centers`, migración
+> `0012`): conecta las `purchase_orders` con Tesorería. Queda **postergada** detrás
+> de Documents y ARCA según la prioridad estratégica del charter.
 
 ## 8. Modo de trabajo
 
@@ -144,6 +154,8 @@ nativo** (evidencia visual auditable + insumo de compliance ANMAT).
 Documentación de arquitectura y consolidación (gobernada por este rector):
 
 - [ERP-FASE0-GOBERNANZA-DB.md](./ERP-FASE0-GOBERNANZA-DB.md) — **FASE 0: gobernanza y trazabilidad de DB**: causa raíz de PARIDAD-3 (bootstrap sin tracker), matriz completa de migraciones (disco/tracker/manual/no-aplicada), estrategia de sincronización segura (`migration repair`) y riesgos de `db push`/migraciones/deploys.
+- [ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md) — **FASE 1: cierre de PARIDAD-1/2/3** con registro de ejecución de GATE A (merge a main + deploy) y GATE B (`migration repair`), verificación previa/posterior y rollback.
+- [ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md](./ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md) — **FASE 1.5: consolidación documental final** — paridad Código↔Migraciones↔DB↔Documentación y módulos autorizados para FASE 2.
 - [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md) — **auditoría read-only en vivo de la DB**: migraciones aplicadas, tablas/columnas reales, RBAC, buckets, paridad definitiva y plan de remediación PARIDAD-1.
 - [ERP-CONSOLIDACION-DEFINITIVA.md](./ERP-CONSOLIDACION-DEFINITIVA.md) — informe capstone: paridad, divergencia y clasificación main/branch/eliminar/Core.
 - [ERP-ARQUITECTURA-MAESTRA.md](./ERP-ARQUITECTURA-MAESTRA.md) — vista única de los 10 módulos.

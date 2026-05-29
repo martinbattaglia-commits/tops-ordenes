@@ -215,12 +215,17 @@ aplicadas** en la DB remota → falla en runtime hasta aplicar la migración.
     invoice_audit)
 ```
 
-**Orden de aplicación seguro en DB remota (estado real):**
-- Aplicadas: `0001`–`0009`.
+**Orden de aplicación seguro en DB remota (estado real, post FASE 1 2026-05-29):**
+- Aplicadas y **registradas en el tracker** `schema_migrations`: `0001`–`0009`
+  (reconciliado vía `migration repair`, PARIDAD-3 cerrada).
 - **Faltan aplicar:** `0010` (documents) y `0011` (ARCA). Ninguna rompe a las ya
   aplicadas; ambas dependen solo de objetos de `0001`/`0005` ya presentes.
-- ⚠️ `0008`/`0009` están **aplicadas en DB pero recién ahora versionadas** (en
-  `wip/erp-consolidation`). El SQL coincide con lo que ya corre en producción.
+- ✅ `0008`/`0009`/`0010` ya están **versionadas en `main`** (HEAD `b82a5f2`,
+  PARIDAD-1 cerrada). El SQL de 0008/0009 coincide con lo que ya corre en
+  producción.
+- ⚠️ **Prohibido `supabase db push`:** con el tracker en `0001–0009`, un push
+  intentaría aplicar `0010`/`0011` como DDL real. Solo aplicar con backup +
+  diagnóstico + rollback aprobados (gate explícito).
 
 ---
 

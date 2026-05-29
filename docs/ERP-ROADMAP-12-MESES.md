@@ -25,7 +25,7 @@
 
 | Trimestre | Foco | Hitos |
 |-----------|------|-------|
-| **Q1 (Jun–Ago 2026)** | Consolidación → Facturación operativa | Paridad repo, RBAC vivo, ARCA decidido, Compras en prod |
+| **Q1 (Jun–Ago 2026)** | Consolidación → Facturación operativa | ✅ Paridad repo (FASE 1), **Módulo Documents `0010` (FASE 2: diagnóstico)**, RBAC vivo, ARCA decidido, Compras en prod |
 | **Q2 (Sep–Nov 2026)** | Proveedores + fundación financiera | Migración 0012 (catálogos) + 0013 (supplier_invoices), Centros de Costo |
 | **Q3 (Dic 2026–Feb 2027)** | Tesorería + Cuentas Corrientes | Migración 0015, subledgers AR/AP, conciliación |
 | **Q4 (Mar–May 2027)** | Contabilidad/BI + reemplazo Neuralsoft | Migración 0016 (GL), Libros IVA, ETL Neuralsoft (0017) |
@@ -38,14 +38,15 @@
 
 | # | Iniciativa | Prio | Depende de | Riesgos | Complej. | Impacto |
 |:-:|-----------|:----:|-----------|---------|:--------:|:-------:|
-| I1 | **Paridad repo (P1):** llevar SQL 0008/0009/0010 a `main` | P0 | — | bajo (solo archivos; DB ya los tiene salvo 0010) | ◔ | ★★☆ (riesgo silencioso) |
+| I1 | **Paridad repo (P1):** llevar SQL 0008/0009/0010 a `main` | P0 | — | bajo (solo archivos; DB ya los tiene salvo 0010) | ◔ | ✅ **HECHO** (FASE 1, `main` `b82a5f2`; tracker `0001–0009` vía repair) |
 | I2 | **Resolver duplicados (P2):** clientify/drive/types + `drive/ping` | P0 | I1 | regresión si se elige mal el ganador | ◑ | ★★☆ |
 | I3 | **Gate ARCA (P3):** feature-flag `/billing`+`/settings/fiscal` | P0 | — | bajo (solo flag) | ◔ | ★★★ (saca módulo roto de prod) |
 | I4 | **Activar RBAC (P4):** poblar `user_roles` (seed) | P1 | — | bajo (reversible, no schema) | ◔ | ★★☆ (gobernanza/SoD) |
 | I5 | **Roles faltantes:** Facturación, Compras, Auditor, Super Admin (seed) | P1 | I4 | bajo | ◑ | ★★☆ |
 | I6 | **Promover Compras/OC a `main` (P5)** con tests | P1 | I1, I2 | deploy a prod (revert disponible) | ◕ | ★★★ |
-| I7 | **Re-verificar estado DB Supabase** (read-only) | P0 | — | ninguno (read-only) | ◔ | ★★☆ (precondición de todo) |
-| I8 | **Aplicar 0011 ARCA** (si hay cert X.509) | P2 | I3, cert host | down-migration; impacto fiscal | ◕ | ★★★ |
+| I7 | **Re-verificar estado DB Supabase** (read-only) | P0 | — | ninguno (read-only) | ◔ | ✅ **HECHO** (auditoría 2026-05-29) |
+| I7b | **FASE 2 — Módulo Documents (`0010`):** diagnóstico/arquitectura/riesgos/plan (SIN aplicar; `db push` prohibido; backup RP6 + idempotencia como pre-req) | P0 | I1 | bajo (solo análisis); aplicar `0010` será gate aparte | ◑ | ★★★ (próximo paso funcional) |
+| I8 | **Aplicar 0011 ARCA** (si hay cert X.509; **tras** cerrar Documents) | P2 | I3, I7b, cert host | down-migration; impacto fiscal | ◕ | ★★★ |
 
 ### Q2 · Sep–Nov 2026 — Proveedores + fundación contable
 

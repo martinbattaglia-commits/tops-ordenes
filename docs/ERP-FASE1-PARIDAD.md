@@ -1,10 +1,12 @@
 # FASE 1 — PARIDAD · Cierre de PARIDAD-1 / PARIDAD-2 / PARIDAD-3
 
-> **Estado:** en ejecución · **Fecha:** 2026-05-29 · **Modo:** CTO / Governance-first
+> **Estado:** ✅ completada · **Fecha:** 2026-05-29 · **Modo:** CTO / Governance-first
 > **Autorización:** Charter Maestro → "FASE 1 PARIDAD · Objetivo: Cerrar PARIDAD-1 PARIDAD-2 PARIDAD-3".
 > **Metodología obligatoria:** Diagnóstico → Riesgos → Impacto → Plan → Rollback → Recomendación.
-> **Prohibido sin aprobación explícita:** merge a `main`, deploy, `supabase db push`, ejecución de
-> migraciones, activación de RBAC/ARCA/Documents, modificación de producción.
+> **Cierre:** GATE A ejecutado (merge `fix/paridad-1-migraciones` → `main`, HEAD `b82a5f2`, deploy verde)
+> y GATE B ejecutado (`migration repair` 0006–0009). Sigue **prohibido sin aprobación explícita**:
+> `supabase db push`, ejecución de migraciones `0010`/`0011`, activación de RBAC/ARCA/Documents,
+> cualquier otra modificación de producción.
 
 ---
 
@@ -12,12 +14,13 @@
 
 | Divergencia | Qué es | Estado al cierre de esta fase |
 |-------------|--------|-------------------------------|
-| **PARIDAD-1** | `main` no contenía el SQL de `0008`/`0009`/`0010` (sí aplicadas/pendientes en DB) | 🟢 **Preparado** — rama `fix/paridad-1-migraciones` lista. Falta **GATE A** (merge). |
+| **PARIDAD-1** | `main` no contenía el SQL de `0008`/`0009`/`0010` (sí aplicadas/pendientes en DB) | ✅ **CERRADO (2026-05-29)** — **GATE A** ejecutado: merge `fix/paridad-1-migraciones` → `main` (HEAD `b82a5f2`) + deploy verde. Ver §8. |
 | **PARIDAD-2** | El rector §5 y `erp-arquitectura-objetivo.md` sobre-declaraban tablas como creadas | ✅ **Cerrado** — docs corregidos contra DB real (rama `docs/consolidacion-arquitectonica`). |
 | **PARIDAD-3** | El tracker `schema_migrations` solo conoce `0001`–`0005`; `0006`–`0009` quedaron fuera | ✅ **CERRADO (2026-05-29)** — `migration repair` ejecutado (GATE B). Tracker = `0001`–`0009`. Ver §7. |
 
-PARIDAD-1 quedó **preparado** (rama no-`main`, sin deploy); PARIDAD-2 y PARIDAD-3 **cerrados**.
-La única acción mutante fue GATE B sobre el **tracker** de migraciones — el esquema físico no cambió.
+Las tres divergencias quedaron **cerradas**. GATE A agregó los 3 SQL a `main` (cambio puramente
+aditivo, build idéntico, sin impacto en DB/datos/auth/storage); GATE B reconcilió el **tracker**
+de migraciones. El esquema físico de la DB **no cambió** en ninguno de los dos gates.
 
 ---
 
@@ -52,8 +55,13 @@ Re-verificado en vivo:
 - **Agravante de idempotencia:** `0008`/`0009`/`0010`/`0011` usan `create type ... as enum` **sin guard**.
   Re-ejecutarlas rompe con `type already exists`.
 
-**Conclusión:** el tracker está desincronizado. `supabase db push` es **destructivo en potencia** hoy:
-intentaría re-aplicar `0006`–`0011` y fallaría en el primer `create type`.
+**Conclusión (diagnóstico, pre-GATE B):** el tracker estaba desincronizado y `supabase db push`
+habría intentado re-aplicar `0006`–`0011`, fallando en el primer `create type`.
+
+> **⚠️ Estado post-GATE B (ver §7.5):** ya reconciliado el tracker a `0001`–`0009`, el modo de
+> falla **cambió**: un `db push` ya **no** se detiene en `0006` — *avanzaría* a `0010`/`0011` como
+> DDL real. La prohibición de `db push` es por eso **más crítica** ahora, hasta endurecer
+> idempotencia (`create type ... if not exists`/guards) + backup externo (RP6).
 
 ---
 
@@ -75,9 +83,9 @@ intentaría re-aplicar `0006`–`0011` y fallaría en el primer `create type`.
 1. ✅ Rama `fix/paridad-1-migraciones` creada desde `origin/main`.
 2. ✅ Checkout byte-idéntico de `0008`/`0009`/`0010` desde `origin/wip/erp-consolidation`.
 3. ✅ Commit `4e20d62` + push (rama no-`main` → **no deploya**).
-4. 🔒 **GATE A — PENDIENTE DE APROBACIÓN:** merge `fix/paridad-1-migraciones` → `main`.
-   - Efecto colateral: **dispara deploy Netlify de producción** (solo `main` auto-deploya).
-   - El merge NO ejecuta SQL ni toca la DB; solo alinea Código↔Migraciones.
+4. ✅ **GATE A — EJECUTADO (2026-05-29):** merge `fix/paridad-1-migraciones` → `main` (HEAD `b82a5f2`)
+   + deploy Netlify verde. El merge NO ejecutó SQL ni tocó la DB; solo alineó Código↔Migraciones.
+   Registro completo en §8.
 
 ### PARIDAD-2 → CERRADO
 - Correcciones ya commiteadas en `docs/consolidacion-arquitectonica`. Sin merge requerido para
@@ -97,18 +105,20 @@ supabase migration repair --status applied 0009
 # 0010 y 0011 se dejan SIN registrar (no están aplicadas) — correcto.
 ```
 
-🔒 **GATE B — PENDIENTE DE APROBACIÓN:** ejecutar `migration repair` (toca el tracker de producción).
+✅ **GATE B — EJECUTADO (2026-05-29):** `migration repair` corrido sobre 0006–0009 (tracker = `0001–0009`).
+Registro completo en §7.
 
 ---
 
 ## 4. Impacto
 
-- **PARIDAD-1 (preparado):** una vez mergeado, `main` deja de divergir de las migraciones. Riesgo de
-  reconstrucción desde cero (Definición de Éxito #1/#2) eliminado para estas 3 migraciones.
+- **PARIDAD-1 (cerrado):** mergeado a `main` (`b82a5f2`), `main` ya no diverge de las migraciones.
+  Riesgo de reconstrucción desde cero (Definición de Éxito #1/#2) eliminado para estas 3 migraciones.
 - **PARIDAD-2 (cerrado):** la documentación deja de mentir sobre el estado de la DB. Cualquier futura
   decisión (aplicar 0010/0011) parte de una base honesta.
-- **PARIDAD-3 (planificado):** tras GATE B, `db push` y `migration up` vuelven a ser seguros para
-  `0010`/`0011` (previa idempotencia + backup). Hoy siguen prohibidos.
+- **PARIDAD-3 (cerrado):** el tracker quedó en `0001–0009`. ⚠️ **`db push` ahora es MÁS peligroso**:
+  intentaría aplicar `0010`/`0011` como DDL real. Sigue **prohibido** sin backup + idempotencia
+  endurecida + rollback aprobados (gate explícito).
 
 ---
 
@@ -134,7 +144,7 @@ supabase migration repair --status applied 0009
    backup externo (RP6), que son trabajo de una fase posterior.
 
 **Decisión solicitada (al momento de redactar §1–§6):** ¿Apruebo GATE A y/o GATE B?
-→ **GATE B fue aprobado y ejecutado el 2026-05-29.** Registro completo en §7. GATE A sigue pendiente.
+→ **Ambos fueron aprobados y ejecutados el 2026-05-29.** GATE B: registro en §7. GATE A: registro en §8.
 
 ---
 
@@ -199,7 +209,56 @@ supabase migration repair --status reverted 0006 0007 0008 0009 --linked < /dev/
 # Devuelve el tracker a [0001..0005]. No ejecuta ni revierte SQL real.
 ```
 
-### 7.7 Estado final FASE 1
-- **PARIDAD-1:** preparado (rama `fix/paridad-1-migraciones`, commit `4e20d62`). **GATE A pendiente.**
+### 7.7 Estado tras GATE B
+- **PARIDAD-1:** preparado (rama `fix/paridad-1-migraciones`, commit `4e20d62`). **GATE A pendiente** (luego ejecutado — ver §8).
 - **PARIDAD-2:** cerrado.
 - **PARIDAD-3:** ✅ **cerrado** — tracker alineado a la realidad (`0001`–`0009`), esquema sin cambios.
+
+---
+
+## 8. Registro de ejecución — GATE A (2026-05-29)
+
+**Autorización:** "PRE-CHECK FINAL de GATE A · validación definitiva antes del merge · si satisfactorio,
+merge `fix/paridad-1-migraciones` → `main` + deploy automático · no aplicar 0010/0011 · no activar
+Documents/ARCA/RBAC · no `db push`."
+
+### 8.1 Pre-check final (5 verificaciones exigidas) — TODO confirmado
+| # | Verificación | Resultado |
+|---|---|---|
+| 1 | Rama contiene únicamente `0008`/`0009`/`0010` | ✅ exactamente 3 archivos, todos `A` (added) |
+| 2 | Archivos byte-idénticos a la versión auditada | ✅ blob hashes coinciden con `origin/wip/erp-consolidation` (0008 `7f7773a…`, 0009 `e345bf4…`, 0010 `fe2b9bb…`) |
+| 3 | Sin cambios en `package.json`/`lock`/`next.config`/`netlify.toml`/middleware/env/APIs/componentes/rutas | ✅ ninguno tocado |
+| 4 | Build Netlify funcionalmente idéntico | ✅ `npm run build` = `next build`; no corre `supabase/migrations/*.sql` |
+| 5 | Sin impacto en Supabase/datos/usuarios/auth/storage | ✅ merge solo agrega archivos SQL al repo; no ejecuta DDL |
+
+### 8.2 Acción ejecutada
+```bash
+git checkout main
+git merge --no-ff fix/paridad-1-migraciones   # trazabilidad de auditoría
+git push origin main                            # dispara deploy Netlify de producción
+# HEAD main resultante: b82a5f2
+```
+
+### 8.3 Auditoría posterior — merge aditivo, DB intacta
+| Comprobación | Resultado |
+|---|---|
+| `main` HEAD | `b82a5f2` |
+| Archivos cambiados por el merge | solo `supabase/migrations/0008,0009,0010` (+728 inserciones) |
+| Deploy Netlify | ✅ verde (ready) |
+| `/login` · `/` | 200 · 307 (sin regresión) |
+| Tablas públicas / buckets / RBAC / enums | idénticos a §7.4 — **la DB no cambió** |
+| `documents` · tablas ARCA | siguen ausentes (0010/0011 NO aplicadas) |
+
+### 8.4 Rollback de GATE A (si fuese necesario)
+```bash
+git revert -m 1 <merge_sha>   # quita los 3 SQL del repo; NO toca la DB (son aditivos)
+git push origin main          # nuevo deploy
+```
+
+### 8.5 Estado final FASE 1 (definitivo)
+- **PARIDAD-1:** ✅ **cerrado** — SQL `0008`/`0009`/`0010` en `main` (`b82a5f2`), deploy verde.
+- **PARIDAD-2:** ✅ cerrado.
+- **PARIDAD-3:** ✅ cerrado — tracker `0001`–`0009`, esquema físico sin cambios.
+
+> **FASE 1 PARIDAD: COMPLETADA.** Las tres fuentes de verdad (Código/Migraciones/Tracker) quedaron
+> alineadas para el rango `0001`–`0009`. `0010`/`0011` permanecen versionadas pero **NO aplicadas**.

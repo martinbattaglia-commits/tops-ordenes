@@ -9,6 +9,15 @@
 > método" §6 de [ERP-CONSOLIDACION-DEFINITIVA.md](./ERP-CONSOLIDACION-DEFINITIVA.md):
 > el estado de DB **sí** fue re-verificado en esta sesión y los resultados están aquí.
 
+> **📌 SNAPSHOT HISTÓRICO — leer junto al cierre de FASE 1.** Esta auditoría captura el
+> estado **antes** de FASE 1. Lo que aquí figura como desincronizado ya fue corregido el
+> mismo día: el tracker se reconcilió a `0001–0009` (`migration repair`, **PARIDAD-3
+> cerrada**) y el SQL `0008`/`0009`/`0010` se mergeó a `main` `b82a5f2` (**PARIDAD-1
+> cerrada**). El **esquema físico** descrito abajo (20 tablas, 5 buckets, RBAC dormido,
+> `documents`/ARCA ausentes) **sigue vigente** — esos hechos no cambiaron. Solo cambió el
+> tracker y el contenido de `main`. Detalle del cierre en
+> [ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md).
+
 ---
 
 ## 0. Método

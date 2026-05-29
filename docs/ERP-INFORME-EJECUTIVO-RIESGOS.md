@@ -45,6 +45,9 @@ po-signatures (no existe `invoices`).
 - ⚠️ **Desplegado pero roto en runtime:** Facturación ARCA + Settings/fiscal (código sí, tablas 0011 no).
 - 🟢 **Versionado en branch (antes en riesgo):** Compras/OC + validación pública, Proveedores, RBAC/roles UI, Ejecutivo/Cockpit, Operaciones/mapa, Documental, CCTV, Comercial/Clientify, Drive, WhatsApp, OCR, ANMAT.
 
+> **Actualización 2026-05-29 (FASE 1):** PARIDAD-1 cerrada — el SQL `0008`/`0009`/`0010`
+> se promovió a `main` (`b82a5f2`); PARIDAD-3 cerrada — tracker `0001–0009`.
+
 ---
 
 ## 2. Riesgos (panorama general)
@@ -57,7 +60,7 @@ po-signatures (no existe `invoices`).
 | G4 | Auditoría/comprobantes borrables por CASCADE | media | alto | 🟠 vivo |
 | G5 | Bucket fiscal `invoices` sin scoping por cliente | media | alto | 🟡 latente (bucket no existe aún) |
 | G6 | Duplicados sin resolver (clientify/drive/types) | alta | bajo | 🟡 vivo |
-| G7 | DB adelantada al código (0008/0009) sin paridad de repo | — | — | ✅ mitigado (ya versionado) |
+| G7 | DB adelantada al código (0008/0009) sin paridad de repo | — | — | ✅ **CERRADO** (0008/0009/0010 en `main` `b82a5f2`; tracker `0001–0009`) |
 | G8 | Stash viejo `stash@{0}` redundante | baja | bajo | 🟢 menor |
 
 ---
@@ -140,6 +143,12 @@ Todos ya preservados en `wip/erp-consolidation`. Prioridad de promoción futura 
 
 ## 7. Roadmap técnico recomendado
 
+> **Re-priorización post FASE 1.5 (2026-05-29):** completada la PARIDAD (FASE 1), la
+> prioridad estratégica del charter ordena la secuencia funcional así:
+> **Módulo Documents (`0010`) → ARCA (`0011`) → Proveedores (`0012`)**. El paso de
+> Documents adelanta a Proveedores; ARCA no avanza hasta cerrar Documents. La FASE 2
+> es **solo diagnóstico/arquitectura/plan** del Módulo Documents (sin aplicar `0010`).
+
 **Secuencia segura (cada paso valida al anterior):**
 
 1. **Gate de Facturación (C1).** Decidir: aplicar 0011 a la DB remota (con
@@ -152,23 +161,26 @@ Todos ya preservados en `wip/erp-consolidation`. Prioridad de promoción futura 
    Ver [RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) §5.
 4. **Resolver duplicados** (clientify/drive/types) y conciliar `drive/ping`.
    Prerequisito de cualquier merge a `main`.
-5. **Promover Compras a `main`** (con tests) — es lo más maduro y con datos reales.
-6. **Recién entonces: migración 0012** — Fase 3 financiera (`supplier_invoices`
+5. **FASE 2 — Módulo Documents (`0010`):** diagnóstico/arquitectura/riesgos/plan de
+   aplicación de la tabla `documents` (SQL ya en `main`, NO aplicado). Sin `db push`,
+   con backup (RP6) + idempotencia endurecida como pre-requisitos. **Es el próximo paso.**
+6. **ARCA (`0011`):** aplicar tras cerrar Documents (gate de Facturación C1 + cert X.509).
+7. **Recién entonces: migración 0012** — Fase 3 financiera (`supplier_invoices`
    + `cost_centers`) **con** los blindajes de C2 incorporados (`ON DELETE
    RESTRICT` + trigger anti-borrado). Esto conecta OC → obligación de pago →
    habilita Tesorería (Fase 4).
-7. **Tesorería → Cuentas Corrientes → Balance** (Fases 4–6), en ese orden, según
+8. **Tesorería → Cuentas Corrientes → Balance** (Fases 4–6), en ese orden, según
    la cadena lineal del grafo de dependencias.
 
 ---
 
 ## 8. Recomendación de siguiente paso (decisión única)
 
-> **Antes de escribir una línea de la migración 0012**, ejecutar el paso 1 (gate
-> de Facturación) y el paso 2 (poblar `user_roles`). Son los dos movimientos de
-> **menor riesgo y mayor desbloqueo**: el #1 elimina el único módulo roto en
-> producción; el #2 activa el RBAC ya sembrado sin tocar schema. Ambos son
-> reversibles y no crean tablas.
+> **Antes de avanzar a las migraciones financieras (`0011`/`0012`)**, ejecutar el
+> paso 1 (gate de Facturación) y el paso 2 (poblar `user_roles`). Son los dos
+> movimientos de **menor riesgo y mayor desbloqueo**: el #1 elimina el único módulo
+> roto en producción; el #2 activa el RBAC ya sembrado sin tocar schema. Ambos son
+> reversibles y no crean tablas. El paso funcional inmediato es **FASE 2 — Documents (`0010`)**.
 
 **Checklist de validación previa a 0012 — estado:**
 
@@ -182,11 +194,12 @@ Todos ya preservados en `wip/erp-consolidation`. Prioridad de promoción futura 
 | Decisión de gate Facturación tomada | ⏳ **pendiente del usuario** |
 | `user_roles` poblado | ⏳ pendiente |
 
-**Veredicto:** la **consolidación está completa**. El ERP está auditado,
+**Veredicto:** la **consolidación está completa** y, tras FASE 1, la **paridad
+Código↔Migraciones↔Tracker quedó cerrada** (`0001–0009`). El ERP está auditado,
 mapeado, su RBAC documentado, su WIP preservado y sus dependencias trazadas.
-**Se puede avanzar a la decisión de implementación** (Proveedores → 0012 →
-Tesorería → Cuentas Corrientes), pero **recomiendo resolver C1 y G3 primero**
-porque son baratos, reversibles y desbloquean todo lo demás.
+**El próximo paso es FASE 2 — Módulo Documents (`0010`)** (diagnóstico/arquitectura/plan,
+sin aplicar), seguido de ARCA (`0011`) y luego Proveedores (`0012`). **Recomiendo
+resolver C1 y G3 primero** porque son baratos, reversibles y desbloquean lo demás.
 
 ---
 

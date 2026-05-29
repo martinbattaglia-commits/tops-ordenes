@@ -8,6 +8,15 @@
 > **No ejecuta nada.** Toda evidencia abajo proviene de consultas `SELECT` y lectura de
 > archivos. Ninguna migración, dato, tabla, columna o función fue modificada.
 
+> **⚠️ CIERRE POSTERIOR (2026-05-29, FASE 1):** las divergencias diagnosticadas en este
+> documento ya fueron **resueltas**. El SQL `0008`/`0009`/`0010` se mergeó a `main`
+> (HEAD `b82a5f2`, **PARIDAD-1 cerrada**) y el tracker se reconcilió a `0001–0009` vía
+> `migration repair` (**PARIDAD-3 cerrada**). Las afirmaciones de abajo (tracker "solo
+> conoce 0001–0005", `main` sin 0008/0009/0010) son el **diagnóstico histórico** que motivó
+> FASE 1; ya no describen el estado vigente. Nota nueva: con el tracker en `0001–0009`, un
+> `supabase db push` intentaría aplicar `0010`/`0011` como DDL real — sigue **prohibido**.
+> Ver [ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md).
+
 ---
 
 ## 1. Informe de Gobernanza de Base de Datos
