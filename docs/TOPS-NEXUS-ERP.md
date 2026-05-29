@@ -117,3 +117,19 @@ pedir confirmación salvo bloqueo técnico real. **Excepción:** el `full push` 
 producción / deploy con impacto fiscal real requiere confirmación explícita por
 el blast radius (ERP en vivo). Migraciones nuevas no se aplican al Supabase remoto
 sin confirmación.
+
+## 9. Módulos oficiales (10) y documentos de arquitectura
+
+TOPS Nexus se compone de **10 módulos Core**: (1) CRM/Clientes, (2) Operaciones,
+(3) Compras, (4) Documentos/Drive, (5) Facturación ARCA, (6) Tesorería,
+(7) Cuentas Corrientes, (8) Centros de Costo, (9) ANMAT y **(10) CCTV y Monitoreo
+Operativo** — este último **elevado oficialmente de integración satélite a módulo
+nativo** (evidencia visual auditable + insumo de compliance ANMAT).
+
+Documentación de arquitectura y consolidación (gobernada por este rector):
+
+- [ERP-CONSOLIDACION-DEFINITIVA.md](./ERP-CONSOLIDACION-DEFINITIVA.md) — informe capstone: paridad, divergencia y clasificación main/branch/eliminar/Core.
+- [ERP-ARQUITECTURA-MAESTRA.md](./ERP-ARQUITECTURA-MAESTRA.md) — vista única de los 10 módulos.
+- [ERP-MODULO-CCTV.md](./ERP-MODULO-CCTV.md) — incorporación oficial del módulo CCTV.
+- [ERP-ROADMAP-12-MESES.md](./ERP-ROADMAP-12-MESES.md) — plan 2026-06 → 2027-05.
+- Auditoría base: [ERP-MODULE-MAP.md](./ERP-MODULE-MAP.md) · [ERP-DEPENDENCY-GRAPH.md](./ERP-DEPENDENCY-GRAPH.md) · [RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) · [erp-arquitectura-objetivo.md](./erp-arquitectura-objetivo.md) · [ERP-INFORME-EJECUTIVO-RIESGOS.md](./ERP-INFORME-EJECUTIVO-RIESGOS.md).
