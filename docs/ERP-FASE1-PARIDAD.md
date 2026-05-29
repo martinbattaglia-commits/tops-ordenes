@@ -14,9 +14,10 @@
 |-------------|--------|-------------------------------|
 | **PARIDAD-1** | `main` no contenía el SQL de `0008`/`0009`/`0010` (sí aplicadas/pendientes en DB) | 🟢 **Preparado** — rama `fix/paridad-1-migraciones` lista. Falta **GATE A** (merge). |
 | **PARIDAD-2** | El rector §5 y `erp-arquitectura-objetivo.md` sobre-declaraban tablas como creadas | ✅ **Cerrado** — docs corregidos contra DB real (rama `docs/consolidacion-arquitectonica`). |
-| **PARIDAD-3** | El tracker `schema_migrations` solo conoce `0001`–`0005`; `0006`–`0009` quedaron fuera | 🟡 **Diagnosticado + plan listo** — requiere `migration repair`. Falta **GATE B**. |
+| **PARIDAD-3** | El tracker `schema_migrations` solo conoce `0001`–`0005`; `0006`–`0009` quedaron fuera | ✅ **CERRADO (2026-05-29)** — `migration repair` ejecutado (GATE B). Tracker = `0001`–`0009`. Ver §7. |
 
-Ninguna acción de esta fase tocó la base de datos, producción, ni `main`.
+PARIDAD-1 quedó **preparado** (rama no-`main`, sin deploy); PARIDAD-2 y PARIDAD-3 **cerrados**.
+La única acción mutante fue GATE B sobre el **tracker** de migraciones — el esquema físico no cambió.
 
 ---
 
@@ -132,5 +133,73 @@ supabase migration repair --status applied 0009
 4. **No** ejecutar `db push` ni aplicar `0010`/`0011` en esta fase: requieren idempotencia endurecida +
    backup externo (RP6), que son trabajo de una fase posterior.
 
-**Decisión solicitada:** ¿Apruebo GATE A (merge → deploy) y/o GATE B (`migration repair` → tracker prod)?
-Hasta entonces, FASE 1 queda con PARIDAD-1 preparado, PARIDAD-2 cerrado, PARIDAD-3 diagnosticado.
+**Decisión solicitada (al momento de redactar §1–§6):** ¿Apruebo GATE A y/o GATE B?
+→ **GATE B fue aprobado y ejecutado el 2026-05-29.** Registro completo en §7. GATE A sigue pendiente.
+
+---
+
+## 7. Registro de ejecución — GATE B (2026-05-29)
+
+**Autorización:** "AUTORIZACIÓN CONTROLADA – GATE B · Cerrar PARIDAD-3 · Regularizar el tracker · Sin
+modificar esquema · Sin ejecutar SQL · Sin alterar datos productivos."
+
+### 7.1 Tooling verificado
+- `supabase` CLI `2.101.0`. Link parcial: `supabase/.temp/*` presente (ref `arsksytgdnzukbmfgkju`),
+  `config.toml` **ausente** — el CLI igual conecta usando las credenciales del link almacenadas.
+- Ejecución **no-interactiva**: `SUPABASE_ACCESS_TOKEN` (de `.env.local`, nunca commiteado) + `--linked`
+  + `stdin < /dev/null` (un eventual prompt recibe EOF y falla rápido en vez de colgarse).
+
+### 7.2 Verificación previa (read-only, vía Management API) — TODO confirmado
+| Comprobación | Resultado |
+|---|---|
+| Tracker antes | `[0001, 0002, 0003, 0004, 0005]` |
+| 0006 aplicada | ✅ índice `operators_full_name_uniq` (1) + 3 operadores reales activos |
+| 0007 aplicada | ✅ `service_unit_t` = hs,km,pal,mes,un,**m3,viaje** |
+| 0008 aplicada | ✅ `purchase_orders`, `po_items`, `po_events`, `po_email_sends` |
+| 0009 aplicada | ✅ `roles`/`permissions`/`role_permissions`/`user_roles` + `current_role()`/`has_permission()` + `user_role_t` |
+| 0010 **NO** aplicada | ✅ `documents` ausente (0), `document_type_t` ausente (0) |
+| 0011 **NO** aplicada | ✅ `customer_invoices`/`invoice_items`/`fiscal_config`/`puntos_venta`/`invoice_audit` ausentes |
+| RBAC | 7 roles / 22 permisos / 64 mapeos / `user_roles`=0 (dormido) |
+| Tablas públicas | 20 |
+
+### 7.3 Comando ejecutado
+```bash
+supabase migration repair --status applied 0006 0007 0008 0009 --linked < /dev/null
+# → Repaired migration history: [0006 0007 0008 0009] => applied
+# → Finished supabase migration repair.
+```
+`0010` y `0011` **excluidos deliberadamente** (no están aplicados).
+
+### 7.4 Auditoría posterior — solo cambió el tracker
+| Comprobación | Antes | Después | ¿Cambió? |
+|---|---|---|---|
+| Tracker | `[0001..0005]` | `[0001..0009]` | ✅ **sí (objetivo)** |
+| Tablas públicas | 20 | 20 | no |
+| `documents` | ausente | ausente | no |
+| Tablas ARCA (0011) | ausentes | ausentes | no |
+| Funciones `current_role`/`has_permission` | presentes | presentes | no |
+| Buckets | 5 | 5 | no |
+| Enums (incl. `service_unit_t`) | idénticos | idénticos | no |
+| RBAC (7/22/64/0) | igual | igual | no (sigue dormido) |
+
+`supabase migration list` post-repair: `0001`–`0009` con Local+Remote; `0010`/`0011` solo Local.
+El CLI registró `name` + conteo de `statements` para `0006`–`0009` (real_operators/4,
+extend_service_units/3, purchase_orders/67, rbac/40) pero **no ejecutó ese SQL** — el esquema físico
+quedó intacto (verificado arriba).
+
+### 7.5 Riesgo nuevo introducido por el cierre
+> ⚠️ **Ahora el tracker conoce `0001`–`0009`, por lo que un `supabase db push` intentaría aplicar
+> `0010` y `0011` como pendientes — DDL real (crearía `documents`, tablas ARCA, enums).** Antes fallaba
+> al re-correr `0006`; ahora *avanzaría* a 0010/0011. **La prohibición de `db push` es MÁS crítica que
+> antes** hasta endurecer idempotencia + tener backup externo (RP6) + cert X.509 para 0011.
+
+### 7.6 Rollback de GATE B (si fuese necesario)
+```bash
+supabase migration repair --status reverted 0006 0007 0008 0009 --linked < /dev/null
+# Devuelve el tracker a [0001..0005]. No ejecuta ni revierte SQL real.
+```
+
+### 7.7 Estado final FASE 1
+- **PARIDAD-1:** preparado (rama `fix/paridad-1-migraciones`, commit `4e20d62`). **GATE A pendiente.**
+- **PARIDAD-2:** cerrado.
+- **PARIDAD-3:** ✅ **cerrado** — tracker alineado a la realidad (`0001`–`0009`), esquema sin cambios.
