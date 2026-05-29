@@ -1,5 +1,17 @@
-import { MOCK_PURCHASE_ORDERS } from "@/lib/compras/compras-mock";
-import { DOCS as ANMAT_DOCS } from "@/lib/anmat/data";
+import { createClient } from "@/lib/supabase/server";
+import { env } from "@/lib/env";
+
+/**
+ * Centro documental — data layer.
+ *
+ * QW Fase 1 (2026-05-29):
+ *  - Se ELIMINÓ la mezcla de mocks (OC PDFs de compras-mock + DOCS de ANMAT
+ *    + 5 facturas/remitos/contratos ficticios).
+ *  - `listDocs()` ahora consulta la tabla real `documents` en Supabase.
+ *  - Si la tabla está vacía (estado actual en prod) la UI muestra un empty
+ *    state claro: "Sin documentos cargados aún".
+ *  - Se mantiene `getDocTypes()` para los filtros del UI.
+ */
 
 export type DocType =
   | "OC PDF"
@@ -9,7 +21,8 @@ export type DocType =
   | "Procedimiento"
   | "Capacitación"
   | "Factura"
-  | "Remito";
+  | "Remito"
+  | "Otro";
 
 export interface DocItem {
   id: string;
@@ -24,90 +37,81 @@ export interface DocItem {
   tags: string[];
 }
 
-/**
- * Centro documental unificado: combina OC PDFs, contratos ANMAT,
- * habilitaciones, auditorías, capacitaciones, facturas y remitos.
- */
-export function listDocs(): DocItem[] {
-  const ocDocs: DocItem[] = MOCK_PURCHASE_ORDERS.slice(0, 12).map((po) => ({
-    id: `oc-${po.id}`,
-    title: `OC ${po.public_id} · ${po.vendor?.razon}`,
-    type: "OC PDF",
-    vendor: po.vendor?.razon,
-    uploadedAt: po.date.slice(0, 10),
-    size: "312 KB",
-    hash: po.integrity_hash ?? "—",
-    href: `/api/compras/${po.public_id}/pdf`,
-    tags: [po.vendor?.categoria ?? "", po.signed_by ? "Firmada" : "Sin firma"].filter(Boolean),
-  }));
+/** Fila cruda de la tabla `documents` (subset relevante). */
+interface DocumentRow {
+  id: string;
+  title: string | null;
+  doc_type: string | null;
+  uploaded_at: string | null;
+  created_at: string | null;
+  bytes: number | null;
+  sha256: string | null;
+  tags: string[] | null;
+  metadata: Record<string, unknown> | null;
+}
 
-  const anmat: DocItem[] = ANMAT_DOCS.map((d) => ({
-    id: d.id,
-    title: d.title,
-    type: d.type as DocType,
-    client: d.client,
-    uploadedAt: d.uploadedAt,
-    size: d.size,
-    hash: d.hash,
-    tags: ["ANMAT", d.type],
-  }));
+function fmtBytes(b: number | null): string {
+  if (!b || b <= 0) return "—";
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
 
-  const extras: DocItem[] = [
-    {
-      id: "fact-001",
-      title: "Factura A-0003-00080012 · Pallets Sur S.R.L.",
-      type: "Factura",
-      vendor: "Pallets Sur S.R.L.",
-      uploadedAt: "2026-05-24",
-      size: "184 KB",
-      hash: "8c1e4a7f2b9d6c...",
-      tags: ["Factura A", "Conciliada"],
-    },
-    {
-      id: "fact-002",
-      title: "Factura A-0003-00080015 · Combustibles AMBA",
-      type: "Factura",
-      vendor: "Combustibles AMBA S.A.",
-      uploadedAt: "2026-05-22",
-      size: "166 KB",
-      hash: "3a9c2e5b8d1f7e...",
-      tags: ["Factura A"],
-    },
-    {
-      id: "rem-001",
-      title: "Remito R-0034-00021876 · Bidcom S.A.",
-      type: "Remito",
-      client: "Bidcom S.A.",
-      uploadedAt: "2026-05-23",
-      size: "92 KB",
-      hash: "6d4f1a8c3e5b9d...",
-      tags: ["Remito", "Despacho"],
-    },
-    {
-      id: "cont-001",
-      title: "Contrato de almacenaje · Roemmers S.A.I.C.F.",
-      type: "Contrato",
-      client: "Roemmers S.A.I.C.F.",
-      uploadedAt: "2026-04-30",
-      size: "624 KB",
-      hash: "f1c8a4e9b2d6c3...",
-      tags: ["Contrato", "ANMAT", "Vigente"],
-    },
-    {
-      id: "cont-002",
-      title: "Contrato logística integral · L'Oréal Argentina",
-      type: "Contrato",
-      client: "L'Oréal Argentina",
-      uploadedAt: "2026-03-18",
-      size: "812 KB",
-      hash: "9b2e7d4a1c8f3e...",
-      tags: ["Contrato", "Cosmética", "ANMAT"],
-    },
+function normalizeDocType(raw: string | null): DocType {
+  if (!raw) return "Otro";
+  const t = raw as DocType;
+  const valid: DocType[] = [
+    "OC PDF",
+    "Contrato",
+    "Habilitación",
+    "Auditoría",
+    "Procedimiento",
+    "Capacitación",
+    "Factura",
+    "Remito",
+    "Otro",
   ];
+  return valid.includes(t) ? t : "Otro";
+}
 
-  return [...ocDocs, ...anmat, ...extras].sort(
-    (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
-  );
+function rowToDocItem(r: DocumentRow): DocItem {
+  const meta = r.metadata ?? {};
+  return {
+    id: r.id,
+    title: r.title ?? "(sin título)",
+    type: normalizeDocType(r.doc_type),
+    vendor: typeof meta.vendor === "string" ? (meta.vendor as string) : undefined,
+    client: typeof meta.client === "string" ? (meta.client as string) : undefined,
+    uploadedAt: (r.uploaded_at ?? r.created_at ?? "").slice(0, 10),
+    size: fmtBytes(r.bytes),
+    hash: r.sha256 ?? "—",
+    tags: r.tags ?? [],
+  };
+}
+
+/**
+ * Lista documentos del Centro Documental.
+ * - En producción: query a Supabase `documents` (con RLS multi-tenant).
+ * - En demo mode / sin Supabase: retorna [].
+ *
+ * La UI debe manejar el caso de array vacío mostrando un empty state.
+ */
+export async function listDocs(): Promise<DocItem[]> {
+  if (env.app.demoMode || env.app.needsSupabase) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("documents")
+    .select("id, title, doc_type, uploaded_at, created_at, bytes, sha256, tags, metadata")
+    .is("deleted_at", null)
+    .order("uploaded_at", { ascending: false, nullsFirst: false })
+    .limit(500);
+  if (error) {
+    console.warn("[documental] listDocs error:", error.message);
+    return [];
+  }
+  const rows = (data ?? []) as DocumentRow[];
+  return rows.map(rowToDocItem);
 }
 
 export function getDocTypes(): DocType[] {

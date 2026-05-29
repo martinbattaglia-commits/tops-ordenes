@@ -174,56 +174,17 @@ export const CAMERAS: Camera[] = [
   },
 ];
 
-export const EVENTS: CctvEvent[] = [
-  {
-    ts: "hace 1 min",
-    cameraId: "BAR-03",
-    cameraName: "Barracas · Muelle de carga",
-    kind: "motion",
-    detail: "Movimiento detectado en zona restringida fuera de horario",
-    severity: "warn",
-  },
-  {
-    ts: "hace 3 min",
-    cameraId: "MAG-01",
-    cameraName: "Magaldi · Acceso principal",
-    kind: "access",
-    detail: "Acceso autorizado · Juan Carlos (encargado)",
-    severity: "info",
-  },
-  {
-    ts: "hace 8 min",
-    cameraId: "MAG-02",
-    cameraName: "Magaldi · Muelle de carga 1",
-    kind: "motion",
-    detail: "Operación de carga programada · OC-2026-0348",
-    severity: "info",
-  },
-  {
-    ts: "hace 14 min",
-    cameraId: "MAG-04",
-    cameraName: "Magaldi · ANMAT pasillo B",
-    kind: "motion",
-    detail: "Picking pallet 3-A · operario autorizado",
-    severity: "info",
-  },
-  {
-    ts: "hace 22 min",
-    cameraId: "MAG-05",
-    cameraName: "Magaldi · Cadena de frío",
-    kind: "temp",
-    detail: "Temperatura estable a 4.8°C · dentro de rango ANMAT",
-    severity: "info",
-  },
-  {
-    ts: "hace 42 min",
-    cameraId: "LUJ-03",
-    cameraName: "Luján · Galpón principal",
-    kind: "alarm",
-    detail: "Cámara offline · pérdida de señal · ticket abierto",
-    severity: "danger",
-  },
-];
+/**
+ * QW Fase 1 (2026-05-29):
+ *  - El feed de eventos en vivo era 100% hardcoded (6 eventos ficticios).
+ *  - Se vació hasta que exista integración real con eventos del NVR vía
+ *    ISAPI Subscribe Event API o tabla `cctv_events` en Supabase.
+ *  - El array `CAMERAS` (configuración estática de cámaras mock) tampoco
+ *    se usa en la UI: la página de /cctv consume `listCamerasSafe()` real
+ *    de `src/lib/cctv/hikvision.ts`. Se mantiene aquí únicamente para
+ *    compatibilidad de tipos hasta que se borre en una iteración futura.
+ */
+export const EVENTS: CctvEvent[] = [];
 
 export function getCameraStats() {
   const total = CAMERAS.length;

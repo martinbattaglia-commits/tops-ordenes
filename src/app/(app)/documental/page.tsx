@@ -19,10 +19,11 @@ const TYPE_ICONS: Record<DocType, IconName> = {
   Capacitación: "users",
   Factura: "wallet",
   Remito: "package",
+  Otro: "file-pdf",
 };
 
-export default function DocumentalPage({ searchParams }: PageProps) {
-  const docs = listDocs();
+export default async function DocumentalPage({ searchParams }: PageProps) {
+  const docs = await listDocs();
   const filterType = searchParams?.type as DocType | undefined;
   const q = searchParams?.q ?? "";
 
@@ -163,7 +164,9 @@ export default function DocumentalPage({ searchParams }: PageProps) {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={7} className="text-center py-10 text-fg-muted">
-                    No hay documentos que coincidan.
+                    {docs.length === 0
+                      ? "Sin documentos cargados aún. Usá el panel de arriba para subir el primero."
+                      : "No hay documentos que coincidan con los filtros aplicados."}
                   </td>
                 </tr>
               )}
@@ -173,6 +176,13 @@ export default function DocumentalPage({ searchParams }: PageProps) {
 
         {/* Mobile cards */}
         <div className="md:hidden divide-y divide-stroke-soft">
+          {filtered.length === 0 && (
+            <div className="p-6 text-center text-fg-muted text-sm">
+              {docs.length === 0
+                ? "Sin documentos cargados aún."
+                : "No hay documentos que coincidan."}
+            </div>
+          )}
           {filtered.map((d) => (
             <div key={d.id} className="p-4 flex items-start gap-3">
               <Icon name={TYPE_ICONS[d.type] ?? "file-pdf"} size={18} className="text-tops-red mt-0.5 flex-shrink-0" />

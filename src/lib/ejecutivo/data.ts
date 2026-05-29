@@ -1,10 +1,27 @@
 /**
  * Data layer del Cockpit ejecutivo — agrega KPIs cross-módulo.
- * En demo mode usa los mocks existentes; en producción consulta
- * vistas materializadas (TODO Fase 2).
+ *
+ * QW Fase 1 (2026-05-29):
+ *  - Se ELIMINARON los KPIs hardcoded ("OS operativas: 324",
+ *    "ANMAT compliance: 100%", deltas/trends ficticios, activity feed mock).
+ *  - Solo se muestran KPIs con fuente REAL verificable. Los que aún no tienen
+ *    fuente devuelven `value: null` y la UI debe renderizar "Dato no disponible".
+ *  - Las trends y deltas se omiten (null) hasta que exista historización real.
+ *  - El activity feed queda vacío hasta que exista una tabla `event_log`
+ *    cross-módulo (planificado F2).
+ *
+ * Fuentes reales actualmente disponibles:
+ *  - Conteo de OCs → Supabase via `listPurchaseOrders` (compras)
+ *  - Conteo de OSs → Supabase via `listOrders` (servicios)
+ *
+ * Fuentes pendientes de integración real (devuelven null):
+ *  - Ocupación m² real-time (requiere sondas IoT o entrada manual)
+ *  - ANMAT compliance score (requiere módulo ANMAT real)
+ *  - Activity feed cross-módulo (requiere event_log)
  */
 
 import { listPurchaseOrders } from "@/lib/compras/data";
+import { listOrders } from "@/lib/data/orders";
 import type { PurchaseOrder } from "@/lib/types-po";
 import { LOCATIONS, type LocationStatus } from "./locations";
 
@@ -13,9 +30,14 @@ export { LOCATIONS } from "./locations";
 
 export interface CockpitKpi {
   label: string;
-  value: string;
-  delta?: string;
-  trend?: number[];
+  /** Valor formateado para mostrar. `null` = "Dato no disponible". */
+  value: string | null;
+  /** Delta vs período previo. `null` = no hay historización aún. */
+  delta?: string | null;
+  /** Serie temporal para sparkline. `null` = sin historización. */
+  trend?: number[] | null;
+  /** Tooltip o nota explicativa cuando value=null. */
+  pendingReason?: string;
   featured?: boolean;
 }
 
@@ -31,96 +53,78 @@ export interface CockpitData {
   kpis: CockpitKpi[];
   locations: LocationStatus[];
   activity: ActivityFeedItem[];
+  activityPendingIntegration: boolean;
   recentOrders: PurchaseOrder[];
 }
 
 export async function getCockpitData(): Promise<CockpitData> {
-  const { rows } = await listPurchaseOrders({ pageSize: 6 });
+  // -------------------------------------------------------------
+  // FUENTES REALES (Supabase)
+  // -------------------------------------------------------------
+  let recentOrders: PurchaseOrder[] = [];
+  let ocTotal: number | null = null;
+  let osTotal: number | null = null;
 
-  // Cross-módulo KPIs (en F2: agregar OS, CCTV uptime, ANMAT compliance real)
-  const totalM2 = LOCATIONS.reduce((a, l) => a + l.m2, 0);
-  const occupied = LOCATIONS.reduce((a, l) => a + (l.m2 * l.occupancyPct) / 100, 0);
-  const avgOccupancy = Math.round((occupied / totalM2) * 100);
-  const ocMonth = rows.length;
+  try {
+    const r = await listPurchaseOrders({ pageSize: 6 });
+    recentOrders = r.rows;
+    ocTotal = r.total;
+  } catch {
+    // listPurchaseOrders falla → mantener null, UI mostrará "Dato no disponible"
+  }
 
+  try {
+    const o = await listOrders({ pageSize: 1 });
+    osTotal = o.total;
+  } catch {
+    // idem
+  }
+
+  // -------------------------------------------------------------
+  // KPIs · sólo valores con fuente real verificable
+  // -------------------------------------------------------------
   const kpis: CockpitKpi[] = [
     {
-      label: "Ocupación m²",
-      value: `${avgOccupancy}%`,
-      delta: "+3 pts",
-      trend: [62, 65, 70, 72, 78, 82, avgOccupancy],
+      label: "Órdenes de compra",
+      value: ocTotal !== null ? String(ocTotal) : null,
+      delta: null,
+      trend: null,
       featured: true,
+      pendingReason: ocTotal === null ? "Conexión a Supabase no disponible." : undefined,
     },
     {
-      label: "OC firmadas mes",
-      value: String(ocMonth),
-      delta: "+18%",
-      trend: [12, 14, 18, 22, 28, 34, ocMonth],
+      label: "Órdenes de servicio",
+      value: osTotal !== null ? String(osTotal) : null,
+      delta: null,
+      trend: null,
+      pendingReason: osTotal === null ? "Conexión a Supabase no disponible." : undefined,
     },
     {
-      label: "OS operativas",
-      value: "324",
-      delta: "+12%",
-      trend: [240, 255, 270, 285, 295, 310, 324],
+      label: "Ocupación m²",
+      value: null,
+      delta: null,
+      trend: null,
+      pendingReason: "Pendiente de integración con sondas / entrada operativa real.",
     },
     {
-      label: "ANMAT compliance",
-      value: "100%",
-      delta: "RNE vigente",
-      trend: [98, 99, 100, 100, 100, 100, 100],
+      label: "Compliance ANMAT",
+      value: null,
+      delta: null,
+      trend: null,
+      pendingReason: "Pendiente de integración con módulo ANMAT real.",
     },
   ];
 
-  const activity: ActivityFeedItem[] = [
-    {
-      ts: "hace 8 min",
-      kind: "oc_signed",
-      title: "OC-2026-0348 firmada",
-      detail: "Distribuidora Norte Office · $ 18.948.600",
-      actor: "José Luis Battaglia",
-    },
-    {
-      ts: "hace 14 min",
-      kind: "cctv_event",
-      title: "Movimiento detectado · Magaldi sector D",
-      detail: "Cámara CAM-MAG-04 · acceso autorizado",
-      actor: "CCTV / Hikvision",
-    },
-    {
-      ts: "hace 22 min",
-      kind: "os_signed",
-      title: "OS-201567 firmada por Bidcom",
-      detail: "Mariano Stella · 18 pallets recibidos",
-      actor: "Bidcom S.A.",
-    },
-    {
-      ts: "hace 38 min",
-      kind: "anmat_event",
-      title: "Reporte de temperatura cadena de frío",
-      detail: "Magaldi · cámara 2 · 4.8°C estable",
-      actor: "Sistema ANMAT",
-    },
-    {
-      ts: "hace 1 h",
-      kind: "doc_uploaded",
-      title: "Contrato ANMAT v2 subido",
-      detail: "Cliente Laboratorios Bagó · firmado",
-      actor: "Ruth Cardozo",
-    },
-    {
-      ts: "hace 2 h",
-      kind: "oc_created",
-      title: "OC-2026-0347 creada · Pallets Sur",
-      detail: "60 pallets europeos · pendiente firma",
-      actor: "Sistema",
-    },
-  ];
+  // -------------------------------------------------------------
+  // ACTIVITY FEED · sin fuente real todavía → vacío + flag
+  // -------------------------------------------------------------
+  const activity: ActivityFeedItem[] = [];
 
   return {
     kpis,
     locations: LOCATIONS,
     activity,
-    recentOrders: rows,
+    activityPendingIntegration: true,
+    recentOrders,
   };
 }
-

@@ -127,7 +127,7 @@ export function AmbaMap({ locations = LOCATIONS }: { locations?: LocationStatus[
               fill="var(--fg-muted)"
               textAnchor="middle"
             >
-              {loc.tag} · {loc.occupancyPct}%
+              {loc.tag}{loc.occupancyPct !== null ? ` · ${loc.occupancyPct}%` : ""}
             </text>
           </g>
         );

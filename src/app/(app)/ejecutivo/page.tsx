@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { PoStatusBadge } from "@/components/compras/PoStatusBadge";
-import { Sparkline } from "@/components/compras/charts/Sparkline";
 import { AmbaMap } from "@/components/ejecutivo/AmbaMap";
-import { getCockpitData, type ActivityFeedItem } from "@/lib/ejecutivo/data";
+import { getCockpitData, type ActivityFeedItem, type CockpitKpi } from "@/lib/ejecutivo/data";
 import { fmtCurrency, truncate } from "@/lib/compras/format";
 import { ORG, PRODUCT } from "@/lib/org";
 
@@ -12,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CockpitPage() {
   const data = await getCockpitData();
+  const totalM2 = data.locations.reduce((a, l) => a + l.m2, 0);
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6">
@@ -29,10 +29,10 @@ export default async function CockpitPage() {
             <div className="eyebrow-tiny">
               {PRODUCT.name} · {PRODUCT.shortTagline}
             </div>
-            <h1 className="page-title">Buen día, José Luis.</h1>
+            <h1 className="page-title">Buen día.</h1>
             <p className="page-subtitle max-w-xl">
               Cockpit corporativo · {ORG.legalName} desde {ORG.since}. Operaciones 3PL en{" "}
-              {data.locations.length} locaciones · 15.000 m² · ANMAT vigente.
+              {data.locations.length} locaciones · {totalM2.toLocaleString("es-AR")} m² de huella.
             </p>
           </div>
           <div className="flex gap-2">
@@ -51,22 +51,7 @@ export default async function CockpitPage() {
       {/* KPI Grid */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {data.kpis.map((k, i) => (
-          <div key={i} className={`card kpi card-lift relative overflow-hidden ${k.featured ? "featured-stroke" : ""}`}>
-            <div className="kpi-label">{k.label}</div>
-            <div className="kpi-value">{k.value}</div>
-            {k.delta && (
-              <div className={`kpi-delta ${k.delta.startsWith("-") ? "down" : "up"}`}>
-                <Icon name={k.delta.startsWith("-") ? "trend-down" : "trend-up"} size={12} />
-                {k.delta}
-                <span className="vs">vs. mes ant.</span>
-              </div>
-            )}
-            {k.trend && (
-              <div className="absolute bottom-3 right-3">
-                <Sparkline data={k.trend} color={k.featured ? "#C90812" : "#214576"} />
-              </div>
-            )}
-          </div>
+          <KpiCard key={i} kpi={k} />
         ))}
       </section>
 
@@ -78,7 +63,7 @@ export default async function CockpitPage() {
             <div>
               <div className="text-sm font-bold text-fg-primary">Mapa operativo · CABA</div>
               <div className="text-[11px] text-fg-secondary mt-0.5">
-                {data.locations.length} sedes operativas · monitoreo Verisure 24/7
+                {data.locations.length} sedes operativas
               </div>
             </div>
             <Link href="/operaciones/mapa" className="text-xs font-bold text-fg-link hover:underline">
@@ -106,13 +91,19 @@ export default async function CockpitPage() {
                   <div className="text-[11px] text-fg-muted truncate">{loc.address}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm font-bold text-fg-brand tabular">{loc.occupancyPct}%</div>
+                  <div className="text-sm font-bold text-fg-brand tabular">
+                    {loc.occupancyPct !== null ? `${loc.occupancyPct}%` : "—"}
+                  </div>
                   <div className="text-[10px] text-fg-muted tabular">
-                    {loc.m2.toLocaleString("es-AR")} m² · {loc.activeOps} ops
+                    {loc.m2.toLocaleString("es-AR")} m²
+                    {loc.activeOps !== null && <> · {loc.activeOps} ops</>}
                   </div>
                 </div>
               </div>
             ))}
+          </div>
+          <div className="border-t border-stroke-soft px-5 py-2.5 text-[10px] text-fg-muted text-center">
+            Ocupación real-time y operaciones activas: pendientes de integración operativa.
           </div>
         </div>
 
@@ -124,11 +115,23 @@ export default async function CockpitPage() {
               Eventos cross-módulo en tiempo real
             </div>
           </div>
-          <ol className="flex-1 divide-y divide-stroke-soft overflow-y-auto" style={{ maxHeight: 520 }}>
-            {data.activity.map((ev, i) => (
-              <ActivityRow key={i} item={ev} />
-            ))}
-          </ol>
+          {data.activity.length > 0 ? (
+            <ol className="flex-1 divide-y divide-stroke-soft overflow-y-auto" style={{ maxHeight: 520 }}>
+              {data.activity.map((ev, i) => (
+                <ActivityRow key={i} item={ev} />
+              ))}
+            </ol>
+          ) : (
+            <div className="flex-1 p-6 flex flex-col items-center justify-center text-center">
+              <Icon name="wand" size={24} className="text-fg-muted mb-2" />
+              <div className="text-sm font-bold text-fg-primary">Sin actividad disponible</div>
+              <div className="text-[11px] text-fg-secondary mt-1 max-w-xs">
+                {data.activityPendingIntegration
+                  ? "Pendiente de integración con el event log cross-módulo (planificado Fase 2)."
+                  : "No hay eventos recientes."}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -138,100 +141,84 @@ export default async function CockpitPage() {
           Módulos operativos
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <ModuleCard
-            href="/compras"
-            icon="cart"
-            title="Compras"
-            sub="OC a proveedores"
-            stat={`${data.recentOrders.length} OC mes`}
-          />
-          <ModuleCard
-            href="/dashboard"
-            icon="orders"
-            title="Servicios"
-            sub="OS a clientes"
-            stat="324 OS · 97% firma"
-          />
-          <ModuleCard
-            href="/cctv"
-            icon="eye"
-            title="CCTV"
-            sub="Hikvision · Verisure"
-            stat="14 cámaras · uptime 99,8%"
-            tag="LIVE"
-          />
-          <ModuleCard
-            href="/anmat"
-            icon="shield"
-            title="ANMAT"
-            sub="Compliance & RNE"
-            stat="RNE vigente · 0 obs."
-          />
-          <ModuleCard
-            href="/documental"
-            icon="file-pdf"
-            title="Documental"
-            sub="Contratos · remitos · OC"
-            stat="2.847 docs · SHA-256"
-          />
-          <ModuleCard
-            href="/clients"
-            icon="clients"
-            title="Comercial"
-            sub="CRM · Clientify"
-            stat="42 clientes activos"
-          />
-          <ModuleCard
-            href="/compras/drive"
-            icon="drive"
-            title="Drive sync"
-            sub="Google Workspace"
-            stat="324 OC · 19,8 MB"
-          />
-          <ModuleCard
-            href="/reports"
-            icon="report"
-            title="Analytics"
-            sub="KPIs corporativos"
-            stat="6 reportes · realtime"
-          />
+          <ModuleCard href="/compras" icon="cart" title="Compras" sub="OC a proveedores" />
+          <ModuleCard href="/dashboard" icon="orders" title="Servicios" sub="OS a clientes" />
+          <ModuleCard href="/cctv" icon="eye" title="CCTV" sub="Hikvision · Verisure" tag="LIVE" />
+          <ModuleCard href="/anmat" icon="shield" title="ANMAT" sub="Compliance & RNE" />
+          <ModuleCard href="/documental" icon="file-pdf" title="Documental" sub="Contratos · remitos · OC" />
+          <ModuleCard href="/comercial/pipeline" icon="trend-up" title="Comercial" sub="CRM · Clientify" />
+          <ModuleCard href="/compras/drive" icon="drive" title="Drive sync" sub="Google Workspace" />
+          <ModuleCard href="/reports" icon="report" title="Analytics" sub="KPIs corporativos" />
         </div>
       </section>
 
       {/* Recent OC quick view */}
-      <section className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-stroke-soft flex items-center justify-between">
-          <div>
-            <div className="text-sm font-bold text-fg-primary">Últimas OC firmadas</div>
-            <div className="text-[11px] text-fg-secondary mt-0.5">Top 6 más recientes del módulo Compras</div>
-          </div>
-          <Link href="/compras/ordenes" className="text-xs font-bold text-fg-link hover:underline">
-            Ver todas →
-          </Link>
-        </div>
-        <div className="divide-y divide-stroke-soft">
-          {data.recentOrders.map((o) => (
-            <Link
-              key={o.id}
-              href={`/compras/ordenes/${o.public_id}`}
-              className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
-            >
-              <div className="font-mono text-[11px] text-fg-muted w-28 flex-shrink-0">{o.public_id}</div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-fg-primary truncate">
-                  {truncate(o.vendor?.razon ?? "—", 32)}
-                </div>
-                <div className="text-[11px] text-fg-muted font-mono">{o.vendor?.cuit}</div>
-              </div>
-              <div className="text-right text-sm tabular font-bold text-fg-brand w-28">
-                {fmtCurrency(o.total)}
-              </div>
-              <PoStatusBadge status={o.status} className="hidden sm:inline-flex" />
-              <Icon name="chevron-right" size={14} className="text-fg-muted hidden md:block" />
+      {data.recentOrders.length > 0 && (
+        <section className="card overflow-hidden">
+          <div className="px-5 py-4 border-b border-stroke-soft flex items-center justify-between">
+            <div>
+              <div className="text-sm font-bold text-fg-primary">Últimas órdenes de compra</div>
+              <div className="text-[11px] text-fg-secondary mt-0.5">Top 6 más recientes del módulo Compras</div>
+            </div>
+            <Link href="/compras/ordenes" className="text-xs font-bold text-fg-link hover:underline">
+              Ver todas →
             </Link>
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="divide-y divide-stroke-soft">
+            {data.recentOrders.map((o) => (
+              <Link
+                key={o.id}
+                href={`/compras/ordenes/${o.public_id}`}
+                className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+              >
+                <div className="font-mono text-[11px] text-fg-muted w-28 flex-shrink-0">{o.public_id}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-fg-primary truncate">
+                    {truncate(o.vendor?.razon ?? "—", 32)}
+                  </div>
+                  <div className="text-[11px] text-fg-muted font-mono">{o.vendor?.cuit}</div>
+                </div>
+                <div className="text-right text-sm tabular font-bold text-fg-brand w-28">
+                  {fmtCurrency(o.total)}
+                </div>
+                <PoStatusBadge status={o.status} className="hidden sm:inline-flex" />
+                <Icon name="chevron-right" size={14} className="text-fg-muted hidden md:block" />
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function KpiCard({ kpi }: { kpi: CockpitKpi }) {
+  const isPending = kpi.value === null;
+  return (
+    <div
+      className={`card kpi card-lift relative overflow-hidden ${kpi.featured ? "featured-stroke" : ""}`}
+      title={kpi.pendingReason ?? undefined}
+    >
+      <div className="kpi-label">{kpi.label}</div>
+      {isPending ? (
+        <>
+          <div className="kpi-value text-fg-muted text-xl">Dato no disponible</div>
+          {kpi.pendingReason && (
+            <div className="text-[10px] text-fg-muted mt-1.5 leading-tight">{kpi.pendingReason}</div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="kpi-value">{kpi.value}</div>
+          {kpi.delta && (
+            <div className={`kpi-delta ${kpi.delta.startsWith("-") ? "down" : "up"}`}>
+              <Icon name={kpi.delta.startsWith("-") ? "trend-down" : "trend-up"} size={12} />
+              {kpi.delta}
+              <span className="vs">vs. mes ant.</span>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -267,14 +254,12 @@ function ModuleCard({
   icon,
   title,
   sub,
-  stat,
   tag,
 }: {
   href: string;
   icon: IconName;
   title: string;
   sub: string;
-  stat: string;
   tag?: string;
 }) {
   return (
@@ -291,8 +276,7 @@ function ModuleCard({
         <Icon name={icon} size={18} />
       </div>
       <div className="text-sm font-bold text-fg-primary">{title}</div>
-      <div className="text-[11px] text-fg-muted mb-2">{sub}</div>
-      <div className="text-[11px] font-bold text-fg-brand tabular">{stat}</div>
+      <div className="text-[11px] text-fg-muted">{sub}</div>
     </Link>
   );
 }

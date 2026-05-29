@@ -116,7 +116,12 @@ export default async function CctvPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Cámaras conectadas" value={String(onlineCount)} sub={`de ${total}`} kind="success" />
         <StatCard label="Resolución máxima" value="4 MP" sub="H.264 / H.265" kind="info" />
-        <StatCard label="Eventos hoy" value={String(EVENTS.length)} sub="motion + access" kind="warn" />
+        <StatCard
+          label="Eventos hoy"
+          value={EVENTS.length === 0 ? "—" : String(EVENTS.length)}
+          sub={EVENTS.length === 0 ? "Pendiente de integración" : "motion + access"}
+          kind="muted"
+        />
         <StatCard
           label="NVR status"
           value={connectionError ? "Offline" : "Online"}
@@ -142,46 +147,55 @@ export default async function CctvPage() {
                 Motion · access · alarmas · cadena de frío
               </div>
             </div>
-            <span className="flex items-center gap-1.5 text-[11px] text-status-success font-bold">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-pulse" />
-              LIVE
-            </span>
           </div>
-          <ol className="flex-1 divide-y divide-stroke-soft overflow-y-auto">
-            {EVENTS.map((e, i) => {
-              const color =
-                e.severity === "danger"
-                  ? "text-tops-red bg-tops-red/10"
-                  : e.severity === "warn"
-                    ? "text-status-warning bg-status-warning/10"
-                    : "text-tops-blue-700 bg-tops-blue-700/10";
-              return (
-                <li key={i} className="px-5 py-3 flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-md grid place-items-center flex-shrink-0 ${color}`}>
-                    <Icon
-                      name={
-                        e.kind === "alarm"
-                          ? "bolt"
-                          : e.kind === "access"
-                            ? "shield"
-                            : e.kind === "temp"
-                              ? "wand"
-                              : "eye"
-                      }
-                      size={14}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-bold text-fg-primary truncate">{e.cameraName}</div>
-                    <div className="text-[11px] text-fg-secondary line-clamp-2">{e.detail}</div>
-                    <div className="text-[10px] text-fg-muted mt-0.5 uppercase tracking-wider font-bold">
-                      {e.cameraId} · {e.ts}
+          {EVENTS.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
+              <Icon name="wand" size={24} className="text-fg-muted mb-2" />
+              <div className="text-sm font-bold text-fg-primary">Feed de eventos pendiente</div>
+              <div className="text-[11px] text-fg-secondary mt-1 max-w-xs leading-relaxed">
+                Integración con el NVR ISAPI Subscribe Event API o tabla{" "}
+                <code className="font-mono">cctv_events</code> en Supabase planificada para Fase 2.
+                <br />
+                Las cámaras y snapshots ya funcionan en tiempo real.
+              </div>
+            </div>
+          ) : (
+            <ol className="flex-1 divide-y divide-stroke-soft overflow-y-auto">
+              {EVENTS.map((e, i) => {
+                const color =
+                  e.severity === "danger"
+                    ? "text-tops-red bg-tops-red/10"
+                    : e.severity === "warn"
+                      ? "text-status-warning bg-status-warning/10"
+                      : "text-tops-blue-700 bg-tops-blue-700/10";
+                return (
+                  <li key={i} className="px-5 py-3 flex items-start gap-3">
+                    <div className={`w-8 h-8 rounded-md grid place-items-center flex-shrink-0 ${color}`}>
+                      <Icon
+                        name={
+                          e.kind === "alarm"
+                            ? "bolt"
+                            : e.kind === "access"
+                              ? "shield"
+                              : e.kind === "temp"
+                                ? "wand"
+                                : "eye"
+                        }
+                        size={14}
+                      />
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-bold text-fg-primary truncate">{e.cameraName}</div>
+                      <div className="text-[11px] text-fg-secondary line-clamp-2">{e.detail}</div>
+                      <div className="text-[10px] text-fg-muted mt-0.5 uppercase tracking-wider font-bold">
+                        {e.cameraId} · {e.ts}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
           <div className="px-5 py-2.5 border-t border-stroke-soft text-[11px] text-fg-muted text-center font-mono">
             NVR Hikvision ERI-K216-P16 · {env.hikvision.host}:{env.hikvision.httpPort} · ISAPI
           </div>

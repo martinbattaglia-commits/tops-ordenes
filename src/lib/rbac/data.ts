@@ -10,15 +10,30 @@ import type {
 
 /**
  * Data layer del módulo RBAC.
- * En demo mode devuelve un set seed coherente para que la UI sea
- * navegable sin Supabase aplicado.
+ *
+ * Estrategia:
+ *  - PRODUCCIÓN (Supabase configurado): consulta tablas reales `roles`,
+ *    `permissions`, `role_permissions`, `user_roles`.
+ *  - DEMO MODE (`NEXT_PUBLIC_DEMO_MODE=1`) o sin Supabase: usa los seeds
+ *    constantes definidos abajo. Los seeds reflejan los **6 roles reales**
+ *    de Logística TOPS (Director / Administración / Operaciones /
+ *    Comercial / Depósito / Auditor) — no usuarios ficticios.
+ *
+ * NOTA · QW Fase 1 (2026-05-29):
+ *  - Se eliminó la lista de asignaciones ficticias (MOCK_USER_ASSIGNMENTS).
+ *  - `listUserAssignments()` retorna `[]` en demo mode hasta que existan
+ *    asignaciones reales en `user_roles`. La UI debe mostrar "Sin usuarios
+ *    asignados" en ese caso.
+ *  - Para poblar `user_roles` en producción, ejecutar:
+ *      `scripts/seed-rbac-real-roles.sql`
+ *    (requiere gate ejecutivo; no se ejecuta automáticamente).
  */
 
 // ------------------------------------------------------------------
-// MOCK SEED (demo mode)
+// PERMISSIONS — 22 permisos seedeados (alineados con la migración 0009)
 // ------------------------------------------------------------------
 
-const MOCK_PERMISSIONS: Permission[] = [
+const SEED_PERMISSIONS: Permission[] = [
   { id: "p1", slug: "cockpit.view", module: "cockpit", action: "view", label: "Ver cockpit ejecutivo", description: "Acceso al panel /ejecutivo", created_at: "2026-05-26T00:00:00Z" },
   { id: "p2", slug: "cockpit.export", module: "cockpit", action: "export", label: "Exportar reportes ejecutivos", description: null, created_at: "2026-05-26T00:00:00Z" },
   { id: "p3", slug: "compras.view", module: "compras", action: "view", label: "Ver órdenes de compra", description: null, created_at: "2026-05-26T00:00:00Z" },
@@ -43,38 +58,136 @@ const MOCK_PERMISSIONS: Permission[] = [
   { id: "p22", slug: "sistema.admin", module: "sistema", action: "admin", label: "Administración del sistema", description: null, created_at: "2026-05-26T00:00:00Z" },
 ];
 
-const MOCK_ROLES: Role[] = [
-  { id: "r1", slug: "director_ops", name: "Director de Operaciones", description: "Único habilitado a firmar OC. Acceso total operativo.", color: "#C90812", is_system: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", permission_count: 22, user_count: 1 },
-  { id: "r2", slug: "admin", name: "Administración", description: "Equipo de administración financiera y compliance.", color: "#214576", is_system: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", permission_count: 21, user_count: 2 },
-  { id: "r3", slug: "operaciones", name: "Operaciones", description: "Encargados de depósito, picking, recepción.", color: "#050555", is_system: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", permission_count: 8, user_count: 6 },
-  { id: "r4", slug: "compliance", name: "Compliance / DT", description: "Director técnico, auditorías ANMAT, documental.", color: "#0E7C3A", is_system: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", permission_count: 6, user_count: 1 },
-  { id: "r5", slug: "comercial", name: "Comercial", description: "Equipo CRM, ventas, pipeline Clientify.", color: "#B45309", is_system: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", permission_count: 3, user_count: 2 },
-  { id: "r6", slug: "seguridad", name: "Seguridad / CCTV", description: "Monitoreo Verisure 24/7, eventos CCTV.", color: "#3a6db0", is_system: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", permission_count: 3, user_count: 1 },
-  { id: "r7", slug: "cliente_b2b", name: "Cliente B2B", description: "Solo lectura de sus propias OS/OC (rol futuro F3).", color: "#8A94A6", is_system: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", permission_count: 1, user_count: 0 },
+// ------------------------------------------------------------------
+// 6 ROLES REALES — Logística TOPS
+// ------------------------------------------------------------------
+
+const SEED_ROLES: Role[] = [
+  {
+    id: "r1",
+    slug: "director",
+    name: "Director",
+    description: "Máxima autoridad operativa y financiera. Único habilitado a firmar OC.",
+    color: "#C90812",
+    is_system: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-05-29T00:00:00Z",
+    permission_count: 22,
+    user_count: 0,
+  },
+  {
+    id: "r2",
+    slug: "administracion",
+    name: "Administración",
+    description: "Equipo financiero, fiscalía y compliance. Todos los permisos salvo firma de OC.",
+    color: "#214576",
+    is_system: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-05-29T00:00:00Z",
+    permission_count: 21,
+    user_count: 0,
+  },
+  {
+    id: "r3",
+    slug: "operaciones",
+    name: "Operaciones",
+    description: "Coordinación de depósitos, picking, recepción y servicios a clientes.",
+    color: "#050555",
+    is_system: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-05-29T00:00:00Z",
+    permission_count: 9,
+    user_count: 0,
+  },
+  {
+    id: "r4",
+    slug: "comercial",
+    name: "Comercial",
+    description: "Equipo CRM, ventas, gestión de pipeline en Clientify.",
+    color: "#B45309",
+    is_system: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-05-29T00:00:00Z",
+    permission_count: 3,
+    user_count: 0,
+  },
+  {
+    id: "r5",
+    slug: "deposito",
+    name: "Depósito",
+    description: "Operarios de picking, recepción, firma de OS y monitoreo de cámaras.",
+    color: "#0E7C3A",
+    is_system: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-05-29T00:00:00Z",
+    permission_count: 4,
+    user_count: 0,
+  },
+  {
+    id: "r6",
+    slug: "auditor",
+    name: "Auditor",
+    description: "Acceso de SOLO LECTURA a todos los módulos. Para auditorías internas y externas.",
+    color: "#8A94A6",
+    is_system: true,
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-05-29T00:00:00Z",
+    permission_count: 7,
+    user_count: 0,
+  },
 ];
+
+// ------------------------------------------------------------------
+// Mapeo role.slug → permission.slug[]
+// ------------------------------------------------------------------
 
 const ROLE_PERMS_MAP: Record<string, string[]> = {
-  director_ops: MOCK_PERMISSIONS.map((p) => p.slug),
-  admin: MOCK_PERMISSIONS.filter((p) => p.slug !== "compras.sign").map((p) => p.slug),
-  operaciones: ["cockpit.view", "compras.view", "compras.create", "servicios.view", "servicios.create", "servicios.sign", "cctv.view", "documental.view"],
-  compliance: ["cockpit.view", "compliance.view", "compliance.edit", "documental.view", "documental.create", "cctv.view"],
+  // Director: TODO
+  director: SEED_PERMISSIONS.map((p) => p.slug),
+
+  // Administración: TODO menos firma de OC
+  administracion: SEED_PERMISSIONS.filter((p) => p.slug !== "compras.sign").map((p) => p.slug),
+
+  // Operaciones: gestiona compras (sin firma), todo servicios (incl. firma), CCTV view, documental view+create
+  operaciones: [
+    "cockpit.view",
+    "compras.view",
+    "compras.create",
+    "servicios.view",
+    "servicios.create",
+    "servicios.sign",
+    "cctv.view",
+    "documental.view",
+    "documental.create",
+  ],
+
+  // Comercial: solo CRM
   comercial: ["cockpit.view", "comercial.view", "comercial.edit"],
-  seguridad: ["cockpit.view", "cctv.view", "cctv.admin"],
-  cliente_b2b: ["servicios.view"],
+
+  // Depósito (operario picking): OS (incl. firma), cámaras view
+  deposito: ["servicios.view", "servicios.create", "servicios.sign", "cctv.view"],
+
+  // Auditor: SOLO view en todos los módulos
+  auditor: [
+    "cockpit.view",
+    "compras.view",
+    "servicios.view",
+    "comercial.view",
+    "compliance.view",
+    "cctv.view",
+    "documental.view",
+  ],
 };
 
-const MOCK_USER_ASSIGNMENTS: UserRoleAssignment[] = [
-  { user_id: "u1", role_id: "r1", position_title: "Director de Operaciones", depot: null, assigned_at: "2026-01-01T00:00:00Z", assigned_by: null, user_email: "joseluis@logisticatops.com", user_name: "José Luis Battaglia", role: MOCK_ROLES[0] },
-  { user_id: "u2", role_id: "r2", position_title: "Jefa de Administración", depot: null, assigned_at: "2026-01-01T00:00:00Z", assigned_by: "u1", user_email: "ruth@logisticatops.com", user_name: "Ruth Cardozo", role: MOCK_ROLES[1] },
-  { user_id: "u3", role_id: "r3", position_title: "Encargado Magaldi", depot: "MAGALDI", assigned_at: "2026-01-15T00:00:00Z", assigned_by: "u1", user_email: "juancarlos@logisticatops.com", user_name: "Juan Carlos", role: MOCK_ROLES[2] },
-  { user_id: "u4", role_id: "r3", position_title: "Encargado Luján", depot: "LUJAN", assigned_at: "2026-01-15T00:00:00Z", assigned_by: "u1", user_email: "despachos@logisticatops.com", user_name: "Jorge Merino", role: MOCK_ROLES[2] },
-  { user_id: "u5", role_id: "r4", position_title: "DT — Lic. en Farmacia", depot: null, assigned_at: "2026-02-01T00:00:00Z", assigned_by: "u1", user_email: "dt@logisticatops.com", user_name: "Lic. María Inés Cardozo", role: MOCK_ROLES[3] },
-  { user_id: "u6", role_id: "r5", position_title: "Account Manager", depot: null, assigned_at: "2026-03-01T00:00:00Z", assigned_by: "u1", user_email: "cynthia@logisticatops.com", user_name: "Cynthia LogisticaTops", role: MOCK_ROLES[4] },
-  { user_id: "u7", role_id: "r5", position_title: "Comercial AR", depot: null, assigned_at: "2026-03-15T00:00:00Z", assigned_by: "u1", user_email: "ruth.carrasquero@logisticatops.com", user_name: "Ruth Carrasquero", role: MOCK_ROLES[4] },
-  { user_id: "u8", role_id: "r6", position_title: "Coord. Seguridad", depot: null, assigned_at: "2026-02-01T00:00:00Z", assigned_by: "u1", user_email: "seguridad@logisticatops.com", user_name: "Coord. Seguridad", role: MOCK_ROLES[5] },
-  { user_id: "u9", role_id: "r3", position_title: "Operario picking", depot: "MAGALDI", assigned_at: "2026-04-01T00:00:00Z", assigned_by: "u3", user_email: "carlos.mendez@logisticatops.com", user_name: "Carlos Méndez", role: MOCK_ROLES[2] },
-  { user_id: "u10", role_id: "r3", position_title: "Operario picking", depot: "MAGALDI", assigned_at: "2026-04-01T00:00:00Z", assigned_by: "u3", user_email: "sebastian.romero@logisticatops.com", user_name: "Sebastián Romero", role: MOCK_ROLES[2] },
-];
+// ------------------------------------------------------------------
+// User assignments — VACÍO por default (no usuarios ficticios)
+// ------------------------------------------------------------------
+
+const SEED_USER_ASSIGNMENTS: UserRoleAssignment[] = [];
+
+// ------------------------------------------------------------------
+// Mock-mode helper
+// ------------------------------------------------------------------
 
 function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
@@ -85,15 +198,18 @@ function isMock(): boolean {
 // ------------------------------------------------------------------
 
 export async function listRoles(): Promise<Role[]> {
-  if (isMock()) return MOCK_ROLES;
+  if (isMock()) return SEED_ROLES;
   const supabase = createClient();
-  if (!supabase) return MOCK_ROLES;
+  if (!supabase) return SEED_ROLES;
   const { data, error } = await supabase
     .from("roles")
     .select("*, role_permissions(permission_id), user_roles(user_id)")
     .order("name");
   if (error) throw new Error(`listRoles: ${error.message}`);
-  return ((data ?? []) as Array<Role & { role_permissions?: { permission_id: string }[]; user_roles?: { user_id: string }[] }>).map((r) => ({
+  const rows = (data ?? []) as Array<Role & { role_permissions?: { permission_id: string }[]; user_roles?: { user_id: string }[] }>;
+  // Si la tabla `roles` está vacía en DB, devolver el seed para no mostrar UI vacía
+  if (rows.length === 0) return SEED_ROLES;
+  return rows.map((r) => ({
     ...r,
     permission_count: r.role_permissions?.length ?? 0,
     user_count: r.user_roles?.length ?? 0,
@@ -102,12 +218,12 @@ export async function listRoles(): Promise<Role[]> {
 
 export async function getRole(slug: string): Promise<RoleWithPermissions | null> {
   if (isMock()) {
-    const role = MOCK_ROLES.find((r) => r.slug === slug);
+    const role = SEED_ROLES.find((r) => r.slug === slug);
     if (!role) return null;
     const permSlugs = ROLE_PERMS_MAP[slug] ?? [];
     return {
       ...role,
-      permissions: MOCK_PERMISSIONS.filter((p) => permSlugs.includes(p.slug)),
+      permissions: SEED_PERMISSIONS.filter((p) => permSlugs.includes(p.slug)),
     };
   }
   const supabase = createClient();
@@ -118,7 +234,16 @@ export async function getRole(slug: string): Promise<RoleWithPermissions | null>
     .eq("slug", slug)
     .maybeSingle();
   if (error) throw new Error(`getRole: ${error.message}`);
-  if (!data) return null;
+  if (!data) {
+    // Fallback al seed para que la UI siga navegable
+    const role = SEED_ROLES.find((r) => r.slug === slug);
+    if (!role) return null;
+    const permSlugs = ROLE_PERMS_MAP[slug] ?? [];
+    return {
+      ...role,
+      permissions: SEED_PERMISSIONS.filter((p) => permSlugs.includes(p.slug)),
+    };
+  }
   const r = data as Role & { permissions?: Array<{ permission: Permission }> };
   return {
     ...r,
@@ -127,22 +252,24 @@ export async function getRole(slug: string): Promise<RoleWithPermissions | null>
 }
 
 export async function listPermissions(): Promise<Permission[]> {
-  if (isMock()) return MOCK_PERMISSIONS;
+  if (isMock()) return SEED_PERMISSIONS;
   const supabase = createClient();
-  if (!supabase) return MOCK_PERMISSIONS;
+  if (!supabase) return SEED_PERMISSIONS;
   const { data, error } = await supabase
     .from("permissions")
     .select("*")
     .order("module")
     .order("action");
   if (error) throw new Error(`listPermissions: ${error.message}`);
-  return (data ?? []) as Permission[];
+  const rows = (data ?? []) as Permission[];
+  if (rows.length === 0) return SEED_PERMISSIONS;
+  return rows;
 }
 
 export async function listUserAssignments(): Promise<UserRoleAssignment[]> {
-  if (isMock()) return MOCK_USER_ASSIGNMENTS;
+  if (isMock()) return SEED_USER_ASSIGNMENTS;
   const supabase = createClient();
-  if (!supabase) return MOCK_USER_ASSIGNMENTS;
+  if (!supabase) return SEED_USER_ASSIGNMENTS;
   const { data, error } = await supabase
     .from("user_roles")
     .select("*, role:roles(*), profile:profiles(email, full_name)")
