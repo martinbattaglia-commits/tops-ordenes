@@ -79,7 +79,7 @@ export function NotificationsBell() {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute right-0 mt-1.5 w-80 max-w-[calc(100vw-24px)] bg-white border border-stroke-soft rounded-lg shadow-lg z-50 overflow-hidden">
+          <div className="absolute right-0 mt-1.5 w-80 max-w-[calc(100vw-24px)] bg-bg-surface border border-stroke-soft rounded-lg shadow-lg z-50 overflow-hidden">
             <div className="flex items-center justify-between px-3 py-2 border-b border-stroke-soft bg-neutral-50">
               <div className="text-sm font-bold text-fg-brand">Notificaciones</div>
               {unread > 0 && (

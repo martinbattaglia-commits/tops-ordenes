@@ -1,12 +1,22 @@
 # TOPS Órdenes
 
-Sistema digital de órdenes de servicio operativas para **Logística TOPS (Verotin S.A.)**.
-Reemplaza el formulario manual en papel: generación, firma, envío y centralización de cada
-orden de servicio (autoelevador, transporte, peón, picking, distribución, ANMAT, etc.) desde
-cualquier celular, tablet o desktop — con auditoría, PDF profesional y reglas de envío
-automáticas.
+Plataforma digital de **órdenes de compra** (OC) y **órdenes de servicio** (OS) para
+**Logística TOPS (Verotin S.A.)**. Mobile-first, instalable como PWA, integrada con Supabase
+y Resend, lista para deploy en Netlify.
 
-> Operación 3PL · 40+ años · Depósitos Magaldi (CABA) y Luján (BsAs).
+Dos módulos coexistentes con shell, auth, Tailwind tokens y diseño compartidos:
+
+- **Compras → Proveedores (`/compras`)**: wizard 4 pasos (Proveedor → Datos → Productos → Firma),
+  firma digital del Director de Operaciones (canvas DPR-aware con hash SHA-256), PDF
+  corporativo A4 con QR de validación, envío automático a proveedor + Ruth + JL, sync a
+  Google Drive `/Órdenes de Compra 2026/<Mes>/<Proveedor>/`, dashboard con KPIs/charts,
+  trazabilidad timeline, conciliación contra facturas. Firma exclusiva: José Luis Battaglia.
+
+- **Servicios → Clientes (`/dashboard`, `/orders`)**: módulo legacy de órdenes de servicio
+  operativas (autoelevador, transporte, peón, picking, ANMAT, etc.) firmadas por el
+  cliente desde el celular del operario.
+
+> Operación 3PL · 40+ años · Depósitos Magaldi (CABA, ANMAT) y Luján (BsAs).
 
 ---
 
@@ -65,7 +75,7 @@ npm run dev
    SUPABASE_SERVICE_ROLE_KEY      = eyJhbGc...   ← jamás exponer al cliente
    ```
 
-### 2 · Aplicar las 4 migraciones
+### 2 · Aplicar las 8 migraciones
 
 **Opción A — Supabase CLI (recomendado):**
 ```bash
@@ -84,6 +94,10 @@ supabase link --project-ref <YOUR_REF>
 | `0002_seed.sql` | Catálogo de 13 servicios + 4 operadores |
 | `0003_storage.sql` | Buckets `signatures`, `pdfs`, `attachments` con policies |
 | `0004_extended_schema.sql` | `notifications` + `attachments` tables, columnas adicionales, triggers de notification y updated_at, **realtime publication**, vista `v_orders_dashboard` |
+| `0005_fix_rls_recursion.sql` | Fix RLS recursivo en `profiles` |
+| `0006_real_operators.sql` | Reemplazo de operadores demo por dotación real |
+| `0007_extend_service_units.sql` | Unidades extendidas (m3, viaje) en catálogo |
+| `0008_purchase_orders.sql` | **Módulo OC**: tablas `vendors`, `products`, `purchase_orders`, `po_items`, `po_events`, `po_email_sends`, vista `vendor_stats`, buckets `po-pdfs` + `po-signatures` + policies |
 
 ### 3 · Crear el primer admin
 
@@ -168,47 +182,69 @@ El archivo [`netlify.toml`](netlify.toml) ya tiene:
 
 ```
 src/
-├── app/                          # Next App Router
-│   ├── (app)/                    # Rutas autenticadas (envueltas en Shell)
-│   │   ├── dashboard/            # KPIs, gráfico depósitos, mix servicios
-│   │   ├── orders/               # Lista + filtros + paginación
-│   │   │   ├── [publicId]/       # Detalle + PdfPreview + share
-│   │   │   └── new/              # Wizard 4 pasos + firma canvas
-│   │   ├── clients/              # Maestro de clientes
-│   │   ├── reports/              # KPIs ejecutivos
-│   │   ├── billing/              # Cierre mensual a facturar
-│   │   ├── templates/            # Vista previa email
-│   │   └── settings/             # Estado de integraciones
+├── app/                              # Next App Router
+│   ├── (app)/                        # Rutas autenticadas (envueltas en Shell)
+│   │   ├── compras/                  # ── Módulo Órdenes de Compra (OC) ──
+│   │   │   ├── page.tsx              #   Dashboard OC: KPIs + SpendChart + Donut + Alerts
+│   │   │   ├── nueva/                #   Wizard 4 pasos (Proveedor → Datos → Productos → Firma)
+│   │   │   │   ├── NewPoWizard.tsx
+│   │   │   │   └── actions.ts        #   Server action createPurchaseOrderAction
+│   │   │   ├── ordenes/              #   Lista historial + filtros + tabs
+│   │   │   │   ├── [publicId]/       #   Detalle + PdfPreview + Email/WhatsApp tabs
+│   │   │   │   └── OrdersToolbar.tsx
+│   │   │   ├── proveedores/          #   Maestro de proveedores
+│   │   │   ├── drive/                #   Drive sync status + folders por mes
+│   │   │   └── email/                #   Plantilla email automática
+│   │   ├── dashboard/                # ── Módulo Órdenes de Servicio (OS) legacy ──
+│   │   ├── orders/                   #   Lista OS
+│   │   ├── clients/                  #   Clientes (servicios)
+│   │   ├── reports/ billing/ settings/ templates/
+│   ├── compras/validar/[publicId]/   # ── Pública para QR scan ──
 │   ├── api/
-│   │   ├── auth/                 # callback OAuth + signout
-│   │   └── orders/
-│   │       ├── [publicId]/pdf/   # PDF server-side
-│   │       └── export/           # CSV export
-│   ├── login/                    # Pantalla de acceso
-│   ├── layout.tsx                # Root layout + PWA bootstrap
-│   └── globals.css               # Tokens TOPS + Tailwind
+│   │   ├── auth/                     # callback OAuth + signout
+│   │   ├── orders/[publicId]/pdf/    # PDF OS server-side
+│   │   ├── orders/export/            # CSV OS
+│   │   └── compras/
+│   │       ├── [publicId]/pdf/       # PDF OC con QR
+│   │       └── export/               # CSV OC
+│   ├── login/                        # Pantalla de acceso
+│   ├── layout.tsx                    # Root layout + PWA bootstrap
+│   └── globals.css                   # Tokens TOPS + Tailwind
 ├── components/
-│   ├── Icon.tsx                  # 40+ SVG inline (Lucide-style)
-│   ├── StatusBadge.tsx
-│   ├── charts/                   # Sparkline, DepotChart, ServiceMixDonut
-│   └── shell/                    # Sidebar, Topbar, MobileBottomNav, Drawer
+│   ├── Icon.tsx                      # 60+ SVG inline (Lucide-style)
+│   ├── StatusBadge.tsx               # Badge OS
+│   ├── charts/                       # Sparkline, DepotChart, ServiceMixDonut (OS)
+│   ├── compras/
+│   │   ├── PoStatusBadge.tsx
+│   │   ├── PdfPreview.tsx            # Vista A4 idéntica al PDF
+│   │   ├── SignaturePad.tsx          # Canvas DPR-aware mouse+touch+stylus
+│   │   └── charts/                   # SpendChart, CategoryDonut, Sparkline
+│   └── shell/                        # Sidebar (2 secciones), Topbar, MobileBottomNav contextual
 ├── lib/
-│   ├── data/orders.ts            # Data access (Supabase ↔ mock fallback)
-│   ├── pdf/OrderPdfDocument.tsx  # Plantilla react-pdf
-│   ├── supabase/                 # client + server + middleware
-│   ├── email.ts                  # Reglas destinatarios + Resend
-│   ├── env.ts                    # Lectura tipada de env vars
-│   ├── mock-data.ts              # Demo mode
-│   ├── services-catalog.ts       # Tarifario fallback
-│   ├── types.ts
-│   └── utils.ts                  # fmtCurrency, sha256, isValidCuit, …
-├── middleware.ts                 # Refresh de sesión + redirect a /login
-supabase/migrations/              # SQL versionado (init, seed, storage)
+│   ├── data/orders.ts                # Data access OS
+│   ├── pdf/OrderPdfDocument.tsx      # PDF OS
+│   ├── compras/
+│   │   ├── data.ts                   # Data access OC (Supabase ↔ mock)
+│   │   ├── compras-mock.ts           # 64 OC demo
+│   │   ├── products-catalog.ts       # 20 SKUs seed
+│   │   ├── validation.ts             # Zod schemas + formatZodIssues
+│   │   ├── totals.ts                 # IVA 21% + SHA-256 integridad
+│   │   ├── email.ts                  # Plantilla HTML + Resend
+│   │   ├── format.ts                 # fmt AR (currency, cuit, mod 11, …)
+│   │   └── pdf/PoPdfDocument.tsx     # PDF OC con react-pdf
+│   ├── supabase/                     # client + server + admin + middleware
+│   ├── env.ts                        # Lectura tipada de env vars
+│   ├── org.ts                        # Constantes corporativas + categorías + depots
+│   ├── types.ts                      # Tipos OS
+│   ├── types-po.ts                   # Tipos OC
+│   └── utils.ts
+├── middleware.ts                     # Refresh sesión + skip público (/compras/validar)
+supabase/migrations/                  # SQL versionado (0001-0008)
 public/
-├── fonts/Gotham-*.otf            # Fuente corporativa
-├── icons/                        # Logos + iconos PWA
-├── manifest.webmanifest          # PWA
-└── sw.js                         # Service worker (offline-friendly)
+├── fonts/Gotham-*.otf                # Fuente corporativa
+├── icons/                            # Logos + iconos PWA
+├── manifest.webmanifest              # PWA con shortcuts a /compras/nueva
+└── sw.js                             # Service worker
 ```
 
 ---
@@ -302,11 +338,58 @@ Solo `admin` y `supervisor` pueden leerla (policy en `0001_init.sql`).
 
 ## Roadmap inmediato
 
-- [ ] Integración con AFIP padrón para auto-validar CUIT en alta de cliente.
+- [ ] Integración con AFIP padrón para auto-validar CUIT en alta de proveedor/cliente.
 - [ ] Notificaciones push (Web Push) cuando una orden necesita firma.
 - [ ] App nativa wrapper (Capacitor) para distribuir en App Store / Play Store.
 - [ ] Integración Clientify para sincronizar maestro de clientes y deals.
-- [ ] Dashboard avanzado (cohorts, retención de cliente, margen por servicio).
+- [ ] Drive sync vía service account (la UI está; falta cablear API).
+- [ ] WhatsApp Business API en `OrderDetailTabs` (hoy es mockup).
+- [ ] Dashboard avanzado OC (cohorts, retención de cliente, margen por servicio).
+
+---
+
+## Módulo Órdenes de Compra (OC) — detalle
+
+### Flujo end-to-end
+1. **Login** corporativo → middleware redirige a `/compras` (start_url del manifest).
+2. **`/compras/nueva`** — wizard 4 pasos:
+   - **Proveedor**: búsqueda con autocomplete sobre el maestro (`vendors`), validación
+     CUIT módulo 11 con check verde, alta inline si no existe.
+   - **Datos generales**: depot card (Magaldi/Luján), condición de pago, fecha entrega,
+     chips de categoría (12 categorías predefinidas en `src/lib/org.ts`).
+   - **Productos**: tabla dinámica con `ProductPicker` que filtra el catálogo, totales
+     en vivo (neto + IVA 21%), smart suggestions contextuales.
+   - **Firma**: `SignaturePad` DPR-aware con touch+stylus, hash SHA-256 al guardar,
+     checklist de acciones automáticas (PDF, Drive, email, historial).
+3. **Submit** → `createPurchaseOrderAction` (server action):
+   - Upsert vendor por CUIT.
+   - Insert `purchase_orders` (auto-id `OC-2026-NNNN` por sequence).
+   - Insert `po_items`.
+   - Upload PNG firma a bucket `po-signatures`.
+   - Insert eventos `created` + `signed` en `po_events`.
+   - Envío de emails vía Resend (proveedor en To, Ruth + JL en CC).
+   - Hash de integridad SHA-256 sobre `(vendor, items, total, emisor, signed_at)`.
+4. **Detalle `/compras/ordenes/[publicId]`** — sticky sidebar con timeline trazabilidad
+   + EmailChips con doble check verde, tabs PDF/Email/WhatsApp.
+5. **QR público `/compras/validar/[publicId]`** — escaneable, muestra integridad + link
+   al PDF firmado.
+
+### Solo José Luis Battaglia puede emitir
+La constante `ORG.emitter` define al único firmante autorizado. El wizard preselecciona
+sus datos, el badge "Autorizado" se muestra en el paso 2, y la firma SHA-256 incluye
+`emisor_email` para ser tamper-evident.
+
+### Reglas de envío automático (OC)
+Definidas en `src/lib/compras/email.ts`:
+- **To:** `vendor.email`
+- **CC:** `ruth@logisticatops.com` + `joseluis@logisticatops.com`
+- **Adjunto:** PDF firmado generado por `@react-pdf/renderer` con QR `qrcode`.
+- Sin `RESEND_API_KEY` el envío se omite (log warn), la OC sí queda persistida.
+
+### Coexistencia con módulo OS
+Ambos módulos comparten Shell, Auth, Tailwind tokens, manifest PWA, supabase clients y
+middleware. El sidebar agrupa las rutas en dos secciones (Compras / Servicios) y el
+`MobileBottomNav` cambia los 5 items según el path activo.
 
 ---
 

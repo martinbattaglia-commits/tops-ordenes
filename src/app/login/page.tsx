@@ -29,21 +29,23 @@ export default function LoginPage({
           </div>
           <div>
             <div className="text-tops-red text-eyebrow uppercase mb-4">
-              Operaciones inteligentes · 2026
+              Logistics Operating System · Edición 2026
             </div>
             <h1 className="text-5xl font-bold uppercase leading-[1.05] tracking-tight mb-6">
-              Órdenes de servicio,
+              TOPS NEXUS.
               <br />
-              completamente digitales.
+              Operaciones 3PL, sin
+              <br />
+              improvisaciones.
             </h1>
             <p className="text-white/80 text-lg leading-relaxed max-w-md mb-8">
-              Reemplazá el papel: generá, firmá y centralizá cada orden desde el celular del
-              operario. Plataforma oficial de Logística TOPS.
+              Cockpit corporativo para compras, servicios, CRM, CCTV, ANMAT y documental.
+              Desde 1985 — Logística TOPS / Verotin S.A.
             </p>
             <div className="flex gap-8 pt-4 border-t border-white/15">
-              <Stat label="Metros cuadrados" value="15.000" />
-              <Stat label="Órdenes este mes" value="324" />
-              <Stat label="Tasa firma digital" value="97,2 %" />
+              <Stat label="Años de trayectoria" value="40+" />
+              <Stat label="m² operativos" value="15.000" />
+              <Stat label="Habilitación ANMAT" value="Vigente" />
             </div>
           </div>
           <div className="text-xs text-white/55">
@@ -59,7 +61,10 @@ export default function LoginPage({
             <div className="text-tops-red text-eyebrow uppercase mb-1">Acceso corporativo</div>
             <h2 className="text-3xl font-bold text-fg-brand">Iniciá sesión</h2>
             <p className="text-fg-secondary text-sm mt-1">
-              Ingresá con tu email corporativo de Logística TOPS.
+              TOPS NEXUS · Logistics Operating System. Ingresá con tu email corporativo
+              <span className="block text-fg-muted text-xs mt-0.5">
+                @logisticatops.com o @verotinsa.com
+              </span>
             </p>
           </div>
           <LoginForm redirectTo={searchParams?.from} initialError={searchParams?.error} />
@@ -88,11 +93,11 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function BrandWhite() {
   return (
-    <div className="flex items-end gap-2">
-      <span className="text-2xl font-black uppercase tracking-tight">TOPS</span>
-      <span className="text-xs uppercase tracking-[0.18em] font-bold text-tops-red mb-1">
-        Órdenes
-      </span>
-    </div>
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src="/icons/logo-isologo-primary.png"
+      alt="Logística TOPS"
+      className="h-20 w-auto object-contain rounded-md"
+    />
   );
 }

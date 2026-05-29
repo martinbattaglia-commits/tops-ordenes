@@ -98,6 +98,9 @@ Tablas creadas (migraciones 0001–0011):
 | **6. Inteligencia de Negocio** | Dashboard corporativo | 🟡 parcial — `ejecutivo`/`reports` existen |
 | **7. Integraciones** | Clientify, Google Workspace, WhatsApp, WMS, Hikvision, migración Neuralsoft | 🟡 parcial — código Clientify/Drive/WhatsApp/Hikvision presente; migración Neuralsoft pendiente |
 
+> **Migración 0011 (ARCA):** pendiente de aplicar en producción. Revisión
+> detallada de qué crea/modifica en [migracion-0011-arca-revision.md](./migracion-0011-arca-revision.md).
+
 ## 7. Próximo incremento recomendado
 
 **Completar Fase 3 — Proveedores:** agregar `supplier_invoices` + `cost_centers`

@@ -14,8 +14,8 @@ import { env } from "@/lib/env";
 export async function updateSession(request: NextRequest) {
   const response = NextResponse.next({ request });
 
-  // Sin Supabase configurado dejamos pasar (demo mode).
-  if (!env.supabase.configured) {
+  // Demo mode (sin Supabase o forzado) → dejamos pasar libremente.
+  if (!env.supabase.configured || env.app.demoMode) {
     return response;
   }
 
@@ -42,7 +42,11 @@ export async function updateSession(request: NextRequest) {
     pathname === "/login" ||
     pathname === "/drive" ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/clientify") ||
+    pathname.startsWith("/api/cctv") ||
+    pathname.startsWith("/api/whatsapp") ||
     pathname.startsWith("/api/drive") ||
+    pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
     pathname.startsWith("/fonts") ||

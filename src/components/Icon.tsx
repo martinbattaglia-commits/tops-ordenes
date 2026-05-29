@@ -48,7 +48,26 @@ export type IconName =
   | "whatsapp"
   | "share"
   | "copy"
-  | "trash";
+  | "trash"
+  | "cart"
+  | "vendors"
+  | "drive"
+  | "wand"
+  | "cloud-check"
+  | "cloud"
+  | "file-pdf"
+  | "wallet"
+  | "tag"
+  | "tag-alt"
+  | "database"
+  | "shield"
+  | "pause"
+  | "play"
+  | "minus"
+  | "folder"
+  | "users"
+  | "sun"
+  | "moon";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "stroke"> {
   name: IconName;
@@ -411,6 +430,132 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
         <svg {...common}>
           <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />
+        </svg>
+      );
+    case "cart":
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="20" r="1.4" />
+          <circle cx="17" cy="20" r="1.4" />
+          <path d="M3 3h2l2.4 12.2a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21 8H6" />
+        </svg>
+      );
+    case "vendors":
+      return (
+        <svg {...common}>
+          <rect x="3" y="7" width="18" height="13" rx="1.5" />
+          <path d="M8 7V5a4 4 0 0 1 8 0v2" />
+          <path d="M3 11h18" />
+        </svg>
+      );
+    case "drive":
+      return (
+        <svg {...common}>
+          <path d="M8 3h8l5 9-4 7H7l-4-7z" />
+          <path d="M8 3l4 9M16 3l-4 9M3 12h18" />
+        </svg>
+      );
+    case "wand":
+      return (
+        <svg {...common}>
+          <path d="M3 21l9-9" />
+          <path d="M15 7l2-2 2 2-2 2zM7 3l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 13l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" />
+        </svg>
+      );
+    case "cloud-check":
+      return (
+        <svg {...common}>
+          <path d="M7 18a5 5 0 0 1-1-9.9A6 6 0 0 1 18 9a4.5 4.5 0 0 1 .5 9H7" />
+          <path d="m10 15 2 2 4-4" />
+        </svg>
+      );
+    case "cloud":
+      return (
+        <svg {...common}>
+          <path d="M7 18a5 5 0 0 1-1-9.9A6 6 0 0 1 18 9a4.5 4.5 0 0 1 .5 9H7" />
+        </svg>
+      );
+    case "file-pdf":
+      return (
+        <svg {...common}>
+          <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+          <path d="M14 3v5h5" />
+          <path d="M9 14h1.5a1.5 1.5 0 0 1 0 3H9zM13 14v3M13 14h2M16 17v-3h2M16 16h1.6" strokeWidth={1.4} />
+        </svg>
+      );
+    case "wallet":
+      return (
+        <svg {...common}>
+          <rect x="3" y="6" width="18" height="14" rx="2" />
+          <path d="M3 10h18M16 14h2" />
+        </svg>
+      );
+    case "tag":
+    case "tag-alt":
+      return (
+        <svg {...common}>
+          <path d="M3 12 12 3h7a2 2 0 0 1 2 2v7l-9 9z" />
+          <circle cx="16" cy="8" r="1.5" />
+        </svg>
+      );
+    case "database":
+      return (
+        <svg {...common}>
+          <ellipse cx="12" cy="5" rx="8" ry="3" />
+          <path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5" />
+          <path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+        </svg>
+      );
+    case "shield":
+      return (
+        <svg {...common}>
+          <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z" />
+        </svg>
+      );
+    case "pause":
+      return (
+        <svg {...common}>
+          <rect x="6" y="5" width="4" height="14" rx="1" />
+          <rect x="14" y="5" width="4" height="14" rx="1" />
+        </svg>
+      );
+    case "play":
+      return (
+        <svg {...common}>
+          <path d="M7 5l12 7-12 7z" />
+        </svg>
+      );
+    case "minus":
+      return (
+        <svg {...common}>
+          <path d="M5 12h14" />
+        </svg>
+      );
+    case "folder":
+      return (
+        <svg {...common}>
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg {...common}>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+        </svg>
+      );
+    case "sun":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+        </svg>
+      );
+    case "moon":
+      return (
+        <svg {...common}>
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
       );
     default:
