@@ -102,6 +102,23 @@ export async function uploadDocument(opts: {
 }
 
 /**
+ * Borra un objeto del bucket privado. Se usa como COMPENSACIÓN (M-1/M-2):
+ * si el upload a Storage tuvo éxito pero el INSERT en `documents` falla, el
+ * blob quedaría huérfano. Esta función lo elimina para no dejar basura ni
+ * archivos sin fila (que además quedarían fuera del scoping multi-tenant).
+ * No lanza: el camino de error que la invoca ya está reportando otro fallo.
+ */
+export async function removeDocument(path: string): Promise<void> {
+  const admin = createAdminClient();
+  if (!admin) return;
+  try {
+    await admin.storage.from("documents").remove([path]);
+  } catch {
+    // best-effort: no escalamos un fallo de limpieza sobre el error original.
+  }
+}
+
+/**
  * Genera una URL firmada temporal para un objeto del bucket privado.
  * Devuelve null en demo mode (sin admin client).
  */

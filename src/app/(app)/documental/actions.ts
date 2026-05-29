@@ -7,6 +7,7 @@ import {
   uploadDocument,
   getSignedUrl,
   newDocumentGroupId,
+  removeDocument,
 } from "@/lib/documental/storage";
 import { extractFromPdf, extractFromImage, OcrError } from "@/lib/ocr/openai";
 import type { ExtractedDocument } from "@/lib/ocr/types";
@@ -27,6 +28,52 @@ interface ProcessErr {
 }
 
 export type ProcessResult = ProcessOk | ProcessErr;
+
+/** Roles internos habilitados a subir/versionar documentos (espejo de la RLS). */
+const INTERNAL_ROLES = ["admin", "operaciones", "supervisor"] as const;
+
+/**
+ * MIME types aceptados — DEBE coincidir con el `check` de `documents.mime_type`
+ * y con `allowed_mime_types` del bucket (M-3). Antes la app aceptaba cualquier
+ * `image/*` (incl. svg ⇒ vector XSS) y fallaba recién en DB.
+ */
+const ALLOWED_MIME = [
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/tiff",
+] as const;
+
+/**
+ * A-1 (GATE 1C): AUTORIZACIÓN TEMPRANA. Debe ejecutarse ANTES de tocar Storage,
+ * OCR u OpenAI. Sin esto, un usuario sin rol interno podía disparar uploads y
+ * consumo de tokens de OpenAI (DoS por costo) aunque el INSERT fallara luego.
+ * En demo mode (sin Supabase) no hay sesión ni costos de prod: se permite.
+ */
+async function authorizeInternal(): Promise<
+  { ok: true; userId: string | null } | { ok: false; error: string }
+> {
+  if (!env.supabase.configured) return { ok: true, userId: null };
+  const supabase = createClient();
+  if (!supabase) return { ok: true, userId: null };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "No autenticado" };
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+  const role = profile?.role as (typeof INTERNAL_ROLES)[number] | undefined;
+  if (!role || !INTERNAL_ROLES.includes(role)) {
+    return {
+      ok: false,
+      error:
+        "No autorizado: se requiere rol interno (admin/operaciones/supervisor) para subir documentos",
+    };
+  }
+  return { ok: true, userId: user.id };
+}
 
 /** Captura ip + user-agent del request para la bitácora de auditoría. */
 function auditContext(): { ip: string | null; userAgent: string | null } {
@@ -56,12 +103,23 @@ export async function processDocumentAction(formData: FormData): Promise<Process
     return { ok: false, error: "Archivo > 20 MB no soportado por ahora" };
   }
 
-  const contentType = file.type || "application/octet-stream";
-  const isPdf = contentType === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  // M-3: normalizamos PDF-por-extensión y validamos contra la lista única que
+  // comparten app + tabla + bucket. svg/gif/heic se rechazan en el borde.
+  let contentType = file.type || "application/octet-stream";
+  const isPdf =
+    contentType === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (isPdf) contentType = "application/pdf";
   const isImage = contentType.startsWith("image/");
-  if (!isPdf && !isImage) {
-    return { ok: false, error: `Tipo no soportado: ${contentType}. Subí PDF o imagen.` };
+  if (!ALLOWED_MIME.includes(contentType as (typeof ALLOWED_MIME)[number])) {
+    return {
+      ok: false,
+      error: `Tipo no soportado: ${contentType}. Permitidos: PDF, PNG, JPEG, WEBP, TIFF.`,
+    };
   }
+
+  // A-1: autorización ANTES de Storage / OCR / OpenAI.
+  const authz = await authorizeInternal();
+  if (!authz.ok) return { ok: false, error: authz.error };
 
   // Vínculos opcionales (multi-tenant / multi-sede).
   const clientId = (formData.get("client_id") as string) || null;
@@ -103,7 +161,9 @@ export async function processDocumentAction(formData: FormData): Promise<Process
       const supabase = createClient();
       if (supabase) {
         const { data: { user } } = await supabase.auth.getUser();
-        const { data: ins } = await supabase
+        // El INSERT dispara tg_documents_audit ⇒ el evento 'create' se registra
+        // por trigger (M-1). No logueamos a mano para no duplicar.
+        const { data: ins, error: insErr } = await supabase
           .from("documents")
           .insert({
             document_group_id: uploaded.groupId,
@@ -124,15 +184,9 @@ export async function processDocumentAction(formData: FormData): Promise<Process
           })
           .select("id")
           .single();
-        if (ins?.id) {
-          const { ip, userAgent } = auditContext();
-          await supabase.rpc("log_document_event", {
-            p_document_id: ins.id,
-            p_action: "create",
-            p_ip: ip,
-            p_user_agent: userAgent,
-            p_detail: { ocr: "failed", reason: msg },
-          });
+        // M-2: si el INSERT falla, el blob ya subido quedaría huérfano ⇒ limpiar.
+        if (insErr || !ins?.id) {
+          await removeDocument(uploaded.path);
         }
       }
     }
@@ -178,18 +232,17 @@ export async function processDocumentAction(formData: FormData): Promise<Process
         .single();
 
       if (dbErr) {
-        return { ok: false, error: `DB insert: ${dbErr.message}`, extract };
+        // M-2: el blob ya está en Storage; si el INSERT falla queda huérfano.
+        await removeDocument(uploaded.path);
+        // B-3: no filtramos el nombre del constraint al usuario.
+        const friendly = dbErr.message.includes("documents_hash_uq")
+          ? "Documento duplicado: ya existe un archivo idéntico para este cliente."
+          : `DB insert: ${dbErr.message}`;
+        return { ok: false, error: friendly, extract };
       }
 
-      const { ip, userAgent } = auditContext();
-      await supabase.rpc("log_document_event", {
-        p_document_id: inserted.id,
-        p_action: "create",
-        p_ip: ip,
-        p_user_agent: userAgent,
-        p_detail: { type: extract.type, version: uploaded.version },
-      });
-
+      // El evento 'create' se registra por trigger (tg_documents_audit, M-1):
+      // no se llama a log_document_event aquí para no duplicar la auditoría.
       let signedUrl: string | null = null;
       try {
         signedUrl = await getSignedUrl(uploaded.path);
@@ -265,21 +318,158 @@ export async function softDeleteDocumentAction(
   if (!supabase) return { ok: false, error: "Sin Supabase" };
 
   const { data: { user } } = await supabase.auth.getUser();
+  // M-5: liberamos el slot de "versión actual" (documents_current_uq es parcial
+  // sobre is_current). Si no, el grupo quedaría bloqueado para promover otra
+  // versión y todas las queries deberían recordar filtrar deleted_at.
+  // El evento 'delete' lo registra tg_documents_audit (M-1) al pasar deleted_at
+  // de null a no-null: no se llama a log_document_event aquí (evita duplicado).
   const { error } = await supabase
     .from("documents")
-    .update({ deleted_at: new Date().toISOString(), deleted_by: user?.id ?? null })
+    .update({
+      deleted_at: new Date().toISOString(),
+      deleted_by: user?.id ?? null,
+      is_current: false,
+    })
     .eq("id", documentId);
   if (error) return { ok: false, error: error.message };
 
-  const { ip, userAgent } = auditContext();
-  await supabase.rpc("log_document_event", {
-    p_document_id: documentId,
-    p_action: "delete",
-    p_ip: ip,
-    p_user_agent: userAgent,
-    p_detail: { soft: true },
-  });
-
   revalidatePath("/documental");
   return { ok: true };
+}
+
+/**
+ * Versionado (P5) — flujo de aplicación real (cierra la omisión "schema-only"
+ * detectada en C-1). Sube una nueva versión de un documento existente: el
+ * trigger `tg_documents_version` (BEFORE INSERT) hereda `document_group_id`,
+ * numera la versión y degrada a la anterior; `tg_documents_audit` registra el
+ * 'create'. La lectura del predecesor pasa por RLS (autorización por tenant).
+ */
+export async function createDocumentVersionAction(
+  prevDocumentId: string,
+  formData: FormData,
+): Promise<ProcessResult> {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Archivo no recibido o vacío" };
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    return { ok: false, error: "Archivo > 20 MB no soportado por ahora" };
+  }
+
+  let contentType = file.type || "application/octet-stream";
+  const isPdf =
+    contentType === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (isPdf) contentType = "application/pdf";
+  if (!ALLOWED_MIME.includes(contentType as (typeof ALLOWED_MIME)[number])) {
+    return {
+      ok: false,
+      error: `Tipo no soportado: ${contentType}. Permitidos: PDF, PNG, JPEG, WEBP, TIFF.`,
+    };
+  }
+
+  // A-1: autorización ANTES de Storage / OCR.
+  const authz = await authorizeInternal();
+  if (!authz.ok) return { ok: false, error: authz.error };
+
+  if (!env.supabase.configured) return { ok: false, error: "Sin Supabase" };
+  const supabase = createClient();
+  if (!supabase) return { ok: false, error: "Sin Supabase" };
+
+  // Lectura del predecesor sujeta a RLS: si no hay acceso, no vuelve la fila.
+  const { data: prev, error: prevErr } = await supabase
+    .from("documents")
+    .select("id, document_group_id, version, client_id, vendor_id, depot, deleted_at")
+    .eq("id", prevDocumentId)
+    .single();
+  if (prevErr || !prev) {
+    return { ok: false, error: "Documento base no encontrado o sin acceso" };
+  }
+  if (prev.deleted_at) {
+    return { ok: false, error: "No se puede versionar un documento eliminado" };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const nextVersion = (prev.version ?? 1) + 1;
+
+  // 1. Subir (mismo grupo, versión siguiente — el path conserva v{n}).
+  let uploaded;
+  try {
+    uploaded = await uploadDocument({
+      buffer,
+      originalName: file.name,
+      contentType,
+      clientId: prev.client_id,
+      groupId: prev.document_group_id,
+      version: nextVersion,
+    });
+  } catch (e) {
+    return { ok: false, error: `Storage: ${(e as Error).message}` };
+  }
+
+  // 2. OCR.
+  let extract: ExtractedDocument;
+  try {
+    if (isPdf) {
+      extract = await extractFromPdf(buffer);
+    } else {
+      const b64 = buffer.toString("base64");
+      extract = await extractFromImage(`data:${contentType};base64,${b64}`);
+    }
+  } catch (e) {
+    await removeDocument(uploaded.path);
+    const msg = e instanceof OcrError ? e.message : (e as Error).message;
+    return { ok: false, error: `OCR: ${msg}. No se creó la versión.` };
+  }
+
+  // 3. INSERT con supersedes_id ⇒ el trigger hereda grupo, numera y degrada.
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: inserted, error: dbErr } = await supabase
+    .from("documents")
+    .insert({
+      // group/version los fija el trigger; los enviamos por consistencia del path.
+      document_group_id: prev.document_group_id,
+      version: nextVersion,
+      is_current: true,
+      supersedes_id: prev.id,
+      type: extract.type,
+      title: extract.title ?? file.name,
+      summary: extract.summary,
+      doc_date: extract.date,
+      expires_at: extract.expiresAt,
+      client_id: prev.client_id,
+      vendor_id: prev.vendor_id,
+      depot: prev.depot,
+      storage_bucket: uploaded.bucket,
+      storage_path: uploaded.path,
+      mime_type: contentType,
+      file_size: uploaded.size,
+      file_hash: uploaded.hash,
+      extract: extract as unknown as Record<string, unknown>,
+      raw_text: extract.rawText.slice(0, 50_000),
+      tags: extract.tags,
+      source: "upload",
+      uploaded_by: user?.id ?? null,
+      ai_tokens_used: extract.meta.tokensUsed,
+      ai_model: extract.meta.model,
+    })
+    .select("id")
+    .single();
+
+  if (dbErr) {
+    await removeDocument(uploaded.path);
+    const friendly = dbErr.message.includes("documents_hash_uq")
+      ? "Documento duplicado: ya existe un archivo idéntico para este cliente."
+      : `DB insert: ${dbErr.message}`;
+    return { ok: false, error: friendly, extract };
+  }
+
+  let signedUrl: string | null = null;
+  try {
+    signedUrl = await getSignedUrl(uploaded.path);
+  } catch {
+    signedUrl = null;
+  }
+
+  revalidatePath("/documental");
+  return { ok: true, documentId: inserted.id, extract, signedUrl };
 }
