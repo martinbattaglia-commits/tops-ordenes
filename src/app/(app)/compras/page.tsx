@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { CountUp } from "@/components/CountUp";
 import { PoStatusBadge } from "@/components/compras/PoStatusBadge";
 import { SpendChart } from "@/components/compras/charts/SpendChart";
 import { CategoryDonut } from "@/components/compras/charts/CategoryDonut";
@@ -14,7 +15,7 @@ export default async function ComprasDashboardPage() {
   const k = await getDashboardKpis();
 
   return (
-    <div className="p-4 md:p-7 lg:p-8">
+    <div className="p-4 md:p-7 lg:p-8 nx-page-fade">
       {/* Header */}
       <div className="page-header">
         <div>
@@ -44,6 +45,7 @@ export default async function ComprasDashboardPage() {
           value={String(k.ocThisMonth)}
           delta={k.ocDelta}
           spark={[3, 5, 4, 7, 9, 8, 11]}
+          index={0}
         />
         <Kpi
           label="Monto comprometido"
@@ -51,24 +53,27 @@ export default async function ComprasDashboardPage() {
           delta={k.spendDelta}
           featured
           spark={[8, 10, 7, 12, 14, 18, 16]}
+          index={1}
         />
         <Kpi
           label="% conciliadas"
           value={`${k.reconciledPct}%`}
           delta={k.reconciledDelta}
           spark={[60, 64, 68, 72, 78, 81, 84]}
+          index={2}
         />
         <Kpi
           label="% firmadas en el día"
           value={`${k.signaturePct}%`}
           delta={k.signatureDelta}
           spark={[80, 85, 90, 92, 94, 96, 97]}
+          index={3}
         />
       </div>
 
       {/* Charts */}
       <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)" }}>
-        <div className="card">
+        <div className="nx-surface card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-stroke-soft">
             <div>
               <div className="text-sm font-bold text-fg-primary">Gasto últimos 6 meses</div>
@@ -96,7 +101,7 @@ export default async function ComprasDashboardPage() {
           </div>
         </div>
 
-        <div className="card">
+        <div className="nx-surface card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-stroke-soft">
             <div>
               <div className="text-sm font-bold text-fg-primary">Mix de categorías</div>
@@ -124,18 +129,25 @@ function Kpi({
   delta,
   featured,
   spark,
+  index = 0,
 }: {
   label: string;
   value: string;
   delta: string;
   featured?: boolean;
   spark?: number[];
+  index?: number;
 }) {
   const up = !delta.startsWith("-");
   return (
-    <div className={`card kpi ${featured ? "featured-stroke" : ""} relative overflow-hidden`}>
+    <div
+      style={{ animationDelay: `${index * 45}ms` }}
+      className={`nx-surface nx-stagger card kpi ${featured ? "featured-stroke" : ""} relative overflow-hidden`}
+    >
       <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{value}</div>
+      <div className="kpi-value">
+        {/^\d+$/.test(value) ? <CountUp to={Number(value)} format="int" /> : value}
+      </div>
       <div className={`kpi-delta ${up ? "up" : "down"}`}>
         <Icon name={up ? "trend-up" : "trend-down"} size={12} />
         {delta}
@@ -152,7 +164,7 @@ function Kpi({
 
 function RecentOrdersCard({ rows }: { rows: Awaited<ReturnType<typeof getDashboardKpis>>["recentOrders"] }) {
   return (
-    <div className="card overflow-hidden">
+    <div className="nx-surface card overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-stroke-soft">
         <div>
           <div className="text-sm font-bold text-fg-primary">Últimas órdenes de compra</div>
@@ -167,7 +179,7 @@ function RecentOrdersCard({ rows }: { rows: Awaited<ReturnType<typeof getDashboa
           <Link
             key={o.id}
             href={`/compras/ordenes/${o.public_id}`}
-            className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+            className="nx-row flex items-center gap-3 px-5 py-3"
           >
             <div className="font-mono text-[11px] text-fg-muted w-28 flex-shrink-0">{o.public_id}</div>
             <div className="flex-1 min-w-0">
@@ -229,7 +241,7 @@ function AlertsCard() {
     ok: "bg-status-success/10 text-status-success",
   };
   return (
-    <div className="card overflow-hidden">
+    <div className="nx-surface card overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4 border-b border-stroke-soft">
         <div>
           <div className="text-sm font-bold text-fg-primary">Alertas</div>
@@ -238,7 +250,7 @@ function AlertsCard() {
       </div>
       <ul className="divide-y divide-stroke-soft">
         {alerts.map((a, i) => (
-          <li key={i} className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors">
+          <li key={i} className="flex items-center gap-3 px-5 py-3">
             <div className={`w-9 h-9 rounded-lg grid place-items-center ${colors[a.kind]}`}>
               <Icon name={a.icon} size={16} />
             </div>

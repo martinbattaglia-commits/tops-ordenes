@@ -11,7 +11,7 @@ export default async function VendorsPage() {
   const totalYtd = vendors.reduce((a, v) => a + (v.ytd_spend ?? 0), 0);
 
   return (
-    <div className="p-4 md:p-7 lg:p-8">
+    <div className="p-4 md:p-7 lg:p-8 nx-page-fade">
       <div className="page-header">
         <div>
           <div className="eyebrow-tiny">Maestro · {vendors.length} proveedores</div>
@@ -28,7 +28,7 @@ export default async function VendorsPage() {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="nx-surface card overflow-hidden">
         <div className="hidden md:block overflow-x-auto">
           <table className="tbl">
             <thead>

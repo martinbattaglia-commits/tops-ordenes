@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { CountUp } from "@/components/CountUp";
 import { listSupplierInvoices } from "@/lib/erp/data";
 import {
   SUPPLIER_INVOICE_STATUS_META,
@@ -35,7 +36,7 @@ export default async function SupplierInvoicesPage() {
   const pagadas = counts["pagada"] ?? 0;
 
   return (
-    <div className="p-4 lg:p-8">
+    <div className="p-4 lg:p-8 nx-page-fade">
       <div className="page-header">
         <div>
           <div className="eyebrow-tiny">Cuentas por pagar · ERP</div>
@@ -61,14 +62,14 @@ export default async function SupplierInvoicesPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <Stat label="Comprobantes" value={String(counts["todas"] ?? 0)} sub="total cargados" />
-        <Stat label="Pendientes de pago" value={String((counts["pendiente"] ?? 0) + (counts["conciliada"] ?? 0) + (counts["aprobada"] ?? 0))} sub="incluye aprobadas" />
-        <Stat label="Pagadas" value={String(pagadas)} sub="ciclo cerrado" />
-        <Stat label="Monto total" value={fmtCurrency(sumTotal)} sub="todos los estados" />
+        <Stat label="Comprobantes" value={String(counts["todas"] ?? 0)} sub="total cargados" index={0} />
+        <Stat label="Pendientes de pago" value={String((counts["pendiente"] ?? 0) + (counts["conciliada"] ?? 0) + (counts["aprobada"] ?? 0))} sub="incluye aprobadas" index={1} />
+        <Stat label="Pagadas" value={String(pagadas)} sub="ciclo cerrado" index={2} />
+        <Stat label="Monto total" value={fmtCurrency(sumTotal)} sub="todos los estados" index={3} />
       </div>
 
       {/* Tabla */}
-      <div className="card overflow-hidden">
+      <div className="nx-surface card overflow-hidden">
         <div className="px-4 py-3 border-b border-stroke-soft">
           <h2 className="text-sm font-semibold">Comprobantes registrados</h2>
         </div>
@@ -145,11 +146,16 @@ export default async function SupplierInvoicesPage() {
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+function Stat({ label, value, sub, index = 0 }: { label: string; value: string; sub: string; index?: number }) {
   return (
-    <div className="card p-5">
+    <div
+      style={{ animationDelay: `${index * 45}ms` }}
+      className="nx-surface nx-stagger card p-5"
+    >
       <div className="kpi-label">{label}</div>
-      <div className="text-2xl font-bold tabular leading-none mt-1 text-fg-brand">{value}</div>
+      <div className="text-2xl font-bold tabular leading-none mt-1 text-fg-brand">
+        {/^\d+$/.test(value) ? <CountUp to={Number(value)} format="int" /> : value}
+      </div>
       <div className="text-[11px] text-fg-muted mt-1">{sub}</div>
     </div>
   );
