@@ -24,7 +24,7 @@ export const env = {
     url:
       process.env.NEXT_PUBLIC_APP_URL ??
       (process.env.NODE_ENV === "production"
-        ? "https://nexus.logisticatops.com"
+        ? "https://tops-ordenes.netlify.app"
         : "http://localhost:3030"),
     /** Solo true si fue forzado explícitamente. Sin keys → NO es demo, es error. */
     demoMode: explicitDemo,
