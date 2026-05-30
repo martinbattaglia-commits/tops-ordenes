@@ -29,7 +29,7 @@ export default function Shell({ user, children }: ShellProps) {
 
       <div className="flex-1 min-w-0 flex flex-col">
         <Topbar onMenuClick={() => setDrawerOpen(true)} />
-        <main className="flex-1 min-h-0 scroll-area pb-[calc(80px+var(--safe-bottom))] lg:pb-0 nexus-page-fade">
+        <main className="flex-1 min-h-0 scroll-area pb-[calc(80px+var(--safe-bottom))] lg:pb-0 nx-page-fade">
           {children}
         </main>
         <div className="lg:hidden">

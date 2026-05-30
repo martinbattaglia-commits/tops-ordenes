@@ -62,7 +62,7 @@ export function NotificationsBell() {
       <button
         aria-label={`Notificaciones${unread > 0 ? ` (${unread} sin leer)` : ""}`}
         onClick={() => setOpen((o) => !o)}
-        className="relative inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-neutral-100"
+        className="nx-icon-btn relative inline-flex items-center justify-center w-10 h-10 rounded-md"
       >
         <Icon name="bell" size={17} />
         {unread > 0 && (

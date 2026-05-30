@@ -361,16 +361,44 @@
     @apply bg-tops-blue-900 text-white flex flex-col;
     padding-top: max(20px, var(--safe-top));
   }
+  /* Nav del shell · variante de superficie OSCURA (sin shimmer/glow). Motion
+     restringido con tokens nx-*: transición de fondo/color + nudge sutil del
+     ícono en hover + rail activo consistente. */
   .sidebar-link {
-    @apply flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium;
-    @apply text-white/75 hover:text-white hover:bg-white/10 cursor-pointer transition-colors;
+    @apply relative flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium;
+    @apply text-white/75 cursor-pointer;
+    transition:
+      background-color var(--nx-dur-hover) var(--nx-ease-out),
+      color var(--nx-dur-hover) var(--nx-ease-out);
+  }
+  .sidebar-link svg {
+    transition: transform var(--nx-dur-hover) var(--nx-ease-out);
+  }
+  .sidebar-link:hover {
+    @apply text-white;
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+  .sidebar-link:hover svg {
+    transform: translateX(2px);
+  }
+  .sidebar-link:focus-visible {
+    @apply text-white outline-none;
+    background-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
   }
   .sidebar-link.active {
     @apply bg-white/10 text-white;
   }
-  .sidebar-link.danger-accent {
-    @apply relative;
+  .sidebar-link.active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    @apply bg-white rounded-r-md;
   }
+  /* Items "accent" (nueva OC/OS): el rail rojo gana sobre el blanco activo. */
   .sidebar-link.danger-accent::before {
     content: "";
     position: absolute;
@@ -379,6 +407,31 @@
     bottom: 6px;
     width: 3px;
     @apply bg-tops-red rounded-r-md;
+  }
+
+  /* Botones-ícono del topbar · hover premium en superficie CLARA. */
+  .nx-icon-btn {
+    transition:
+      background-color var(--nx-dur-hover) var(--nx-ease-out),
+      color var(--nx-dur-hover) var(--nx-ease-out),
+      transform var(--nx-dur-hover) var(--nx-ease-out);
+  }
+  .nx-icon-btn:hover {
+    @apply bg-neutral-100 text-fg-primary;
+  }
+  .nx-icon-btn:active {
+    transform: scale(0.96);
+  }
+  .nx-icon-btn:focus-visible {
+    @apply outline-none ring-2 ring-tops-blue-700/25;
+  }
+
+  /* Buscador del topbar · focus premium (no pisa el .input global). */
+  .nx-search:focus {
+    @apply border-tops-blue-700;
+    box-shadow:
+      0 0 0 3px rgba(33, 69, 118, 0.16),
+      0 1px 2px rgba(15, 23, 42, 0.04);
   }
 
   /* ---- Chips / segmented ------------------------------------------ */
@@ -846,6 +899,10 @@
   .nx-live-dot {
     animation: none !important;
     transition: none !important;
+  }
+  .sidebar-link:hover svg,
+  .nx-icon-btn:active {
+    transform: none !important;
   }
 }
 

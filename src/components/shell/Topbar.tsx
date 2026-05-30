@@ -33,7 +33,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       <button
         onClick={onMenuClick}
         aria-label="Abrir menú"
-        className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-md hover:bg-neutral-100 active:bg-neutral-200"
+        className="nx-icon-btn lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-md"
       >
         <Icon name="menu" size={20} />
       </button>
@@ -66,7 +66,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
           className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted"
         />
         <input
-          className="input pl-9 pr-12 h-10"
+          className="input nx-search pl-9 pr-12 h-10"
           placeholder="Buscar OC, OS, proveedor, cliente, CUIT…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -78,7 +78,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-secondary border border-stroke-soft rounded-pill bg-bg-surface">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+          <span className="nx-live-dot" />
           <span className="capitalize">{fechaHoy}</span>
         </div>
         <ThemeToggle />

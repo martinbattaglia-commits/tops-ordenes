@@ -49,7 +49,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-stroke-soft text-fg-secondary hover:bg-neutral-50 hover:text-fg-primary transition-colors"
+      className="nx-icon-btn inline-flex items-center justify-center w-9 h-9 rounded-md border border-stroke-soft text-fg-secondary"
       aria-label={theme === "dark" ? "Activar modo claro" : "Activar modo oscuro"}
       title={theme === "dark" ? "Activar modo claro" : "Activar modo oscuro"}
     >

@@ -285,10 +285,7 @@ function DepotPing({ name, online, ops }: { name: string; online: boolean; ops: 
   return (
     <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-white/5 text-[12px]">
       <span
-        className={cn(
-          "w-1.5 h-1.5 rounded-full",
-          online ? "bg-emerald-400 shadow-[0_0_0_3px_rgba(54,194,117,0.25)]" : "bg-gray-500"
-        )}
+        className={online ? "nx-live-dot" : "w-1.5 h-1.5 rounded-full bg-gray-500"}
       />
       <span className="text-white/85 font-medium flex-1 truncate">{name}</span>
       <span className="text-white/50 text-[11px]">{ops} op.</span>
