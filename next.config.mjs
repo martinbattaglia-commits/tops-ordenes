@@ -16,7 +16,16 @@ const nextConfig = {
     // pdf-parse / pdfjs-dist no soportan el bundling de webpack (RSC): su
     // carga lanza "Object.defineProperty called on non-object". Marcarlo como
     // paquete externo hace que Node lo requiera de forma nativa en runtime.
-    serverComponentsExternalPackages: ["pdf-parse"],
+    // @napi-rs/canvas: binario nativo (.node) usado para rasterizar PDFs
+    // escaneados a imagen (camino OCR pdf_image). Debe requerirse nativo, no
+    // bundlearse.
+    serverComponentsExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
+    // El file-tracing de Next no siempre detecta el .node prebuilt de canvas
+    // (se resuelve dinámico). Lo incluimos explícito en la función OCR para que
+    // viaje en el zip de la Netlify Function.
+    outputFileTracingIncludes: {
+      "/api/documental/ocr": ["./node_modules/@napi-rs/canvas/**"],
+    },
   },
   async headers() {
     return [

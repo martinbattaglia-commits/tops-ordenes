@@ -159,14 +159,27 @@ export async function extractFromPdf(
   const rawText = (textResult.text ?? "").trim();
   const pages = textResult.pages?.length ?? 1;
 
-  // 2. Decidir: si hay texto suficiente, vamos por chat (más barato)
-  //    Si el PDF es solo imágenes, deberíamos hacer Vision (TODO F3)
+  // 2. Decidir: si hay texto suficiente, vamos por chat (más barato).
+  //    Si el PDF es escaneado (sin capa de texto), rasterizamos la primera
+  //    página y la mandamos al MISMO pipeline Vision que usan las imágenes —
+  //    mismo esquema JSON, mismo mapper. Esto cierra el gap "pdf_image".
   if (rawText.length < 100) {
-    // PDF probablemente escaneado — por ahora devolvemos un placeholder
-    // con el indicador para que el caller decida (en F3 metemos pdf→png)
+    // BEST-EFFORT: el render nunca lanza; devuelve null si el PDF está cifrado/
+    // corrupto o el binario de canvas no carga. En ese caso conservamos el 422
+    // de siempre y la UI cae a carga manual (comportamiento previo intacto).
+    const { renderFirstPageToPng } = await import("./pdf-render");
+    const pngDataUrl = await renderFirstPageToPng(pdfBuffer);
+    if (pngDataUrl) {
+      return visionExtract(pngDataUrl, {
+        model,
+        t0,
+        pages,
+        sourceKind: "pdf_image",
+      });
+    }
     throw new OcrError(
-      `PDF sin texto extraíble (${rawText.length} chars, ${pages} páginas). ` +
-        `Para PDFs escaneados, en F3 agregamos conversión a imagen.`,
+      `PDF sin texto extraíble (${rawText.length} chars, ${pages} páginas) y ` +
+        `no se pudo rasterizar la primera página. Cargá una foto/JPG del comprobante.`,
       422
     );
   }
@@ -203,11 +216,33 @@ export async function extractFromImage(
   imageBase64DataUrl: string,
   opts: { modelOverride?: string } = {}
 ): Promise<ExtractedDocument> {
-  const t0 = Date.now();
-  const model = getModel(opts.modelOverride);
+  return visionExtract(imageBase64DataUrl, {
+    model: getModel(opts.modelOverride),
+    t0: Date.now(),
+    pages: 1,
+    sourceKind: "image",
+  });
+}
 
+/**
+ * Pipeline Vision compartido: manda una imagen (data URL) a OpenAI y arma el
+ * `ExtractedDocument`. Lo usan DOS caminos con idéntico esquema/prompt:
+ *  - `extractFromImage` (JPG/PNG que sube el usuario), y
+ *  - `extractFromPdf` cuando el PDF es escaneado y se rasterizó a PNG
+ *    (`sourceKind: "pdf_image"`).
+ * Centralizarlo evita que ambos caminos diverjan en prompt o parámetros.
+ */
+async function visionExtract(
+  imageBase64DataUrl: string,
+  meta: {
+    model: string;
+    t0: number;
+    pages: number;
+    sourceKind: "image" | "pdf_image";
+  }
+): Promise<ExtractedDocument> {
   const { data, tokens } = await callOpenAI({
-    model,
+    model: meta.model,
     messages: [
       { role: "system", content: EXTRACTION_PROMPT },
       {
@@ -223,12 +258,12 @@ export async function extractFromImage(
 
   return mergeWithDefaults(data, {
     rawText: "",
-    pages: 1,
-    sourceKind: "image",
+    pages: meta.pages,
+    sourceKind: meta.sourceKind,
     charCount: 0,
-    model,
+    model: meta.model,
     tokensUsed: tokens,
-    elapsedMs: Date.now() - t0,
+    elapsedMs: Date.now() - meta.t0,
   });
 }
 
