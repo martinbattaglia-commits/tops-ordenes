@@ -16,9 +16,9 @@ export default function Shell({ user, children }: ShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="min-h-screen flex bg-bg-page">
+    <div className="h-[100dvh] flex bg-bg-page overflow-hidden">
       {/* Sidebar fijo desktop */}
-      <aside className="hidden lg:flex w-[248px] shrink-0 sticky top-0 h-screen">
+      <aside className="hidden lg:flex w-[248px] shrink-0 h-full">
         <Sidebar user={user} />
       </aside>
 

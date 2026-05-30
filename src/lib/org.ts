@@ -41,6 +41,8 @@ export const ORG = {
     },
   ] as const,
   driveRoot: "Órdenes de Compra 2026",
+  /** Dominio primario del Google Workspace corporativo (scopea los enlaces a `/a/<dominio>/`). */
+  googleWorkspaceDomain: "logisticatops.com",
 } as const;
 
 /**

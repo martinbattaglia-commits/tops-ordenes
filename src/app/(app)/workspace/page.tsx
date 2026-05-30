@@ -1,8 +1,15 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "@/components/Icon";
-import { PRODUCT } from "@/lib/org";
+import { ORG, PRODUCT } from "@/lib/org";
 
 export const metadata = { title: "Google Workspace" };
+
+/* ── Enlaces al Workspace corporativo ────────────────────────────────────────
+ * Gmail, Calendar y Drive soportan el path oficial `/a/<dominio>/`, que fuerza
+ * la sesión del Workspace de la empresa (evita el selector de cuentas / la
+ * cuenta personal). Meet, Contacts y Gemini no tienen ese path → URL canónica. */
+const WS_DOMAIN = ORG.googleWorkspaceDomain;
+const ws = (sub: string) => `https://${sub}.google.com/a/${WS_DOMAIN}/`;
 
 /* ── Iconos oficiales de marca (SVG inline, multicolor) ──────────────────── */
 
@@ -165,7 +172,7 @@ const TOOLS: Tool[] = [
     key: "gmail",
     name: "Gmail",
     description: "Correo corporativo y bandejas de equipo.",
-    url: "https://mail.google.com",
+    url: ws("mail"),
     badge: "Comunicación",
     logo: <GmailLogo />,
     accent: "rgba(234,67,53,0.30)",
@@ -176,7 +183,7 @@ const TOOLS: Tool[] = [
     key: "calendar",
     name: "Calendar",
     description: "Agenda corporativa y gestión de reuniones.",
-    url: "https://calendar.google.com",
+    url: ws("calendar"),
     badge: "Productividad",
     logo: <CalendarLogo />,
     accent: "rgba(26,115,232,0.30)",
@@ -187,7 +194,7 @@ const TOOLS: Tool[] = [
     key: "drive",
     name: "Drive",
     description: "Documentación corporativa y archivos.",
-    url: "https://drive.google.com",
+    url: ws("drive"),
     badge: "Documentación",
     logo: <DriveLogo />,
     accent: "rgba(255,186,0,0.30)",
@@ -386,9 +393,9 @@ const GEMINI_OPERATIONS: { key: string; label: string; description: string; icon
 
 /* Quick Links · accesos rápidos (abren en pestaña nueva). */
 const QUICK_LINKS: { label: string; url: string; icon: Parameters<typeof Icon>[0]["name"] }[] = [
-  { label: "Gmail", url: "https://mail.google.com", icon: "mail" },
-  { label: "Calendar", url: "https://calendar.google.com", icon: "calendar" },
-  { label: "Drive", url: "https://drive.google.com", icon: "folder" },
+  { label: "Gmail", url: ws("mail"), icon: "mail" },
+  { label: "Calendar", url: ws("calendar"), icon: "calendar" },
+  { label: "Drive", url: ws("drive"), icon: "folder" },
   { label: "Meet", url: "https://meet.google.com", icon: "eye" },
   { label: "Contacts", url: "https://contacts.google.com", icon: "users" },
   { label: "Gemini", url: "https://gemini.google.com", icon: "sparkle" },
