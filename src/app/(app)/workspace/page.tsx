@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { ORG, PRODUCT } from "@/lib/org";
 
@@ -496,8 +497,146 @@ export default function WorkspacePage() {
         </div>
       </section>
 
+      {/* ── Workspace Hub · accesos REALES (abren Google · pestaña nueva) ── */}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <div className="eyebrow-tiny">Workspace Hub · accesos directos</div>
+            <p className="text-[13px] text-fg-secondary">
+              Clic = abre el servicio oficial de Google en una pestaña nueva.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Abren Google
+          </span>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {TOOLS.map((tool, i) => (
+            <a
+              key={tool.key}
+              href={tool.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Abrir ${tool.name} en una pestaña nueva`}
+              style={
+                {
+                  "--gws-accent": tool.accent,
+                  "--gws-glow": tool.glow,
+                  "--gws-border": tool.border,
+                  animationDelay: `${i * 55}ms`,
+                } as CSSProperties
+              }
+              className="gws-card gws-clickable gws-stagger card p-5 flex flex-col gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="gws-icon-tile w-14 h-14 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+                  {tool.logo}
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">
+                  {tool.badge}
+                </span>
+              </div>
+
+              <div className="flex-1">
+                <div className="text-base font-black text-fg-primary tracking-tight">{tool.name}</div>
+                <p className="text-[13px] text-fg-secondary mt-1 leading-snug">{tool.description}</p>
+              </div>
+
+              <span className="btn btn-primary btn-sm btn-shimmer w-full justify-center pointer-events-none">
+                <span>Abrir en Google</span>
+                <Icon name="arrow-up-right" size={14} stroke={2.2} />
+              </span>
+            </a>
+          ))}
+        </div>
+
+        {/* Drive Corporativo — módulo REAL interno de Nexus (no es launcher) */}
+        <Link
+          href="/drive"
+          aria-label="Explorar Drive Corporativo dentro de TOPS Nexus"
+          style={
+            {
+              "--gws-accent": "rgba(255,186,0,0.30)",
+              "--gws-glow": "rgba(255,186,0,0.38)",
+              "--gws-border": "rgba(255,186,0,0.50)",
+            } as CSSProperties
+          }
+          className="gws-card gws-clickable card group mt-1 flex items-center gap-4 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
+        >
+          <div className="gws-icon-tile w-12 h-12 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+            <DriveLogo />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[14px] font-black text-fg-primary tracking-tight">
+                Drive Corporativo TOPS
+              </span>
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                Módulo real
+              </span>
+            </div>
+            <p className="text-[12px] text-fg-secondary leading-snug">
+              Explorá los archivos dentro de TOPS Nexus — sin salir del sistema.
+            </p>
+          </div>
+          <span className="btn btn-primary btn-sm btn-shimmer shrink-0 pointer-events-none">
+            <span>Explorar Drive</span>
+            <Icon name="arrow-right" size={14} stroke={2.2} />
+          </span>
+        </Link>
+      </section>
+
+      {/* ── Workspace Quick Links · accesos REALES (pestaña nueva) ────────── */}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <div className="eyebrow-tiny">Workspace Quick Links</div>
+            <p className="text-[13px] text-fg-secondary">Accesos rápidos · abren Google en pestaña nueva.</p>
+          </div>
+          <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">
+            {QUICK_LINKS.length} accesos
+          </span>
+        </div>
+
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+          {QUICK_LINKS.map((link, i) => (
+            <a
+              key={link.label}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Abrir ${link.label} en una pestaña nueva`}
+              style={{ animationDelay: `${i * 35}ms` } as CSSProperties}
+              className="gws-card gws-clickable gws-stagger card p-3.5 flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
+            >
+              <span className="gws-icon-tile w-9 h-9 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center text-tops-blue-700">
+                <Icon name={link.icon} size={16} />
+              </span>
+              <span className="text-[13px] font-semibold text-fg-primary truncate flex-1">
+                {link.label}
+              </span>
+              <Icon
+                name="arrow-up-right"
+                size={14}
+                className="text-fg-secondary opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0"
+              />
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Separador · de aquí hacia abajo todo es informativo / simulado ── */}
+      <div className="flex items-center gap-3 pt-1" aria-hidden="true">
+        <span className="h-px flex-1 bg-stroke-soft" />
+        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-fg-secondary whitespace-nowrap">
+          Vista informativa · datos simulados · sin APIs
+        </span>
+        <span className="h-px flex-1 bg-stroke-soft" />
+      </div>
+
       {/* ── Workspace Search Hub · buscador global (visual, sin backend) ──── */}
-      <section className="gws-card card overflow-hidden relative p-5 md:p-6">
+      <section className="gws-info card overflow-hidden relative p-5 md:p-6">
         <div
           className="absolute inset-0 pointer-events-none opacity-80"
           style={{
@@ -516,7 +655,7 @@ export default function WorkspacePage() {
             Simulado
           </span>
         </div>
-        <div className="relative mt-4 gws-shine flex items-center gap-3 rounded-xl border border-stroke-soft bg-bg-surface/70 px-4 py-3 shadow-sm">
+        <div className="relative mt-4 flex items-center gap-3 rounded-xl border border-dashed border-stroke-soft bg-bg-surface/50 px-4 py-3 opacity-70">
           <Icon name="search" size={18} className="text-fg-secondary shrink-0" />
           <span className="flex-1 text-[13px] text-fg-secondary truncate">
             Buscar correos, reuniones, documentos o contactos…
@@ -551,7 +690,7 @@ export default function WorkspacePage() {
                   animationDelay: `${i * 45}ms`,
                 } as CSSProperties
               }
-              className="gws-card gws-stagger card p-4 flex flex-col gap-3"
+              className="gws-info gws-stagger card p-4 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
@@ -591,7 +730,7 @@ export default function WorkspacePage() {
             <div
               key={s.name}
               style={{ animationDelay: `${i * 45}ms` } as CSSProperties}
-              className="gws-card gws-stagger card p-4 flex flex-col gap-3"
+              className="gws-info gws-stagger card p-4 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
@@ -604,59 +743,6 @@ export default function WorkspacePage() {
                 <div className={`text-[11px] font-semibold ${toneText(s.tone)}`}>{s.status}</div>
               </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Workspace Hub · grid ejecutivo de las 6 herramientas ─────────── */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <div className="eyebrow-tiny">Workspace Hub</div>
-            <p className="text-[13px] text-fg-secondary">Accesos directos a las 6 herramientas.</p>
-          </div>
-          <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">
-            {TOOLS.length} apps
-          </span>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {TOOLS.map((tool, i) => (
-            <a
-              key={tool.key}
-              href={tool.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Abrir ${tool.name} en una pestaña nueva`}
-              style={
-                {
-                  "--gws-accent": tool.accent,
-                  "--gws-glow": tool.glow,
-                  "--gws-border": tool.border,
-                  animationDelay: `${i * 55}ms`,
-                } as CSSProperties
-              }
-              className="gws-card gws-stagger card p-5 flex flex-col gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="gws-icon-tile w-14 h-14 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
-                  {tool.logo}
-                </div>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">
-                  {tool.badge}
-                </span>
-              </div>
-
-              <div className="flex-1">
-                <div className="text-base font-black text-fg-primary tracking-tight">{tool.name}</div>
-                <p className="text-[13px] text-fg-secondary mt-1 leading-snug">{tool.description}</p>
-              </div>
-
-              <span className="btn btn-primary btn-sm btn-shimmer w-full justify-center pointer-events-none">
-                <span>Abrir</span>
-                <Icon name="arrow-right" size={14} stroke={2.2} />
-              </span>
-            </a>
           ))}
         </div>
       </section>
@@ -692,7 +778,7 @@ export default function WorkspacePage() {
                   animationDelay: `${i * 50}ms`,
                 } as CSSProperties
               }
-              className="gws-card gws-stagger card p-5 flex flex-col gap-3"
+              className="gws-info gws-stagger card p-5 flex flex-col gap-3"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="gws-icon-tile w-11 h-11 shrink-0 rounded-xl bg-fg-secondary/[0.07] border border-stroke-soft grid place-items-center text-[#9b72cb]">
@@ -734,7 +820,7 @@ export default function WorkspacePage() {
           {/* Próximos eventos */}
           <div
             style={{ animationDelay: "0ms" } as CSSProperties}
-            className="gws-card gws-stagger card p-5 flex flex-col gap-4"
+            className="gws-info gws-stagger card p-5 flex flex-col gap-4"
           >
             <WidgetHeader title="Próximos eventos" source="Calendar" icon="calendar" />
             <div className="flex flex-col gap-2.5">
@@ -753,7 +839,7 @@ export default function WorkspacePage() {
           {/* Correos recientes */}
           <div
             style={{ animationDelay: "55ms" } as CSSProperties}
-            className="gws-card gws-stagger card p-5 flex flex-col gap-4"
+            className="gws-info gws-stagger card p-5 flex flex-col gap-4"
           >
             <WidgetHeader title="Correos recientes" source="Gmail" icon="mail" />
             <div className="flex flex-col divide-y divide-stroke-soft -my-1">
@@ -786,7 +872,7 @@ export default function WorkspacePage() {
           {/* Documentos recientes */}
           <div
             style={{ animationDelay: "110ms" } as CSSProperties}
-            className="gws-card gws-stagger card p-5 flex flex-col gap-4"
+            className="gws-info gws-stagger card p-5 flex flex-col gap-4"
           >
             <WidgetHeader title="Documentos recientes" source="Drive" icon="folder" />
             <div className="flex flex-col gap-1.5">
@@ -811,7 +897,7 @@ export default function WorkspacePage() {
         {/* Gemini Quick Actions */}
         <div
           style={{ animationDelay: "150ms" } as CSSProperties}
-          className="gws-card gws-stagger card p-5 flex flex-col gap-4"
+          className="gws-info gws-stagger card p-5 flex flex-col gap-4"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -865,7 +951,7 @@ export default function WorkspacePage() {
           </span>
         </div>
 
-        <div className="gws-card card p-5">
+        <div className="gws-info card p-5">
           <ol className="relative flex flex-col gap-4 before:absolute before:left-[18px] before:top-2 before:bottom-2 before:w-px before:bg-stroke-soft">
             {WORKSPACE_ACTIVITY.map((a, i) => (
               <li
@@ -893,45 +979,6 @@ export default function WorkspacePage() {
         </div>
       </section>
 
-      {/* ── Workspace Quick Links · accesos rápidos (pestaña nueva) ───────── */}
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <div className="eyebrow-tiny">Workspace Quick Links</div>
-            <p className="text-[13px] text-fg-secondary">Accesos rápidos a los servicios de Google.</p>
-          </div>
-          <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">
-            {QUICK_LINKS.length} accesos
-          </span>
-        </div>
-
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-          {QUICK_LINKS.map((link, i) => (
-            <a
-              key={link.label}
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Abrir ${link.label} en una pestaña nueva`}
-              style={{ animationDelay: `${i * 35}ms` } as CSSProperties}
-              className="gws-card gws-stagger card p-3.5 flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
-            >
-              <span className="gws-icon-tile w-9 h-9 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center text-tops-blue-700">
-                <Icon name={link.icon} size={16} />
-              </span>
-              <span className="text-[13px] font-semibold text-fg-primary truncate flex-1">
-                {link.label}
-              </span>
-              <Icon
-                name="arrow-up-right"
-                size={14}
-                className="text-fg-secondary opacity-0 -translate-x-1 transition-all group-hover:opacity-100 group-hover:translate-x-0"
-              />
-            </a>
-          ))}
-        </div>
-      </section>
-
       {/* ── Workspace Health Monitor · estado de salud (mock, sin APIs) ───── */}
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
@@ -944,7 +991,7 @@ export default function WorkspacePage() {
           </span>
         </div>
 
-        <div className="gws-card card divide-y divide-stroke-soft">
+        <div className="gws-info card divide-y divide-stroke-soft">
           {HEALTH_SERVICES.map((s, i) => (
             <div
               key={s.name}

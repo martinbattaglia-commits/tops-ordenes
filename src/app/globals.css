@@ -687,6 +687,80 @@
   }
 }
 
+/* Real / clickeable — cursor explícito (refuerzo del affordance). Los <a>
+   ya son pointer, pero lo dejamos explícito para anchors e internos. */
+.gws-clickable {
+  cursor: pointer;
+}
+
+/* ── Accesos reales · capa de estado activo premium (Linear/Raycast/Arc) ──
+   Sólo .gws-card.gws-clickable (lo que abre Google o el módulo Drive real).
+   Shimmer lento en hover + halo de marca que respira + microinteracción del
+   ícono. Sin autoplay agresivo: todo en :hover / :focus-visible. */
+
+/* Shimmer diagonal lento — un solo pase al entrar el puntero. El overflow
+   recorta el sweep dentro del radio; NO afecta al drop-shadow del glow. */
+.gws-card.gws-clickable {
+  overflow: hidden;
+}
+.gws-card.gws-clickable::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    110deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  transition: transform 900ms cubic-bezier(0.25, 0.8, 0.25, 1);
+  pointer-events: none;
+  z-index: 0;
+}
+.gws-card.gws-clickable:hover::after,
+.gws-card.gws-clickable:focus-visible::after {
+  transform: translateX(130%);
+}
+
+/* Halo de marca que respira — sólo mientras hay hover/focus, muy sutil. */
+@keyframes gws-halo-breathe {
+  0%,
+  100% {
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 0.16;
+  }
+}
+.gws-card.gws-clickable:hover::before,
+.gws-card.gws-clickable:focus-visible::before {
+  animation: gws-halo-breathe 2800ms ease-in-out infinite;
+}
+
+/* Microinteracción del ícono — lift + scale muy leve + anillo de marca. */
+.gws-card.gws-clickable:hover .gws-icon-tile,
+.gws-card.gws-clickable:focus-visible .gws-icon-tile {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow:
+    0 10px 24px -8px var(--gws-glow, rgba(66, 133, 244, 0.5)),
+    0 0 0 3px var(--gws-accent, rgba(66, 133, 244, 0.3));
+}
+
+/* Informativo / simulado — NO interactivo. Sin lift, sin glow, cursor normal.
+   Conserva sólo el fade-in de entrada (gws-stagger). Comunica "panel, no botón"
+   para que el usuario distinga de un vistazo qué se puede clickear y qué no. */
+.gws-info {
+  position: relative;
+  isolation: isolate;
+  cursor: default;
+}
+.gws-info:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
 /* Reduced motion: cero animaciones. */
 @media (prefers-reduced-motion: reduce) {
   .nexus-page-fade,
@@ -697,6 +771,10 @@
   .ce-engine .ce-alert-row,
   .drive-row,
   .gws-card,
+  .gws-card.gws-clickable::after,
+  .gws-card.gws-clickable:hover::before,
+  .gws-card.gws-clickable:focus-visible::before,
+  .gws-info,
   .gws-icon-tile,
   .gws-stagger,
   .gws-shine::after {
