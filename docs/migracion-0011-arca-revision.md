@@ -93,8 +93,9 @@ no-negociable "no modificar comprobantes autorizados".**
 - `invoice_items`: lectura si existe la factura; escritura admin/operaciones.
 - `invoice_audit`: lectura admin/supervisor; insert admin/operaciones (append-only).
 
-> Dependencia: usan `public.current_role()` (creada en 0009_rbac) y
-> `profiles.client_id`. Confirmar que ambas existen en producción antes de aplicar.
+> Dependencia: usan `public.current_role()` (creada en `0001_init`, endurecida en
+> `0005_fix_rls_recursion`; `0009_rbac` solo la **usa**) y `profiles.client_id`.
+> Confirmar que ambas existen en producción antes de aplicar.
 
 ## 6. Storage + Realtime
 
@@ -105,7 +106,7 @@ no-negociable "no modificar comprobantes autorizados".**
 
 ## 7. Checklist antes de aplicar en producción
 
-- [ ] Confirmar que 0009 (RBAC, `current_role()`) y `profiles.client_id` ya están en prod.
+- [ ] Confirmar que `current_role()` (de 0001/0005) y `profiles.client_id` ya están en prod.
 - [ ] Confirmar backup/restore point del proyecto Supabase.
 - [ ] Aceptar que `clients` y `orders` reciben columnas nuevas (con default, sin pérdida).
 - [ ] Revisar el seed de `fiscal_config` (VEROTIN, **SANDBOX**) y los 2 puntos de venta.

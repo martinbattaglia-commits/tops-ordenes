@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Preview · Google Workspace V3 (mockup)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          "tops-red": "#c90812",
+          "tops-blue-700": "#214576",
+          "tops-blue-900": "#050555",
+          "bg-surface": "#ffffff",
+          "bg-surface-alt": "#eef1f6",
+          "fg-primary": "#0b1220",
+          "fg-secondary": "#5a6577",
+          "fg-muted": "#8a94a6",
+          "stroke-soft": "#dde3ec",
+          "stroke-strong": "#c2cad6",
+        },
+        boxShadow: { xs: "0 1px 2px rgba(0,0,0,0.04)" },
+        borderRadius: { pill: "9999px" },
+      },
+    },
+  };
+</script>
+<style>
+  :root { --tops-red:#c90812; --tops-blue-700:#214576; --tops-blue-900:#050555;
+    --bg-surface:#fff; --fg-primary:#0b1220; --fg-secondary:#5a6577; --stroke-soft:#dde3ec; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background:#eef1f6; color:var(--fg-primary); }
+  .card { border-radius:0.5rem; border:1px solid var(--stroke-soft); background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+  .eyebrow-tiny { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.14em; color:var(--tops-red); margin-bottom:0.5rem; }
+  .page-title { font-size:1.875rem; font-weight:800; color:var(--tops-blue-900); letter-spacing:-0.02em; margin:0; }
+  .page-subtitle { color:var(--fg-secondary); font-size:0.875rem; margin-top:0.25rem; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:0.5rem; border-radius:0.375rem; padding:0.5rem 1rem; font-size:0.875rem; font-weight:700; line-height:1; letter-spacing:0.04em; min-height:40px; transition:all .2s; }
+  .btn-primary { background:var(--tops-blue-900); color:#fff; }
+  .btn-primary:hover { background:var(--tops-blue-700); }
+  .btn-sm { font-size:0.75rem; padding:0.375rem 0.75rem; min-height:32px; }
+  /* gws premium (idéntico a globals.css) */
+  .gws-card { position:relative; isolation:isolate; transition:transform 200ms cubic-bezier(.25,.8,.25,1), box-shadow 200ms cubic-bezier(.25,.8,.25,1), border-color 200ms ease; }
+  .gws-card::before { content:""; position:absolute; inset:0; border-radius:inherit;
+    background:radial-gradient(120% 80% at 85% 0%, var(--gws-accent, rgba(66,133,244,.4)), transparent 60%);
+    opacity:0; transition:opacity 240ms ease; pointer-events:none; z-index:-1; }
+  .gws-card:hover { transform:translate3d(0,-3px,0); box-shadow:0 18px 40px -18px var(--gws-glow, rgba(66,133,244,.45)); border-color:var(--gws-border, rgba(33,69,118,.25)); }
+  .gws-card:hover::before { opacity:.1; }
+  .gws-card:active { transform:translate3d(0,-1px,0); }
+  .gws-icon-tile { transition:box-shadow 240ms ease, transform 240ms ease; }
+  .gws-card:hover .gws-icon-tile { box-shadow:0 8px 20px -8px var(--gws-glow, rgba(66,133,244,.5)); transform:translateY(-1px); }
+  @keyframes gws-fade-in { from{opacity:0; transform:translate3d(0,8px,0);} to{opacity:1; transform:translate3d(0,0,0);} }
+  .gws-stagger { animation:gws-fade-in 360ms cubic-bezier(.25,.8,.25,1) both; }
+  .gws-shine { position:relative; overflow:hidden; }
+  .gws-shine::after { content:""; position:absolute; inset:0;
+    background:linear-gradient(110deg, transparent 35%, rgba(255,255,255,.14) 50%, transparent 65%);
+    transform:translateX(-120%); animation:gws-shine-sweep 7s ease-in-out infinite; pointer-events:none; }
+  @keyframes gws-shine-sweep { 0%,72%,100%{transform:translateX(-120%);} 86%{transform:translateX(120%);} }
+  .preview-banner { background:#050555; color:#fff; }
+</style>
+</head>
+<body>
+<div class="preview-banner text-[12px] font-bold tracking-wide px-4 py-2 text-center">
+  PREVIEW ESTÁTICO · Google Workspace V3 (mockup · sin APIs) · réplica fiel de /workspace — no es la app real
+</div>
+
+<div class="p-4 md:p-7 lg:p-8 space-y-8 max-w-[1180px] mx-auto">
+
+  <!-- HEADER -->
+  <section id="sec-header" class="card overflow-hidden relative">
+    <div class="absolute inset-0 pointer-events-none opacity-90" style="background:radial-gradient(ellipse at top right, rgba(66,133,244,0.12), transparent 58%), radial-gradient(ellipse at bottom left, rgba(33,69,118,0.12), transparent 60%);"></div>
+    <div class="relative p-6 md:p-8">
+      <div class="flex items-start gap-4">
+        <div class="w-14 h-14 shrink-0 rounded-2xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+          <svg viewBox="0 0 48 48" width="30" height="30"><path fill="#ffc107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.3-.4-3.5z"/><path fill="#ff3d00" d="M6.3 14.7l6.6 4.8C14.7 15.1 18.9 12 24 12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4caf50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976d2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C39.5 36.5 44 30.9 44 24c0-1.3-.1-2.3-.4-3.5z"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="eyebrow-tiny">TOPS NEXUS · Accesos corporativos</div>
+          <h1 class="page-title">Google Workspace</h1>
+          <p class="page-subtitle max-w-2xl">Hub corporativo de las herramientas de Google que utiliza Logística TOPS. Cada acceso abre el servicio oficial en una pestaña nueva.</p>
+        </div>
+      </div>
+      <div class="mt-6">
+        <div class="eyebrow-tiny mb-2">Estado de integración</div>
+        <div class="gws-shine flex flex-wrap gap-2 rounded-xl border border-stroke-soft bg-bg-surface/60 p-2">
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg-surface border border-stroke-soft"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(54,194,117,0.22)]"></span><span class="text-[12px] font-semibold text-fg-primary">Enlaces directos</span><span class="text-[11px] text-fg-secondary">· Activo</span></div>
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg-surface border border-stroke-soft"><span class="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.20)]"></span><span class="text-[12px] font-semibold text-fg-primary">SSO Workspace</span><span class="text-[11px] text-fg-secondary">· Próximamente</span></div>
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg-surface border border-stroke-soft"><span class="w-1.5 h-1.5 rounded-full bg-fg-secondary/40"></span><span class="text-[12px] font-semibold text-fg-primary">APIs Google</span><span class="text-[11px] text-fg-secondary">· No conectado</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEARCH HUB -->
+  <section id="sec-search" class="gws-card card overflow-hidden relative p-5 md:p-6">
+    <div class="absolute inset-0 pointer-events-none opacity-80" style="background:radial-gradient(ellipse at center left, rgba(66,133,244,0.10), transparent 60%);"></div>
+    <div class="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="min-w-0"><div class="eyebrow-tiny">Workspace Search Hub</div><p class="text-[13px] text-fg-secondary">Búsqueda global en correos, reuniones, documentos y contactos.</p></div>
+      <span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded shrink-0">Simulado</span>
+    </div>
+    <div class="relative mt-4 gws-shine flex items-center gap-3 rounded-xl border border-stroke-soft bg-bg-surface/70 px-4 py-3 shadow-sm">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5a6577" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <span class="flex-1 text-[13px] text-fg-secondary truncate">Buscar correos, reuniones, documentos o contactos…</span>
+      <span class="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">⌘K</span>
+    </div>
+  </section>
+
+  <!-- KPIs -->
+  <section id="sec-kpis" class="space-y-3">
+    <div class="flex items-end justify-between gap-3">
+      <div><div class="eyebrow-tiny">Workspace KPIs</div><p class="text-[13px] text-fg-secondary">Indicadores operativos por servicio.</p></div>
+      <span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">Simulado</span>
+    </div>
+    <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      <!-- KPI template -->
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3" style="--gws-accent:rgba(234,67,53,.30);--gws-glow:rgba(234,67,53,.40);--gws-border:rgba(234,67,53,.45);">
+        <div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#4caf50" d="M45 16.2l-5 2.75-5 4.75L35 40h7a3 3 0 0 0 3-3V16.2z"/><path fill="#1e88e5" d="M3 16.2l3.614 1.71L13 23.7V40H6a3 3 0 0 1-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3 12.298V16.2l10 7.5V11.2L9.876 8.859A3.299 3.299 0 0 0 3 12.298z"/><path fill="#fbc02d" d="M45 12.298V16.2l-10 7.5V11.2l3.124-2.341A3.299 3.299 0 0 1 45 12.298z"/></svg></div><span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">Gmail</span></div>
+        <div><div class="text-2xl font-black text-fg-primary tracking-tight tabular-nums leading-none">12</div><div class="text-[11px] font-semibold text-fg-secondary mt-1 leading-snug">Correos pendientes</div></div>
+      </div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3" style="--gws-accent:rgba(26,115,232,.30);--gws-glow:rgba(26,115,232,.40);--gws-border:rgba(26,115,232,.45);">
+        <div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#fff" stroke="#dadce0" d="M37 42H11a5 5 0 0 1-5-5V11a5 5 0 0 1 5-5h26a5 5 0 0 1 5 5v26a5 5 0 0 1-5 5z"/><path fill="#1e88e5" d="M11 6h26a5 5 0 0 1 5 5v3H6v-3a5 5 0 0 1 5-5z"/><text x="24" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#1a73e8">31</text></svg></div><span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">Calendar</span></div>
+        <div><div class="text-2xl font-black text-fg-primary tracking-tight tabular-nums leading-none">4</div><div class="text-[11px] font-semibold text-fg-secondary mt-1 leading-snug">Reuniones hoy</div></div>
+      </div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3" style="--gws-accent:rgba(255,186,0,.30);--gws-glow:rgba(255,186,0,.38);--gws-border:rgba(255,186,0,.50);">
+        <div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 87.3 78" width="22" height="22"><path fill="#0066da" d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z"/><path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.5l5.85 11.5z"/><path fill="#00832d" d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z"/><path fill="#2684fc" d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/><path fill="#ffba00" d="M73.4 26.5L60.7 4.5c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25 59.8 53h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg></div><span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">Drive</span></div>
+        <div><div class="text-2xl font-black text-fg-primary tracking-tight tabular-nums leading-none">28</div><div class="text-[11px] font-semibold text-fg-secondary mt-1 leading-snug">Documentos recientes</div></div>
+      </div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3" style="--gws-accent:rgba(155,114,203,.32);--gws-glow:rgba(155,114,203,.42);--gws-border:rgba(155,114,203,.48);">
+        <div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 24 24" width="20" height="20"><defs><linearGradient id="g2" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4285f4"/><stop offset=".5" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs><path fill="url(#g2)" d="M12 0c0 6.627-5.373 12-12 12 6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/></svg></div><span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">Gemini</span></div>
+        <div><div class="text-2xl font-black text-fg-primary tracking-tight tabular-nums leading-none">6</div><div class="text-[11px] font-semibold text-fg-secondary mt-1 leading-snug">Acciones IA disponibles</div></div>
+      </div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3" style="--gws-accent:rgba(0,131,45,.30);--gws-glow:rgba(0,131,45,.38);--gws-border:rgba(0,131,45,.45);">
+        <div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 87.5 72" width="22" height="22"><path fill="#00832d" d="M49.5 36l8.53 9.75 11.47 7.33 2-17.02-2-16.64-11.69 6.44z"/><path fill="#0066da" d="M0 51.5V66a6 6 0 0 0 6 6h14.5l3-10.96-3-9.54-9.95-3z"/><path fill="#e94235" d="M20.5 0L0 20.5l10.55 3 9.95-3 2.95-9.41z"/><path fill="#2684fc" d="M20.5 20.5H0v31h20.5z"/><path fill="#00ac47" d="M82.6 8.68L69.5 19.42v33.66l13.16 10.79c1.97 1.54 4.84.14 4.84-2.37V11c0-2.53-2.94-3.92-4.9-2.32zM49.5 36v15.5h-29V72h43a6 6 0 0 0 6-6V53.08z"/><path fill="#ffba00" d="M63.5 0h-43v20.5h29V36l20-16.57V6a6 6 0 0 0-6-6z"/></svg></div><span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">Meet</span></div>
+        <div><div class="text-2xl font-black text-fg-primary tracking-tight tabular-nums leading-none">15:00</div><div class="text-[11px] font-semibold text-fg-secondary mt-1 leading-snug">Próxima reunión</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="sec-dashboard" class="space-y-3">
+    <div class="flex items-end justify-between gap-3">
+      <div><div class="eyebrow-tiny">Workspace Dashboard</div><p class="text-[13px] text-fg-secondary">Estado de cada servicio · informativo.</p></div>
+      <span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">Sin consumo de APIs</span>
+    </div>
+    <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3"><div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#4caf50" d="M45 16.2l-5 2.75-5 4.75L35 40h7a3 3 0 0 0 3-3V16.2z"/><path fill="#1e88e5" d="M3 16.2l3.614 1.71L13 23.7V40H6a3 3 0 0 1-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/></svg></div><span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(54,194,117,0.22)]"></span></div><div><div class="text-[13px] font-black text-fg-primary tracking-tight">Gmail</div><div class="text-[11px] font-semibold text-emerald-500">Activo</div></div></div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3"><div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#fff" stroke="#dadce0" d="M37 42H11a5 5 0 0 1-5-5V11a5 5 0 0 1 5-5h26a5 5 0 0 1 5 5v26a5 5 0 0 1-5 5z"/><path fill="#1e88e5" d="M11 6h26a5 5 0 0 1 5 5v3H6v-3a5 5 0 0 1 5-5z"/><text x="24" y="34" text-anchor="middle" font-size="18" font-weight="700" fill="#1a73e8">31</text></svg></div><span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(54,194,117,0.22)]"></span></div><div><div class="text-[13px] font-black text-fg-primary tracking-tight">Calendar</div><div class="text-[11px] font-semibold text-emerald-500">Activo</div></div></div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3"><div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 87.3 78" width="22" height="22"><path fill="#0066da" d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z"/><path fill="#00ac47" d="M43.65 25L29.9 1.2c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z"/><path fill="#ea4335" d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.5l5.85 11.5z"/><path fill="#2684fc" d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z"/><path fill="#ffba00" d="M73.4 26.5L60.7 4.5c-.8-1.4-1.95-2.5-3.3-3.3L43.65 25 59.8 53h27.45c0-1.55-.4-3.1-1.2-4.5z"/></svg></div><span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(54,194,117,0.22)]"></span></div><div><div class="text-[13px] font-black text-fg-primary tracking-tight">Drive</div><div class="text-[11px] font-semibold text-emerald-500">Activo</div></div></div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3"><div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 87.5 72" width="22" height="22"><path fill="#00832d" d="M49.5 36l8.53 9.75 11.47 7.33 2-17.02-2-16.64-11.69 6.44z"/><path fill="#0066da" d="M0 51.5V66a6 6 0 0 0 6 6h14.5l3-10.96-3-9.54-9.95-3z"/><path fill="#e94235" d="M20.5 0L0 20.5l10.55 3 9.95-3 2.95-9.41z"/><path fill="#2684fc" d="M20.5 20.5H0v31h20.5z"/><path fill="#00ac47" d="M82.6 8.68L69.5 19.42v33.66l13.16 10.79c1.97 1.54 4.84.14 4.84-2.37V11c0-2.53-2.94-3.92-4.9-2.32zM49.5 36v15.5h-29V72h43a6 6 0 0 0 6-6V53.08z"/><path fill="#ffba00" d="M63.5 0h-43v20.5h29V36l20-16.57V6a6 6 0 0 0-6-6z"/></svg></div><span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.20)]"></span></div><div><div class="text-[13px] font-black text-fg-primary tracking-tight">Meet</div><div class="text-[11px] font-semibold text-amber-500">Próximamente</div></div></div>
+      <div class="gws-card gws-stagger card p-4 flex flex-col gap-3"><div class="flex items-center justify-between gap-2"><div class="gws-icon-tile w-10 h-10 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 24 24" width="20" height="20"><defs><linearGradient id="g3" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4285f4"/><stop offset=".5" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs><path fill="url(#g3)" d="M12 0c0 6.627-5.373 12-12 12 6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/></svg></div><span class="w-2 h-2 rounded-full bg-fg-secondary/40"></span></div><div><div class="text-[13px] font-black text-fg-primary tracking-tight">Gemini</div><div class="text-[11px] font-semibold text-fg-secondary">No conectado</div></div></div>
+    </div>
+  </section>
+
+  <!-- GEMINI OPERATIONS CENTER -->
+  <section id="sec-gemini-ops" class="space-y-3">
+    <div class="flex items-end justify-between gap-3">
+      <div class="flex items-center gap-3"><div class="gws-icon-tile w-10 h-10 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm"><svg viewBox="0 0 24 24" width="20" height="20"><defs><linearGradient id="g4" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4285f4"/><stop offset=".5" stop-color="#9b72cb"/><stop offset="1" stop-color="#d96570"/></linearGradient></defs><path fill="url(#g4)" d="M12 0c0 6.627-5.373 12-12 12 6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/></svg></div><div><div class="eyebrow-tiny">Gemini Operations Center</div><p class="text-[13px] text-fg-secondary">Capacidades de IA para operación corporativa.</p></div></div>
+      <span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded shrink-0">Próximamente</span>
+    </div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" id="gemini-ops-grid"></div>
+  </section>
+
+  <!-- ACTIVITY CENTER -->
+  <section id="sec-activity" class="space-y-3">
+    <div class="flex items-end justify-between gap-3">
+      <div><div class="eyebrow-tiny">Workspace Activity Center</div><p class="text-[13px] text-fg-secondary">Actividad reciente del espacio de trabajo.</p></div>
+      <span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">Simulado</span>
+    </div>
+    <div class="gws-card card p-5">
+      <ol class="relative flex flex-col gap-4" style="--line:1px;">
+        <div style="position:absolute;left:18px;top:8px;bottom:8px;width:1px;background:#dde3ec;"></div>
+        <li class="relative flex items-start gap-4"><span class="relative z-[1] w-9 h-9 rounded-full bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm text-amber-500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><div class="min-w-0 flex-1 pt-1"><div class="flex items-center justify-between gap-2"><span class="text-[13px] font-bold text-fg-primary tracking-tight truncate">Documento subido</span><span class="text-[10px] text-fg-secondary shrink-0">hace 8 min</span></div><div class="text-[12px] text-fg-secondary truncate">Contrato_Verotin_2026.pdf · Drive</div></div></li>
+        <li class="relative flex items-start gap-4"><span class="relative z-[1] w-9 h-9 rounded-full bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm text-tops-blue-700"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><div class="min-w-0 flex-1 pt-1"><div class="flex items-center justify-between gap-2"><span class="text-[13px] font-bold text-fg-primary tracking-tight truncate">Reunión creada</span><span class="text-[10px] text-fg-secondary shrink-0">hace 25 min</span></div><div class="text-[12px] text-fg-secondary truncate">Auditoría ANMAT · cadena de frío</div></div></li>
+        <li class="relative flex items-start gap-4"><span class="relative z-[1] w-9 h-9 rounded-full bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm text-tops-red"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span><div class="min-w-0 flex-1 pt-1"><div class="flex items-center justify-between gap-2"><span class="text-[13px] font-bold text-fg-primary tracking-tight truncate">Correo recibido</span><span class="text-[10px] text-fg-secondary shrink-0">hace 40 min</span></div><div class="text-[12px] text-fg-secondary truncate">Operaciones · coordinación ruta CABA</div></div></li>
+        <li class="relative flex items-start gap-4"><span class="relative z-[1] w-9 h-9 rounded-full bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm" style="color:#9b72cb;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/></svg></span><div class="min-w-0 flex-1 pt-1"><div class="flex items-center justify-between gap-2"><span class="text-[13px] font-bold text-fg-primary tracking-tight truncate">Gemini utilizado</span><span class="text-[10px] text-fg-secondary shrink-0">hace 1 h</span></div><div class="text-[12px] text-fg-secondary truncate">Resumen de documento operativo</div></div></li>
+        <li class="relative flex items-start gap-4"><span class="relative z-[1] w-9 h-9 rounded-full bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm text-emerald-500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-4 3.5-6 7-6s7 2 7 6"/></svg></span><div class="min-w-0 flex-1 pt-1"><div class="flex items-center justify-between gap-2"><span class="text-[13px] font-bold text-fg-primary tracking-tight truncate">Contacto agregado</span><span class="text-[10px] text-fg-secondary shrink-0">hace 2 h</span></div><div class="text-[12px] text-fg-secondary truncate">Proveedor SRL · directorio corporativo</div></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- QUICK LINKS -->
+  <section id="sec-quicklinks" class="space-y-3">
+    <div class="flex items-end justify-between gap-3">
+      <div><div class="eyebrow-tiny">Workspace Quick Links</div><p class="text-[13px] text-fg-secondary">Accesos rápidos a los servicios de Google.</p></div>
+      <span class="text-[11px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">9 accesos</span>
+    </div>
+    <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" id="quicklinks-grid"></div>
+  </section>
+
+  <!-- HEALTH MONITOR -->
+  <section id="sec-health" class="space-y-3">
+    <div class="flex items-end justify-between gap-3">
+      <div><div class="eyebrow-tiny">Workspace Health Monitor</div><p class="text-[13px] text-fg-secondary">Estado de salud de los servicios.</p></div>
+      <span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded">Mock data</span>
+    </div>
+    <div class="gws-card card divide-y divide-stroke-soft" id="health-list"></div>
+  </section>
+
+</div>
+
+<script>
+  const ICON = {
+    bolt:'<path d="M13 2L3 14h7l-1 8 10-12h-7z"/>', pen:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+    file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+    mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    orders:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+    shield:'<path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6z"/>',
+    cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+    users:'<circle cx="9" cy="8" r="3"/><path d="M2 21c0-3.5 3-5 7-5s7 1.5 7 5"/><circle cx="18" cy="9" r="2.5"/>',
+    sparkle:'<path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8z"/>',
+    tag:'<path d="M3 11l8-8 10 10-8 8z"/><circle cx="8" cy="8" r="1.5"/>',
+    check:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+    arrow:'<path d="M7 17L17 7M17 7H8M17 7v9"/>'
+  };
+  const svg=(p,s=16)=>`<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+  const ops=[['Generar propuesta comercial','Borrador comercial a partir de un brief.','bolt'],['Generar minuta de reunión','Resumen y acuerdos de una reunión.','pen'],['Resumir documento','Síntesis ejecutiva de un archivo.','file'],['Redactar email','Correo corporativo con tono adecuado.','mail'],['Crear procedimiento operativo','SOP estructurado para el depósito.','orders'],['Generar contrato','Plantilla contractual base.','shield']];
+  document.getElementById('gemini-ops-grid').innerHTML = ops.map(([l,d,i])=>`
+    <div class="gws-card gws-stagger card p-5 flex flex-col gap-3" style="--gws-accent:rgba(155,114,203,.32);--gws-glow:rgba(155,114,203,.42);--gws-border:rgba(155,114,203,.48);">
+      <div class="flex items-start justify-between gap-3"><div class="gws-icon-tile w-11 h-11 rounded-xl bg-fg-secondary/[0.07] border border-stroke-soft grid place-items-center" style="color:#9b72cb;">${svg(ICON[i],18)}</div><span class="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">Próximamente</span></div>
+      <div class="flex-1"><div class="text-[14px] font-black text-fg-primary tracking-tight leading-tight">${l}</div><p class="text-[12px] text-fg-secondary mt-1 leading-snug">${d}</p></div>
+    </div>`).join('');
+
+  const links=[['Gmail','mail'],['Calendar','cal'],['Drive','folder'],['Meet','eye'],['Contacts','users'],['Gemini','sparkle'],['Admin Console','shield'],['Google Keep','tag'],['Google Tasks','check']];
+  document.getElementById('quicklinks-grid').innerHTML = links.map(([l,i])=>`
+    <a href="#" class="gws-card gws-stagger card p-3.5 flex items-center gap-3 group">
+      <span class="gws-icon-tile w-9 h-9 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center text-tops-blue-700">${svg(ICON[i],16)}</span>
+      <span class="text-[13px] font-semibold text-fg-primary truncate flex-1">${l}</span>
+      <span class="text-fg-secondary opacity-50">${svg(ICON.arrow,14)}</span>
+    </a>`).join('');
+
+  const health=[['Gmail','Operativo','up','99.9%','#34d399'],['Calendar','Operativo','up','99.8%','#34d399'],['Drive','Operativo','up','99.9%','#34d399'],['Meet','Advertencia','warn','97.4%','#fbbf24'],['Gemini','Desconectado','down','—','#c90812']];
+  const htxt={up:'text-emerald-500',warn:'text-amber-500',down:'text-tops-red'};
+  document.getElementById('health-list').innerHTML = health.map(([n,s,t,u,c])=>`
+    <div class="flex items-center gap-3 p-4">
+      <div class="gws-icon-tile w-9 h-9 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm text-fg-secondary">${svg(ICON.shield,16)}</div>
+      <div class="min-w-0 flex-1"><div class="text-[13px] font-black text-fg-primary tracking-tight">${n}</div><div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full" style="background:${c};box-shadow:0 0 0 3px ${c}33;"></span><span class="text-[11px] font-semibold ${htxt[t]}">${s}</span></div></div>
+      <div class="text-right shrink-0"><div class="text-[13px] font-bold text-fg-primary tabular-nums">${u}</div><div class="text-[10px] text-fg-secondary uppercase tracking-wider">Uptime</div></div>
+    </div>`).join('');
+</script>
+</body>
+</html>

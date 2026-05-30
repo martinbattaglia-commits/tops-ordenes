@@ -1,68 +1,91 @@
-import { NextResponse } from "next/server";
-import { checkDriveEnv, pingDrive } from "@/lib/google-drive";
+import { NextResponse, type NextRequest } from "next/server";
+import { ping, isDriveConfigured, DriveError } from "@/lib/drive/client";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { requireDrivePermission } from "@/lib/rbac/check";
 
-// Esta ruta hace una llamada de red a Google → forzamos runtime Node.js y
-// renderizado dinámico para que NO se intente prerenderizar en build.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Ping es diagnóstico — límite agresivo para evitar abuso (un usuario que pinguea
+// constante para mapear cuando Drive entra/sale de configuración).
+const RL_LIMIT = 20;
+const RL_WINDOW_MS = 60_000;
+
+function safeRequestId(raw: string | null): string {
+  if (raw && /^[a-zA-Z0-9_\-]{1,64}$/.test(raw)) return raw;
+  return `drive-ping-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 /**
  * GET /api/drive/ping
  *
- * Valida que las tres variables de entorno estén presentes y prueba una
- * conexión real a Google Drive contra la carpeta raíz configurada.
+ * Verifica que la service account de Google Drive está configurada y tiene
+ * permisos sobre la carpeta raíz.
  *
- * Respuestas:
- *   200 → { success: true,  connected: true,  ... }
- *   500 → { success: false, connected: false, error, env }
- *   400 → { success: false, connected: false, env, missing: [...] } si faltan vars
+ * Auth: requiere sesión + permiso `compliance.view`.
+ * Rate-limit: 20 req/min por IP.
  */
-export async function GET() {
-  const env = checkDriveEnv();
+export async function GET(req: NextRequest) {
+  const requestId = safeRequestId(req.headers.get("x-request-id"));
 
-  if (!env.ok) {
-    const missing: string[] = [];
-    if (!env.clientEmail) missing.push("GOOGLE_CLIENT_EMAIL");
-    if (!env.privateKey) missing.push("GOOGLE_PRIVATE_KEY");
-    if (!env.folderId) missing.push("GOOGLE_DRIVE_FOLDER_ID");
-
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const rl = rateLimit(`drive-ping:${clientKey(ip)}`, {
+    limit: RL_LIMIT,
+    windowMs: RL_WINDOW_MS,
+  });
+  if (!rl.ok) {
     return NextResponse.json(
       {
-        success: false,
-        connected: false,
-        error: `Faltan variables de entorno: ${missing.join(", ")}`,
-        env,
-        missing,
-        checkedAt: new Date().toISOString(),
+        ok: false,
+        error: "Rate limit excedido",
+        retryAfterMs: rl.retryAfterMs,
+        requestId,
       },
-      { status: 400 }
+      {
+        status: 429,
+        headers: {
+          "x-request-id": requestId,
+          "retry-after": String(Math.ceil(rl.retryAfterMs / 1000)),
+        },
+      }
     );
   }
 
-  const result = await pingDrive();
+  const auth = await requireDrivePermission(req, "compliance.view", requestId);
+  if (auth instanceof NextResponse) return auth;
 
-  if (!result.success) {
+  if (!isDriveConfigured()) {
     return NextResponse.json(
       {
-        success: false,
-        connected: false,
-        error: result.error,
-        env,
-        checkedAt: new Date().toISOString(),
+        ok: false,
+        error: "Drive no configurado",
+        hint: "Setea GOOGLE_SERVICE_ACCOUNT_JSON y GOOGLE_DRIVE_ROOT_FOLDER_ID en el entorno",
+        requestId,
       },
-      { status: 500 }
+      { status: 503, headers: { "x-request-id": requestId } }
     );
   }
 
-  return NextResponse.json(
-    {
-      success: true,
-      connected: true,
-      folderId: result.folderId,
-      folderName: result.folderName,
-      env,
-      checkedAt: new Date().toISOString(),
-    },
-    { status: 200 }
-  );
+  try {
+    const result = await ping();
+    return NextResponse.json(
+      { ...result, checkedAt: new Date().toISOString(), requestId },
+      { headers: { "x-request-id": requestId } }
+    );
+  } catch (e) {
+    if (e instanceof DriveError) {
+      return NextResponse.json(
+        { ok: false, error: e.message, requestId },
+        { status: e.status ?? 502, headers: { "x-request-id": requestId } }
+      );
+    }
+    return NextResponse.json(
+      {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+        requestId,
+      },
+      { status: 502, headers: { "x-request-id": requestId } }
+    );
+  }
 }

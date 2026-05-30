@@ -26,7 +26,6 @@ export type IconName =
   | "forklift"
   | "package"
   | "building"
-  | "google"
   | "pin"
   | "clock"
   | "calendar"
@@ -67,6 +66,7 @@ export type IconName =
   | "minus"
   | "folder"
   | "users"
+  | "google"
   | "sun"
   | "moon";
 
@@ -272,15 +272,6 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
         <svg {...common}>
           <rect x="4" y="3" width="16" height="18" rx="1" />
           <path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2M10 21v-3h4v3" />
-        </svg>
-      );
-    case "google":
-      return (
-        <svg {...common}>
-          <path d="M21 12.2c0-.7-.06-1.2-.2-1.8H12v3.4h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-6.9Z" />
-          <path d="M12 21c2.4 0 4.5-.8 6-2.2l-3.1-2.4c-.9.6-2 .9-2.9.9-2.2 0-4.2-1.5-4.8-3.6H4v2.4A9 9 0 0 0 12 21Z" />
-          <path d="M7.2 13.7a5.4 5.4 0 0 1 0-3.4V7.9H4a9 9 0 0 0 0 8.2l3.2-2.4Z" />
-          <path d="M12 6.6c1.3 0 2.4.5 3.3 1.3l2.5-2.5A9 9 0 0 0 4 7.9l3.2 2.4C7.8 8.1 9.8 6.6 12 6.6Z" />
         </svg>
       );
     case "pin":
@@ -553,6 +544,15 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />
           <path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />
+        </svg>
+      );
+    case "google":
+      return (
+        <svg {...common}>
+          <path d="M21 12.2c0-.7-.06-1.2-.2-1.8H12v3.4h5.1a4.4 4.4 0 0 1-1.9 2.9v2.4h3.1c1.8-1.7 2.7-4.1 2.7-6.9Z" />
+          <path d="M12 21c2.4 0 4.5-.8 6-2.2l-3.1-2.4c-.9.6-2 .9-2.9.9-2.2 0-4.2-1.5-4.8-3.6H4v2.4A9 9 0 0 0 12 21Z" />
+          <path d="M7.2 13.7a5.4 5.4 0 0 1 0-3.4V7.9H4a9 9 0 0 0 0 8.2l3.2-2.4Z" />
+          <path d="M12 6.6c1.3 0 2.4.5 3.3 1.3l2.5-2.5A9 9 0 0 0 4 7.9l3.2 2.4C7.8 8.1 9.8 6.6 12 6.6Z" />
         </svg>
       );
     case "sun":

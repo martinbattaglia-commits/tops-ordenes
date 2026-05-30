@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/Icon";
 import { cn } from "@/lib/utils";
+import { PRODUCT } from "@/lib/org";
 
 interface NavItem {
   href: string;
@@ -11,26 +13,99 @@ interface NavItem {
   icon: IconName;
   count?: number;
   accent?: boolean;
+  badge?: string;
 }
 
-const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/orders", label: "Órdenes", icon: "orders", count: 48 },
-  { href: "/orders/new", label: "Nueva orden", icon: "plus", accent: true },
-  { href: "/clients", label: "Clientes", icon: "clients" },
-  { href: "/reports", label: "Reportes", icon: "report" },
-  { href: "/billing", label: "Facturación", icon: "bill" },
-];
+interface Domain {
+  id: string;
+  label: string;
+  items: NavItem[];
+}
 
-const NAV_WORKSPACE: NavItem[] = [
-  { href: "/workspace", label: "Accesos Google", icon: "google" },
-];
-
-const NAV_BOTTOM: NavItem[] = [
-  { href: "/templates", label: "Plantillas email", icon: "mail" },
-  { href: "/settings/users", label: "Usuarios", icon: "clients" },
-  { href: "/organigrama", label: "Organigrama", icon: "building" },
-  { href: "/settings", label: "Configuración", icon: "gear" },
+/**
+ * Dominios del Operating System. Cada dominio agrupa rutas relacionadas
+ * y se renderea como una sección colapsable del sidebar.
+ */
+const DOMAINS: Domain[] = [
+  {
+    id: "cockpit",
+    label: "Cockpit",
+    items: [
+      { href: "/ejecutivo", label: "Cockpit ejecutivo", icon: "dashboard" },
+      { href: "/operaciones/mapa", label: "Mapa operativo", icon: "pin" },
+    ],
+  },
+  {
+    id: "compras",
+    label: "Compras · Proveedores",
+    items: [
+      { href: "/compras", label: "Dashboard compras", icon: "dashboard" },
+      { href: "/compras/ordenes", label: "Órdenes de compra", icon: "cart", count: 64 },
+      { href: "/compras/nueva", label: "Nueva OC", icon: "plus", accent: true },
+      { href: "/compras/proveedores", label: "Proveedores", icon: "vendors" },
+    ],
+  },
+  {
+    id: "servicios",
+    label: "Operaciones · Servicios",
+    items: [
+      { href: "/dashboard", label: "Dashboard servicio", icon: "dashboard" },
+      { href: "/orders", label: "Órdenes de servicio", icon: "orders", count: 48 },
+      { href: "/orders/new", label: "Nueva OS", icon: "plus", accent: true },
+      { href: "/clients", label: "Clientes (OS)", icon: "clients" },
+    ],
+  },
+  {
+    id: "comercial",
+    label: "Comercial · CRM",
+    items: [
+      { href: "/comercial/contactos", label: "Contactos", icon: "users", badge: "Clientify" },
+      { href: "/comercial/pipeline", label: "Pipeline", icon: "trend-up", badge: "Clientify" },
+    ],
+  },
+  {
+    id: "compliance",
+    label: "Compliance · ANMAT",
+    items: [
+      { href: "/anmat", label: "ANMAT cockpit", icon: "shield" },
+      { href: "/drive", label: "Drive TOPS", icon: "drive" },
+    ],
+  },
+  {
+    id: "seguridad",
+    label: "Seguridad · CCTV",
+    items: [
+      { href: "/cctv", label: "Centro de monitoreo", icon: "eye", badge: "Hikvision" },
+    ],
+  },
+  {
+    id: "analytics",
+    label: "Analytics & Finanzas",
+    items: [
+      { href: "/reports", label: "Reportes", icon: "report" },
+      { href: "/billing", label: "Facturación", icon: "bill" },
+      { href: "/compras/drive", label: "Drive sync", icon: "drive" },
+      { href: "/compras/email", label: "Plantilla email", icon: "mail" },
+    ],
+  },
+  {
+    id: "workspace",
+    label: "Google Workspace",
+    items: [
+      { href: "/workspace", label: "Accesos Google", icon: "google" },
+    ],
+  },
+  {
+    id: "sistema",
+    label: "Sistema",
+    items: [
+      { href: "/organigrama", label: "Organigrama", icon: "building" },
+      { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
+      { href: "/settings/users", label: "Usuarios", icon: "users" },
+      { href: "/templates", label: "Plantillas OS", icon: "mail" },
+      { href: "/settings", label: "Configuración", icon: "gear" },
+    ],
+  },
 ];
 
 interface Props {
@@ -42,62 +117,82 @@ export default function Sidebar({ user, onNavigate }: Props) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === "/dashboard";
-    if (href === "/orders") return pathname === "/orders";
-    if (href === "/orders/new") return pathname.startsWith("/orders/new");
+    // Rutas exactas (no usar prefix match — evita colisiones tipo /compras y /compras/ordenes)
+    const exact = new Set([
+      "/ejecutivo",
+      "/dashboard",
+      "/orders",
+      "/compras",
+      "/compras/ordenes",
+      "/clients",
+      "/reports",
+      "/billing",
+      "/anmat",
+      "/cctv",
+      "/operaciones/mapa",
+      "/organigrama",
+      "/workspace",
+      "/comercial/contactos",
+      "/comercial/pipeline",
+      "/settings",
+      "/settings/roles",
+      "/settings/users",
+      "/templates",
+    ]);
+    if (exact.has(href)) return pathname === href;
     return pathname.startsWith(href);
   };
 
   return (
-    <div className="sidebar w-full h-full flex flex-col px-4 pb-4 overflow-y-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-end gap-2">
-          <span className="text-xl font-black uppercase tracking-tight text-white">TOPS</span>
-          <span className="text-[10px] uppercase tracking-[0.18em] font-bold text-tops-red mb-1">
-            Órdenes
-          </span>
+    <div className="sidebar w-full h-full flex flex-col px-3 pb-3 overflow-y-auto">
+      {/* Brand block */}
+      <Link
+        href="/ejecutivo"
+        onClick={onNavigate}
+        className="flex flex-col items-center mt-2 mb-5 hover:opacity-95 transition-opacity"
+      >
+        <Image
+          src="/icons/logo-isologo-primary.png"
+          alt="Logística TOPS"
+          width={500}
+          height={500}
+          priority
+          className="w-auto h-20 object-contain"
+        />
+        <div className="mt-2 text-center">
+          <div className="text-[15px] font-black tracking-[0.18em] text-white leading-none">
+            {PRODUCT.name}
+          </div>
+          <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-tops-red">
+            {PRODUCT.shortTagline}
+          </div>
         </div>
+      </Link>
+
+      {/* Domain sections */}
+      <div className="flex flex-col gap-3">
+        {DOMAINS.map((domain) => (
+          <Section key={domain.id} label={domain.label}>
+            {domain.items.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                active={isActive(item.href)}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </Section>
+        ))}
       </div>
 
-      <Section label="Operación">
-        {NAV.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={isActive(item.href)}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </Section>
-
-      <Section label="Google Workspace" className="mt-2">
-        {NAV_WORKSPACE.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={isActive(item.href)}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </Section>
-
-      <Section label="Sistema" className="mt-2">
-        {NAV_BOTTOM.map((item) => (
-          <NavLink
-            key={item.href}
-            item={item}
-            active={isActive(item.href)}
-            onNavigate={onNavigate}
-          />
-        ))}
-      </Section>
-
+      {/* Footer: depots + user */}
       <div className="mt-auto pt-4">
         <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40 px-1.5 mb-2">
-          Depósitos activos
+          Locaciones · CABA
         </div>
         <div className="flex flex-col gap-1.5 mb-3">
-          <DepotPing name="Magaldi · CABA" online ops={6} />
+          <DepotPing name="Magaldi · ANMAT" online ops={6} />
+          <DepotPing name="Barracas · General" online ops={4} />
           <DepotPing name="Luján · BsAs" online ops={3} />
         </div>
         <Link
@@ -123,6 +218,9 @@ export default function Sidebar({ user, onNavigate }: Props) {
             Cerrar sesión
           </button>
         </form>
+        <div className="mt-3 px-1.5 text-[9px] text-white/30 text-center font-mono tracking-tight">
+          NEXUS · v{PRODUCT.version} · {PRODUCT.edition}
+        </div>
       </div>
     </div>
   );
@@ -139,7 +237,7 @@ function Section({
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40 px-1.5 mb-1">
+      <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40 px-1.5 mb-1">
         {label}
       </div>
       <nav className="flex flex-col gap-0.5">{children}</nav>
@@ -162,11 +260,16 @@ function NavLink({
       onClick={onNavigate}
       className={cn("sidebar-link", active && "active", item.accent && "danger-accent")}
     >
-      <Icon name={item.icon} size={17} />
-      <span className="flex-1">{item.label}</span>
+      <Icon name={item.icon} size={16} />
+      <span className="flex-1 truncate">{item.label}</span>
       {item.count != null && (
-        <span className="text-[11px] font-bold text-white/55 bg-white/10 px-1.5 py-0.5 rounded">
+        <span className="text-[10px] font-bold text-white/55 bg-white/10 px-1.5 py-0.5 rounded tabular-nums">
           {item.count}
+        </span>
+      )}
+      {item.badge && (
+        <span className="text-[9px] font-bold uppercase tracking-wider text-white/70 bg-tops-red/30 border border-tops-red/40 px-1.5 py-0.5 rounded">
+          {item.badge}
         </span>
       )}
     </Link>

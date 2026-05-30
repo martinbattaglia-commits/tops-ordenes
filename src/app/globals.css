@@ -25,11 +25,56 @@
     --status-danger: #c90812;
     --status-info: #214576;
 
+    /* Semantic surface tokens (overridables en .dark) */
+    --bg-page: #f7f8fb;
+    --bg-surface: #ffffff;
+    --bg-surface-alt: #eef1f6;
+    --fg-primary: #0b1220;
+    --fg-secondary: #5a6577;
+    --fg-muted: #8a94a6;
+    --fg-brand: #050555;
+    --fg-link: #214576;
+    --stroke-soft: #dde3ec;
+    --stroke-strong: #c2cad6;
+
     /* Safe area for iOS notch + home indicator */
     --safe-top: env(safe-area-inset-top);
     --safe-bottom: env(safe-area-inset-bottom);
     --safe-left: env(safe-area-inset-left);
     --safe-right: env(safe-area-inset-right);
+
+    color-scheme: light;
+  }
+
+  /* Dark mode — Operating System cockpit aesthetic */
+  :root.dark {
+    --bg-page: #0a0e1c;
+    --bg-surface: #11162a;
+    --bg-surface-alt: #161c33;
+    --fg-primary: #e6e9f2;
+    --fg-secondary: #aab1c2;
+    --fg-muted: #7a8195;
+    --fg-brand: #e6e9f2;
+    --fg-link: #6da3e6;
+    --stroke-soft: #1f2540;
+    --stroke-strong: #2a3252;
+
+    /* Neutral swaps: lo que era #fff en light ahora es surface oscuro */
+    --neutral-50: #11162a;
+    --neutral-100: #161c33;
+    --neutral-200: #1f2540;
+    --neutral-300: #2a3252;
+    --neutral-400: #7a8195;
+    --neutral-500: #aab1c2;
+    --neutral-700: #d4d8e3;
+    --neutral-900: #e6e9f2;
+
+    color-scheme: dark;
+  }
+
+  :root.dark body {
+    background-color: var(--bg-page);
+    color: var(--fg-primary);
   }
 
   html {
@@ -121,7 +166,7 @@
     @apply bg-tops-red text-white hover:opacity-90;
   }
   .btn-ghost {
-    @apply bg-white text-fg-primary border border-stroke-soft hover:bg-neutral-50;
+    @apply bg-bg-surface text-fg-primary border border-stroke-soft hover:bg-neutral-50;
   }
   .btn-link {
     @apply text-fg-link bg-transparent hover:underline px-0 py-0 min-h-0;
@@ -137,7 +182,7 @@
 
   /* ---- Inputs ----------------------------------------------------- */
   .input {
-    @apply block w-full rounded-md border border-stroke-soft bg-white px-3 py-2.5 text-fg-primary;
+    @apply block w-full rounded-md border border-stroke-soft bg-bg-surface px-3 py-2.5 text-fg-primary;
     @apply focus:outline-none focus:border-tops-blue-700 focus:ring-2 focus:ring-tops-blue-700/20;
     @apply transition-colors duration-150;
     min-height: 44px;
@@ -160,7 +205,7 @@
 
   /* ---- Cards ------------------------------------------------------ */
   .card {
-    @apply rounded-lg border border-stroke-soft bg-white shadow-xs;
+    @apply rounded-lg border border-stroke-soft bg-bg-surface shadow-xs;
   }
   .card-pad {
     @apply p-5;
@@ -319,7 +364,7 @@
 
   /* ---- Chips / segmented ------------------------------------------ */
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-md border border-stroke-soft bg-white px-3 py-2 text-sm font-medium;
+    @apply inline-flex items-center gap-1.5 rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm font-medium;
     @apply hover:border-tops-blue-700 transition-colors cursor-pointer;
   }
   .chip.selected {
@@ -346,7 +391,7 @@
     @apply inline-flex items-center justify-center w-5 h-5 rounded-full border border-current text-[10px] font-bold;
   }
   .step-item.active .num {
-    @apply bg-white text-tops-blue-900 border-white;
+    @apply bg-bg-surface text-tops-blue-900 border-white;
   }
   .step-item.done .num {
     @apply bg-status-success text-white border-status-success;
@@ -418,6 +463,135 @@
   }
   body {
     background: white;
+  }
+}
+
+/* =========================================================================
+   NEXUS premium animation layer (GPU-friendly, sin libs externas)
+   ----------------------------------------------------------------------
+   Reglas:
+   · Todo va detrás de prefers-reduced-motion: reduce.
+   · Transform / opacity solamente — nada que dispare layout o repaint pesado.
+   · Easings discretos (no bounce/elastic) — estética enterprise.
+   ========================================================================= */
+
+/* Page-level fade-in para todas las rutas montadas. Se aplica en <main>
+   del shell. Subtle, 220ms — invisible para usuarios apurados pero claro
+   para los detallistas. */
+@keyframes nexus-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.nexus-page-fade {
+  animation: nexus-fade-up 280ms cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+
+/* Hover lift premium para cards. Usá .card-lift en cualquier .card
+   que quieras que reaccione al puntero. No agresivo — 2px + shadow. */
+.card-lift {
+  transition:
+    transform 180ms cubic-bezier(0.25, 0.8, 0.25, 1),
+    box-shadow 180ms cubic-bezier(0.25, 0.8, 0.25, 1),
+    border-color 180ms ease;
+  will-change: transform;
+}
+.card-lift:hover {
+  transform: translate3d(0, -2px, 0);
+  box-shadow: 0 12px 28px -12px rgba(5, 5, 85, 0.18);
+  border-color: rgba(33, 69, 118, 0.25);
+}
+.card-lift:active {
+  transform: translate3d(0, 0, 0);
+}
+
+/* Shimmer corporativo — sweep diagonal para botones primarios y CTAs.
+   No autoplay; sólo en hover para evitar distracción permanente. */
+.btn-shimmer {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.btn-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 70%
+  );
+  transform: translateX(-110%);
+  transition: transform 700ms ease;
+  pointer-events: none;
+}
+.btn-shimmer:hover::after {
+  transform: translateX(110%);
+}
+
+/* Animated counters / KPIs — sutil pulse cada 6s en cifras destacadas. */
+@keyframes nexus-kpi-pulse {
+  0%,
+  88%,
+  100% {
+    text-shadow: none;
+  }
+  92% {
+    text-shadow: 0 0 14px rgba(201, 8, 18, 0.25);
+  }
+}
+.kpi-pulse {
+  animation: nexus-kpi-pulse 6s ease-in-out infinite;
+}
+
+/* Compliance Alert Engine — halo + filas con stagger sutil */
+.ce-engine {
+  position: relative;
+  isolation: isolate;
+}
+.ce-engine .ce-engine-glow {
+  position: absolute;
+  inset: -1px;
+  background: radial-gradient(
+    circle at 80% 0%,
+    rgba(201, 8, 18, 0.06),
+    transparent 60%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+.ce-engine .ce-ring-stroke {
+  transition: stroke-dasharray 700ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.ce-engine .ce-alert-row {
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+.ce-engine .ce-alert-row:hover {
+  transform: translate3d(2px, 0, 0);
+}
+
+/* Drive TOPS — filas con micro-lift y ícono shimmer en hover */
+.drive-row {
+  transition: padding-left 200ms ease, background-color 160ms ease;
+}
+.drive-row:hover {
+  padding-left: calc(1.25rem + 4px);
+}
+
+/* Sidebar nav items — accent bar wipe-in en active/hover */
+@keyframes nexus-bar-wipe {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
   }
 }
 

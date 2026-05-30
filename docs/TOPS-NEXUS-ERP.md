@@ -57,27 +57,43 @@ desconectadas ni lógica duplicada.
 
 ## 5. Modelo de datos — estado actual vs. objetivo
 
-Tablas creadas (migraciones 0001–0011):
+> **Corrección 2026-05-29 (auditoría read-only en vivo):** esta sección fue
+> rectificada contra la DB real. Versiones previas listaban `documents` y las 5
+> tablas ARCA como creadas — **no existen** en la base. Detalle y evidencia en
+> [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md).
 
-`attachments`, `audit_log`, `clients`, `customer_invoices`, `documents`,
-`email_sends`, `fiscal_config`, `invoice_audit`, `invoice_items`, `notifications`,
+**Tablas REALES en `public` (20, verificadas en DB al 2026-05-29):**
+
+`attachments`, `audit_log`, `clients`, `email_sends`, `notifications`,
 `operators`, `order_services`, `orders`, `permissions`, `po_email_sends`,
-`po_events`, `po_items`, `products`, `profiles`, `puntos_venta`,
-`purchase_orders`, `role_permissions`, `roles`, `services_catalog`,
-`user_roles`, `vendors`.
+`po_events`, `po_items`, `products`, `profiles`, `purchase_orders`,
+`role_permissions`, `roles`, `services_catalog`, `user_roles`, `vendors`.
+**Vistas:** `my_permissions`, `v_orders_dashboard`, `vendor_stats`.
+
+**Tablas que la documentación previa daba por creadas pero NO existen:**
+`documents` (0010 sin aplicar) · `customer_invoices`, `invoice_items`,
+`fiscal_config`, `puntos_venta`, `invoice_audit` (0011 sin aplicar).
+
+**Migraciones — estado efectivo (al 2026-05-29, post FASE 1):** `0001–0009`
+aplicadas y **registradas en el tracker** `schema_migrations` (reconciliado vía
+`supabase migration repair`, **PARIDAD-3 cerrada**); **`0010` y `0011` NO
+aplicadas**. El SQL de `0008`/`0009`/`0010` ya está en `main` (**PARIDAD-1
+cerrada**, HEAD `b82a5f2`). Sigue **prohibido `supabase db push`**: ahora
+intentaría aplicar `0010`/`0011` como DDL real (ver
+[ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md) §7.5).
 
 | Objetivo (charter)   | Estado | Mapea a |
 |----------------------|--------|---------|
 | clients              | ✅ | `clients` |
 | providers            | ✅ | `vendors` |
 | service_orders       | ✅ | `orders` + `order_services` |
-| customer_invoices    | ✅ | `customer_invoices` + `invoice_items` |
-| invoice_items        | ✅ | `invoice_items` |
-| users / roles        | ✅ | `profiles` + `user_roles` + `roles` + `permissions` |
-| audit_logs           | ✅ | `audit_log` (+ `invoice_audit`) |
-| documents            | ✅ | `documents` + `attachments` |
+| customer_invoices    | ❌ | — (0011 **NO aplicada** en DB) |
+| invoice_items        | ❌ | — (0011 **NO aplicada** en DB) |
+| users / roles        | ✅ | `profiles` + `user_roles` (0 filas) + `roles` + `permissions` |
+| audit_logs           | ✅ | `audit_log` (`invoice_audit` ausente, 0011) |
+| documents            | ❌ | solo `attachments`; `documents` ausente (0010 **NO aplicada**) |
 | notifications        | ✅ | `notifications` |
-| settings             | 🟡 | `fiscal_config` (falta settings general) |
+| settings             | ❌ | `fiscal_config` ausente (0011); sin settings general |
 | **supplier_invoices**| ❌ | — (Fase 3) |
 | **cost_centers**     | ❌ | — (Fase 3) |
 | **payments**         | ❌ | — (Fase 4) |
@@ -91,23 +107,32 @@ Tablas creadas (migraciones 0001–0011):
 | Fase | Alcance | Estado |
 |------|---------|--------|
 | **1. Operaciones** | OC de servicio, operadores, catálogo de servicios | ✅ existe — optimizar; faltan `warehouses`/`storage_contracts`/`transport_orders` formales |
-| **2. Facturación ARCA** | WSAA/WSFEv1, CAE, QR, PDF fiscal, config, puntos de venta | ✅ completo (SANDBOX/Mock; PRODUCCIÓN bloqueada sin cert) |
+| **2. Facturación ARCA** | WSAA/WSFEv1, CAE, QR, PDF fiscal, config, puntos de venta | 🟡 **código completo, NO operativo** — migración `0011` **no aplicada**: las 5 tablas ARCA no existen en DB ⇒ `/billing` y `/settings/fiscal` fallan en runtime. PRODUCCIÓN además bloqueada sin cert. |
 | **3. Proveedores** | Cargar/aprobar/pagar/auditar facturas; centro de costo, categoría contable, responsable | 🟡 parcial — `vendors` + `purchase_orders`/`po_items` ✓; **faltan `supplier_invoices` + `cost_centers`** |
 | **4. Tesorería** | Caja, bancos, transferencias, cobranzas, pagos, cheques, flujo de fondos; KPIs saldo/proyección/deuda/cobranza | ❌ ausente |
 | **5. Cuentas Corrientes** | Saldos y mora de clientes y proveedores | ❌ ausente |
 | **6. Inteligencia de Negocio** | Dashboard corporativo | 🟡 parcial — `ejecutivo`/`reports` existen |
 | **7. Integraciones** | Clientify, Google Workspace, WhatsApp, WMS, Hikvision, migración Neuralsoft | 🟡 parcial — código Clientify/Drive/WhatsApp/Hikvision presente; migración Neuralsoft pendiente |
 
-> **Migración 0011 (ARCA):** pendiente de aplicar en producción. Revisión
-> detallada de qué crea/modifica en [migracion-0011-arca-revision.md](./migracion-0011-arca-revision.md).
+> **Migraciones 0010 (documents) y 0011 (ARCA):** ambas **NO aplicadas** en la DB
+> real (verificado 2026-05-29). `/documental` no persiste y `/billing` + `/settings/fiscal`
+> fallan en runtime contra la DB. Revisión de 0011 en
+> [migracion-0011-arca-revision.md](./migracion-0011-arca-revision.md); evidencia del
+> estado real en [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md).
 
 ## 7. Próximo incremento recomendado
 
-**Completar Fase 3 — Proveedores:** agregar `supplier_invoices` + `cost_centers`
-(migración 0012) y el módulo asociado. Es el eslabón que conecta las
-`purchase_orders` existentes con la Tesorería (Fase 4): una factura de proveedor
-aprobada genera una obligación de pago. Cada factura se asocia a centro de costo,
-categoría contable y responsable, con auditoría e inmutabilidad lógica.
+**FASE 2 — Módulo Documents (migración `0010`).** Prioridad estratégica vigente
+(post FASE 1.5): el código y la migración `0010` ya están versionados en `main`
+pero **NO aplicados** en DB. La próxima fase es **solo diagnóstico, arquitectura,
+riesgos y plan de implementación** del Módulo Documents — sin ejecutar la migración,
+sin `db push`, con backup previo (RP6) e idempotencia endurecida como pre-requisitos.
+**ARCA (`0011`) no avanza hasta cerrar Documents.** Detalle en
+[ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md](./ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md).
+
+> _Diferido_ — Fase 3 Proveedores (`supplier_invoices` + `cost_centers`, migración
+> `0012`): conecta las `purchase_orders` con Tesorería. Queda **postergada** detrás
+> de Documents y ARCA según la prioridad estratégica del charter.
 
 ## 8. Modo de trabajo
 
@@ -117,3 +142,23 @@ pedir confirmación salvo bloqueo técnico real. **Excepción:** el `full push` 
 producción / deploy con impacto fiscal real requiere confirmación explícita por
 el blast radius (ERP en vivo). Migraciones nuevas no se aplican al Supabase remoto
 sin confirmación.
+
+## 9. Módulos oficiales (10) y documentos de arquitectura
+
+TOPS Nexus se compone de **10 módulos Core**: (1) CRM/Clientes, (2) Operaciones,
+(3) Compras, (4) Documentos/Drive, (5) Facturación ARCA, (6) Tesorería,
+(7) Cuentas Corrientes, (8) Centros de Costo, (9) ANMAT y **(10) CCTV y Monitoreo
+Operativo** — este último **elevado oficialmente de integración satélite a módulo
+nativo** (evidencia visual auditable + insumo de compliance ANMAT).
+
+Documentación de arquitectura y consolidación (gobernada por este rector):
+
+- [ERP-FASE0-GOBERNANZA-DB.md](./ERP-FASE0-GOBERNANZA-DB.md) — **FASE 0: gobernanza y trazabilidad de DB**: causa raíz de PARIDAD-3 (bootstrap sin tracker), matriz completa de migraciones (disco/tracker/manual/no-aplicada), estrategia de sincronización segura (`migration repair`) y riesgos de `db push`/migraciones/deploys.
+- [ERP-FASE1-PARIDAD.md](./ERP-FASE1-PARIDAD.md) — **FASE 1: cierre de PARIDAD-1/2/3** con registro de ejecución de GATE A (merge a main + deploy) y GATE B (`migration repair`), verificación previa/posterior y rollback.
+- [ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md](./ERP-FASE15-CONSOLIDACION-DOCUMENTAL.md) — **FASE 1.5: consolidación documental final** — paridad Código↔Migraciones↔DB↔Documentación y módulos autorizados para FASE 2.
+- [ERP-AUDITORIA-SUPABASE-2026-05-29.md](./ERP-AUDITORIA-SUPABASE-2026-05-29.md) — **auditoría read-only en vivo de la DB**: migraciones aplicadas, tablas/columnas reales, RBAC, buckets, paridad definitiva y plan de remediación PARIDAD-1.
+- [ERP-CONSOLIDACION-DEFINITIVA.md](./ERP-CONSOLIDACION-DEFINITIVA.md) — informe capstone: paridad, divergencia y clasificación main/branch/eliminar/Core.
+- [ERP-ARQUITECTURA-MAESTRA.md](./ERP-ARQUITECTURA-MAESTRA.md) — vista única de los 10 módulos.
+- [ERP-MODULO-CCTV.md](./ERP-MODULO-CCTV.md) — incorporación oficial del módulo CCTV.
+- [ERP-ROADMAP-12-MESES.md](./ERP-ROADMAP-12-MESES.md) — plan 2026-06 → 2027-05.
+- Auditoría base: [ERP-MODULE-MAP.md](./ERP-MODULE-MAP.md) · [ERP-DEPENDENCY-GRAPH.md](./ERP-DEPENDENCY-GRAPH.md) · [RBAC-ARCHITECTURE.md](./RBAC-ARCHITECTURE.md) · [erp-arquitectura-objetivo.md](./erp-arquitectura-objetivo.md) · [ERP-INFORME-EJECUTIVO-RIESGOS.md](./ERP-INFORME-EJECUTIVO-RIESGOS.md).

@@ -38,16 +38,29 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  // Rutas estrictamente públicas. Cuidado al agregar nuevas: cualquier ruta acá
+  // queda accesible sin sesión y puede leakear datos sensibles del Drive
+  // corporativo, CRM, CCTV, etc.
+  //
+  // Política:
+  //   · /login                       → form público de inicio de sesión
+  //   · /api/auth/*                  → callbacks de Supabase (login/logout)
+  //   · /api/whatsapp/webhook        → Meta firma y postea acá (sin cookies)
+  //   · /api/clientify/webhook       → Clientify firma con HMAC y postea acá
+  //   · /compras/validar/<publicId>  → QR público que valida OC firmadas
+  //   · assets estáticos             → _next, icons, fonts, manifest, sw, favicon
+  //
+  // TODO el resto (incluido /drive, /api/drive/*, /api/cctv/*, /api/clientify/{ping,sync-deals},
+  // /api/whatsapp/{ping,send}, /api/compras/*, /api/orders/*, /api/invoices/*) requiere
+  // sesión válida — fueron movidos a privado el 2026-05-29 tras el DRIVE-PREFLIGHT-AUDIT
+  // que detectó exposición pública del browser de Drive.
   const isPublic =
     pathname === "/login" ||
     pathname === "/auth/forgot-password" ||
     pathname === "/auth/reset-password" ||
-    pathname === "/drive" ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/clientify") ||
-    pathname.startsWith("/api/cctv") ||
-    pathname.startsWith("/api/whatsapp") ||
-    pathname.startsWith("/api/drive") ||
+    pathname === "/api/whatsapp/webhook" ||
+    pathname === "/api/clientify/webhook" ||
     pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
@@ -57,6 +70,14 @@ export async function updateSession(request: NextRequest) {
     pathname === "/favicon.ico";
 
   if (!user && !isPublic) {
+    // APIs: 401 JSON (no redirect — el fetch del cliente espera JSON parseable).
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json(
+        { ok: false, error: "Auth required" },
+        { status: 401 }
+      );
+    }
+    // Páginas: redirect a /login con query `from` para volver luego.
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("from", pathname);
