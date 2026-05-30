@@ -37,16 +37,6 @@ export const LOCATIONS: LocationStatus[] = [
     online: true,
   },
   {
-    id: "barracas",
-    name: "Barracas",
-    address: "Av. Vélez Sarsfield · CABA",
-    tag: "General",
-    occupancyPct: null,
-    m2: 5400,
-    activeOps: null,
-    online: true,
-  },
-  {
     id: "lujan",
     name: "Pedro de Luján",
     address: "Pedro de Luján 3159 · CABA",

@@ -52,7 +52,7 @@ export default function MapaOperativoPage() {
           <div>
             <div className="text-sm font-bold text-fg-primary">Locaciones en CABA</div>
             <div className="text-[11px] text-fg-secondary mt-0.5">
-              Magaldi · Barracas · Pedro de Luján
+              Magaldi · Pedro de Luján
             </div>
           </div>
         </div>
@@ -69,7 +69,7 @@ export default function MapaOperativoPage() {
             Ocupación y operaciones activas pendientes de integración con sondas IoT y entrada operativa.
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5">
           {LOCATIONS.map((loc) => (
             <div key={loc.id} className="card card-lift p-5">
               <div className="flex items-start justify-between gap-3">

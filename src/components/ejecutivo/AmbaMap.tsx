@@ -3,22 +3,20 @@
 import { LOCATIONS, type LocationStatus } from "@/lib/ejecutivo/locations";
 
 /**
- * Mapa estilizado de CABA con las 3 locaciones operativas de TOPS.
+ * Mapa estilizado de CABA con las 2 locaciones operativas de TOPS.
  *
  * Coordenadas geográficas reales (lat/lng) → traducidas linealmente al viewBox
  * SVG. No es cartográfico: el objetivo es comunicar presencia urbana con
  * precisión relativa entre sedes, no precisión sub-cuadra.
  *
  *  · Magaldi:        Agustín Magaldi 1765 · Barracas, CABA  (~ -34.6443, -58.3781)
- *  · Barracas:       Av. Vélez Sarsfield · CABA              (~ -34.6446, -58.3795)
  *  · Pedro de Luján: Pedro de Luján 3159 · CABA              (~ -34.6447, -58.4625)
  *
- * Las 3 están en Capital Federal — no hay sedes en Provincia.
+ * Ambas están en Capital Federal — no hay sedes en Provincia.
  */
 
 const PINS: Record<string, { x: number; y: number }> = {
   magaldi: { x: 380, y: 215 },
-  barracas: { x: 365, y: 240 },
   lujan: { x: 296, y: 225 },
 };
 
@@ -75,7 +73,7 @@ export function AmbaMap({ locations = LOCATIONS }: { locations?: LocationStatus[
       </text>
 
       {/* Eje corredor sur (Av. Sáenz / Vélez Sarsfield / Av. Eva Perón) que conecta
-          Pedro de Luján con Barracas/Magaldi — todo dentro de Capital. */}
+          Pedro de Luján con Magaldi — todo dentro de Capital. */}
       <path
         d={`M ${PINS.lujan.x} ${PINS.lujan.y} Q ${(PINS.lujan.x + PINS.magaldi.x) / 2} ${PINS.lujan.y + 28} ${PINS.magaldi.x} ${PINS.magaldi.y}`}
         fill="none"
@@ -99,10 +97,8 @@ export function AmbaMap({ locations = LOCATIONS }: { locations?: LocationStatus[
         if (!pin) return null;
         const color =
           loc.tag === "ANMAT" ? "#C90812" : loc.tag === "General" ? "#050555" : "#214576";
-        // Magaldi y Barracas están muy cerca (mismo barrio) — desplazo label de Barracas
-        // hacia abajo para evitar superposición.
-        const labelOffsetY = loc.id === "barracas" ? 26 : -14;
-        const subOffsetY = loc.id === "barracas" ? 38 : 22;
+        const labelOffsetY = -14;
+        const subOffsetY = 22;
         return (
           <g key={loc.id}>
             <circle cx={pin.x} cy={pin.y} r={16} fill={color} opacity={0.15}>
