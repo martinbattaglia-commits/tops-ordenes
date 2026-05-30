@@ -1,6 +1,11 @@
 # OCR de Facturas de Proveedor (F2) — Plan de pruebas con documentos reales
 
-> **Estado:** código commiteado local (`fbda299`), **sin push ni deploy**.
+> **Estado:** código commiteado local hasta `e880cec`, **sin push ni deploy**.
+> **Actualización `e880cec`:** los **PDFs escaneados** (sin capa de texto) ahora
+> entran por el camino **`pdf_image`** — se rasteriza la primera página a PNG
+> (pdfjs-dist + @napi-rs/canvas) y se manda al mismo pipeline Vision que las
+> imágenes, con idéntico esquema JSON y mapper OCR→Factura. Antes terminaban en
+> 422; ese 422 ahora es solo el fallback best-effort (PDF cifrado/corrupto).
 > **Decisión pendiente:** una vez validado contra facturas reales, se decide push + deploy + aplicar migración `0015`.
 
 ---
@@ -25,12 +30,23 @@ proveedores, los 7 campos críticos para Cuentas por Pagar:
 
 ---
 
-## 2. Preparación del entorno (modo prueba, sin tocar producción)
+## 2. Requisitos: validación LOCAL vs go-live
 
-> El `.env.local` apunta a la Supabase **de producción**, así que las pruebas se
-> corren con `DEMO_MODE` para que **NO se escriba nada en la base**: el OCR llama
-> a OpenAI de verdad, pero el "Confirmar y guardar" devuelve un id sintético sin
-> INSERT. Es seguro para producción.
+Los requisitos de la **validación local** (lo que hacemos ahora) son distintos y
+mucho menores que los del **go-live a producción**. No mezclar.
+
+| Requisito | Validación LOCAL (ahora) | Go-live (después del Go) |
+|---|---|---|
+| `OPENAI_API_KEY` | ✅ **Ya está** en `.env.local` y funcionando — no hay que cargar nada | ⏳ Cargar en **Netlify** (no está en prod) |
+| Migración `0015` (bucket `supplier-invoices`) | ❌ **No hace falta** — en DEMO_MODE el adjunto es best-effort y se saltea; no se persiste nada | ⏳ Aplicar en Supabase para conservar el PDF original |
+| DEMO_MODE | ✅ `NEXT_PUBLIC_DEMO_MODE=1` (ya definido en `.env.local`) | ❌ Off en producción |
+| Facturas reales | ✅ 3–5 comprobantes (ver sección 4) | — |
+
+> **Por qué es seguro:** el `.env.local` apunta a la Supabase **de producción**,
+> pero con `DEMO_MODE` el OCR llama a OpenAI de verdad y el "Confirmar y guardar"
+> devuelve un id sintético **sin INSERT** ni escritura de adjunto. No toca la base.
+
+### Levantar el entorno de prueba
 
 ```bash
 cd ~/CODE/tops-ordenes
@@ -42,7 +58,7 @@ curl -s -o /dev/null -w "dev:%{http_code}\n" http://localhost:3030/
 ```
 
 - **UI:** http://localhost:3030/compras/facturas/nueva
-- **Requisito:** `OPENAI_API_KEY` cargada en `.env.local` (ya está y funcionando).
+- **Confirmar:** que `NEXT_PUBLIC_DEMO_MODE=1` en `.env.local` (para no escribir en la base de producción).
 
 ### Juntar los documentos
 Dejar las facturas reales en una carpeta, p. ej. `~/CODE/facturas-test/`:
@@ -84,9 +100,12 @@ curl -s -X POST http://localhost:3030/api/documental/ocr \
 
 Marcar con una factura real cada escenario. Cuantos más cubra, mejor.
 
-- [ ] **Factura A** digital (PDF con texto) — caso más común
+- [ ] **Factura A** digital (PDF con texto) — caso más común, camino `pdf_text`
 - [ ] **Factura B** o **C** (consumidor final / monotributo)
-- [ ] **Factura escaneada / foto** (sin capa de texto → camino Vision)
+- [ ] 🔴 **CRÍTICO — PDF escaneado** (PDF sin capa de texto → camino **`pdf_image`**,
+      código nuevo de `e880cec`). Verificar que rasterice la 1ª página y que
+      **PV, Número y CAE** salgan bien (es lo que el camino Vision podía perder).
+- [ ] **Foto / imagen directa** (JPG/PNG → camino `image`)
 - [ ] Proveedor **que SÍ está en la base** (debería matchear por CUIT → "Alta")
 - [ ] Proveedor **que NO está en la base** (debería mostrar "Revisar" + nombre detectado)
 - [ ] Con **percepciones** (IIBB / ganancias) además de IVA
@@ -141,6 +160,9 @@ Incidencias / ajustes sugeridos:
       (`neto + iva + percepciones ≈ total`, tolerancia ±1%) en **≥ 95%**.
 - [ ] **Cero falsos "Alta"** en campos que en realidad estaban mal
       (más grave que un "Revisar" de más).
+- [ ] **PDF escaneado (`pdf_image`)**: al menos un comprobante escaneado real
+      procesa por Vision y devuelve **PV, Número y CAE** correctos. Si el render
+      falla, cae al **422 + carga manual** sin romper (best-effort).
 - [ ] El flujo nunca rompe: documento ilegible / no soportado → mensaje claro y
       **se puede cargar a mano** igual.
 - [ ] Ningún documento provoca error 500 en `/api/documental/ocr`.
@@ -152,9 +174,13 @@ Incidencias / ajustes sugeridos:
 
 ## 7. Casos borde a vigilar (aprendido en la muestra sintética)
 
-- **Punto de venta y CAE en fotos**: el camino Vision no deja texto bruto; por eso
-  se agregó el bloque discreto `comprobante`. Confirmar que en facturas
-  **escaneadas reales** el PV y el CAE siguen saliendo bien.
+- **Punto de venta y CAE en fotos y PDFs escaneados**: ambos van por Vision
+  (`image` y `pdf_image`), que no deja texto bruto; por eso se agregó el bloque
+  discreto `comprobante`. Confirmar que tanto en **fotos** como en **PDFs
+  escaneados reales** el PV y el CAE siguen saliendo bien.
+- **PDF escaneado multipágina**: el camino `pdf_image` rasteriza **solo la
+  primera página** (los datos fiscales caben en una carilla). Si una factura
+  escaneada tuviera datos críticos en la página 2, anotarlo como caso a evaluar.
 - **Separadores de miles AR** (`1.234.567,89`): debe quedar como número
   `1234567.89`, no `1.234`.
 - **Múltiples alícuotas de IVA**: hoy se toma el `kind="iva"`; si la factura trae
