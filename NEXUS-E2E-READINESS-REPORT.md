@@ -218,10 +218,10 @@ El ERP **puede operar Compras + Documental + Comercial + WhatsApp + Drive** desd
 | **Estado** | 🟢 **FUNCIONAL** |
 | **Library** | `src/lib/drive/client.ts` (356 líneas) — usa `googleapis` v3 con Service Account |
 | **API real** | `drive.files.list`, `drive.files.create`, `drive.files.get`, `drive.permissions` |
-| **Auth** | Service Account JSON o key separada (`GOOGLE_SERVICE_ACCOUNT_JSON` o `GOOGLE_CLIENT_EMAIL` + `GOOGLE_PRIVATE_KEY`) |
+| **Auth** | Service Account JSON (`GOOGLE_SERVICE_ACCOUNT_JSON`) — scopes `drive.readonly` + `drive.file` |
 | **Páginas** | `/drive` (DriveBrowser), `/compras/drive` (sync de OCs) |
 | **API routes** | `/api/drive/list`, `/api/drive/ping` |
-| **Env vars Netlify** | ✅ `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_DRIVE_FOLDER_ID`, `GOOGLE_DRIVE_ROOT_FOLDER_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` |
+| **Env vars Netlify** | `GOOGLE_SERVICE_ACCOUNT_JSON` (JSON completo de la SA) + `GOOGLE_DRIVE_ROOT_FOLDER_ID` |
 | **Riesgo** | 🟢 Bajo — Google Drive API maduro |
 | **Pendiente** | Posible que requiera compartir folder con service account email |
 
