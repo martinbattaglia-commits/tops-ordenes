@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { PoStatusBadge } from "@/components/compras/PoStatusBadge";
 import { AmbaMap } from "@/components/ejecutivo/AmbaMap";
+import { TodayStrip } from "@/components/ejecutivo/TodayStrip";
 import { getCockpitData, type ActivityFeedItem, type CockpitKpi } from "@/lib/ejecutivo/data";
 import { fmtCurrency, truncate } from "@/lib/compras/format";
 import { ORG, PRODUCT } from "@/lib/org";
@@ -47,6 +48,9 @@ export default async function CockpitPage() {
           </div>
         </div>
       </section>
+
+      {/* Información del día — contexto ejecutivo (fecha/hora/clima) */}
+      <TodayStrip />
 
       {/* KPI Grid */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
