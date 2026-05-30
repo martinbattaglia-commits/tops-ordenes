@@ -36,6 +36,13 @@ const DOMAINS: Domain[] = [
     ],
   },
   {
+    id: "workspace",
+    label: "Google Workspace",
+    items: [
+      { href: "/workspace", label: "Accesos Google", icon: "google" },
+    ],
+  },
+  {
     id: "compras",
     label: "Compras · Proveedores",
     items: [
@@ -62,6 +69,7 @@ const DOMAINS: Domain[] = [
     items: [
       { href: "/comercial/contactos", label: "Contactos", icon: "users", badge: "Clientify" },
       { href: "/comercial/pipeline", label: "Pipeline", icon: "trend-up", badge: "Clientify" },
+      { href: "/comercial/herramientas", label: "Herramientas", icon: "bolt" },
     ],
   },
   {
@@ -87,13 +95,6 @@ const DOMAINS: Domain[] = [
       { href: "/billing", label: "Facturación", icon: "bill" },
       { href: "/compras/drive", label: "Drive sync", icon: "drive" },
       { href: "/compras/email", label: "Plantilla email", icon: "mail" },
-    ],
-  },
-  {
-    id: "workspace",
-    label: "Google Workspace",
-    items: [
-      { href: "/workspace", label: "Accesos Google", icon: "google" },
     ],
   },
   {
@@ -137,6 +138,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/workspace",
       "/comercial/contactos",
       "/comercial/pipeline",
+      "/comercial/herramientas",
       "/settings",
       "/settings/roles",
       "/settings/users",
@@ -196,7 +198,6 @@ export default function Sidebar({ user, onNavigate }: Props) {
         </div>
         <div className="flex flex-col gap-1.5 mb-3">
           <DepotPing name="Magaldi · ANMAT" online ops={6} />
-          <DepotPing name="Barracas · General" online ops={4} />
           <DepotPing name="Luján · BsAs" online ops={3} />
         </div>
         <Link

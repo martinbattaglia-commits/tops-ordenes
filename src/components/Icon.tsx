@@ -67,6 +67,7 @@ export type IconName =
   | "folder"
   | "users"
   | "google"
+  | "calculator"
   | "sun"
   | "moon";
 
@@ -553,6 +554,14 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
           <path d="M12 21c2.4 0 4.5-.8 6-2.2l-3.1-2.4c-.9.6-2 .9-2.9.9-2.2 0-4.2-1.5-4.8-3.6H4v2.4A9 9 0 0 0 12 21Z" />
           <path d="M7.2 13.7a5.4 5.4 0 0 1 0-3.4V7.9H4a9 9 0 0 0 0 8.2l3.2-2.4Z" />
           <path d="M12 6.6c1.3 0 2.4.5 3.3 1.3l2.5-2.5A9 9 0 0 0 4 7.9l3.2 2.4C7.8 8.1 9.8 6.6 12 6.6Z" />
+        </svg>
+      );
+    case "calculator":
+      return (
+        <svg {...common}>
+          <rect x="5" y="3" width="14" height="18" rx="2" />
+          <path d="M8 7h8" />
+          <path d="M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h.01M12 19h.01M16 19h.01" />
         </svg>
       );
     case "sun":
