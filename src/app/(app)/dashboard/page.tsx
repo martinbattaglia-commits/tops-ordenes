@@ -5,8 +5,10 @@ import { Sparkline } from "@/components/charts/Sparkline";
 import { DepotChart } from "@/components/charts/DepotChart";
 import { ServiceMixDonut } from "@/components/charts/ServiceMixDonut";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
+import { CountUp } from "@/components/CountUp";
+import { OperationalStatus } from "@/components/dashboard/OperationalStatus";
 import { getDashboardKpis, listRecentOrders } from "@/lib/data/orders";
-import { fmtCurrency, monthName } from "@/lib/utils";
+import { monthName } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard" };
 
@@ -16,7 +18,7 @@ export default async function DashboardPage() {
   const greeting = greetingFor(now);
 
   return (
-    <div className="p-4 lg:p-8">
+    <div className="p-4 lg:p-8 nx-page-fade">
       <RealtimeRefresher />
       <div className="page-header">
         <div>
@@ -25,13 +27,14 @@ export default async function DashboardPage() {
           <p className="page-subtitle">
             {kpis.byDepot.reduce((a, b) => a + b.count, 0)} órdenes gestionadas. Magaldi y Luján operando.
           </p>
+          <OperationalStatus byDepot={kpis.byDepot} />
         </div>
         <div className="flex gap-2">
           <button className="btn btn-ghost btn-sm">
             <Icon name="export" size={14} />
             <span className="hidden sm:inline">Exportar mes</span>
           </button>
-          <Link href="/orders/new" className="btn btn-primary btn-sm">
+          <Link href="/orders/new" className="btn btn-primary btn-sm nx-cta">
             <Icon name="plus" size={14} stroke={2.2} />
             <span>Nueva orden</span>
           </Link>
@@ -39,20 +42,20 @@ export default async function DashboardPage() {
       </div>
 
       <div className="kpi-grid">
-        <Kpi label="Órdenes del mes" value={kpis.ordersThisMonth.toString()} delta={kpis.ordersDelta} spark={[12,14,11,16,15,17,20,18,22,24,28,32]} />
-        <Kpi label="Horas operativas" value={kpis.hours.toLocaleString("es-AR")} unit="hs" delta={kpis.hoursDelta} spark={[20,22,21,28,26,29,32,28,34,38,40,44]} />
-        <Kpi label="Facturación proyectada" value={fmtCurrency(kpis.revenueProjection)} delta={kpis.revenueDelta} spark={[10,12,14,16,18,21,24,28,30,34,38,42]} accent />
-        <Kpi label="Firma digital" value={kpis.signatureRate.toFixed(1).replace(".", ",")} unit="%" delta={kpis.signatureDelta} spark={[88,89,90,91,92,93,94,95,96,96,97,97]} />
+        <Kpi index={0} label="Órdenes del mes" countTo={kpis.ordersThisMonth} countFormat="int" delta={kpis.ordersDelta} spark={[12,14,11,16,15,17,20,18,22,24,28,32]} />
+        <Kpi index={1} label="Horas operativas" countTo={kpis.hours} countFormat="int" unit="hs" delta={kpis.hoursDelta} spark={[20,22,21,28,26,29,32,28,34,38,40,44]} />
+        <Kpi index={2} label="Facturación proyectada" countTo={kpis.revenueProjection} countFormat="currency" delta={kpis.revenueDelta} spark={[10,12,14,16,18,21,24,28,30,34,38,42]} accent />
+        <Kpi index={3} label="Firma digital" value={kpis.signatureRate.toFixed(1).replace(".", ",")} unit="%" delta={kpis.signatureDelta} spark={[88,89,90,91,92,93,94,95,96,96,97,97]} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mt-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mt-4 nx-stagger" style={{ animationDelay: "160ms" }}>
         <DepotChart magaldi={kpis.series30d.magaldi} lujan={kpis.series30d.lujan} />
         <ServiceMixDonut items={kpis.serviceMix} total={kpis.ordersThisMonth} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mt-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mt-4 nx-stagger" style={{ animationDelay: "220ms" }}>
         {/* Últimas órdenes */}
-        <div className="card">
+        <div className="card nx-surface">
           <div className="flex items-end justify-between p-5 border-b border-stroke-soft">
             <div>
               <div className="text-base font-bold text-fg-brand">Últimas órdenes</div>
@@ -76,7 +79,7 @@ export default async function DashboardPage() {
               </thead>
               <tbody>
                 {recent.map((o) => (
-                  <tr key={o.id}>
+                  <tr key={o.id} className="nx-row">
                     <td>
                       <Link href={`/orders/${o.public_id}`} className="order-num">
                         {o.public_id}
@@ -112,7 +115,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Top clientes */}
-        <div className="card">
+        <div className="card nx-surface">
           <div className="p-5 border-b border-stroke-soft">
             <div className="text-base font-bold text-fg-brand">Clientes más activos</div>
             <div className="text-xs text-fg-secondary mt-0.5">Por órdenes en lo que va del mes</div>
@@ -156,24 +159,33 @@ export default async function DashboardPage() {
 function Kpi({
   label,
   value,
+  countTo,
+  countFormat,
   unit,
   delta,
   spark,
   accent,
+  index = 0,
 }: {
   label: string;
-  value: string;
+  value?: string;
+  countTo?: number;
+  countFormat?: "int" | "currency";
   unit?: string;
   delta?: string;
   spark?: number[];
   accent?: boolean;
+  index?: number;
 }) {
   const up = delta?.startsWith("+");
   return (
-    <div className={`card kpi ${accent ? "featured-stroke" : ""}`}>
+    <div
+      className={`card kpi nx-surface nx-stagger ${accent ? "featured-stroke" : ""}`}
+      style={{ animationDelay: `${index * 40}ms` }}
+    >
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">
-        {value}
+        {countTo != null && countFormat ? <CountUp to={countTo} format={countFormat} /> : value}
         {unit && <span className="unit">{unit}</span>}
       </div>
       {delta && (

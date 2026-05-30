@@ -842,8 +842,31 @@
   .gws-stagger,
   .nx-stagger,
   .gws-shine::after,
-  .nx-shine::after {
+  .nx-shine::after,
+  .nx-live-dot {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Estado operativo · punto vivo discreto (status, no decorativo). Respira suave;
+   verde = operando. Estático bajo prefers-reduced-motion. */
+@keyframes nexus-live-breathe {
+  0%,
+  100% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0);
+  }
+}
+.nx-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #22c55e;
+  animation: nexus-live-breathe 2400ms var(--nx-ease-out) infinite;
 }
