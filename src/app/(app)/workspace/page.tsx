@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { CountUp } from "@/components/CountUp";
 import { ORG, PRODUCT } from "@/lib/org";
 
 export const metadata = { title: "Google Workspace" };
@@ -139,14 +140,14 @@ function GeminiLogo() {
   return (
     <svg viewBox="0 0 24 24" width="32" height="32" aria-hidden="true">
       <defs>
-        <linearGradient id="gws-gemini" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+        <linearGradient id="nx-gemini" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#4285f4" />
           <stop offset="0.5" stopColor="#9b72cb" />
           <stop offset="1" stopColor="#d96570" />
         </linearGradient>
       </defs>
       <path
-        fill="url(#gws-gemini)"
+        fill="url(#nx-gemini)"
         d="M12 0c0 6.627-5.373 12-12 12 6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"
       />
     </svg>
@@ -481,13 +482,13 @@ export default function WorkspacePage() {
           {/* Estado de integración */}
           <div className="mt-6">
             <div className="eyebrow-tiny mb-2">Estado de integración</div>
-            <div className="gws-shine flex flex-wrap gap-2 rounded-xl border border-stroke-soft bg-bg-surface/60 p-2">
+            <div className="nx-shine flex flex-wrap gap-2 rounded-xl border border-stroke-soft bg-bg-surface/60 p-2">
               {INTEGRATION.map((it) => (
                 <div
                   key={it.label}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg-surface border border-stroke-soft"
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${toneDot(it.tone)}`} />
+                  <span className={it.tone === "ok" ? "nx-live-dot" : `w-1.5 h-1.5 rounded-full ${toneDot(it.tone)}`} />
                   <span className="text-[12px] font-semibold text-fg-primary">{it.label}</span>
                   <span className="text-[11px] text-fg-secondary">· {it.status}</span>
                 </div>
@@ -507,7 +508,7 @@ export default function WorkspacePage() {
             </p>
           </div>
           <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Abren Google
+            <span className="nx-live-dot" /> Abren Google
           </span>
         </div>
 
@@ -521,16 +522,16 @@ export default function WorkspacePage() {
               aria-label={`Abrir ${tool.name} en una pestaña nueva`}
               style={
                 {
-                  "--gws-accent": tool.accent,
-                  "--gws-glow": tool.glow,
-                  "--gws-border": tool.border,
+                  "--nx-accent": tool.accent,
+                  "--nx-glow": tool.glow,
+                  "--nx-border": tool.border,
                   animationDelay: `${i * 55}ms`,
                 } as CSSProperties
               }
-              className="gws-card gws-clickable gws-stagger card p-5 flex flex-col gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
+              className="nx-interactive nx-stagger card p-5 flex flex-col gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="gws-icon-tile w-14 h-14 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+                <div className="nx-icon-tile w-14 h-14 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
                   {tool.logo}
                 </div>
                 <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">
@@ -557,14 +558,14 @@ export default function WorkspacePage() {
           aria-label="Explorar Drive Corporativo dentro de TOPS Nexus"
           style={
             {
-              "--gws-accent": "rgba(255,186,0,0.30)",
-              "--gws-glow": "rgba(255,186,0,0.38)",
-              "--gws-border": "rgba(255,186,0,0.50)",
+              "--nx-accent": "rgba(255,186,0,0.30)",
+              "--nx-glow": "rgba(255,186,0,0.38)",
+              "--nx-border": "rgba(255,186,0,0.50)",
             } as CSSProperties
           }
-          className="gws-card gws-clickable card group mt-1 flex items-center gap-4 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
+          className="nx-interactive card group mt-1 flex items-center gap-4 p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
         >
-          <div className="gws-icon-tile w-12 h-12 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+          <div className="nx-icon-tile w-12 h-12 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
             <DriveLogo />
           </div>
           <div className="min-w-0 flex-1">
@@ -608,9 +609,9 @@ export default function WorkspacePage() {
               rel="noopener noreferrer"
               aria-label={`Abrir ${link.label} en una pestaña nueva`}
               style={{ animationDelay: `${i * 35}ms` } as CSSProperties}
-              className="gws-card gws-clickable gws-stagger card p-3.5 flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
+              className="nx-interactive nx-stagger card p-3.5 flex items-center gap-3 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
             >
-              <span className="gws-icon-tile w-9 h-9 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center text-tops-blue-700">
+              <span className="nx-icon-tile w-9 h-9 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center text-tops-blue-700">
                 <Icon name={link.icon} size={16} />
               </span>
               <span className="text-[13px] font-semibold text-fg-primary truncate flex-1">
@@ -629,14 +630,15 @@ export default function WorkspacePage() {
       {/* ── Separador · de aquí hacia abajo todo es informativo / simulado ── */}
       <div className="flex items-center gap-3 pt-1" aria-hidden="true">
         <span className="h-px flex-1 bg-stroke-soft" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-fg-secondary whitespace-nowrap">
-          Vista informativa · datos simulados · sin APIs
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-stroke-soft bg-bg-surface px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-fg-secondary shadow-sm">
+          <Icon name="eye" size={11} className="text-fg-muted" />
+          Vista previa · datos simulados · sin APIs
         </span>
         <span className="h-px flex-1 bg-stroke-soft" />
       </div>
 
       {/* ── Workspace Search Hub · buscador global (visual, sin backend) ──── */}
-      <section className="gws-info card overflow-hidden relative p-5 md:p-6">
+      <section className="nx-surface card overflow-hidden relative p-5 md:p-6">
         <div
           className="absolute inset-0 pointer-events-none opacity-80"
           style={{
@@ -684,16 +686,16 @@ export default function WorkspacePage() {
               key={kpi.key}
               style={
                 {
-                  "--gws-accent": kpi.accent,
-                  "--gws-glow": kpi.glow,
-                  "--gws-border": kpi.border,
+                  "--nx-accent": kpi.accent,
+                  "--nx-glow": kpi.glow,
+                  "--nx-border": kpi.border,
                   animationDelay: `${i * 45}ms`,
                 } as CSSProperties
               }
-              className="gws-info gws-stagger card p-4 flex flex-col gap-3"
+              className="nx-surface nx-stagger card p-4 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+                <div className="nx-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
                   {kpi.logo}
                 </div>
                 <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">
@@ -702,7 +704,7 @@ export default function WorkspacePage() {
               </div>
               <div>
                 <div className="text-2xl font-black text-fg-primary tracking-tight tabular-nums leading-none">
-                  {kpi.value}
+                  {/^\d+$/.test(kpi.value) ? <CountUp to={Number(kpi.value)} format="int" /> : kpi.value}
                 </div>
                 <div className="text-[11px] font-semibold text-fg-secondary mt-1 leading-snug">
                   {kpi.label}
@@ -730,13 +732,13 @@ export default function WorkspacePage() {
             <div
               key={s.name}
               style={{ animationDelay: `${i * 45}ms` } as CSSProperties}
-              className="gws-info gws-stagger card p-4 flex flex-col gap-3"
+              className="nx-surface nx-stagger card p-4 flex flex-col gap-3"
             >
               <div className="flex items-center justify-between gap-2">
-                <div className="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+                <div className="nx-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
                   {s.logo}
                 </div>
-                <span className={`w-2 h-2 rounded-full ${toneDot(s.tone)}`} />
+                <span className={s.tone === "ok" ? "nx-live-dot" : `w-2 h-2 rounded-full ${toneDot(s.tone)}`} />
               </div>
               <div>
                 <div className="text-[13px] font-black text-fg-primary tracking-tight">{s.name}</div>
@@ -751,7 +753,7 @@ export default function WorkspacePage() {
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+            <div className="nx-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
               <GeminiLogo />
             </div>
             <div>
@@ -772,16 +774,16 @@ export default function WorkspacePage() {
               key={op.key}
               style={
                 {
-                  "--gws-accent": "rgba(155,114,203,0.32)",
-                  "--gws-glow": "rgba(155,114,203,0.42)",
-                  "--gws-border": "rgba(155,114,203,0.48)",
+                  "--nx-accent": "rgba(155,114,203,0.32)",
+                  "--nx-glow": "rgba(155,114,203,0.42)",
+                  "--nx-border": "rgba(155,114,203,0.48)",
                   animationDelay: `${i * 50}ms`,
                 } as CSSProperties
               }
-              className="gws-info gws-stagger card p-5 flex flex-col gap-3"
+              className="nx-surface nx-stagger card p-5 flex flex-col gap-3"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="gws-icon-tile w-11 h-11 shrink-0 rounded-xl bg-fg-secondary/[0.07] border border-stroke-soft grid place-items-center text-[#9b72cb]">
+                <div className="nx-icon-tile w-11 h-11 shrink-0 rounded-xl bg-fg-secondary/[0.07] border border-stroke-soft grid place-items-center text-[#9b72cb]">
                   <Icon name={op.icon} size={18} />
                 </div>
                 <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">
@@ -820,7 +822,7 @@ export default function WorkspacePage() {
           {/* Próximos eventos */}
           <div
             style={{ animationDelay: "0ms" } as CSSProperties}
-            className="gws-info gws-stagger card p-5 flex flex-col gap-4"
+            className="nx-surface nx-stagger card p-5 flex flex-col gap-4"
           >
             <WidgetHeader title="Próximos eventos" source="Calendar" icon="calendar" />
             <div className="flex flex-col gap-2.5">
@@ -839,7 +841,7 @@ export default function WorkspacePage() {
           {/* Correos recientes */}
           <div
             style={{ animationDelay: "55ms" } as CSSProperties}
-            className="gws-info gws-stagger card p-5 flex flex-col gap-4"
+            className="nx-surface nx-stagger card p-5 flex flex-col gap-4"
           >
             <WidgetHeader title="Correos recientes" source="Gmail" icon="mail" />
             <div className="flex flex-col divide-y divide-stroke-soft -my-1">
@@ -872,7 +874,7 @@ export default function WorkspacePage() {
           {/* Documentos recientes */}
           <div
             style={{ animationDelay: "110ms" } as CSSProperties}
-            className="gws-info gws-stagger card p-5 flex flex-col gap-4"
+            className="nx-surface nx-stagger card p-5 flex flex-col gap-4"
           >
             <WidgetHeader title="Documentos recientes" source="Drive" icon="folder" />
             <div className="flex flex-col gap-1.5">
@@ -897,11 +899,11 @@ export default function WorkspacePage() {
         {/* Gemini Quick Actions */}
         <div
           style={{ animationDelay: "150ms" } as CSSProperties}
-          className="gws-info gws-stagger card p-5 flex flex-col gap-4"
+          className="nx-surface nx-stagger card p-5 flex flex-col gap-4"
         >
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="gws-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+              <div className="nx-icon-tile w-10 h-10 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
                 <GeminiLogo />
               </div>
               <div>
@@ -951,13 +953,13 @@ export default function WorkspacePage() {
           </span>
         </div>
 
-        <div className="gws-info card p-5">
+        <div className="nx-surface card p-5">
           <ol className="relative flex flex-col gap-4 before:absolute before:left-[18px] before:top-2 before:bottom-2 before:w-px before:bg-stroke-soft">
             {WORKSPACE_ACTIVITY.map((a, i) => (
               <li
                 key={a.key}
                 style={{ animationDelay: `${i * 45}ms` } as CSSProperties}
-                className="gws-stagger relative flex items-start gap-4"
+                className="nx-stagger relative flex items-start gap-4"
               >
                 <span
                   className={`relative z-[1] w-9 h-9 shrink-0 rounded-full bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm ${a.tone}`}
@@ -991,20 +993,20 @@ export default function WorkspacePage() {
           </span>
         </div>
 
-        <div className="gws-info card divide-y divide-stroke-soft">
+        <div className="nx-surface card divide-y divide-stroke-soft">
           {HEALTH_SERVICES.map((s, i) => (
             <div
               key={s.name}
               style={{ animationDelay: `${i * 40}ms` } as CSSProperties}
-              className="gws-stagger flex items-center gap-3 p-4"
+              className="nx-stagger flex items-center gap-3 p-4"
             >
-              <div className="gws-icon-tile w-9 h-9 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
+              <div className="nx-icon-tile w-9 h-9 shrink-0 rounded-lg bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm">
                 {s.logo}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[13px] font-black text-fg-primary tracking-tight">{s.name}</div>
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-1.5 h-1.5 rounded-full ${healthDot(s.tone)}`} />
+                  <span className={s.tone === "up" ? "nx-live-dot" : `w-1.5 h-1.5 rounded-full ${healthDot(s.tone)}`} />
                   <span className={`text-[11px] font-semibold ${healthText(s.tone)}`}>
                     {s.status}
                   </span>
