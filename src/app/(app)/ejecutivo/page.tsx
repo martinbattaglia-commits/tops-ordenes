@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
+import { CountUp } from "@/components/CountUp";
 import { PoStatusBadge } from "@/components/compras/PoStatusBadge";
 import { AmbaMap } from "@/components/ejecutivo/AmbaMap";
 import { TodayStrip } from "@/components/ejecutivo/TodayStrip";
@@ -15,9 +16,9 @@ export default async function CockpitPage() {
   const totalM2 = data.locations.reduce((a, l) => a + l.m2, 0);
 
   return (
-    <div className="p-4 md:p-7 lg:p-8 space-y-6">
+    <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade">
       {/* Hero */}
-      <section className="card overflow-hidden relative">
+      <section className="nx-surface card overflow-hidden relative">
         <div
           className="absolute inset-0 pointer-events-none opacity-90"
           style={{
@@ -55,14 +56,14 @@ export default async function CockpitPage() {
       {/* KPI Grid */}
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {data.kpis.map((k, i) => (
-          <KpiCard key={i} kpi={k} />
+          <KpiCard key={i} kpi={k} index={i} />
         ))}
       </section>
 
       {/* Grid principal: Mapa + Locations + Activity */}
       <section className="grid gap-6" style={{ gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)" }}>
         {/* Mapa + ocupación */}
-        <div className="card overflow-hidden">
+        <div className="nx-surface card overflow-hidden">
           <div className="px-5 py-4 border-b border-stroke-soft flex items-center justify-between">
             <div>
               <div className="text-sm font-bold text-fg-primary">Mapa operativo · CABA</div>
@@ -80,7 +81,7 @@ export default async function CockpitPage() {
           <div className="border-t border-stroke-soft divide-y divide-stroke-soft">
             {data.locations.map((loc) => (
               <div key={loc.id} className="px-5 py-3 flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)] flex-shrink-0" />
+                <span className="nx-live-dot flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-fg-primary">
                     {loc.name}{" "}
@@ -112,7 +113,7 @@ export default async function CockpitPage() {
         </div>
 
         {/* Activity feed cross-module */}
-        <div className="card overflow-hidden flex flex-col">
+        <div className="nx-surface card overflow-hidden flex flex-col">
           <div className="px-5 py-4 border-b border-stroke-soft">
             <div className="text-sm font-bold text-fg-primary">Actividad reciente</div>
             <div className="text-[11px] text-fg-secondary mt-0.5">
@@ -145,19 +146,19 @@ export default async function CockpitPage() {
           Módulos operativos
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <ModuleCard href="/compras" icon="cart" title="Compras" sub="OC a proveedores" />
-          <ModuleCard href="/dashboard" icon="orders" title="Servicios" sub="OS a clientes" />
-          <ModuleCard href="/cctv" icon="eye" title="CCTV" sub="Hikvision · Verisure" tag="LIVE" />
-          <ModuleCard href="/anmat" icon="shield" title="ANMAT" sub="Compliance & RNE" />
-          <ModuleCard href="/comercial/pipeline" icon="trend-up" title="Comercial" sub="CRM · Clientify" />
-          <ModuleCard href="/compras/drive" icon="drive" title="Drive sync" sub="Google Workspace" />
-          <ModuleCard href="/reports" icon="report" title="Analytics" sub="KPIs corporativos" />
+          <ModuleCard href="/compras" icon="cart" title="Compras" sub="OC a proveedores" index={0} />
+          <ModuleCard href="/dashboard" icon="orders" title="Servicios" sub="OS a clientes" index={1} />
+          <ModuleCard href="/cctv" icon="eye" title="CCTV" sub="Hikvision · Verisure" tag="LIVE" index={2} />
+          <ModuleCard href="/anmat" icon="shield" title="ANMAT" sub="Compliance & RNE" index={3} />
+          <ModuleCard href="/comercial/pipeline" icon="trend-up" title="Comercial" sub="CRM · Clientify" index={4} />
+          <ModuleCard href="/compras/drive" icon="drive" title="Drive sync" sub="Google Workspace" index={5} />
+          <ModuleCard href="/reports" icon="report" title="Analytics" sub="KPIs corporativos" index={6} />
         </div>
       </section>
 
       {/* Recent OC quick view */}
       {data.recentOrders.length > 0 && (
-        <section className="card overflow-hidden">
+        <section className="nx-surface card overflow-hidden">
           <div className="px-5 py-4 border-b border-stroke-soft flex items-center justify-between">
             <div>
               <div className="text-sm font-bold text-fg-primary">Últimas órdenes de compra</div>
@@ -172,7 +173,7 @@ export default async function CockpitPage() {
               <Link
                 key={o.id}
                 href={`/compras/ordenes/${o.public_id}`}
-                className="flex items-center gap-3 px-5 py-3 hover:bg-neutral-50 transition-colors"
+                className="nx-row flex items-center gap-3 px-5 py-3"
               >
                 <div className="font-mono text-[11px] text-fg-muted w-28 flex-shrink-0">{o.public_id}</div>
                 <div className="flex-1 min-w-0">
@@ -195,11 +196,12 @@ export default async function CockpitPage() {
   );
 }
 
-function KpiCard({ kpi }: { kpi: CockpitKpi }) {
+function KpiCard({ kpi, index }: { kpi: CockpitKpi; index: number }) {
   const isPending = kpi.value === null;
   return (
     <div
-      className={`card kpi card-lift relative overflow-hidden ${kpi.featured ? "featured-stroke" : ""}`}
+      style={{ animationDelay: `${index * 45}ms` }}
+      className={`nx-surface nx-stagger card kpi relative overflow-hidden ${kpi.featured ? "featured-stroke" : ""}`}
       title={kpi.pendingReason ?? undefined}
     >
       <div className="kpi-label">{kpi.label}</div>
@@ -212,7 +214,13 @@ function KpiCard({ kpi }: { kpi: CockpitKpi }) {
         </>
       ) : (
         <>
-          <div className="kpi-value">{kpi.value}</div>
+          <div className="kpi-value">
+            {kpi.value && /^\d+$/.test(kpi.value) ? (
+              <CountUp to={Number(kpi.value)} format="int" />
+            ) : (
+              kpi.value
+            )}
+          </div>
           {kpi.delta && (
             <div className={`kpi-delta ${kpi.delta.startsWith("-") ? "down" : "up"}`}>
               <Icon name={kpi.delta.startsWith("-") ? "trend-down" : "trend-up"} size={12} />
@@ -237,7 +245,7 @@ function ActivityRow({ item }: { item: ActivityFeedItem }) {
   };
   const meta = kindMeta[item.kind];
   return (
-    <li className="px-5 py-3 flex items-start gap-3 hover:bg-neutral-50 transition-colors">
+    <li className="px-5 py-3 flex items-start gap-3">
       <div className={`w-8 h-8 rounded-md grid place-items-center flex-shrink-0 ${meta.bg} ${meta.color}`}>
         <Icon name={meta.icon} size={14} />
       </div>
@@ -258,17 +266,20 @@ function ModuleCard({
   title,
   sub,
   tag,
+  index = 0,
 }: {
   href: string;
   icon: IconName;
   title: string;
   sub: string;
   tag?: string;
+  index?: number;
 }) {
   return (
     <Link
       href={href}
-      className="card card-lift p-4 relative overflow-hidden group"
+      style={{ animationDelay: `${index * 45}ms` }}
+      className="nx-interactive nx-stagger card p-4 relative overflow-hidden group"
     >
       {tag && (
         <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider text-tops-red bg-tops-red/10 px-1.5 py-0.5 rounded">
