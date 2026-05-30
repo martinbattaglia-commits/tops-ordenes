@@ -90,9 +90,17 @@ const DOMAINS: Domain[] = [
     ],
   },
   {
+    id: "workspace",
+    label: "Google Workspace",
+    items: [
+      { href: "/workspace", label: "Accesos Google", icon: "google" },
+    ],
+  },
+  {
     id: "sistema",
     label: "Sistema",
     items: [
+      { href: "/organigrama", label: "Organigrama", icon: "building" },
       { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
       { href: "/settings/users", label: "Usuarios", icon: "users" },
       { href: "/templates", label: "Plantillas OS", icon: "mail" },
@@ -124,6 +132,8 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/cctv",
       "/documental",
       "/operaciones/mapa",
+      "/organigrama",
+      "/workspace",
       "/comercial/contactos",
       "/comercial/pipeline",
       "/settings",

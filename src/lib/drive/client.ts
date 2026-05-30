@@ -8,21 +8,42 @@ import { JWT } from "google-auth-library";
  *   1. En Google Cloud Console → IAM → Service accounts → crear nueva.
  *   2. Crear key JSON, descargar y pegar contenido en env var:
  *      `GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'`
- *      (línea única, escapada). Alternativamente apuntar a archivo:
- *      `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json`
- *   3. Compartir carpeta raíz de Drive con el email de la service account
- *      (formato: `nombre@proyecto.iam.gserviceaccount.com`) con permiso editor.
- *   4. Setear `GOOGLE_DRIVE_ROOT_FOLDER_ID` con el ID de la carpeta
+ *      (línea única, escapada).
+ *   3. Compartir carpetas de Drive con el email de la service account
+ *      (formato: `nombre@proyecto.iam.gserviceaccount.com`):
+ *        · Lector  — Compliance Engine + Drive TOPS browser (lectura)
+ *        · Editor  — solo carpetas donde NEXUS sube PDFs (módulo Compras OC)
+ *   4. Setear `GOOGLE_DRIVE_ROOT_FOLDER_ID` con el ID de la carpeta raíz
  *      (de la URL: drive.google.com/drive/folders/<ID>).
+ *
+ * Scopes mínimos aplicados (principio de menor privilegio):
+ *   · drive.readonly — listar/leer todo lo compartido con la SA
+ *   · drive.file     — crear archivos solo en folders compartidos como editor
+ *
+ * NO se usa `https://www.googleapis.com/auth/drive` (full read/write/delete)
+ * porque concede más permiso del necesario. Si en el futuro NEXUS tiene que
+ * BORRAR archivos en Drive, evaluar agregar scope específico y rotar SA.
  */
 
 const SCOPES = [
+  "https://www.googleapis.com/auth/drive.readonly",
   "https://www.googleapis.com/auth/drive.file",
-  "https://www.googleapis.com/auth/drive",
 ];
 
 let driveCached: drive_v3.Drive | null = null;
 let serviceAccountEmail: string | null = null;
+// Map<`${parentId}/${name}`, folderId> — caché in-process del lookup ensureFolder.
+const folderCache = new Map<string, string>();
+
+/**
+ * Reset del cache del cliente Drive. Útil tras rotar la SA o cambiar env vars
+ * sin reiniciar el proceso. Llamable desde un endpoint admin / health-check.
+ */
+export function resetDriveCache(): void {
+  driveCached = null;
+  serviceAccountEmail = null;
+  folderCache.clear();
+}
 
 function getCredentials(): { email: string; key: string } | null {
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -75,6 +96,56 @@ function requireDrive(): drive_v3.Drive {
 }
 
 // ------------------------------------------------------------------
+// Structured logging
+// ------------------------------------------------------------------
+//
+// Formato JSON one-line en stdout — compatible con cualquier log shipper
+// (Netlify Logs, Logflare, Datadog, Sentry breadcrumbs).
+//   { ts, level, mod: "drive", op, ms, ok, err?, ...meta }
+//
+// En F4 se reemplaza por adapter pluggable (envió real a Sentry).
+
+type LogLevel = "info" | "warn" | "error";
+
+interface LogMeta {
+  op: string;
+  ms?: number;
+  ok?: boolean;
+  err?: string;
+  // dato libre por operación (folderId, query, count)
+  [k: string]: unknown;
+}
+
+function logDrive(level: LogLevel, meta: LogMeta): void {
+  const line = JSON.stringify({
+    ts: new Date().toISOString(),
+    level,
+    mod: "drive",
+    ...meta,
+  });
+  if (level === "error") console.error(line);
+  else if (level === "warn") console.warn(line);
+  else console.log(line);
+}
+
+/**
+ * Wrap async ops para medir duración + capturar errores con structured logging.
+ * Re-lanza el error sin tocarlo (caller mantiene el control del flow).
+ */
+async function timed<T>(op: string, meta: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
+  const start = Date.now();
+  try {
+    const out = await fn();
+    logDrive("info", { op, ms: Date.now() - start, ok: true, ...meta });
+    return out;
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    logDrive("error", { op, ms: Date.now() - start, ok: false, err, ...meta });
+    throw e;
+  }
+}
+
+// ------------------------------------------------------------------
 // Folder helpers
 // ------------------------------------------------------------------
 
@@ -82,8 +153,6 @@ function requireDrive(): drive_v3.Drive {
  * Busca un folder por nombre dentro de un parent. Si no existe lo crea.
  * Cachea por path para que llamadas repetidas no re-consulten.
  */
-const folderCache = new Map<string, string>();
-
 export async function ensureFolder(name: string, parentId: string): Promise<string> {
   const cacheKey = `${parentId}/${name}`;
   if (folderCache.has(cacheKey)) return folderCache.get(cacheKey)!;
@@ -198,20 +267,27 @@ export async function ping(): Promise<DrivePing> {
   const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
   if (!rootId) throw new DriveError("GOOGLE_DRIVE_ROOT_FOLDER_ID no configurado", 503);
 
-  const res = await drive.files.get({
-    fileId: rootId,
-    fields: "id, name, capabilities/canEdit, mimeType, ownedByMe",
-    supportsAllDrives: true,
-  });
+  return timed("ping", { rootId }, async () => {
+    const res = await drive.files.get({
+      fileId: rootId,
+      // canRead = lectura mínima, canEdit = escritura, ownedByMe = propietario.
+      // Con SA leemos un share: ownedByMe será false y canRead/canEdit indican el nivel.
+      fields: "id, name, capabilities/canRead, capabilities/canEdit, mimeType, ownedByMe",
+      supportsAllDrives: true,
+    });
 
-  const data = res.data as drive_v3.Schema$File & { capabilities?: { canEdit?: boolean } };
-  return {
-    ok: true,
-    serviceAccountEmail: getServiceAccountEmail() ?? "?",
-    rootFolderId: rootId,
-    rootFolderName: data.name ?? null,
-    rootShared: Boolean(data.capabilities?.canEdit),
-  };
+    const data = res.data as drive_v3.Schema$File & {
+      capabilities?: { canRead?: boolean; canEdit?: boolean };
+    };
+    return {
+      ok: true,
+      serviceAccountEmail: getServiceAccountEmail() ?? "?",
+      rootFolderId: rootId,
+      rootFolderName: data.name ?? null,
+      // "rootShared" = true si la SA tiene al menos lectura confirmada por Drive.
+      rootShared: Boolean(data.capabilities?.canRead ?? data.capabilities?.canEdit),
+    };
+  });
 }
 
 // ------------------------------------------------------------------
@@ -235,7 +311,21 @@ export interface DriveBreadcrumb {
   name: string;
 }
 
-const PAGE_SIZE_DEFAULT = 200;
+const PAGE_SIZE_DEFAULT = 50;
+const PAGE_SIZE_MAX = 200;
+
+// fields() reutilizable — single source of truth de qué metadata pedimos.
+const FILE_FIELDS =
+  "files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, parents)";
+
+/**
+ * Escape de literales en Google Drive Query Language.
+ * Doc: https://developers.google.com/drive/api/guides/search-files#query_string_examples
+ * Solo `'` y `\` son metacaracteres dentro de un string literal.
+ */
+function escapeDriveQuery(s: string): string {
+  return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
 
 function mapEntry(f: drive_v3.Schema$File): DriveEntry {
   return {
@@ -251,106 +341,263 @@ function mapEntry(f: drive_v3.Schema$File): DriveEntry {
   };
 }
 
-/**
- * Lista hijos directos de un folder. Si folderId es undefined usa el root
- * configurado. Folders primero, luego archivos por modifiedTime desc.
- */
-export async function listChildren(
-  folderId?: string,
-  opts: { pageSize?: number; query?: string } = {}
-): Promise<DriveEntry[]> {
-  const drive = requireDrive();
-  const target =
-    folderId && folderId.trim().length > 0
-      ? folderId
-      : process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
-  if (!target) throw new DriveError("Sin folder de referencia (root no seteado)", 503);
-
-  const q = opts.query?.trim();
-  const baseQ = `'${target}' in parents and trashed=false`;
-  const fullQ = q
-    ? `${baseQ} and name contains '${q.replace(/'/g, "\\'")}'`
-    : baseQ;
-
-  const res = await drive.files.list({
-    q: fullQ,
-    fields:
-      "files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, parents)",
-    orderBy: "folder,modifiedTime desc",
-    pageSize: opts.pageSize ?? PAGE_SIZE_DEFAULT,
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
-  });
-
-  return (res.data.files ?? []).map(mapEntry);
+export interface ListChildrenPage {
+  entries: DriveEntry[];
+  nextPageToken: string | null;
+  total: number; // count en esta página, no global (Drive API no devuelve total)
 }
 
 /**
- * Búsqueda global por nombre dentro del Drive accesible por la service account.
- * Devuelve un mix de folders + files, máx pageSize entradas.
+ * Lista hijos directos de un folder, con paginación.
+ * Si folderId es undefined usa el root configurado.
+ * Folders primero, luego archivos por modifiedTime desc.
+ *
+ * SCOPE ENFORCEMENT (R1, remediation 2026-05-29):
+ *   Si `folderId` es provisto y distinto del root, valida con `isUnderRoot()`
+ *   que ese folder esté dentro del subtree autorizado. Falla con 403 si NO.
+ *   Esto impide enumerar carpetas accesibles por la SA fuera del scope NEXUS.
+ */
+export async function listChildren(
+  folderId?: string,
+  opts: { pageSize?: number; pageToken?: string; query?: string } = {}
+): Promise<ListChildrenPage> {
+  const drive = requireDrive();
+  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  const trimmedFolder = folderId?.trim();
+  const target = trimmedFolder && trimmedFolder.length > 0 ? trimmedFolder : rootId;
+  if (!target) throw new DriveError("Sin folder de referencia (root no seteado)", 503);
+
+  // Guard de scope: si el caller pidió un folder distinto del root, debe estar
+  // dentro del subtree del root. Cubre R1.
+  if (trimmedFolder && trimmedFolder !== rootId) {
+    const allowed = await isUnderRoot(trimmedFolder);
+    if (!allowed) {
+      logDrive("warn", { op: "listChildren.scope-denied", folderId: trimmedFolder });
+      throw new DriveError("Folder fuera del scope autorizado", 403);
+    }
+  }
+
+  const q = opts.query?.trim();
+  const baseQ = `'${escapeDriveQuery(target)}' in parents and trashed=false`;
+  const fullQ = q ? `${baseQ} and name contains '${escapeDriveQuery(q)}'` : baseQ;
+
+  const pageSize = Math.min(Math.max(opts.pageSize ?? PAGE_SIZE_DEFAULT, 1), PAGE_SIZE_MAX);
+
+  return timed("listChildren", { target, hasQuery: !!q, pageSize }, async () => {
+    const res = await drive.files.list({
+      q: fullQ,
+      fields: `nextPageToken, ${FILE_FIELDS}`,
+      orderBy: "folder,modifiedTime desc",
+      pageSize,
+      pageToken: opts.pageToken,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+
+    const entries = (res.data.files ?? []).map(mapEntry);
+    return {
+      entries,
+      nextPageToken: res.data.nextPageToken ?? null,
+      total: entries.length,
+    };
+  });
+}
+
+/**
+ * Búsqueda por nombre dentro del Drive accesible por la service account.
+ *
+ * IMPORTANTE — alcance:
+ *   · Google Drive API NO soporta búsqueda recursiva nativa por ancestro.
+ *   · Por default acotamos a archivos cuyo PARENT DIRECTO está dentro del root,
+ *     o cuyo parent[0] coincide con uno de los hijos directos del root.
+ *   · Si `bounded=false`, hace búsqueda global en TODO el Drive accesible
+ *     por la SA (puede incluir archivos compartidos de otras orgs).
+ *
+ * Para búsqueda recursiva profunda, ver `searchRecursive` (no implementado v1).
  */
 export async function searchFiles(
   query: string,
-  pageSize = 30
-): Promise<DriveEntry[]> {
-  if (!query.trim()) return [];
+  opts: { pageSize?: number; bounded?: boolean } = {}
+): Promise<{ entries: DriveEntry[]; bounded: boolean; rootScoped: boolean }> {
+  if (!query.trim()) return { entries: [], bounded: false, rootScoped: false };
   const drive = requireDrive();
-  const safe = query.replace(/'/g, "\\'");
-  const res = await drive.files.list({
-    q: `name contains '${safe}' and trashed=false`,
-    fields:
-      "files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, parents)",
-    orderBy: "modifiedTime desc",
-    pageSize,
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
+  const safe = escapeDriveQuery(query);
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 30, 1), PAGE_SIZE_MAX);
+  const bounded = opts.bounded ?? true;
+  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+
+  return timed("searchFiles", { q: query, bounded, pageSize }, async () => {
+    // Si tenemos rootId y queremos bounded, hacemos primero el listado de
+    // hijos directos del root para filtrar resultados que estén en ese set.
+    let rootChildrenIds: Set<string> | null = null;
+    if (bounded && rootId) {
+      const rootKids = await drive.files.list({
+        q: `'${escapeDriveQuery(rootId)}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`,
+        fields: "files(id)",
+        pageSize: PAGE_SIZE_MAX,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      rootChildrenIds = new Set((rootKids.data.files ?? []).map((f) => f.id ?? ""));
+      rootChildrenIds.add(rootId); // incluir el root mismo
+    }
+
+    const res = await drive.files.list({
+      q: `name contains '${safe}' and trashed=false`,
+      fields: FILE_FIELDS,
+      orderBy: "modifiedTime desc",
+      pageSize,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+
+    let entries = (res.data.files ?? []).map(mapEntry);
+
+    if (rootChildrenIds) {
+      // Filter: keep solo los que tengan al menos un parent en el set.
+      // Cubre 2 niveles (root y nietos directos). Para más profundidad
+      // habría que caminar el árbol — v2.
+      entries = entries.filter((e) =>
+        e.parents.some((p) => rootChildrenIds!.has(p))
+      );
+    }
+
+    return {
+      entries,
+      bounded,
+      rootScoped: Boolean(rootChildrenIds),
+    };
   });
-  return (res.data.files ?? []).map(mapEntry);
 }
 
 /**
  * Reconstruye breadcrumbs desde el root hasta el folder dado.
  * Si el folder está fuera del root, devuelve solo el folder + sus ancestros directos.
+ * Guard de 12 niveles por safety + structured log.
+ *
+ * SCOPE ENFORCEMENT (R2, remediation 2026-05-29):
+ *   Valida con `isUnderRoot()` que el folderId esté dentro del subtree
+ *   autorizado. Falla con 403 si NO. Impide reconstruir paths de carpetas
+ *   ajenas accesibles por la SA.
  */
 export async function getBreadcrumbs(folderId: string): Promise<DriveBreadcrumb[]> {
   const drive = requireDrive();
   const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  const trimmed = folderId?.trim();
+  if (!trimmed) return [];
 
-  const crumbs: DriveBreadcrumb[] = [];
-  let current: string | undefined = folderId;
-  let safety = 0;
-  while (current && safety < 12) {
-    safety += 1;
-    const got = await drive.files.get({
-      fileId: current,
-      fields: "id, name, parents",
-      supportsAllDrives: true,
-    });
-    const data: drive_v3.Schema$File = got.data;
-    crumbs.unshift({ id: data.id ?? current, name: data.name ?? "(sin nombre)" });
-    if (root && data.id === root) break;
-    current = data.parents?.[0];
+  // Guard de scope: el folder debe estar bajo el root configurado. Cubre R2.
+  if (trimmed !== root) {
+    const allowed = await isUnderRoot(trimmed);
+    if (!allowed) {
+      logDrive("warn", { op: "getBreadcrumbs.scope-denied", folderId: trimmed });
+      throw new DriveError("Folder fuera del scope autorizado", 403);
+    }
   }
-  return crumbs;
+
+  return timed("getBreadcrumbs", { folderId: trimmed }, async () => {
+    const crumbs: DriveBreadcrumb[] = [];
+    let current: string | undefined = trimmed;
+    let safety = 0;
+    while (current && safety < 12) {
+      safety += 1;
+      const got = await drive.files.get({
+        fileId: current,
+        fields: "id, name, parents",
+        supportsAllDrives: true,
+      });
+      const data: drive_v3.Schema$File = got.data;
+      crumbs.unshift({ id: data.id ?? current, name: data.name ?? "(sin nombre)" });
+      if (root && data.id === root) break;
+      current = data.parents?.[0];
+    }
+    if (safety === 12) {
+      logDrive("warn", { op: "getBreadcrumbs", folderId: trimmed, err: "depth-cap-12-reached" });
+    }
+    return crumbs;
+  });
 }
 
 /**
- * Top documentos modificados recientemente — útil como widget "Recientes".
+ * Top documentos modificados recientemente.
+ *
+ * Estrategia:
+ *   · Query global (no acotada por parents) para captar modifs en subcarpetas profundas.
+ *   · Filter out folders del resultado (queremos archivos modificados, no carpetas).
+ *   · Si `bounded=true` (default) y hay root configurado, filtra a los que tengan
+ *     parent directo en el root o en uno de los hijos directos del root.
+ *
+ * Trade-off vs versión anterior:
+ *   · Antes: solo top-level del root (perdía modificaciones en subcarpetas).
+ *   · Ahora: captura modificaciones en profundidad pero 1 query extra por bounded.
  */
-export async function listRecent(limit = 10): Promise<DriveEntry[]> {
+export async function listRecent(
+  limit = 10,
+  opts: { bounded?: boolean } = {}
+): Promise<DriveEntry[]> {
   const drive = requireDrive();
   const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
-  const q = root
-    ? `'${root}' in parents and trashed=false`
-    : "trashed=false";
-  const res = await drive.files.list({
-    q,
-    fields:
-      "files(id, name, mimeType, size, modifiedTime, webViewLink, iconLink, parents)",
-    orderBy: "modifiedTime desc",
-    pageSize: limit,
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
+  const bounded = opts.bounded ?? true;
+  const safeLimit = Math.min(Math.max(limit, 1), 50);
+
+  return timed("listRecent", { limit: safeLimit, bounded, hasRoot: !!root }, async () => {
+    // Si bounded + root: precarga IDs de hijos directos del root para filtro.
+    let scopeIds: Set<string> | null = null;
+    if (bounded && root) {
+      const rootKids = await drive.files.list({
+        q: `'${escapeDriveQuery(root)}' in parents and trashed=false and mimeType='application/vnd.google-apps.folder'`,
+        fields: "files(id)",
+        pageSize: PAGE_SIZE_MAX,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      scopeIds = new Set((rootKids.data.files ?? []).map((f) => f.id ?? ""));
+      scopeIds.add(root);
+    }
+
+    // Drive no admite `mimeType !=` con NOT en algunos casos; usamos exclusión
+    // post-query para simplicidad.
+    const res = await drive.files.list({
+      q: "trashed=false",
+      fields: FILE_FIELDS,
+      orderBy: "modifiedTime desc",
+      // Pedimos más entries del límite para tener colchón post-filter.
+      pageSize: Math.min(safeLimit * 4, PAGE_SIZE_MAX),
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+
+    let entries = (res.data.files ?? []).map(mapEntry).filter((e) => !e.isFolder);
+
+    if (scopeIds) {
+      entries = entries.filter((e) => e.parents.some((p) => scopeIds!.has(p)));
+    }
+
+    return entries.slice(0, safeLimit);
   });
-  return (res.data.files ?? []).map(mapEntry);
+}
+
+/**
+ * Verifica si un archivo o folder está dentro del subtree del root configurado.
+ * Util para validación post-query y para enforce de scope en endpoints sensibles.
+ * Camina hacia arriba hasta `maxDepth` niveles.
+ */
+export async function isUnderRoot(fileId: string, maxDepth = 6): Promise<boolean> {
+  const drive = requireDrive();
+  const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+  if (!root) return false;
+  if (fileId === root) return true;
+
+  let current: string | undefined = fileId;
+  for (let i = 0; i < maxDepth && current; i += 1) {
+    const got = await drive.files.get({
+      fileId: current,
+      fields: "id, parents",
+      supportsAllDrives: true,
+    });
+    const parents: string[] = got.data.parents ?? [];
+    if (parents.includes(root)) return true;
+    current = parents[0];
+  }
+  return false;
 }

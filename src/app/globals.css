@@ -595,6 +595,98 @@
   }
 }
 
+/* ── Google Workspace · hub premium (solo sección visual Workspace) ───────
+   Glow por color de marca vía custom props (--gws-accent/glow/border) que
+   cada card setea inline. Sin librerías, sin JS. Restraint corporativo. */
+.gws-card {
+  position: relative;
+  isolation: isolate;
+  transition:
+    transform 200ms cubic-bezier(0.25, 0.8, 0.25, 1),
+    box-shadow 200ms cubic-bezier(0.25, 0.8, 0.25, 1),
+    border-color 200ms ease;
+}
+.gws-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    120% 80% at 85% 0%,
+    var(--gws-accent, rgba(66, 133, 244, 0.4)),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity 240ms ease;
+  pointer-events: none;
+  z-index: -1;
+}
+.gws-card:hover {
+  transform: translate3d(0, -3px, 0);
+  box-shadow: 0 18px 40px -18px var(--gws-glow, rgba(66, 133, 244, 0.45));
+  border-color: var(--gws-border, rgba(33, 69, 118, 0.25));
+}
+.gws-card:hover::before {
+  opacity: 0.1;
+}
+.gws-card:active {
+  transform: translate3d(0, -1px, 0);
+}
+
+/* Tile del ícono de marca — halo sutil en hover del card */
+.gws-icon-tile {
+  transition: box-shadow 240ms ease, transform 240ms ease;
+}
+.gws-card:hover .gws-icon-tile {
+  box-shadow: 0 8px 20px -8px var(--gws-glow, rgba(66, 133, 244, 0.5));
+  transform: translateY(-1px);
+}
+
+/* Stagger fade-in para el grid del hub (delay inline por card) */
+@keyframes gws-fade-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+.gws-stagger {
+  animation: gws-fade-in 360ms cubic-bezier(0.25, 0.8, 0.25, 1) both;
+}
+
+/* Shimmer lento sobre la barra de estado del header (no autoplay agresivo) */
+.gws-shine {
+  position: relative;
+  overflow: hidden;
+}
+.gws-shine::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 65%
+  );
+  transform: translateX(-120%);
+  animation: gws-shine-sweep 7s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes gws-shine-sweep {
+  0%,
+  72%,
+  100% {
+    transform: translateX(-120%);
+  }
+  86% {
+    transform: translateX(120%);
+  }
+}
+
 /* Reduced motion: cero animaciones. */
 @media (prefers-reduced-motion: reduce) {
   .nexus-page-fade,
@@ -603,7 +695,11 @@
   .kpi-pulse,
   .ce-engine .ce-ring-stroke,
   .ce-engine .ce-alert-row,
-  .drive-row {
+  .drive-row,
+  .gws-card,
+  .gws-icon-tile,
+  .gws-stagger,
+  .gws-shine::after {
     animation: none !important;
     transition: none !important;
   }

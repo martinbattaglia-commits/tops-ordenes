@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 
 interface DriveEntry {
@@ -25,9 +25,13 @@ interface ListResponse {
   configured: boolean;
   entries: DriveEntry[];
   breadcrumbs: DriveBreadcrumb[];
+  nextPageToken?: string | null;
   error?: string;
   hint?: string;
   searchActive?: boolean;
+  bounded?: boolean;
+  rootScoped?: boolean;
+  requestId?: string;
 }
 
 interface Props {
@@ -45,70 +49,162 @@ export function DriveBrowser({ configured, serviceAccountEmail }: Props) {
   const [folderStack, setFolderStack] = useState<DriveBreadcrumb[]>([]);
   const [entries, setEntries] = useState<DriveEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [recent, setRecent] = useState<DriveEntry[]>([]);
+  const [recentLoading, setRecentLoading] = useState(false);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [searchScope, setSearchScope] = useState<{
+    bounded: boolean;
+    rootScoped: boolean;
+  } | null>(null);
+  const [lastRequestId, setLastRequestId] = useState<string | null>(null);
 
   const currentFolderId = folderStack[folderStack.length - 1]?.id;
 
+  // R15: AbortController activo para cancelar requests in-flight cuando llega
+  // uno nuevo. Evita race condition en search-as-you-type (request 1 llegando
+  // después de request 2 → setEntries con data vieja).
+  const activeAbortRef = useRef<AbortController | null>(null);
+  // Al unmount, cancelamos todo lo pendiente.
+  useEffect(() => {
+    return () => activeAbortRef.current?.abort();
+  }, []);
+
   const load = useCallback(
-    async (opts: { folderId?: string; search?: string } = {}) => {
+    async (
+      opts: {
+        folderId?: string;
+        search?: string;
+        pageToken?: string;
+        append?: boolean;
+      } = {}
+    ) => {
       if (!configured) return;
-      setLoading(true);
+
+      // Cancelar cualquier load anterior (caso típico: usuario tipea más
+      // rápido que la respuesta). El finally previo se ejecuta con el error
+      // AbortError y vuelve loading=false sin pisar entries.
+      if (!opts.append) {
+        activeAbortRef.current?.abort();
+      }
+      const controller = new AbortController();
+      if (!opts.append) activeAbortRef.current = controller;
+
+      if (opts.append) setLoadingMore(true);
+      else setLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams();
         if (opts.folderId) params.set("folderId", opts.folderId);
         if (opts.search?.trim()) params.set("search", opts.search.trim());
+        if (opts.pageToken) params.set("pageToken", opts.pageToken);
         const res = await fetch(`/api/drive/list?${params.toString()}`, {
           cache: "no-store",
+          signal: controller.signal,
         });
         const data: ListResponse = await res.json();
+        // Solo aplicar resultados si este controller sigue siendo el activo
+        // (otra request más nueva no nos pisó).
+        if (!opts.append && activeAbortRef.current !== controller) return;
+        setLastRequestId(data.requestId ?? null);
         if (!res.ok || !data.ok) {
-          setError(data.error || `HTTP ${res.status}`);
-          setEntries([]);
+          const msg =
+            res.status === 401
+              ? "Tu sesión expiró. Volvé a iniciar sesión."
+              : res.status === 403
+                ? data.error ?? "No tenés permiso para ver esta carpeta."
+                : res.status === 429
+                  ? "Demasiadas consultas. Esperá unos segundos."
+                  : data.error || `HTTP ${res.status}`;
+          setError(msg);
+          if (!opts.append) setEntries([]);
+          setNextPageToken(null);
           return;
         }
-        setEntries(data.entries);
+        if (opts.append) {
+          setEntries((prev) => [...prev, ...data.entries]);
+        } else {
+          setEntries(data.entries);
+        }
+        setNextPageToken(data.nextPageToken ?? null);
+        if (opts.search) {
+          setSearchScope({
+            bounded: data.bounded ?? true,
+            rootScoped: data.rootScoped ?? false,
+          });
+        } else {
+          setSearchScope(null);
+        }
         if (!opts.search && data.breadcrumbs.length > 0) {
           setFolderStack(data.breadcrumbs);
         }
       } catch (e) {
+        // AbortError es esperado cuando una request más nueva canceló esta.
+        // Silenciar — no hay error real para el usuario.
+        if (e instanceof DOMException && e.name === "AbortError") return;
         setError(e instanceof Error ? e.message : "Error al listar Drive");
-        setEntries([]);
+        if (!opts.append) setEntries([]);
+        setNextPageToken(null);
       } finally {
-        setLoading(false);
+        // Solo limpiar loading si seguimos siendo el controller activo.
+        if (opts.append || activeAbortRef.current === controller) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [configured]
   );
 
+  const loadMore = useCallback(() => {
+    if (!nextPageToken || loadingMore) return;
+    void load({
+      folderId: currentFolderId,
+      search: search.trim() || undefined,
+      pageToken: nextPageToken,
+      append: true,
+    });
+  }, [nextPageToken, loadingMore, load, currentFolderId, search]);
+
   // Carga inicial: root + recientes
   useEffect(() => {
     if (!configured) return;
     void load();
+    const recentController = new AbortController();
     void (async () => {
+      setRecentLoading(true);
       try {
-        const res = await fetch("/api/drive/list?recent=1", { cache: "no-store" });
+        const res = await fetch("/api/drive/list?recent=1", {
+          cache: "no-store",
+          signal: recentController.signal,
+        });
         const data: ListResponse = await res.json();
         if (res.ok && data.ok) setRecent(data.entries);
-      } catch {
+      } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") return;
         /* silencioso — recientes es opcional */
+      } finally {
+        setRecentLoading(false);
       }
     })();
+    return () => recentController.abort();
   }, [configured, load]);
 
-  // Búsqueda con debounce
+  // Búsqueda con debounce + abort en cleanup (R15).
   useEffect(() => {
     if (!configured) return;
     const term = search.trim();
     if (!term) {
-      // si limpia búsqueda, volver al folder current
       void load({ folderId: currentFolderId });
       return;
     }
     const t = window.setTimeout(() => void load({ search: term }), 280);
-    return () => window.clearTimeout(t);
+    return () => {
+      window.clearTimeout(t);
+      activeAbortRef.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, configured]);
 
@@ -160,7 +256,29 @@ export function DriveBrowser({ configured, serviceAccountEmail }: Props) {
           <div className="eyebrow-tiny">Compliance · Drive corporativo</div>
           <h1 className="page-title">Drive TOPS</h1>
           <p className="page-subtitle">
-            {summary.folders} carpetas · {summary.files} archivos en este nivel
+            {search ? (
+              <>
+                Resultados de búsqueda · {entries.length}
+                {searchScope?.rootScoped ? (
+                  <span className="ml-2 text-[10px] uppercase tracking-[0.14em] font-bold text-status-success bg-status-success/10 px-1.5 py-0.5 rounded">
+                    Solo en carpeta TOPS
+                  </span>
+                ) : (
+                  <span className="ml-2 text-[10px] uppercase tracking-[0.14em] font-bold text-status-warning bg-status-warning/10 px-1.5 py-0.5 rounded">
+                    Todo el Drive accesible
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                {summary.folders} carpetas · {summary.files} archivos en este nivel
+                {nextPageToken && (
+                  <span className="ml-2 text-[10px] uppercase tracking-[0.14em] font-bold text-fg-muted">
+                    + más disponibles
+                  </span>
+                )}
+              </>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -172,10 +290,20 @@ export function DriveBrowser({ configured, serviceAccountEmail }: Props) {
             />
             <input
               className="input pl-9 w-64"
-              placeholder="Buscar en todo el Drive…"
+              placeholder="Buscar en Drive…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded grid place-items-center text-fg-muted hover:bg-neutral-100"
+                aria-label="Limpiar búsqueda"
+              >
+                <Icon name="x" size={12} />
+              </button>
+            )}
           </div>
           <button
             className="btn btn-ghost btn-sm"
@@ -230,17 +358,44 @@ export function DriveBrowser({ configured, serviceAccountEmail }: Props) {
           </div>
 
           {error ? (
-            <ErrorPanel message={error} />
+            <ErrorPanel message={error} requestId={lastRequestId} />
           ) : loading && entries.length === 0 ? (
             <SkeletonRows />
           ) : entries.length === 0 ? (
             <EmptyState search={search} />
           ) : (
-            <ul className="divide-y divide-stroke-soft">
-              {entries.map((e) => (
-                <EntryRow key={e.id} entry={e} onOpenFolder={openFolder} />
-              ))}
-            </ul>
+            <>
+              <ul className="divide-y divide-stroke-soft">
+                {entries.map((e) => (
+                  <EntryRow key={e.id} entry={e} onOpenFolder={openFolder} />
+                ))}
+              </ul>
+              {nextPageToken && (
+                <div className="border-t border-stroke-soft px-5 py-3 flex items-center justify-between">
+                  <span className="text-[11px] text-fg-muted">
+                    Mostrando {entries.length} ítems
+                  </span>
+                  <button
+                    type="button"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="btn btn-ghost btn-sm"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <Icon name="refresh" size={12} className="animate-spin" />
+                        Cargando…
+                      </>
+                    ) : (
+                      <>
+                        Cargar más
+                        <Icon name="chevron-down" size={12} />
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -253,7 +408,19 @@ export function DriveBrowser({ configured, serviceAccountEmail }: Props) {
                 Últimos archivos modificados
               </div>
             </div>
-            {recent.length === 0 ? (
+            {recentLoading ? (
+              <ul className="divide-y divide-stroke-soft">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <li key={`rs-${i}`} className="px-5 py-2.5 flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-md bg-neutral-100 animate-pulse" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-2.5 w-2/3 bg-neutral-100 rounded animate-pulse" />
+                      <div className="h-2 w-1/3 bg-neutral-100 rounded animate-pulse" />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : recent.length === 0 ? (
               <div className="px-5 py-6 text-[11px] text-fg-muted text-center">
                 Sin actividad reciente todavía
               </div>
@@ -432,7 +599,13 @@ function EmptyState({ search }: { search: string }) {
   );
 }
 
-function ErrorPanel({ message }: { message: string }) {
+function ErrorPanel({
+  message,
+  requestId,
+}: {
+  message: string;
+  requestId: string | null;
+}) {
   return (
     <div className="px-5 py-8 text-center">
       <div className="w-12 h-12 rounded-full bg-tops-red/10 text-tops-red grid place-items-center mx-auto mb-3">
@@ -442,6 +615,11 @@ function ErrorPanel({ message }: { message: string }) {
       <div className="text-[11px] text-fg-secondary mt-1 max-w-md mx-auto">
         {message}
       </div>
+      {requestId && (
+        <div className="text-[10px] font-mono text-fg-muted mt-3">
+          ref: {requestId}
+        </div>
+      )}
     </div>
   );
 }
