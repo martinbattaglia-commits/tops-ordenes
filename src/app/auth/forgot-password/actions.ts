@@ -29,8 +29,12 @@ export async function sendPasswordResetLink(
   const supabase = createClient();
   if (!supabase) return { ok: false, error: "Supabase no configurado." };
 
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const origin = host ? `${proto}://${host}` : env.app.url;
+
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${env.app.url}/auth/reset-password`,
+    redirectTo: `${origin}/auth/reset-password`,
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

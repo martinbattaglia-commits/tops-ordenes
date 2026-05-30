@@ -22,9 +22,14 @@ const NAV: NavItem[] = [
   { href: "/billing", label: "Facturación", icon: "bill" },
 ];
 
+const NAV_WORKSPACE: NavItem[] = [
+  { href: "/workspace", label: "Accesos Google", icon: "google" },
+];
+
 const NAV_BOTTOM: NavItem[] = [
   { href: "/templates", label: "Plantillas email", icon: "mail" },
   { href: "/settings/users", label: "Usuarios", icon: "clients" },
+  { href: "/organigrama", label: "Organigrama", icon: "building" },
   { href: "/settings", label: "Configuración", icon: "gear" },
 ];
 
@@ -56,6 +61,17 @@ export default function Sidebar({ user, onNavigate }: Props) {
 
       <Section label="Operación">
         {NAV.map((item) => (
+          <NavLink
+            key={item.href}
+            item={item}
+            active={isActive(item.href)}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </Section>
+
+      <Section label="Google Workspace" className="mt-2">
+        {NAV_WORKSPACE.map((item) => (
           <NavLink
             key={item.href}
             item={item}
