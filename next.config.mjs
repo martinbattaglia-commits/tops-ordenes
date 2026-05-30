@@ -13,6 +13,10 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ["@supabase/supabase-js"],
+    // pdf-parse / pdfjs-dist no soportan el bundling de webpack (RSC): su
+    // carga lanza "Object.defineProperty called on non-object". Marcarlo como
+    // paquete externo hace que Node lo requiera de forma nativa en runtime.
+    serverComponentsExternalPackages: ["pdf-parse"],
   },
   async headers() {
     return [

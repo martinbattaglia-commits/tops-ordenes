@@ -140,6 +140,13 @@ export const env = {
       (arcaCertPath && arcaKeyPath) || (arcaCertPem && arcaKeyPem)
     ),
   },
+  openai: {
+    /** API key para OCR/extracción de documentos (facturas proveedor, etc.). */
+    apiKey: process.env.OPENAI_API_KEY?.trim() ?? "",
+    /** Modelo por defecto. gpt-4o-mini = barato y suficiente para facturas. */
+    ocrModel: process.env.OPENAI_OCR_MODEL?.trim() || "gpt-4o-mini",
+    configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
+  },
   hikvision: {
     host: process.env.HIKVISION_HOST?.trim() ?? "",
     httpPort: parseInt(process.env.HIKVISION_HTTP_PORT ?? "80", 10) || 80,

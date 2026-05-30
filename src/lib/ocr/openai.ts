@@ -1,8 +1,13 @@
-import { PDFParse } from "pdf-parse";
 import type {
   ExtractedDocument,
   DocumentType,
+  ExtractedComprobante,
 } from "./types";
+
+// `pdf-parse` (vía pdfjs-dist) NO se importa arriba a propósito: su carga
+// eager rompe el bundling RSC de Next ("Object.defineProperty called on
+// non-object") y tiraba TODA la ruta, incluso el camino de imágenes que no
+// necesita PDF. Se carga de forma perezosa solo dentro de extractFromPdf.
 
 /**
  * OCR + extracción estructurada de documentos corporativos con OpenAI.
@@ -66,6 +71,13 @@ con esta estructura:
   "lineItems": [
     { "description": "string", "quantity": number|null, "unit": "string|null", "unitPrice": number|null, "subtotal": number|null, "sku": "string|null" }
   ],
+  "comprobante": {
+    "letra": "A|B|C|M|null",
+    "clase": "factura|nota_credito|nota_debito|recibo|otro|null",
+    "puntoVenta": "string de 4-5 dígitos tal cual (ej '0003') o null",
+    "numero": "string de 8 dígitos tal cual (ej '00001234') o null",
+    "cae": "14 dígitos sin espacios o null"
+  },
   "tags": ["palabra1", "palabra2", ...]
 }
 
@@ -74,6 +86,13 @@ Reglas:
 - Las fechas en formato ISO YYYY-MM-DD (interpretá dd/mm/yyyy del español)
 - Los montos como números (sin formato): 1234567.89, no "1.234.567,89"
 - typeConfidence < 0.6 si no estás seguro
+- comprobante: SOLO para facturas/notas de crédito/débito/recibos. Si el doc no es
+  un comprobante fiscal, usá comprobante: null.
+  · "letra" es la letra grande del recuadro central (A/B/C/M). El código fiscal
+    también la indica: COD 01→A, COD 06→B, COD 11→C.
+  · "puntoVenta" y "numero": leelos del encabezado ("Punto de Venta: 0003",
+    "Comp. Nro: 00001234"). Mantené los ceros a la izquierda.
+  · "cae": número de 14 dígitos cerca de "CAE N°". Es CRÍTICO no perderlo.
 - tags: 3-6 palabras clave útiles para búsqueda (ANMAT, cosmética, urgente, vencimiento, etc.)`;
 
 interface OpenAIResponse {
@@ -131,7 +150,9 @@ export async function extractFromPdf(
   const t0 = Date.now();
   const model = getModel(opts.modelOverride);
 
-  // 1. Extraer texto puro con pdf-parse (API moderna con clase PDFParse)
+  // 1. Extraer texto puro con pdf-parse (API moderna con clase PDFParse).
+  //    Import perezoso: solo se carga cuando realmente procesamos un PDF.
+  const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: new Uint8Array(pdfBuffer) });
   const textResult = await parser.getText();
   await parser.destroy();
@@ -244,6 +265,7 @@ function mergeWithDefaults(
     parties: Array.isArray(partial.parties) ? partial.parties : [],
     amounts: Array.isArray(partial.amounts) ? partial.amounts : [],
     lineItems: Array.isArray(partial.lineItems) ? partial.lineItems : [],
+    comprobante: normalizeComprobante(partial.comprobante),
     tags: Array.isArray(partial.tags) ? partial.tags.slice(0, 8) : [],
     rawText: meta.rawText,
     meta: {
@@ -259,6 +281,47 @@ function mergeWithDefaults(
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+/**
+ * Sanea el bloque `comprobante` que devuelve el modelo: valida la letra/clase
+ * contra los valores permitidos y deja solo dígitos en PV/numero/CAE. Devuelve
+ * null si el doc no es un comprobante (o el modelo no lo devolvió).
+ */
+function normalizeComprobante(
+  c: Partial<ExtractedComprobante> | null | undefined
+): ExtractedComprobante | null {
+  if (!c || typeof c !== "object") return null;
+
+  const letraRaw = typeof c.letra === "string" ? c.letra.trim().toUpperCase() : "";
+  const letra = (["A", "B", "C", "M"] as const).includes(letraRaw as never)
+    ? (letraRaw as ExtractedComprobante["letra"])
+    : null;
+
+  const claseRaw = typeof c.clase === "string" ? c.clase.trim().toLowerCase() : "";
+  const clase = (["factura", "nota_credito", "nota_debito", "recibo", "otro"] as const).includes(
+    claseRaw as never
+  )
+    ? (claseRaw as ExtractedComprobante["clase"])
+    : null;
+
+  const pvDigits = typeof c.puntoVenta === "string" ? c.puntoVenta.replace(/\D/g, "") : "";
+  const numDigits = typeof c.numero === "string" ? c.numero.replace(/\D/g, "") : "";
+  const caeDigits = typeof c.cae === "string" ? c.cae.replace(/\D/g, "") : "";
+
+  const out: ExtractedComprobante = {
+    letra,
+    clase,
+    puntoVenta: pvDigits ? pvDigits.padStart(4, "0") : null,
+    numero: numDigits ? numDigits.padStart(8, "0") : null,
+    cae: caeDigits.length === 14 ? caeDigits : null,
+  };
+
+  // Si todo quedó vacío, no hay comprobante útil.
+  if (!out.letra && !out.clase && !out.puntoVenta && !out.numero && !out.cae) {
+    return null;
+  }
+  return out;
 }
 
 function normalizeDate(s: string | null | undefined): string | null {
