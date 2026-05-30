@@ -37,3 +37,10 @@ next-env.d.ts.bak
 # supabase
 supabase/.branches
 supabase/.temp
+
+# backups / GCS service-account keys (BKP.R1 — never commit)
+backup-sa-key.json
+*-sa-key.json
+gcp-sa-*.json
+*.dump
+lifecycle.json.bak
