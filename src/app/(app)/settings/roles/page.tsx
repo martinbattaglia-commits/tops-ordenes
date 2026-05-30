@@ -2,16 +2,32 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { listRoles, listPermissions, listUserAssignments } from "@/lib/rbac/data";
 import { MODULE_LABELS } from "@/lib/rbac/types";
+import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 
 export const metadata = { title: "Sistema · Roles y permisos" };
 export const dynamic = "force-dynamic";
 
 export default async function RolesPage() {
-  const [roles, permissions, assignments] = await Promise.all([
-    listRoles(),
-    listPermissions(),
-    listUserAssignments(),
-  ]);
+  // Las tablas RBAC (roles/permissions/user_roles, migración 0009_rbac) pueden
+  // no estar aplicadas en prod. Degradar con gracia en vez de romper el shell.
+  let roles: Awaited<ReturnType<typeof listRoles>>;
+  let permissions: Awaited<ReturnType<typeof listPermissions>>;
+  let assignments: Awaited<ReturnType<typeof listUserAssignments>>;
+  try {
+    [roles, permissions, assignments] = await Promise.all([
+      listRoles(),
+      listPermissions(),
+      listUserAssignments(),
+    ]);
+  } catch (e) {
+    return (
+      <ModuleUnavailable
+        title="Roles y permisos no disponibles"
+        migration="0009_rbac"
+        detail={e instanceof Error ? e.message : String(e)}
+      />
+    );
+  }
 
   const totalUsers = new Set(assignments.map((a) => a.user_id)).size;
 

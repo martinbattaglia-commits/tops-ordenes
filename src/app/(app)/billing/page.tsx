@@ -4,6 +4,7 @@ import { listOrders } from "@/lib/data/orders";
 import { listInvoices } from "@/lib/invoicing/data";
 import { INVOICE_STATUS_META, COMPROBANTE_LABEL } from "@/lib/invoicing/types";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
+import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { EmitInvoiceButton } from "./EmitInvoiceButton";
 
 export const metadata = { title: "Facturación" };
@@ -13,10 +14,27 @@ function nroComprobante(pv: number, nro: number | null): string {
 }
 
 export default async function BillingPage() {
-  const [{ rows }, invoicesResult] = await Promise.all([
-    listOrders({ pageSize: 1000 }),
-    listInvoices({ pageSize: 50 }),
-  ]);
+  // El esquema de facturación (customer_invoices, migración 0011_arca_billing)
+  // puede no estar aplicado todavía en prod. Si falta, degradamos a un card
+  // claro en lugar de tirar y romper todo el shell (root error.tsx).
+  let rows: Awaited<ReturnType<typeof listOrders>>["rows"];
+  let invoicesResult: Awaited<ReturnType<typeof listInvoices>>;
+  try {
+    const [ordersRes, invRes] = await Promise.all([
+      listOrders({ pageSize: 1000 }),
+      listInvoices({ pageSize: 50 }),
+    ]);
+    rows = ordersRes.rows;
+    invoicesResult = invRes;
+  } catch (e) {
+    return (
+      <ModuleUnavailable
+        title="Facturación no disponible"
+        migration="0011_arca_billing"
+        detail={e instanceof Error ? e.message : String(e)}
+      />
+    );
+  }
 
   const facturables = rows.filter((o) => o.status === "FIRMADA");
   const total = facturables.reduce((a, b) => a + b.total, 0);

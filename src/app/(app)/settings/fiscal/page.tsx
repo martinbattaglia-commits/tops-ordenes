@@ -3,16 +3,31 @@ import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { getFiscalConfig, listPuntosVenta } from "@/lib/invoicing/data";
+import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { FiscalConfigForm } from "./FiscalConfigForm";
 import { PuntosVentaManager } from "./PuntosVentaManager";
 
 export const metadata = { title: "Configuración fiscal" };
 
 export default async function FiscalSettingsPage() {
-  const [config, puntosVenta] = await Promise.all([
-    getFiscalConfig(),
-    listPuntosVenta({ includeInactive: true }),
-  ]);
+  // fiscal_config / puntos_venta (migración 0011_arca_billing) pueden no estar
+  // aplicados en prod. Degradar con gracia en vez de romper el shell.
+  let config: Awaited<ReturnType<typeof getFiscalConfig>>;
+  let puntosVenta: Awaited<ReturnType<typeof listPuntosVenta>>;
+  try {
+    [config, puntosVenta] = await Promise.all([
+      getFiscalConfig(),
+      listPuntosVenta({ includeInactive: true }),
+    ]);
+  } catch (e) {
+    return (
+      <ModuleUnavailable
+        title="Configuración fiscal no disponible"
+        migration="0011_arca_billing"
+        detail={e instanceof Error ? e.message : String(e)}
+      />
+    );
+  }
 
   // Gating: en producción sólo admin edita. En demo, vista de sólo lectura.
   let isAdmin = false;
