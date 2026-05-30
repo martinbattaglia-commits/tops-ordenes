@@ -43,6 +43,25 @@
     --safe-left: env(safe-area-inset-left);
     --safe-right: env(safe-area-inset-right);
 
+    /* ── Nexus Motion System · tokens (F0) ───────────────────────────────
+       Única fuente de verdad de ritmo/easing/lift. Cada valor es idéntico
+       al literal que reemplaza → cero cambio visual al adoptar var().
+       NOTA: --nx-accent/glow/border NO se definen acá a propósito: deben
+       quedar sin setear para que el inline --gws-* (Workspace) gane vía la
+       cadena de fallback. Se setean por contexto, inline, en cada módulo. */
+    --nx-ease-out: cubic-bezier(0.25, 0.8, 0.25, 1);
+    --nx-ease-standard: ease;
+    --nx-dur-fast: 160ms;
+    --nx-dur-hover: 180ms;
+    --nx-dur-base: 200ms;
+    --nx-dur-glow: 240ms;
+    --nx-dur-enter: 280ms;
+    --nx-dur-stagger: 360ms;
+    --nx-dur-shimmer: 700ms;
+    --nx-dur-sweep: 900ms;
+    --nx-lift-sm: -2px;
+    --nx-lift-md: -3px;
+
     color-scheme: light;
   }
 
@@ -489,36 +508,42 @@
   }
 }
 
-.nexus-page-fade {
-  animation: nexus-fade-up 280ms cubic-bezier(0.25, 0.8, 0.25, 1) both;
+.nexus-page-fade,
+.nx-page-fade {
+  animation: nexus-fade-up var(--nx-dur-enter) var(--nx-ease-out) both;
 }
 
 /* Hover lift premium para cards. Usá .card-lift en cualquier .card
    que quieras que reaccione al puntero. No agresivo — 2px + shadow. */
-.card-lift {
+.card-lift,
+.nx-lift {
   transition:
-    transform 180ms cubic-bezier(0.25, 0.8, 0.25, 1),
-    box-shadow 180ms cubic-bezier(0.25, 0.8, 0.25, 1),
-    border-color 180ms ease;
+    transform var(--nx-dur-hover) var(--nx-ease-out),
+    box-shadow var(--nx-dur-hover) var(--nx-ease-out),
+    border-color var(--nx-dur-hover) var(--nx-ease-standard);
   will-change: transform;
 }
-.card-lift:hover {
-  transform: translate3d(0, -2px, 0);
+.card-lift:hover,
+.nx-lift:hover {
+  transform: translate3d(0, var(--nx-lift-sm), 0);
   box-shadow: 0 12px 28px -12px rgba(5, 5, 85, 0.18);
   border-color: rgba(33, 69, 118, 0.25);
 }
-.card-lift:active {
+.card-lift:active,
+.nx-lift:active {
   transform: translate3d(0, 0, 0);
 }
 
 /* Shimmer corporativo — sweep diagonal para botones primarios y CTAs.
    No autoplay; sólo en hover para evitar distracción permanente. */
-.btn-shimmer {
+.btn-shimmer,
+.nx-cta {
   position: relative;
   overflow: hidden;
   isolation: isolate;
 }
-.btn-shimmer::after {
+.btn-shimmer::after,
+.nx-cta::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -529,10 +554,11 @@
     transparent 70%
   );
   transform: translateX(-110%);
-  transition: transform 700ms ease;
+  transition: transform var(--nx-dur-shimmer) var(--nx-ease-standard);
   pointer-events: none;
 }
-.btn-shimmer:hover::after {
+.btn-shimmer:hover::after,
+.nx-cta:hover::after {
   transform: translateX(110%);
 }
 
@@ -578,10 +604,13 @@
 }
 
 /* Drive TOPS — filas con micro-lift y ícono shimmer en hover */
-.drive-row {
-  transition: padding-left 200ms ease, background-color 160ms ease;
+.drive-row,
+.nx-row {
+  transition: padding-left var(--nx-dur-base) var(--nx-ease-standard),
+    background-color var(--nx-dur-fast) var(--nx-ease-standard);
 }
-.drive-row:hover {
+.drive-row:hover,
+.nx-row:hover {
   padding-left: calc(1.25rem + 4px);
 }
 
@@ -598,47 +627,57 @@
 /* ── Google Workspace · hub premium (solo sección visual Workspace) ───────
    Glow por color de marca vía custom props (--gws-accent/glow/border) que
    cada card setea inline. Sin librerías, sin JS. Restraint corporativo. */
-.gws-card {
+.gws-card,
+.nx-interactive {
   position: relative;
   isolation: isolate;
   transition:
-    transform 200ms cubic-bezier(0.25, 0.8, 0.25, 1),
-    box-shadow 200ms cubic-bezier(0.25, 0.8, 0.25, 1),
-    border-color 200ms ease;
+    transform var(--nx-dur-base) var(--nx-ease-out),
+    box-shadow var(--nx-dur-base) var(--nx-ease-out),
+    border-color var(--nx-dur-base) var(--nx-ease-standard);
 }
-.gws-card::before {
+.gws-card::before,
+.nx-interactive::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: radial-gradient(
     120% 80% at 85% 0%,
-    var(--gws-accent, rgba(66, 133, 244, 0.4)),
+    var(--nx-accent, var(--gws-accent, rgba(66, 133, 244, 0.4))),
     transparent 60%
   );
   opacity: 0;
-  transition: opacity 240ms ease;
+  transition: opacity var(--nx-dur-glow) var(--nx-ease-standard);
   pointer-events: none;
   z-index: -1;
 }
-.gws-card:hover {
-  transform: translate3d(0, -3px, 0);
-  box-shadow: 0 18px 40px -18px var(--gws-glow, rgba(66, 133, 244, 0.45));
-  border-color: var(--gws-border, rgba(33, 69, 118, 0.25));
+.gws-card:hover,
+.nx-interactive:hover {
+  transform: translate3d(0, var(--nx-lift-md), 0);
+  box-shadow: 0 18px 40px -18px
+    var(--nx-glow, var(--gws-glow, rgba(66, 133, 244, 0.45)));
+  border-color: var(--nx-border, var(--gws-border, rgba(33, 69, 118, 0.25)));
 }
-.gws-card:hover::before {
+.gws-card:hover::before,
+.nx-interactive:hover::before {
   opacity: 0.1;
 }
-.gws-card:active {
+.gws-card:active,
+.nx-interactive:active {
   transform: translate3d(0, -1px, 0);
 }
 
 /* Tile del ícono de marca — halo sutil en hover del card */
-.gws-icon-tile {
-  transition: box-shadow 240ms ease, transform 240ms ease;
+.gws-icon-tile,
+.nx-icon-tile {
+  transition: box-shadow var(--nx-dur-glow) var(--nx-ease-standard),
+    transform var(--nx-dur-glow) var(--nx-ease-standard);
 }
-.gws-card:hover .gws-icon-tile {
-  box-shadow: 0 8px 20px -8px var(--gws-glow, rgba(66, 133, 244, 0.5));
+.gws-card:hover .gws-icon-tile,
+.nx-interactive:hover .nx-icon-tile {
+  box-shadow: 0 8px 20px -8px
+    var(--nx-glow, var(--gws-glow, rgba(66, 133, 244, 0.5)));
   transform: translateY(-1px);
 }
 
@@ -653,16 +692,19 @@
     transform: translate3d(0, 0, 0);
   }
 }
-.gws-stagger {
-  animation: gws-fade-in 360ms cubic-bezier(0.25, 0.8, 0.25, 1) both;
+.gws-stagger,
+.nx-stagger {
+  animation: gws-fade-in var(--nx-dur-stagger) var(--nx-ease-out) both;
 }
 
 /* Shimmer lento sobre la barra de estado del header (no autoplay agresivo) */
-.gws-shine {
+.gws-shine,
+.nx-shine {
   position: relative;
   overflow: hidden;
 }
-.gws-shine::after {
+.gws-shine::after,
+.nx-shine::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -689,7 +731,8 @@
 
 /* Real / clickeable — cursor explícito (refuerzo del affordance). Los <a>
    ya son pointer, pero lo dejamos explícito para anchors e internos. */
-.gws-clickable {
+.gws-clickable,
+.nx-interactive {
   cursor: pointer;
 }
 
@@ -700,10 +743,12 @@
 
 /* Shimmer diagonal lento — un solo pase al entrar el puntero. El overflow
    recorta el sweep dentro del radio; NO afecta al drop-shadow del glow. */
-.gws-card.gws-clickable {
+.gws-card.gws-clickable,
+.nx-interactive {
   overflow: hidden;
 }
-.gws-card.gws-clickable::after {
+.gws-card.gws-clickable::after,
+.nx-interactive::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -715,12 +760,14 @@
     transparent 62%
   );
   transform: translateX(-130%);
-  transition: transform 900ms cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: transform var(--nx-dur-sweep) var(--nx-ease-out);
   pointer-events: none;
   z-index: 0;
 }
 .gws-card.gws-clickable:hover::after,
-.gws-card.gws-clickable:focus-visible::after {
+.gws-card.gws-clickable:focus-visible::after,
+.nx-interactive:hover::after,
+.nx-interactive:focus-visible::after {
   transform: translateX(130%);
 }
 
@@ -735,28 +782,34 @@
   }
 }
 .gws-card.gws-clickable:hover::before,
-.gws-card.gws-clickable:focus-visible::before {
+.gws-card.gws-clickable:focus-visible::before,
+.nx-interactive:hover::before,
+.nx-interactive:focus-visible::before {
   animation: gws-halo-breathe 2800ms ease-in-out infinite;
 }
 
 /* Microinteracción del ícono — lift + scale muy leve + anillo de marca. */
 .gws-card.gws-clickable:hover .gws-icon-tile,
-.gws-card.gws-clickable:focus-visible .gws-icon-tile {
+.gws-card.gws-clickable:focus-visible .gws-icon-tile,
+.nx-interactive:hover .nx-icon-tile,
+.nx-interactive:focus-visible .nx-icon-tile {
   transform: translateY(-1px) scale(1.03);
   box-shadow:
-    0 10px 24px -8px var(--gws-glow, rgba(66, 133, 244, 0.5)),
-    0 0 0 3px var(--gws-accent, rgba(66, 133, 244, 0.3));
+    0 10px 24px -8px var(--nx-glow, var(--gws-glow, rgba(66, 133, 244, 0.5))),
+    0 0 0 3px var(--nx-accent, var(--gws-accent, rgba(66, 133, 244, 0.3)));
 }
 
 /* Informativo / simulado — NO interactivo. Sin lift, sin glow, cursor normal.
    Conserva sólo el fade-in de entrada (gws-stagger). Comunica "panel, no botón"
    para que el usuario distinga de un vistazo qué se puede clickear y qué no. */
-.gws-info {
+.gws-info,
+.nx-surface {
   position: relative;
   isolation: isolate;
   cursor: default;
 }
-.gws-info:hover {
+.gws-info:hover,
+.nx-surface:hover {
   transform: none !important;
   box-shadow: none !important;
 }
@@ -764,20 +817,32 @@
 /* Reduced motion: cero animaciones. */
 @media (prefers-reduced-motion: reduce) {
   .nexus-page-fade,
+  .nx-page-fade,
   .card-lift,
+  .nx-lift,
   .btn-shimmer::after,
+  .nx-cta::after,
   .kpi-pulse,
   .ce-engine .ce-ring-stroke,
   .ce-engine .ce-alert-row,
   .drive-row,
+  .nx-row,
   .gws-card,
+  .nx-interactive,
   .gws-card.gws-clickable::after,
+  .nx-interactive::after,
   .gws-card.gws-clickable:hover::before,
   .gws-card.gws-clickable:focus-visible::before,
+  .nx-interactive:hover::before,
+  .nx-interactive:focus-visible::before,
   .gws-info,
+  .nx-surface,
   .gws-icon-tile,
+  .nx-icon-tile,
   .gws-stagger,
-  .gws-shine::after {
+  .nx-stagger,
+  .gws-shine::after,
+  .nx-shine::after {
     animation: none !important;
     transition: none !important;
   }
