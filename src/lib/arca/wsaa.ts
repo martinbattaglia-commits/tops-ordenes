@@ -92,6 +92,14 @@ export function buildTra(service: string, now: Date = new Date()): string {
 export function opensslSigner(certPath: string, keyPath: string): CmsSigner {
   return {
     async sign(traXml: string): Promise<string> {
+      if (!certPath || !keyPath) {
+        throw new WsaaAuthError(
+          "ARCA_CMS_SIGNER=openssl requiere ARCA_CERT_PATH / ARCA_KEY_PATH " +
+            "(archivos en disco). Para credenciales por contenido-env " +
+            "(ARCA_CERT_PEM / ARCA_KEY_PEM, p. ej. en serverless), usá el firmador " +
+            "forge (default)."
+        );
+      }
       // Validar lectura de los archivos (falla claro si faltan/no legibles).
       await Promise.all([readFile(certPath), readFile(keyPath)]);
       return await new Promise<string>((resolve, reject) => {

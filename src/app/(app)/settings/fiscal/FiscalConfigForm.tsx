@@ -149,11 +149,14 @@ export function FiscalConfigForm({ config, puntosVenta, canEdit, arcaConfigured 
             </Field>
           </div>
           <p className="text-xs text-fg-muted mt-2">
-            La clave privada X.509 nunca se guarda en la base ni en el repo: vive en el host
-            (<code className="font-mono">ARCA_CERT_PATH</code> / <code className="font-mono">ARCA_KEY_PATH</code>).
+            La clave privada X.509 nunca se guarda en la base ni en el repo: se entrega como
+            secret del entorno (<code className="font-mono">ARCA_CERT_PEM</code> /{" "}
+            <code className="font-mono">ARCA_KEY_PEM</code> en serverless, o{" "}
+            <code className="font-mono">ARCA_CERT_PATH</code> /{" "}
+            <code className="font-mono">ARCA_KEY_PATH</code> en hosts con filesystem).
             Estado de credenciales:{" "}
             <span className={arcaConfigured ? "text-status-success font-semibold" : "text-status-warning font-semibold"}>
-              {arcaConfigured ? "montadas en el host" : "no presentes — sólo SANDBOX/Homologación"}
+              {arcaConfigured ? "presentes en el entorno" : "no presentes — sólo SANDBOX/Homologación"}
             </span>
             .
           </p>

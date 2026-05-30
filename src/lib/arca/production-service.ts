@@ -23,6 +23,7 @@
 
 import { env } from "../env";
 import { WsaaClient } from "./wsaa";
+import { hasArcaCredentials } from "./credentials";
 import { Wsfev1Client, Wsfev1Error, type FeAuth } from "./wsfev1";
 import { MockArcaService } from "./mock-service";
 import { consoleArcaLogger, maskSecret, type ArcaLogger } from "./logger";
@@ -111,7 +112,9 @@ export class ProductionArcaService implements IArcaService {
     this.certPath = cfg.certPath ?? env.arca.certPath;
     this.keyPath = cfg.keyPath ?? env.arca.keyPath;
 
-    const hasCreds = Boolean(this.certPath && this.keyPath);
+    // Credenciales por path (override de cfg/env) o por contenido PEM en env
+    // (serverless). El firmador resuelve la fuente real al firmar.
+    const hasCreds = Boolean(this.certPath && this.keyPath) || hasArcaCredentials();
     const allowFallback = cfg.allowMockFallback ?? env.arca.allowMockFallback;
 
     if (!hasCreds) {
@@ -166,9 +169,10 @@ export class ProductionArcaService implements IArcaService {
     if (this.fallback) return;
     if (!this.wsaa || !this.wsfev1) {
       throw new ArcaConfigError(
-        `ARCA ${this.ambiente}: faltan credenciales fiscales (ARCA_CERT_PATH / ` +
-          `ARCA_KEY_PATH) en el host. La clave privada nunca vive en repo/DB. ` +
-          `Configurá el certificado X.509 + clave, o usá ambiente SANDBOX (Mock). ` +
+        `ARCA ${this.ambiente}: faltan credenciales fiscales. Definí ARCA_CERT_PEM / ` +
+          `ARCA_KEY_PEM (PEM o base64, recomendado en serverless) o ARCA_CERT_PATH / ` +
+          `ARCA_KEY_PATH (host con filesystem). La clave privada nunca vive en repo/DB. ` +
+          `Como alternativa, usá ambiente SANDBOX (Mock). ` +
           (this.ambiente === "PRODUCCION"
             ? `En PRODUCCION no existe fallback a Mock (jamás se simula un CAE real).`
             : `Para dev/preview podés habilitar ARCA_ALLOW_MOCK_FALLBACK=1.`)

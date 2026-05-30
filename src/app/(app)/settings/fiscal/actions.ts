@@ -89,7 +89,7 @@ export async function updateFiscalConfig(input: unknown): Promise<ActionResult> 
     return {
       ok: false,
       error:
-        "No se puede activar PRODUCCIÓN: faltan ARCA_CERT_PATH / ARCA_KEY_PATH en el host. Cargá el certificado X.509 antes de emitir con validez fiscal.",
+        "No se puede activar PRODUCCIÓN: faltan credenciales X.509. Definí ARCA_CERT_PEM / ARCA_KEY_PEM (PEM o base64, recomendado en Netlify) o ARCA_CERT_PATH / ARCA_KEY_PATH antes de emitir con validez fiscal.",
     };
   }
 

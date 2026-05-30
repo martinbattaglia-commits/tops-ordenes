@@ -13,6 +13,27 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 
 const explicitDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "1";
 
+/**
+ * Decodifica un PEM entregado por env. Acepta PEM crudo (contiene "BEGIN") o
+ * base64 del PEM (recomendado en Netlify para evitar problemas de newlines).
+ * Vacío si no está seteado o no decodifica.
+ */
+const decodePem = (raw?: string): string => {
+  const v = raw?.trim();
+  if (!v) return "";
+  if (v.includes("BEGIN")) return v;
+  try {
+    return Buffer.from(v, "base64").toString("utf8");
+  } catch {
+    return "";
+  }
+};
+
+const arcaCertPem = decodePem(process.env.ARCA_CERT_PEM);
+const arcaKeyPem = decodePem(process.env.ARCA_KEY_PEM);
+const arcaCertPath = process.env.ARCA_CERT_PATH?.trim() ?? "";
+const arcaKeyPath = process.env.ARCA_KEY_PATH?.trim() ?? "";
+
 export const env = {
   supabase: {
     url: supabaseUrl,
@@ -70,8 +91,16 @@ export const env = {
     /** CUIT del emisor (sin guiones). Fuente real: fiscal_config.cuit. */
     cuit: process.env.ARCA_CUIT?.replace(/\D/g, "") ?? "",
     /** Alias/ruta del certificado X.509 en el host (la key jamás en repo/DB). */
-    certPath: process.env.ARCA_CERT_PATH?.trim() ?? "",
-    keyPath: process.env.ARCA_KEY_PATH?.trim() ?? "",
+    certPath: arcaCertPath,
+    keyPath: arcaKeyPath,
+    /**
+     * Contenido PEM del cert/clave entregado por env (base64 o PEM crudo). Vía
+     * recomendada en runtimes serverless (Netlify Functions) donde NO hay
+     * filesystem persistente en certPath/keyPath. La clave privada vive SOLO en
+     * memoria durante la firma; jamás se loguea ni se persiste en repo/DB.
+     */
+    certPem: arcaCertPem,
+    keyPem: arcaKeyPem,
     /**
      * Firmador CMS/PKCS#7 del TRA. `forge` = puro-JS (node-forge), portable a
      * runtime serverless sin binario externo (default, recomendado por GATE 3).
@@ -103,9 +132,12 @@ export const env = {
      * (jamás simular un CAE real). Default: false.
      */
     allowMockFallback: process.env.ARCA_ALLOW_MOCK_FALLBACK === "1",
-    /** Credenciales presentes → listo para producción real. */
+    /**
+     * Credenciales presentes → listo para producción real. Acepta cualquiera de
+     * las dos vías: archivos en disco (path) o contenido PEM en env (serverless).
+     */
     configured: Boolean(
-      process.env.ARCA_CERT_PATH?.trim() && process.env.ARCA_KEY_PATH?.trim()
+      (arcaCertPath && arcaKeyPath) || (arcaCertPem && arcaKeyPem)
     ),
   },
   hikvision: {

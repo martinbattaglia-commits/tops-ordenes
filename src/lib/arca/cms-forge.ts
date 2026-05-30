@@ -12,15 +12,16 @@
  * en `<in0>`.
  *
  * Seguridad:
- *  - La clave privada se lee del path indicado (ARCA_KEY_PATH) y vive SOLO en
- *    memoria durante la firma. Nunca se loguea ni se persiste.
+ *  - La clave privada se resuelve por contenido-env (ARCA_KEY_PEM) o path
+ *    (ARCA_KEY_PATH) y vive SOLO en memoria durante la firma. Nunca se loguea
+ *    ni se persiste en repo/DB.
  *  - No se imprime cert/clave/CMS en claro.
  */
 
-import { readFile } from "fs/promises";
 // node-forge se declara como módulo ambiente en ./node-forge.d.ts (sin @types).
 import forge from "node-forge";
 import type { CmsSigner } from "./wsaa";
+import { resolveArcaPem } from "./credentials";
 
 export interface ForgeSignerOptions {
   /** Algoritmo de digest. ARCA acepta sha256 (default) y sha1 (legacy). */
@@ -28,8 +29,9 @@ export interface ForgeSignerOptions {
 }
 
 /**
- * Construye un CmsSigner puro-JS. Lee cert+clave PEM de disco en cada firma
- * (igual semántica que opensslSigner: falla claro si faltan/no legibles).
+ * Construye un CmsSigner puro-JS. Resuelve cert+clave PEM por cada firma vía
+ * `resolveArcaPem` (contenido-env > archivo en disco): portable a serverless,
+ * falla claro si faltan/no legibles.
  */
 export function forgeCmsSigner(
   certPath: string,
@@ -41,10 +43,7 @@ export function forgeCmsSigner(
 
   return {
     async sign(traXml: string): Promise<string> {
-      const [certPem, keyPem] = await Promise.all([
-        readFile(certPath, "utf8"),
-        readFile(keyPath, "utf8"),
-      ]);
+      const { certPem, keyPem } = await resolveArcaPem(certPath, keyPath);
 
       const cert = forge.pki.certificateFromPem(certPem);
       const privateKey = forge.pki.privateKeyFromPem(keyPem);
