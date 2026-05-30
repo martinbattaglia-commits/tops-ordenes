@@ -43,6 +43,7 @@ const DOMAINS: Domain[] = [
       { href: "/compras/ordenes", label: "Órdenes de compra", icon: "cart", count: 64 },
       { href: "/compras/nueva", label: "Nueva OC", icon: "plus", accent: true },
       { href: "/compras/proveedores", label: "Proveedores", icon: "vendors" },
+      { href: "/compras/facturas", label: "Facturas proveedor", icon: "wallet" },
     ],
   },
   {
@@ -102,6 +103,7 @@ const DOMAINS: Domain[] = [
       { href: "/organigrama", label: "Organigrama", icon: "building" },
       { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
       { href: "/settings/users", label: "Usuarios", icon: "users" },
+      { href: "/settings/centros-costo", label: "Centros de costo", icon: "tag-alt" },
       { href: "/templates", label: "Plantillas OS", icon: "mail" },
       { href: "/settings", label: "Configuración", icon: "gear" },
     ],
@@ -124,6 +126,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/orders",
       "/compras",
       "/compras/ordenes",
+      "/compras/facturas",
       "/clients",
       "/reports",
       "/billing",
@@ -137,6 +140,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/settings",
       "/settings/roles",
       "/settings/users",
+      "/settings/centros-costo",
       "/templates",
     ]);
     if (exact.has(href)) return pathname === href;
