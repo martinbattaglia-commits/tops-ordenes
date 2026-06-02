@@ -25,6 +25,8 @@ yarn-error.log*
 .env
 .env*.local
 .env.production
+.env*.save
+*.save
 
 # vercel / netlify
 .vercel
