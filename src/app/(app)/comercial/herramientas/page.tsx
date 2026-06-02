@@ -1,67 +1,107 @@
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { PRODUCT } from "@/lib/org";
+import { VIRTUAL_TOURS } from "./_data/tours";
 
-export const metadata = { title: "Herramientas Comerciales" };
+export const metadata = { title: "Herramientas" };
 
-/* ── Herramientas Comerciales · accesos rápidos ───────────────────────────
+/* ── Herramientas · repositorio de herramientas comerciales oficiales ───────
  *
- * Cada herramienta es un enlace externo que abre en una pestaña nueva. Las
- * URLs son configurables desde este array: agregar una nueva tarjeta solo
- * requiere sumar un objeto a `TOOLS` — el layout (grid responsive) se adapta
- * solo. No se duplica funcionalidad: estas tarjetas son únicamente accesos.
+ * Sección única de Herramientas de Logística TOPS:
+ *   · Generadores → rutas internas que embeben la versión oficial dentro del
+ *                   shell Nexus (iframe same-origin desde `public/tools/<x>`):
+ *                   Cotizador, Propuesta ANMAT, Propuesta Cargas Generales.
+ *   · Recorridos  → abren el tour 360° en una pestaña nueva (las plataformas
+ *                   no permiten embeber en iframe).
+ *
+ * Fuente de verdad de los recorridos: `_data/tours.ts`.
  */
 
-interface CommercialTool {
+interface ToolCard {
   key: string;
+  /** Ruta interna (Link). Mutuamente excluyente con `externalUrl`. */
+  href?: string;
+  /** Enlace externo (abre en pestaña nueva). */
+  externalUrl?: string;
   name: string;
   description: string;
-  url: string;
-  /** Texto del botón de acción. */
-  cta: string;
-  /** Etiqueta corta de categoría. */
   badge: string;
   icon: IconName;
-  /** Color de marca y derivados para el glow/borde en hover (custom props CSS). */
+  disabled?: boolean;
   accent: string;
   glow: string;
   border: string;
-  /** Color del ícono. */
   iconColor: string;
 }
 
-const TOOLS: CommercialTool[] = [
-  {
-    key: "recorrido-anmat",
-    name: "Recorrido Virtual ANMAT",
-    description:
-      "Visualización interactiva de los nuevos cubículos y áreas habilitadas para clientes.",
-    url: "https://realsee.ai/49kkW65",
-    cta: "Abrir Recorrido Virtual",
-    badge: "Recorrido 3D",
-    icon: "building",
-    accent: "rgba(33,69,118,0.30)",
-    glow: "rgba(33,69,118,0.40)",
-    border: "rgba(33,69,118,0.45)",
-    iconColor: "text-tops-blue-700",
-  },
+const RED = {
+  accent: "rgba(229,57,53,0.28)",
+  glow: "rgba(229,57,53,0.38)",
+  border: "rgba(229,57,53,0.45)",
+  iconColor: "text-tops-red",
+};
+const BLUE = {
+  accent: "rgba(33,69,118,0.30)",
+  glow: "rgba(33,69,118,0.40)",
+  border: "rgba(33,69,118,0.45)",
+  iconColor: "text-tops-blue-700",
+};
+
+const TOOL_CARDS: ToolCard[] = [
   {
     key: "cotizador",
-    name: "Cotizador Comercial",
+    href: "/comercial/herramientas/cotizador",
+    name: "Cotizador Logístico TOPS",
     description:
-      "Herramienta interna para cálculo rápido de propuestas comerciales y valorización de servicios logísticos.",
-    url: "https://logisticatops-cotizador.netlify.app",
-    cta: "Abrir Cotizador",
+      "Versión oficial del cotizador de Logística TOPS: cálculo de tarifas de almacenaje, distribución y servicios logísticos.",
     badge: "Cotización",
     icon: "calculator",
-    accent: "rgba(229,57,53,0.28)",
-    glow: "rgba(229,57,53,0.38)",
-    border: "rgba(229,57,53,0.45)",
-    iconColor: "text-tops-red",
+    ...RED,
+  },
+  {
+    key: "propuesta-anmat",
+    href: "/comercial/herramientas/propuesta-anmat",
+    name: "Propuesta Comercial ANMAT",
+    description:
+      "Generador oficial de propuestas comerciales para almacenamiento regulado ANMAT.",
+    badge: "ANMAT",
+    icon: "shield",
+    ...RED,
+  },
+  {
+    key: "propuesta-general",
+    href: "/comercial/herramientas/propuesta-general",
+    name: "Propuesta Comercial Cargas Generales",
+    description:
+      "Generador oficial de propuestas comerciales para almacenamiento de cargas generales.",
+    badge: "Cargas Generales",
+    icon: "forklift",
+    ...RED,
   },
 ];
 
-export default function HerramientasComercialesPage() {
+const TOUR_ICONS: Record<string, IconName> = {
+  lujan: "building",
+  "barracas-anmat": "shield",
+  "barracas-general": "forklift",
+};
+
+const RECORRIDO_CARDS: ToolCard[] = VIRTUAL_TOURS.map((tour) => {
+  const hasTour = tour.status === "available" && tour.tourUrl.trim().length > 0;
+  return {
+    key: tour.slug,
+    externalUrl: hasTour ? tour.tourUrl : undefined,
+    name: tour.shortTitle,
+    description: tour.description,
+    badge: tour.status === "coming_soon" ? "Próximamente" : "Recorrido 3D",
+    icon: TOUR_ICONS[tour.slug] ?? "building",
+    disabled: !hasTour,
+    ...BLUE,
+  };
+});
+
+export default function HerramientasPage() {
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-8">
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -79,91 +119,144 @@ export default function HerramientasComercialesPage() {
               <Icon name="bolt" size={26} />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="eyebrow-tiny">{PRODUCT.name} · Comercial</div>
-              <h1 className="page-title">Herramientas Comerciales</h1>
+              <div className="eyebrow-tiny">{PRODUCT.name} · Herramientas</div>
+              <h1 className="page-title">Herramientas</h1>
               <p className="page-subtitle max-w-2xl">
-                Accesos rápidos a las herramientas del equipo comercial. Cada
-                acceso abre la herramienta en una pestaña nueva.
+                Repositorio oficial de herramientas comerciales de Logística TOPS:
+                cotizador, generadores de propuestas y recorridos virtuales de las
+                instalaciones.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Grid de herramientas ───────────────────────────────────────── */}
+      {/* ── Herramientas Comerciales ───────────────────────────────────── */}
       <section className="space-y-3">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <div className="eyebrow-tiny">Accesos rápidos</div>
-            <p className="text-[13px] text-fg-secondary">
-              Herramientas comerciales de Logística TOPS.
-            </p>
-          </div>
-          <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded shrink-0">
-            {TOOLS.length} herramientas
-          </span>
+        <div>
+          <div className="eyebrow-tiny">Herramientas Comerciales</div>
+          <p className="text-[13px] text-fg-secondary">
+            Cotizador y generadores oficiales de propuestas comerciales.
+          </p>
         </div>
-
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {TOOLS.map((tool, i) => (
-            <a
-              key={tool.key}
-              href={tool.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`${tool.cta} en una pestaña nueva`}
-              style={
-                {
-                  "--gws-accent": tool.accent,
-                  "--gws-glow": tool.glow,
-                  "--gws-border": tool.border,
-                  animationDelay: `${i * 55}ms`,
-                } as CSSProperties
-              }
-              className="gws-card gws-stagger card p-5 flex flex-col gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div
-                  className={`gws-icon-tile w-14 h-14 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm ${tool.iconColor}`}
-                >
-                  <Icon name={tool.icon} size={26} />
-                </div>
-                <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">
-                  {tool.badge}
-                </span>
-              </div>
-
-              <div className="flex-1">
-                <div className="text-base font-black text-fg-primary tracking-tight">
-                  {tool.name}
-                </div>
-                <p className="text-[13px] text-fg-secondary mt-1 leading-snug">
-                  {tool.description}
-                </p>
-              </div>
-
-              <span className="btn btn-primary btn-sm btn-shimmer w-full justify-center pointer-events-none">
-                <span>{tool.cta}</span>
-                <Icon name="arrow-up-right" size={14} stroke={2.2} />
-              </span>
-            </a>
+          {TOOL_CARDS.map((tool, i) => (
+            <ToolTile key={tool.key} tool={tool} index={i} />
           ))}
         </div>
       </section>
 
-      {/* ── Nota informativa ───────────────────────────────────────────── */}
-      <section className="card p-4 md:p-5 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.16em] text-fg-secondary">
-            <Icon name="arrow-up-right" size={12} /> Enlaces externos
+      {/* ── Recorridos Virtuales ───────────────────────────────────────── */}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <div className="eyebrow-tiny">Recorridos Virtuales</div>
+            <p className="text-[13px] text-fg-secondary">
+              Tours 360° de los depósitos de Logística TOPS. Se abren en una
+              pestaña nueva.
+            </p>
+          </div>
+          <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-2 py-1 rounded shrink-0">
+            {RECORRIDO_CARDS.length} recorridos
           </span>
         </div>
-        <p className="text-[12px] text-fg-secondary leading-relaxed">
-          Estos accesos son enlaces directos a herramientas externas: abren en
-          una pestaña nueva y no modifican datos del sistema. Esta sección queda
-          preparada para sumar nuevas herramientas comerciales a futuro.
-        </p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {RECORRIDO_CARDS.map((tool, i) => (
+            <ToolTile key={tool.key} tool={tool} index={i} />
+          ))}
+        </div>
       </section>
     </div>
+  );
+}
+
+function ToolTile({ tool, index }: { tool: ToolCard; index: number }) {
+  const cardStyle = {
+    "--gws-accent": tool.accent,
+    "--gws-glow": tool.glow,
+    "--gws-border": tool.border,
+    animationDelay: `${index * 55}ms`,
+  } as CSSProperties;
+
+  const isExternal = Boolean(tool.externalUrl);
+
+  const inner = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div
+          className={`gws-icon-tile w-14 h-14 shrink-0 rounded-xl bg-bg-surface border border-stroke-soft grid place-items-center shadow-sm ${tool.iconColor}`}
+        >
+          <Icon name={tool.icon} size={26} />
+        </div>
+        <span className="text-[9px] font-bold uppercase tracking-wider text-fg-secondary bg-fg-secondary/10 border border-stroke-soft px-1.5 py-0.5 rounded">
+          {tool.badge}
+        </span>
+      </div>
+
+      <div className="flex-1">
+        <div className="text-base font-black text-fg-primary tracking-tight">
+          {tool.name}
+        </div>
+        <p className="text-[13px] text-fg-secondary mt-1 leading-snug">
+          {tool.description}
+        </p>
+      </div>
+
+      <span
+        className={`btn btn-sm w-full justify-center pointer-events-none ${
+          tool.disabled ? "btn-ghost opacity-60" : "btn-primary btn-shimmer"
+        }`}
+      >
+        <span>{tool.disabled ? "Próximamente" : "Abrir"}</span>
+        {!tool.disabled && (
+          <Icon
+            name={isExternal ? "arrow-up-right" : "arrow-right"}
+            size={14}
+            stroke={2.2}
+          />
+        )}
+      </span>
+    </>
+  );
+
+  const cardClass =
+    "gws-card gws-clickable gws-stagger card p-5 flex flex-col gap-4 group focus:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/50";
+
+  if (tool.disabled) {
+    return (
+      <div
+        aria-disabled="true"
+        style={cardStyle}
+        className="gws-card gws-stagger card p-5 flex flex-col gap-4 cursor-not-allowed"
+      >
+        {inner}
+      </div>
+    );
+  }
+
+  if (isExternal) {
+    return (
+      <a
+        href={tool.externalUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Abrir ${tool.name} en una pestaña nueva`}
+        style={cardStyle}
+        className={cardClass}
+      >
+        {inner}
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      href={tool.href ?? "#"}
+      aria-label={`Abrir ${tool.name}`}
+      style={cardStyle}
+      className={cardClass}
+    >
+      {inner}
+    </Link>
   );
 }

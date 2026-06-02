@@ -94,6 +94,7 @@ const DOMAINS: Domain[] = [
       { href: "/comercial/contactos", label: "Contactos", icon: "users", badge: "Clientify" },
       { href: "/comercial/pipeline", label: "Pipeline", icon: "trend-up", badge: "Clientify" },
       { href: "/comercial/herramientas", label: "Herramientas", icon: "bolt" },
+      { href: "/comercial/herramientas/cotizador", label: "Cotizador", icon: "calculator" },
     ],
   },
   {
@@ -176,6 +177,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/comercial/contactos",
       "/comercial/pipeline",
       "/comercial/herramientas",
+      "/comercial/herramientas/cotizador",
       "/settings",
       "/settings/roles",
       "/settings/users",

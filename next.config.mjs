@@ -33,7 +33,10 @@ const nextConfig = {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "X-Frame-Options", value: "DENY" },
+          // SAMEORIGIN (no DENY) para permitir embeber herramientas internas
+          // same-origin vía <iframe> (ej. /tools/cotizador en /comercial/herramientas).
+          // Sigue bloqueando que cualquier sitio externo enmarque la app (anti-clickjacking).
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(self), geolocation=(self), microphone=()" },
         ],
