@@ -79,6 +79,20 @@ export const env = {
       process.env.META_WA_TOKEN?.trim() && process.env.META_WA_PHONE_NUMBER_ID?.trim()
     ),
   },
+  tracking: {
+    /** Token compartido que el dispositivo Traccar envía en /api/tracking/ingest. */
+    ingestToken: process.env.TRACKING_INGEST_TOKEN?.trim() ?? "",
+    /**
+     * Access token público de Mapbox GL JS (cliente). El mapa en vivo lo lee
+     * desde acá; si está vacío, la UI cae al fallback AmbaMap sin romper.
+     * Se configura en .env.local / Netlify — NUNCA hardcodeado en repo.
+     */
+    mapboxToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim() ?? "",
+    /** True si el mapa Mapbox puede renderizar (token presente). */
+    mapEnabled: Boolean(process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim()),
+    /** True si la ingesta está habilitada (token presente). */
+    configured: Boolean(process.env.TRACKING_INGEST_TOKEN?.trim()),
+  },
   arca: {
     /**
      * Ambiente por defecto si la DB no responde. La fuente de verdad real

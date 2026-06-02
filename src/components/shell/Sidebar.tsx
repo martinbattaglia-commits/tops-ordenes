@@ -33,6 +33,7 @@ const DOMAINS: Domain[] = [
     items: [
       { href: "/ejecutivo", label: "Cockpit ejecutivo", icon: "dashboard" },
       { href: "/operaciones/mapa", label: "Mapa operativo", icon: "pin" },
+      { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
     ],
   },
   {
@@ -105,6 +106,7 @@ const DOMAINS: Domain[] = [
       { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
       { href: "/settings/users", label: "Usuarios", icon: "users" },
       { href: "/settings/centros-costo", label: "Centros de costo", icon: "tag-alt" },
+      { href: "/settings/tracking", label: "Tracking", icon: "truck" },
       { href: "/templates", label: "Plantillas OS", icon: "mail" },
       { href: "/settings", label: "Configuración", icon: "gear" },
     ],
@@ -134,6 +136,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/anmat",
       "/cctv",
       "/operaciones/mapa",
+      "/operaciones/tracking",
       "/organigrama",
       "/workspace",
       "/comercial/contactos",
@@ -143,6 +146,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/settings/roles",
       "/settings/users",
       "/settings/centros-costo",
+      "/settings/tracking",
       "/templates",
     ]);
     if (exact.has(href)) return pathname === href;
