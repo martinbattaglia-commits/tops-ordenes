@@ -14,7 +14,7 @@
 | Gate 4A | Picking | `17b0be5` | ✅ Cerrado · SQL+TS+UI+E2E+kit validación |
 | Gate 4B | Packing | `c5390bd` | ✅ Cerrado · SQL+TS+UI+E2E 12/12+kit validación |
 | Mini-Gate 4B.1 | Packing Cancel (`anular_packing_unit`) | `547f6eb` | ✅ **VALIDADO (2026-06-03)** · RPC `0034` + kit 12/12 (0 footprint). Capa TS/UI (botón "Anular") **pendiente, no bloqueante**. |
-| Gate 4C | Despacho + Entrega (`shipments`, `confirm_dispatch`/`confirm_delivery`/`revert_dispatch`) | _(s/ commit)_ | 🟡 **IMPLEMENTADO (código, 2026-06-03)** · `0035` + TS + UI + kit 14 casos. **Migración SIN aplicar** (la corre Martín) → kit sin correr. tsc/eslint OK. |
+| Gate 4C | Despacho + Entrega (`shipments`, `confirm_dispatch`/`confirm_delivery`/`revert_dispatch`) | `841f85b` | ✅ **VALIDADO + CERRADO (2026-06-03)** · `0035` aplicada · `gate4c_dispatch_validation_report.sql` **14/14 OK** (FEFO, ledger append-only, reversión compensatoria, D1=A, authz) + TS + UI. |
 
 ### Gates / fases previas (estado)
 - **Recepciones (Gate 1)** · **Inventario+Ledger (Gate 2)** · **Pedidos+Reserva (Gate 3)**: funcionalmente **validados** y **aplicados en DB**, pero **SIN commitear** en git (ver §Deuda/Riesgos y `GIT_RECOVERY_CHECKLIST.md`).
@@ -22,8 +22,9 @@
 - **Digital Twin físico (0020-0023)**: commiteado.
 
 ### Gates pendientes
-- **Gate 4C — Despacho + Entrega**: 🟡 **IMPLEMENTADO (código, 2026-06-03)** — migración `0035_wms_dispatch.sql` + capa TS (`src/lib/dispatch/*`) + UI (`/wms/despachos`) + kit `gate4c_dispatch_validation_report.sql` (14 casos). `tsc`/`eslint` OK. **PENDIENTE: aplicar `0035` (la corre Martín) + correr el kit + E2E.** Backup manual previo OBLIGATORIO (PITR off). Ver `GATE_4C_IMPLEMENTATION_REPORT.md`. Primer gate que toca stock/ledger de forma **irreversible** (egreso).
-- **Gate 5 — Cadena de Custodia Digital** (QR por unidad, evidencia fotográfica, auditoría visual): planificado, no iniciado. `packing_units` es la entidad física canónica reservada para esto.
+- **Gate 5 — Cadena de Custodia Digital** (QR por `packing_unit`/`shipment`, evidencia fotográfica, firma del receptor, POD, timeline, auditoría): planificado, **diseño en `GATE_5_CHAIN_OF_CUSTODY_DESIGN.md`**, no iniciada implementación. `packing_units` / `shipments` son las entidades físicas canónicas reservadas para esto.
+
+> **Gate 4C cerrado:** el gate del primer egreso irreversible quedó **VALIDADO + CERRADO** (2026-06-03, commit `841f85b`). Ver fila en la tabla de gates completados y `GATE_4C_IMPLEMENTATION_REPORT.md`.
 
 ### Riesgos abiertos (resumen — detalle en docs específicos)
 1. **🔴 CRÍTICO — Cadena de migraciones partida en git:** `0032`/`0033` (commiteadas) dependen de `0025/0026/0027/0029/0030/0031` (**sin commitear**). Un clon limpio de `main` compila picking/packing pero las migraciones base no están versionadas. Mitigación: commit aislado de Gates 1/2/3 (Fase 0 pendiente).
@@ -106,7 +107,8 @@ Recepción ──► Reserva ──► Picking ──► Packing ──► Despa
 | Cadena migraciones git | `0032/0033` commiteadas dependen de `0025-0031` sin commitear | **Alta** | Fase 0 (commit Gates 1/2/3) |
 | `main` sin push | Gates 4A/4B sin respaldo remoto | Media | push tras consolidar |
 | Casos 2‑6 Recepciones | Kit sin correr | Baja | validación pendiente |
-| ~~FEFO split por lote~~ ✅ **IMPLEMENTADO** | `confirm_dispatch` (0035) decrementa `inventory_lots` por lote FEFO real (multi-lote). _Pendiente validar al aplicar `0035`._ | Cerrado (código) | Gate 4C |
+| ~~FEFO split por lote~~ ✅ **RESUELTO + VALIDADO** | `confirm_dispatch` (0035) decrementa `inventory_lots` por lote FEFO real (multi-lote). Casos C3/C4 del kit OK. | Cerrado | Gate 4C |
+| ~~Dispatch / Delivery / Reversión~~ ✅ **RESUELTO + VALIDADO** | `confirm_dispatch` / `confirm_delivery` / `revert_dispatch` (0035), 14/14 casos OK. | Cerrado | Gate 4C |
 | POST‑503 residual | Revalidación inline single-instance | Baja | revisar en deploy |
 
 Ver detalle operativo en: `WMS_ARCHITECTURE_SNAPSHOT_20260603.md`, `GATE_4C_DECISIONS.md`, `SUPABASE_BACKUP_CHECKLIST.md`, `GIT_RECOVERY_CHECKLIST.md`.

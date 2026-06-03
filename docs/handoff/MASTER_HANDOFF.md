@@ -8,12 +8,13 @@
 > - **Gate 4B (Packing)** — ✅ cerrado y commiteado (`c5390bd`, migración `0033`).
 > - **Mini-Gate 4B.1 (Packing Cancel)** — ✅ **VALIDADO y commiteado** (`547f6eb`, RPC `anular_packing_unit`,
 >   migración `0034`, kit 12/12 0 footprint). Capa TS/UI (botón "Anular") pendiente, **no bloqueante**.
-> - **Gate 4C (Despacho + Entrega)** — 🟡 **IMPLEMENTADO (código).** `0035_wms_dispatch.sql` (`shipments` +
->   `shipment_status_t` + `confirm_dispatch`/`confirm_delivery`/`revert_dispatch` + `wms_dispatch_recompute`)
->   + capa TS (`src/lib/dispatch/*`) + UI (`/wms/despachos`) + kit 14 casos. `tsc`/`eslint` OK.
->   **PENDIENTE: aplicar `0035` (Martín) + correr el kit + E2E.** Backup manual previo (PITR off).
->   Ver `GATE_4C_IMPLEMENTATION_REPORT.md`.
-> - **Cadena de migraciones** versionada en git hasta `0034` (`0035` en working tree); `main` ↔ `origin/main`.
+> - **Gate 4C (Despacho + Entrega)** — ✅ **VALIDADO + CERRADO** (`841f85b`). `0035_wms_dispatch.sql`
+>   aplicada; `gate4c_dispatch_validation_report.sql` **14/14 OK** (FEFO real, egreso sobre `stock_reserved`,
+>   ledger append-only, reversión compensatoria, D1=A, authz). `shipments` + `shipment_status_t` +
+>   `confirm_dispatch`/`confirm_delivery`/`revert_dispatch` + `wms_dispatch_recompute` + TS (`src/lib/dispatch/*`)
+>   + UI (`/wms/despachos`). Ver `GATE_4C_IMPLEMENTATION_REPORT.md`.
+> - **Cadena de migraciones** versionada en git hasta `0035`; `main` ↔ `origin/main` (sin push pendiente).
+> - **GATE 4 COMPLETO** (4A · 4B · 4B.1 · 4C). **Próximo: Gate 5 — Cadena de Custodia** (`GATE_5_CHAIN_OF_CUSTODY_DESIGN.md`).
 > - **RENUMERACIÓN DEFINITIVA:** `0034` = Packing Cancel (4B.1) · `0035` = Dispatch (4C).
 >   (Las referencias a "Fase 4C = `0034`" más abajo son previas a la renumeración — leer `0035`.)
 > Docs de referencia: `WMS_PHASE_CLOSURE_HANDOFF.md`, `GATE_4C_READINESS_REPORT.md`, `GATE_4B1_CLOSURE_REPORT.md`.
@@ -108,7 +109,7 @@
 - **Casos 2‑6 de Recepciones** sin ejecutar (kit listo).
 - **DEV/PROD misma DB** (`arsksytgdnzukbmfgkju` usada como DEV) — sin separación clara.
 **Mejora futura:**
-- **FEFO split por lote + `inventory_lots.quantity--` en egreso** (se cierra en Gate 4C).
+- ~~**FEFO split por lote + `inventory_lots.quantity--` en egreso**~~ ✅ **CERRADO en Gate 4C** (`confirm_dispatch`, 0035; validado C3/C4).
 - **Digital Twin v2** (`0028_facility_spaces.sql`) — bloqueado hasta matriz maestra de Dirección.
 - Rol `supervisor` no existe en tabla `roles` (sí en `user_role_t`/RLS) → seed RBAC de 'pedidos' para supervisor es no‑op (acceso real cubierto por RLS).
 
@@ -150,7 +151,7 @@
 - **Fase 0 (pre):** commit aislado de Gate 2+3 (migraciones 0029/0030/0031 + lib/pedidos + UI pedidos) y de Sprint 2 si corresponde, con OK. Definir backup/push de `main`. Opcional: cerrar POST‑503 (adelgazar `revalidatePath`).
 - **Fase 4A — Picking:** `0032` `confirm_picking` (alloc reservada→pickeada, línea→pickeado; **sin tocar stock**); UI `/wms/picking` (cola de `en_preparacion`, ruta por `warehouse_position`, confirmación SKU/lote); `src/lib/picking/*`. *(Opcional `picking_runs` para waves.)* Riesgo BAJO.
 - **Fase 4B — Packing:** `0033` `packing_units`+`packing_unit_items` + `packing_status_t` + `confirm_packing` (alloc→empacada; pedido→preparado); UI `/wms/packing` (bultos/etiquetado). Riesgo MEDIO. Dep 4A.
-- **Fase 4C — Despacho + Entrega:** **`0035`** (renumerada; `0034`=4B.1) `shipments` + `shipment_status_t` + `confirm_dispatch` (**EGRESO** en `inventory_movements` `reference='despacho'` + `stock_reserved-=q` + **`inventory_lots.quantity-=q` FEFO**; alloc→despachada; pedido→despachado) + `confirm_delivery` (→entregado, vínculo Tracking opcional) + `revert_dispatch` (reversión compensatoria). UI `/wms/despachos`. Riesgo ALTO. Dep 4B. **READY TO CODE** (D1–D6 resueltos; prerrequisito `anular_packing_unit` ✅ cerrado en 4B.1). **`confirm_movement` queda intacto** (egreso de despacho inline en `confirm_dispatch`, no se reutiliza la rama `egreso`). Resta Backup+PITR antes de aplicar.
+- **Fase 4C — Despacho + Entrega:** ✅ **VALIDADO + CERRADO** (`0035`, `841f85b`, 14/14 OK). `shipments` + `shipment_status_t` + `confirm_dispatch` (**EGRESO** sobre `stock_reserved` + **`inventory_lots-=q` FEFO real**; ledger `egreso` por lote) + `confirm_delivery` + `revert_dispatch` (reingreso compensatorio) + `wms_dispatch_recompute`. UI `/wms/despachos`. `confirm_movement` **intacto** (no se reutiliza). D1–D6 resueltos; prerrequisito `anular_packing_unit` ✅ (4B.1).
 - **Decisiones a confirmar antes de 4A:** (1) `picking_runs`/waves sí/no; (2) picking por línea vs parcial de allocations; (3) un `shipment` por pedido vs consolidar varios; (4) `lots--` con `lot_number` null (ítems sin lote) — manejo; (5) entrega manual vs disparada por Tracking.
 
 ## 13. FUNCIONALIDADES FUTURAS YA APROBADAS
