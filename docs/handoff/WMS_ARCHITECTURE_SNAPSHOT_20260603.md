@@ -38,6 +38,14 @@
 **Despacho + Entrega (0035) — Gate 4C ✅ CLOSED**
 - `shipments` — cabecera de despacho, `public_id 'DSP-'`. 1 por pedido (índice parcial `unique(order_id) where status<>'anulado'`). Campos: `order_id, status, carrier, vehicle_ref, tracking_ref, dispatched_at/by, delivered_at/by, received_by_name, reverted_at/by, notes, active`. RLS lockdown (escritura solo vía RPC).
 
+**Cadena de Custodia (0036–0039) — Gate 5 🟡 BACK-END DB (NO CERRADO)**
+- `custody_events` — timeline append-only + **hash-chain** (`prev_hash`/`row_hash`). Doble FK nullable (`packing_unit_id` XOR `shipment_id`) + CHECK. `geom` PostGIS generado. `public_id 'CUST-'`. Inmutable por trigger.
+- `custody_evidence` — archivos en Storage. `sha256 not null`, multi-bucket CHECK, `unique(bucket,path)`, `retention_class/until`, `redacted/redacted_at/redacted_by`. Append-only salvo flip de redacción.
+- `delivery_pods` — POD 1×shipment, `public_id 'POD-'`. Receptor canónico + firma (`signature_evidence_id`).
+- Columnas QR opacas: `packing_units.custody_token`, `shipments.custody_token`.
+- Storage (0037): 3 buckets PRIVADOS `custody-evidence`/`custody-pii`/`custody-pod`.
+- **Estado:** back-end SQL implementado/commiteado (`0036`=10/10, `0037`=9/9; `0038`/`0039` sin validar). **Capa de aplicación (TS/UI/QR/Timeline/POD surface) NO existe. Gate 5 NO cerrado** — ver `GATE_5_CLOSURE_REPORT.md`.
+
 **Auditoría (0001)**
 - `audit_log` — append-only. `ts, user_id, entity, entity_id, action, payload(jsonb), ip`. Mecanismo único de auditoría de picking/packing.
 

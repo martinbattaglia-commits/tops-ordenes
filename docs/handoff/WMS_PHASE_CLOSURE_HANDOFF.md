@@ -21,8 +21,10 @@
 - **FASE 9A (Lotes/Vencimientos)**: commiteada (`7aa9e52`).
 - **Digital Twin físico (0020-0023)**: commiteado.
 
-### Gates pendientes
-- **Gate 5 — Cadena de Custodia Digital** (QR por `packing_unit`/`shipment`, evidencia fotográfica, firma del receptor, POD, timeline, auditoría): planificado, **diseño en `GATE_5_CHAIN_OF_CUSTODY_DESIGN.md`**, no iniciada implementación. `packing_units` / `shipments` son las entidades físicas canónicas reservadas para esto.
+### Gates en curso / pendientes
+- **Gate 5 — Cadena de Custodia Digital** (QR por `packing_unit`/`shipment`, evidencia fotográfica, firma, POD, timeline, auditoría): 🟡 **BACK-END DB IMPLEMENTADO, NO CERRADO.**
+  - ✅ **Back-end SQL `0036`–`0039` implementado y commiteado** (`7196b86`/`468d893`/`d301e8e`/`681d810`): 3 tablas (`custody_events`/`custody_evidence`/`delivery_pods`) + tokens QR + 3 buckets privados + 9 RPC (emit/attach/register/verify/redact/generate_pod/timeline/by_token/summary) + hash-chain + read-audit. Validación: `0036`=10/10, `0037`=9/9; **`0038`/`0039` kits sin correr** (pendiente).
+  - ⛔ **NO CERRADO** (ver `GATE_5_CLOSURE_REPORT.md` §8): **capa de aplicación inexistente** (TS `src/lib/custody/*`, UI captura/timeline/POD/QR, Server Actions, POD-PDF server-side) · **backup de Storage indefinido** · aplicación/validación de `0038`/`0039` sin confirmar · retención con deadlines tentativos.
 
 > **Gate 4C cerrado:** el gate del primer egreso irreversible quedó **VALIDADO + CERRADO** (2026-06-03, commit `841f85b`). Ver fila en la tabla de gates completados y `GATE_4C_IMPLEMENTATION_REPORT.md`.
 
