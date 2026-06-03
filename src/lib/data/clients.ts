@@ -13,7 +13,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { clientify, type ClientifyContact } from "@/lib/clientify";
+import { clientify, type ClientifyCompany } from "@/lib/clientify";
 import { MOCK_CLIENTS } from "@/lib/mock-data";
 import type { Client } from "@/lib/types";
 
@@ -40,11 +40,13 @@ export async function listClientsHybrid(
 ): Promise<ListClientsResult> {
   const { search, page = 1, pageSize = 50 } = opts;
 
-  // 1. Intento Clientify si está configurado
+  // 1. Intento Clientify si está configurado.
+  //    TOPS es B2B: la cartera de clientes son EMPRESAS (razón social + CUIT),
+  //    no personas. Por eso leemos `/companies/`, no `/contacts/`.
   if (env.clientify.configured) {
-    const res = await clientify.listContacts({ page, pageSize, search });
+    const res = await clientify.listCompanies({ page, pageSize, search });
     if (res.ok) {
-      const rows = res.data.results.map(clientifyToClient);
+      const rows = res.data.results.map(clientifyCompanyToClient);
       // Best-effort: proyectamos a Supabase para que orders tenga FK válida.
       void projectToSupabase(rows).catch((e) =>
         console.error("[clients] projectToSupabase failed (non-blocking)", e)
@@ -104,35 +106,42 @@ function filterMock(rows: Client[], search?: string): Client[] {
 }
 
 // ============================================================================
-// Mapeo TOPS Client ↔ Clientify Contact
+// Mapeo TOPS Client ↔ Clientify Company (cartera B2B)
 // ============================================================================
 
-/** Convierte un contacto de Clientify al modelo Client de TOPS. */
-export function clientifyToClient(c: ClientifyContact): Client {
-  const fullName =
-    [c.first_name, c.last_name].filter(Boolean).join(" ").trim() ||
-    (typeof c.company === "object" && c.company?.name) ||
-    `Contacto #${c.id}`;
-
-  // CUIT puede venir en identification_number o en custom attrs.
+/** Convierte una EMPRESA de Clientify al modelo Client de TOPS (cartera B2B). */
+export function clientifyCompanyToClient(c: ClientifyCompany): Client {
+  const razon = (c.name ?? "").trim() || `Empresa #${c.id}`;
   const cuit = (c.identification_number ?? extractCuitFromRaw(c.raw) ?? "").toString();
 
   return {
-    id: `clientify-${c.id}`,
-    razon: fullName,
+    id: `clientify-company-${c.id}`,
+    razon,
     cuit,
     domicilio: null,
     telefono: c.phone ?? null,
-    contacto: fullName,
+    // El "contacto principal" vive en los contactos asociados a la empresa
+    // (relación aparte en Clientify), no en el payload de la empresa.
+    contacto: null,
     email: c.email ?? null,
     tags: Array.isArray(c.tags) ? c.tags.filter((t): t is string => typeof t === "string") : [],
-    created_at: c.created ?? new Date().toISOString(),
+    created_at:
+      (typeof c.raw?.created === "string" ? c.raw.created : null) ?? new Date().toISOString(),
   };
 }
 
 function extractCuitFromRaw(raw: Record<string, unknown> | undefined): string | null {
   if (!raw) return null;
-  const candidates = ["cuit", "CUIT", "tax_id", "vat", "identification"];
+  const candidates = [
+    "cuit",
+    "CUIT",
+    "tax_id",
+    "vat",
+    "identification",
+    "identification_number",
+    "taxpayer_identification_number",
+    "tax_number",
+  ];
   for (const k of candidates) {
     const v = raw[k];
     if (typeof v === "string" && v.trim()) return v.trim();
@@ -140,29 +149,19 @@ function extractCuitFromRaw(raw: Record<string, unknown> | undefined): string | 
   return null;
 }
 
-/** Convierte un input de "Nuevo cliente" TOPS al payload Clientify Contact. */
-export function clientToClientifyPayload(input: {
+/** Convierte un input de "Nuevo cliente" TOPS al payload Clientify Company. */
+export function clientToClientifyCompanyPayload(input: {
   razon: string;
   cuit: string;
   email?: string;
   telefono?: string;
-  contacto?: string;
   tags?: string[];
 }): Record<string, unknown> {
-  // Si el "contacto" tiene espacio asumimos "Nombre Apellido", si no usamos
-  // razón social como first_name (Clientify acepta esto en la mayoría de cuentas).
-  const contact = input.contacto?.trim() || input.razon.trim();
-  const parts = contact.split(/\s+/);
-  const first_name = parts[0] ?? input.razon.trim();
-  const last_name = parts.slice(1).join(" ") || "—";
-
   return {
-    first_name,
-    last_name,
+    name: input.razon.trim(),
+    identification_number: input.cuit.replace(/\D/g, ""),
     email: input.email?.trim() || undefined,
     phone: input.telefono?.trim() || undefined,
-    title: input.razon.trim(),
-    identification_number: input.cuit.replace(/\D/g, ""),
     tags: input.tags && input.tags.length > 0 ? input.tags : undefined,
   };
 }

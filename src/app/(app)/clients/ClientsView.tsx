@@ -121,7 +121,7 @@ export default function ClientsView({
               onClick={handleRefresh}
               disabled={refreshing}
               className="btn btn-ghost btn-sm"
-              title="Sincronizar contactos desde Clientify"
+              title="Sincronizar empresas desde Clientify"
             >
               <Icon
                 name="refresh"
@@ -167,7 +167,7 @@ export default function ClientsView({
             <Link href="/settings" className="text-fg-link">
               Conectar Clientify
             </Link>{" "}
-            para sincronizar contactos del CRM
+            para sincronizar empresas del CRM
           </span>
         )}
         {warning && (

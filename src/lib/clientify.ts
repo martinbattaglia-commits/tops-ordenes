@@ -273,6 +273,15 @@ export const clientify = {
     });
   },
 
+  /** Crea una empresa. Payload pass-through: el caller mapea campos TOPS → Clientify. */
+  async createCompany(payload: Record<string, unknown>): Promise<ClientifyResult<ClientifyCompany>> {
+    return clientifyRequest<ClientifyCompany>("/companies/", {
+      method: "POST",
+      body: payload,
+      retries: 1, // escritura: sólo 1 reintento si vuelve 5xx, para no duplicar
+    });
+  },
+
   /** Health check ligero. Hace `GET /contacts/?page_size=1`. */
   async ping(): Promise<ClientifyResult<{ ok: true; count?: number }>> {
     const res = await clientifyRequest<ClientifyListPage<ClientifyContact>>("/contacts/", {

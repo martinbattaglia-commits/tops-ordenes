@@ -5,7 +5,11 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { clientify } from "@/lib/clientify";
-import { clientToClientifyPayload, listClientsHybrid, clientifyToClient } from "@/lib/data/clients";
+import {
+  clientToClientifyCompanyPayload,
+  listClientsHybrid,
+  clientifyCompanyToClient,
+} from "@/lib/data/clients";
 import { isValidCuit } from "@/lib/utils";
 import type { Client } from "@/lib/types";
 
@@ -113,15 +117,15 @@ async function createClientInner(input: NewClientInput): Promise<CreateClientRes
   let clientifyId: number | null = null;
   let clientifySynced = false;
   if (env.clientify.configured) {
-    const payload = clientToClientifyPayload({
+    // B2B: el cliente es una EMPRESA en Clientify, no un contacto/persona.
+    const payload = clientToClientifyCompanyPayload({
       razon: data.razon,
       cuit: cuitDigits,
       email: data.email,
       telefono: data.telefono,
-      contacto: data.contacto,
       tags: data.tags,
     });
-    const r = await clientify.createContact(payload);
+    const r = await clientify.createCompany(payload);
     if (r.ok) {
       clientifyId = r.data.id;
       clientifySynced = true;
@@ -141,7 +145,7 @@ async function createClientInner(input: NewClientInput): Promise<CreateClientRes
       };
     }
     const memClient: Client = {
-      id: `clientify-${clientifyId}`,
+      id: `clientify-company-${clientifyId}`,
       razon: data.razon,
       cuit: cuitDigits,
       domicilio: null,
@@ -199,12 +203,12 @@ export async function refreshFromClientify(): Promise<{
     return { ok: false, synced: 0, error: "Clientify no está configurado." };
   }
   try {
-    // Pull 1 página completa (50 contactos). Para volúmenes mayores se paginaría.
-    const r = await clientify.listContacts({ pageSize: 100 });
+    // B2B: sincronizamos EMPRESAS (no contactos). Pull 1 página completa (100).
+    const r = await clientify.listCompanies({ pageSize: 100 });
     if (!r.ok) return { ok: false, synced: 0, error: r.message };
     const admin = createAdminClient();
     if (!admin) return { ok: false, synced: 0, error: "Supabase admin no disponible." };
-    const rows = r.data.results.map(clientifyToClient).filter((c) => c.cuit?.length >= 11);
+    const rows = r.data.results.map(clientifyCompanyToClient).filter((c) => c.cuit?.length >= 11);
     if (rows.length === 0) {
       revalidatePath("/clients");
       return { ok: true, synced: 0 };
