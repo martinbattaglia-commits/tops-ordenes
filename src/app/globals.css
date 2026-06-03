@@ -31,7 +31,7 @@
     --bg-surface-alt: #eef1f6;
     --fg-primary: #0b1220;
     --fg-secondary: #5a6577;
-    --fg-muted: #8a94a6;
+    --fg-muted: #69738a;
     --fg-brand: #050555;
     --fg-link: #214576;
     --stroke-soft: #dde3ec;
@@ -126,6 +126,13 @@
     textarea {
       font-size: 14px;
     }
+  }
+
+  /* Placeholders legibles y consistentes (WCAG AA via --fg-muted) */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--fg-muted);
+    opacity: 1;
   }
 
   /* tabular numerals for currency / counters */
@@ -519,7 +526,7 @@
   }
   .tbl-mobile-cards tbody td::before {
     content: attr(data-label);
-    color: var(--neutral-400);
+    color: var(--fg-muted);
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.12em;

@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
   osNumber: { fontSize: 16, fontWeight: 700, color: "#050555", fontFamily: "Courier", marginBottom: 4 },
   sectionLabel: {
     fontSize: 7.5,
-    color: "#8A94A6",
+    color: "#69738A",
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: 1.4,
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   },
   block: { marginBottom: 12 },
   row2: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
-  fieldLabel: { fontSize: 7, color: "#8A94A6", marginBottom: 1 },
+  fieldLabel: { fontSize: 7, color: "#69738A", marginBottom: 1 },
   fieldValue: { fontSize: 10, color: "#0B1220" },
   fieldValueBold: { fontSize: 10, color: "#0B1220", fontWeight: 700 },
   tableHead: {

@@ -14,7 +14,7 @@ const C = {
   red: "#C90812",
   text: "#0B1220",
   textSec: "#5A6577",
-  muted: "#8A94A6",
+  muted: "#69738A",
   stroke: "#DDE3EC",
   strokeSoft: "#EEF1F6",
   bg: "#F7F8FB",
