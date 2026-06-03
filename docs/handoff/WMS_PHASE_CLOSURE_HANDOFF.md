@@ -13,6 +13,7 @@
 |---|---|---|---|
 | Gate 4A | Picking | `17b0be5` | ✅ Cerrado · SQL+TS+UI+E2E+kit validación |
 | Gate 4B | Packing | `c5390bd` | ✅ Cerrado · SQL+TS+UI+E2E 12/12+kit validación |
+| Mini-Gate 4B.1 | Packing Cancel (`anular_packing_unit`) | _(s/ commit)_ | ✅ **VALIDADO (2026-06-03)** · RPC `0034` + kit 12/12 (0 footprint). Capa TS/UI (botón "Anular") **pendiente, no bloqueante**. |
 
 ### Gates / fases previas (estado)
 - **Recepciones (Gate 1)** · **Inventario+Ledger (Gate 2)** · **Pedidos+Reserva (Gate 3)**: funcionalmente **validados** y **aplicados en DB**, pero **SIN commitear** en git (ver §Deuda/Riesgos y `GIT_RECOVERY_CHECKLIST.md`).
@@ -20,7 +21,7 @@
 - **Digital Twin físico (0020-0023)**: commiteado.
 
 ### Gates pendientes
-- **Gate 4C — Despacho + Entrega**: NO iniciado. Es el primer gate que toca stock/ledger de forma **irreversible** (egreso). Decisiones abiertas en `GATE_4C_DECISIONS.md`.
+- **Gate 4C — Despacho + Entrega**: ✅ **READY TO CODE (2026-06-03)** — diseño aprobado (`GATE_4C_DISPATCH_DESIGN.md`, D1–D6 resueltos), Bloqueante #3 cerrado por 4B.1. Migración será **`0035_wms_dispatch.sql`** (`0034` = 4B.1). Resta solo Backup+PITR antes de **aplicar**. Primer gate que toca stock/ledger de forma **irreversible** (egreso).
 - **Gate 5 — Cadena de Custodia Digital** (QR por unidad, evidencia fotográfica, auditoría visual): planificado, no iniciado. `packing_units` es la entidad física canónica reservada para esto.
 
 ### Riesgos abiertos (resumen — detalle en docs específicos)
@@ -30,7 +31,7 @@
 4. **🟡 Gaps de numeración de migraciones:** `0012` y `0028` no existen (huecos intencionales: `0028` reservado a Digital Twin v2, bloqueado).
 
 ### Deuda técnica registrada
-- `anular_packing_unit()` — no existe RPC de anulación; un **bulto vacío abierto** no se puede cerrar (`close` exige ≥1 ítem) ni anular → queda "trabado" y oculta "Empacar todo" (D2). Candidata a **4B.1 o 4C**. (Chip de tarea creado.)
+- ~~`anular_packing_unit()`~~ — ✅ **RESUELTO (Mini-Gate 4B.1, `0034`, validado 2026-06-03).** RPC Empty-only (`abierta` vacío → `anulada`); el bulto vacío trabado ahora tiene salida terminal. _Pendiente menor:_ exponer el botón "Anular" en UI Packing (capa TS/UI de 4B.1, no bloqueante).
 - **Footprint de demos E2E** en DB compartida: pedidos `TEST_*`/cancelados + bultos vacíos colgados + filas `picking.*`/`packing.*` en `audit_log` (append-only, no se borran).
 - **Casos 2‑6 de Recepciones**: kit `wms_validation_kit_casos_2-6.sql` sin correr.
 - **POST‑503 residual** (revalidación inline bajo `next start` single‑instance): no‑fatal.
@@ -99,7 +100,7 @@ Recepción ──► Reserva ──► Picking ──► Packing ──► Despa
 
 | Ítem | Descripción | Severidad | Destino |
 |---|---|---|---|
-| `anular_packing_unit()` | No hay RPC de anulación; bulto vacío abierto queda trabado (no cierra, no anula) | Media | 4B.1 / 4C |
+| ~~`anular_packing_unit()`~~ ✅ **RESUELTO** | RPC Empty-only en `0034` (4B.1), validada 0 footprint. _Falta solo el botón UI (no bloqueante)._ | Cerrado | Mini-Gate 4B.1 |
 | Bultos vacíos en demo | Demos E2E dejan `BLT-*` vacíos colgados de pedidos cancelados | Baja | limpieza manual o `anular` |
 | Cadena migraciones git | `0032/0033` commiteadas dependen de `0025-0031` sin commitear | **Alta** | Fase 0 (commit Gates 1/2/3) |
 | `main` sin push | Gates 4A/4B sin respaldo remoto | Media | push tras consolidar |

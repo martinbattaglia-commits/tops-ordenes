@@ -2,6 +2,19 @@
 > Generado 2026-06-03. Fuente de verdad para continuar en un chat nuevo sin releer el historial.
 > Verificado contra repo `~/CODE/tops-ordenes`, migraciones `0001`–`0031` y Supabase `arsksytgdnzukbmfgkju`.
 
+> 🟢 **ACTUALIZACIÓN DE ESTADO (2026-06-03, posterior a la redacción original):**
+> El cuerpo de este documento se escribió con **Gate 4 "en diseño"**. Estado **vigente**:
+> - **Gate 4A (Picking)** — ✅ cerrado y commiteado (`17b0be5`, migración `0032`).
+> - **Gate 4B (Packing)** — ✅ cerrado y commiteado (`c5390bd`, migración `0033`).
+> - **Mini-Gate 4B.1 (Packing Cancel)** — ✅ **VALIDADO (RPC `anular_packing_unit`, migración `0034`,
+>   kit 12/12 0 footprint).** Capa TS/UI (botón "Anular") pendiente, **no bloqueante**.
+> - **Gate 4C (Despacho + Entrega)** — ✅ **READY TO CODE.** Diseño aprobado (`GATE_4C_DISPATCH_DESIGN.md`,
+>   D1–D6 resueltos). Migración será **`0035_wms_dispatch.sql`**. Resta solo Backup+PITR antes de **aplicar**.
+> - **Cadena de migraciones** versionada en git hasta `0034`; `main` ↔ `origin/main` sincronizados.
+> - **RENUMERACIÓN DEFINITIVA:** `0034` = Packing Cancel (4B.1) · `0035` = Dispatch (4C).
+>   (Las referencias a "Fase 4C = `0034`" más abajo son previas a la renumeración — leer `0035`.)
+> Docs de referencia: `WMS_PHASE_CLOSURE_HANDOFF.md`, `GATE_4C_READINESS_REPORT.md`, `GATE_4B1_CLOSURE_REPORT.md`.
+
 ---
 
 ## 1. RESUMEN EJECUTIVO
@@ -134,7 +147,7 @@
 - **Fase 0 (pre):** commit aislado de Gate 2+3 (migraciones 0029/0030/0031 + lib/pedidos + UI pedidos) y de Sprint 2 si corresponde, con OK. Definir backup/push de `main`. Opcional: cerrar POST‑503 (adelgazar `revalidatePath`).
 - **Fase 4A — Picking:** `0032` `confirm_picking` (alloc reservada→pickeada, línea→pickeado; **sin tocar stock**); UI `/wms/picking` (cola de `en_preparacion`, ruta por `warehouse_position`, confirmación SKU/lote); `src/lib/picking/*`. *(Opcional `picking_runs` para waves.)* Riesgo BAJO.
 - **Fase 4B — Packing:** `0033` `packing_units`+`packing_unit_items` + `packing_status_t` + `confirm_packing` (alloc→empacada; pedido→preparado); UI `/wms/packing` (bultos/etiquetado). Riesgo MEDIO. Dep 4A.
-- **Fase 4C — Despacho + Entrega:** `0034` `shipments` + `shipment_status_t` + `confirm_dispatch` (**EGRESO** en `inventory_movements` `reference='despacho'` + `stock_reserved-=q` + **`inventory_lots.quantity-=q` FEFO**; alloc→despachada; pedido→despachado) + `confirm_delivery` (→entregado, vínculo Tracking opcional) + **extensión de `confirm_movement`** (validar `shipments`); UI `/wms/despachos` (confirmar despacho, remito, descuento). Riesgo ALTO. Dep 4B.
+- **Fase 4C — Despacho + Entrega:** **`0035`** (renumerada; `0034`=4B.1) `shipments` + `shipment_status_t` + `confirm_dispatch` (**EGRESO** en `inventory_movements` `reference='despacho'` + `stock_reserved-=q` + **`inventory_lots.quantity-=q` FEFO**; alloc→despachada; pedido→despachado) + `confirm_delivery` (→entregado, vínculo Tracking opcional) + `revert_dispatch` (reversión compensatoria). UI `/wms/despachos`. Riesgo ALTO. Dep 4B. **READY TO CODE** (D1–D6 resueltos; prerrequisito `anular_packing_unit` ✅ cerrado en 4B.1). **`confirm_movement` queda intacto** (egreso de despacho inline en `confirm_dispatch`, no se reutiliza la rama `egreso`). Resta Backup+PITR antes de aplicar.
 - **Decisiones a confirmar antes de 4A:** (1) `picking_runs`/waves sí/no; (2) picking por línea vs parcial de allocations; (3) un `shipment` por pedido vs consolidar varios; (4) `lots--` con `lot_number` null (ítems sin lote) — manejo; (5) entrega manual vs disparada por Tracking.
 
 ## 13. FUNCIONALIDADES FUTURAS YA APROBADAS
