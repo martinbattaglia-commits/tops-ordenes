@@ -89,25 +89,25 @@ function renderEmailHtml(input: SendInput): string {
       </td></tr>
       <tr><td style="padding:0 22px 8px; font-size:14px; color:#0B1220; line-height:1.55;">
         Estimado/a <b>${escapeHtml(input.vendor.contacto || input.vendor.razon)}</b>,
-        <p style="margin:10px 0 0;">Adjuntamos la orden de compra ${escapeHtml(input.public_id)} firmada por nuestro Director de Operaciones. Le solicitamos confirmación de recepción y coordinación de entrega.</p>
+        <p style="margin:10px 0 0;">Adjuntamos la orden de compra ${escapeHtml(input.public_id)} firmada por nuestro ${escapeHtml(ORG.emitter.role)}. Le solicitamos confirmación de recepción y coordinación de entrega.</p>
       </td></tr>
       <tr><td style="padding:14px 22px;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F7F8FB; border-radius:8px;">
           <tr>
             <td style="padding:10px 14px;">
-              <div style="font-size:10px; letter-spacing:1px; color:#8A94A6; text-transform:uppercase; font-weight:700;">Cond. pago</div>
+              <div style="font-size:10px; letter-spacing:1px; color:#69738A; text-transform:uppercase; font-weight:700;">Cond. pago</div>
               <div style="font-size:14px; font-weight:700; color:#050555;">${escapeHtml(input.cond_pago)}</div>
             </td>
             <td style="padding:10px 14px;">
-              <div style="font-size:10px; letter-spacing:1px; color:#8A94A6; text-transform:uppercase; font-weight:700;">Entrega</div>
+              <div style="font-size:10px; letter-spacing:1px; color:#69738A; text-transform:uppercase; font-weight:700;">Entrega</div>
               <div style="font-size:14px; font-weight:700; color:#050555;">${escapeHtml(input.entrega)}</div>
             </td>
             <td style="padding:10px 14px;">
-              <div style="font-size:10px; letter-spacing:1px; color:#8A94A6; text-transform:uppercase; font-weight:700;">Items</div>
+              <div style="font-size:10px; letter-spacing:1px; color:#69738A; text-transform:uppercase; font-weight:700;">Items</div>
               <div style="font-size:14px; font-weight:700; color:#050555; font-variant-numeric:tabular-nums;">${input.items.length}</div>
             </td>
             <td style="padding:10px 14px;">
-              <div style="font-size:10px; letter-spacing:1px; color:#8A94A6; text-transform:uppercase; font-weight:700;">Total</div>
+              <div style="font-size:10px; letter-spacing:1px; color:#69738A; text-transform:uppercase; font-weight:700;">Total</div>
               <div style="font-size:14px; font-weight:700; color:#C90812; font-variant-numeric:tabular-nums;">${escapeHtml(fmtCurrency(input.totals.total))}</div>
             </td>
           </tr>
@@ -122,7 +122,7 @@ function renderEmailHtml(input: SendInput): string {
         <a href="${env.app.url}/api/compras/${encodeURIComponent(input.public_id)}/pdf" style="display:inline-block; background:#C90812; color:#fff; font-weight:700; text-decoration:none; padding:12px 20px; border-radius:8px; font-size:14px;">Ver Orden de Compra (PDF) →</a>
       </td></tr>
       ${input.observ ? `<tr><td style="padding:0 22px 14px; font-size:13px; color:#5A6577; line-height:1.5;"><b>Observaciones:</b> ${escapeHtml(input.observ)}</td></tr>` : ""}
-      <tr><td style="padding:18px 22px; background:#F7F8FB; font-size:11px; color:#8A94A6; line-height:1.55;">
+      <tr><td style="padding:18px 22px; background:#F7F8FB; font-size:11px; color:#69738A; line-height:1.55;">
         <b>${escapeHtml(ORG.emitter.name)}</b> · ${escapeHtml(ORG.emitter.role)}<br>
         ${escapeHtml(ORG.legalName)} · CUIT ${escapeHtml(ORG.cuit)}<br>
         ${escapeHtml(ORG.address)} · ${escapeHtml(ORG.phone)}<br>
@@ -139,7 +139,7 @@ function renderEmailText(input: SendInput): string {
 
 Estimado/a ${input.vendor.contacto || input.vendor.razon},
 
-Adjuntamos la orden de compra firmada por nuestro Director de Operaciones.
+Adjuntamos la orden de compra firmada por nuestro ${ORG.emitter.role}.
 
 Detalles:
 - Fecha: ${fmtDate(new Date())}

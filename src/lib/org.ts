@@ -3,6 +3,23 @@
  * Single source of truth para footers, PDF, emails, headers.
  */
 
+import { DIRECTOR, GERENCIA } from "./orgchart";
+
+/** Iniciales a partir de nombre y apellido (primeras dos palabras). */
+function initialsOf(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
+/**
+ * Emisor/firmante y administración se DERIVAN del organigrama institucional
+ * (`orgchart.ts`, fuente entregada por la Presidencia) para que exista una
+ * sola fuente de verdad de quién firma los comprobantes. No hardcodear acá:
+ * cualquier cambio de cargo/persona se hace en `orgchart.ts` y se propaga.
+ */
+const ADMIN_NODE =
+  GERENCIA.find((n) => n.rbac?.slug === "admin") ?? GERENCIA[GERENCIA.length - 1];
+
 export const ORG = {
   legalName: "Verotin S.A.",
   brand: "Logística TOPS",
@@ -13,16 +30,16 @@ export const ORG = {
   phone: "(011) 4302-3944 / 3541 / 9710",
   website: "www.logisticatops.com",
   emitter: {
-    name: "José Luis Battaglia",
-    role: "Director de Operaciones",
-    email: "joseluis@logisticatops.com",
-    initials: "JL",
+    name: DIRECTOR.name,
+    role: DIRECTOR.title,
+    email: DIRECTOR.email ?? "",
+    initials: initialsOf(DIRECTOR.name),
   },
   admin: {
-    name: "Ruth Cardozo",
-    role: "Administración · Verotin S.A.",
-    email: "ruth@logisticatops.com",
-    initials: "RC",
+    name: ADMIN_NODE.name,
+    role: ADMIN_NODE.detail ?? ADMIN_NODE.title,
+    email: ADMIN_NODE.email ?? "",
+    initials: initialsOf(ADMIN_NODE.name),
   },
   depots: [
     {

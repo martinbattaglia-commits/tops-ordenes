@@ -71,7 +71,7 @@ function EmailMockup({ po }: { po: PurchaseOrder }) {
         </h3>
         <p className="text-sm text-fg-primary leading-relaxed mb-3">
           Estimado/a <b>{po.vendor?.contacto ?? po.vendor?.razon}</b>,<br />
-          Adjuntamos la orden de compra firmada por nuestro Director de Operaciones. Le solicitamos
+          Adjuntamos la orden de compra firmada por nuestro {ORG.emitter.role}. Le solicitamos
           confirmación de recepción y coordinación de entrega.
         </p>
         <div className="grid grid-cols-2 gap-3 my-4 p-3 bg-neutral-50 rounded-md">
