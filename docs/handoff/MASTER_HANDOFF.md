@@ -6,11 +6,14 @@
 > El cuerpo de este documento se escribió con **Gate 4 "en diseño"**. Estado **vigente**:
 > - **Gate 4A (Picking)** — ✅ cerrado y commiteado (`17b0be5`, migración `0032`).
 > - **Gate 4B (Packing)** — ✅ cerrado y commiteado (`c5390bd`, migración `0033`).
-> - **Mini-Gate 4B.1 (Packing Cancel)** — ✅ **VALIDADO (RPC `anular_packing_unit`, migración `0034`,
->   kit 12/12 0 footprint).** Capa TS/UI (botón "Anular") pendiente, **no bloqueante**.
-> - **Gate 4C (Despacho + Entrega)** — ✅ **READY TO CODE.** Diseño aprobado (`GATE_4C_DISPATCH_DESIGN.md`,
->   D1–D6 resueltos). Migración será **`0035_wms_dispatch.sql`**. Resta solo Backup+PITR antes de **aplicar**.
-> - **Cadena de migraciones** versionada en git hasta `0034`; `main` ↔ `origin/main` sincronizados.
+> - **Mini-Gate 4B.1 (Packing Cancel)** — ✅ **VALIDADO y commiteado** (`547f6eb`, RPC `anular_packing_unit`,
+>   migración `0034`, kit 12/12 0 footprint). Capa TS/UI (botón "Anular") pendiente, **no bloqueante**.
+> - **Gate 4C (Despacho + Entrega)** — 🟡 **IMPLEMENTADO (código).** `0035_wms_dispatch.sql` (`shipments` +
+>   `shipment_status_t` + `confirm_dispatch`/`confirm_delivery`/`revert_dispatch` + `wms_dispatch_recompute`)
+>   + capa TS (`src/lib/dispatch/*`) + UI (`/wms/despachos`) + kit 14 casos. `tsc`/`eslint` OK.
+>   **PENDIENTE: aplicar `0035` (Martín) + correr el kit + E2E.** Backup manual previo (PITR off).
+>   Ver `GATE_4C_IMPLEMENTATION_REPORT.md`.
+> - **Cadena de migraciones** versionada en git hasta `0034` (`0035` en working tree); `main` ↔ `origin/main`.
 > - **RENUMERACIÓN DEFINITIVA:** `0034` = Packing Cancel (4B.1) · `0035` = Dispatch (4C).
 >   (Las referencias a "Fase 4C = `0034`" más abajo son previas a la renumeración — leer `0035`.)
 > Docs de referencia: `WMS_PHASE_CLOSURE_HANDOFF.md`, `GATE_4C_READINESS_REPORT.md`, `GATE_4B1_CLOSURE_REPORT.md`.
