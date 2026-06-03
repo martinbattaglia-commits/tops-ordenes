@@ -61,6 +61,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname === "/api/whatsapp/webhook" ||
     pathname === "/api/clientify/webhook" ||
+    pathname === "/api/tracking/ingest" || // Traccar Client postea sin sesión; protegido por token propio
     pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
