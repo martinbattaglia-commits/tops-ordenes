@@ -7,6 +7,7 @@ import { SHIPMENT_STATUS_META } from "@/lib/dispatch/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { fmtDateTime } from "@/lib/utils";
 import { DispatchActions } from "../_components/DispatchActions";
+import { CustodyShipmentSection } from "../../custody/_components/CustodyShipmentSection";
 
 export const metadata = { title: "Despacho de pedido · WMS" };
 export const dynamic = "force-dynamic";
@@ -155,6 +156,17 @@ export default async function DispatchPanelPage({ params }: { params: { id: stri
           </div>
         )}
       </div>
+
+      {/* Cadena de Custodia (Gate 5) — solo cuando ya hay despacho. Resiliente. */}
+      {panel.shipment && (
+        <div className="mt-8 border-t border-stroke-soft pt-6">
+          <CustodyShipmentSection
+            shipmentId={panel.shipment.id}
+            shipmentPublicId={panel.shipment.public_id}
+            orderId={panel.order_id}
+          />
+        </div>
+      )}
     </div>
   );
 }
