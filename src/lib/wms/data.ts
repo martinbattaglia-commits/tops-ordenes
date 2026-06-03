@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import type { WmsKpis, InventoryRow } from "./types";
+import type { WmsKpis, InventoryRow, PositionOption, PositionStatus } from "./types";
 
 /**
  * Data accessors del WMS (FASE 5 · Sprint 1). Mismo patrón que
@@ -63,14 +63,21 @@ export async function getWmsDashboard(): Promise<WmsKpis> {
 
   const { data: items, error: iErr } = await supabase
     .from("inventory_items")
-    .select("stock_available, client_name, position_id, active");
+    .select("stock_available, stock_reserved, client_name, position_id, active");
   if (iErr) throw new Error(`getWmsDashboard.items: ${iErr.message}`);
 
   const active = (items ?? []).filter((r) => r.active);
   const stockTotal = active.reduce((s, r) => s + Number(r.stock_available ?? 0), 0);
   const clientesActivos = new Set(active.map((r) => r.client_name)).size;
+  // Regla unificada Dashboard ↔ Digital Twin: ocupada = (disponible + reservado) > 0.
   const posicionesOcupadas = new Set(
-    active.filter((r) => r.position_id).map((r) => r.position_id)
+    active
+      .filter(
+        (r) =>
+          r.position_id &&
+          Number(r.stock_available ?? 0) + Number(r.stock_reserved ?? 0) > 0
+      )
+      .map((r) => r.position_id)
   ).size;
   const posicionesTotal = posTotal ?? 0;
 
@@ -173,4 +180,48 @@ export async function listInventory(): Promise<InventoryRow[]> {
       position_full_code: buildFullCode(pos),
     };
   });
+}
+
+// ------------------------------------------------------------------
+// Opciones de posición (dropdown de destino — full_code legible)
+// ------------------------------------------------------------------
+
+const MOCK_POSITION_OPTIONS: PositionOption[] = [
+  { id: "mock-c01", full_code: "PEDRO_LUJAN_3159·P1·D7·MC·A·C01", status: "ocupado" },
+  { id: "mock-c02", full_code: "PEDRO_LUJAN_3159·P1·D7·MC·A·C02", status: "disponible" },
+  { id: "mock-c03", full_code: "PEDRO_LUJAN_3159·P1·D7·MC·A·C03", status: "disponible" },
+];
+
+interface RawPositionOption {
+  id: string;
+  status: PositionStatus;
+  code?: string | null;
+  rack?: RackEmbed | RackEmbed[] | null;
+}
+
+export async function listPositionOptions(): Promise<PositionOption[]> {
+  if (isMock()) return MOCK_POSITION_OPTIONS;
+
+  const supabase = createClient();
+  if (!supabase) return MOCK_POSITION_OPTIONS;
+
+  const { data, error } = await supabase
+    .from("warehouse_positions")
+    .select(
+      `id, status, code,
+       rack:warehouse_racks(code,
+         zone:warehouse_zones(code,
+           sector:warehouse_sectors(code,
+             floor:warehouse_floors(code,
+               warehouse:warehouses(code)))))`
+    )
+    .eq("active", true)
+    .order("code", { ascending: true });
+  if (error) throw new Error(`listPositionOptions: ${error.message}`);
+
+  return ((data ?? []) as unknown as RawPositionOption[]).map((p): PositionOption => ({
+    id: String(p.id),
+    full_code: buildFullCode(p) ?? String(p.code ?? p.id),
+    status: p.status,
+  }));
 }
