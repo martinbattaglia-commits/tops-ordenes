@@ -86,11 +86,11 @@ jobs:
           SIZE=$(stat -c%s "$FILENAME")
           echo "✓ Dump generado: $FILENAME ($SIZE bytes)"
           # Validación de integridad: pg_restore debe poder listar el contenido.
-          if ! pg_restore --list "$FILENAME" > /dev/null; then
+          if ! /usr/lib/postgresql/17/bin/pg_restore --list "$FILENAME" > /dev/null; then
             echo "::error::'pg_restore --list' falló: el dump podría estar corrupto."
             exit 1
           fi
-          echo "✓ Integridad del dump verificada (pg_restore --list OK)."
+          echo "✓ Integridad del dump verificada (pg_restore 17 OK)."
           echo "FILENAME=$FILENAME" >> "$GITHUB_ENV"
           echo "DATE_PATH=$DATE_PATH" >> "$GITHUB_ENV"
 
