@@ -6,7 +6,13 @@ name: Supabase Daily Backup
 #   - SUPABASE_DB_URL : cadena Postgres de PRODUCCIÓN con sslmode=require
 #   - GCP_SA_KEY      : JSON completo de la service account write-only
 #   - GCS_BUCKET      : tops-nexus-supabase-backups
-# NO corre hasta que los 3 secrets existan en el repo.
+# NO corre con éxito hasta que los 3 secrets existan en el repo (falla fail-fast con mensaje claro).
+#
+# A2.1 (2026-06-04) — Remediación:
+#   · pg_dump 15 ahora se instala desde el repo oficial PGDG (apt.postgresql.org).
+#     El método anterior (`apt-get install postgresql-client-15` sin PGDG) fallaba con
+#     exit 100 en ubuntu-latest (24.04 noble) porque ese repo solo trae el cliente 16.
+#   · Fail-fast: validación explícita de secrets, de pg_dump, de gcloud, del dump y de su integridad.
 
 on:
   schedule:
@@ -26,24 +32,67 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Install pg_dump v15 (Supabase corre Postgres 15)
+      - name: Validar secrets requeridos (fail-fast)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
         run: |
+          set -euo pipefail
+          missing=0
+          for v in SUPABASE_DB_URL GCP_SA_KEY GCS_BUCKET; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Secret requerido '$v' ausente o vacío."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Faltan secrets. Cargarlos en Settings → Secrets and variables → Actions y reintentar."
+            exit 1
+          fi
+          echo "✓ Los 3 secrets requeridos están presentes."
+
+      - name: Instalar pg_dump 15 (repo oficial PGDG)
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-15
+          if ! command -v pg_dump > /dev/null; then
+            echo "::error::pg_dump no quedó instalado tras la instalación PGDG."
+            exit 1
+          fi
           pg_dump --version
+          pg_restore --version
 
-      - name: Generate backup (custom format, compress 9)
+      - name: Generar backup (custom format, compress 9)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
+          set -euo pipefail
           DATE_PATH=$(date -u +'%Y/%m/%d')
           FILENAME="backup-$(date -u +'%Y-%m-%dT%H%M%SZ').dump"
           pg_dump "$SUPABASE_DB_URL" \
             --format=custom --compress=9 --no-owner --no-acl --verbose \
             --file="$FILENAME"
-          ls -lh "$FILENAME"
+          if [ ! -s "$FILENAME" ]; then
+            echo "::error::El dump '$FILENAME' está vacío o no se creó."
+            exit 1
+          fi
+          SIZE=$(stat -c%s "$FILENAME")
+          echo "✓ Dump generado: $FILENAME ($SIZE bytes)"
+          # Validación de integridad: pg_restore debe poder listar el contenido.
+          if ! pg_restore --list "$FILENAME" > /dev/null; then
+            echo "::error::'pg_restore --list' falló: el dump podría estar corrupto."
+            exit 1
+          fi
+          echo "✓ Integridad del dump verificada (pg_restore --list OK)."
           echo "FILENAME=$FILENAME" >> "$GITHUB_ENV"
           echo "DATE_PATH=$DATE_PATH" >> "$GITHUB_ENV"
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
       - name: Auth to Google Cloud
         uses: google-github-actions/auth@v2
@@ -53,18 +102,29 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Validar gcloud
+        run: |
+          set -euo pipefail
+          if ! command -v gcloud > /dev/null; then
+            echo "::error::gcloud no está disponible tras setup-gcloud."
+            exit 1
+          fi
+          gcloud --version | head -1
+
       - name: Upload to GCS
         run: |
+          set -euo pipefail
           gcloud storage cp "$FILENAME" \
             "gs://${{ secrets.GCS_BUCKET }}/${DATE_PATH}/${FILENAME}"
 
       - name: Verify upload
         run: |
+          set -euo pipefail
           gcloud storage ls -l "gs://${{ secrets.GCS_BUCKET }}/${DATE_PATH}/${FILENAME}"
 
       - name: Cleanup local file
         if: always()
-        run: rm -f "$FILENAME"
+        run: rm -f "${FILENAME:-}"
 
       - name: Notify on failure
         if: failure()
