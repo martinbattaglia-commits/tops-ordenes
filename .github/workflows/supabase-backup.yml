@@ -1,18 +1,22 @@
 name: Supabase Daily Backup
 
-# Backup externo de la DB de producción Supabase → Google Cloud Storage.
+# Backup externo de la DB de producción Supabase → Google Drive ("TOPS Nexus Backups").
 # Cierra el bloqueante P0.1 de GATE 0 (retención AFIP RG 1415 = 10 años).
-# Requiere 3 GitHub Secrets (ver docs/erp/BACKUP-EXECUTION-RUNBOOK.md §5):
-#   - SUPABASE_DB_URL : cadena Postgres de PRODUCCIÓN con sslmode=require
-#   - GCP_SA_KEY      : JSON completo de la service account write-only
-#   - GCS_BUCKET      : tops-nexus-supabase-backups
-# NO corre con éxito hasta que los 3 secrets existan en el repo (falla fail-fast con mensaje claro).
 #
-# A2.1 (2026-06-04) — Remediación:
-#   · pg_dump 15 ahora se instala desde el repo oficial PGDG (apt.postgresql.org).
-#     El método anterior (`apt-get install postgresql-client-15` sin PGDG) fallaba con
-#     exit 100 en ubuntu-latest (24.04 noble) porque ese repo solo trae el cliente 16.
-#   · Fail-fast: validación explícita de secrets, de pg_dump, de gcloud, del dump y de su integridad.
+# Migración 2026-06-04: se reemplazó Google Cloud Storage por Google Drive (sin buckets,
+# sin gs://, sin gcloud storage, sin billing de GCP). La subida usa la Service Account
+# tops-ordenes-drive@tops-ordenes.iam.gserviceaccount.com vía la Drive API.
+#
+# Secrets requeridos (GitHub → Settings → Secrets and variables → Actions):
+#   - SUPABASE_DB_URL : cadena Postgres de PRODUCCIÓN (Session Pooler) con sslmode=require
+#   - GCP_SA_KEY      : JSON de la Service Account `tops-ordenes-drive@...` (con acceso a Drive)
+# Config (no secreta, definida abajo como env del job):
+#   - DRIVE_FOLDER_ID : carpeta destino "TOPS Nexus Backups"
+#   - DRIVE_IMPERSONATE_SUBJECT : usuario Workspace a impersonar (domain-wide delegation).
+#       Necesario porque una service account no tiene quota de Drive: impersona al usuario
+#       (18 TB) para que el archivo se cuente contra su almacenamiento. Requiere DWD habilitada
+#       en Admin de Workspace (API Controls → Domain-wide delegation → client_id de la SA con
+#       scope https://www.googleapis.com/auth/drive). Alternativa: usar una Shared Drive.
 
 on:
   schedule:
@@ -31,28 +35,34 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DRIVE_FOLDER_ID: "1Erng2SywVN9ymHqUzkT0iMRrKSmrHWBw"
+      DRIVE_IMPERSONATE_SUBJECT: "martin.battaglia@logisticatops.com"
     steps:
       - name: Validar secrets requeridos (fail-fast)
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-          GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
         run: |
           set -euo pipefail
           missing=0
-          for v in SUPABASE_DB_URL GCP_SA_KEY GCS_BUCKET; do
+          for v in SUPABASE_DB_URL GCP_SA_KEY; do
             if [ -z "${!v:-}" ]; then
               echo "::error::Secret requerido '$v' ausente o vacío."
               missing=1
             fi
           done
+          if [ -z "${DRIVE_FOLDER_ID:-}" ]; then
+            echo "::error::DRIVE_FOLDER_ID no configurado."
+            missing=1
+          fi
           if [ "$missing" -ne 0 ]; then
-            echo "::error::Faltan secrets. Cargarlos en Settings → Secrets and variables → Actions y reintentar."
+            echo "::error::Faltan secrets/config. Revisar Settings → Secrets and variables → Actions."
             exit 1
           fi
-          echo "✓ Los 3 secrets requeridos están presentes."
+          echo "✓ Secrets y config requeridos presentes."
 
-      - name: Instalar pg_dump 15 (repo oficial PGDG)
+      - name: Instalar pg_dump 17 (repo oficial PGDG)
         run: |
           set -euo pipefail
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -61,7 +71,7 @@ jobs:
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
-          sudo apt-get install -y postgresql-client-15
+          sudo apt-get install -y postgresql-client-17
           if ! command -v pg_dump > /dev/null; then
             echo "::error::pg_dump no quedó instalado tras la instalación PGDG."
             exit 1
@@ -94,33 +104,91 @@ jobs:
           echo "FILENAME=$FILENAME" >> "$GITHUB_ENV"
           echo "DATE_PATH=$DATE_PATH" >> "$GITHUB_ENV"
 
-      - name: Auth to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Validar gcloud
+      - name: Instalar cliente de Google Drive (Python)
         run: |
           set -euo pipefail
-          if ! command -v gcloud > /dev/null; then
-            echo "::error::gcloud no está disponible tras setup-gcloud."
-            exit 1
-          fi
-          gcloud --version | head -1
+          python3 -m pip install --quiet --upgrade \
+            google-api-python-client google-auth
+          echo "✓ google-api-python-client instalado."
 
-      - name: Upload to GCS
+      - name: Subir backup a Google Drive
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           set -euo pipefail
-          gcloud storage cp "$FILENAME" \
-            "gs://${{ secrets.GCS_BUCKET }}/${DATE_PATH}/${FILENAME}"
+          python3 - <<'PY'
+          import json, os, sys
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+          from googleapiclient.errors import HttpError
 
-      - name: Verify upload
+          info = json.loads(os.environ["GCP_SA_KEY"])
+          scopes = ["https://www.googleapis.com/auth/drive"]
+          creds = service_account.Credentials.from_service_account_info(info, scopes=scopes)
+          subject = os.environ.get("DRIVE_IMPERSONATE_SUBJECT", "").strip()
+          if subject:
+              creds = creds.with_subject(subject)   # domain-wide delegation → usa quota del usuario
+
+          svc = build("drive", "v3", credentials=creds, cache_discovery=False)
+          filename = os.environ["FILENAME"]
+          folder_id = os.environ["DRIVE_FOLDER_ID"]
+          media = MediaFileUpload(filename, mimetype="application/octet-stream", resumable=True)
+          meta = {"name": filename, "parents": [folder_id]}
+
+          try:
+              f = svc.files().create(
+                  body=meta, media_body=media,
+                  fields="id,name,size,createdTime",
+                  supportsAllDrives=True,
+              ).execute()
+          except HttpError as e:
+              msg = str(e)
+              print(f"::error::Drive upload falló: {msg}", file=sys.stderr)
+              if "quota" in msg.lower() or "storageQuota" in msg:
+                  print("::error::La Service Account no tiene quota de Drive. "
+                        "Habilitar domain-wide delegation (impersonar usuario Workspace) "
+                        "o usar una Shared Drive.", file=sys.stderr)
+              raise
+
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write(f"DRIVE_FILE_ID={f['id']}\n")
+          print(f"✓ Subido a Drive: id={f['id']} name={f['name']} "
+                f"size={f.get('size')} created={f.get('createdTime')}")
+          PY
+
+      - name: Verificar archivo en Drive
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           set -euo pipefail
-          gcloud storage ls -l "gs://${{ secrets.GCS_BUCKET }}/${DATE_PATH}/${FILENAME}"
+          python3 - <<'PY'
+          import json, os, sys
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
+
+          info = json.loads(os.environ["GCP_SA_KEY"])
+          creds = service_account.Credentials.from_service_account_info(
+              info, scopes=["https://www.googleapis.com/auth/drive"])
+          subject = os.environ.get("DRIVE_IMPERSONATE_SUBJECT", "").strip()
+          if subject:
+              creds = creds.with_subject(subject)
+          svc = build("drive", "v3", credentials=creds, cache_discovery=False)
+
+          fid = os.environ["DRIVE_FILE_ID"]
+          f = svc.files().get(fileId=fid,
+                              fields="id,name,size,createdTime,parents",
+                              supportsAllDrives=True).execute()
+          size = int(f.get("size", 0))
+          if size <= 0:
+              print("::error::El archivo en Drive tiene tamaño 0.", file=sys.stderr)
+              sys.exit(1)
+          if os.environ["DRIVE_FOLDER_ID"] not in (f.get("parents") or []):
+              print("::error::El archivo no está en la carpeta de backups esperada.", file=sys.stderr)
+              sys.exit(1)
+          print(f"✓ Verificado en Drive: {f['name']} ({size} bytes) created={f['createdTime']}")
+          print("Backup uploaded successfully")
+          PY
 
       - name: Cleanup local file
         if: always()
