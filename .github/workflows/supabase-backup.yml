@@ -72,12 +72,21 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y postgresql-client-17
-          if ! command -v pg_dump > /dev/null; then
-            echo "::error::pg_dump no quedó instalado tras la instalación PGDG."
+          # El runner trae postgresql-client-16 preinstalado y su pg_dump gana en PATH.
+          # Forzamos los binarios v17 (en /usr/lib/postgresql/17/bin) para los steps siguientes
+          # y validamos la versión (el server Supabase es 17.x → pg_dump debe ser >= 17).
+          PG17_BIN=/usr/lib/postgresql/17/bin
+          if [ ! -x "$PG17_BIN/pg_dump" ]; then
+            echo "::error::No se encontró pg_dump 17 en $PG17_BIN tras la instalación PGDG."
             exit 1
           fi
-          pg_dump --version
-          pg_restore --version
+          echo "$PG17_BIN" >> "$GITHUB_PATH"
+          "$PG17_BIN/pg_dump" --version
+          "$PG17_BIN/pg_restore" --version
+          case "$("$PG17_BIN/pg_dump" --version)" in
+            *" 17."*) echo "✓ pg_dump 17 OK" ;;
+            *) echo "::error::pg_dump no es v17."; exit 1 ;;
+          esac
 
       - name: Generar backup (custom format, compress 9)
         env:
