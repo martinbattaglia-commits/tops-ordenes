@@ -6,14 +6,16 @@ import { fmtDateTime } from "@/lib/utils";
 import type { CustodyEvidenceRef, CustodyTimelineEvent } from "@/lib/custody/types";
 import { EvidenceViewer } from "../../_components/EvidenceViewer";
 import { PrintButton } from "../../_components/PrintButton";
+import { PodDownloadButton } from "../../_components/PodDownloadButton";
 
 export const metadata = { title: "POD · Custodia" };
 export const dynamic = "force-dynamic";
 
 /**
- * POD Surface (GATE 5 · FASE 8). Muestra receptor, fecha, firma, evidencias y
- * shipment. Genera PDF vía print-to-PDF del navegador (sin nueva arquitectura
- * server-side). El binario de la firma se accede por signed URL auditado.
+ * POD Surface (GATE 5.3 · B4). Muestra receptor, fecha, firma, evidencias y
+ * shipment. El POD-PDF se genera SERVER-SIDE (custody-pod) y se descarga por
+ * emit_custody_signed_url (auditado). El binario de la firma se accede igual por
+ * signed URL auditado. PrintButton queda como respaldo de impresión local.
  */
 export default async function PodSurfacePage({ params }: { params: { id: string } }) {
   // params.id = shipment_id
@@ -42,10 +44,12 @@ export default async function PodSurfacePage({ params }: { params: { id: string 
     );
   }
 
-  // Evidencias del timeline (fotos/firma) para adjuntar al POD.
+  // Evidencias del timeline (fotos/firma). Se excluye el propio POD-PDF (documento
+  // en custody-pod) porque tiene su descarga dedicada y auditada (PodDownloadButton).
   const evidences: CustodyEvidenceRef[] = timeline.nodes
     .filter((n): n is CustodyTimelineEvent => n.type === "event")
-    .flatMap((n) => n.evidences);
+    .flatMap((n) => n.evidences)
+    .filter((e) => !(e.kind === "documento" && e.bucket === "custody-pod"));
   const signatureRef = pod.signature_evidence_id
     ? evidences.find((e) => e.evidence_id === pod.signature_evidence_id) ??
       ({ evidence_id: pod.signature_evidence_id, kind: "firma", bucket: "custody-pii", sha256: "", redacted: false } as CustodyEvidenceRef)
@@ -63,7 +67,8 @@ export default async function PodSurfacePage({ params }: { params: { id: string 
           <p className="page-subtitle">Despacho {pod.shipment_public_id ?? pod.shipment_id}</p>
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <PrintButton />
+          <PodDownloadButton shipmentId={pod.shipment_id} hasPdf={Boolean(pod.pod_storage_path)} revalidate={`/wms/custody/pod/${pod.shipment_id}`} />
+          <PrintButton label="Imprimir" />
           <Link href="/wms/custody" className="btn btn-ghost btn-sm"><Icon name="arrow-left" size={12} /> Volver</Link>
         </div>
       </div>

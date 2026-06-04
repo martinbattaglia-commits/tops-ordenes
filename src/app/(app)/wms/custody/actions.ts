@@ -10,6 +10,7 @@ import {
   redactCustodyEvidence,
   getEvidenceSignedUrl,
 } from "@/lib/custody/custody";
+import { generateAndStorePodPdf, getPodPdfEvidenceId } from "@/lib/custody/pod-pdf";
 import type {
   CustodyBucket,
   CustodyEventType,
@@ -101,12 +102,54 @@ export async function registerEventAction(input: RegisterEventInput, revalHint?:
   }
 }
 
-/** Genera el POD de un shipment. */
-export async function generatePodAction(input: GeneratePodInput, revalHint?: string): Promise<Result<{ pod_id: string; public_id: string }>> {
+/**
+ * Genera el POD de un shipment y, a continuación, construye el POD-PDF server-side
+ * (sube a custody-pod + completa pod_storage_path). El PDF es best-effort: si falla,
+ * el POD queda creado y se puede regenerar (regeneratePodPdfAction) sin perder datos.
+ */
+export async function generatePodAction(
+  input: GeneratePodInput,
+  revalHint?: string
+): Promise<Result<{ pod_id: string; public_id: string; pdf_path?: string; pdf_warning?: string }>> {
   try {
     const res = await generateDeliveryPod(input);
+    let pdf_path: string | undefined;
+    let pdf_warning: string | undefined;
+    try {
+      const pdf = await generateAndStorePodPdf(input.shipmentId, { force: true });
+      pdf_path = pdf?.path;
+    } catch (e) {
+      pdf_warning = e instanceof Error ? e.message : String(e);
+    }
     revalidate(revalHint);
-    return { ok: true, data: res };
+    return { ok: true, data: { ...res, pdf_path, pdf_warning } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** (Re)genera el POD-PDF server-side de un POD ya existente (idempotente con force). */
+export async function regeneratePodPdfAction(
+  shipmentId: string,
+  revalHint?: string
+): Promise<Result<{ path: string }>> {
+  try {
+    const pdf = await generateAndStorePodPdf(shipmentId, { force: true });
+    if (!pdf) return { ok: false, error: "No hay POD para este despacho (o modo demo)." };
+    revalidate(revalHint);
+    return { ok: true, data: { path: pdf.path } };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Emite (auditado) y firma un signed URL para descargar el POD-PDF de un shipment. */
+export async function podPdfSignedUrlAction(shipmentId: string): Promise<Result<{ url: string }>> {
+  try {
+    const evidenceId = await getPodPdfEvidenceId(shipmentId);
+    if (!evidenceId) return { ok: false, error: "El POD-PDF aún no fue generado." };
+    const url = await getEvidenceSignedUrl(evidenceId, "descarga_pod");
+    return { ok: true, data: { url } };
   } catch (e) {
     return fail(e);
   }
