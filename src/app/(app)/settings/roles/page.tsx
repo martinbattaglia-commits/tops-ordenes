@@ -3,11 +3,19 @@ import { Icon } from "@/components/Icon";
 import { listRoles, listPermissions, listUserAssignments } from "@/lib/rbac/data";
 import { MODULE_LABELS } from "@/lib/rbac/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { RestrictedAccess } from "@/components/shell/RestrictedAccess";
+import { isCurrentUserAdmin } from "@/lib/auth/roles";
 
 export const metadata = { title: "Sistema · Roles y permisos" };
 export const dynamic = "force-dynamic";
 
 export default async function RolesPage() {
+  // Gate 5.5: gestión de roles/permisos solo para admin (antes no tenía guard;
+  // quedaba oculta solo porque 0009_rbac no estaba aplicada — riesgo latente F-04).
+  if (!(await isCurrentUserAdmin())) {
+    return <RestrictedAccess message="Solo los administradores pueden ver y gestionar roles y permisos." />;
+  }
+
   // Las tablas RBAC (roles/permissions/user_roles, migración 0009_rbac) pueden
   // no estar aplicadas en prod. Degradar con gracia en vez de romper el shell.
   let roles: Awaited<ReturnType<typeof listRoles>>;

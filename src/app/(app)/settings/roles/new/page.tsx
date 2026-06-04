@@ -2,11 +2,17 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { listPermissions } from "@/lib/rbac/data";
 import { MODULE_LABELS } from "@/lib/rbac/types";
+import { RestrictedAccess } from "@/components/shell/RestrictedAccess";
+import { isCurrentUserAdmin } from "@/lib/auth/roles";
 
 export const metadata = { title: "Nuevo rol" };
 export const dynamic = "force-dynamic";
 
 export default async function NewRolePage() {
+  // Gate 5.5: creación de roles solo para admin (F-04).
+  if (!(await isCurrentUserAdmin())) {
+    return <RestrictedAccess message="Solo los administradores pueden crear roles." />;
+  }
   const permissions = await listPermissions();
   const byModule = new Map<string, typeof permissions>();
   for (const p of permissions) {

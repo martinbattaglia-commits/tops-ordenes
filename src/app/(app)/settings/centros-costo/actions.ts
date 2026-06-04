@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import { isCurrentUserAdmin } from "@/lib/auth/roles";
 import {
   CreateCostCenterSchema,
   formatZodIssues,
@@ -29,6 +30,11 @@ export async function createCostCenterAction(
 
   if (env.app.demoMode || env.app.needsSupabase) {
     return { ok: true };
+  }
+
+  // Gate 5.5: solo admin puede crear centros de costo (F-05, enforcement server-side).
+  if (!(await isCurrentUserAdmin())) {
+    return { ok: false, error: "Solo los administradores pueden gestionar centros de costo." };
   }
 
   const supabase = createClient();
@@ -64,6 +70,11 @@ export async function setCostCenterActiveAction(
 
   if (env.app.demoMode || env.app.needsSupabase) {
     return { ok: true };
+  }
+
+  // Gate 5.5: solo admin puede activar/desactivar centros de costo (F-05).
+  if (!(await isCurrentUserAdmin())) {
+    return { ok: false, error: "Solo los administradores pueden gestionar centros de costo." };
   }
 
   const supabase = createClient();

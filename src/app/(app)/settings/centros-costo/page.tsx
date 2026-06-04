@@ -2,12 +2,19 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { listCostCenters } from "@/lib/erp/data";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { RestrictedAccess } from "@/components/shell/RestrictedAccess";
+import { isCurrentUserAdmin } from "@/lib/auth/roles";
 import { CentrosCostoManager } from "./CentrosCostoManager";
 
 export const metadata = { title: "Centros de costo" };
 export const dynamic = "force-dynamic";
 
 export default async function CentrosCostoPage() {
+  // Gate 5.5: administración de centros de costo solo para admin (F-05).
+  if (!(await isCurrentUserAdmin())) {
+    return <RestrictedAccess message="Solo los administradores pueden gestionar centros de costo." />;
+  }
+
   let costCenters: Awaited<ReturnType<typeof listCostCenters>>;
   try {
     costCenters = await listCostCenters({ includeInactive: true });

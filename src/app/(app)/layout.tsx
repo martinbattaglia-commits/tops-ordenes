@@ -18,7 +18,21 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       if (user) {
         const meta = user.user_metadata as Record<string, string | undefined>;
         const name = meta.full_name || meta.name || user.email?.split("@")[0] || "Usuario";
-        const role = meta.role || "Operaciones";
+        // Gate 5.5 (F-06): el rol mostrado viene de `profiles.role` (autoritativo, la
+        // misma fuente que los guards / current_role()), NO de user_metadata.role —
+        // que puede divergir y mostró "Operaciones" para un admin en el QA E2E.
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .maybeSingle();
+        const ROLE_LABELS: Record<string, string> = {
+          admin: "Admin",
+          operaciones: "Operaciones",
+          supervisor: "Supervisor",
+          cliente: "Cliente",
+        };
+        const role = ROLE_LABELS[(prof?.role as string) ?? ""] || meta.role || "Operaciones";
         userMeta = {
           name,
           role,

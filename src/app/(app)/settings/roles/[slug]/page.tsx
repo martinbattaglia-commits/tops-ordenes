@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { getRole, listPermissions } from "@/lib/rbac/data";
 import { MODULE_LABELS, ACTION_LABELS } from "@/lib/rbac/types";
+import { RestrictedAccess } from "@/components/shell/RestrictedAccess";
+import { isCurrentUserAdmin } from "@/lib/auth/roles";
 
 export const metadata = { title: "Rol · Permisos" };
 export const dynamic = "force-dynamic";
@@ -12,6 +14,10 @@ interface PageProps {
 }
 
 export default async function RoleDetailPage({ params }: PageProps) {
+  // Gate 5.5: detalle/edición de rol solo para admin (F-04).
+  if (!(await isCurrentUserAdmin())) {
+    return <RestrictedAccess message="Solo los administradores pueden ver y editar roles." />;
+  }
   const [role, allPermissions] = await Promise.all([
     getRole(params.slug),
     listPermissions(),
