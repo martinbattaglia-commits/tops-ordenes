@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           DATE_PATH=$(date -u +'%Y/%m/%d')
           FILENAME="backup-$(date -u +'%Y-%m-%dT%H%M%SZ').dump"
-          /usr/lib/postgresql/17/bin/pg_dump
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
             --format=custom --compress=9 --no-owner --no-acl --verbose \
             --file="$FILENAME"
           if [ ! -s "$FILENAME" ]; then
