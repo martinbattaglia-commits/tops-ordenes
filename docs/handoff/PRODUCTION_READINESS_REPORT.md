@@ -30,11 +30,17 @@ RLS**, **autorización inconsistente en `/settings/*`** y, sobre todo, **infraes
 ## 2. Riesgos
 
 ### Abiertos (bloqueantes)
-| # | Riesgo | Sev | Tipo |
-|---|---|---|---|
-| F-01-R | PII de usuarios (emails/roles) legible por todo staff vía RLS `profiles` | P0 | Datos/PII |
-| F-03 | DEV/PROD misma DB + PITR off + sin backup de Storage | P0 | Infra/recuperación |
-| F-04 | `/settings/roles*` sin guard de rol (latente; se activa al aplicar 0009) | P1 | Access control |
+| # | Riesgo | Sev | Tipo | Estado |
+|---|---|---|---|---|
+| F-01-R | PII de usuarios (emails/roles) legible por todo staff vía RLS `profiles` | P0 | Datos/PII | **Fix aprobado (0040), PENDIENTE de aplicación manual** — ver runbook + smoke test |
+| F-03 | DEV/PROD misma DB + PITR off + sin backup de Storage | P0 | Infra/recuperación | Abierto (infra) |
+| F-04 | `/settings/roles*` sin guard de rol | P1 | Access control | ✅ Cerrado en `2b57d00` (guard admin code-only) |
+
+> **Actualización 2026-06-04 (Gate 5.5):** la migración **`0040_profiles_pii_lockdown.sql`** quedó
+> **APROBADA SIN CAMBIOS** (impact analysis + auditoría adversarial). **NO aplicada todavía** — paquete de
+> ejecución manual listo: `RLS_0040_EXECUTION_RUNBOOK.md` + `RLS_0040_SMOKE_TEST.sql` + `RLS_0040_IMPACT_ANALYSIS.md`.
+> Los guards code-only (F-04/F-05/F-06) ya se aplicaron en `2b57d00`. **El estado NO se declara CLOSED**:
+> resta aplicar 0040, resolver F-03 (infra) y el residual de emails en `audit_log` (legibles por supervisor).
 
 ### Abiertos (no bloqueantes)
 | # | Riesgo | Sev |
