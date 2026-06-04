@@ -15,11 +15,14 @@
 >   + UI (`/wms/despachos`). Ver `GATE_4C_IMPLEMENTATION_REPORT.md`.
 > - **Cadena de migraciones** versionada en git hasta `0035`; `main` ↔ `origin/main` (sin push pendiente).
 > - **GATE 4 COMPLETO** (4A · 4B · 4B.1 · 4C).
-> - **Gate 5 — Cadena de Custodia:** 🟡 **BACK-END DB IMPLEMENTADO, NO CERRADO.** `0036`–`0039` commiteados
->   (`7196b86`/`468d893`/`d301e8e`/`681d810`): 3 tablas custody + tokens QR + 3 buckets privados + 9 RPC +
->   hash-chain + read-audit. `0036`=10/10, `0037`=9/9; `0038`/`0039` sin validar. **Bloqueantes de cierre
->   (`GATE_5_CLOSURE_REPORT.md`):** capa de aplicación (TS/UI/QR/Timeline/POD surface) **inexistente**, backup
->   de Storage indefinido, POD-PDF server-side no implementado. **Gate 5 NO está CLOSED.**
+> - **Gate 5 — Cadena de Custodia:** ✅ **VALIDATED + CLOSED (2026-06-03).** `0036`–`0039` aplicadas en
+>   Supabase Production y commiteadas (`7196b86`/`468d893`/`d301e8e`/`681d810`): 3 tablas custody + tokens QR +
+>   3 buckets privados + 9 RPC + hash-chain + read-audit. **QA completo:** `0036`=10/10, `0037`=9/9,
+>   **`0038`=10/10**, **`0039`=12/12** (0 FAIL · 0 SKIP). **App Layer completa** (`b55916e`): TS Layer +
+>   Server Actions + QR + Timeline + Dashboard + Shipment Integration + Evidence Viewer + POD Surface +
+>   **POD-PDF server-side** (`61e69e4`, cierra B4). `tsc`=0 · `eslint` limpio. Ver
+>   `GATE_5_FINAL_CLOSURE_REPORT.md`. **Follow-up operativo/compliance (NO bloqueante del cierre de ingeniería):**
+>   B3 backup de Storage · B6 política legal de retención (+ anclaje Merkle opcional).
 > - **RENUMERACIÓN DEFINITIVA:** `0034` = Packing Cancel (4B.1) · `0035` = Dispatch (4C).
 >   (Las referencias a "Fase 4C = `0034`" más abajo son previas a la renumeración — leer `0035`.)
 > Docs de referencia: `WMS_PHASE_CLOSURE_HANDOFF.md`, `GATE_4C_READINESS_REPORT.md`, `GATE_4B1_CLOSURE_REPORT.md`.

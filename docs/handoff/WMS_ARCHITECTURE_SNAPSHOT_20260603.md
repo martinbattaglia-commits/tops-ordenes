@@ -38,13 +38,13 @@
 **Despacho + Entrega (0035) — Gate 4C ✅ CLOSED**
 - `shipments` — cabecera de despacho, `public_id 'DSP-'`. 1 por pedido (índice parcial `unique(order_id) where status<>'anulado'`). Campos: `order_id, status, carrier, vehicle_ref, tracking_ref, dispatched_at/by, delivered_at/by, received_by_name, reverted_at/by, notes, active`. RLS lockdown (escritura solo vía RPC).
 
-**Cadena de Custodia (0036–0039) — Gate 5 🟡 BACK-END DB (NO CERRADO)**
+**Cadena de Custodia (0036–0039) — Gate 5 ✅ VALIDATED + CLOSED**
 - `custody_events` — timeline append-only + **hash-chain** (`prev_hash`/`row_hash`). Doble FK nullable (`packing_unit_id` XOR `shipment_id`) + CHECK. `geom` PostGIS generado. `public_id 'CUST-'`. Inmutable por trigger.
 - `custody_evidence` — archivos en Storage. `sha256 not null`, multi-bucket CHECK, `unique(bucket,path)`, `retention_class/until`, `redacted/redacted_at/redacted_by`. Append-only salvo flip de redacción.
-- `delivery_pods` — POD 1×shipment, `public_id 'POD-'`. Receptor canónico + firma (`signature_evidence_id`).
+- `delivery_pods` — POD 1×shipment, `public_id 'POD-'`. Receptor canónico + firma (`signature_evidence_id`) + `pod_storage_path` (PDF en `custody-pod`, poblado por el POD-PDF server-side).
 - Columnas QR opacas: `packing_units.custody_token`, `shipments.custody_token`.
 - Storage (0037): 3 buckets PRIVADOS `custody-evidence`/`custody-pii`/`custody-pod`.
-- **Estado:** back-end SQL implementado/commiteado (`0036`=10/10, `0037`=9/9; `0038`/`0039` sin validar). **Capa de aplicación (TS/UI/QR/Timeline/POD surface) NO existe. Gate 5 NO cerrado** — ver `GATE_5_CLOSURE_REPORT.md`.
+- **Estado:** back-end SQL aplicado en Production y commiteado. **QA `0036`=10/10 · `0037`=9/9 · `0038`=10/10 · `0039`=12/12 (0 FAIL/SKIP).** **App Layer completa** (TS/Server Actions/QR/Timeline/Dashboard/Shipment Integration/Evidence Viewer/POD Surface) + **POD-PDF server-side** (`@react-pdf/renderer` → `custody-pod` → `pod_storage_path` → descarga por `emit_custody_signed_url` auditado). `tsc`=0 · `eslint` limpio. **Gate 5 CERRADO** — ver `GATE_5_FINAL_CLOSURE_REPORT.md`. Follow-up operativo/compliance: B3 (backup Storage) · B6 (retención legal/Merkle).
 
 **Auditoría (0001)**
 - `audit_log` — append-only. `ts, user_id, entity, entity_id, action, payload(jsonb), ip`. Mecanismo único de auditoría de picking/packing.
@@ -170,6 +170,8 @@
 ## 4. Próximos pasos
 
 1. ~~Fase 0 (higiene) / Gate 4C~~ ✅ **COMPLETADO** — cadena versionada hasta `0035`; Gate 4C VALIDADO y CERRADO.
-2. **Deuda menor pendiente:** capa TS/UI del botón "Anular" de 4B.1 (no bloqueante); correr casos 2‑6 de Recepciones.
-3. **Gate 5 — Cadena de Custodia Digital** (QR por `packing_unit`/`shipment`, evidencia fotográfica, firma del receptor, POD, timeline, auditoría) sobre `packing_units` / `shipments`. Diseño: `GATE_5_CHAIN_OF_CUSTODY_DESIGN.md`. **NO iniciar implementación.**
-4. **Operativo (antes de despachos reales):** evaluar habilitar PITR; mantener backup manual previo a cada sesión de egreso.
+2. ~~**Gate 5 — Cadena de Custodia Digital**~~ ✅ **VALIDATED + CLOSED (2026-06-03)** — `0036`–`0039` aplicadas; QA 10/10·9/9·10/10·12/12; App Layer + POD-PDF server-side. Ver `GATE_5_FINAL_CLOSURE_REPORT.md`.
+3. **Follow-up operativo/compliance de Gate 5 (no bloqueante):** B3 backup de los 3 buckets custody · B6 política legal de retención (+ Merkle opcional). Ver `SUPABASE_BACKUP_CHECKLIST.md`.
+4. **Deuda menor pendiente:** capa TS/UI del botón "Anular" de 4B.1 (no bloqueante); correr casos 2‑6 de Recepciones.
+5. **Operativo (antes de despachos reales):** evaluar habilitar PITR; mantener backup manual previo a cada sesión de egreso.
+6. **Gate 6:** NO iniciado (fuera de alcance de este cierre).

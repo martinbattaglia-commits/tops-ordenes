@@ -1,5 +1,11 @@
 # GATE 5 — Cadena de Custodia · REPORTE DE CIERRE (auditoría integral)
 
+> ⚠️ **DOCUMENTO SUPERADO (2026-06-03).** Este reporte declaró **NOT CLOSED** por bloqueantes que **ya fueron
+> resueltos** (B1 App Layer, B2 `0038`/`0039` aplicadas+validadas, B4 POD-PDF server-side, B5 QR app-side).
+> El veredicto vigente es **GATE 5 = VALIDATED + CLOSED** — ver **`GATE_5_FINAL_CLOSURE_REPORT.md`** (canónico).
+> Se conserva como registro histórico de la auditoría intermedia. B3/B6 siguen abiertos como
+> *Operational / Compliance Follow-Up* (no bloqueantes).
+
 > Auditoría integral de Gate 5 para determinar cierre. Roles: Principal Architect + QA Lead + Security
 > Architect + Product Owner + Auditor Técnico. Repo `~/CODE/tops-ordenes` @ `681d810`. Fecha: 2026-06-03.
 > **Modo: auditoría + documentación.** Sin nuevas funcionalidades, sin migraciones, sin Gate 6.

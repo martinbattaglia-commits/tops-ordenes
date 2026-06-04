@@ -15,6 +15,7 @@
 | Gate 4B | Packing | `c5390bd` | ✅ Cerrado · SQL+TS+UI+E2E 12/12+kit validación |
 | Mini-Gate 4B.1 | Packing Cancel (`anular_packing_unit`) | `547f6eb` | ✅ **VALIDADO (2026-06-03)** · RPC `0034` + kit 12/12 (0 footprint). Capa TS/UI (botón "Anular") **pendiente, no bloqueante**. |
 | Gate 4C | Despacho + Entrega (`shipments`, `confirm_dispatch`/`confirm_delivery`/`revert_dispatch`) | `841f85b` | ✅ **VALIDADO + CERRADO (2026-06-03)** · `0035` aplicada · `gate4c_dispatch_validation_report.sql` **14/14 OK** (FEFO, ledger append-only, reversión compensatoria, D1=A, authz) + TS + UI. |
+| Gate 5 | Cadena de Custodia (custody_events/evidence/PODs, QR, hash-chain, Storage, POD-PDF) | `7196b86`…`61e69e4` | ✅ **VALIDATED + CLOSED (2026-06-03)** · `0036`–`0039` aplicadas en Production · QA `0036`=10/10·`0037`=9/9·**`0038`=10/10**·**`0039`=12/12** (0 FAIL/SKIP) · App Layer completa + **POD-PDF server-side** (`61e69e4`) · `tsc`=0 · `eslint` limpio. Ver `GATE_5_FINAL_CLOSURE_REPORT.md`. |
 
 ### Gates / fases previas (estado)
 - **Recepciones (Gate 1)** · **Inventario+Ledger (Gate 2)** · **Pedidos+Reserva (Gate 3)**: funcionalmente **validados** y **aplicados en DB**, pero **SIN commitear** en git (ver §Deuda/Riesgos y `GIT_RECOVERY_CHECKLIST.md`).
@@ -22,11 +23,21 @@
 - **Digital Twin físico (0020-0023)**: commiteado.
 
 ### Gates en curso / pendientes
-- **Gate 5 — Cadena de Custodia Digital** (QR por `packing_unit`/`shipment`, evidencia fotográfica, firma, POD, timeline, auditoría): 🟡 **BACK-END DB IMPLEMENTADO, NO CERRADO.**
-  - ✅ **Back-end SQL `0036`–`0039` implementado y commiteado** (`7196b86`/`468d893`/`d301e8e`/`681d810`): 3 tablas (`custody_events`/`custody_evidence`/`delivery_pods`) + tokens QR + 3 buckets privados + 9 RPC (emit/attach/register/verify/redact/generate_pod/timeline/by_token/summary) + hash-chain + read-audit. Validación: `0036`=10/10, `0037`=9/9; **`0038`/`0039` kits sin correr** (pendiente).
-  - ⛔ **NO CERRADO** (ver `GATE_5_CLOSURE_REPORT.md` §8): **capa de aplicación inexistente** (TS `src/lib/custody/*`, UI captura/timeline/POD/QR, Server Actions, POD-PDF server-side) · **backup de Storage indefinido** · aplicación/validación de `0038`/`0039` sin confirmar · retención con deadlines tentativos.
+- **Gate 5 — Cadena de Custodia Digital** (QR por `packing_unit`/`shipment`, evidencia fotográfica, firma, POD, timeline, auditoría): ✅ **VALIDATED + CLOSED (2026-06-03).**
+  - ✅ **Back-end SQL `0036`–`0039` aplicado en Production y commiteado** (`7196b86`/`468d893`/`d301e8e`/`681d810`): 3 tablas (`custody_events`/`custody_evidence`/`delivery_pods`) + tokens QR + 3 buckets privados + 9 RPC (emit/attach/register/verify/redact/generate_pod/timeline/by_token/summary) + hash-chain + read-audit. **QA: `0036`=10/10 · `0037`=9/9 · `0038`=10/10 · `0039`=12/12 (0 FAIL · 0 SKIP).**
+  - ✅ **App Layer completa** (`b55916e`): TS Layer (`src/lib/custody/*`), Server Actions, QR Layer, Timeline, Dashboard, Shipment Integration (`/wms/despachos/[id]`), Evidence Viewer, POD Surface, y **POD-PDF server-side** (`61e69e4`, cierra B4: render `@react-pdf/renderer` → `custody-pod` → `pod_storage_path` → descarga por `emit_custody_signed_url`). `tsc`=0 · `eslint` limpio.
+  - 📋 **Follow-up operativo/compliance (NO bloqueante del cierre de ingeniería):** ver sección **Operational / Compliance Follow-Up**.
 
 > **Gate 4C cerrado:** el gate del primer egreso irreversible quedó **VALIDADO + CERRADO** (2026-06-03, commit `841f85b`). Ver fila en la tabla de gates completados y `GATE_4C_IMPLEMENTATION_REPORT.md`.
+> **Gate 5 cerrado:** Cadena de Custodia **VALIDATED + CLOSED** (2026-06-03). Ver `GATE_5_FINAL_CLOSURE_REPORT.md`.
+
+### Operational / Compliance Follow-Up (post-cierre Gate 5)
+> Ítems **operativos/de compliance**, fuera del alcance de ingeniería de Gate 5. No bloquean el cierre técnico; se gestionan en operación antes del uso productivo con evidencia real (MELI).
+
+| # | Ítem | Tipo | Estado | Acción |
+|---|---|---|---|---|
+| **B3** | **Backup de Storage** de los 3 buckets custody (no cubierto por backup de DB ni PITR, que está off) | Operativo | ⏳ Pendiente | Definir y activar export/replicación periódica de `custody-evidence`/`custody-pii`/`custody-pod`. Ver `SUPABASE_BACKUP_CHECKLIST.md`. |
+| **B6** | **Política legal de retención** + (opcional) anclaje **Merkle** legal-grade | Compliance | ⏳ Pendiente | Confirmar marco legal de retención por bucket (deadlines hoy tentativos en `0038`: pii 1a / evidence 2a / pod 10a) y base legal de PII/geo. Merkle diario opcional para auditoría externa. |
 
 ### Riesgos abiertos (resumen — detalle en docs específicos)
 1. **🔴 CRÍTICO — Cadena de migraciones partida en git:** `0032`/`0033` (commiteadas) dependen de `0025/0026/0027/0029/0030/0031` (**sin commitear**). Un clon limpio de `main` compila picking/packing pero las migraciones base no están versionadas. Mitigación: commit aislado de Gates 1/2/3 (Fase 0 pendiente).
