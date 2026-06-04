@@ -66,8 +66,8 @@ jobs:
             echo "::error::pg_dump no quedó instalado tras la instalación PGDG."
             exit 1
           fi
-          pg_dump --version
-          pg_restore --version
+          /usr/lib/postgresql/17/bin/pg_dump --version
+          /usr/lib/postgresql/17/bin/pg_restore --version
 
       - name: Generar backup (custom format, compress 9)
         env:
@@ -76,7 +76,7 @@ jobs:
           set -euo pipefail
           DATE_PATH=$(date -u +'%Y/%m/%d')
           FILENAME="backup-$(date -u +'%Y-%m-%dT%H%M%SZ').dump"
-          pg_dump "$SUPABASE_DB_URL" \
+          /usr/lib/postgresql/17/bin/pg_dump
             --format=custom --compress=9 --no-owner --no-acl --verbose \
             --file="$FILENAME"
           if [ ! -s "$FILENAME" ]; then
