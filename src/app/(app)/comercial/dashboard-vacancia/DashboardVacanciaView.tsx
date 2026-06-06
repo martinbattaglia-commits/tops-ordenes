@@ -10,6 +10,7 @@ import {
   CATEGORY_LABEL,
   type CapacityCategory,
   type SiteCapacity,
+  type CommittedSnapshot,
 } from "@/lib/wms/corporate-capacity";
 
 const fmt = (n: number) => n.toLocaleString("es-AR");
@@ -33,10 +34,10 @@ const PRESETS: Preset[] = [
   { label: "20 puestos coworking", mode: "coworking", amount: 20 },
 ];
 
-export function DashboardVacanciaView() {
-  const corp = useMemo(() => getCorporateCapacity(), []);
-  const summary = useMemo(() => getCorporateVacancySummary(), []);
-  const sites = useMemo(() => getCapacityBySite(), []);
+export function DashboardVacanciaView({ committed = {} }: { committed?: CommittedSnapshot }) {
+  const corp = useMemo(() => getCorporateCapacity(committed), [committed]);
+  const summary = useMemo(() => getCorporateVacancySummary(committed), [committed]);
+  const sites = useMemo(() => getCapacityBySite(committed), [committed]);
 
   const [mode, setMode] = useState<MatchMode>("anmat");
   const [amount, setAmount] = useState<number>(300);
@@ -51,7 +52,7 @@ export function DashboardVacanciaView() {
           <h1 className="page-title">Dashboard Corporativo de Vacancia TOPS</h1>
           <p className="page-subtitle">
             Consolidado Pedro Luján 3159 + Agustín Magaldi 1765 · base superficie comercializable ·
-            disponible físico (committed = 0 hasta CRM F2.1)
+            vacancia física / comercial / proyectada (hook CRM activo · F2.1-4)
           </p>
         </div>
         <div className="flex items-center gap-2 no-print">
@@ -72,6 +73,19 @@ export function DashboardVacanciaView() {
         <BigKpi label="Ocupado" value={`${fmt(summary.ocupadoM2)} m²`} icon="lock" tone="#dc2626" />
         <BigKpi label="Vacancia corporativa" value={`${summary.vacanciaPct}%`} icon="trend-up" tone="#16a34a" bar={summary.vacanciaPct} />
       </div>
+
+      {/* 1b · Vacancia física / comercial / proyectada (hook CRM) */}
+      <SectionTitle icon="trend-up" title="1b · Vacancia: física · comercial · proyectada" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+        <VacancyBand label="Física" sub="capacidad − ocupado" disp={summary.disponibleM2} pct={summary.vacanciaPct} color="#16a34a" />
+        <VacancyBand label="Comercial" sub="− comprometido (ganado)" disp={summary.disponibleComercialM2} pct={summary.vacanciaComercialPct} color="#0d9488" />
+        <VacancyBand label="Proyectada" sub="− reservado (propuesta/neg.)" disp={summary.disponibleProyectadoM2} pct={summary.vacanciaProyectadaPct} color="#2563eb" />
+      </div>
+      <p className="text-[11px] text-fg-muted mb-6">
+        {summary.hasCommitments
+          ? `CRM: reservado ${fmt(summary.reservadoM2)} m² · comprometido ${fmt(summary.committedM2)} m² (los onboardeados ya están en "ocupado" — no se doble-cuentan).`
+          : "Sin compromisos CRM cargados: comercial y proyectada = física (activación segura del hook, sin impacto)."}
+      </p>
 
       {/* 2-4 · Categorías */}
       <SectionTitle icon="tag" title="2–4 · Por categoría" />
@@ -206,6 +220,24 @@ function BigKpi({ label, value, icon, tone, bar }: { label: string; value: strin
           <div className="h-full rounded-full" style={{ width: `${Math.min(100, bar)}%`, background: tone ?? "#16a34a" }} />
         </div>
       )}
+    </div>
+  );
+}
+
+function VacancyBand({ label, sub, disp, pct, color }: { label: string; sub: string; disp: number; pct: number; color: string }) {
+  return (
+    <div className="nx-surface card p-3" style={{ borderLeft: `3px solid ${color}` }}>
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs font-bold uppercase tracking-wide" style={{ color }}>
+          Vacancia {label}
+        </span>
+        <span className="text-lg font-bold tabular" style={{ color }}>{pct}%</span>
+      </div>
+      <div className="text-sm font-semibold text-fg-primary tabular mt-0.5">{disp.toLocaleString("es-AR")} m² disponibles</div>
+      <div className="text-[11px] text-fg-muted">{sub}</div>
+      <div className="mt-2 h-1.5 rounded-full bg-bg-surface-alt overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: color }} />
+      </div>
     </div>
   );
 }
