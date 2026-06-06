@@ -63,6 +63,18 @@ function primaryCta(estado: CrmStage): Cta | null {
   }
 }
 
+/**
+ * Avance de etapa para estados cuyo CTA primario es navegación a una tab (no
+ * un advance) pero que sí tienen una transición hacia adelante en el backend.
+ * P0.3: `calificado → propuesta` (el único hueco real; `propuesta`/`negociacion`
+ * ya avanzan vía primaryCta). Reusa crm_advance_stage (0047) — sin tocar backend.
+ * `visita` queda fuera de scope: la UI no ofrece entrada a `visita` hoy.
+ */
+function forwardAdvance(estado: CrmStage): { to: CrmStage; label: string } | null {
+  if (estado === "calificado") return { to: "propuesta", label: "Pasar a propuesta" };
+  return null;
+}
+
 export function Opportunity360View({ full, source = "local" }: { full: OpportunityFull; source?: "supabase" | "local" }) {
   const { opportunity: o, quotes, proposals, contract, onboarding, history } = full;
   const [tab, setTab] = useState<TabKey>("resumen");
@@ -90,6 +102,7 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
     [o.serviceType, o.m2],
   );
   const cta = primaryCta(o.estado);
+  const fwd = forwardAdvance(o.estado);
   const canLose = o.estado !== "ganado" && o.estado !== "perdido";
   const stageColor = STAGE_COLOR[o.estado];
 
@@ -144,6 +157,16 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
                 style={{ background: stageColor, color: "#fff" }}
               >
                 {isPending && cta.mode === "advance" ? "Procesando…" : cta.label} <Icon name="arrow-right" size={13} />
+              </button>
+            )}
+            {fwd && (
+              <button
+                disabled={!writable || isPending}
+                onClick={() => run(() => advanceStage(o.id, fwd.to))}
+                className="btn btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: STAGE_COLOR[fwd.to], color: "#fff" }}
+              >
+                {isPending ? "Procesando…" : fwd.label} <Icon name="arrow-right" size={13} />
               </button>
             )}
             {canLose && (

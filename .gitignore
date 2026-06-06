@@ -12,6 +12,13 @@ out/
 build
 dist
 
+# next.js — backups/artefactos temporales de build (no commitear)
+.next_old_*/
+.next_corrupt_backup/
+
+# playwright MCP — artefactos temporales
+.playwright-mcp/
+
 # misc
 .DS_Store
 *.pem
