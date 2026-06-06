@@ -4,15 +4,16 @@ import { listOpportunities } from "@/lib/comercial/opportunities-data";
 import { STAGE_LABEL, STAGE_COLOR, SERVICE_LABEL } from "@/lib/comercial/crm-types";
 
 export const metadata = { title: "Oportunidades · Comercial" };
+export const dynamic = "force-dynamic";
 
 const fmt = (n: number) => n.toLocaleString("es-AR");
 
 /**
- * Lista de oportunidades — punto de entrada a la Ficha 360° (F2.1-6).
- * Fuente LOCAL de muestra (sin Supabase). Cada fila enlaza a /comercial/oportunidades/[id].
+ * Lista de oportunidades — punto de entrada a la Ficha 360°.
+ * F2.1-7: fuente Supabase real (crm_opportunities) con fallback a muestra local.
  */
-export default function OportunidadesPage() {
-  const opps = listOpportunities();
+export default async function OportunidadesPage() {
+  const { items: opps, source } = await listOpportunities();
 
   return (
     <div className="p-4 lg:p-8 nx-page-fade">
@@ -21,7 +22,8 @@ export default function OportunidadesPage() {
           <div className="eyebrow-tiny">Comercial · CRM</div>
           <h1 className="page-title">Oportunidades</h1>
           <p className="page-subtitle">
-            Pipeline comercial · {opps.length} oportunidades · datos de muestra (F2.1-6)
+            Pipeline comercial · {opps.length} oportunidades · fuente:{" "}
+            <span className="font-semibold">{source === "supabase" ? "Supabase (crm_opportunities)" : "muestra local (sin tabla)"}</span>
           </p>
         </div>
       </div>

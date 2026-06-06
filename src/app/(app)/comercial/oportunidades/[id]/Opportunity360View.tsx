@@ -38,7 +38,7 @@ function nextAction(estado: CrmStage): { label: string; tab: TabKey } | null {
   }
 }
 
-export function Opportunity360View({ full }: { full: OpportunityFull }) {
+export function Opportunity360View({ full, source = "local" }: { full: OpportunityFull; source?: "supabase" | "local" }) {
   const { opportunity: o, quotes, proposals, contract, onboarding, history } = full;
   const [tab, setTab] = useState<TabKey>("resumen");
 
@@ -67,6 +67,10 @@ export function Opportunity360View({ full }: { full: OpportunityFull }) {
         <Link href="/comercial/oportunidades" className="hover:text-fg-brand">Oportunidades</Link>
         <Icon name="chevron-right" size={11} />
         <span className="font-mono text-fg-secondary">{o.publicId}</span>
+        <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded"
+          style={{ background: source === "supabase" ? "#16a34a1a" : "#64748b1a", color: source === "supabase" ? "#16a34a" : "#64748b" }}>
+          <Icon name="database" size={10} /> {source === "supabase" ? "Supabase" : "muestra local"}
+        </span>
       </div>
 
       {/* Header */}

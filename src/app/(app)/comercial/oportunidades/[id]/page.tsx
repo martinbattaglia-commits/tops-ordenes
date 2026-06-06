@@ -3,14 +3,15 @@ import { getOpportunityFull } from "@/lib/comercial/opportunities-data";
 import { Opportunity360View } from "./Opportunity360View";
 
 export const metadata = { title: "Ficha 360° · Oportunidad" };
+export const dynamic = "force-dynamic";
 
 /**
- * Ficha 360° de Oportunidad (F2.1-6) — pantalla central del CRM.
+ * Ficha 360° de Oportunidad — pantalla central del CRM.
  * Integra Opportunity + Capacity + Quote + Proposal + Contract + Onboarding.
- * Fuente LOCAL de muestra (F2.1-7 → Supabase). Sin Clientify, sin webhook.
+ * F2.1-7: fuente Supabase real (crm_*) con fallback a muestra local. Sin Clientify, sin webhook.
  */
-export default function OpportunityFichaPage({ params }: { params: { id: string } }) {
-  const full = getOpportunityFull(params.id);
+export default async function OpportunityFichaPage({ params }: { params: { id: string } }) {
+  const { full, source } = await getOpportunityFull(params.id);
   if (!full) notFound();
-  return <Opportunity360View full={full} />;
+  return <Opportunity360View full={full} source={source} />;
 }

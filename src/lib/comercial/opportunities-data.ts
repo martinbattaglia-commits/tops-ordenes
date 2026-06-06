@@ -9,6 +9,10 @@
 import type {
   OpportunityFull, Opportunity, Quote, Proposal, Contract, Onboarding, StageEvent,
 } from "./crm-types";
+import { createClient } from "@/lib/supabase/server";
+import { listOpportunitiesDb, getOpportunityFullDb } from "./opportunities-supabase";
+
+export type DataSource = "supabase" | "local";
 
 // ── OPP-2026-0001 · ANMAT 200 m² · en PROPUESTA (cotización + propuesta enviada) ──
 const OPP_1: Opportunity = {
@@ -162,18 +166,39 @@ const DATA: Record<string, OpportunityFull> = {
   "opp-0003": { opportunity: OPP_3, quotes: [], proposals: [], contract: null, onboarding: null, history: HIST_3 },
 };
 
-// ── Accesores (hoy local; F2.1-7 → Supabase) ──────────────────────────────────
+// ── Fuente local (fallback) ───────────────────────────────────────────────────
 
-export function listOpportunities(): Opportunity[] {
+function listOpportunitiesLocal(): Opportunity[] {
   return Object.values(DATA).map((d) => d.opportunity);
 }
-
-export function getOpportunityFull(id: string): OpportunityFull | null {
+function getOpportunityFullLocal(id: string): OpportunityFull | null {
   return DATA[id] ?? null;
 }
 
-/** Resuelve por publicId (para deep-links tipo OPP-2026-0001). */
+/** Resuelve por publicId (para deep-links tipo OPP-2026-0001) — local. */
 export function getOpportunityIdByPublicId(publicId: string): string | null {
   const found = Object.values(DATA).find((d) => d.opportunity.publicId === publicId);
   return found?.opportunity.id ?? null;
+}
+
+// ── Accesores públicos: Supabase (real) con fallback a la muestra local ────────
+// La app apunta a una base donde crm_* puede no existir (p.ej. sin 0041–0046);
+// en ese caso el accesor cae a la muestra local y la Ficha 360° sigue operativa.
+
+export async function listOpportunities(): Promise<{ items: Opportunity[]; source: DataSource }> {
+  const supabase = createClient();
+  if (supabase) {
+    const db = await listOpportunitiesDb(supabase);
+    if (db) return { items: db, source: "supabase" };
+  }
+  return { items: listOpportunitiesLocal(), source: "local" };
+}
+
+export async function getOpportunityFull(id: string): Promise<{ full: OpportunityFull | null; source: DataSource }> {
+  const supabase = createClient();
+  if (supabase) {
+    const db = await getOpportunityFullDb(supabase, id);
+    if (db) return { full: db, source: "supabase" };
+  }
+  return { full: getOpportunityFullLocal(id), source: "local" };
 }
