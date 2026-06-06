@@ -192,13 +192,21 @@ begin
     ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-0000000c0004','authenticated','authenticated','val.operaciones@crmval.test','',now(),now(),now()),
     ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-0000000c0005','authenticated','authenticated','val.cliente@crmval.test','',now(),now(),now());
 
-  -- profiles: roles user_role_t. admin → bypass; cliente → role 'cliente'; resto 'operaciones'.
-  insert into public.profiles(id, full_name, email, role, active) values
-    ('00000000-0000-0000-0000-0000000c0001','Val Comercial',   'val.comercial@crmval.test',  'operaciones', true),
-    ('00000000-0000-0000-0000-0000000c0002','Val NoPerm',       'val.noperm@crmval.test',     'operaciones', true),
-    ('00000000-0000-0000-0000-0000000c0003','Val Admin',        'val.admin@crmval.test',      'admin',       true),
-    ('00000000-0000-0000-0000-0000000c0004','Val Operaciones',  'val.operaciones@crmval.test','operaciones', true),
-    ('00000000-0000-0000-0000-0000000c0005','Val Cliente',      'val.cliente@crmval.test',    'cliente',     true);
+  -- profiles: en staging el trigger `on_auth_user_created → handle_new_user` YA crea
+  -- el profile al insertar auth.users. Opción A (no insertar, evitar colisión pkey):
+  -- ACTUALIZAR el role/full_name sobre el profile existente.
+  update public.profiles p
+     set full_name = v.full_name,
+         role      = v.role::public.user_role_t,
+         active    = true
+  from (values
+    ('00000000-0000-0000-0000-0000000c0001'::uuid,'Val Comercial',  'operaciones'),
+    ('00000000-0000-0000-0000-0000000c0002'::uuid,'Val NoPerm',     'operaciones'),
+    ('00000000-0000-0000-0000-0000000c0003'::uuid,'Val Admin',      'admin'),
+    ('00000000-0000-0000-0000-0000000c0004'::uuid,'Val Operaciones','operaciones'),
+    ('00000000-0000-0000-0000-0000000c0005'::uuid,'Val Cliente',    'cliente')
+  ) as v(id, full_name, role)
+  where p.id = v.id;
 
   -- user_roles (RBAC): comercial → rol comercial ; operaciones → rol operaciones.
   -- noperm y cliente NO reciben mapeo (sin permisos comerciales).
@@ -206,7 +214,15 @@ begin
     ('00000000-0000-0000-0000-0000000c0001', v_role_comercial),
     ('00000000-0000-0000-0000-0000000c0004', v_role_operaciones);
 
-  insert into _crm_val values('6-fixtures','fixtures auth/profiles/user_roles creados', true, '5 users');
+  -- verificar que los 5 profiles existen con su role (trigger creó + update aplicó)
+  declare n_prof int;
+  begin
+    select count(*) into n_prof from public.profiles
+      where id in ('00000000-0000-0000-0000-0000000c0001','00000000-0000-0000-0000-0000000c0002',
+                   '00000000-0000-0000-0000-0000000c0003','00000000-0000-0000-0000-0000000c0004',
+                   '00000000-0000-0000-0000-0000000c0005');
+    insert into _crm_val values('6-fixtures','fixtures (auth.users + trigger profiles + update role + user_roles)', n_prof=5, n_prof||'/5 profiles');
+  end;
 exception when others then
   insert into _crm_val values('6-fixtures','fixtures creados', false, 'ERROR: '||SQLERRM||' — ajustar insert auth.users (runbook §5)');
 end $$;
