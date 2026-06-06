@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
+import { CaptureEmbed } from "./CaptureEmbed";
 import { findAvailability, type CapacityCategory } from "@/lib/wms/corporate-capacity";
 import {
   type OpportunityFull, type CrmService, type CrmStage,
@@ -146,8 +147,8 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
       <div className="nx-surface card p-4">
         {tab === "resumen" && <ResumenTab full={full} />}
         {tab === "capacidad" && <CapacidadTab o={o} cap={cap} />}
-        {tab === "cotizaciones" && <CotizacionesTab quotes={quotes} />}
-        {tab === "propuestas" && <PropuestasTab proposals={proposals} />}
+        {tab === "cotizaciones" && <CotizacionesTab quotes={quotes} opportunityId={o.id} />}
+        {tab === "propuestas" && <PropuestasTab proposals={proposals} opportunityId={o.id} serviceType={o.serviceType} />}
         {tab === "contrato" && <ContratoTab contract={contract} />}
         {tab === "onboarding" && <OnboardingTab onboarding={onboarding} />}
         {tab === "historial" && <HistorialTab history={history} />}
@@ -264,10 +265,20 @@ function CapacidadTab({ o, cap }: { o: OpportunityFull["opportunity"]; cap: Retu
   );
 }
 
-function CotizacionesTab({ quotes }: { quotes: OpportunityFull["quotes"] }) {
-  if (quotes.length === 0) return <Empty text="Sin cotizaciones. Usá el cotizador para generar una (se persiste en F2.1-7)." />;
+function CotizacionesTab({ quotes, opportunityId }: { quotes: OpportunityFull["quotes"]; opportunityId: string }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-4">
+      <div className="no-print">
+        {open ? (
+          <CaptureEmbed opportunityId={opportunityId} slug="cotizador" title="Cotizador · Guardar en Nexus" onClose={() => setOpen(false)} />
+        ) : (
+          <button onClick={() => setOpen(true)} className="btn btn-sm self-start" style={{ background: "var(--fg-brand,#0f172a)", color: "#fff" }}>
+            <Icon name="calculator" size={13} /> Cotizar y capturar a Nexus
+          </button>
+        )}
+      </div>
+      {quotes.length === 0 && <Empty text="Sin cotizaciones. Abrí el cotizador y guardá en Nexus." />}
       {quotes.map((q) => (
         <div key={q.id} className="rounded-lg border border-stroke-soft p-3">
           <div className="flex items-center justify-between mb-2">
@@ -300,10 +311,31 @@ function CotizacionesTab({ quotes }: { quotes: OpportunityFull["quotes"] }) {
   );
 }
 
-function PropuestasTab({ proposals }: { proposals: OpportunityFull["proposals"] }) {
-  if (proposals.length === 0) return <Empty text="Sin propuestas generadas." />;
+function PropuestasTab({ proposals, opportunityId }: { proposals: OpportunityFull["proposals"]; opportunityId: string; serviceType: CrmService }) {
+  const [open, setOpen] = useState<null | "propuesta-anmat" | "propuesta-general">(null);
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div className="flex flex-col gap-3">
+      <div className="no-print">
+        {open ? (
+          <CaptureEmbed
+            opportunityId={opportunityId}
+            slug={open}
+            title={`Propuesta ${open === "propuesta-anmat" ? "ANMAT" : "General"} · Guardar en Nexus`}
+            onClose={() => setOpen(null)}
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setOpen("propuesta-anmat")} className="btn btn-sm" style={{ background: "#2563eb", color: "#fff" }}>
+              <Icon name="file-pdf" size={13} /> Propuesta ANMAT
+            </button>
+            <button onClick={() => setOpen("propuesta-general")} className="btn btn-sm" style={{ background: "#dc2626", color: "#fff" }}>
+              <Icon name="file-pdf" size={13} /> Propuesta General
+            </button>
+          </div>
+        )}
+      </div>
+      {proposals.length === 0 && <Empty text="Sin propuestas. Generá una y guardá en Nexus." />}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {proposals.map((p) => (
         <div key={p.id} className="rounded-lg border border-stroke-soft p-3">
           <div className="flex items-center justify-between">
@@ -316,6 +348,7 @@ function PropuestasTab({ proposals }: { proposals: OpportunityFull["proposals"] 
           <Row label="Cotización" value={p.quotePublicId ?? "—"} />
         </div>
       ))}
+      </div>
     </div>
   );
 }

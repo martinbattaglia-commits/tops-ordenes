@@ -3630,4 +3630,19 @@
 })();
 </script>
 
+
+<script>
+/* TOPS Nexus · Capture Bridge hook (CB-2) — additive, read-only. NO toca la lógica del artefacto. */
+(function(){
+  window.__nexusCapture = function(){
+    try {
+      var s = JSON.parse(localStorage.getItem('tops_propuesta_v1') || 'null');
+      var ag = JSON.parse(localStorage.getItem('tops_anmat_gen_v1') || 'null');
+      if (!s && !ag) return null;
+      return { kind:'proposal', tipo:'anmat', fields:(s||ag||{}), raw:{ state:s, ag:ag }, source:'localStorage' };
+    } catch(e){ return null; }
+  };
+})();
+</script>
+
 </body></html>
