@@ -94,6 +94,7 @@ const DOMAINS: Domain[] = [
     items: [
       { href: "/comercial/contactos", label: "Contactos", icon: "users", badge: "Clientify" },
       { href: "/comercial/pipeline", label: "Pipeline", icon: "trend-up", badge: "Clientify" },
+      { href: "/comercial/mapa-lujan", label: "Mapa Luján 3159", icon: "building", badge: "Premium" },
       { href: "/comercial/herramientas", label: "Herramientas", icon: "bolt" },
       { href: "/comercial/herramientas/cotizador", label: "Cotizador", icon: "calculator" },
     ],
