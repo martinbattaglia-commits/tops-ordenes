@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "purpose": "Payload de REFERENCIA (inferido del tipo ClientifyContact + help center). NO es una captura real. Valores sintéticos, sin PII. Reemplazar/complementar con clientify-contact-REAL.json una vez capturado el webhook real (ver CLIENTIFY_PAYLOAD_CAPTURE_RUNBOOK.md).",
+    "source": "inferred",
+    "shape": "flat-contact"
+  },
+  "url": "https://api.clientify.net/v1/contacts/778899/",
+  "id": 778899,
+  "owner": null,
+  "owner_name": null,
+  "first_name": "Nombre",
+  "last_name": "Apellido",
+  "status": "Lead",
+  "title": "",
+  "company": null,
+  "taxpayer_identification_number": "30-12345678-9",
+  "medium": "organic",
+  "channel": "web",
+  "contact_source": "Google Ads",
+  "emails": [{ "id": 1, "type": 1, "email": "contacto@empresa.test" }],
+  "phones": [{ "id": 1, "type": 1, "phone": "+54 11 4000-0000", "unsubscribed": false }],
+  "addresses": [],
+  "picture_url": null,
+  "custom_fields": [],
+  "tags": ["anmat", "buenos-aires"],
+  "created": "2026-06-06T10:00:00Z",
+  "modified": "2026-06-06T10:00:00Z"
+}

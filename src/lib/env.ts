@@ -68,6 +68,9 @@ export const env = {
     apiKey: process.env.CLIENTIFY_API_KEY?.trim() ?? "",
     baseUrl: process.env.CLIENTIFY_BASE_URL?.trim() || "https://api.clientify.net/v1",
     configured: Boolean(process.env.CLIENTIFY_API_KEY?.trim()),
+    // F2.2-2 · token secreto de la URL del webhook (Clientify NO firma → no es clave HMAC).
+    webhookSecret: process.env.CLIENTIFY_WEBHOOK_SECRET?.trim() ?? "",
+    webhookConfigured: Boolean(process.env.CLIENTIFY_WEBHOOK_SECRET?.trim()),
   },
   whatsapp: {
     provider: (process.env.WHATSAPP_PROVIDER ?? "meta") as "meta" | "twilio" | "none",

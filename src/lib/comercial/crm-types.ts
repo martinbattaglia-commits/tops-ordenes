@@ -8,6 +8,45 @@
  */
 
 export type CrmService = "anmat" | "general" | "oficinas";
+
+// ── Leads (F2.2 · bandeja) ──────────────────────────────────────────────────
+export type LeadStatus = "nuevo" | "contactado" | "calificado" | "descartado" | "promovido";
+
+export interface CrmLead {
+  id: string;
+  publicId: string | null;        // LEAD-YYYY-NNNN
+  clientifyId: string | null;
+  source: string | null;
+  fullName: string | null;
+  email: string | null;
+  phone: string | null;
+  cuit: string | null;
+  companyName: string | null;
+  status: LeadStatus;
+  ownerId: string | null;
+  ownerName: string | null;       // resuelto vía profiles_public
+  tags: string[];
+  posibleDuplicado: boolean;      // derivado de tags
+  opportunityId: string | null;   // si ya fue promovido
+  createdAt: string;
+}
+
+export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
+  nuevo: "Nuevo",
+  contactado: "Contactado",
+  calificado: "Calificado",
+  descartado: "Descartado",
+  promovido: "Promovido",
+};
+
+export const LEAD_STATUS_COLOR: Record<LeadStatus, string> = {
+  nuevo: "#2563eb",
+  contactado: "#0891b2",
+  calificado: "#16a34a",
+  descartado: "#94a3b8",
+  promovido: "#7c3aed",
+};
+
 export type CrmStage =
   | "nuevo_lead" | "contactado" | "calificado" | "visita"
   | "propuesta" | "negociacion" | "ganado" | "perdido";

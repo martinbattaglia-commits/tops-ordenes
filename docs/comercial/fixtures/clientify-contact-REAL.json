@@ -1,0 +1,58 @@
+{
+  "_meta": {
+    "purpose": "Captura REAL (read-only GET /contacts) con PII redactada. Nombres de campo y estructura reales; valores sintéticos.",
+    "source": "real-redacted",
+    "capturedAt_note": "stamp manual si se requiere",
+    "shape": "flat-contact"
+  },
+  "url": "https://api.clientify.net/v1/contacts/162770027/",
+  "id": 162770027,
+  "owner": "https://api.clientify.net/v1/users/0/",
+  "owner_name": "Owner Redactado",
+  "first_name": "Nombre",
+  "last_name": "Apellido",
+  "status": "in-deal",
+  "title": "",
+  "company": "https://api.clientify.net/v1/companies/16232277/",
+  "company_name": "Karina Speranza",
+  "taxpayer_identification_number": "30-12345678-9",
+  "medium": "",
+  "channel": "inbox_whatsapp",
+  "contact_source": null,
+  "emails": [
+    {
+      "id": 121943982,
+      "type": 4,
+      "email": "contacto@empresa.test"
+    }
+  ],
+  "phones": [
+    {
+      "id": 111036714,
+      "type": 1,
+      "phone": "+54 11 4000-0000",
+      "unsubscribed": false
+    },
+    {
+      "id": 111035851,
+      "type": 1,
+      "phone": "+54 11 4000-0000",
+      "unsubscribed": false
+    }
+  ],
+  "addresses": [],
+  "picture_url": null,
+  "custom_fields": [],
+  "tags": [
+    "whatsapp api",
+    "lead anmat"
+  ],
+  "created": "2026-06-05T18:15:54.016143+02:00",
+  "modified": "2026-06-05T19:40:52.599323+02:00",
+  "last_contact": "2026-06-05T18:28:48.622916+02:00",
+  "birthday": null,
+  "gdpr_accept": false,
+  "gdpr_acceptance_date": null,
+  "gdpr_revoke_date": null,
+  "disclaimer": false
+}
