@@ -35,7 +35,9 @@ create table if not exists public.crm_contracts (
   id                    uuid primary key default gen_random_uuid(),
   short_id              int  not null default nextval('public.crm_contracts_short_id_seq'),
   public_id             text unique,                 -- CON-YYYY-0001
-  opportunity_id        uuid not null references public.crm_opportunities(id) on delete cascade,
+  -- R-G1: RESTRICT (no CASCADE) — el contrato es registro legal; bloquear el
+  -- borrado de una oportunidad con contrato antes que perder documentación.
+  opportunity_id        uuid not null references public.crm_opportunities(id) on delete restrict,
   client_id             uuid references public.clients(id),
   proposal_id           uuid references public.crm_proposals(id) on delete set null,
   version               int not null default 1,

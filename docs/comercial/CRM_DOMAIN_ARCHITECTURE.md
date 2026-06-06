@@ -23,6 +23,8 @@
 
 > **Corrección de RLS (F2.1-3):** las policies de 0042-0045 originalmente usaban `current_role() in (...,'comercial')`, pero `comercial` **no** es valor de `user_role_t` (= admin/operaciones/supervisor/cliente) — es un rol del sistema **RBAC** (tabla `roles`). Se corrigió a **`has_permission('comercial.view'|'comercial.edit')`** (con bypass admin) — la forma canónica del repo. Habría fallado al aplicar; detectado en validación estructural antes de cualquier apply.
 
+> **Ajuste R-G1 (F2.1-GATE):** `crm_contracts.opportunity_id` pasó de `on delete cascade` a **`on delete restrict`** (0044). Los contratos son **registro legal** y no deben desaparecer por el borrado de una oportunidad: ahora ese borrado queda **bloqueado** si existe contrato. El resto de hijos (quotes/proposals/onboarding/stage_history) conservan `cascade`. Ver [CRM_F2_1_GATE §5 R-G1](./CRM_F2_1_GATE.md).
+
 **10 tablas** del dominio. **Ninguna aplicada** a Supabase (PROD prohibido). Validación = conformidad estructural con patrones del repo.
 
 ---
