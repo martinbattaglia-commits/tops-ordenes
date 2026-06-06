@@ -46,7 +46,10 @@ export async function updateSession(request: NextRequest) {
   //   · /login                       → form público de inicio de sesión
   //   · /api/auth/*                  → callbacks de Supabase (login/logout)
   //   · /api/whatsapp/webhook        → Meta firma y postea acá (sin cookies)
-  //   · /api/clientify/webhook       → Clientify firma con HMAC y postea acá
+  //   · /api/clientify/webhook/<token> → Clientify postea acá. Clientify NO firma
+  //                                    (ver CLIENTIFY_WEBHOOK_AUTH_RESEARCH.md); la
+  //                                    auth es token-en-URL, validado timing-safe
+  //                                    dentro del handler. ping/sync-* siguen privados.
   //   · /compras/validar/<publicId>  → QR público que valida OC firmadas
   //   · assets estáticos             → _next, icons, fonts, manifest, sw, favicon
   //
@@ -60,7 +63,11 @@ export async function updateSession(request: NextRequest) {
     pathname === "/auth/reset-password" ||
     pathname.startsWith("/api/auth") ||
     pathname === "/api/whatsapp/webhook" ||
+    // Webhook de Clientify: ruta tokenizada /api/clientify/webhook/<token>. El token-en-URL
+    // se valida dentro del handler (verifyWebhookToken). NO incluye /api/clientify/ping ni
+    // /api/clientify/sync-* (siguen privados: no empiezan con ".../webhook/").
     pathname === "/api/clientify/webhook" ||
+    pathname.startsWith("/api/clientify/webhook/") ||
     pathname === "/api/tracking/ingest" || // Traccar Client postea sin sesión; protegido por token propio
     pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
