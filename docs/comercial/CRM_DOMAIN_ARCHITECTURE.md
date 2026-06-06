@@ -19,7 +19,9 @@
 | `0043_crm_quotes_proposals.sql` | cotizaciones + propuestas | `crm_quotes`, `crm_quote_items`, `crm_proposals` | ✅ archivo |
 | `0044_crm_contracts_onboarding.sql` | contratos + onboarding | `crm_contracts`, `crm_onboarding`, `crm_onboarding_tasks` | ✅ archivo |
 | `0045_crm_sync_audit.sql` | auditoría + sync | `crm_stage_history`, `clientify_sync_log` | ✅ archivo |
-| `00xx_crm_rbac_seed.sql` | permisos finos + `profiles_public` | — | ⏳ F2.1-3 |
+| `0046_crm_rbac_seed.sql` | permisos finos (`comercial.create/delete/admin`) + vista `profiles_public` | — | ✅ archivo (F2.1-3) |
+
+> **Corrección de RLS (F2.1-3):** las policies de 0042-0045 originalmente usaban `current_role() in (...,'comercial')`, pero `comercial` **no** es valor de `user_role_t` (= admin/operaciones/supervisor/cliente) — es un rol del sistema **RBAC** (tabla `roles`). Se corrigió a **`has_permission('comercial.view'|'comercial.edit')`** (con bypass admin) — la forma canónica del repo. Habría fallado al aplicar; detectado en validación estructural antes de cualquier apply.
 
 **10 tablas** del dominio. **Ninguna aplicada** a Supabase (PROD prohibido). Validación = conformidad estructural con patrones del repo.
 

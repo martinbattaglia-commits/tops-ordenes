@@ -146,11 +146,11 @@ declare t text;
 begin
   foreach t in array array['crm_quotes','crm_quote_items','crm_proposals'] loop
     execute format('drop policy if exists "%s read" on public.%I', t, t);
-    execute format('create policy "%s read" on public.%I for select using (public.is_staff() or public.current_role() = ''comercial'')', t, t);
+    execute format('create policy "%s read" on public.%I for select using (public.has_permission(''comercial.view''))', t, t);
     execute format('drop policy if exists "%s write" on public.%I', t, t);
-    execute format('create policy "%s write" on public.%I for insert with check (public.current_role() in (''admin'',''operaciones'',''supervisor'',''comercial''))', t, t);
+    execute format('create policy "%s write" on public.%I for insert with check (public.has_permission(''comercial.edit''))', t, t);
     execute format('drop policy if exists "%s update" on public.%I', t, t);
-    execute format('create policy "%s update" on public.%I for update using (public.current_role() in (''admin'',''operaciones'',''supervisor'',''comercial'')) with check (public.current_role() in (''admin'',''operaciones'',''supervisor'',''comercial''))', t, t);
+    execute format('create policy "%s update" on public.%I for update using (public.has_permission(''comercial.edit'')) with check (public.has_permission(''comercial.edit''))', t, t);
     execute format('drop policy if exists "%s delete" on public.%I', t, t);
     execute format('create policy "%s delete" on public.%I for delete using (public.is_admin())', t, t);
   end loop;

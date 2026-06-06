@@ -146,19 +146,19 @@ create trigger trg_crm_opp_touch
 alter table public.crm_leads         enable row level security;
 alter table public.crm_opportunities enable row level security;
 
--- crm_leads
+-- crm_leads · RLS por RBAC (has_permission · bypass admin incluido)
 drop policy if exists "crm_leads read" on public.crm_leads;
 create policy "crm_leads read" on public.crm_leads for select
-  using (public.is_staff() or public.current_role() = 'comercial');
+  using (public.has_permission('comercial.view'));
 
 drop policy if exists "crm_leads write" on public.crm_leads;
 create policy "crm_leads write" on public.crm_leads for insert
-  with check (public.current_role() in ('admin','operaciones','supervisor','comercial'));
+  with check (public.has_permission('comercial.edit'));
 
 drop policy if exists "crm_leads update" on public.crm_leads;
 create policy "crm_leads update" on public.crm_leads for update
-  using (public.current_role() in ('admin','operaciones','supervisor','comercial'))
-  with check (public.current_role() in ('admin','operaciones','supervisor','comercial'));
+  using (public.has_permission('comercial.edit'))
+  with check (public.has_permission('comercial.edit'));
 
 drop policy if exists "crm_leads delete" on public.crm_leads;
 create policy "crm_leads delete" on public.crm_leads for delete
@@ -167,16 +167,16 @@ create policy "crm_leads delete" on public.crm_leads for delete
 -- crm_opportunities
 drop policy if exists "crm_opp read" on public.crm_opportunities;
 create policy "crm_opp read" on public.crm_opportunities for select
-  using (public.is_staff() or public.current_role() = 'comercial');
+  using (public.has_permission('comercial.view'));
 
 drop policy if exists "crm_opp write" on public.crm_opportunities;
 create policy "crm_opp write" on public.crm_opportunities for insert
-  with check (public.current_role() in ('admin','operaciones','supervisor','comercial'));
+  with check (public.has_permission('comercial.edit'));
 
 drop policy if exists "crm_opp update" on public.crm_opportunities;
 create policy "crm_opp update" on public.crm_opportunities for update
-  using (public.current_role() in ('admin','operaciones','supervisor','comercial'))
-  with check (public.current_role() in ('admin','operaciones','supervisor','comercial'));
+  using (public.has_permission('comercial.edit'))
+  with check (public.has_permission('comercial.edit'));
 
 drop policy if exists "crm_opp delete" on public.crm_opportunities;
 create policy "crm_opp delete" on public.crm_opportunities for delete
