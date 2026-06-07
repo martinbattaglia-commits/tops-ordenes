@@ -4,11 +4,13 @@
   "private": true,
   "description": "TOPS Órdenes — plataforma digital de órdenes de servicio para Logística TOPS (Verotin S.A.)",
   "scripts": {
+    "predev": "node scripts/env-check.mjs --heal --guard",
     "dev": "next dev -p 3030",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "env:check": "node scripts/env-check.mjs"
   },
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
