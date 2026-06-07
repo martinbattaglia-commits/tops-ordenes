@@ -129,6 +129,18 @@ const DOMAINS: Domain[] = [
     ],
   },
   {
+    id: "rrhh",
+    label: "Recursos Humanos",
+    items: [
+      { href: "/rrhh", label: "Dashboard RRHH", icon: "dashboard" },
+      { href: "/rrhh/empleados", label: "Empleados", icon: "clients" },
+      { href: "/rrhh/solicitudes", label: "Solicitudes", icon: "calendar" },
+      { href: "/rrhh/novedades", label: "Novedades", icon: "report" },
+      { href: "/rrhh/documentos", label: "Documentación", icon: "lock" },
+      { href: "/rrhh/mi-espacio", label: "Mi espacio", icon: "user" },
+    ],
+  },
+  {
     id: "sistema",
     label: "Sistema",
     items: [
