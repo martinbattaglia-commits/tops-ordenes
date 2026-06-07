@@ -43,7 +43,7 @@ left join (
 ) vl on vl.supplier_invoice_id = si.id
 left join (
   select supplier_invoice_id,
-         sum(importe) filter (where tax_kind like 'PERCEPCION_%')          as percepciones,
+         sum(importe) filter (where tax_kind::text like 'PERCEPCION_%')          as percepciones,
          sum(importe) filter (where tax_kind in ('IMPUESTO_INTERNO','OTRO')) as tributos
   from public.supplier_invoice_other_taxes
   group by supplier_invoice_id

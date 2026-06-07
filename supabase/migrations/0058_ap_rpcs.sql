@@ -228,7 +228,10 @@ grant execute on function public.ap_submit_for_review(uuid, text) to authenticat
 grant execute on function public.ap_approve(uuid, text) to authenticated;
 grant execute on function public.ap_reopen(uuid, text) to authenticated;
 grant execute on function public.ap_void(uuid, text) to authenticated;
--- ap__transition es interno: NO se otorga a authenticated.
-revoke all on function public.ap__transition(uuid, public.ap_approval_status_t[], public.ap_approval_status_t, text, text) from public;
+-- ap__transition es interno: NO debe ser invocable por clientes. Supabase otorga
+-- EXECUTE a authenticated/anon por DEFAULT PRIVILEGES en funciones nuevas, así
+-- que revoke from public NO alcanza: hay que revocar explícitamente de
+-- authenticated y anon (queda ejecutable solo por el owner / service_role).
+revoke all on function public.ap__transition(uuid, public.ap_approval_status_t[], public.ap_approval_status_t, text, text) from public, authenticated, anon;
 
 notify pgrst, 'reload schema';
