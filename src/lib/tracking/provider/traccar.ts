@@ -5,20 +5,34 @@ import type {
 } from "./types";
 
 /**
- * Proveedor inicial: Traccar Client (iPhone/Android) en protocolo OsmAnd.
+ * Proveedor: Traccar Client (iPhone/Android). Soporta DOS formatos del MISMO
+ * cliente, en simultáneo y sin romper compatibilidad:
  *
- * El cliente envía (GET o POST form-urlencoded) los parámetros:
- *   id, lat, lon, speed, bearing, altitude, accuracy, batt, timestamp
+ *  1. OsmAnd legacy (query-string / form-urlencoded):
+ *       id, lat|latitude, lon|longitude, speed(NUDOS), batt|battery(0..100),
+ *       bearing|heading, accuracy|hdop, timestamp(epoch seg | ISO)
  *
- * Notas de normalización:
- *  · speed: el protocolo OsmAnd reporta velocidad en NUDOS → se convierte a
- *    km/h (1 nudo = 1.852 km/h). Si tu config envía otra unidad, ajustar acá:
- *    es el único punto del sistema que conoce la unidad cruda.
- *  · batt: 0..100; se redondea a entero.
- *  · timestamp: epoch en segundos o ISO; se normaliza a ISO-8601.
+ *  2. Traccar Client MODERNO (≥ v9.0.0, body JSON; el route handler lo aplana):
+ *       { "device_id": "...",
+ *         "location": {
+ *           "timestamp": "ISO-8601",
+ *           "coords": { "latitude", "longitude", "speed"(M/S), "heading", "accuracy" },
+ *           "battery": { "level": 0..1 }, "is_moving": bool, "odometer": ... } }
+ *     Tras el aplanado del route quedan las claves planas:
+ *       device_id, latitude, longitude, speed, heading, accuracy, level, timestamp
+ *
+ * Normalización (ÚNICO punto del sistema que conoce las unidades crudas):
+ *  · device:    legacy `id` · moderno `device_id` (alias `deviceid`).
+ *  · velocidad: legacy = NUDOS → km/h (×1.852); moderno = M/S → km/h (×3.6).
+ *               Se discrimina por marcadores exclusivos del cliente moderno
+ *               (device_id / level / is_moving / odometer). speed < 0 (no
+ *               disponible en el cliente moderno) → null.
+ *  · batería:   legacy = batt|battery 0..100; moderno = level 0..1 → ×100.
+ *  · timestamp: epoch(seg) o ISO → ISO-8601.
  */
 
 const KNOTS_TO_KMH = 1.852;
+const MS_TO_KMH = 3.6;
 
 function num(v: string | null): number | null {
   if (v == null || v === "") return null;
@@ -39,10 +53,11 @@ function parseRecordedAt(ts: string | null): string {
 
 export const traccarProvider: TrackingProvider = {
   id: "traccar",
-  label: "Traccar Client (OsmAnd)",
+  label: "Traccar Client (OsmAnd + JSON v9)",
 
   parse(get: ParamGetter): ProviderParseResult {
-    const device = get("id");
+    // Identificador del dispositivo: legacy `id`, moderno `device_id`/`deviceid`.
+    const device = get("id") ?? get("device_id") ?? get("deviceid");
     const latitude = num(get("lat") ?? get("latitude"));
     const longitude = num(get("lon") ?? get("longitude"));
 
@@ -50,12 +65,33 @@ export const traccarProvider: TrackingProvider = {
       return {
         ok: false,
         reason: "missing-fields",
-        detail: "id, lat y lon son obligatorios",
+        detail: "id/device_id, lat y lon son obligatorios",
       };
     }
 
-    const speedKnots = num(get("speed"));
-    const battery = num(get("batt") ?? get("battery"));
+    // ¿Payload del cliente moderno? Marcadores exclusivos del formato ≥ v9.
+    const isModern =
+      get("device_id") !== null ||
+      get("level") !== null ||
+      get("is_moving") !== null ||
+      get("odometer") !== null;
+
+    // Velocidad: moderno en m/s, legacy en nudos. <0 = no disponible → null.
+    const speedRaw = num(get("speed"));
+    const speedKmh =
+      speedRaw === null || speedRaw < 0
+        ? null
+        : speedRaw * (isModern ? MS_TO_KMH : KNOTS_TO_KMH);
+
+    // Batería: legacy batt/battery (0..100); moderno level (0..1) → 0..100.
+    const battLegacy = num(get("batt") ?? get("battery"));
+    const battLevel = num(get("level"));
+    const battery =
+      battLegacy !== null
+        ? Math.round(battLegacy)
+        : battLevel !== null
+          ? Math.round(battLevel * 100)
+          : null;
 
     return {
       ok: true,
@@ -63,8 +99,8 @@ export const traccarProvider: TrackingProvider = {
         device,
         latitude,
         longitude,
-        speedKmh: speedKnots === null ? null : speedKnots * KNOTS_TO_KMH,
-        battery: battery === null ? null : Math.round(battery),
+        speedKmh,
+        battery,
         heading: num(get("bearing") ?? get("heading")),
         accuracy: num(get("accuracy") ?? get("hdop")),
         recordedAt: parseRecordedAt(get("timestamp")),
