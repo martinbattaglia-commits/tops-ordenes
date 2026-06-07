@@ -70,7 +70,7 @@ export default async function ContactosPage({ searchParams }: PageProps) {
         </div>
         <div className="flex gap-2">
           <a
-            href="https://app.clientify.com/contacts/"
+            href="https://new.clientify.com/"
             target="_blank"
             rel="noopener"
             className="btn btn-primary btn-sm"

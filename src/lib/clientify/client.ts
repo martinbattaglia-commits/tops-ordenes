@@ -129,8 +129,11 @@ export interface ListContactsParams {
 export async function listContacts(
   params: ListContactsParams = {}
 ): Promise<ClientifyPaginated<ClientifyContact>> {
+  // CRM-C4: Clientify /contacts/ filtra por `query` (el param `search` se ignora
+  // y devuelve la lista completa). Mapeamos search→query sin tocar el resto.
+  const { search, ...rest } = params;
   return fetchClientify<ClientifyPaginated<ClientifyContact>>("contacts/", {
-    query: params as Record<string, QueryValue>,
+    query: { ...rest, query: search } as Record<string, QueryValue>,
   });
 }
 
