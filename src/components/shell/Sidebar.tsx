@@ -32,6 +32,7 @@ const DOMAINS: Domain[] = [
     label: "Cockpit",
     items: [
       { href: "/ejecutivo", label: "Cockpit ejecutivo", icon: "dashboard" },
+      { href: "/analytics", label: "Analytics Ejecutivo", icon: "report" },
       { href: "/operaciones/mapa", label: "Mapa operativo", icon: "pin" },
       { href: "/operaciones/mapa-inteligente", label: "Mapa Inteligente", icon: "pin" },
       { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
@@ -167,6 +168,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
     // Rutas exactas (no usar prefix match — evita colisiones tipo /compras y /compras/ordenes)
     const exact = new Set([
       "/ejecutivo",
+      "/analytics",
       "/dashboard",
       "/orders",
       "/compras",
