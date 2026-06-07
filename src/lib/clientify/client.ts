@@ -161,9 +161,11 @@ export async function listPipelines(): Promise<ClientifyPaginated<ClientifyPipel
 export interface ListDealsParams {
   page?: number;
   page_size?: number;
-  pipeline?: number;
+  // Clientify v1 filtra deals por `pipeline_id` / `status_id` (NO por `pipeline`
+  // ni `status`: esos nombres se ignoran silenciosamente y devuelven todo el set).
+  pipeline_id?: number;
   pipeline_stage?: number;
-  status?: number;
+  status_id?: number;
   contact?: number;
   ordering?: string;
   search?: string;

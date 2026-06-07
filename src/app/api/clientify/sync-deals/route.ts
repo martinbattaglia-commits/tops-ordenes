@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     const dealsByPipeline = await Promise.all(
       pipelineIds.map(async (pid) => {
         const res = await listDeals({
-          pipeline: pid,
+          pipeline_id: pid,
           page_size: 500,
           ordering: "-modified",
         });

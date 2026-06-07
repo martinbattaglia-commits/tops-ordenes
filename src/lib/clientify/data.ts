@@ -39,13 +39,13 @@ export interface PipelineSnapshot {
   active: UiPipeline | null;
   /** Deals del pipeline activo agrupados por stage. */
   dealsByStage: Map<number, UiDeal[]>;
-  /** Todos los deals abiertos del tenant (para totales). */
+  /** Todos los deals del pipeline activo (todas las etapas/estados). */
   openDeals: UiDeal[];
   /** Total YTD ganado. */
   wonYtd: number;
-  /** Total pipeline activo (sum amount, open). */
+  /** Total del pipeline activo (suma amount de todo el pipeline). */
   pipelineTotal: number;
-  /** Conteo de deals abiertos. */
+  /** Conteo de deals del pipeline activo. */
   openCount: number;
   /** Top deals por amount. */
   topDeals: UiDeal[];
@@ -107,18 +107,19 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
     };
   }
 
-  // 2. Deals del pipeline activo (status=1 → Open). Traemos hasta 200.
-  // 3. Deals ganados YTD (status=2). Traemos los más recientes.
-  const [openRes, wonRes] = await Promise.all([
-    listDeals({ pipeline: active.id, status: 1, page_size: 200, ordering: "-modified" }),
-    listDeals({ pipeline: active.id, status: 2, page_size: 200, ordering: "-actual_closed_date" }),
-  ]);
-
-  const openDeals = openRes.results.map(mapDeal);
-  const wonDeals = wonRes.results.map(mapDeal);
+  // 2. Deals del pipeline activo — TODO el pipeline (todas las etapas y estados),
+  //    para reflejar la realidad comercial de Clientify (no solo abiertas).
+  //    CRM-C2: filtro server-side por `pipeline_id` (el parámetro correcto; `pipeline`
+  //    se ignora y devuelve el tenant completo). Sin filtro de status → pipeline completo.
+  const dealsRes = await listDeals({
+    pipeline_id: active.id,
+    page_size: 200,
+    ordering: "-modified",
+  });
+  const deals = dealsRes.results.map(mapDeal);
 
   const dealsByStage = new Map<number, UiDeal[]>();
-  for (const d of openDeals) {
+  for (const d of deals) {
     if (d.stageId == null) continue;
     const arr = dealsByStage.get(d.stageId) ?? [];
     arr.push(d);
@@ -126,22 +127,23 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
   }
 
   const yearNow = new Date().getFullYear();
-  const wonYtd = wonDeals
-    .filter((d) => d.actualClose && new Date(d.actualClose).getFullYear() === yearNow)
+  const wonYtd = deals
+    .filter((d) => d.status === "won" && d.actualClose && new Date(d.actualClose).getFullYear() === yearNow)
     .reduce((a, d) => a + d.amount, 0);
 
-  const pipelineTotal = openDeals.reduce((a, d) => a + d.amount, 0);
+  // Total del pipeline = suma de TODO ANMAT (todas las etapas), coherente con Clientify.
+  const pipelineTotal = deals.reduce((a, d) => a + d.amount, 0);
 
-  const topDeals = [...openDeals].sort((a, b) => b.amount - a.amount).slice(0, 6);
+  const topDeals = [...deals].sort((a, b) => b.amount - a.amount).slice(0, 6);
 
   return {
     pipelines,
     active,
     dealsByStage,
-    openDeals,
+    openDeals: deals,
     wonYtd,
     pipelineTotal,
-    openCount: openDeals.length,
+    openCount: deals.length,
     topDeals,
   };
 }
