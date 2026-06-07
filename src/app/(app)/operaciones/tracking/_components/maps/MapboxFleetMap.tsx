@@ -62,6 +62,7 @@ export function MapboxFleetMap({ token, vehicles, selectedId, onSelect }: FleetM
     if (!token || !containerRef.current) return;
     let cancelled = false;
     let map: MapboxMap | null = null;
+    let ro: ResizeObserver | null = null;
     const markers = markersRef.current;
 
     (async () => {
@@ -77,9 +78,24 @@ export function MapboxFleetMap({ token, vehicles, selectedId, onSelect }: FleetM
           attributionControl: false,
         });
         map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
-        map.on("load", () => !cancelled && setReady(true));
+        map.on("load", () => {
+          if (cancelled) return;
+          setReady(true);
+          // Forzar un resize tras load: si el contenedor todavía no tenía su
+          // tamaño final al inicializar, mapbox arrancaría con viewport 0 y no
+          // pediría tiles. Re-medimos para garantizar el render del basemap.
+          map?.resize();
+        });
         map.on("error", () => !cancelled && setFailed(true));
         mapRef.current = map;
+
+        // ResizeObserver: re-mide ante cualquier cambio de layout (colapso de
+        // sidebar, resize de ventana, navegación interna, hidratación tardía).
+        // Garantiza que el viewport nunca quede en 0 → tiles siempre cargan.
+        if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+          ro = new ResizeObserver(() => mapRef.current?.resize());
+          ro.observe(containerRef.current);
+        }
       } catch {
         if (!cancelled) setFailed(true);
       }
@@ -87,6 +103,7 @@ export function MapboxFleetMap({ token, vehicles, selectedId, onSelect }: FleetM
 
     return () => {
       cancelled = true;
+      ro?.disconnect();
       markers.forEach((m) => m.remove());
       markers.clear();
       didFitRef.current = false;
@@ -152,7 +169,11 @@ export function MapboxFleetMap({ token, vehicles, selectedId, onSelect }: FleetM
 
   return (
     <div className="relative w-full h-full min-h-[420px]">
-      <div ref={containerRef} className="absolute inset-0 rounded-xl overflow-hidden" />
+      {/* Altura explícita (h-full + min-h), NO `absolute inset-0`: cuando
+          mapbox-gl agrega `.mapboxgl-map { position: relative }` pisa el
+          position:absolute y el contenedor colapsaba a height:0 → viewport 0 →
+          0 tiles → mapa vacío. Con altura propia el basemap siempre renderiza. */}
+      <div ref={containerRef} className="h-full w-full min-h-[420px] rounded-xl overflow-hidden" />
       {!ready && !failed && (
         <div className="absolute inset-0 grid place-items-center rounded-xl bg-bg-surface-alt animate-pulse">
           <span className="text-xs text-fg-muted">Cargando mapa…</span>

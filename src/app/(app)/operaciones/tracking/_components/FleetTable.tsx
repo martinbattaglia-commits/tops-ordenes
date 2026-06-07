@@ -8,8 +8,13 @@ import { MOTION_TONE, type LiveVehicle } from "@/lib/tracking/live";
  * y lo enfocan en el mapa + panel. Empty state cuando no hay vehículos.
  */
 
+// timeZone fijo (zona operativa): sin esto, el SSR (server en UTC) y el CSR
+// (browser en ART) formatean distinto → hydration mismatch React #425/#422.
+// Fijarla hace que server y cliente produzcan el MISMO string → sin mismatch.
 function formatLastComm(iso: string | null): string {
-  return iso ? new Date(iso).toLocaleString("es-AR") : "Sin datos";
+  return iso
+    ? new Date(iso).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })
+    : "Sin datos";
 }
 
 interface FleetTableProps {

@@ -17,7 +17,7 @@ function formatRelative(iso: string, nowMs: number): string {
   if (m < 60) return `hace ${m} min`;
   const h = Math.round(m / 60);
   if (h < 24) return `hace ${h} h`;
-  return new Date(iso).toLocaleString("es-AR");
+  return new Date(iso).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
 }
 
 interface VehiclePanelProps {
