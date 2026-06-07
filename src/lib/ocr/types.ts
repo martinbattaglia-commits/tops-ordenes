@@ -46,6 +46,52 @@ export interface ExtractedLineItem {
   sku?: string;
 }
 
+// -------------------------------------------------------------------------
+// ERP-B2 · Desglose fiscal avanzado (aditivo). Alimenta el detalle B1
+// (supplier_invoice_vat_lines / _other_taxes) vía ap_create_supplier_invoice.
+// Opcional: sólo relevante para facturas/NC/ND. No afecta los otros tipos de
+// documento (contratos, remitos, etc.), donde queda en null/undefined.
+// -------------------------------------------------------------------------
+
+/** Un subtotal de IVA por alícuota. `alicuota` ∈ {0, 2.5, 5, 10.5, 21, 27}. */
+export interface ExtractedVatLine {
+  /** Alícuota nominal de IVA (porcentaje): 0, 2.5, 5, 10.5, 21 o 27. */
+  alicuota: number;
+  /** Base imponible (neto gravado) a esa alícuota. */
+  baseNeto: number;
+  /** IVA liquidado para esa base (≈ baseNeto · alicuota / 100). */
+  importeIva: number;
+}
+
+export type ExtractedOtherTaxKind =
+  | "PERCEPCION_IVA"
+  | "PERCEPCION_IIBB"
+  | "PERCEPCION_GANANCIAS"
+  | "IMPUESTO_INTERNO"
+  | "OTRO";
+
+/** Una percepción / retención / impuesto interno (NO es crédito fiscal de IVA). */
+export interface ExtractedOtherTax {
+  kind: ExtractedOtherTaxKind;
+  /** Provincia (obligatorio en IIBB). */
+  jurisdiction?: string | null;
+  base?: number | null;
+  alicuota?: number | null;
+  importe: number;
+}
+
+/** Bloque fiscal de una factura de proveedor (multi-alícuota + percepciones). */
+export interface ExtractedFiscal {
+  vatLines: ExtractedVatLine[];
+  otherTaxes: ExtractedOtherTax[];
+  /** Neto no gravado (sin IVA por naturaleza). */
+  netoNoGravado?: number | null;
+  /** Neto exento. */
+  netoExento?: number | null;
+  /** Total declarado en el comprobante (para validación cruzada). */
+  totalDeclarado?: number | null;
+}
+
 /**
  * Datos discretos del comprobante fiscal argentino (factura/NC/ND/recibo).
  *
@@ -88,6 +134,8 @@ export interface ExtractedDocument {
   lineItems: ExtractedLineItem[];
   /** Datos discretos del comprobante fiscal (solo facturas/NC/ND/recibos). */
   comprobante?: ExtractedComprobante | null;
+  /** Desglose fiscal avanzado (ERP-B2): IVA por alícuota + percepciones. */
+  fiscal?: ExtractedFiscal | null;
   /** Tags sugeridos para indexar (ej ["ANMAT", "cosmética", "urgente"]). */
   tags: string[];
   /** Texto bruto extraído del doc (para búsqueda full-text). */

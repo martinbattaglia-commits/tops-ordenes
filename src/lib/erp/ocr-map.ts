@@ -14,10 +14,67 @@
  * humano SIEMPRE revisa y confirma antes de persistir (modo A).
  */
 
-import type { ExtractedDocument } from "@/lib/ocr/types";
+import type { ExtractedDocument, ExtractedOtherTaxKind } from "@/lib/ocr/types";
 import type { SupplierComprobante } from "@/lib/erp/types";
 
 export type Confidence = "alta" | "media" | "baja" | "vacio";
+
+// ------------------------------------------------------------------
+// ERP-B2 · Mapa AFIP de alícuotas de IVA (espejo de 0056:89-93).
+//   alic_iva_id ↔ alícuota: 3=0, 4=10.5, 5=21, 6=27, 8=5, 9=2.5
+// ------------------------------------------------------------------
+const AFIP_ALIC_TO_ID: Record<string, number> = {
+  "0": 3,
+  "2.5": 9,
+  "5": 8,
+  "10.5": 4,
+  "21": 5,
+  "27": 6,
+};
+/** Devuelve el alic_iva_id AFIP para una alícuota válida, o null. */
+export function alicuotaToId(alicuota: number): number | null {
+  const key = String(alicuota);
+  return AFIP_ALIC_TO_ID[key] ?? null;
+}
+
+/** Un renglón de IVA listo para el RPC ap_create_supplier_invoice. */
+export interface VatLinePrefill {
+  alicuota: number; // 0|2.5|5|10.5|21|27
+  alicIvaId: number; // 3|4|5|6|8|9
+  baseNeto: string;
+  importeIva: string;
+}
+/** Una percepción/tributo lista para el RPC. */
+export interface OtherTaxPrefill {
+  kind: ExtractedOtherTaxKind;
+  jurisdiction: string;
+  base: string;
+  alicuota: string;
+  importe: string;
+}
+/** Un renglón descriptivo (no fiscal) listo para el RPC. */
+export interface ItemPrefill {
+  descripcion: string;
+  cantidad: string;
+  precioUnitario: string;
+  alicIvaId: number;
+  importeNeto: string;
+  importeIva: string;
+  importeTotal: string;
+}
+/** Bloque fiscal completo del prefill. */
+export interface FiscalPrefill {
+  vatLines: VatLinePrefill[];
+  otherTaxes: OtherTaxPrefill[];
+  items: ItemPrefill[];
+  noGravado: string;
+  exento: string;
+  totalDeclarado: string;
+  /** De dónde salió: detalle del modelo, reconstrucción, o vacío. */
+  source: "detail" | "fallback" | "empty";
+  confidence: Confidence;
+  note?: string;
+}
 
 export interface PrefilledField<T> {
   value: T;
@@ -55,6 +112,8 @@ export interface InvoicePrefill {
   iva: PrefilledField<string>;
   percepciones: PrefilledField<string>;
   observ: PrefilledField<string>;
+  /** ERP-B2: detalle fiscal listo para ap_create_supplier_invoice. */
+  fiscal: FiscalPrefill;
   /** Confianza global heurística (promedio ponderado). */
   overall: Confidence;
 }
@@ -266,6 +325,190 @@ function detectAmounts(doc: ExtractedDocument): AmountTriple {
   };
 }
 
+// ------------------------------------------------------------------
+// ERP-B2 · Detalle fiscal (vatLines / otherTaxes / items) para el RPC
+// ------------------------------------------------------------------
+
+const VALID_ALIC = [0, 2.5, 5, 10.5, 21, 27];
+
+/** Snap de una alícuota efectiva (iva/neto·100) a la AFIP más cercana ≤0.6pp. */
+function snapAlicuota(effective: number): number | null {
+  let best: number | null = null;
+  let bestDiff = Infinity;
+  for (const a of VALID_ALIC) {
+    const d = Math.abs(a - effective);
+    if (d < bestDiff) {
+      bestDiff = d;
+      best = a;
+    }
+  }
+  return best !== null && bestDiff <= 0.6 ? best : null;
+}
+
+/** ¿importe_iva coherente con base·alícuota (tolerancia AFIP 0.02 / 1%)? */
+function vatLineCoherent(baseNeto: number, alicuota: number, importeIva: number): boolean {
+  const expected = Math.round((baseNeto * alicuota) / 100 * 100) / 100;
+  return Math.abs(importeIva - expected) <= Math.max(0.02, expected * 0.01);
+}
+
+/**
+ * Construye el detalle fiscal listo para `ap_create_supplier_invoice`.
+ *
+ * Prioridad:
+ *  1. doc.fiscal (PROMPT v2): mapea cada vatLine a su alic_iva_id AFIP y
+ *     clasifica las percepciones. Confianza alta si todos los renglones son
+ *     coherentes (importe_iva ≈ base·alícuota).
+ *  2. Fallback (sin doc.fiscal): reconstruye UN renglón de IVA desde
+ *     neto+iva (snap de la alícuota efectiva) y vuelca percepciones como una
+ *     sola fila PERCEPCION_IVA de baja confianza para que el humano la
+ *     reclasifique. Nunca peor que el comportamiento previo.
+ *  3. Vacío: sin datos fiscales.
+ */
+function detectFiscalDetail(doc: ExtractedDocument): FiscalPrefill {
+  const f = doc.fiscal;
+
+  // ---- 1. Camino detalle (modelo devolvió fiscal) ----
+  if (f && (f.vatLines?.length || f.otherTaxes?.length || f.netoNoGravado || f.netoExento)) {
+    const vatLines: VatLinePrefill[] = [];
+    let allCoherent = true;
+    for (const l of f.vatLines ?? []) {
+      const id = alicuotaToId(l.alicuota);
+      if (id === null) {
+        allCoherent = false;
+        continue; // alícuota no-AFIP: la descartamos (el modelo ya debió filtrar)
+      }
+      const base = Number(l.baseNeto) || 0;
+      const ivaModel = Number(l.importeIva);
+      // Si el IVA falta o es incoherente, lo recomputamos desde base·alícuota.
+      const ivaCoherent = isFinite(ivaModel) && vatLineCoherent(base, l.alicuota, ivaModel);
+      const iva = ivaCoherent ? ivaModel : Math.round((base * l.alicuota) / 100 * 100) / 100;
+      if (!ivaCoherent) allCoherent = false;
+      vatLines.push({
+        alicuota: l.alicuota,
+        alicIvaId: id,
+        baseNeto: fmtAmount(base),
+        importeIva: fmtAmount(iva),
+      });
+    }
+    // Consolidar renglones repetidos por alícuota (unique en 0056).
+    const consolidated = consolidateVatLines(vatLines);
+
+    const otherTaxes: OtherTaxPrefill[] = (f.otherTaxes ?? []).map((t) => ({
+      kind: t.kind,
+      jurisdiction: t.jurisdiction ?? "",
+      base: t.base != null ? fmtAmount(t.base) : "",
+      alicuota: t.alicuota != null ? String(t.alicuota) : "",
+      importe: fmtAmount(t.importe || 0),
+    }));
+
+    const items = mapItems(doc);
+
+    const confidence: Confidence = consolidated.length === 0
+      ? (otherTaxes.length ? "media" : "vacio")
+      : allCoherent
+        ? "alta"
+        : "media";
+
+    return {
+      vatLines: consolidated,
+      otherTaxes,
+      items,
+      noGravado: f.netoNoGravado ? fmtAmount(f.netoNoGravado) : "",
+      exento: f.netoExento ? fmtAmount(f.netoExento) : "",
+      totalDeclarado: f.totalDeclarado ? fmtAmount(f.totalDeclarado) : "",
+      source: "detail",
+      confidence,
+      note:
+        confidence === "alta"
+          ? "Detalle fiscal leído y coherente (IVA por alícuota)."
+          : "Detalle fiscal leído; revisá los renglones marcados.",
+    };
+  }
+
+  // ---- 2. Fallback: reconstruir desde montos planos ----
+  const amounts = doc.amounts ?? [];
+  const pick = (kind: string): number | null => {
+    const a = amounts.find((x) => x.kind === kind);
+    return a && typeof a.value === "number" ? a.value : null;
+  };
+  let neto = pick("neto") ?? pick("subtotal");
+  let iva = pick("iva");
+  const total = pick("total");
+  const otros = amounts.filter((x) => x.kind === "otro" && typeof x.value === "number");
+  const percep = otros.length ? otros.reduce((s, x) => s + (x.value || 0), 0) : null;
+  if (neto === null && total !== null && iva !== null) neto = total - iva - (percep ?? 0);
+
+  if (neto !== null && neto > 0 && iva !== null) {
+    const effective = (iva / neto) * 100;
+    const alic = snapAlicuota(effective);
+    if (alic !== null) {
+      const id = alicuotaToId(alic)!;
+      const otherTaxes: OtherTaxPrefill[] = percep && percep > 0
+        ? [{ kind: "PERCEPCION_IVA", jurisdiction: "", base: "", alicuota: "", importe: fmtAmount(percep) }]
+        : [];
+      return {
+        vatLines: [{ alicuota: alic, alicIvaId: id, baseNeto: fmtAmount(neto), importeIva: fmtAmount(iva) }],
+        otherTaxes,
+        items: mapItems(doc),
+        noGravado: "",
+        exento: "",
+        totalDeclarado: total !== null ? fmtAmount(total) : "",
+        source: "fallback",
+        confidence: "baja",
+        note: `Reconstruido como alícuota única ${alic}% (sin desglose del modelo). Verificá${
+          percep && percep > 0 ? " y reclasificá las percepciones." : "."
+        }`,
+      };
+    }
+  }
+
+  // ---- 3. Vacío ----
+  return {
+    vatLines: [],
+    otherTaxes: [],
+    items: mapItems(doc),
+    noGravado: "",
+    exento: "",
+    totalDeclarado: total !== null ? fmtAmount(total) : "",
+    source: "empty",
+    confidence: "vacio",
+    note: "No se detectó desglose de IVA; cargá los renglones manualmente.",
+  };
+}
+
+/** Suma renglones de IVA con la misma alícuota (la tabla exige unique). */
+function consolidateVatLines(lines: VatLinePrefill[]): VatLinePrefill[] {
+  const byAlic = new Map<number, VatLinePrefill>();
+  for (const l of lines) {
+    const prev = byAlic.get(l.alicuota);
+    if (prev) {
+      prev.baseNeto = fmtAmount((Number(prev.baseNeto) || 0) + (Number(l.baseNeto) || 0));
+      prev.importeIva = fmtAmount((Number(prev.importeIva) || 0) + (Number(l.importeIva) || 0));
+    } else {
+      byAlic.set(l.alicuota, { ...l });
+    }
+  }
+  return [...byAlic.values()];
+}
+
+/** Mapea lineItems → items del RPC (no fiscal, opcional). */
+function mapItems(doc: ExtractedDocument): ItemPrefill[] {
+  return (doc.lineItems ?? []).slice(0, 50).map((li) => {
+    const cantidad = li.quantity ?? 1;
+    const precio = li.unitPrice ?? 0;
+    const neto = li.subtotal ?? (cantidad * precio);
+    return {
+      descripcion: (li.description ?? "").slice(0, 300) || "—",
+      cantidad: fmtAmount(cantidad),
+      precioUnitario: fmtAmount(precio),
+      alicIvaId: 5, // 21% por defecto; el detalle fiscal manda en el cálculo
+      importeNeto: fmtAmount(neto),
+      importeIva: "0.00",
+      importeTotal: fmtAmount(neto),
+    };
+  });
+}
+
 function detectVendor(doc: ExtractedDocument, vendors: VendorLite[]): VendorMatch {
   // El proveedor es el EMISOR de la factura.
   const emisor =
@@ -338,7 +581,12 @@ export function mapOcrToInvoice(
   const tipo = detectTipo(doc);
   const { pv, numero } = detectPvNumero(doc);
   const cae = detectCae(doc);
-  const amounts = detectAmounts(doc);
+  const fiscal = detectFiscalDetail(doc);
+
+  // Los montos resumen (neto/iva/percepciones) se DERIVAN del detalle fiscal
+  // cuando existe (fuente de verdad B2). Si el detalle quedó vacío, caemos al
+  // detector plano legacy para no perder el prefill de cabecera.
+  const amounts = deriveAmountSummary(fiscal, doc);
 
   const fechaEmision: PrefilledField<string> = doc.date
     ? { value: doc.date, confidence: "alta", note: "Fecha de emisión detectada." }
@@ -370,6 +618,26 @@ export function mapOcrToInvoice(
     iva: amounts.iva,
     percepciones: amounts.percepciones,
     observ,
+    fiscal,
     overall,
+  };
+}
+
+/**
+ * Deriva el resumen neto/iva/percepciones desde el detalle fiscal (B2). Si el
+ * detalle quedó vacío, usa el detector plano legacy (compatibilidad).
+ */
+function deriveAmountSummary(fiscal: FiscalPrefill, doc: ExtractedDocument): AmountTriple {
+  if (fiscal.source === "empty") return detectAmounts(doc);
+  const neto = fiscal.vatLines.reduce((s, l) => s + (Number(l.baseNeto) || 0), 0);
+  const iva = fiscal.vatLines.reduce((s, l) => s + (Number(l.importeIva) || 0), 0);
+  const percep = fiscal.otherTaxes
+    .filter((t) => t.kind.startsWith("PERCEPCION_"))
+    .reduce((s, t) => s + (Number(t.importe) || 0), 0);
+  const conf = fiscal.confidence;
+  return {
+    neto: { value: fmtAmount(neto), confidence: neto > 0 ? conf : "vacio", note: fiscal.note },
+    iva: { value: fmtAmount(iva), confidence: iva > 0 ? conf : "vacio" },
+    percepciones: { value: percep > 0 ? fmtAmount(percep) : "", confidence: percep > 0 ? conf : "vacio" },
   };
 }

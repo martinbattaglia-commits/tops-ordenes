@@ -2,6 +2,10 @@ import type {
   ExtractedDocument,
   DocumentType,
   ExtractedComprobante,
+  ExtractedFiscal,
+  ExtractedVatLine,
+  ExtractedOtherTax,
+  ExtractedOtherTaxKind,
 } from "./types";
 
 // `pdf-parse` (vía pdfjs-dist) NO se importa arriba a propósito: su carga
@@ -78,6 +82,17 @@ con esta estructura:
     "numero": "string de 8 dígitos tal cual (ej '00001234') o null",
     "cae": "14 dígitos sin espacios o null"
   },
+  "fiscal": {
+    "vatLines": [
+      { "alicuota": 21, "baseNeto": 1000.00, "importeIva": 210.00 }
+    ],
+    "otherTaxes": [
+      { "kind": "PERCEPCION_IVA|PERCEPCION_IIBB|PERCEPCION_GANANCIAS|IMPUESTO_INTERNO|OTRO", "jurisdiction": "provincia o null", "base": 1000.00, "alicuota": 3.0, "importe": 30.00 }
+    ],
+    "netoNoGravado": 0.00,
+    "netoExento": 0.00,
+    "totalDeclarado": 1240.00
+  },
   "tags": ["palabra1", "palabra2", ...]
 }
 
@@ -93,7 +108,26 @@ Reglas:
   · "puntoVenta" y "numero": leelos del encabezado ("Punto de Venta: 0003",
     "Comp. Nro: 00001234"). Mantené los ceros a la izquierda.
   · "cae": número de 14 dígitos cerca de "CAE N°". Es CRÍTICO no perderlo.
-- tags: 3-6 palabras clave útiles para búsqueda (ANMAT, cosmética, urgente, vencimiento, etc.)`;
+- tags: 3-6 palabras clave útiles para búsqueda (ANMAT, cosmética, urgente, vencimiento, etc.)
+- fiscal: SOLO para facturas/notas de crédito/débito argentinas. Si el doc no es un
+  comprobante con desglose impositivo, usá fiscal: null. Es la parte MÁS importante
+  para contabilidad — extraela con máximo cuidado del cuadro de impuestos al pie:
+  · vatLines: UNA entrada por cada alícuota de IVA distinta del cuadro. La alícuota
+    debe ser EXACTAMENTE una de: 0, 2.5, 5, 10.5, 21, 27 (porcentajes AFIP). Si una
+    factura tiene neto a 21% y neto a 10.5%, devolvé DOS entradas. baseNeto es la base
+    imponible y importeIva el IVA de esa fila (importeIva ≈ baseNeto·alicuota/100).
+    NO sumes alícuotas distintas en una sola fila. En Factura B/C el IVA no se
+    discrimina: dejá vatLines vacío y poné el importe en netoNoGravado o como total.
+  · otherTaxes: percepciones, retenciones e impuestos internos. NO confundir con IVA:
+    - "Percepción IVA" / "Perc. IVA RG" → PERCEPCION_IVA
+    - "Percepción IIBB" / "Ingresos Brutos" / "IIBB" → PERCEPCION_IIBB (incluí la
+      provincia en jurisdiction: Buenos Aires, CABA, Córdoba, Santa Fe, etc.)
+    - "Retención/Percepción Ganancias" → PERCEPCION_GANANCIAS
+    - "Impuestos Internos" → IMPUESTO_INTERNO
+    - cualquier otro tributo → OTRO
+    importe es el monto cobrado; base y alicuota si figuran (o null).
+  · netoNoGravado / netoExento: conceptos sin IVA (peajes, exentos). 0 si no hay.
+  · totalDeclarado: el TOTAL final del comprobante tal como figura impreso.`;
 
 interface OpenAIResponse {
   choices: Array<{ message: { content: string } }>;
@@ -194,7 +228,7 @@ export async function extractFromPdf(
         content: `Documento (${pages} páginas, texto extraído):\n\n${rawText.slice(0, 30000)}`,
       },
     ],
-    maxTokens: 2500,
+    maxTokens: 3200,
   });
 
   return mergeWithDefaults(data, {
@@ -253,7 +287,7 @@ async function visionExtract(
         ],
       },
     ],
-    maxTokens: 2500,
+    maxTokens: 3200,
   });
 
   return mergeWithDefaults(data, {
@@ -301,6 +335,7 @@ function mergeWithDefaults(
     amounts: Array.isArray(partial.amounts) ? partial.amounts : [],
     lineItems: Array.isArray(partial.lineItems) ? partial.lineItems : [],
     comprobante: normalizeComprobante(partial.comprobante),
+    fiscal: normalizeFiscal(partial.fiscal),
     tags: Array.isArray(partial.tags) ? partial.tags.slice(0, 8) : [],
     rawText: meta.rawText,
     meta: {
@@ -357,6 +392,91 @@ function normalizeComprobante(
     return null;
   }
   return out;
+}
+
+/** Alícuotas de IVA válidas en AFIP (porcentajes). */
+const VALID_ALICUOTAS = new Set([0, 2.5, 5, 10.5, 21, 27]);
+const VALID_TAX_KINDS = new Set<ExtractedOtherTaxKind>([
+  "PERCEPCION_IVA",
+  "PERCEPCION_IIBB",
+  "PERCEPCION_GANANCIAS",
+  "IMPUESTO_INTERNO",
+  "OTRO",
+]);
+
+function num(v: unknown): number | null {
+  if (typeof v === "number" && isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/[^0-9.\-]/g, ""));
+    return isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Sanea el bloque `fiscal`: descarta filas de IVA con alícuota no-AFIP, valida
+ * los tipos de percepción, normaliza montos. Devuelve null si no hay nada útil
+ * (comprobantes no fiscales, o el modelo no lo devolvió). NO inventa datos: si
+ * una fila es inconsistente la descarta; el mapper marcará la baja confianza.
+ */
+function normalizeFiscal(
+  f: Partial<ExtractedFiscal> | null | undefined
+): ExtractedFiscal | null {
+  if (!f || typeof f !== "object") return null;
+
+  const vatLines: ExtractedVatLine[] = Array.isArray(f.vatLines)
+    ? f.vatLines
+        .map((l) => {
+          const alicuota = num(l?.alicuota);
+          const baseNeto = num(l?.baseNeto);
+          const importeIva = num(l?.importeIva);
+          if (alicuota === null || !VALID_ALICUOTAS.has(alicuota)) return null;
+          return {
+            alicuota,
+            baseNeto: baseNeto ?? 0,
+            importeIva: importeIva ?? 0,
+          } as ExtractedVatLine;
+        })
+        .filter((x): x is ExtractedVatLine => x !== null)
+    : [];
+
+  const otherTaxes: ExtractedOtherTax[] = Array.isArray(f.otherTaxes)
+    ? f.otherTaxes
+        .map((t) => {
+          const kindRaw = typeof t?.kind === "string" ? t.kind.trim().toUpperCase() : "";
+          const kind = (VALID_TAX_KINDS.has(kindRaw as ExtractedOtherTaxKind)
+            ? kindRaw
+            : "OTRO") as ExtractedOtherTaxKind;
+          const importe = num(t?.importe);
+          if (importe === null || importe === 0) return null;
+          const jur = typeof t?.jurisdiction === "string" ? t.jurisdiction.trim() : null;
+          return {
+            kind,
+            jurisdiction: jur && jur.length > 0 ? jur : null,
+            base: num(t?.base),
+            alicuota: num(t?.alicuota),
+            importe,
+          } as ExtractedOtherTax;
+        })
+        .filter((x): x is ExtractedOtherTax => x !== null)
+    : [];
+
+  const netoNoGravado = num(f.netoNoGravado);
+  const netoExento = num(f.netoExento);
+  const totalDeclarado = num(f.totalDeclarado);
+
+  // Si no hay absolutamente nada fiscal útil, no devolvemos el bloque.
+  if (
+    vatLines.length === 0 &&
+    otherTaxes.length === 0 &&
+    !netoNoGravado &&
+    !netoExento &&
+    !totalDeclarado
+  ) {
+    return null;
+  }
+
+  return { vatLines, otherTaxes, netoNoGravado, netoExento, totalDeclarado };
 }
 
 function normalizeDate(s: string | null | undefined): string | null {
