@@ -12,6 +12,10 @@
   # Node 22 (LTS): requerido por pdfjs-dist@5 (engines node ">=22.13.0 || >=24")
   # y pdf-parse@2 (">=22.3.0"). Con Node 20 el `next build` rompía con exit 2.
   NODE_VERSION = "22"
+  # next build (compile + type-check estricto de 300+ archivos + 4 docs @react-pdf)
+  # supera el heap por defecto del contenedor → OOM en "checking validity of types".
+  # Reproducido local: OOM a 1024MB, OK a 4096MB. Subimos el heap del build.
+  NODE_OPTIONS = "--max-old-space-size=4096"
   NEXT_TELEMETRY_DISABLED = "1"
 
 [[plugins]]
