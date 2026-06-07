@@ -118,8 +118,13 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
   });
   const deals = dealsRes.results.map(mapDeal);
 
+  // CRM-C3: el tablero de Clientify muestra SOLO deals activos (oculta Won/Lost
+  // y cerrados equivalentes). Columnas y top = activos; header/total = pipeline completo.
+  const isActive = (d: UiDeal) => d.status !== "won" && d.status !== "lost";
+  const activeDeals = deals.filter(isActive);
+
   const dealsByStage = new Map<number, UiDeal[]>();
-  for (const d of deals) {
+  for (const d of activeDeals) {
     if (d.stageId == null) continue;
     const arr = dealsByStage.get(d.stageId) ?? [];
     arr.push(d);
@@ -131,10 +136,12 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
     .filter((d) => d.status === "won" && d.actualClose && new Date(d.actualClose).getFullYear() === yearNow)
     .reduce((a, d) => a + d.amount, 0);
 
-  // Total del pipeline = suma de TODO ANMAT (todas las etapas), coherente con Clientify.
+  // Total del pipeline = suma de TODO ANMAT (todas las etapas/estados), coherente
+  // con el encabezado de Clientify ("Total $ ... (50)").
   const pipelineTotal = deals.reduce((a, d) => a + d.amount, 0);
 
-  const topDeals = [...deals].sort((a, b) => b.amount - a.amount).slice(0, 6);
+  // Top oportunidades abiertas = solo activos (excluye Won/Lost).
+  const topDeals = [...activeDeals].sort((a, b) => b.amount - a.amount).slice(0, 6);
 
   return {
     pipelines,

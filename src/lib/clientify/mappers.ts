@@ -36,7 +36,7 @@ export interface UiDeal {
   pipelineId: number | null;
   probability: number;
   probabilityLabel: string;
-  status: "open" | "won" | "lost" | "other";
+  status: "open" | "expired" | "won" | "lost" | "other";
   statusLabel: string;
   ownerName: string | null;
   expectedClose: string | null;
@@ -63,10 +63,12 @@ export interface UiPipeline {
   stages: UiStage[];
 }
 
+// Clientify status reales (verificado contra status_desc en vivo · CRM-C3):
+//   1=Open, 2=Expired, 3=Won, 4=Lost. (El mapeo previo 2→won/3→other era incorrecto.)
 const STATUS_MAP: Record<number, UiDeal["status"]> = {
   1: "open",
-  2: "won",
-  3: "other",
+  2: "expired",
+  3: "won",
   4: "lost",
 };
 
