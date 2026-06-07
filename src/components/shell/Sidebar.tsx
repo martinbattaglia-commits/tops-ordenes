@@ -53,6 +53,7 @@ const DOMAINS: Domain[] = [
       { href: "/compras/nueva", label: "Nueva OC", icon: "plus", accent: true },
       { href: "/compras/proveedores", label: "Proveedores", icon: "vendors" },
       { href: "/compras/facturas", label: "Facturas proveedor", icon: "wallet" },
+      { href: "/compras/libro-iva", label: "Libro IVA Compras", icon: "report" },
     ],
   },
   {
@@ -171,6 +172,7 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/compras",
       "/compras/ordenes",
       "/compras/facturas",
+      "/compras/libro-iva",
       "/clients",
       "/reports",
       "/billing",
