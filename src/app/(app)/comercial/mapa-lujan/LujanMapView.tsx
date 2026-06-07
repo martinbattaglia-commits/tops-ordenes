@@ -172,7 +172,7 @@ export function LujanMapView() {
             className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all border"
             style={
               view === v.key
-                ? { background: "var(--fg-brand, #0f172a)", color: "#fff", borderColor: "transparent" }
+                ? { background: "var(--tops-blue-900, #050555)", color: "#fff", borderColor: "transparent" }
                 : { background: "transparent", borderColor: "var(--stroke-soft, #e2e8f0)" }
             }
           >
@@ -191,7 +191,7 @@ export function LujanMapView() {
               className="rounded-full px-2.5 py-1 text-[11px] font-semibold border transition-all"
               style={
                 filter === f.key
-                  ? { background: "var(--fg-brand, #0f172a)", color: "#fff", borderColor: "transparent" }
+                  ? { background: "var(--tops-blue-900, #050555)", color: "#fff", borderColor: "transparent" }
                   : { borderColor: "var(--stroke-soft, #e2e8f0)" }
               }
             >
