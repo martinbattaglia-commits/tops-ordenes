@@ -76,7 +76,7 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
       </div>
 
       {/* Tabs estado */}
-      <div className="flex overflow-x-auto -mx-1 mb-4 gap-1 p-1 bg-white border border-stroke-soft rounded-lg w-fit max-w-full">
+      <div className="flex overflow-x-auto -mx-1 mb-4 gap-1 p-1 bg-bg-surface-alt border border-stroke-soft rounded-lg w-fit max-w-full">
         {TABS.map((t) => {
           const c = t.key === "todas" ? counts.todas ?? 0 : counts[t.key] ?? 0;
           const active = status === t.key;

@@ -69,7 +69,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
       </div>
 
       {/* Status tabs */}
-      <div className="flex overflow-x-auto -mx-1 mb-4 gap-1 p-1 bg-white border border-stroke-soft rounded-lg w-fit">
+      <div className="flex overflow-x-auto -mx-1 mb-4 gap-1 p-1 bg-bg-surface-alt border border-stroke-soft rounded-lg w-fit">
         {STATUS_TABS.map((t) => (
           <Link
             key={t.key}

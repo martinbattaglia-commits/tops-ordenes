@@ -80,7 +80,7 @@ function FilterPill({
   onChange: (v: string) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-2 px-3 py-2 border border-stroke-soft rounded-md bg-white text-sm">
+    <div className="inline-flex items-center gap-2 px-3 py-2 border border-stroke-soft rounded-md bg-bg-surface-alt text-sm">
       <span className="text-fg-muted font-medium">{label}:</span>
       <select
         value={value}

@@ -101,7 +101,7 @@ function FilterPill({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="relative inline-flex items-center gap-2 px-3 py-2 border border-stroke-soft bg-white rounded-md text-xs font-semibold text-fg-primary whitespace-nowrap cursor-pointer hover:border-stroke-strong transition-colors">
+    <div className="relative inline-flex items-center gap-2 px-3 py-2 border border-stroke-soft bg-bg-surface-alt rounded-md text-xs font-semibold text-fg-primary whitespace-nowrap cursor-pointer hover:border-stroke-strong transition-colors">
       <span className="text-fg-muted uppercase tracking-[0.08em] font-bold text-[10px]">
         {label}
       </span>
