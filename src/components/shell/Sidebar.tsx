@@ -128,6 +128,18 @@ const DOMAINS: Domain[] = [
     ],
   },
   {
+    id: "tesoreria",
+    label: "Tesorería · Finanzas",
+    items: [
+      { href: "/tesoreria", label: "Resumen", icon: "wallet" },
+      { href: "/tesoreria/bancos", label: "Bancos", icon: "building" },
+      { href: "/tesoreria/movimientos", label: "Movimientos", icon: "refresh" },
+      { href: "/tesoreria/cobranzas", label: "Cobranzas", icon: "download" },
+      { href: "/tesoreria/pagos", label: "Pagos", icon: "cart" },
+      { href: "/tesoreria/flujo-fondos", label: "Flujo de fondos", icon: "trend-up" },
+    ],
+  },
+  {
     id: "sistema",
     label: "Sistema",
     items: [
