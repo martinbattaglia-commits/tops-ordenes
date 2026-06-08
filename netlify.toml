@@ -17,6 +17,14 @@
   # Reproducido local: OOM a 1024MB, OK a 4096MB. Subimos el heap del build.
   NODE_OPTIONS = "--max-old-space-size=4096"
   NEXT_TELEMETRY_DISABLED = "1"
+  # Secret scanning — falso positivo en templates estáticos.
+  # Los HTML de /public/tools (contratos, cotizador, propuestas) embeben fuentes
+  # en base64 cuyo contenido contiene subcadenas "eyJ". NO son JWT/secretos:
+  # verificado 0 estructura a.b.c y 0 coincidencia con env vars. Netlify los marca
+  # como "exposed secrets". Se excluye SOLO ese path estático del escaneo.
+  # NEXT_PUBLIC_* son públicas por diseño (se inlinean en el bundle cliente) → se omiten del scan.
+  SECRETS_SCAN_OMIT_PATHS = "public/tools/**"
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY,NEXT_PUBLIC_MAPBOX_TOKEN,NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_DEMO_MODE"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
