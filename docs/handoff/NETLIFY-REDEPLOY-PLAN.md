@@ -1,7 +1,13 @@
 # NETLIFY-REDEPLOY-PLAN — TOPS NEXUS
 
 **Fecha:** 2026-06-08 · Plan de redeploy tras el fallo de secret scanning en `70a9944`.
-**Fix:** config-only en `netlify.toml` (no toca CRM360/Compliance/RRHH/Drive ni ninguna funcionalidad).
+
+> ## ⚠️ FIX REAL (confirmado por log): redacción del secreto, NO el omit de netlify.toml
+> El log de Netlify confirmó el secreto en `docs/handoff/DRIVE-TOPS-ROOT-FOLDER-UPDATE.md` (valor de `GOOGLE_DRIVE_ROOT_FOLDER_ID`, líneas 14/26/49/61). **Fix aplicado:** reemplazar el valor por `[REDACTED]` en ese doc. El omit de `netlify.toml` que se proponía abajo **fue revertido** (no correspondía: hubiera enmascarado, no resuelto). El procedimiento de redeploy (Pasos 1–4 / rollback) sigue vigente; solo cambia el contenido del commit (redacción del doc, no `netlify.toml`).
+
+---
+
+**Fix (versión previa, descartada):** ~~config-only en `netlify.toml`~~ → reemplazado por la redacción del valor real (ver banner).
 
 ---
 

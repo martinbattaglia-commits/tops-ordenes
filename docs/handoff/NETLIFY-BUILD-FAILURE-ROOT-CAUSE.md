@@ -2,6 +2,12 @@
 
 **Fecha:** 2026-06-08 · Causa raíz del build fallido `70a9944` ("Exposed secrets detected").
 
+> ## ⚠️ CAUSA CONFIRMADA POR EL LOG DE NETLIFY (supera la hipótesis previa)
+> El log de Netlify nombró el secreto **exactamente** en `docs/handoff/DRIVE-TOPS-ROOT-FOLDER-UPDATE.md` (líneas 14, 26, 49, 61): el **valor real de `GOOGLE_DRIVE_ROOT_FOLDER_ID`** quedó escrito en esa documentación. Es un **secreto real expuesto** (valor de env var), NO el `eyJ` base64 de `contrato-anmat` que se planteó como hipótesis abajo.
+> **Fix aplicado:** redactar el valor → `[REDACTED]` en ese doc. **Se revirtió** el omit de `netlify.toml` (no aplicaba). El análisis siguiente queda como registro de la investigación (descarta otros candidatos), pero la causa real es la de este banner.
+
+---
+
 ---
 
 ## Resumen ejecutivo

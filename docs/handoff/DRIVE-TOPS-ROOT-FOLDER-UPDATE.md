@@ -11,7 +11,7 @@ La carpeta fue compartida con la SA y el cambio quedó aplicado en `.env.local` 
 |---|---|
 | **Carpeta anterior** | `TOPS Nexus Backups` — id `1Erng2SywVN9ymHqUzkT0iMRrKSmrHWBw` (contenía `backup-*.dump`) |
 | **Carpeta nueva** | `AGENCIA GUBERNAMENTAL DE CONTROL` |
-| **folder_id utilizado** | **`1RBxm-gW08y4in9ZB11WvRB-c9r73jgX1`** |
+| **folder_id utilizado** | **`[REDACTED]`** |
 | **Variable** | `GOOGLE_DRIVE_ROOT_FOLDER_ID` (`.env.local` dev) |
 | **Backup** | `.env.local.pre-drive-root.bak` |
 
@@ -23,7 +23,7 @@ La carpeta fue compartida con la SA y el cambio quedó aplicado en `.env.local` 
 
 **Folder objetivo encontrado:**
 ```
-AGENCIA GUBERNAMENTAL DE CONTROL → id 1RBxm-gW08y4in9ZB11WvRB-c9r73jgX1
+AGENCIA GUBERNAMENTAL DE CONTROL → id [REDACTED]
 ```
 
 **Primer nivel del nuevo root (lo que verá el usuario al abrir Drive TOPS):**
@@ -46,7 +46,7 @@ AGENCIA GUBERNAMENTAL DE CONTROL → id 1RBxm-gW08y4in9ZB11WvRB-c9r73jgX1
 | Validación | Resultado |
 |---|---|
 | Carpeta AGENCIA accesible para la SA | ✅ (compartida; encontrada vía API) |
-| folder_id real obtenido (sin asumir) | ✅ `1RBxm-gW08y4in9ZB11WvRB-c9r73jgX1` |
+| folder_id real obtenido (sin asumir) | ✅ `[REDACTED]` |
 | Primer nivel = LUJAN + MAGALDI | ✅ (confirmado por API; parents = AGENCIA) |
 | No aparecen backups/dumps/internos | ✅ (el nuevo root no los contiene) |
 | `GOOGLE_DRIVE_ROOT_FOLDER_ID` actualizado | ✅ `.env.local` (+ backup) |
@@ -58,7 +58,7 @@ AGENCIA GUBERNAMENTAL DE CONTROL → id 1RBxm-gW08y4in9ZB11WvRB-c9r73jgX1
 
 ## Pendiente para producción
 
-- **Netlify:** setear `GOOGLE_DRIVE_ROOT_FOLDER_ID = 1RBxm-gW08y4in9ZB11WvRB-c9r73jgX1` en las env vars del sitio (este cambio fue en `.env.local` = dev local). Requiere tu OK / acceso a Netlify (no se tocó producción).
+- **Netlify:** setear `GOOGLE_DRIVE_ROOT_FOLDER_ID = [REDACTED]` en las env vars del sitio (este cambio fue en `.env.local` = dev local). Requiere tu OK / acceso a Netlify (no se tocó producción).
 - Confirmar que la SA tenga acceso en el contexto de prod (la compartición es a nivel de la cuenta de servicio, así que aplica igual).
 
 > Cambio de config aplicado en dev. Sin tocar código. Sin commit/push. Producción pendiente de setear la misma variable en Netlify.
