@@ -202,6 +202,12 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/settings/centros-costo",
       "/settings/tracking",
       "/templates",
+      "/rrhh",
+      "/rrhh/empleados",
+      "/rrhh/solicitudes",
+      "/rrhh/novedades",
+      "/rrhh/documentos",
+      "/rrhh/mi-espacio",
     ]);
     if (exact.has(href)) return pathname === href;
     return pathname.startsWith(href);
