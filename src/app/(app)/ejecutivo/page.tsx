@@ -71,9 +71,6 @@ export default async function CockpitPage() {
                 {data.locations.length} sedes operativas
               </div>
             </div>
-            <Link href="/operaciones/mapa" className="text-xs font-bold text-fg-link hover:underline">
-              Ver mapa completo →
-            </Link>
           </div>
           <div className="p-5">
             <AmbaMap locations={data.locations} />

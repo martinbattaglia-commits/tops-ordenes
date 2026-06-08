@@ -32,17 +32,12 @@ const DOMAINS: Domain[] = [
     label: "Cockpit",
     items: [
       { href: "/ejecutivo", label: "Cockpit ejecutivo", icon: "dashboard" },
-      { href: "/analytics", label: "Analytics Ejecutivo", icon: "report" },
-      { href: "/operaciones/mapa", label: "Mapa operativo", icon: "pin" },
-      { href: "/operaciones/mapa-inteligente", label: "Mapa Inteligente", icon: "pin" },
-      { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
-    ],
-  },
-  {
-    id: "workspace",
-    label: "Google Workspace",
-    items: [
+      { href: "/comercial/dashboard-vacancia", label: "Vacancia Corporativa", icon: "trend-up", badge: "Premium" },
       { href: "/workspace", label: "Accesos Google", icon: "google" },
+      { href: "/cctv", label: "Centro de monitoreo", icon: "eye", badge: "Hikvision" },
+      { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
+      { href: "/organigrama", label: "Organigrama", icon: "building" },
+      { href: "/analytics", label: "Analytics Ejecutivo", icon: "report" },
     ],
   },
   {
@@ -99,7 +94,6 @@ const DOMAINS: Domain[] = [
       { href: "/comercial/oportunidades", label: "Oportunidades", icon: "clients", badge: "360°" },
       { href: "/comercial/mapa-lujan", label: "Mapa Luján 3159", icon: "building", badge: "Premium" },
       { href: "/comercial/mapa-magaldi", label: "Mapa Magaldi 1765", icon: "building", badge: "Premium" },
-      { href: "/comercial/dashboard-vacancia", label: "Vacancia Corporativa", icon: "trend-up", badge: "Premium" },
       { href: "/comercial/herramientas", label: "Herramientas", icon: "bolt" },
       { href: "/comercial/herramientas/cotizador", label: "Cotizador", icon: "calculator" },
     ],
@@ -110,13 +104,6 @@ const DOMAINS: Domain[] = [
     items: [
       { href: "/anmat", label: "ANMAT cockpit", icon: "shield" },
       { href: "/drive", label: "Drive TOPS", icon: "drive" },
-    ],
-  },
-  {
-    id: "seguridad",
-    label: "Seguridad · CCTV",
-    items: [
-      { href: "/cctv", label: "Centro de monitoreo", icon: "eye", badge: "Hikvision" },
     ],
   },
   {
@@ -145,7 +132,6 @@ const DOMAINS: Domain[] = [
     id: "sistema",
     label: "Sistema",
     items: [
-      { href: "/organigrama", label: "Organigrama", icon: "building" },
       { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
       { href: "/settings/users", label: "Usuarios", icon: "users" },
       { href: "/settings/centros-costo", label: "Centros de costo", icon: "tag-alt" },
@@ -180,8 +166,6 @@ export default function Sidebar({ user, onNavigate }: Props) {
       "/billing",
       "/anmat",
       "/cctv",
-      "/operaciones/mapa",
-      "/operaciones/mapa-inteligente",
       "/operaciones/tracking",
       "/wms",
       "/wms/inventario",
@@ -304,8 +288,11 @@ function Section({
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40 px-1.5 mb-1">
-        {label}
+      <div className="px-1.5 mb-1">
+        <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">
+          {label}
+        </div>
+        <div className="mt-1 h-[2px] rounded-xs bg-tops-red" />
       </div>
       <nav className="flex flex-col gap-0.5">{children}</nav>
     </div>
