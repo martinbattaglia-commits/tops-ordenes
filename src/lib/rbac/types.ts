@@ -11,7 +11,18 @@ export type PermissionModule =
   | "cctv"
   | "documental"
   | "analytics"
-  | "sistema";
+  | "sistema"
+  // H2 — módulos reales presentes en la DB (seeds) que faltaban en el tipo:
+  | "wms"
+  | "tracking"
+  | "pedidos"
+  | "tesoreria"
+  | "cuentas_pagar"
+  | "rrhh"
+  // RBAC-PERMISSIONS-UPDATE (2026-06-08): "Mi Espacio" como permiso independiente
+  // del módulo RRHH. Un usuario puede tener mi_espacio.view SIN tener rrhh.* —
+  // acceso exclusivo a su propio legajo/datos/solicitudes/vacaciones/documentación.
+  | "mi_espacio";
 
 export type PermissionAction = "view" | "create" | "edit" | "delete" | "sign" | "export" | "admin";
 
@@ -72,6 +83,39 @@ export const MODULE_LABELS: Record<PermissionModule, string> = {
   documental: "Centro documental",
   analytics: "Analytics & Finanzas",
   sistema: "Sistema",
+  wms: "WMS · Depósito",
+  tracking: "Tracking · Flota",
+  pedidos: "Pedidos · Logística",
+  tesoreria: "Tesorería · Finanzas",
+  cuentas_pagar: "Cuentas a Pagar",
+  rrhh: "Recursos Humanos",
+  mi_espacio: "Mi Espacio (autoservicio)",
+};
+
+/**
+ * Roles RBAC DEFINITIVOS (F3, aprobados por Presidencia — RBAC-AUDITORIA-EJECUTIVA).
+ * Reemplazan el modelo genérico ADMIN/SUPERVISOR/OPERACIONES.
+ */
+export const APP_ROLES = [
+  "super_admin",
+  "admin_operativo",
+  "gerencia_comercial",
+  "administracion_finanzas",
+  "jefe_deposito_central",
+  "jefe_deposito_anexa",
+  "cliente_b2b", // arquitectura preparada — NO activar (sin usuarios)
+] as const;
+
+export type AppRole = (typeof APP_ROLES)[number];
+
+export const APP_ROLE_LABELS: Record<AppRole, string> = {
+  super_admin: "Super Admin · Presidencia",
+  admin_operativo: "Admin Operativo · Dirección de Operaciones",
+  gerencia_comercial: "Gerencia Comercial",
+  administracion_finanzas: "Administración y Finanzas",
+  jefe_deposito_central: "Jefe Depósito Central · Magaldi",
+  jefe_deposito_anexa: "Jefe Depósito Anexa · Luján",
+  cliente_b2b: "Cliente B2B (inactivo)",
 };
 
 export const ACTION_LABELS: Record<PermissionAction, string> = {

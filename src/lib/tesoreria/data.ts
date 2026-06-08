@@ -120,3 +120,95 @@ export async function getCashflowProjection(): Promise<CashflowRow[]> {
   if (error) throw error;
   return (data ?? []) as CashflowRow[];
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// DRILL-DOWN de KPIs (trazabilidad). Enriquece los open items con NOMBRE
+// (cliente/proveedor) y FECHA DE EMISIÓN. NO recalcula saldos/totales: el
+// `saldo`/`total` provienen tal cual de las vistas open_items (D1/D5 intacto).
+// Orden: por vencimiento ascendente (heredado de list*OpenItems).
+// ───────────────────────────────────────────────────────────────────────────
+
+export interface CobranzaDetailRow {
+  invoiceId: string;
+  clientId: string | null;
+  cliente: string | null;
+  factura: string;
+  emision: string | null;
+  vencimiento: string | null;
+  estado: string;
+  saldo: number;
+  total: number;
+}
+
+export interface PagoDetailRow {
+  invoiceId: string;
+  vendorId: string | null;
+  proveedor: string | null;
+  factura: string;
+  emision: string | null;
+  vencimiento: string | null;
+  estado: string;
+  saldo: number;
+  total: number;
+}
+
+export async function listCobranzasDetail(): Promise<CobranzaDetailRow[]> {
+  const supabase = createClient();
+  if (!supabase) return [];
+  const items = await listCustomerOpenItems(); // ya ordenado por fch_vto_pago asc
+  if (items.length === 0) return [];
+  const ids = Array.from(new Set(items.map((i) => i.invoice_id)));
+  const { data: invs } = await supabase
+    .from("customer_invoices")
+    .select("id, client_id, razon_social, created_at")
+    .in("id", ids);
+  const meta = new Map((invs ?? []).map((r: { id: string; client_id: string | null; razon_social: string | null; created_at: string | null }) => [r.id, r]));
+  return items.map((it) => {
+    const m = meta.get(it.invoice_id);
+    return {
+      invoiceId: it.invoice_id,
+      clientId: m?.client_id ?? null,
+      cliente: m?.razon_social ?? null,
+      factura: it.numero_comprobante != null ? String(it.numero_comprobante) : it.invoice_id.slice(0, 8),
+      emision: m?.created_at ?? null,
+      vencimiento: it.fch_vto_pago,
+      estado: it.estado_cobro,
+      saldo: Number(it.saldo),
+      total: Number(it.total),
+    };
+  });
+}
+
+export async function listPagosDetail(): Promise<PagoDetailRow[]> {
+  const supabase = createClient();
+  if (!supabase) return [];
+  const items = await listSupplierOpenItems(); // ya ordenado por fecha_vencimiento asc
+  if (items.length === 0) return [];
+  const ids = Array.from(new Set(items.map((i) => i.invoice_id)));
+  const { data: invs } = await supabase
+    .from("supplier_invoices")
+    .select("id, vendor_id, fecha_emision")
+    .in("id", ids);
+  const invMeta = new Map((invs ?? []).map((r: { id: string; vendor_id: string | null; fecha_emision: string | null }) => [r.id, r]));
+  const vendorIds = Array.from(new Set((invs ?? []).map((r: { vendor_id: string | null }) => r.vendor_id).filter(Boolean))) as string[];
+  let vMeta = new Map<string, string | null>();
+  if (vendorIds.length > 0) {
+    const { data: vends } = await supabase.from("vendors").select("id, razon").in("id", vendorIds);
+    vMeta = new Map((vends ?? []).map((r: { id: string; razon: string | null }) => [r.id, r.razon]));
+  }
+  return items.map((it) => {
+    const m = invMeta.get(it.invoice_id);
+    const vid = m?.vendor_id ?? null;
+    return {
+      invoiceId: it.invoice_id,
+      vendorId: vid,
+      proveedor: vid ? (vMeta.get(vid) ?? null) : null,
+      factura: it.public_id,
+      emision: m?.fecha_emision ?? null,
+      vencimiento: it.fecha_vencimiento,
+      estado: it.estado_pago,
+      saldo: Number(it.saldo),
+      total: Number(it.total),
+    };
+  });
+}

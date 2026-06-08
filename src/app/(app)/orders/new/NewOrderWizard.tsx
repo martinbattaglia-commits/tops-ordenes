@@ -474,11 +474,13 @@ function StepClient({
           />
         </div>
         {showSug && (
-          <div className="absolute z-20 left-0 right-0 mt-1.5 bg-white border border-stroke-soft rounded-lg shadow-md overflow-hidden max-h-80 overflow-y-auto">
-            <div className="px-3 py-2 text-[10px] uppercase tracking-[0.12em] font-bold text-fg-muted bg-neutral-50 border-b border-stroke-soft">
+          <div className="absolute z-20 left-0 right-0 mt-1.5 bg-bg-surface border border-stroke-soft rounded-lg shadow-lg overflow-hidden max-h-80 overflow-y-auto">
+            <div className="px-3 py-2 text-[10px] uppercase tracking-[0.12em] font-bold text-fg-muted bg-bg-surface-alt border-b border-stroke-soft">
               {search ? "Coincidencias" : "Clientes recientes"}
             </div>
-            {filtered.map((c) => (
+            {filtered.map((c) => {
+              const isSelected = Boolean(data.cuit) && c.cuit === data.cuit;
+              return (
               <button
                 type="button"
                 key={c.id}
@@ -486,24 +488,30 @@ function StepClient({
                   e.preventDefault();
                   pick(c);
                 }}
-                className="w-full text-left px-3 py-2.5 flex items-center gap-3 hover:bg-neutral-50 border-b border-stroke-soft"
+                className={cn(
+                  "w-full text-left px-3 py-2.5 flex items-center gap-3 border-b border-stroke-soft cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-tops-blue-700",
+                  isSelected
+                    ? "bg-tops-blue-700/15 ring-1 ring-inset ring-tops-blue-700"
+                    : "hover:bg-bg-surface-alt hover:ring-1 hover:ring-inset hover:ring-tops-blue-700/40"
+                )}
               >
                 <div className="w-7 h-7 rounded-md bg-tops-blue-700 text-white grid place-items-center text-xs font-bold shrink-0">
                   {c.razon[0]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate">{c.razon}</div>
-                  <div className="text-[11px] text-fg-muted font-mono">{c.cuit}</div>
+                  <div className="text-sm font-semibold truncate text-fg-primary">{c.razon}</div>
+                  <div className="text-[11px] text-fg-secondary font-mono">{c.cuit}</div>
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="flex gap-1 shrink-0 items-center">
+                  {isSelected && <Icon name="check-circle" size={14} className="text-tops-blue-700" />}
                   {c.tags.slice(0, 2).map((t) => (
                     <span
                       key={t}
                       className={cn(
                         "text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded",
                         t === "ANMAT"
-                          ? "bg-tops-red/10 text-tops-red"
-                          : "bg-tops-blue-700/10 text-tops-blue-700"
+                          ? "bg-tops-red/15 text-tops-red"
+                          : "bg-tops-blue-700/15 text-fg-link"
                       )}
                     >
                       {t}
@@ -511,7 +519,8 @@ function StepClient({
                   ))}
                 </div>
               </button>
-            ))}
+              );
+            })}
             {filtered.length === 0 && (
               <div className="px-3 py-4 text-sm text-fg-muted italic text-center">
                 Sin coincidencias.

@@ -11,6 +11,7 @@ import type {
 } from "./crm-types";
 import { createClient } from "@/lib/supabase/server";
 import { listOpportunitiesDb, getOpportunityFullDb } from "./opportunities-supabase";
+import { isVisibleCommercialPipeline } from "./pipeline-filter";
 
 export type DataSource = "supabase" | "local";
 
@@ -19,6 +20,10 @@ const OPP_1: Opportunity = {
   id: "opp-0001",
   publicId: "OPP-2026-0001",
   empresa: "Laboratorios Andrómaco S.A.",
+  companyName: "Laboratorios Andrómaco S.A.",
+  dealName: null,
+  pipeline: "ANMAT",
+  lastActivityAt: "2026-06-01",
   cuit: "30-50001234-9",
   contacto: "María Pérez",
   email: "compras@andromaco.test",
@@ -59,6 +64,10 @@ const OPP_2: Opportunity = {
   id: "opp-0002",
   publicId: "OPP-2026-0002",
   empresa: "Divanlito S.R.L.",
+  companyName: "Divanlito S.R.L.",
+  dealName: null,
+  pipeline: "Cargas Generales",
+  lastActivityAt: "2026-06-04",
   cuit: "30-60005678-2",
   contacto: "Jorge Díaz",
   email: "logistica@divanlito.test",
@@ -118,6 +127,10 @@ const OPP_3: Opportunity = {
   id: "opp-0003",
   publicId: "OPP-2026-0003",
   empresa: "Farma Sur S.A.",
+  companyName: "Farma Sur S.A.",
+  dealName: null,
+  pipeline: "ANMAT",
+  lastActivityAt: "2026-06-06",
   cuit: "30-70009012-5",
   contacto: "Lucía Gómez",
   email: "operaciones@farmasur.test",
@@ -189,7 +202,10 @@ export async function listOpportunities(): Promise<{ items: Opportunity[]; sourc
   const supabase = createClient();
   if (supabase) {
     const db = await listOpportunitiesDb(supabase);
-    if (db) return { items: db, source: "supabase" };
+    // Filtro VISUAL DE LECTURA: CRM360 solo muestra los pipelines comerciales
+    // activos (ANMAT / Cargas Generales / Oficinas). El histórico "Logística Tops"
+    // se oculta. No borra datos ni toca Clientify/sync/backfill.
+    if (db) return { items: db.filter((o) => isVisibleCommercialPipeline(o.pipeline)), source: "supabase" };
   }
   return { items: listOpportunitiesLocal(), source: "local" };
 }

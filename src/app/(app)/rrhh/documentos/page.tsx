@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { listDocumentos } from "@/lib/rrhh/data";
+import { DOC_CLASS_LABEL } from "@/lib/rrhh/types";
 import { getDocumentoSignedUrl } from "@/lib/rrhh/actions";
 
 export const metadata = { title: "Documentación · RRHH" };
 export const dynamic = "force-dynamic";
 
 export default async function DocumentosPage() {
+  if (!(await canAccess("rrhh.view"))) return <AccesoRestringido modulo="RRHH · Documentación" />;
   try {
     const docs = await listDocumentos();
 
@@ -28,7 +32,7 @@ export default async function DocumentosPage() {
         </div>
         <div className="card p-5">
           {docs.length === 0 ? (
-            <p className="text-fg-muted text-sm">No hay documentos visibles para tu rol.</p>
+            <p className="text-fg-muted text-sm">No hay documentos cargados.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -37,7 +41,7 @@ export default async function DocumentosPage() {
               <tbody>
                 {docs.map((d) => (
                   <tr key={d.id} className="border-t border-border">
-                    <td className="py-2">{d.doc_class}</td>
+                    <td className="py-2">{DOC_CLASS_LABEL[d.doc_class]}</td>
                     <td>{d.titulo ?? "—"}</td>
                     <td>{d.storage_bucket}{d.storage_bucket === "rrhh-health" ? " 🔒" : ""}</td>
                     <td>{d.expires_at ?? "—"}</td>

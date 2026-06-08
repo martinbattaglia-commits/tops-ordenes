@@ -48,7 +48,8 @@ export interface ClientifyContact {
   last_name: string;
   status: string;
   title: string;
-  company: string | null; // URL
+  company: string | null; // URL al recurso company en la API
+  company_name: string | null; // Razón social (viene en el payload del contacto)
   taxpayer_identification_number: string;
   medium: string;
   channel: string;

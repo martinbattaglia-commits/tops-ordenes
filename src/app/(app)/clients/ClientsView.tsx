@@ -215,7 +215,7 @@ export default function ClientsView({
               {filtered.map((c) => (
                 <tr key={c.id}>
                   <td className="cell-cliente">
-                    <span className="font-semibold">{c.razon}</span>
+                    <Link href={`/clientes/${c.id}`} className="font-semibold text-fg-link hover:underline cursor-pointer" title="Abrir ficha del cliente">{c.razon}</Link>
                     {c.domicilio && <span className="cuit">{c.domicilio}</span>}
                   </td>
                   <td className="font-mono text-xs">{fmtCuit(c.cuit)}</td>
@@ -277,7 +277,7 @@ export default function ClientsView({
         <div className="md:hidden divide-y divide-stroke-soft">
           {filtered.map((c) => (
             <div key={c.id} className="p-4">
-              <div className="font-semibold text-fg-primary">{c.razon}</div>
+              <Link href={`/clientes/${c.id}`} className="font-semibold text-fg-link hover:underline cursor-pointer block">{c.razon}</Link>
               <div className="text-xs text-fg-muted font-mono mb-1">{fmtCuit(c.cuit)}</div>
               <div className="text-xs text-fg-secondary">
                 {c.contacto ?? "—"} · {c.email ?? "—"}
@@ -524,7 +524,7 @@ function NewClientModal({
 
             <ModalField label="Tags" help="Sirven para clasificar y filtrar">
               <div className="chip-group flex flex-wrap gap-1.5">
-                {["ANMAT", "PHARMA", "FOOD", "COSMETIC", "GENERAL"].map((t) => {
+                {["ANMAT", "OFICINAS", "CARGAS GENERALES", "TRANSPORTE"].map((t) => {
                   const active = form.tags?.includes(t) ?? false;
                   return (
                     <button
@@ -537,7 +537,7 @@ function NewClientModal({
                           ? t === "ANMAT"
                             ? "bg-tops-red text-white border-tops-red"
                             : "bg-tops-blue-700 text-white border-tops-blue-700"
-                          : "bg-white text-fg-secondary border-stroke-soft hover:border-tops-blue-700/40"
+                          : "bg-bg-surface-alt text-fg-primary border-stroke-soft hover:border-tops-blue-700/60"
                       )}
                     >
                       {t}
@@ -563,8 +563,8 @@ function NewClientModal({
                     className={cn(
                       "px-3 py-2 text-xs font-semibold rounded-md border transition-colors text-center",
                       form.depot === opt.value
-                        ? "bg-tops-blue-900 text-white border-tops-blue-900"
-                        : "bg-white text-fg-primary border-stroke-soft hover:border-tops-blue-700/40"
+                        ? "bg-tops-blue-700 text-white border-tops-blue-700"
+                        : "bg-bg-surface-alt text-fg-primary border-stroke-soft hover:border-tops-blue-700/60"
                     )}
                   >
                     {opt.label}

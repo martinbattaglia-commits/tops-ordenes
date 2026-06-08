@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { getDashboardCounts, hasPerm } from "@/lib/rrhh/data";
 
 export const metadata = { title: "RRHH" };
@@ -16,6 +18,7 @@ function Kpi({ label, value }: { label: string; value: number }) {
 }
 
 export default async function RrhhDashboardPage() {
+  if (!(await canAccess("rrhh.view"))) return <AccesoRestringido modulo="RRHH" />;
   try {
     const [k, canExport] = await Promise.all([getDashboardCounts(), hasPerm("rrhh.export")]);
     return (
@@ -41,22 +44,22 @@ export default async function RrhhDashboardPage() {
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Link href="/rrhh/empleados" className="card p-4 hover:bg-bg-subtle flex items-center gap-2">
+          <Link href="/rrhh/empleados" className="card p-4 nx-interactive cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
             <Icon name="clients" /> <span>Empleados</span>
           </Link>
-          <Link href="/rrhh/solicitudes" className="card p-4 hover:bg-bg-subtle flex items-center gap-2">
+          <Link href="/rrhh/solicitudes" className="card p-4 nx-interactive cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
             <Icon name="calendar" /> <span>Solicitudes</span>
           </Link>
-          <Link href="/rrhh/novedades" className="card p-4 hover:bg-bg-subtle flex items-center gap-2">
+          <Link href="/rrhh/novedades" className="card p-4 nx-interactive cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
             <Icon name="report" /> <span>Novedades</span>
           </Link>
-          <Link href="/rrhh/documentos" className="card p-4 hover:bg-bg-subtle flex items-center gap-2">
+          <Link href="/rrhh/documentos" className="card p-4 nx-interactive cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
             <Icon name="lock" /> <span>Documentación</span>
           </Link>
-          <Link href="/organigrama" className="card p-4 hover:bg-bg-subtle flex items-center gap-2">
+          <Link href="/organigrama" className="card p-4 nx-interactive cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
             <Icon name="building" /> <span>Organigrama</span>
           </Link>
-          <Link href="/rrhh/mi-espacio" className="card p-4 hover:bg-bg-subtle flex items-center gap-2">
+          <Link href="/rrhh/mi-espacio" className="card p-4 nx-interactive cursor-pointer flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
             <Icon name="user" /> <span>Mi espacio</span>
           </Link>
         </div>

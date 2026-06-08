@@ -20,8 +20,23 @@ export interface Empleado {
   fecha_reconocida: string | null;
   supervisor_id: string | null;
   obra_social: string | null;
+  modalidad_contratacion: string | null;
+  es_jubilado: boolean | null;
   estado: EmpleadoEstado;
 }
+
+/** Etiquetas legibles de modalidad de contratación (legajo / alta). */
+export const MODALIDAD_LABEL: Record<string, string> = {
+  tiempo_indeterminado: "Tiempo completo indeterminado",
+  tiempo_parcial: "Tiempo parcial",
+  director: "Director (LRT)",
+  periodo_prueba: "Período de prueba",
+  plazo_fijo: "Plazo fijo",
+  eventual: "Eventual",
+  temporada: "Temporada",
+  pasantia: "Pasantía",
+  otro: "Otro",
+};
 
 export interface EmpleadoBancario {
   id: string;
@@ -95,7 +110,23 @@ export type DocClass =
   | "estudio"
   | "capacitacion"
   | "adjunto_solicitud"
+  | "recibo_sueldo"
   | "otro";
+
+/** Etiquetas legibles de clase documental (centro documental + legajo). */
+export const DOC_CLASS_LABEL: Record<DocClass, string> = {
+  dni: "DNI",
+  cuil: "CUIL",
+  cv: "CV",
+  contrato: "Contrato",
+  alta_afip: "Alta AFIP",
+  certificado: "Certificado",
+  estudio: "Estudio",
+  capacitacion: "Capacitación",
+  adjunto_solicitud: "Adjunto de solicitud",
+  recibo_sueldo: "Recibo de sueldo",
+  otro: "Otro",
+};
 
 export interface Documento {
   id: string;

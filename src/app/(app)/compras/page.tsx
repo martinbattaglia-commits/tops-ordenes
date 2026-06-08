@@ -46,6 +46,7 @@ export default async function ComprasDashboardPage() {
           delta={k.ocDelta}
           spark={[3, 5, 4, 7, 9, 8, 11]}
           index={0}
+          href="/compras/ordenes"
         />
         <Kpi
           label="Monto comprometido"
@@ -54,6 +55,7 @@ export default async function ComprasDashboardPage() {
           featured
           spark={[8, 10, 7, 12, 14, 18, 16]}
           index={1}
+          href="/compras/ordenes"
         />
         <Kpi
           label="% conciliadas"
@@ -61,6 +63,7 @@ export default async function ComprasDashboardPage() {
           delta={k.reconciledDelta}
           spark={[60, 64, 68, 72, 78, 81, 84]}
           index={2}
+          href="/compras/ordenes?status=conciliada"
         />
         <Kpi
           label="% firmadas en el día"
@@ -68,6 +71,7 @@ export default async function ComprasDashboardPage() {
           delta={k.signatureDelta}
           spark={[80, 85, 90, 92, 94, 96, 97]}
           index={3}
+          href="/compras/ordenes?status=firmada"
         />
       </div>
 
@@ -130,6 +134,7 @@ function Kpi({
   featured,
   spark,
   index = 0,
+  href,
 }: {
   label: string;
   value: string;
@@ -137,12 +142,13 @@ function Kpi({
   featured?: boolean;
   spark?: number[];
   index?: number;
+  href?: string;
 }) {
   const up = !delta.startsWith("-");
-  return (
+  const card = (
     <div
       style={{ animationDelay: `${index * 45}ms` }}
-      className={`nx-surface nx-stagger card kpi ${featured ? "featured-stroke" : ""} relative overflow-hidden`}
+      className={`nx-surface nx-stagger card kpi ${featured ? "featured-stroke" : ""} relative overflow-hidden h-full`}
     >
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">
@@ -159,6 +165,13 @@ function Kpi({
         </div>
       )}
     </div>
+  );
+  if (!href) return card;
+  return (
+    <Link href={href} title={`Ver detalle · ${label}`}
+      className="nx-interactive block rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
+      {card}
+    </Link>
   );
 }
 

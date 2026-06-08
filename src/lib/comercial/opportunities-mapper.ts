@@ -11,10 +11,16 @@ import type {
   CrmService, CrmStage, CommittedState, QuoteStatus, ProposalType, ProposalStatus,
   ContractStatus, OnboardingStatus, OnboardingTaskType, OnboardingTaskStatus,
 } from "./crm-types";
+import { isClientifyApiUrl } from "./opportunity-title";
 
 const num = (x: unknown): number | null => (x == null ? null : Number(x));
 const numOr0 = (x: unknown): number => Number(x ?? 0);
 const str = (x: unknown): string | null => (x == null ? null : String(x));
+/** Texto sólo si NO es una URL técnica de Clientify (anti-URL en el título). */
+const safeStr = (x: unknown): string | null => {
+  const s = str(x);
+  return s && !isClientifyApiUrl(s) ? s : null;
+};
 
 // ── Formas crudas de la base (snake_case, como devuelve PostgREST/pg) ──────────
 
@@ -55,6 +61,8 @@ export interface RawOpportunity {
   email: string | null; telefono: string | null; service_type: string; m2: number | string | null;
   deposito: string | null; estado: string; probabilidad: number; monto: number | string | null;
   currency: string; owner_id: string | null; owner_name?: string | null;
+  company_name?: string | null; clientify_deal_name?: string | null;
+  clientify_pipeline?: string | null; clientify_modified?: string | null;
   expected_close: string | null; clientify_deal_id: string | null;
   capacity_feasible: boolean | null; assigned_site: string | null; assigned_units: unknown;
   committed_state: string; created_at: string;
@@ -70,17 +78,20 @@ export interface RawOpportunityFull extends RawOpportunity {
 
 // ── Mapeo ─────────────────────────────────────────────────────────────────────
 
-function razonOf(c: RawOpportunity["clients"]): string {
-  if (!c) return "(sin cuenta)";
+function razonOf(c: RawOpportunity["clients"]): string | null {
+  if (!c) return null;
   const o = Array.isArray(c) ? c[0] : c;
-  return o?.razon ?? "(sin cuenta)";
+  return o?.razon ?? null;
 }
 
 export function mapOpportunity(r: RawOpportunity): Opportunity {
+  // Empresa: cliente linkeado → company_name (Clientify, saneado anti-URL) → contacto → "—".
+  // safeStr descarta URLs técnicas de Clientify para que jamás se filtren como título.
+  const empresa = razonOf(r.clients) ?? safeStr(r.company_name) ?? r.contacto ?? "—";
   return {
     id: r.id,
     publicId: r.public_id ?? r.id,
-    empresa: razonOf(r.clients),
+    empresa,
     cuit: r.cuit,
     contacto: r.contacto,
     email: r.email,
@@ -92,7 +103,11 @@ export function mapOpportunity(r: RawOpportunity): Opportunity {
     probabilidad: r.probabilidad,
     monto: num(r.monto),
     currency: r.currency ?? "ARS",
-    ownerName: r.owner_name ?? (r.owner_id ? "—" : "—"),
+    ownerName: r.owner_name ?? "—",
+    companyName: safeStr(r.company_name),
+    dealName: safeStr(r.clientify_deal_name),
+    pipeline: str(r.clientify_pipeline),
+    lastActivityAt: r.clientify_modified ?? r.created_at,
     expectedClose: r.expected_close,
     clientifyDealId: r.clientify_deal_id,
     capacityFeasible: r.capacity_feasible,

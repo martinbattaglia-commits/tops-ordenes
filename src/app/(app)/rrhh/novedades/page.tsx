@@ -1,10 +1,13 @@
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { listNovedades } from "@/lib/rrhh/data";
 
 export const metadata = { title: "Novedades · RRHH" };
 export const dynamic = "force-dynamic";
 
 export default async function NovedadesPage({ searchParams }: { searchParams: { periodo?: string } }) {
+  if (!(await canAccess("rrhh.view"))) return <AccesoRestringido modulo="RRHH · Novedades" />;
   try {
     const novedades = await listNovedades(searchParams?.periodo);
     return (
@@ -18,7 +21,7 @@ export default async function NovedadesPage({ searchParams }: { searchParams: { 
         </div>
         <div className="card p-5">
           {novedades.length === 0 ? (
-            <p className="text-fg-muted text-sm">No hay novedades visibles para tu rol.</p>
+            <p className="text-fg-muted text-sm">No hay novedades cargadas.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>

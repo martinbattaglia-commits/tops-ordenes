@@ -15,7 +15,7 @@ import type {
 } from "./types";
 
 const EMP_COLS =
-  "id,public_id,profile_id,apellido_nombre,dni,cuil,categoria,seccion,depot,convenio,fecha_ingreso,fecha_reconocida,supervisor_id,obra_social,estado";
+  "id,public_id,profile_id,apellido_nombre,dni,cuil,categoria,seccion,depot,convenio,fecha_ingreso,fecha_reconocida,supervisor_id,obra_social,modalidad_contratacion,es_jubilado,estado";
 
 /** Chequeo de permiso server-side vía RPC (RBAC, fail-closed en la base). */
 export async function hasPerm(slug: string): Promise<boolean> {
@@ -136,6 +136,20 @@ export async function listDocumentos(): Promise<Documento[]> {
     .from("rrhh_documents")
     .select("id,empleado_id,solicitud_id,doc_class,storage_bucket,titulo,mime_type,expires_at,created_at")
     .is("deleted_at", null).order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Documento[];
+}
+
+/** Documentos de un legajo (incluye recibos de sueldo). Cliente de sesión → RLS. */
+export async function getEmpleadoDocumentos(empleadoId: string): Promise<Documento[]> {
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("rrhh_documents")
+    .select("id,empleado_id,solicitud_id,doc_class,storage_bucket,titulo,mime_type,expires_at,created_at")
+    .eq("empleado_id", empleadoId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as Documento[];
 }

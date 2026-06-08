@@ -28,7 +28,7 @@ export default async function ContactosPage({ searchParams }: PageProps) {
   }
 
   const page = Math.max(1, parseInt(searchParams?.page ?? "1", 10) || 1);
-  const q = searchParams?.q ?? "";
+  const q = (searchParams?.q ?? "").trim();
   const pageSize = 30;
 
   let result;
@@ -136,13 +136,37 @@ export default async function ContactosPage({ searchParams }: PageProps) {
                         </div>
                       )}
                       <div className="min-w-0">
-                        <div className="text-sm font-bold text-fg-primary truncate">{c.name}</div>
+                        <a
+                          href={c.href}
+                          target="_blank"
+                          rel="noopener"
+                          title="Abrir ficha en Clientify"
+                          className="text-sm font-bold text-fg-primary truncate block hover:text-fg-link hover:underline cursor-pointer"
+                        >
+                          {c.name}
+                        </a>
                         {c.taxId && <div className="text-[11px] text-fg-muted font-mono">{c.taxId}</div>}
                       </div>
                     </div>
                   </td>
-                  <td className="text-xs text-fg-secondary truncate max-w-[160px]">
-                    {c.companyUrl ? "Vinculada" : "—"}
+                  <td className="text-xs truncate max-w-[180px]">
+                    {c.companyName ? (
+                      c.companyHref ? (
+                        <a
+                          href={c.companyHref}
+                          target="_blank"
+                          rel="noopener"
+                          title="Abrir empresa en Clientify"
+                          className="text-fg-link hover:underline cursor-pointer font-semibold"
+                        >
+                          {c.companyName}
+                        </a>
+                      ) : (
+                        <span className="text-fg-secondary font-semibold">{c.companyName}</span>
+                      )
+                    ) : (
+                      <span className="text-fg-muted">Sin empresa asignada</span>
+                    )}
                   </td>
                   <td className="text-xs">
                     {c.email ? (
@@ -206,7 +230,27 @@ export default async function ContactosPage({ searchParams }: PageProps) {
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-bold text-fg-primary truncate">{c.name}</div>
+                <a
+                  href={c.href}
+                  target="_blank"
+                  rel="noopener"
+                  className="text-sm font-bold text-fg-primary truncate block hover:text-fg-link cursor-pointer"
+                >
+                  {c.name}
+                </a>
+                <div className="text-[11px] truncate">
+                  {c.companyName ? (
+                    c.companyHref ? (
+                      <a href={c.companyHref} target="_blank" rel="noopener" className="text-fg-link hover:underline cursor-pointer">
+                        {c.companyName}
+                      </a>
+                    ) : (
+                      <span className="text-fg-secondary">{c.companyName}</span>
+                    )
+                  ) : (
+                    <span className="text-fg-muted">Sin empresa asignada</span>
+                  )}
+                </div>
                 {c.email && (
                   <div className="text-xs text-fg-link truncate">{c.email}</div>
                 )}

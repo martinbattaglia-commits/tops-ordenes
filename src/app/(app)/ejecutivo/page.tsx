@@ -1,288 +1,221 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { CountUp } from "@/components/CountUp";
-import { PoStatusBadge } from "@/components/compras/PoStatusBadge";
-import { AmbaMap } from "@/components/ejecutivo/AmbaMap";
-import { TodayStrip } from "@/components/ejecutivo/TodayStrip";
-import { getCockpitData, type ActivityFeedItem, type CockpitKpi } from "@/lib/ejecutivo/data";
-import { fmtCurrency, truncate } from "@/lib/compras/format";
+import { getCommandCenter, type SystemState, type HealthLevel, type CriticalAlert, type ExecKpi } from "@/lib/ejecutivo/command-center";
+import { canViewExecutiveFinancialBlocks } from "@/lib/rbac/cockpit-visibility";
 import { ORG, PRODUCT } from "@/lib/org";
 
 export const metadata = { title: "Cockpit ejecutivo" };
 export const dynamic = "force-dynamic";
 
+const HEALTH_META: Record<HealthLevel, { dot: string; ring: string; text: string; label: string }> = {
+  normal: { dot: "bg-status-success", ring: "ring-status-success/30", text: "text-status-success", label: "NORMAL" },
+  atencion: { dot: "bg-status-warning", ring: "ring-status-warning/30", text: "text-status-warning", label: "ATENCIÓN" },
+  critico: { dot: "bg-tops-red", ring: "ring-tops-red/30", text: "text-tops-red", label: "CRÍTICO" },
+};
+
+const STATUS_DOT: Record<SystemState["status"], string> = {
+  operative: "bg-status-success",
+  degraded: "bg-status-warning",
+  offline: "bg-tops-red",
+};
+
+// KPIs financieros — sólo visibles con permiso ejecutivo (cockpit.view).
+const FINANCIAL_KPI_LABELS = new Set(["Facturación del mes", "Cobranza pendiente"]);
+
+// BLOQUE 3 — módulos estratégicos. RRHH se incorpora automáticamente seteando `enabled:true`
+// (el grid auto-fluye; no requiere cambiar el layout).
+const MODULES: { href: string; icon: IconName; title: string; sub: string; enabled?: boolean; exec?: boolean }[] = [
+  { href: "/comercial/pipeline", icon: "trend-up", title: "Comercial", sub: "CRM · Clientify" },
+  { href: "/compras", icon: "cart", title: "Compras", sub: "OC a proveedores" },
+  { href: "/dashboard", icon: "orders", title: "Operaciones", sub: "OS · servicios" },
+  { href: "/anmat", icon: "shield", title: "Compliance ANMAT", sub: "RNE · regulatorio" },
+  { href: "/operaciones/tracking", icon: "truck", title: "Tracking", sub: "Flota en vivo" },
+  { href: "/cctv", icon: "eye", title: "CCTV", sub: "Hikvision NVR" },
+  { href: "/analytics", icon: "report", title: "Analytics", sub: "KPIs corporativos", exec: true },
+  { href: "/drive", icon: "drive", title: "Drive Corporativo", sub: "Documental · Google" },
+  // { href: "/rrhh", icon: "users", title: "RRHH", sub: "Recursos Humanos", enabled: true },
+];
+
 export default async function CockpitPage() {
-  const data = await getCockpitData();
-  const totalM2 = data.locations.reduce((a, l) => a + l.m2, 0);
+  const [cc, canExec] = await Promise.all([getCommandCenter(), canViewExecutiveFinancialBlocks()]);
+  // Visibilidad condicional (mismo Cockpit, sin split): se ocultan bloques
+  // financieros/ejecutivos a quien no tenga permiso ejecutivo.
+  const modules = MODULES.filter((m) => m.enabled !== false && (canExec || !m.exec));
+  const kpis = canExec ? cc.kpis : cc.kpis.filter((k) => !FINANCIAL_KPI_LABELS.has(k.label));
 
   return (
-    <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade">
-      {/* Hero */}
-      <section className="nx-surface card overflow-hidden relative">
-        <div
-          className="absolute inset-0 pointer-events-none opacity-90"
-          style={{
-            background:
-              "radial-gradient(ellipse at top right, rgba(201,8,18,0.08), transparent 60%), radial-gradient(ellipse at bottom left, rgba(33,69,118,0.12), transparent 60%)",
-          }}
-        />
-        <div className="relative p-6 md:p-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <div className="eyebrow-tiny">
-              {PRODUCT.name} · {PRODUCT.shortTagline}
-            </div>
-            <h1 className="page-title">Buen día.</h1>
-            <p className="page-subtitle max-w-xl">
-              Cockpit corporativo · {ORG.legalName} desde {ORG.since}. Operaciones 3PL en{" "}
-              {data.locations.length} locaciones · {totalM2.toLocaleString("es-AR")} m² de huella.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/compras/nueva" className="btn btn-danger btn-sm">
-              <Icon name="plus" size={14} stroke={2.2} />
-              <span>Nueva OC</span>
-            </Link>
-            <Link href="/orders/new" className="btn btn-primary btn-sm">
-              <Icon name="plus" size={14} stroke={2.2} />
-              <span>Nueva OS</span>
-            </Link>
-          </div>
+    <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1400px] mx-auto">
+      {/* Header presidencial — slim. Cockpit = monitoreo/análisis/supervisión:
+          sin CTAs transaccionales (Nueva OC/OS viven en sus módulos). */}
+      <header className="flex flex-col gap-1">
+        <div className="eyebrow-tiny">{PRODUCT.name} · Command Center</div>
+        <h1 className="page-title">Estado de la compañía</h1>
+        <p className="page-subtitle">
+          {ORG.legalName} · ahora mismo
+        </p>
+      </header>
+
+      {/* BLOQUE 1 + 1A — Estado General TOPS + Salud Corporativa */}
+      <EstadoGeneral cc={cc} />
+
+      {/* BLOQUE 1B — Centro de Alertas Críticas (no se renderiza si no hay alertas) */}
+      {cc.alerts.length > 0 && <AlertasCriticas alerts={cc.alerts} />}
+
+      {/* BLOQUE 2 — KPIs Ejecutivos */}
+      <section className="space-y-4">
+        {/* KPI maestro (Cash Flow) — financiero: sólo con permiso ejecutivo */}
+        {canExec && <MasterKpi master={cc.master} />}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {kpis.map((k, i) => (
+            <KpiCard key={i} kpi={k} index={i} />
+          ))}
         </div>
       </section>
 
-      {/* Información del día — contexto ejecutivo (fecha/hora/clima) */}
-      <TodayStrip />
-
-      {/* KPI Grid */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {data.kpis.map((k, i) => (
-          <KpiCard key={i} kpi={k} index={i} />
-        ))}
-      </section>
-
-      {/* Grid principal: Mapa + Locations + Activity */}
-      <section className="grid gap-6" style={{ gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)" }}>
-        {/* Mapa + ocupación */}
-        <div className="nx-surface card overflow-hidden">
-          <div className="px-5 py-4 border-b border-stroke-soft flex items-center justify-between">
-            <div>
-              <div className="text-sm font-bold text-fg-primary">Mapa operativo · CABA</div>
-              <div className="text-[11px] text-fg-secondary mt-0.5">
-                {data.locations.length} sedes operativas
-              </div>
-            </div>
-          </div>
-          <div className="p-5">
-            <AmbaMap locations={data.locations} />
-          </div>
-          <div className="border-t border-stroke-soft divide-y divide-stroke-soft">
-            {data.locations.map((loc) => (
-              <div key={loc.id} className="px-5 py-3 flex items-center gap-3">
-                <span className="nx-live-dot flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-fg-primary">
-                    {loc.name}{" "}
-                    <span
-                      className={`text-[9px] font-bold uppercase tracking-wider ml-1 ${
-                        loc.tag === "ANMAT" ? "text-tops-red" : "text-fg-muted"
-                      }`}
-                    >
-                      {loc.tag}
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-fg-muted truncate">{loc.address}</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm font-bold text-fg-brand tabular">
-                    {loc.occupancyPct !== null ? `${loc.occupancyPct}%` : "—"}
-                  </div>
-                  <div className="text-[10px] text-fg-muted tabular">
-                    {loc.m2.toLocaleString("es-AR")} m²
-                    {loc.activeOps !== null && <> · {loc.activeOps} ops</>}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="border-t border-stroke-soft px-5 py-2.5 text-[10px] text-fg-muted text-center">
-            Ocupación real-time y operaciones activas: pendientes de integración operativa.
-          </div>
-        </div>
-
-        {/* Activity feed cross-module */}
-        <div className="nx-surface card overflow-hidden flex flex-col">
-          <div className="px-5 py-4 border-b border-stroke-soft">
-            <div className="text-sm font-bold text-fg-primary">Actividad reciente</div>
-            <div className="text-[11px] text-fg-secondary mt-0.5">
-              Eventos cross-módulo en tiempo real
-            </div>
-          </div>
-          {data.activity.length > 0 ? (
-            <ol className="flex-1 divide-y divide-stroke-soft overflow-y-auto" style={{ maxHeight: 520 }}>
-              {data.activity.map((ev, i) => (
-                <ActivityRow key={i} item={ev} />
-              ))}
-            </ol>
-          ) : (
-            <div className="flex-1 p-6 flex flex-col items-center justify-center text-center">
-              <Icon name="wand" size={24} className="text-fg-muted mb-2" />
-              <div className="text-sm font-bold text-fg-primary">Sin actividad disponible</div>
-              <div className="text-[11px] text-fg-secondary mt-1 max-w-xs">
-                {data.activityPendingIntegration
-                  ? "Pendiente de integración con el event log cross-módulo (planificado Fase 2)."
-                  : "No hay eventos recientes."}
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Quick links a módulos */}
+      {/* BLOQUE 3 — Centro de Módulos Estratégicos */}
       <section>
         <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-fg-muted mb-3">
-          Módulos operativos
+          Módulos estratégicos
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <ModuleCard href="/compras" icon="cart" title="Compras" sub="OC a proveedores" index={0} />
-          <ModuleCard href="/dashboard" icon="orders" title="Servicios" sub="OS a clientes" index={1} />
-          <ModuleCard href="/cctv" icon="eye" title="CCTV" sub="Hikvision · Verisure" tag="LIVE" index={2} />
-          <ModuleCard href="/anmat" icon="shield" title="ANMAT" sub="Compliance & RNE" index={3} />
-          <ModuleCard href="/comercial/pipeline" icon="trend-up" title="Comercial" sub="CRM · Clientify" index={4} />
-          <ModuleCard href="/compras/drive" icon="drive" title="Drive sync" sub="Google Workspace" index={5} />
-          <ModuleCard href="/reports" icon="report" title="Analytics" sub="KPIs corporativos" index={6} />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+          {modules.map((m, i) => (
+            <ModuleCard key={m.href} {...m} index={i} />
+          ))}
         </div>
       </section>
-
-      {/* Recent OC quick view */}
-      {data.recentOrders.length > 0 && (
-        <section className="nx-surface card overflow-hidden">
-          <div className="px-5 py-4 border-b border-stroke-soft flex items-center justify-between">
-            <div>
-              <div className="text-sm font-bold text-fg-primary">Últimas órdenes de compra</div>
-              <div className="text-[11px] text-fg-secondary mt-0.5">Top 6 más recientes del módulo Compras</div>
-            </div>
-            <Link href="/compras/ordenes" className="text-xs font-bold text-fg-link hover:underline">
-              Ver todas →
-            </Link>
-          </div>
-          <div className="divide-y divide-stroke-soft">
-            {data.recentOrders.map((o) => (
-              <Link
-                key={o.id}
-                href={`/compras/ordenes/${o.public_id}`}
-                className="nx-row flex items-center gap-3 px-5 py-3"
-              >
-                <div className="font-mono text-[11px] text-fg-muted w-28 flex-shrink-0">{o.public_id}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-fg-primary truncate">
-                    {truncate(o.vendor?.razon ?? "—", 32)}
-                  </div>
-                  <div className="text-[11px] text-fg-muted font-mono">{o.vendor?.cuit}</div>
-                </div>
-                <div className="text-right text-sm tabular font-bold text-fg-brand w-28">
-                  {fmtCurrency(o.total)}
-                </div>
-                <PoStatusBadge status={o.status} className="hidden sm:inline-flex" />
-                <Icon name="chevron-right" size={14} className="text-fg-muted hidden md:block" />
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
 
-function KpiCard({ kpi, index }: { kpi: CockpitKpi; index: number }) {
-  const isPending = kpi.value === null;
+function EstadoGeneral({ cc }: { cc: Awaited<ReturnType<typeof getCommandCenter>> }) {
+  const h = HEALTH_META[cc.health];
+  return (
+    <section className={`nx-surface card overflow-hidden relative ring-1 ${h.ring}`}>
+      <div className="p-5 md:p-7 flex flex-col lg:flex-row lg:items-center gap-6">
+        {/* Indicador global (1A) */}
+        <div className="flex items-center gap-4 lg:min-w-[300px]">
+          <span className={`relative grid place-items-center w-16 h-16 rounded-full ${h.dot}/12`}>
+            <span className={`w-9 h-9 rounded-full ${h.dot}`} />
+            <span className={`absolute inset-0 rounded-full ring-4 ${h.ring} animate-pulse`} />
+          </span>
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-muted">Salud corporativa</div>
+            <div className={`text-2xl md:text-3xl font-black leading-tight ${h.text}`}>{h.label}</div>
+            <div className="text-sm font-bold text-fg-primary mt-0.5">{cc.headline}</div>
+          </div>
+        </div>
+
+        {/* Resumen + sistemas (1) */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-3xl md:text-4xl font-black text-fg-primary tabular">
+              <CountUp to={cc.operativeCount} format="int" />/{cc.totalSystems}
+            </span>
+            <span className="text-sm font-bold text-fg-secondary">sistemas operativos</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+            {cc.systems.map((s) => (
+              <div key={s.id} className="flex items-center gap-2 min-w-0" title={s.detail}>
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[s.status]} ${s.status !== "operative" ? "animate-pulse" : ""}`} />
+                <span className={`text-[13px] font-semibold truncate ${s.status !== "operative" ? (s.critical ? "text-tops-red" : "text-status-warning") : "text-fg-primary"}`}>{s.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AlertasCriticas({ alerts }: { alerts: CriticalAlert[] }) {
+  return (
+    <section className="nx-surface card overflow-hidden">
+      <div className="px-5 py-3 border-b border-stroke-soft flex items-center gap-2">
+        <Icon name="bell" size={15} className="text-tops-red" />
+        <span className="text-sm font-bold text-fg-primary">Centro de alertas críticas</span>
+        <span className="text-[11px] font-bold text-tops-red bg-tops-red/10 px-1.5 py-0.5 rounded ml-auto">
+          {alerts.length}
+        </span>
+      </div>
+      <ul className="divide-y divide-stroke-soft">
+        {alerts.map((a) => (
+          <li key={a.id} className="px-5 py-3 flex items-start gap-3">
+            <span
+              className={`w-8 h-8 rounded-md grid place-items-center flex-shrink-0 ${
+                a.severity === "critical" ? "bg-tops-red/10 text-tops-red" : "bg-status-warning/10 text-status-warning"
+              }`}
+            >
+              <Icon name="bell" size={14} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-bold text-fg-primary">{a.title}</div>
+              <div className="text-[11px] text-fg-secondary">{a.detail}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function MasterKpi({ master }: { master: { label: string; value: string | null; pendingReason?: string } }) {
+  return (
+    <div className="nx-surface card featured-stroke relative overflow-hidden p-5 md:p-6 flex items-center justify-between gap-4">
+      <div
+        className="absolute inset-0 pointer-events-none opacity-90"
+        style={{ background: "radial-gradient(ellipse at right, rgba(33,69,118,0.10), transparent 65%)" }}
+      />
+      <div className="relative">
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-fg-muted">Resultado operativo</div>
+        <div className="text-sm font-bold text-fg-secondary">{master.label}</div>
+      </div>
+      <div className="relative text-right">
+        {master.value !== null ? (
+          <div className="text-3xl md:text-4xl font-black text-fg-brand tabular">{master.value}</div>
+        ) : (
+          <>
+            <div className="text-xl font-black text-fg-muted">Dato no disponible</div>
+            {master.pendingReason && <div className="text-[10px] text-fg-muted mt-1">{master.pendingReason}</div>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ kpi, index }: { kpi: ExecKpi; index: number }) {
+  const pending = kpi.value === null;
+  const numeric = kpi.value && /^\d+$/.test(kpi.value);
   return (
     <div
-      style={{ animationDelay: `${index * 45}ms` }}
-      className={`nx-surface nx-stagger card kpi relative overflow-hidden ${kpi.featured ? "featured-stroke" : ""}`}
+      style={{ animationDelay: `${index * 40}ms` }}
+      className="nx-surface nx-stagger card kpi relative overflow-hidden"
       title={kpi.pendingReason ?? undefined}
     >
       <div className="kpi-label">{kpi.label}</div>
-      {isPending ? (
+      {pending ? (
         <>
-          <div className="kpi-value text-fg-muted text-xl">Dato no disponible</div>
-          {kpi.pendingReason && (
-            <div className="text-[10px] text-fg-muted mt-1.5 leading-tight">{kpi.pendingReason}</div>
-          )}
+          <div className="kpi-value text-fg-muted text-lg">Dato no disponible</div>
+          {kpi.pendingReason && <div className="text-[10px] text-fg-muted mt-1.5 leading-tight">{kpi.pendingReason}</div>}
         </>
       ) : (
         <>
-          <div className="kpi-value">
-            {kpi.value && /^\d+$/.test(kpi.value) ? (
-              <CountUp to={Number(kpi.value)} format="int" />
-            ) : (
-              kpi.value
-            )}
-          </div>
-          {kpi.delta && (
-            <div className={`kpi-delta ${kpi.delta.startsWith("-") ? "down" : "up"}`}>
-              <Icon name={kpi.delta.startsWith("-") ? "trend-down" : "trend-up"} size={12} />
-              {kpi.delta}
-              <span className="vs">vs. mes ant.</span>
-            </div>
-          )}
+          <div className="kpi-value">{numeric ? <CountUp to={Number(kpi.value)} format="int" /> : kpi.value}</div>
+          {kpi.sub && <div className="text-[10px] font-semibold text-fg-muted mt-1 uppercase tracking-wide">{kpi.sub}</div>}
         </>
       )}
     </div>
   );
 }
 
-function ActivityRow({ item }: { item: ActivityFeedItem }) {
-  const kindMeta: Record<ActivityFeedItem["kind"], { icon: IconName; color: string; bg: string }> = {
-    oc_signed: { icon: "check-circle", color: "text-status-success", bg: "bg-status-success/10" },
-    oc_created: { icon: "cart", color: "text-tops-blue-700", bg: "bg-tops-blue-700/10" },
-    os_signed: { icon: "pen", color: "text-status-success", bg: "bg-status-success/10" },
-    anmat_event: { icon: "shield", color: "text-tops-red", bg: "bg-tops-red/10" },
-    cctv_event: { icon: "eye", color: "text-status-warning", bg: "bg-status-warning/10" },
-    doc_uploaded: { icon: "file-pdf", color: "text-tops-blue-700", bg: "bg-tops-blue-700/10" },
-  };
-  const meta = kindMeta[item.kind];
-  return (
-    <li className="px-5 py-3 flex items-start gap-3">
-      <div className={`w-8 h-8 rounded-md grid place-items-center flex-shrink-0 ${meta.bg} ${meta.color}`}>
-        <Icon name={meta.icon} size={14} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-bold text-fg-primary truncate">{item.title}</div>
-        <div className="text-[11px] text-fg-secondary truncate">{item.detail}</div>
-        <div className="text-[10px] text-fg-muted mt-0.5">
-          {item.actor} · {item.ts}
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function ModuleCard({
-  href,
-  icon,
-  title,
-  sub,
-  tag,
-  index = 0,
-}: {
-  href: string;
-  icon: IconName;
-  title: string;
-  sub: string;
-  tag?: string;
-  index?: number;
-}) {
+function ModuleCard({ href, icon, title, sub, index = 0 }: { href: string; icon: IconName; title: string; sub: string; index?: number }) {
   return (
     <Link
       href={href}
-      style={{ animationDelay: `${index * 45}ms` }}
-      className="nx-interactive nx-stagger card p-4 relative overflow-hidden group"
+      style={{ animationDelay: `${index * 40}ms` }}
+      className="nx-interactive nx-stagger card p-4 relative overflow-hidden group flex flex-col"
     >
-      {tag && (
-        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider text-tops-red bg-tops-red/10 px-1.5 py-0.5 rounded">
-          {tag}
-        </span>
-      )}
       <div className="w-10 h-10 rounded-md bg-tops-blue-900 text-white grid place-items-center mb-2.5 group-hover:bg-tops-blue-700 transition-colors">
         <Icon name={icon} size={18} />
       </div>

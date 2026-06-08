@@ -22,9 +22,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCommittedSnapshot } from "./committed-capacity";
-import { findAvailability, type CapacityCategory } from "@/lib/wms/corporate-capacity";
-import type { CrmStage, CrmService, CommittedState } from "./crm-types";
+import type { CrmStage, CommittedState } from "./crm-types";
 
 // ── Resultado tipado ──────────────────────────────────────────────────────
 export interface OpportunitySnapshot {
@@ -37,12 +35,6 @@ export type ActionResult =
   | { ok: true; message: string; opportunity?: OpportunitySnapshot }
   | { ok: false; message: string };
 
-const SERVICE_TO_CATEGORY: Record<CrmService, CapacityCategory> = {
-  anmat: "anmat",
-  general: "general",
-  oficinas: "oficina",
-};
-
 const KNOWN_SITES = ["PEDRO_LUJAN_3159", "MAGALDI_1765"] as const;
 export type AssignedSite = (typeof KNOWN_SITES)[number];
 
@@ -53,6 +45,8 @@ function humanizeRpcError(message: string): string {
   if (m.includes("GANADO_REQUIRES_CAPACITY")) return "No se puede ganar sin capacidad reservada. Reservá un sitio primero.";
   if (m.includes("INSUFFICIENT_CAPACITY")) return "No hay capacidad suficiente en el sitio para los m² requeridos.";
   if (m.includes("CANNOT_RESERVE_LOST")) return "No se puede reservar capacidad para una oportunidad perdida.";
+  if (m.includes("UNIT_ALREADY_RESERVED")) return "Unidad ya reservada.";
+  if (m.includes("UNIT_NOT_FOUND")) return "La unidad no existe en el sitio seleccionado.";
   if (m.includes("INVALID_SITE")) return "Sitio no reconocido.";
   if (m.includes("INVALID_UNITS")) return "Debés indicar al menos una unidad a reservar.";
   if (m.includes("ONBOARDING_REQUIRES_GANADO")) return "El onboarding solo se completa en oportunidades ganadas.";
@@ -111,42 +105,23 @@ export async function reserveCapacity(opportunityId: string, input: ReserveInput
   if (!input.units || input.units.length === 0) return { ok: false, message: "Indicá al menos una unidad a reservar." };
 
   try {
-    // Leer service_type + m² para mapear categoría y dimensionar el pedido.
-    const { data: opp, error: readErr } = await supabase
-      .from("crm_opportunities")
-      .select("service_type, m2")
-      .eq("id", opportunityId)
-      .is("deleted_at", null)
-      .single();
-    if (readErr || !opp) return { ok: false, message: "Oportunidad inexistente o sin permisos." };
-
-    const category = SERVICE_TO_CATEGORY[opp.service_type as CrmService];
-    const requestedM2 = input.m2 ?? (opp.m2 != null ? Number(opp.m2) : null);
-
-    // Presupuesto físico desde el motor (base proyectada = más conservadora).
-    // Vive en TS (modelos del Digital Twin), no en Postgres → se calcula acá y se
-    // pasa a la RPC para el chequeo atómico final (evita TOCTOU). Ver 0047 §reserve.
-    let pAvailable: number | null = null;
-    if (category) {
-      const snapshot = await getCommittedSnapshot();
-      const avail = findAvailability(
-        { category, m2: requestedM2 ?? undefined, siteCode: input.site, basis: "proyectada" },
-        snapshot,
-      );
-      pAvailable = avail.options[0]?.availableM2 ?? 0;
-    }
-
-    const { data, error } = await supabase
-      .rpc("crm_reserve_capacity", {
-        p_opp: opportunityId,
-        p_site: input.site,
-        p_units: input.units,
-        p_available_m2: pAvailable,
-      })
-      .single();
+    // Reserva ATÓMICA a nivel unidad (fuente de verdad: crm_units). La RPC garantiza
+    // disponible→reservada una sola vez; segundo intento → UNIT_ALREADY_RESERVED.
+    const { error } = await supabase.rpc("crm_reserve_units", {
+      p_opp: opportunityId,
+      p_site: input.site,
+      p_unit_codes: input.units,
+    });
     if (error) return { ok: false, message: humanizeRpcError(error.message) };
+
+    // Snapshot post-reserva para refrescar la ficha (la revalidación hace el resto).
+    const { data: snap } = await supabase
+      .from("crm_opportunities")
+      .select("id, estado, committed_state, assigned_site")
+      .eq("id", opportunityId)
+      .maybeSingle();
     revalidateOpportunity(opportunityId);
-    return { ok: true, message: "Capacidad reservada.", opportunity: toSnapshot(data as OppRowRpc) };
+    return { ok: true, message: "Capacidad reservada.", opportunity: toSnapshot(snap as OppRowRpc | null) };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };
   }

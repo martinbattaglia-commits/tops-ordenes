@@ -35,7 +35,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
     return <ApiError error={e instanceof Error ? e.message : String(e)} />;
   }
 
-  const { pipelines, active, dealsByStage, openDeals, wonYtd, pipelineTotal, openCount, topDeals } =
+  const { pipelines, active, dealsByStage, openDeals, wonYtd, pipelineTotal, openCount, topDeals, pipelineCounts } =
     snapshot;
 
   return (
@@ -57,7 +57,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
             <span className="hidden sm:inline">Clientify conectado</span>
           </span>
           <a
-            href="https://app.clientify.com/deals/"
+            href="https://new.clientify.com/"
             target="_blank"
             rel="noopener"
             className="btn btn-primary btn-sm"
@@ -85,7 +85,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
                   active?.id === p.id ? "text-white/70" : "text-fg-muted"
                 }`}
               >
-                {p.stages.length}
+                {pipelineCounts[p.id] ?? 0}
               </span>
             </Link>
           ))}
@@ -126,7 +126,14 @@ export default async function PipelinePage({ searchParams }: PageProps) {
                     </div>
                     <div className="flex-1 divide-y divide-stroke-soft overflow-y-auto max-h-[480px]">
                       {deals.slice(0, 12).map((d) => (
-                        <div key={d.id} className="px-3 py-2 hover:bg-neutral-50 transition-colors">
+                        <a
+                          key={d.id}
+                          href={d.href}
+                          target="_blank"
+                          rel="noopener"
+                          title="Abrir oportunidad en Clientify"
+                          className="block px-3 py-2 hover:bg-neutral-50 transition-colors cursor-pointer"
+                        >
                           <div className="text-[12px] font-bold text-fg-primary truncate">
                             {truncate(d.title, 32)}
                           </div>
@@ -141,7 +148,7 @@ export default async function PipelinePage({ searchParams }: PageProps) {
                               {d.probabilityLabel}
                             </span>
                           </div>
-                        </div>
+                        </a>
                       ))}
                       {deals.length > 12 && (
                         <div className="px-3 py-1.5 text-[10px] text-fg-muted text-center">
@@ -188,10 +195,11 @@ export default async function PipelinePage({ searchParams }: PageProps) {
                     <tr key={d.id}>
                       <td className="text-sm font-bold text-fg-primary truncate max-w-[260px]">
                         <a
-                          href={`https://app.clientify.com/deals/?deal=${d.id}`}
+                          href={d.href}
                           target="_blank"
                           rel="noopener"
-                          className="hover:text-fg-link"
+                          title="Abrir oportunidad en Clientify"
+                          className="hover:text-fg-link hover:underline cursor-pointer"
                         >
                           {d.title}
                         </a>
@@ -259,12 +267,12 @@ function NotConfigured() {
         <p className="text-xs text-fg-muted">
           La key se obtiene en{" "}
           <a
-            href="https://app.clientify.com/me/settings/api/"
+            href="https://new.clientify.com/settings/api"
             target="_blank"
             rel="noopener"
             className="text-fg-link font-semibold"
           >
-            app.clientify.com → Settings → API
+            new.clientify.com → Settings → API
           </a>
           .
         </p>

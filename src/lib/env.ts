@@ -52,6 +52,15 @@ export const env = {
     /** Para mensajes de error: la DB falta */
     needsSupabase: !supabaseUrl || !supabaseAnonKey,
   },
+  rbac: {
+    /**
+     * H1 — fail-open de bootstrap: cuando `user_roles` está GLOBALMENTE vacía,
+     * checkPermission permite (RBAC dormido) para no bloquear antes de seedear.
+     * Con `RBAC_ENFORCE=1` ese caso pasa a **fail-closed** (403). Activar SOLO
+     * después de seedear `user_roles` en producción (si no, lockout total).
+     */
+    enforce: process.env.RBAC_ENFORCE === "1",
+  },
   email: {
     resendKey: process.env.RESEND_API_KEY,
     from: process.env.RESEND_FROM_EMAIL ?? "TOPS Órdenes <ordenes@logisticatops.com>",

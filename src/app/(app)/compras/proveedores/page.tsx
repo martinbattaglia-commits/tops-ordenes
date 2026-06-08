@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Icon } from "@/components/Icon";
 import { listVendors } from "@/lib/compras/data";
 import { fmtCurrency, fmtCuit, fmtDate, truncate } from "@/lib/compras/format";
+import { NuevoProveedorButton } from "@/components/compras/NuevoProveedorButton";
 
 export const metadata = { title: "Compras · Proveedores" };
 export const dynamic = "force-dynamic";
@@ -21,10 +21,7 @@ export default async function VendorsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/compras/nueva" className="btn btn-danger btn-sm">
-            <Icon name="plus" size={14} stroke={2.2} />
-            <span>Nueva OC</span>
-          </Link>
+          <NuevoProveedorButton />
         </div>
       </div>
 
@@ -51,7 +48,7 @@ export default async function VendorsPage() {
                         {v.avatar ?? v.razon.charAt(0)}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-bold text-fg-primary text-sm truncate">{v.razon}</div>
+                        <Link href={`/compras/proveedores/${v.id}`} className="font-bold text-fg-link hover:underline cursor-pointer text-sm truncate block" title="Abrir ficha del proveedor">{v.razon}</Link>
                         <div className="text-[11px] text-fg-muted font-mono">{fmtCuit(v.cuit)}</div>
                       </div>
                     </div>
@@ -81,7 +78,7 @@ export default async function VendorsPage() {
                 {v.avatar ?? v.razon.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-bold text-fg-primary truncate">{truncate(v.razon, 30)}</div>
+                <Link href={`/compras/proveedores/${v.id}`} className="font-bold text-fg-link hover:underline cursor-pointer truncate block">{truncate(v.razon, 30)}</Link>
                 <div className="text-[11px] text-fg-muted font-mono mb-1">{fmtCuit(v.cuit)}</div>
                 <div className="text-xs text-fg-secondary">{v.contacto}</div>
                 <div className="flex justify-between mt-2 text-xs">

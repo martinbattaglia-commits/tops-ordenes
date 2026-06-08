@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { listSolicitudes, getSolicitudEventos, hasPerm } from "@/lib/rrhh/data";
 import { enviarSolicitud, aprobarL1, aprobarL2, rechazarSolicitud, cancelarSolicitud, anularSolicitud } from "@/lib/rrhh/actions";
 
@@ -7,6 +9,7 @@ export const metadata = { title: "Solicitud · RRHH" };
 export const dynamic = "force-dynamic";
 
 export default async function SolicitudDetailPage({ params }: { params: { id: string } }) {
+  if (!(await canAccess("rrhh.view"))) return <AccesoRestringido modulo="RRHH · Solicitud" />;
   try {
     const all = await listSolicitudes();
     const s = all.find((x) => x.id === params.id) ?? null;

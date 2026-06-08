@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { getMiLegajo } from "@/lib/rrhh/data";
 
 export const metadata = { title: "Mi espacio · RRHH" };
 export const dynamic = "force-dynamic";
 
 export default async function MiEspacioPage() {
+  if (!(await canAccess("mi_espacio.view"))) return <AccesoRestringido modulo="Mi Espacio" />;
   try {
     const legajo = await getMiLegajo();
     return (

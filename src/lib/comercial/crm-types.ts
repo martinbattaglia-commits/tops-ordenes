@@ -76,6 +76,10 @@ export interface Opportunity {
   monto: number | null;
   currency: string;
   ownerName: string;
+  companyName: string | null;   // espejo Clientify (display)
+  dealName: string | null;      // nombre real del deal/oportunidad en Clientify (display). null si no persistido aún.
+  pipeline: string | null;      // pipeline Clientify (origen/segmento, display)
+  lastActivityAt: string | null; // clientify_modified ?? createdAt (display)
   expectedClose: string | null; // ISO date
   clientifyDealId: string | null;
   // Integración capacidad (F2.1-4)
@@ -173,6 +177,40 @@ export interface OpportunityFull {
 }
 
 // ── Metadatos de presentación ───────────────────────────────────────────────
+
+// ── Unidades reservables (crm_units · fuente única de verdad · E3) ───────────
+export type CrmUnitState = "disponible" | "reservada" | "ocupada" | "bloqueada" | "no_comercializable";
+export interface CrmUnit {
+  id: string;
+  site: string;
+  unitCode: string;
+  name: string | null;
+  tipo: string | null;
+  category: CrmService | null;
+  floor: string | null;
+  m2: number | null;
+  state: CrmUnitState;
+  opportunityId: string | null;
+  ocupadoPor: string | null;
+}
+export interface UnitCounts {
+  disponible: number; reservada: number; ocupada: number; bloqueada: number; no_comercializable: number;
+}
+export const UNIT_STATE_LABEL: Record<CrmUnitState, string> = {
+  disponible: "Disponible",
+  reservada: "Reservada",
+  ocupada: "Ocupada",
+  bloqueada: "Bloqueada",
+  no_comercializable: "No comercializable",
+};
+export const UNIT_STATE_COLOR: Record<CrmUnitState, string> = {
+  disponible: "#16a34a",
+  reservada: "#d97706",
+  ocupada: "#dc2626",
+  bloqueada: "#64748b",
+  no_comercializable: "#475569",
+};
+export const UNIT_STATE_ORDER: CrmUnitState[] = ["disponible", "reservada", "ocupada", "bloqueada", "no_comercializable"];
 
 export const STAGE_ORDER: CrmStage[] = [
   "nuevo_lead", "contactado", "calificado", "visita",

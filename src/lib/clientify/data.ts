@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { isVisibleCommercialPipeline } from "@/lib/comercial/pipeline-filter";
 import { listContacts, listDeals, listPipelines } from "./client";
 import {
   mapContact,
@@ -11,18 +12,11 @@ import {
 
 /**
  * Pipelines visibles en TOPS NEXUS. El tenant tiene 4 pipelines en Clientify
- * pero solo nos interesan estos 3 para operaciones internas.
- * Match case-insensitive contra el nombre del pipeline.
+ * pero solo nos interesan estos 3 para operaciones internas (ANMAT / Cargas
+ * Generales / Oficinas). Criterio compartido con CRM360 (fuente única).
  */
-const VISIBLE_PIPELINE_NAMES = new Set([
-  "anmat",
-  "alquiler de oficinas",
-  "carga generales",
-  "cargas generales", // tolerante a typo
-]);
-
 function isVisiblePipeline(p: UiPipeline): boolean {
-  return VISIBLE_PIPELINE_NAMES.has(p.name.trim().toLowerCase());
+  return isVisibleCommercialPipeline(p.name);
 }
 
 /**
@@ -49,6 +43,9 @@ export interface PipelineSnapshot {
   openCount: number;
   /** Top deals por amount. */
   topDeals: UiDeal[];
+  /** CRM-COUNTERS: oportunidades visibles (activas con etapa) por pipeline_id —
+   *  para el badge de cada pestaña. Refleja exactamente la suma de las columnas. */
+  pipelineCounts: Record<number, number>;
 }
 
 export interface ContactsPage {
@@ -78,6 +75,7 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
       pipelineTotal: 0,
       openCount: 0,
       topDeals: [],
+      pipelineCounts: {},
     };
   }
 
@@ -104,6 +102,7 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
       pipelineTotal: 0,
       openCount: 0,
       topDeals: [],
+      pipelineCounts: {},
     };
   }
 
@@ -143,6 +142,27 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
   // Top oportunidades abiertas = solo activos (excluye Won/Lost).
   const topDeals = [...activeDeals].sort((a, b) => b.amount - a.amount).slice(0, 6);
 
+  // CRM-COUNTERS: badge por pestaña = oportunidades VISIBLES (activas con etapa),
+  // exactamente la suma de las columnas del kanban. Reemplaza el conteo previo de
+  // ETAPAS (p.stages.length). Para el pipeline activo se reutiliza el fetch ya hecho;
+  // para los demás visibles se hace un count liviano por pipeline_id.
+  const visibleCount = (ds: UiDeal[]) => ds.filter((d) => isActive(d) && d.stageId != null).length;
+  const pipelineCounts: Record<number, number> = {};
+  await Promise.all(
+    pipelines.map(async (p) => {
+      if (p.id === active.id) {
+        pipelineCounts[p.id] = visibleCount(deals);
+        return;
+      }
+      try {
+        const r = await listDeals({ pipeline_id: p.id, page_size: 200, ordering: "-modified" });
+        pipelineCounts[p.id] = visibleCount(r.results.map(mapDeal));
+      } catch {
+        pipelineCounts[p.id] = 0;
+      }
+    })
+  );
+
   return {
     pipelines,
     active,
@@ -152,6 +172,7 @@ export async function getPipelineSnapshot(pipelineId?: number): Promise<Pipeline
     pipelineTotal,
     openCount: deals.length,
     topDeals,
+    pipelineCounts,
   };
 }
 

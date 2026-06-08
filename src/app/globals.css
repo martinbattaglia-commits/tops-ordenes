@@ -309,8 +309,18 @@
   .tbl tbody tr:hover {
     @apply bg-neutral-50;
   }
+  /* IDs OC/OS: token de enlace corporativo (--fg-link) que SÍ invierte en dark
+     (light #214576 ≈9.6:1 AAA · dark #6da3e6 ≈6.9:1 AA). Reemplaza al constante
+     --tops-blue-900 (#050555) que en dark quedaba casi invisible (~1.1:1).
+     Cubre tabla desktop (.tbl) y cards mobile (.order-num suelto). Interactivo. */
+  .order-num,
   .tbl .order-num {
-    @apply font-mono font-bold text-tops-blue-900;
+    @apply font-mono font-bold text-fg-link transition-colors;
+    cursor: pointer;
+  }
+  .order-num:hover,
+  .tbl .order-num:hover {
+    @apply underline;
   }
   .tbl .cell-cliente {
     @apply flex flex-col;

@@ -14,6 +14,8 @@ interface NavItem {
   count?: number;
   accent?: boolean;
   badge?: string;
+  /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
+  exec?: boolean;
 }
 
 interface Domain {
@@ -31,13 +33,16 @@ const DOMAINS: Domain[] = [
     id: "cockpit",
     label: "Cockpit",
     items: [
-      { href: "/ejecutivo", label: "Cockpit ejecutivo", icon: "dashboard" },
+      // Cockpit único. Los ítems ejecutivos/financieros (`exec:true`) se ocultan a
+      // los roles sin permiso ejecutivo (Comercial, Finanzas, encargados de depósito),
+      // que ven sólo los accesos operativos (Vacancia, Google, CCTV, Tracking, Organigrama).
+      { href: "/ejecutivo", label: "Cockpit ejecutivo", icon: "dashboard", exec: true },
       { href: "/comercial/dashboard-vacancia", label: "Vacancia Corporativa", icon: "trend-up", badge: "Premium" },
       { href: "/workspace", label: "Accesos Google", icon: "google" },
       { href: "/cctv", label: "Centro de monitoreo", icon: "eye", badge: "Hikvision" },
       { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
       { href: "/organigrama", label: "Organigrama", icon: "building" },
-      { href: "/analytics", label: "Analytics Ejecutivo", icon: "report" },
+      { href: "/analytics", label: "Analytics Ejecutivo", icon: "report", exec: true },
     ],
   },
   {
@@ -100,9 +105,9 @@ const DOMAINS: Domain[] = [
   },
   {
     id: "compliance",
-    label: "Compliance · ANMAT",
+    label: "Compliance",
     items: [
-      { href: "/anmat", label: "ANMAT cockpit", icon: "shield" },
+      { href: "/anmat", label: "Compliance Cockpit", icon: "shield" },
       { href: "/drive", label: "Drive TOPS", icon: "drive" },
     ],
   },
@@ -156,10 +161,12 @@ const DOMAINS: Domain[] = [
 
 interface Props {
   user: { name: string; role: string; avatar: string };
+  /** ¿Mostrar ítems ejecutivos/financieros del Cockpit? (default: sí, para no sobre-ocultar). */
+  canViewExecutive?: boolean;
   onNavigate?: () => void;
 }
 
-export default function Sidebar({ user, onNavigate }: Props) {
+export default function Sidebar({ user, canViewExecutive = true, onNavigate }: Props) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -243,14 +250,16 @@ export default function Sidebar({ user, onNavigate }: Props) {
       <div className="flex flex-col gap-3">
         {DOMAINS.map((domain) => (
           <Section key={domain.id} label={domain.label}>
-            {domain.items.map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                active={isActive(item.href)}
-                onNavigate={onNavigate}
-              />
-            ))}
+            {domain.items
+              .filter((item) => canViewExecutive || !item.exec)
+              .map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  active={isActive(item.href)}
+                  onNavigate={onNavigate}
+                />
+              ))}
           </Section>
         ))}
       </div>

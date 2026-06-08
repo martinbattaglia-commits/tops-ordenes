@@ -1,18 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import {
   MAGALDI_1765,
   getMagaldiCommercialSummary,
   CATEGORY_META,
-  STATUS_META,
   FLOOR_LABEL,
   type MagaldiSpace,
   type SpaceCategory,
   type CommercialStatus,
   type FloorCode,
 } from "@/lib/wms/magaldi1765-map";
+import {
+  UNIT_STATE_LABEL, UNIT_STATE_COLOR, UNIT_STATE_ORDER, type CrmUnitState,
+} from "@/lib/comercial/crm-types";
+
+/** Estado efectivo de una unidad: crm_units (verdad) con fallback al modelo estático. */
+function legacyMagaldi(status: CommercialStatus): CrmUnitState {
+  switch (status) {
+    case "disponible": return "disponible";
+    case "ocupado": return "ocupada";
+    case "interno": return "bloqueada";
+    default: return "no_comercializable"; // 'na'
+  }
+}
 
 type ViewKey = "comercial" | "infraestructura" | "anmat" | "general" | "coworking" | "corporativa" | "vacancia";
 const VIEWS: Array<{ key: ViewKey; label: string; icon: IconName }> = [
@@ -40,7 +54,7 @@ const FILTERS: Array<{ key: FilterKey; label: string }> = [
 const FLOORS: FloorCode[] = ["PA", "PB"];
 const fmt = (n: number) => n.toLocaleString("es-AR");
 
-export function MagaldiMapView() {
+export function MagaldiMapView({ unitStates }: { unitStates?: Record<string, CrmUnitState> }) {
   const [view, setView] = useState<ViewKey>("comercial");
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [query, setQuery] = useState("");
@@ -51,6 +65,9 @@ export function MagaldiMapView() {
   const cwp = MAGALDI_1765.coworkingPremium;
   const q = query.trim().toLowerCase();
 
+  // Estado efectivo: crm_units (fuente única) con fallback al modelo estático.
+  const stateOf = (s: MagaldiSpace): CrmUnitState => unitStates?.[s.id] ?? legacyMagaldi(s.status);
+
   const inView = (s: MagaldiSpace): boolean => {
     switch (view) {
       case "anmat":
@@ -58,11 +75,11 @@ export function MagaldiMapView() {
       case "general":
         return s.category === "general";
       case "coworking":
-        return s.category === "coworking" || (s.category === "oficina" && s.status === "disponible");
+        return s.category === "coworking" || (s.category === "oficina" && stateOf(s) === "disponible");
       case "corporativa":
-        return s.status === "interno" || s.category === "publica";
+        return stateOf(s) === "bloqueada" || s.category === "publica";
       case "vacancia":
-        return s.status === "disponible";
+        return stateOf(s) === "disponible";
       default:
         return true; // comercial, infraestructura
     }
@@ -71,9 +88,9 @@ export function MagaldiMapView() {
   const passesFilter = (s: MagaldiSpace): boolean => {
     switch (filter) {
       case "disponible":
-        return s.status === "disponible";
+        return stateOf(s) === "disponible";
       case "ocupado":
-        return s.status === "ocupado";
+        return stateOf(s) === "ocupada";
       case "anmat":
         return s.category === "anmat";
       case "general":
@@ -83,7 +100,7 @@ export function MagaldiMapView() {
       case "con-racks":
         return s.rackPositions != null;
       case "no-vendible":
-        return s.status === "na" || s.status === "interno";
+        return stateOf(s) === "bloqueada" || stateOf(s) === "no_comercializable";
       default:
         return true;
     }
@@ -97,7 +114,7 @@ export function MagaldiMapView() {
 
   const legendItems =
     view === "comercial" || view === "vacancia"
-      ? (Object.keys(STATUS_META) as CommercialStatus[]).map((k) => ({ label: STATUS_META[k].label, color: STATUS_META[k].color }))
+      ? UNIT_STATE_ORDER.map((k) => ({ label: UNIT_STATE_LABEL[k], color: UNIT_STATE_COLOR[k] }))
       : (Object.keys(CATEGORY_META) as SpaceCategory[]).map((k) => ({ label: CATEGORY_META[k].label, color: CATEGORY_META[k].color }));
 
   return (
@@ -212,7 +229,7 @@ export function MagaldiMapView() {
               </div>
               <div className="p-4 grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2.5">
                 {spaces.map((s) => (
-                  <SpaceCard key={s.id} space={s} view={view} onClick={() => setSel(s)} />
+                  <SpaceCard key={s.id} space={s} view={view} state={stateOf(s)} onClick={() => setSel(s)} />
                 ))}
               </div>
             </section>
@@ -226,7 +243,7 @@ export function MagaldiMapView() {
         y ~{fmt(totals.cubiertaNoDesglosadaM2Approx)} m² de cubierta no desglosada (oficinas internas/públicas/servicios) — ver inconsistencias M-3/M-4.
       </p>
 
-      {sel && <SidePanel space={sel} onClose={() => setSel(null)} />}
+      {sel && <SidePanel space={sel} state={stateOf(sel)} onClose={() => setSel(null)} />}
     </div>
   );
 }
@@ -249,17 +266,25 @@ function Kpi({ label, value, icon, tone }: { label: string; value: string; icon:
   );
 }
 
-function SpaceCard({ space, view, onClick }: { space: MagaldiSpace; view: ViewKey; onClick: () => void }) {
+function SpaceCard({ space, view, state, onClick }: { space: MagaldiSpace; view: ViewKey; state: CrmUnitState; onClick: () => void }) {
   const cat = CATEGORY_META[space.category];
-  const st = STATUS_META[space.status];
-  // Color principal según vista: comercial/vacancia → estado; resto → categoría
+  const st = { color: UNIT_STATE_COLOR[state], label: UNIT_STATE_LABEL[state] };
+  // Color principal según vista: comercial/vacancia → estado (crm_units); resto → categoría
   const useStatus = view === "comercial" || view === "vacancia";
   const main = useStatus ? st.color : cat.color;
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-lg p-2.5 border-2 transition-all hover:shadow-md focus:outline-none"
-      style={{ borderColor: useStatus ? st.color : cat.color, background: `${main}0d` }}
+      className="text-left rounded-lg p-2.5 border-2 nx-interactive cursor-pointer focus-visible:outline-none focus-visible:ring-2"
+      style={{
+        borderColor: useStatus ? st.color : cat.color,
+        background: `${main}0d`,
+        // Glow semántico por estado/categoría reutilizando el token nx-interactive del Cockpit.
+        "--nx-accent": `${main}55`,
+        "--nx-glow": `${main}66`,
+        "--nx-border": main,
+        "--tw-ring-color": main,
+      } as CSSProperties}
       title={`${space.name} · ${cat.label} · ${st.label}${space.m2 != null ? ` · ${space.m2} m²` : ""}`}
     >
       <div className="flex items-center justify-between">
@@ -354,10 +379,14 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SidePanel({ space, onClose }: { space: MagaldiSpace; onClose: () => void }) {
+function SidePanel({ space, state, onClose }: { space: MagaldiSpace; state: CrmUnitState; onClose: () => void }) {
   const cat = CATEGORY_META[space.category];
-  const st = STATUS_META[space.status];
-  return (
+  const st = { color: UNIT_STATE_COLOR[state], label: UNIT_STATE_LABEL[state] };
+  // Portal a document.body: el drawer `fixed` debe anclarse al VIEWPORT, no al
+  // contenedor con transform (.nx-page-fade / main.scroll-area), que crea un
+  // containing block y arrastra el drawer con el scroll.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <>
       <div className="fixed inset-0 bg-black/30 z-40 no-print" onClick={onClose} aria-hidden />
       <aside className="fixed right-0 top-0 h-full w-full max-w-sm bg-bg-surface z-50 shadow-2xl border-l border-stroke-soft overflow-y-auto no-print">
@@ -381,13 +410,29 @@ function SidePanel({ space, onClose }: { space: MagaldiSpace; onClose: () => voi
           <Row label="Piso" value={FLOOR_LABEL[space.floor]} />
           <Row label="Código" value={space.id} />
           {space.rackPositions != null && <Row label="Racks selectivos" value={`${space.rackPositions} posiciones`} />}
+
+          {/* P2 · Reserva directa desde el mapa */}
+          {state === "disponible" ? (
+            <Link
+              href={`/comercial/oportunidades?resSite=MAGALDI_1765&resUnit=${encodeURIComponent(space.id)}&resCat=${space.category}${space.m2 != null ? `&resM2=${space.m2}` : ""}`}
+              className="nx-interactive mt-4 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-bold text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700"
+              style={{ background: "#16a34a" } as CSSProperties}
+            >
+              <Icon name="plus" size={14} stroke={2.2} /> Reservar unidad
+            </Link>
+          ) : (
+            <div className="mt-4 rounded-lg px-3 py-2.5 text-sm font-semibold text-center" style={{ background: `${st.color}1a`, color: st.color } as CSSProperties}>
+              {st.label} · sin acción
+            </div>
+          )}
           {space.note && (
             <p className="text-xs text-fg-secondary bg-bg-surface-alt rounded-lg p-2.5 mt-3 leading-relaxed">{space.note}</p>
           )}
           <div className="text-[10px] text-fg-muted mt-3">Fuente: {MAGALDI_1765.meta.sources.join(" · ")}</div>
         </div>
       </aside>
-    </>
+    </>,
+    document.body
   );
 }
 

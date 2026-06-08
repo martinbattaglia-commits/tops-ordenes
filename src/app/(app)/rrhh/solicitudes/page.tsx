@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { listSolicitudes } from "@/lib/rrhh/data";
 
 export const metadata = { title: "Solicitudes · RRHH" };
@@ -16,6 +18,7 @@ const ESTADO_BADGE: Record<string, string> = {
 };
 
 export default async function SolicitudesPage() {
+  if (!(await canAccess("rrhh.view"))) return <AccesoRestringido modulo="RRHH · Solicitudes" />;
   try {
     const solicitudes = await listSolicitudes();
     return (
@@ -29,7 +32,7 @@ export default async function SolicitudesPage() {
         </div>
         <div className="card p-5">
           {solicitudes.length === 0 ? (
-            <p className="text-fg-muted text-sm">No hay solicitudes visibles para tu rol.</p>
+            <p className="text-fg-muted text-sm">No hay solicitudes cargadas.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>

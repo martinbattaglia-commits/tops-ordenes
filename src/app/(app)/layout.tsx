@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Shell from "@/components/shell/Shell";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import { canViewExecutiveFinancialBlocks } from "@/lib/rbac/cockpit-visibility";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // Datos de usuario para mostrar en el sidebar / topbar
@@ -48,5 +49,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     }
   }
 
-  return <Shell user={userMeta}>{children}</Shell>;
+  // Visibilidad condicional del Cockpit (único): los ítems ejecutivos/financieros
+  // del menú (Cockpit ejecutivo, Analytics Ejecutivo) se ocultan a quien no tenga
+  // permiso ejecutivo. Resuelto server-side.
+  const canViewExecutive = await canViewExecutiveFinancialBlocks();
+
+  return (
+    <Shell user={userMeta} canViewExecutive={canViewExecutive}>
+      {children}
+    </Shell>
+  );
 }

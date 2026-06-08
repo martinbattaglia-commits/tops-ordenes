@@ -176,8 +176,23 @@ export async function checkPermission(
   }
 
   // Caso fallback: tabla user_roles GLOBALMENTE vacía → RBAC dormido (FASE 1).
-  // Log warn explícito + permitir (deuda explícita hasta seedear).
   if (totalAssignments === 0) {
+    // H1 — con RBAC_ENFORCE=1 (post-seed en prod) → fail-CLOSED en vez de open.
+    if (env.rbac.enforce) {
+      console.warn(
+        JSON.stringify({
+          ts: new Date().toISOString(),
+          level: "warn",
+          mod: "rbac",
+          op: "check-permission.enforced-empty-deny",
+          permission,
+          userId: user.id,
+          reason: "user_roles vacía y RBAC_ENFORCE=1 → fail-closed",
+        })
+      );
+      return { ok: false, status: 403, error: `Permiso requerido: ${permission}` };
+    }
+    // Default (sin enforce): fail-open de bootstrap + log WARN (deuda hasta seedear).
     console.warn(
       JSON.stringify({
         ts: new Date().toISOString(),

@@ -83,10 +83,6 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         </div>
         <ThemeToggle />
         <NotificationsBell />
-        <Link href="/compras/nueva" className="btn btn-danger btn-sm">
-          <Icon name="plus" size={14} stroke={2.2} />
-          <span className="hidden sm:inline">Nueva OC</span>
-        </Link>
       </div>
     </header>
   );

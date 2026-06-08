@@ -42,10 +42,10 @@ export default async function DashboardPage() {
       </div>
 
       <div className="kpi-grid">
-        <Kpi index={0} label="Órdenes del mes" countTo={kpis.ordersThisMonth} countFormat="int" delta={kpis.ordersDelta} spark={[12,14,11,16,15,17,20,18,22,24,28,32]} />
+        <Kpi index={0} label="Órdenes del mes" countTo={kpis.ordersThisMonth} countFormat="int" delta={kpis.ordersDelta} spark={[12,14,11,16,15,17,20,18,22,24,28,32]} href="/orders" />
         <Kpi index={1} label="Horas operativas" countTo={kpis.hours} countFormat="int" unit="hs" delta={kpis.hoursDelta} spark={[20,22,21,28,26,29,32,28,34,38,40,44]} />
-        <Kpi index={2} label="Facturación proyectada" countTo={kpis.revenueProjection} countFormat="currency" delta={kpis.revenueDelta} spark={[10,12,14,16,18,21,24,28,30,34,38,42]} accent />
-        <Kpi index={3} label="Firma digital" value={kpis.signatureRate.toFixed(1).replace(".", ",")} unit="%" delta={kpis.signatureDelta} spark={[88,89,90,91,92,93,94,95,96,96,97,97]} />
+        <Kpi index={2} label="Facturación proyectada" countTo={kpis.revenueProjection} countFormat="currency" delta={kpis.revenueDelta} spark={[10,12,14,16,18,21,24,28,30,34,38,42]} accent href="/orders" />
+        <Kpi index={3} label="Firma digital" value={kpis.signatureRate.toFixed(1).replace(".", ",")} unit="%" delta={kpis.signatureDelta} spark={[88,89,90,91,92,93,94,95,96,96,97,97]} href="/orders?status=FIRMADA" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-4 mt-4 nx-stagger" style={{ animationDelay: "160ms" }}>
@@ -166,6 +166,7 @@ function Kpi({
   spark,
   accent,
   index = 0,
+  href,
 }: {
   label: string;
   value?: string;
@@ -176,11 +177,12 @@ function Kpi({
   spark?: number[];
   accent?: boolean;
   index?: number;
+  href?: string;
 }) {
   const up = delta?.startsWith("+");
-  return (
+  const card = (
     <div
-      className={`card kpi nx-surface nx-stagger ${accent ? "featured-stroke" : ""}`}
+      className={`card kpi nx-surface nx-stagger ${accent ? "featured-stroke" : ""} h-full`}
       style={{ animationDelay: `${index * 40}ms` }}
     >
       <div className="kpi-label">{label}</div>
@@ -197,6 +199,13 @@ function Kpi({
       )}
       {spark && spark.length > 0 && <Sparkline data={spark} color={accent ? "#C90812" : "#214576"} />}
     </div>
+  );
+  if (!href) return card;
+  return (
+    <Link href={href} title={`Ver detalle · ${label}`}
+      className="nx-interactive block rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700">
+      {card}
+    </Link>
   );
 }
 

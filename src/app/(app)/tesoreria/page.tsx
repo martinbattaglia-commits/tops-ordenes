@@ -42,8 +42,12 @@ export default async function TesoreriaOverviewPage() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Kpi label="Saldo en bancos" value={saldoBancos} />
-          <Kpi label="Cobranzas pendientes" value={cobrPend} />
-          <Kpi label="Pagos pendientes" value={pagoPend} />
+          <Link href="/tesoreria/cobranzas" className="nx-interactive block rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700" title="Ver detalle de cobranzas pendientes">
+            <Kpi label="Cobranzas pendientes" value={cobrPend} />
+          </Link>
+          <Link href="/tesoreria/pagos" className="nx-interactive block rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700" title="Ver detalle de pagos pendientes">
+            <Kpi label="Pagos pendientes" value={pagoPend} />
+          </Link>
           <Kpi label="Flujo proyectado" value={flujoProy} />
         </div>
 

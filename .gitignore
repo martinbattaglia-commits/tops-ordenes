@@ -15,6 +15,7 @@ dist
 # next.js — backups/artefactos temporales de build (no commitear)
 .next_old_*/
 .next_corrupt_backup/
+.next.trash-*/
 
 # playwright MCP — artefactos temporales
 .playwright-mcp/
@@ -31,6 +32,8 @@ yarn-error.log*
 # local env files
 .env
 .env*.local
+.env.local.*
+.env*.bak
 .env.production
 .env*.save
 *.save

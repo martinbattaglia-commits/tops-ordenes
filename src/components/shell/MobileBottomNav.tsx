@@ -15,9 +15,10 @@ interface Item {
 const ITEMS_COCKPIT: Item[] = [
   { href: "/ejecutivo", label: "Cockpit", icon: "dashboard" },
   { href: "/cctv", label: "CCTV", icon: "eye" },
-  { href: "/compras/nueva", label: "Nueva OC", icon: "plus", fab: true },
-  { href: "/anmat", label: "ANMAT", icon: "shield" },
-  { href: "/drive", label: "Drive", icon: "drive" },
+  { href: "/compras/nueva", label: "Nueva OC", icon: "cart", fab: true },
+  { href: "/orders/new", label: "Nueva OS", icon: "orders", fab: true },
+  { href: "/anmat", label: "Compliance", icon: "shield" },
+  { href: "/operaciones/tracking", label: "Tracking", icon: "truck" },
 ];
 
 const ITEMS_OS: Item[] = [
@@ -66,7 +67,7 @@ export default function MobileBottomNav() {
             href={it.href}
             className={cn(
               "flex flex-col items-center justify-center flex-1 py-2 text-[10px] font-bold uppercase tracking-wide",
-              active ? "text-tops-blue-900" : "text-fg-muted",
+              active ? "text-fg-primary" : "text-fg-muted",
               it.fab && "relative -mt-4"
             )}
           >

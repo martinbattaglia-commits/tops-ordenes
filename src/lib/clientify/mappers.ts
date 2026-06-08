@@ -14,6 +14,8 @@ export interface UiContact {
   status: string;
   ownerName: string | null;
   companyUrl: string | null;
+  companyName: string | null; // razón social de la empresa vinculada
+  companyHref: string | null; // deeplink a la ficha de empresa en Clientify
   taxId: string | null;
   tags: string[];
   channel: string;
@@ -45,6 +47,7 @@ export interface UiDeal {
   modifiedAt: string;
   tags: string[];
   source: string | null;
+  href: string; // deeplink a la ficha de oportunidad en Clientify
 }
 
 export interface UiStage {
@@ -80,6 +83,7 @@ function extractIdFromUrl(url: string | null | undefined): number | null {
 
 export function mapContact(c: ClientifyContact): UiContact {
   const name = [c.first_name, c.last_name].filter(Boolean).join(" ").trim() || "—";
+  const companyId = extractIdFromUrl(c.company);
   return {
     id: c.id,
     name,
@@ -88,11 +92,15 @@ export function mapContact(c: ClientifyContact): UiContact {
     status: c.status,
     ownerName: c.owner_name,
     companyUrl: c.company,
+    companyName: c.company_name?.trim() || null,
+    companyHref: companyId
+      ? `https://new.clientify.com/contacts/companies/details/${companyId}`
+      : null,
     taxId: c.taxpayer_identification_number || null,
     tags: c.tags ?? [],
     channel: c.channel,
     pictureUrl: c.picture_url,
-    href: `https://app.clientify.com/contacts/contact_detail.html?id=${c.id}`,
+    href: `https://new.clientify.com/contacts/details/${c.id}`,
   };
 }
 
@@ -122,6 +130,7 @@ export function mapDeal(d: ClientifyDeal): UiDeal {
     modifiedAt: d.modified,
     tags: d.tags ?? [],
     source: d.deal_source,
+    href: `https://new.clientify.com/sales/deals/details/${d.id}`,
   };
 }
 

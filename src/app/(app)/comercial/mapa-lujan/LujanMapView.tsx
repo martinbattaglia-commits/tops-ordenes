@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import {
   LUJAN_3159,
@@ -12,14 +14,19 @@ import {
   type HabilitationCategory,
   type FloorCode,
 } from "@/lib/wms/lujan3159-map";
+import {
+  UNIT_STATE_LABEL, UNIT_STATE_COLOR, UNIT_STATE_ORDER, type CrmUnitState,
+} from "@/lib/comercial/crm-types";
 
-// ── Metadatos de color (comercial / categoría) ──────────────────────────────
+// ── Estado efectivo: crm_units (verdad) con fallback al modelo estático ──────
+function legacyLujanSector(status: CommercialStatus): CrmUnitState {
+  return status === "ocupado" ? "ocupada" : "disponible"; // 'parcial' → disponible (tiene capacidad)
+}
+function legacyLujanCubicle(status: "ocupado" | "disponible"): CrmUnitState {
+  return status === "ocupado" ? "ocupada" : "disponible";
+}
 
-const STATUS_META: Record<CommercialStatus, { label: string; color: string }> = {
-  ocupado: { label: "Ocupado", color: "#dc2626" }, // rojo
-  parcial: { label: "Parcial / Compartido", color: "#ea580c" }, // naranja
-  disponible: { label: "Disponible para vender", color: "#16a34a" }, // verde
-};
+// ── Metadatos de color (categoría) ───────────────────────────────────────────
 
 const CATEGORY_META: Record<HabilitationCategory, { label: string; color: string }> = {
   general: { label: "Cargas Generales", color: "#e11d48" }, // coral
@@ -79,7 +86,7 @@ type Selection =
 
 const fmt = (n: number) => n.toLocaleString("es-AR");
 
-export function LujanMapView() {
+export function LujanMapView({ unitStates }: { unitStates?: Record<string, CrmUnitState> }) {
   const [view, setView] = useState<ViewKey>("comercial");
   const [filter, setFilter] = useState<FilterKey>("todos");
   const [query, setQuery] = useState("");
@@ -90,18 +97,23 @@ export function LujanMapView() {
 
   const q = query.trim().toLowerCase();
 
+  // Estado efectivo desde crm_units (fuente única); fallback al modelo estático.
+  const sectorState = (s: Sector): CrmUnitState => unitStates?.[s.code] ?? legacyLujanSector(s.occupancy.status);
+  const cubicleState = (b: CubicleBlock, c: Cubicle): CrmUnitState =>
+    unitStates?.[`${b.code}-${c.code}`] ?? legacyLujanCubicle(c.status);
+
   const sectorMatches = (s: Sector): boolean => {
     if (view === "anmat" && s.category !== "anmat") return false;
     if (view === "racks" && !s.rack) return false;
     if (filter === "cubiculos") return false;
-    if (filter === "disponible" && s.occupancy.status !== "disponible") return false;
-    if (filter === "ocupado" && s.occupancy.status !== "ocupado") return false;
+    if (filter === "disponible" && sectorState(s) !== "disponible") return false;
+    if (filter === "ocupado" && sectorState(s) !== "ocupada") return false;
     if (filter === "parcial" && s.occupancy.status !== "parcial") return false;
     if (filter === "anmat" && s.category !== "anmat") return false;
     if (filter === "general" && s.category !== "general") return false;
     if (filter === "con-racks" && !s.rack) return false;
     if (q) {
-      const hay = `${s.code} ${s.name} ${s.occupancy.client ?? ""} ${s.category} ${s.occupancy.status}`.toLowerCase();
+      const hay = `${s.code} ${s.name} ${s.occupancy.client ?? ""} ${s.category} ${sectorState(s)}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -110,7 +122,7 @@ export function LujanMapView() {
   const blockVisible = (b: CubicleBlock): boolean => {
     if (view === "racks") return false;
     if (filter === "ocupado" || filter === "general" || filter === "con-racks") return false;
-    if (filter === "disponible" && !b.cubicles.some((c) => c.status === "disponible")) return false;
+    if (filter === "disponible" && !b.cubicles.some((c) => cubicleState(b, c) === "disponible")) return false;
     if (q) {
       const hay = `${b.code} ${b.name} ${b.cubicles.map((c) => c.client ?? "").join(" ")}`.toLowerCase();
       if (!hay.includes(q)) return false;
@@ -237,10 +249,10 @@ export function LujanMapView() {
               </div>
               <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 {secs.map((s) => (
-                  <SectorCard key={s.code} sector={s} view={view} onClick={() => setSel({ kind: "sector", sector: s })} />
+                  <SectorCard key={s.code} sector={s} view={view} state={sectorState(s)} onClick={() => setSel({ kind: "sector", sector: s })} />
                 ))}
                 {blocks.map((b) => (
-                  <CubicleBlockCard key={b.code} block={b} onPick={(c) => setSel({ kind: "cubicle", block: b, cubicle: c })} />
+                  <CubicleBlockCard key={b.code} block={b} cubState={(c) => cubicleState(b, c)} onPick={(c) => setSel({ kind: "cubicle", block: b, cubicle: c })} />
                 ))}
               </div>
             </section>
@@ -255,7 +267,7 @@ export function LujanMapView() {
       </p>
 
       {/* Panel lateral */}
-      {sel && <SidePanel selection={sel} onClose={() => setSel(null)} />}
+      {sel && <SidePanel selection={sel} unitStates={unitStates} onClose={() => setSel(null)} />}
     </div>
   );
 }
@@ -281,10 +293,10 @@ function Kpi({ label, value, icon, tone }: { label: string; value: string; icon:
 function Legend() {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-5 text-[11px] text-fg-secondary">
-      {(Object.keys(STATUS_META) as CommercialStatus[]).map((s) => (
+      {UNIT_STATE_ORDER.map((s) => (
         <span key={s} className="inline-flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded" style={{ background: STATUS_META[s].color }} />
-          {STATUS_META[s].label}
+          <span className="w-3 h-3 rounded" style={{ background: UNIT_STATE_COLOR[s] }} />
+          {UNIT_STATE_LABEL[s]}
         </span>
       ))}
       <span className="w-px h-3 bg-stroke-soft hidden sm:block" />
@@ -315,14 +327,22 @@ function ConfidencePill({ level }: { level: string }) {
   );
 }
 
-function SectorCard({ sector, view, onClick }: { sector: Sector; view: ViewKey; onClick: () => void }) {
-  const st = STATUS_META[sector.occupancy.status];
+function SectorCard({ sector, view, state, onClick }: { sector: Sector; view: ViewKey; state: CrmUnitState; onClick: () => void }) {
+  const st = { color: UNIT_STATE_COLOR[state], label: UNIT_STATE_LABEL[state] };
   const cat = CATEGORY_META[sector.category];
   return (
     <button
       onClick={onClick}
-      className="text-left rounded-xl p-3 border-2 transition-all hover:shadow-md focus:outline-none focus:ring-2"
-      style={{ borderColor: cat.color, background: `${st.color}0d` }}
+      className="text-left rounded-xl p-3 border-2 nx-interactive cursor-pointer focus-visible:outline-none focus-visible:ring-2"
+      style={{
+        borderColor: cat.color,
+        background: `${st.color}0d`,
+        // Glow semántico por estado (verde/rojo/naranja) reutilizando nx-interactive.
+        "--nx-accent": `${st.color}55`,
+        "--nx-glow": `${st.color}66`,
+        "--nx-border": st.color,
+        "--tw-ring-color": st.color,
+      } as CSSProperties}
       title={`${sector.code} · ${st.label}${sector.occupancy.client ? ` · ${sector.occupancy.client}` : ""}`}
     >
       <div className="flex items-center justify-between">
@@ -357,7 +377,7 @@ function SectorCard({ sector, view, onClick }: { sector: Sector; view: ViewKey; 
       ) : (
         <div className="text-[11px] text-fg-muted mt-1 tabular">
           {fmt(sector.surfaceM2)} m²
-          {sector.occupancy.availableM2 != null && sector.occupancy.availableM2 > 0 && sector.occupancy.status !== "disponible"
+          {sector.occupancy.availableM2 != null && sector.occupancy.availableM2 > 0 && state !== "disponible"
             ? ` · disp. ${fmt(sector.occupancy.availableM2)} m²`
             : ""}
           {sector.rack ? ` · ${fmt(sector.rack.positions)} pos` : ""}
@@ -367,9 +387,9 @@ function SectorCard({ sector, view, onClick }: { sector: Sector; view: ViewKey; 
   );
 }
 
-function CubicleBlockCard({ block, onPick }: { block: CubicleBlock; onPick: (c: Cubicle) => void }) {
+function CubicleBlockCard({ block, cubState, onPick }: { block: CubicleBlock; cubState: (c: Cubicle) => CrmUnitState; onPick: (c: Cubicle) => void }) {
   const cat = CATEGORY_META.anmat;
-  const occ = block.cubicles.filter((c) => c.status === "ocupado").length;
+  const occ = block.cubicles.filter((c) => cubState(c) === "ocupada").length;
   const free = block.cubicles.length - occ;
   return (
     <div
@@ -394,13 +414,13 @@ function CubicleBlockCard({ block, onPick }: { block: CubicleBlock; onPick: (c: 
       </div>
       <div className="grid grid-cols-6 gap-1.5">
         {block.cubicles.map((c) => {
-          const st = STATUS_META[c.status];
+          const st = { color: UNIT_STATE_COLOR[cubState(c)], label: UNIT_STATE_LABEL[cubState(c)] };
           return (
             <button
               key={c.code}
               onClick={() => onPick(c)}
-              className="rounded px-1 py-1.5 text-center transition-all hover:scale-105"
-              style={{ background: `${st.color}1a`, border: `1px solid ${st.color}`, color: st.color }}
+              className="rounded px-1 py-1.5 text-center transition-all duration-200 ease-out hover:scale-105 cursor-pointer focus-visible:outline-none focus-visible:ring-2"
+              style={{ background: `${st.color}1a`, border: `1px solid ${st.color}`, color: st.color, "--tw-ring-color": st.color } as CSSProperties}
               title={`${c.code} · ${st.label}${c.client ? ` · ${c.client}` : ""} · ${c.surfaceM2} m²`}
             >
               <div className="text-[11px] font-bold tabular">{c.code.replace("C0", "").replace("C", "")}</div>
@@ -413,8 +433,12 @@ function CubicleBlockCard({ block, onPick }: { block: CubicleBlock; onPick: (c: 
   );
 }
 
-function SidePanel({ selection, onClose }: { selection: NonNullable<Selection>; onClose: () => void }) {
-  return (
+function SidePanel({ selection, unitStates, onClose }: { selection: NonNullable<Selection>; unitStates?: Record<string, CrmUnitState>; onClose: () => void }) {
+  // Portal a document.body: el drawer `fixed` debe ser relativo al VIEWPORT, no al
+  // contenedor con transform (.nx-page-fade / main.scroll-area). Sin portal, el
+  // transform crea un containing block y el drawer se va con el scroll.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <>
       <div className="fixed inset-0 bg-black/30 z-40 no-print" onClick={onClose} aria-hidden />
       <aside className="fixed right-0 top-0 h-full w-full max-w-sm bg-bg-surface z-50 shadow-2xl border-l border-stroke-soft overflow-y-auto no-print">
@@ -425,10 +449,11 @@ function SidePanel({ selection, onClose }: { selection: NonNullable<Selection>; 
           </button>
         </div>
         <div className="p-4">
-          {selection.kind === "sector" ? <SectorDetail sector={selection.sector} /> : <CubicleDetail block={selection.block} cubicle={selection.cubicle} />}
+          {selection.kind === "sector" ? <SectorDetail sector={selection.sector} unitStates={unitStates} /> : <CubicleDetail block={selection.block} cubicle={selection.cubicle} unitStates={unitStates} />}
         </div>
       </aside>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -441,8 +466,9 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SectorDetail({ sector }: { sector: Sector }) {
-  const st = STATUS_META[sector.occupancy.status];
+function SectorDetail({ sector, unitStates }: { sector: Sector; unitStates?: Record<string, CrmUnitState> }) {
+  const state = unitStates?.[sector.code] ?? legacyLujanSector(sector.occupancy.status);
+  const st = { color: UNIT_STATE_COLOR[state], label: UNIT_STATE_LABEL[state] };
   const cat = CATEGORY_META[sector.category];
   return (
     <div>
@@ -476,6 +502,22 @@ function SectorDetail({ sector }: { sector: Sector }) {
           {sector.occupancy.note}
         </p>
       )}
+
+      {/* P2 · Reserva directa desde el mapa */}
+      {state === "disponible" ? (
+        <Link
+          href={`/comercial/oportunidades?resSite=PEDRO_LUJAN_3159&resUnit=${encodeURIComponent(sector.code)}&resCat=${sector.category}&resM2=${sector.surfaceM2}`}
+          className="nx-interactive mt-4 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-bold text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700"
+          style={{ background: "#16a34a" } as CSSProperties}
+        >
+          <Icon name="plus" size={14} stroke={2.2} /> Reservar unidad
+        </Link>
+      ) : (
+        <div className="mt-4 rounded-lg px-3 py-2.5 text-sm font-semibold text-center" style={{ background: `${st.color}1a`, color: st.color } as CSSProperties}>
+          {st.label} · sin acción
+        </div>
+      )}
+
       <div className="text-[10px] text-fg-muted mt-3">
         Fuente: {sector.sources.map((s) => s.doc).join(" · ")}
       </div>
@@ -483,8 +525,9 @@ function SectorDetail({ sector }: { sector: Sector }) {
   );
 }
 
-function CubicleDetail({ block, cubicle }: { block: CubicleBlock; cubicle: Cubicle }) {
-  const st = STATUS_META[cubicle.status];
+function CubicleDetail({ block, cubicle, unitStates }: { block: CubicleBlock; cubicle: Cubicle; unitStates?: Record<string, CrmUnitState> }) {
+  const state = unitStates?.[`${block.code}-${cubicle.code}`] ?? legacyLujanCubicle(cubicle.status);
+  const st = { color: UNIT_STATE_COLOR[state], label: UNIT_STATE_LABEL[state] };
   return (
     <div>
       <div className="font-mono text-2xl font-bold text-fg-primary">
@@ -502,6 +545,21 @@ function CubicleDetail({ block, cubicle }: { block: CubicleBlock; cubicle: Cubic
       <Row label="Cliente" value={cubicle.client ?? "Libre"} />
       <Row label="Superficie" value={`${cubicle.surfaceM2} m²`} />
       <Row label="Piso" value={FLOOR_LABEL[block.floor]} />
+
+      {/* P2 · Reserva directa desde el mapa */}
+      {state === "disponible" ? (
+        <Link
+          href={`/comercial/oportunidades?resSite=PEDRO_LUJAN_3159&resUnit=${encodeURIComponent(`${block.code}-${cubicle.code}`)}&resCat=anmat&resM2=${cubicle.surfaceM2}`}
+          className="nx-interactive mt-4 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-bold text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700"
+          style={{ background: "#16a34a" } as CSSProperties}
+        >
+          <Icon name="plus" size={14} stroke={2.2} /> Reservar unidad
+        </Link>
+      ) : (
+        <div className="mt-4 rounded-lg px-3 py-2.5 text-sm font-semibold text-center" style={{ background: `${st.color}1a`, color: st.color } as CSSProperties}>
+          {st.label} · sin acción
+        </div>
+      )}
       {block.note && (
         <p className="text-xs text-fg-secondary bg-bg-surface-alt rounded-lg p-2.5 mt-3 leading-relaxed">{block.note}</p>
       )}

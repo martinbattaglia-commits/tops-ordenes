@@ -411,28 +411,43 @@ function VendorStep({
         </div>
 
         {open && matches.length > 0 && (
-          <ul className="absolute z-30 top-full mt-1 left-0 right-0 bg-white border border-stroke-soft rounded-md shadow-md max-h-96 overflow-y-auto">
-            {matches.map((v) => (
+          <ul className="absolute z-30 top-full mt-1.5 left-0 right-0 bg-bg-surface border border-stroke-soft rounded-lg shadow-lg overflow-hidden max-h-96 overflow-y-auto">
+            <li className="px-3 py-2 text-[10px] uppercase tracking-[0.12em] font-bold text-fg-muted bg-bg-surface-alt border-b border-stroke-soft">
+              {q ? "Coincidencias" : "Proveedores recientes"}
+            </li>
+            {matches.map((v) => {
+              const selDigits = draft.vendor.cuit.replace(/\D/g, "");
+              const isSelected =
+                (!!draft.vendor.id && draft.vendor.id === v.id) ||
+                (selDigits.length === 11 && selDigits === v.cuit.replace(/\D/g, ""));
+              return (
               <li key={v.id}>
                 <button
                   type="button"
                   onClick={() => pick(v)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-neutral-50 text-left"
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left border-b border-stroke-soft cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-tops-blue-700 ${
+                    isSelected
+                      ? "bg-tops-blue-700/15 ring-1 ring-inset ring-tops-blue-700"
+                      : "hover:bg-bg-surface-alt hover:ring-1 hover:ring-inset hover:ring-tops-blue-700/40"
+                  }`}
                 >
-                  <div className="w-7 h-7 rounded-full bg-tops-blue-700 text-white grid place-items-center text-xs font-bold flex-shrink-0">
+                  <div className="w-7 h-7 rounded-md bg-tops-blue-700 text-white grid place-items-center text-xs font-bold shrink-0">
                     {v.avatar ?? v.razon.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-fg-primary truncate">{v.razon}</div>
-                    <div className="text-[11px] text-fg-muted">
+                    <div className="text-sm font-semibold text-fg-primary truncate">{v.razon}</div>
+                    <div className="text-[11px] text-fg-secondary font-mono">
                       {fmtCuit(v.cuit)} · {v.oc_count ?? 0} OC · {v.last_oc_at ? fmtDate(v.last_oc_at) : "—"}
                     </div>
                   </div>
-                  <div className="hidden md:flex gap-1 flex-shrink-0">
+                  <div className="hidden md:flex gap-1 shrink-0 items-center">
+                    {isSelected && <Icon name="check-circle" size={14} className="text-tops-blue-700" />}
                     {v.tags.slice(0, 2).map((t) => (
                       <span
                         key={t}
-                        className="px-1.5 py-0.5 rounded bg-neutral-100 text-[10px] font-bold text-fg-secondary"
+                        className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                          t === "ANMAT" ? "bg-tops-red/15 text-tops-red" : "bg-tops-blue-700/15 text-fg-link"
+                        }`}
                       >
                         {t}
                       </span>
@@ -440,7 +455,8 @@ function VendorStep({
                   </div>
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </div>

@@ -1,28 +1,38 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { CaptureEmbed } from "./CaptureEmbed";
-import { findAvailability, type CapacityCategory } from "@/lib/wms/corporate-capacity";
 import {
   advanceStage, reserveCapacity, completeOnboarding,
   type ActionResult, type AssignedSite,
 } from "@/lib/comercial/stage-actions";
 import {
-  type OpportunityFull, type CrmService, type CrmStage,
+  type OpportunityFull, type CrmStage, type CrmService, type CrmUnit, type UnitCounts,
   STAGE_ORDER, STAGE_LABEL, STAGE_COLOR, SERVICE_LABEL, COMMITTED_LABEL,
+  UNIT_STATE_LABEL, UNIT_STATE_COLOR, UNIT_STATE_ORDER,
 } from "@/lib/comercial/crm-types";
+import { opportunityDisplayTitle } from "@/lib/comercial/opportunity-title";
 
 /** Tipo de acción que dispara cada subcomponente (cierra sobre la server action). */
 type RunAction = (fn: () => Promise<ActionResult>) => void;
 
-/** Unidades sugeridas por sede (editables; no es un catálogo oficial). */
-const UNIT_SUGGESTIONS: Record<AssignedSite, string[]> = {
-  PEDRO_LUJAN_3159: ["Cubículo ANMAT (2º piso)", "Sector racks", "Depósito general"],
-  MAGALDI_1765: ["Isla coworking", "Oficina PB", "Sector cargas generales", "Cubículo ANMAT PB30"],
-};
+/** Datos de unidades reales (crm_units · E3) inyectados desde el server component. */
+export interface CapacityUnitData {
+  bySite: Record<AssignedSite, { counts: UnitCounts; available: CrmUnit[] }>;
+  oppUnits: CrmUnit[];
+}
+
+/** Precarga del deep link Mapa → CRM360 (P2 · "reserva directa desde el mapa"). */
+export interface CapacityPrefill {
+  site: string;
+  unit: string;
+  category: string | null;
+  m2: number | null;
+}
+
 const SITE_LABEL: Record<AssignedSite, string> = {
   PEDRO_LUJAN_3159: "Pedro Luján 3159",
   MAGALDI_1765: "Agustín Magaldi 1765",
@@ -31,8 +41,6 @@ const KNOWN_SITES: AssignedSite[] = ["PEDRO_LUJAN_3159", "MAGALDI_1765"];
 
 const fmt = (n: number) => n.toLocaleString("es-AR");
 const money = (n: number | null, c = "ARS") => (n == null ? "—" : `$${fmt(n)} ${c}`);
-
-const SERVICE_TO_CATEGORY: Record<CrmService, CapacityCategory> = { anmat: "anmat", general: "general", oficinas: "oficina" };
 
 type TabKey = "resumen" | "capacidad" | "cotizaciones" | "propuestas" | "contrato" | "onboarding" | "historial";
 const TABS: Array<{ key: TabKey; label: string; icon: IconName }> = [
@@ -75,9 +83,11 @@ function forwardAdvance(estado: CrmStage): { to: CrmStage; label: string } | nul
   return null;
 }
 
-export function Opportunity360View({ full, source = "local" }: { full: OpportunityFull; source?: "supabase" | "local" }) {
+export function Opportunity360View({ full, source = "local", unitData, prefill = null }: { full: OpportunityFull; source?: "supabase" | "local"; unitData?: CapacityUnitData; prefill?: CapacityPrefill | null }) {
   const { opportunity: o, quotes, proposals, contract, onboarding, history } = full;
-  const [tab, setTab] = useState<TabKey>("resumen");
+  // P2 — si llegamos con una unidad precargada desde el mapa, abrimos en Capacidad.
+  const validPrefill = prefill && KNOWN_SITES.includes(prefill.site as AssignedSite) ? prefill : null;
+  const [tab, setTab] = useState<TabKey>(validPrefill ? "capacidad" : "resumen");
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
@@ -97,10 +107,6 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
       if (r.ok) router.refresh();
     });
 
-  const cap = useMemo(
-    () => (o.m2 != null ? findAvailability({ category: SERVICE_TO_CATEGORY[o.serviceType], m2: o.m2 }) : null),
-    [o.serviceType, o.m2],
-  );
   const cta = primaryCta(o.estado);
   const fwd = forwardAdvance(o.estado);
   const canLose = o.estado !== "ganado" && o.estado !== "perdido";
@@ -143,7 +149,7 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
                 {COMMITTED_LABEL[o.committedState]}
               </span>
             </div>
-            <h1 className="text-2xl font-black text-fg-primary tracking-tight mt-1">{o.empresa}</h1>
+            <h1 className="text-2xl font-black text-fg-primary tracking-tight mt-1">{opportunityDisplayTitle(o)}</h1>
             <div className="text-xs text-fg-muted mt-0.5">
               {SERVICE_LABEL[o.serviceType]} · {o.m2 != null ? `${fmt(o.m2)} m²` : "m² s/d"} · Owner: {o.ownerName}
             </div>
@@ -232,11 +238,13 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
           <Kpi label="Cierre esperado" value={o.expectedClose ?? "—"} />
         </div>
 
-        {/* Capacidad — badge */}
-        {cap && (
-          <div className="mt-3 rounded-lg border-2 p-2.5 flex items-center gap-2" style={{ borderColor: cap.feasible ? "#16a34a" : "#dc2626", background: `${cap.feasible ? "#16a34a" : "#dc2626"}0d` }}>
-            <Icon name={cap.feasible ? "check-circle" : "x"} size={16} style={{ color: cap.feasible ? "#16a34a" : "#dc2626" }} />
-            <span className="text-sm font-semibold text-fg-primary">{cap.note}</span>
+        {/* Capacidad — unidades reales (crm_units) */}
+        {unitData && unitData.oppUnits.length > 0 && (
+          <div className="mt-3 rounded-lg border-2 p-2.5 flex items-center gap-2" style={{ borderColor: "#16a34a", background: "#16a34a0d" }}>
+            <Icon name="building" size={16} style={{ color: "#16a34a" }} />
+            <span className="text-sm font-semibold text-fg-primary">
+              {unitData.oppUnits.length} unidad{unitData.oppUnits.length > 1 ? "es" : ""} reservada{unitData.oppUnits.length > 1 ? "s" : ""}: {unitData.oppUnits.map((u) => u.unitCode).join(", ")}
+            </span>
             <button onClick={() => setTab("capacidad")} className="ml-auto text-xs text-fg-brand font-semibold no-print">ver detalle →</button>
           </div>
         )}
@@ -251,8 +259,11 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all border"
-            style={tab === t.key ? { background: "var(--fg-brand, #0f172a)", color: "#fff", borderColor: "transparent" } : { borderColor: "var(--stroke-soft, #e2e8f0)" }}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold border transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700 ${
+              tab === t.key
+                ? "bg-tops-blue-700 text-white border-tops-blue-700"
+                : "bg-bg-surface-alt text-fg-secondary border-stroke-soft hover:text-fg-primary hover:border-tops-blue-700/40"
+            }`}
           >
             <Icon name={t.icon} size={13} /> {t.label}
             {tabCount[t.key] != null && tabCount[t.key]! > 0 && (
@@ -265,10 +276,10 @@ export function Opportunity360View({ full, source = "local" }: { full: Opportuni
       {/* Tab content */}
       <div className="nx-surface card p-4">
         {tab === "resumen" && <ResumenTab full={full} />}
-        {tab === "capacidad" && <CapacidadTab o={o} cap={cap} run={run} isPending={isPending} writable={writable} />}
+        {tab === "capacidad" && <CapacidadTab o={o} unitData={unitData} prefill={validPrefill} run={run} isPending={isPending} writable={writable} />}
         {tab === "cotizaciones" && <CotizacionesTab quotes={quotes} opportunityId={o.id} />}
         {tab === "propuestas" && <PropuestasTab proposals={proposals} opportunityId={o.id} serviceType={o.serviceType} />}
-        {tab === "contrato" && <ContratoTab contract={contract} />}
+        {tab === "contrato" && <ContratoTab contract={contract} serviceType={o.serviceType} onboarding={onboarding} />}
         {tab === "onboarding" && <OnboardingTab onboarding={onboarding} estado={o.estado} opportunityId={o.id} run={run} isPending={isPending} writable={writable} />}
         {tab === "historial" && <HistorialTab history={history} />}
       </div>
@@ -357,119 +368,131 @@ function ResumenTab({ full }: { full: OpportunityFull }) {
 }
 
 function CapacidadTab({
-  o, cap, run, isPending, writable,
+  o, unitData, prefill = null, run, isPending, writable,
 }: {
   o: OpportunityFull["opportunity"];
-  cap: ReturnType<typeof findAvailability> | null;
+  unitData?: CapacityUnitData;
+  prefill?: CapacityPrefill | null;
   run: RunAction;
   isPending: boolean;
   writable: boolean;
 }) {
+  // P2 — la precarga del mapa tiene prioridad sobre la sede ya asignada.
   const initialSite: AssignedSite | "" =
-    o.assignedSite && KNOWN_SITES.includes(o.assignedSite as AssignedSite) ? (o.assignedSite as AssignedSite) : "";
+    prefill && KNOWN_SITES.includes(prefill.site as AssignedSite)
+      ? (prefill.site as AssignedSite)
+      : o.assignedSite && KNOWN_SITES.includes(o.assignedSite as AssignedSite)
+        ? (o.assignedSite as AssignedSite)
+        : "";
   const [site, setSite] = useState<AssignedSite | "">(initialSite);
-  const [units, setUnits] = useState<string[]>(o.assignedUnits ?? []);
-  const [unitDraft, setUnitDraft] = useState("");
+  // Preselección de la unidad precargada, solo si está disponible en su sede.
+  const prefillAvailable =
+    prefill && initialSite !== "" && (unitData?.bySite[initialSite]?.available ?? []).some((u) => u.unitCode === prefill.unit);
+  const [sel, setSel] = useState<string[]>(prefillAvailable ? [prefill!.unit] : []);
 
-  const addUnit = (u: string) => {
-    const v = u.trim();
-    if (v && !units.includes(v)) setUnits((prev) => [...prev, v]);
-    setUnitDraft("");
-  };
-  const removeUnit = (u: string) => setUnits((prev) => prev.filter((x) => x !== u));
-  const canReserve = writable && !isPending && site !== "" && units.length > 0;
+  const siteData = site !== "" && unitData ? unitData.bySite[site] : null;
+  const available: CrmUnit[] = siteData?.available ?? [];
+  const counts = siteData?.counts ?? null;
+  const oppUnits = unitData?.oppUnits ?? [];
+  const toggle = (code: string) => setSel((p) => (p.includes(code) ? p.filter((x) => x !== code) : [...p, code]));
+  const selM2 = available.filter((u) => sel.includes(u.unitCode)).reduce((a, u) => a + (u.m2 ?? 0), 0);
+  const canReserve = writable && !isPending && site !== "" && sel.length > 0;
 
   return (
     <div>
-      {cap ? (
+      {/* P2 — unidad precargada desde el mapa (deep link) */}
+      {prefill && (
+        <div className="mb-4 rounded-lg border-2 p-3 no-print flex flex-wrap items-center gap-x-3 gap-y-1"
+          style={{ borderColor: "#16a34a", background: "#16a34a0d" }}>
+          <Icon name="pin" size={16} style={{ color: "#16a34a" }} />
+          <span className="text-sm font-semibold text-fg-primary">
+            Precargada desde el mapa: <span className="font-mono">{prefill.unit}</span>
+            {prefill.category ? <> · {prefill.category}</> : null}
+            {prefill.m2 != null ? <> · {fmt(prefill.m2)} m²</> : null}
+          </span>
+          <span className="text-[11px] text-fg-secondary">
+            {prefillAvailable
+              ? "Unidad seleccionada — revisá y confirmá la reserva abajo."
+              : "Ya no figura disponible en crm_units; elegí otra unidad disponible abajo."}
+          </span>
+        </div>
+      )}
+
+      {/* Unidades reales de esta oportunidad (crm_units) */}
+      {oppUnits.length > 0 && (
         <>
-          <div className="rounded-lg border-2 p-3 mb-3" style={{ borderColor: cap.feasible ? "#16a34a" : "#dc2626", background: `${cap.feasible ? "#16a34a" : "#dc2626"}0d` }}>
-            <div className="flex items-center gap-2">
-              <Icon name={cap.feasible ? "check-circle" : "x"} size={16} style={{ color: cap.feasible ? "#16a34a" : "#dc2626" }} />
-              <span className="font-semibold text-fg-primary text-sm">{cap.note}</span>
-            </div>
-            <div className="text-[11px] text-fg-muted mt-1">
-              Demanda: {fmt(o.m2 ?? 0)} m² {SERVICE_LABEL[o.serviceType]} · matching contra el Motor Corporativo de Capacidad.
-            </div>
-          </div>
-          <SectionLabel text="Disponibilidad por sede" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {cap.options.map((opt) => (
-              <div key={opt.siteCode} className="flex items-center justify-between rounded-lg border border-stroke-soft px-3 py-2">
-                <span className="text-sm font-medium text-fg-primary">{opt.siteName}</span>
-                <span className="inline-flex items-center gap-1.5 text-xs tabular text-fg-secondary">
-                  {fmt(opt.availableM2)} m²
-                  <span className="w-2 h-2 rounded-full" style={{ background: opt.fitsSingleSite ? "#16a34a" : "#94a3b8" }} />
-                </span>
-              </div>
+          <SectionLabel text="Unidades de esta oportunidad" />
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {oppUnits.map((u) => (
+              <span key={u.id} className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                style={{ color: UNIT_STATE_COLOR[u.state], background: `${UNIT_STATE_COLOR[u.state]}22`, border: `1px solid ${UNIT_STATE_COLOR[u.state]}55` }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: UNIT_STATE_COLOR[u.state] }} />
+                {u.unitCode} · {UNIT_STATE_LABEL[u.state]}
+              </span>
             ))}
           </div>
         </>
-      ) : (
-        <Empty text="Sin m² definidos: la disponibilidad no se evalúa, pero podés reservar un sitio/unidades." />
       )}
 
-      {/* Reserva de capacidad → reserveCapacity */}
-      <div className="mt-4 rounded-lg border border-stroke-soft p-3 no-print">
-        <SectionLabel text="Reservar capacidad" />
-        <div className="flex flex-col gap-2">
-          <label className="text-[11px] uppercase tracking-wide text-fg-muted">Sede asignada</label>
-          <select
-            value={site}
-            disabled={!writable || isPending}
-            onChange={(e) => { setSite(e.target.value as AssignedSite | ""); setUnits([]); }}
-            className="rounded-lg border border-stroke-soft bg-bg-surface px-3 py-1.5 text-sm disabled:opacity-50"
-          >
+      <SectionLabel text="Reservar unidad" />
+      <div className="rounded-lg border border-stroke-soft p-3 no-print flex flex-col gap-3">
+        <div>
+          <label className="text-[11px] uppercase tracking-wide text-fg-muted">Sede</label>
+          <select value={site} disabled={!writable || isPending}
+            onChange={(e) => { setSite(e.target.value as AssignedSite | ""); setSel([]); }}
+            className="mt-1 w-full rounded-lg border border-stroke-soft bg-bg-surface px-3 py-1.5 text-sm disabled:opacity-50">
             <option value="">— Elegí una sede —</option>
             {KNOWN_SITES.map((s) => <option key={s} value={s}>{SITE_LABEL[s]}</option>)}
           </select>
-
-          <label className="text-[11px] uppercase tracking-wide text-fg-muted mt-1">Unidades</label>
-          {units.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {units.map((u) => (
-                <span key={u} className="inline-flex items-center gap-1 rounded-full bg-bg-surface-alt px-2.5 py-1 text-xs text-fg-primary">
-                  {u}
-                  <button type="button" onClick={() => removeUnit(u)} disabled={!writable || isPending} className="text-fg-muted hover:text-fg-brand">
-                    <Icon name="x" size={11} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <input
-              value={unitDraft}
-              disabled={!writable || isPending}
-              onChange={(e) => setUnitDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addUnit(unitDraft); } }}
-              placeholder="Agregar unidad y Enter…"
-              className="flex-1 rounded-lg border border-stroke-soft bg-bg-surface px-3 py-1.5 text-sm disabled:opacity-50"
-            />
-            <button type="button" disabled={!writable || isPending || !unitDraft.trim()} onClick={() => addUnit(unitDraft)} className="btn btn-ghost btn-sm disabled:opacity-50">
-              <Icon name="plus" size={13} /> Agregar
-            </button>
-          </div>
-          {site !== "" && (
-            <div className="flex flex-wrap gap-1.5">
-              {UNIT_SUGGESTIONS[site].filter((u) => !units.includes(u)).map((u) => (
-                <button key={u} type="button" disabled={!writable || isPending} onClick={() => addUnit(u)} className="text-[11px] rounded-full border border-stroke-soft px-2 py-0.5 text-fg-secondary hover:text-fg-brand disabled:opacity-50">
-                  + {u}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <button
-            disabled={!canReserve}
-            onClick={() => run(() => reserveCapacity(o.id, { site: site as AssignedSite, units }))}
-            className="btn btn-sm mt-1 self-start disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: "#2563eb", color: "#fff" }}
-          >
-            {isPending ? "Reservando…" : "Reservar capacidad"} <Icon name="check" size={13} />
-          </button>
-          {!writable && <div className="text-[11px] text-fg-muted">Reserva disponible sobre datos reales (Supabase).</div>}
         </div>
+
+        {/* Contadores por estado (crm_units · 5 estados) */}
+        {counts && (
+          <div className="flex flex-wrap gap-1.5">
+            {UNIT_STATE_ORDER.map((st) => (
+              <span key={st} className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-pill"
+                style={{ color: UNIT_STATE_COLOR[st], background: `${UNIT_STATE_COLOR[st]}1a`, border: `1px solid ${UNIT_STATE_COLOR[st]}44` }}>
+                {UNIT_STATE_LABEL[st]}: {counts[st]}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Selector de unidades disponibles REALES (state='disponible') */}
+        {site !== "" && (available.length === 0 ? (
+          <Empty text="Sin unidades disponibles en esta sede." />
+        ) : (
+          <div>
+            <label className="text-[11px] uppercase tracking-wide text-fg-muted">Unidades disponibles ({available.length})</label>
+            <div className="mt-1 max-h-60 overflow-y-auto rounded-lg border border-stroke-soft divide-y divide-stroke-soft/60">
+              {available.map((u) => {
+                const on = sel.includes(u.unitCode);
+                return (
+                  <button key={u.id} type="button" disabled={!writable || isPending} onClick={() => toggle(u.unitCode)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${on ? "bg-tops-blue-700/15" : "hover:bg-bg-surface-alt"}`}>
+                    <span className={`w-4 h-4 rounded grid place-items-center border flex-shrink-0 ${on ? "bg-tops-blue-700 border-tops-blue-700" : "border-stroke-soft"}`}>
+                      {on && <Icon name="check" size={11} className="text-white" />}
+                    </span>
+                    <span className="font-semibold text-fg-primary">{u.unitCode}</span>
+                    <span className="text-[11px] text-fg-muted truncate flex-1">{u.name ?? u.tipo ?? ""}{u.category ? ` · ${SERVICE_LABEL[u.category]}` : ""}</span>
+                    <span className="text-[11px] tabular text-fg-secondary whitespace-nowrap">{u.m2 != null ? `${fmt(u.m2)} m²` : "—"}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-[11px] text-fg-muted mt-1">
+              Seleccionadas: {sel.length}{sel.length > 0 ? ` · ${sel.join(", ")} · ${fmt(selM2)} m²` : ""} · Demanda: {o.m2 != null ? `${fmt(o.m2)} m²` : "s/d"}
+            </div>
+          </div>
+        ))}
+
+        <button disabled={!canReserve}
+          onClick={() => run(() => reserveCapacity(o.id, { site: site as AssignedSite, units: sel }))}
+          className="btn btn-sm self-start disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: "#2563eb", color: "#fff" }}>
+          {isPending ? "Reservando…" : "Reservar unidad"} <Icon name="check" size={13} />
+        </button>
+        {!writable && <div className="text-[11px] text-fg-muted">Reserva disponible sobre datos reales (Supabase).</div>}
       </div>
     </div>
   );
@@ -563,19 +586,92 @@ function PropuestasTab({ proposals, opportunityId }: { proposals: OpportunityFul
   );
 }
 
-function ContratoTab({ contract }: { contract: OpportunityFull["contract"] }) {
-  if (!contract) return <Empty text="Sin contrato. Se genera al pasar a Ganado." />;
+/**
+ * Plantilla contractual por tipo de servicio (regla de negocio · 2026-06-08):
+ *   ANMAT            → Contrato ANMAT            (/tools/contrato-anmat)
+ *   Cargas Generales → Aceptación y Condiciones  (/tools/aceptacion-condiciones)
+ *   Oficinas         → Aceptación y Condiciones  (misma plantilla que Cargas Generales)
+ * Hasta nuevo aviso Oficinas y Cargas Generales comparten plantilla (no hay una tercera).
+ */
+const CONTRACT_TEMPLATE: Record<CrmService, { slug: string; label: string }> = {
+  anmat: { slug: "contrato-anmat", label: "Contrato ANMAT" },
+  general: { slug: "aceptacion-condiciones", label: "Aceptación y Condiciones" },
+  oficinas: { slug: "aceptacion-condiciones", label: "Aceptación y Condiciones" },
+};
+
+/**
+ * Estado documental del contrato (UX · 2026-06-08). Le dice al usuario, de un
+ * vistazo, si el contrato ya fue emitido o todavía falta generarlo.
+ *   Sin generar  → "Contrato pendiente" · 🔴 rojo
+ *   Generado     → "Contrato generado"  · 🟡 amarillo
+ *   Firmado      → "Contrato firmado"   · 🟢 verde
+ *   Onboarding   → "Contrato activo"    · 🟢 teal (en vigencia / cliente activo)
+ */
+type DocStatus = { key: "pendiente" | "generado" | "firmado" | "activo"; label: string; color: string };
+function contractDocStatus(
+  contract: OpportunityFull["contract"],
+  onboarding: OpportunityFull["onboarding"],
+): DocStatus {
+  // Onboarding / contrato en vigencia → cliente activo (estado más avanzado).
+  if (onboarding || contract?.status === "vigente") {
+    return { key: "activo", label: "Contrato activo", color: "#0d9488" };
+  }
+  if (!contract) return { key: "pendiente", label: "Contrato pendiente", color: "#dc2626" };
+  if (contract.status === "firmado") return { key: "firmado", label: "Contrato firmado", color: "#16a34a" };
+  // borrador / enviado / vencido / rescindido → existe pero no firmado.
+  return { key: "generado", label: "Contrato generado", color: "#d97706" };
+}
+
+function ContratoTab({ contract, serviceType, onboarding }: { contract: OpportunityFull["contract"]; serviceType: CrmService; onboarding: OpportunityFull["onboarding"] }) {
+  const tpl = CONTRACT_TEMPLATE[serviceType];
+  const src = `/tools/${tpl.slug}/index.html`;
+  const doc = contractDocStatus(contract, onboarding);
   return (
-    <div className="max-w-md">
-      <div className="flex items-center gap-2 mb-2">
-        <span className="font-mono text-lg font-bold text-fg-brand">{contract.publicId}</span>
-        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded" style={{ background: "#16a34a1a", color: "#16a34a" }}>{contract.status}</span>
+    <div className="flex flex-col gap-3">
+      {/* Estado documental — badge de color sobre el iframe contractual */}
+      <div className="flex items-center gap-2 rounded-lg border p-2.5"
+        style={{ borderColor: `${doc.color}55`, background: `${doc.color}0d` }}>
+        <span className="text-[10px] font-bold uppercase tracking-wide text-fg-muted">Estado documental</span>
+        <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-pill"
+          style={{ color: doc.color, background: `${doc.color}1a`, border: `1px solid ${doc.color}55` }}>
+          <span className="w-2 h-2 rounded-full" style={{ background: doc.color }} />
+          {doc.label}
+        </span>
+        <span className="text-[11px] text-fg-secondary">
+          {doc.key === "pendiente" && "Aún no se generó el contrato."}
+          {doc.key === "generado" && "Contrato emitido — falta la firma."}
+          {doc.key === "firmado" && "Contrato firmado por el cliente."}
+          {doc.key === "activo" && "Contrato en vigencia — cliente en onboarding/activo."}
+        </span>
       </div>
-      <Row label="Versión" value={`v${contract.version}`} />
-      <Row label="Firmado por" value={contract.signedBy ?? "—"} />
-      <Row label="Firmado el" value={contract.signedAt ?? "—"} />
-      <Row label="Vigencia" value={`${contract.validFrom ?? "—"} → ${contract.validUntil ?? "—"}`} />
-      <Row label="Propuesta" value={contract.proposalPublicId ?? "—"} />
+
+      {/* Encabezado: plantilla asignada según servicio + metadata del contrato si existe */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="inline-flex items-center gap-1.5 text-sm font-bold text-fg-primary">
+          <Icon name="pen" size={14} /> {tpl.label}
+        </span>
+        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-bg-surface-alt text-fg-secondary">
+          {SERVICE_LABEL[serviceType]}
+        </span>
+        {contract && (
+          <>
+            <span className="font-mono text-xs font-bold text-fg-brand">{contract.publicId}</span>
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded" style={{ background: "#16a34a1a", color: "#16a34a" }}>{contract.status}</span>
+            <span className="text-[11px] text-fg-muted">v{contract.version}{contract.signedAt ? ` · firmado ${contract.signedAt}` : ""}</span>
+          </>
+        )}
+        <a href={src} target="_blank" rel="noopener noreferrer" className="ml-auto btn btn-ghost btn-sm no-print">
+          <Icon name="arrow-up-right" size={13} /> Abrir / imprimir
+        </a>
+      </div>
+
+      {/* Plantilla contractual embebida (estática, same-origin) */}
+      <iframe
+        src={src}
+        title={tpl.label}
+        className="w-full rounded-lg border border-stroke-soft bg-white"
+        style={{ height: "75vh", border: 0 }}
+      />
     </div>
   );
 }

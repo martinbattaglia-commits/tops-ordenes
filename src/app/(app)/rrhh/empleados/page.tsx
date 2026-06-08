@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { Icon } from "@/components/Icon";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { listEmpleados } from "@/lib/rrhh/data";
 
 export const metadata = { title: "Empleados · RRHH" };
@@ -12,8 +15,9 @@ const ESTADO_BADGE: Record<string, string> = {
 };
 
 export default async function EmpleadosPage() {
+  if (!(await canAccess("rrhh.view"))) return <AccesoRestringido modulo="RRHH · Empleados" />;
   try {
-    const empleados = await listEmpleados();
+    const [empleados, canEdit] = await Promise.all([listEmpleados(), canAccess("rrhh.edit")]);
     return (
       <div className="p-4 lg:p-8 nx-page-fade">
         <div className="page-header">
@@ -22,11 +26,16 @@ export default async function EmpleadosPage() {
             <h1 className="page-title">Empleados</h1>
             <p className="page-subtitle">Legajo digital. El acceso a datos sensibles está restringido por rol.</p>
           </div>
+          {canEdit && (
+            <Link href="/rrhh/empleados/nuevo" className="btn btn-primary btn-sm">
+              <Icon name="plus" size={14} /> <span>Nuevo empleado</span>
+            </Link>
+          )}
         </div>
 
         <div className="card p-5">
           {empleados.length === 0 ? (
-            <p className="text-fg-muted text-sm">No hay empleados visibles para tu rol.</p>
+            <p className="text-fg-muted text-sm">No hay empleados cargados.</p>
           ) : (
             <table className="w-full text-sm">
               <thead>

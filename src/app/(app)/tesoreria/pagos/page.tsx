@@ -1,16 +1,18 @@
+import Link from "next/link";
 import { Kpi, StatusPill } from "@/components/tesoreria/ui";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { PagoForm } from "@/components/tesoreria/PagoForm";
-import { listSupplierOpenItems, getSupplierCurrentAccount, listBankAccounts } from "@/lib/tesoreria/data";
+import { listSupplierOpenItems, listPagosDetail, getSupplierCurrentAccount, listBankAccounts } from "@/lib/tesoreria/data";
 
 export const metadata = { title: "Pagos · Tesorería" };
 export const dynamic = "force-dynamic";
 
 export default async function PagosPage() {
   try {
-    const [openItems, current, accounts] = await Promise.all([
+    const [openItems, detail, current, accounts] = await Promise.all([
       listSupplierOpenItems(),
+      listPagosDetail(),
       getSupplierCurrentAccount(),
       listBankAccounts(),
     ]);
@@ -30,36 +32,53 @@ export default async function PagosPage() {
           <Kpi label="Pagos pendientes" value={pendiente} />
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
-          <div className="card p-5">
-            <h2 className="font-semibold mb-3">Facturas abiertas (open items)</h2>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-fg-muted">
-                  <th className="py-1">Factura</th>
-                  <th className="py-1 text-right">Total</th>
-                  <th className="py-1 text-right">Saldo</th>
-                  <th className="py-1">Estado</th>
-                  <th className="py-1">Vto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {openItems.length === 0 && <tr><td colSpan={5} className="py-4 text-fg-muted">Sin facturas abiertas.</td></tr>}
-                {openItems.map((it) => (
-                  <tr key={it.invoice_id} className="border-t">
-                    <td className="py-2 tabular">{it.public_id}</td>
-                    <td className="py-2 text-right tabular">{fmtCurrency(it.total)}</td>
-                    <td className="py-2 text-right tabular">{fmtCurrency(it.saldo)}</td>
-                    <td className="py-2"><StatusPill status={it.estado_pago} /></td>
-                    <td className="py-2">{fmtDate(it.fecha_vencimiento)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Detalle de pagos pendientes — drill-down del KPI. Orden: vencimiento asc. */}
+        <div className="card p-5 mb-6 overflow-x-auto">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold">Detalle de pagos pendientes</h2>
+            <span className="text-sm text-fg-muted">Total: <strong className="text-fg-brand tabular">{fmtCurrency(pendiente)}</strong></span>
           </div>
-
-          <PagoForm accounts={accounts} openItems={openItems} />
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-fg-muted">
+                <th className="py-1">Proveedor</th>
+                <th className="py-1">Factura</th>
+                <th className="py-1">Emisión</th>
+                <th className="py-1">Vencimiento</th>
+                <th className="py-1">Estado</th>
+                <th className="py-1 text-right">Saldo pendiente</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.length === 0 && <tr><td colSpan={6} className="py-4 text-fg-muted">No hay pagos pendientes.</td></tr>}
+              {detail.map((it) => (
+                <tr key={it.invoiceId} className="border-t">
+                  <td className="py-2">
+                    {it.proveedor ? (
+                      <Link href={it.vendorId ? `/compras/proveedores/${it.vendorId}` : "/compras/proveedores"} className="text-fg-link hover:underline cursor-pointer font-semibold">{it.proveedor}</Link>
+                    ) : <span className="text-fg-muted">—</span>}
+                  </td>
+                  <td className="py-2 tabular">{it.factura}</td>
+                  <td className="py-2">{fmtDate(it.emision)}</td>
+                  <td className="py-2">{fmtDate(it.vencimiento)}</td>
+                  <td className="py-2"><StatusPill status={it.estado} dueDate={it.vencimiento} /></td>
+                  <td className="py-2 text-right tabular">{fmtCurrency(it.saldo)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {detail.length > 0 && (
+              <tfoot>
+                <tr className="border-t font-semibold">
+                  <td className="py-2" colSpan={5}>Total pendiente</td>
+                  <td className="py-2 text-right tabular text-fg-brand">{fmtCurrency(pendiente)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
         </div>
+
+        {/* Registro de pago */}
+        <PagoForm accounts={accounts} openItems={openItems} />
       </div>
     );
   } catch (e) {

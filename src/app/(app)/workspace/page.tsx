@@ -2,7 +2,11 @@ import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { CountUp } from "@/components/CountUp";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { ORG, PRODUCT } from "@/lib/org";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Google Workspace" };
 
@@ -452,7 +456,8 @@ function toneText(tone: ServiceTone) {
   return "text-fg-secondary";
 }
 
-export default function WorkspacePage() {
+export default async function WorkspacePage() {
+  if (!(await canAccess("mi_espacio.view"))) return <AccesoRestringido modulo="Accesos Google / Mi Espacio" />;
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-8">
       {/* ── Dashboard Workspace · header ─────────────────────────────────── */}

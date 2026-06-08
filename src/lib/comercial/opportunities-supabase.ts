@@ -18,7 +18,8 @@ import {
 
 const LIST_SELECT = `
   id, public_id, cuit, contacto, email, telefono, service_type, m2, deposito, estado,
-  probabilidad, monto, currency, owner_id, expected_close, clientify_deal_id,
+  probabilidad, monto, currency, owner_id, owner_name, company_name, clientify_pipeline,
+  clientify_modified, expected_close, clientify_deal_id,
   capacity_feasible, assigned_site, assigned_units, committed_state, created_at,
   clients(razon)
 `;
