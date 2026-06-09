@@ -41,6 +41,20 @@ const FLOOR_LABEL: Record<FloorCode, string> = {
   P2: "2º Piso",
 };
 
+// Nomenclatura VISUAL de bloques de cubículos ANMAT (UX para comerciales):
+// oculta el código técnico (PA3+PA7 / PA4-PA5) y muestra etiqueta corta + piso
+// legible. NO altera `block.code` ni las claves de join/crm_units/deep links:
+// los cubículos siguen siendo PA3+PA7-C01, PA4-PA5-C01, etc. Solo cambia el texto.
+const FLOOR_DISPLAY: Record<FloorCode, string> = {
+  PB: "PLANTA BAJA",
+  P1: "PRIMER PISO",
+  P2: "SEGUNDO PISO",
+};
+function blockDisplay(block: CubicleBlock): { label: string; floor: string } {
+  // PA3+PA7 → PA3 · PA4-PA5 → PA4 (primer token antes de "+"/"-"); piso desde block.floor.
+  return { label: block.code.split(/[+-]/)[0], floor: FLOOR_DISPLAY[block.floor] };
+}
+
 const CONFIDENCE_LABEL: Record<string, string> = {
   exact: "Exacto",
   approximate: "Estimado",
@@ -401,9 +415,11 @@ function CubicleBlockCard({ block, cubState, onPick }: { block: CubicleBlock; cu
           <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: cat.color }}>
             {cat.label} · Cubículos
           </span>
-          <div className="font-mono text-base font-bold text-fg-primary flex items-center gap-1.5">
-            {block.code} <ConfidencePill level={block.confidence} />
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="font-mono text-2xl font-black text-fg-primary tracking-tight leading-none">{blockDisplay(block).label}</span>
+            <ConfidencePill level={block.confidence} />
           </div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-fg-primary mt-1">{blockDisplay(block).floor}</div>
         </div>
         <div className="text-right text-[11px] text-fg-muted tabular">
           {fmt(block.totalM2)} m²
@@ -530,9 +546,10 @@ function CubicleDetail({ block, cubicle, unitStates }: { block: CubicleBlock; cu
   const st = { color: UNIT_STATE_COLOR[state], label: UNIT_STATE_LABEL[state] };
   return (
     <div>
-      <div className="font-mono text-2xl font-bold text-fg-primary">
-        {block.code} · {cubicle.code}
+      <div className="font-mono text-2xl font-black text-fg-primary tracking-tight">
+        {blockDisplay(block).label} · {cubicle.code}
       </div>
+      <div className="text-[11px] font-bold uppercase tracking-wider text-fg-primary mt-0.5">{blockDisplay(block).floor}</div>
       <div className="flex items-center gap-2 mt-1 mb-3">
         <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded" style={{ background: `${CATEGORY_META.anmat.color}1a`, color: CATEGORY_META.anmat.color }}>
           ANMAT
