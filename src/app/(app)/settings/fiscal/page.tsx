@@ -6,10 +6,14 @@ import { getFiscalConfig, listPuntosVenta } from "@/lib/invoicing/data";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { FiscalConfigForm } from "./FiscalConfigForm";
 import { PuntosVentaManager } from "./PuntosVentaManager";
+import { canAccess } from "@/lib/rbac/guard";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 
 export const metadata = { title: "Configuración fiscal" };
+export const dynamic = "force-dynamic";
 
 export default async function FiscalSettingsPage() {
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Configuración fiscal" />;
   // fiscal_config / puntos_venta (migración 0011_arca_billing) pueden no estar
   // aplicados en prod. Degradar con gracia en vez de romper el shell.
   let config: Awaited<ReturnType<typeof getFiscalConfig>>;

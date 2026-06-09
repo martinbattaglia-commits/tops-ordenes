@@ -4,8 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { fmtDateTime } from "@/lib/utils";
 import { InviteUserForm } from "./InviteUserForm";
+import { canAccess } from "@/lib/rbac/guard";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 
 export const metadata = { title: "Usuarios" };
+export const dynamic = "force-dynamic";
 
 interface Profile {
   id: string;
@@ -18,6 +21,7 @@ interface Profile {
 }
 
 export default async function UsersPage() {
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Usuarios" />;
   if (env.app.demoMode) {
     return (
       <div className="p-4 lg:p-8 max-w-2xl">

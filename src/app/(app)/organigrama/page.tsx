@@ -1,5 +1,9 @@
 import { Icon } from "@/components/Icon";
+import { canAccess } from "@/lib/rbac/guard";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 import { ORG, PRODUCT } from "@/lib/org";
+
+export const dynamic = "force-dynamic";
 import {
   ORGCHART_META,
   ASAMBLEA,
@@ -136,7 +140,8 @@ function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-export default function OrganigramaPage() {
+export default async function OrganigramaPage() {
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Organigrama" />;
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-8">
       {/* Hero */}

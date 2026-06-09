@@ -10,22 +10,24 @@ import MobileDrawer from "./MobileDrawer";
 interface ShellProps {
   user: { name: string; role: string; avatar: string };
   canViewExecutive?: boolean;
+  canViewSistema?: boolean;
+  canViewRrhhDocs?: boolean;
   children: ReactNode;
 }
 
-export default function Shell({ user, canViewExecutive, children }: ShellProps) {
+export default function Shell({ user, canViewExecutive, canViewSistema, canViewRrhhDocs, children }: ShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <div className="h-[100dvh] flex bg-bg-page overflow-hidden">
       {/* Sidebar fijo desktop */}
       <aside className="hidden lg:flex w-[248px] shrink-0 h-full">
-        <Sidebar user={user} canViewExecutive={canViewExecutive} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} />
       </aside>
 
       {/* Drawer mobile */}
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Sidebar user={user} canViewExecutive={canViewExecutive} onNavigate={() => setDrawerOpen(false)} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} onNavigate={() => setDrawerOpen(false)} />
       </MobileDrawer>
 
       <div className="flex-1 min-w-0 flex flex-col">

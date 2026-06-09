@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { env } from "@/lib/env";
 import { getProvider, DEFAULT_PROVIDER_ID } from "@/lib/tracking/provider";
+import { canAccess } from "@/lib/rbac/guard";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 
 export const metadata = { title: "Tracking · Configuración" };
 export const dynamic = "force-dynamic";
@@ -14,7 +16,8 @@ export const dynamic = "force-dynamic";
  * y estado de conexión. Los campos de edición están deshabilitados — la gestión
  * real (alta de dispositivos, rotación de token) se entrega en una fase próxima.
  */
-export default function TrackingSettingsPage() {
+export default async function TrackingSettingsPage() {
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Tracking" />;
   const provider = getProvider(DEFAULT_PROVIDER_ID);
   const ingestUrl = `${env.app.url}/api/tracking/ingest`;
   const tokenConfigured = env.tracking.configured;

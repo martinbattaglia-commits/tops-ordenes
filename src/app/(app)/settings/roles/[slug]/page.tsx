@@ -4,6 +4,8 @@ import { Icon } from "@/components/Icon";
 import { getRole, listPermissions } from "@/lib/rbac/data";
 import { MODULE_LABELS, ACTION_LABELS } from "@/lib/rbac/types";
 import { RestrictedAccess } from "@/components/shell/RestrictedAccess";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { isCurrentUserAdmin } from "@/lib/auth/roles";
 
 export const metadata = { title: "Rol · Permisos" };
@@ -14,6 +16,7 @@ interface PageProps {
 }
 
 export default async function RoleDetailPage({ params }: PageProps) {
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Roles" />;
   // Gate 5.5: detalle/edición de rol solo para admin (F-04).
   if (!(await isCurrentUserAdmin())) {
     return <RestrictedAccess message="Solo los administradores pueden ver y editar roles." />;

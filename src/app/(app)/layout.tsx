@@ -3,6 +3,7 @@ import Shell from "@/components/shell/Shell";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { canViewExecutiveFinancialBlocks } from "@/lib/rbac/cockpit-visibility";
+import { canAccess } from "@/lib/rbac/guard";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // Datos de usuario para mostrar en el sidebar / topbar
@@ -54,8 +55,21 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // permiso ejecutivo. Resuelto server-side.
   const canViewExecutive = await canViewExecutiveFinancialBlocks();
 
+  // Gating RBAC del sidebar (Estrategia B): Sistema (sistema.view) y RRHH →
+  // Documentación (rrhh.documentacion.view). Resuelto server-side. Para usuarios
+  // sin rol asignado, canAccess devuelve true (bootstrap per-user) → no sobre-oculta.
+  const [canViewSistema, canViewRrhhDocs] = await Promise.all([
+    canAccess("sistema.view"),
+    canAccess("rrhh.documentacion.view"),
+  ]);
+
   return (
-    <Shell user={userMeta} canViewExecutive={canViewExecutive}>
+    <Shell
+      user={userMeta}
+      canViewExecutive={canViewExecutive}
+      canViewSistema={canViewSistema}
+      canViewRrhhDocs={canViewRrhhDocs}
+    >
       {children}
     </Shell>
   );

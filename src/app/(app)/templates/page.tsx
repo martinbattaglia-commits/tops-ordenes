@@ -1,9 +1,13 @@
 import { env } from "@/lib/env";
 import { Icon } from "@/components/Icon";
+import { canAccess } from "@/lib/rbac/guard";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 
 export const metadata = { title: "Plantillas de email" };
+export const dynamic = "force-dynamic";
 
-export default function TemplatesPage() {
+export default async function TemplatesPage() {
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Plantillas OS" />;
   return (
     <div className="p-4 lg:p-8 max-w-4xl">
       <div className="page-header">

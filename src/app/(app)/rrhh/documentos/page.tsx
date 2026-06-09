@@ -10,7 +10,10 @@ export const metadata = { title: "Documentación · RRHH" };
 export const dynamic = "force-dynamic";
 
 export default async function DocumentosPage() {
-  if (!(await canAccess("rrhh.view"))) return <AccesoRestringido modulo="RRHH · Documentación" />;
+  // Gate granular (RBAC-PERMISSION 2026-06-08): Documentación requiere su propio
+  // permiso (separado de rrhh.view) para poder bloquearla a gerencia_comercial /
+  // administracion_finanzas manteniendo el resto de RRHH visible.
+  if (!(await canAccess("rrhh.documentacion.view"))) return <AccesoRestringido modulo="RRHH · Documentación" />;
   try {
     const docs = await listDocumentos();
 

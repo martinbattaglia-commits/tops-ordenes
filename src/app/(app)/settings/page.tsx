@@ -1,9 +1,13 @@
 import { env } from "@/lib/env";
 import { Icon } from "@/components/Icon";
+import { canAccess } from "@/lib/rbac/guard";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 
 export const metadata = { title: "Configuración" };
+export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Configuración" />;
   return (
     <div className="p-4 lg:p-8 max-w-3xl">
       <div className="page-header">

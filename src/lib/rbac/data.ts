@@ -56,6 +56,10 @@ const SEED_PERMISSIONS: Permission[] = [
   { id: "p20", slug: "documental.delete", module: "documental", action: "delete", label: "Borrar documentos", description: null, created_at: "2026-05-26T00:00:00Z" },
   { id: "p21", slug: "analytics.view", module: "analytics", action: "view", label: "Ver reportes & finanzas", description: null, created_at: "2026-05-26T00:00:00Z" },
   { id: "p22", slug: "sistema.admin", module: "sistema", action: "admin", label: "Administración del sistema", description: null, created_at: "2026-05-26T00:00:00Z" },
+  // RBAC-PERMISSION (2026-06-08): permisos granulares para gatear Sistema (sección
+  // completa) y RRHH→Documentación de forma independiente de sistema.admin / rrhh.view.
+  { id: "p23", slug: "sistema.view", module: "sistema", action: "view", label: "Ver sección Sistema", description: "Organigrama, Roles, Usuarios, Centros de costo, Tracking, Plantillas, Configuración", created_at: "2026-06-08T00:00:00Z" },
+  { id: "p24", slug: "rrhh.documentacion.view", module: "rrhh", action: "view", label: "Ver RRHH → Documentación", description: "Acceso al repositorio documental de RRHH (separado de rrhh.view)", created_at: "2026-06-08T00:00:00Z" },
 ];
 
 // ------------------------------------------------------------------

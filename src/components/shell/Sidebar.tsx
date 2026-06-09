@@ -16,12 +16,16 @@ interface NavItem {
   badge?: string;
   /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
   exec?: boolean;
+  /** Gate RBAC: "sistema" (requiere sistema.view) · "rrhhDocs" (requiere rrhh.documentacion.view). */
+  gate?: "sistema" | "rrhhDocs";
 }
 
 interface Domain {
   id: string;
   label: string;
   items: NavItem[];
+  /** Gate RBAC de todo el dominio (ej. "sistema"). */
+  gate?: "sistema";
 }
 
 /**
@@ -41,7 +45,7 @@ const DOMAINS: Domain[] = [
       { href: "/workspace", label: "Accesos Google", icon: "google" },
       { href: "/cctv", label: "Centro de monitoreo", icon: "eye", badge: "Hikvision" },
       { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
-      { href: "/organigrama", label: "Organigrama", icon: "building" },
+      { href: "/organigrama", label: "Organigrama", icon: "building", gate: "sistema" },
       { href: "/analytics", label: "Analytics Ejecutivo", icon: "report", exec: true },
     ],
   },
@@ -141,13 +145,14 @@ const DOMAINS: Domain[] = [
       { href: "/rrhh/empleados", label: "Empleados", icon: "clients" },
       { href: "/rrhh/solicitudes", label: "Solicitudes", icon: "calendar" },
       { href: "/rrhh/novedades", label: "Novedades", icon: "report" },
-      { href: "/rrhh/documentos", label: "Documentación", icon: "lock" },
+      { href: "/rrhh/documentos", label: "Documentación", icon: "lock", gate: "rrhhDocs" },
       { href: "/rrhh/mi-espacio", label: "Mi espacio", icon: "user" },
     ],
   },
   {
     id: "sistema",
     label: "Sistema",
+    gate: "sistema",
     items: [
       { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
       { href: "/settings/users", label: "Usuarios", icon: "users" },
@@ -163,10 +168,23 @@ interface Props {
   user: { name: string; role: string; avatar: string };
   /** ¿Mostrar ítems ejecutivos/financieros del Cockpit? (default: sí, para no sobre-ocultar). */
   canViewExecutive?: boolean;
+  /** ¿Mostrar la sección Sistema (requiere sistema.view)? (default: sí). */
+  canViewSistema?: boolean;
+  /** ¿Mostrar RRHH → Documentación (requiere rrhh.documentacion.view)? (default: sí). */
+  canViewRrhhDocs?: boolean;
   onNavigate?: () => void;
 }
 
-export default function Sidebar({ user, canViewExecutive = true, onNavigate }: Props) {
+export default function Sidebar({
+  user,
+  canViewExecutive = true,
+  canViewSistema = true,
+  canViewRrhhDocs = true,
+  onNavigate,
+}: Props) {
+  // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
+  const gateAllowed = (gate?: "sistema" | "rrhhDocs") =>
+    !gate || (gate === "sistema" ? canViewSistema : canViewRrhhDocs);
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -248,11 +266,17 @@ export default function Sidebar({ user, canViewExecutive = true, onNavigate }: P
 
       {/* Domain sections */}
       <div className="flex flex-col gap-3">
-        {DOMAINS.map((domain) => (
-          <Section key={domain.id} label={domain.label}>
-            {domain.items
-              .filter((item) => canViewExecutive || !item.exec)
-              .map((item) => (
+        {DOMAINS.map((domain) => {
+          // Dominio gateado completo (ej. Sistema) sin permiso → no renderizar.
+          if (!gateAllowed(domain.gate)) return null;
+          const items = domain.items.filter(
+            (item) => (canViewExecutive || !item.exec) && gateAllowed(item.gate),
+          );
+          // Sección sin ítems visibles → no renderizar el encabezado vacío.
+          if (items.length === 0) return null;
+          return (
+            <Section key={domain.id} label={domain.label}>
+              {items.map((item) => (
                 <NavLink
                   key={item.href}
                   item={item}
@@ -260,8 +284,9 @@ export default function Sidebar({ user, canViewExecutive = true, onNavigate }: P
                   onNavigate={onNavigate}
                 />
               ))}
-          </Section>
-        ))}
+            </Section>
+          );
+        })}
       </div>
 
       {/* Footer: depots + user */}

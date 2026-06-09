@@ -4,12 +4,17 @@ import { listRoles, listPermissions, listUserAssignments } from "@/lib/rbac/data
 import { MODULE_LABELS } from "@/lib/rbac/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { RestrictedAccess } from "@/components/shell/RestrictedAccess";
+import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccess } from "@/lib/rbac/guard";
 import { isCurrentUserAdmin } from "@/lib/auth/roles";
 
 export const metadata = { title: "Sistema · Roles y permisos" };
 export const dynamic = "force-dynamic";
 
 export default async function RolesPage() {
+  // RBAC sistema.view: bloquea la sección Sistema a roles sin ese permiso
+  // (gerencia_comercial / administracion_finanzas). Defensa por URL directa.
+  if (!(await canAccess("sistema.view"))) return <AccesoRestringido modulo="Sistema · Roles y permisos" />;
   // Gate 5.5: gestión de roles/permisos solo para admin (antes no tenía guard;
   // quedaba oculta solo porque 0009_rbac no estaba aplicada — riesgo latente F-04).
   if (!(await isCurrentUserAdmin())) {

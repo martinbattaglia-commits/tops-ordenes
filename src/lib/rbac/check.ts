@@ -32,7 +32,7 @@
 
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 
 export interface PermissionCheckOk {
@@ -109,73 +109,41 @@ export async function checkPermission(
     return { ok: false, status: 401, error: "Auth required" };
   }
 
-  // 2. ¿RBAC poblado en toda la DB? — usar SERVICE ROLE para bypass RLS.
+  // 2. Estrategia B — enforcement DIRIGIDO por-usuario (decisión 2026-06-08).
   //
-  // R22 fix: la RLS de user_roles ("read self or admin") filtra el count
-  // global al subset del caller. Con cliente normal, un usuario regular sin
-  // asignación ve count=0 aunque la tabla tenga rows → fail-open incorrecto
-  // → bypass de RBAC. El admin client bypassa RLS para esta sola query.
+  // Contamos las asignaciones DEL USUARIO (la RLS de user_roles permite leer
+  // las filas propias del caller, sin service role):
+  //   · selfCount === 0 → el usuario NO tiene rol asignado → bootstrap per-user
+  //     (fail-open salvo RBAC_ENFORCE=1). Así, asignar solo a gerencia_comercial /
+  //     administracion_finanzas NO afecta al resto de los usuarios.
+  //   · selfCount  > 0 → enforcement REAL contra los permisos del usuario (abajo).
   //
-  // Si el service_role no está configurado (caso edge: prod sin
-  // SUPABASE_SERVICE_ROLE_KEY), caemos a fail-closed sobre el subset del
-  // usuario — mejor denegar por seguridad que permitir por accidente.
-  const admin = createAdminClient();
-  let totalAssignments: number | null = null;
-
-  if (admin) {
-    const { count, error: countErr } = await admin
-      .from("user_roles")
-      .select("*", { count: "exact", head: true });
-    if (countErr) {
-      console.error(
-        JSON.stringify({
-          ts: new Date().toISOString(),
-          level: "error",
-          mod: "rbac",
-          op: "check-permission.seed-count-failed",
-          permission,
-          userId: user.id,
-          err: countErr.message,
-        })
-      );
-      // No podemos saber si está seedeado → fail-closed.
-      return { ok: false, status: 403, error: "No se pudo verificar permisos" };
-    }
-    totalAssignments = count ?? 0;
-  } else {
-    // Sin service_role disponible: no podemos detectar correctamente el seed
-    // state. Decisión segura: chequear si el usuario tiene rows propias y
-    // operar sobre ese subset (fail-closed para usuarios sin asignación).
-    console.warn(
+  // Trade-off (vs fix R22): R22 usaba el conteo GLOBAL con service role para que
+  // un usuario sin asignación no bypasee cuando la tabla tiene filas de otros.
+  // La Estrategia B elige, a propósito, que los usuarios sin asignación queden en
+  // bootstrap (fail-open) para permitir un rollout dirigido en FASE 1. Ver
+  // RBAC-PERMISSION-CHANGESET.md §nota de seguridad.
+  const { count: selfCount, error: selfErr } = await supabase
+    .from("user_roles")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (selfErr) {
+    console.error(
       JSON.stringify({
         ts: new Date().toISOString(),
-        level: "warn",
+        level: "error",
         mod: "rbac",
-        op: "check-permission.no-admin-client",
+        op: "check-permission.self-count-failed",
         permission,
         userId: user.id,
-        reason:
-          "SUPABASE_SERVICE_ROLE_KEY no configurada — se aplica fail-closed sobre subset del usuario",
+        err: selfErr.message,
       })
     );
-    // Reemplaza el seed-check global por uno self-only — siempre fail-closed
-    // si el usuario no tiene asignación propia. Esto es más estricto que el
-    // fallback original, pero correcto en ausencia de service role.
-    const { count: selfCount } = await supabase
-      .from("user_roles")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id);
-    totalAssignments = (selfCount ?? 0) > 0 ? 1 : 0;
-    if (totalAssignments === 0) {
-      return {
-        ok: false,
-        status: 403,
-        error: `Permiso requerido: ${permission}`,
-      };
-    }
+    return { ok: false, status: 403, error: "No se pudo verificar permisos" };
   }
+  const totalAssignments = selfCount ?? 0;
 
-  // Caso fallback: tabla user_roles GLOBALMENTE vacía → RBAC dormido (FASE 1).
+  // Caso fallback (per-user): el usuario no tiene rol asignado → bootstrap.
   if (totalAssignments === 0) {
     // H1 — con RBAC_ENFORCE=1 (post-seed en prod) → fail-CLOSED en vez de open.
     if (env.rbac.enforce) {
