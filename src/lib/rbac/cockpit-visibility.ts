@@ -15,11 +15,16 @@
  * devuelve true (estado FASE 1 conocido). El cierre efectivo es operacional
  * (seed user_roles + RBAC_ENFORCE=1).
  */
-import type { NextRequest } from "next/server";
-import { checkPermission } from "./check";
+import { getBootPermissions } from "./boot-permissions";
 
-/** ¿Puede ver los bloques financieros/ejecutivos del Cockpit? (super_admin + admin_operativo) */
+/**
+ * ¿Puede ver los bloques financieros/ejecutivos del Cockpit? (super_admin + admin_operativo)
+ *
+ * F1+F2 (2026-06-09): delega en getBootPermissions() — misma semántica que el
+ * checkPermission("cockpit.view") previo, pero deduplicada por request (cache)
+ * y con presupuesto duro anti-cuelgue. checkPermission sigue vigente para las
+ * API routes (drive, libro-iva), que no pasan por acá.
+ */
 export async function canViewExecutiveFinancialBlocks(): Promise<boolean> {
-  const c = await checkPermission(undefined as unknown as NextRequest, "cockpit.view");
-  return c.ok;
+  return (await getBootPermissions()).exec;
 }
