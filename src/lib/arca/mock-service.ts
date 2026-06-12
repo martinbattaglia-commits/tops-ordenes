@@ -69,7 +69,34 @@ export class MockArcaService implements IArcaService {
     const vto = new Date(now);
     vto.setDate(vto.getDate() + 10); // CAE vence ~10 días
 
+    // H1 (FISCAL-HARDENING): el mock replica la regla real de ARCA — las
+    // NC/ND exigen comprobantes asociados (RG 4540). Sin esto el sandbox
+    // aprobaba comprobantes que producción rechazaría (falsa confianza).
+    const NCND_CODES: number[] = [2, 3, 7, 8, 12, 13];
+
     const detResp: FECAEDetResponse[] = req.FeDetReq.map((det) => {
+      const esRectificativo = NCND_CODES.includes(CbteTipo);
+      if (esRectificativo && (!det.CbtesAsoc || det.CbtesAsoc.length === 0)) {
+        // Rechazo idéntico en forma al de producción: sin CAE, Resultado R.
+        return {
+          Concepto: det.Concepto,
+          DocTipo: det.DocTipo,
+          DocNro: det.DocNro,
+          CbteDesde: det.CbteDesde,
+          CbteHasta: det.CbteHasta,
+          CbteFch: det.CbteFch,
+          Resultado: "R" as const,
+          CAE: "",
+          CAEFchVto: "",
+          Observaciones: [
+            {
+              Code: 10192,
+              Msg: "El comprobante requiere informar comprobantes asociados (CbtesAsoc) — RG 4540. Rechazado también en mock.",
+            },
+          ],
+        };
+      }
+
       // Avanza el contador como lo haría ARCA.
       const next =
         (MockArcaService.counters.get(this.key(PtoVta, CbteTipo)) ?? 0) + 1;
@@ -82,7 +109,7 @@ export class MockArcaService implements IArcaService {
         CbteDesde: det.CbteDesde,
         CbteHasta: det.CbteHasta,
         CbteFch: det.CbteFch,
-        Resultado: "A",
+        Resultado: "A" as const,
         CAE: fakeCae(),
         CAEFchVto: yyyymmdd(vto),
         Observaciones: [
@@ -94,6 +121,8 @@ export class MockArcaService implements IArcaService {
       };
     });
 
+    const allApproved = detResp.every((d) => d.Resultado === "A");
+
     return {
       FeCabResp: {
         Cuit: emisor.cuit.replace(/\D/g, ""),
@@ -101,7 +130,7 @@ export class MockArcaService implements IArcaService {
         CbteTipo,
         FchProceso: yyyymmddHHmmss(now),
         CantReg: req.FeCabReq.CantReg,
-        Resultado: "A",
+        Resultado: allApproved ? "A" : "R",
         Reproceso: "N",
       },
       FeDetResp: detResp,

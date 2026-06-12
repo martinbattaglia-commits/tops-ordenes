@@ -30,6 +30,49 @@ export function comprobanteToCbteTipo(t: ComprobanteTipo): CbteTipoCode {
   return CBTE_MAP[t];
 }
 
+// ---- Comprobantes rectificativos (H1 · FISCAL-HARDENING) ------------------
+
+export function esNotaCredito(t: ComprobanteTipo): boolean {
+  return t.startsWith("NOTA_CREDITO");
+}
+
+export function esNotaDebito(t: ComprobanteTipo): boolean {
+  return t.startsWith("NOTA_DEBITO");
+}
+
+/** NC/ND: exigen comprobante asociado (RG 4540). */
+export function esRectificativo(t: ComprobanteTipo): boolean {
+  return esNotaCredito(t) || esNotaDebito(t);
+}
+
+/** Letra del comprobante (A/B/C/E). */
+export function letraComprobante(t: ComprobanteTipo): string {
+  return t.slice(t.lastIndexOf("_") + 1);
+}
+
+/**
+ * Nota de Crédito que rectifica/anula un comprobante (misma letra).
+ * FACTURA_E no tiene NC modelada (NC de exportación, cód. 21) → null.
+ */
+export function notaCreditoPara(tipo: ComprobanteTipo): ComprobanteTipo | null {
+  if (esNotaCredito(tipo)) return null; // una NC no se anula con otra NC
+  switch (letraComprobante(tipo)) {
+    case "A":
+      return "NOTA_CREDITO_A";
+    case "B":
+      return "NOTA_CREDITO_B";
+    case "C":
+      return "NOTA_CREDITO_C";
+    default:
+      return null;
+  }
+}
+
+/** Signo contable del comprobante: las NC restan. */
+export function signoComprobante(t: ComprobanteTipo): 1 | -1 {
+  return esNotaCredito(t) ? -1 : 1;
+}
+
 /**
  * Determina el tipo de comprobante (Factura A/B/C) según la condición IVA
  * del receptor. Emisor RI: a RI/Monotributo → A, a CF/Exento → B.
@@ -126,6 +169,16 @@ export interface ValidationResult {
   errors: string[];
 }
 
+/** Datos mínimos del comprobante asociado para validar una NC/ND (H1). */
+export interface ComprobanteAsociadoRef {
+  tipo_comprobante: ComprobanteTipo;
+  estado_arca: string;
+  anulada: boolean;
+  numero_comprobante: number | null;
+  cuit_cliente: string | null;
+  ambiente: string;
+}
+
 /**
  * Validaciones previas a solicitar CAE. Replica las que ARCA aplica:
  * identidad de importes, datos del receptor según comprobante, etc.
@@ -138,11 +191,51 @@ export function validateInvoice(input: {
   concepto: number;
   fch_serv_desde: string | null;
   fch_serv_hasta: string | null;
+  /** Presente si el comprobante referencia a otro (NC/ND). */
+  comprobante_asociado?: ComprobanteAsociadoRef | null;
+  /** Ambiente vigente de fiscal_config (para validar el asociado). */
+  ambiente?: string;
 }): ValidationResult {
   const errors: string[] = [];
 
   if (input.items.length === 0) {
     errors.push("El comprobante no tiene renglones.");
+  }
+
+  // H1 — comprobantes rectificativos (RG 4540).
+  const rectificativo = esRectificativo(input.tipo_comprobante);
+  const asociado = input.comprobante_asociado ?? null;
+  if (rectificativo && !asociado) {
+    errors.push(
+      "NC/ND: se requiere el comprobante asociado (RG 4540 — CbtesAsoc)."
+    );
+  }
+  if (!rectificativo && asociado) {
+    errors.push("Solo NC/ND pueden referenciar un comprobante asociado.");
+  }
+  if (rectificativo && asociado) {
+    if (asociado.estado_arca !== "AUTORIZADO_ARCA" || !asociado.numero_comprobante) {
+      errors.push("El comprobante asociado debe estar autorizado por ARCA.");
+    }
+    if (asociado.anulada) {
+      errors.push("El comprobante asociado ya está anulado.");
+    }
+    if (esNotaCredito(asociado.tipo_comprobante)) {
+      errors.push("Una Nota de Crédito no puede ser rectificada por otra NC/ND.");
+    }
+    if (letraComprobante(asociado.tipo_comprobante) !== letraComprobante(input.tipo_comprobante)) {
+      errors.push(
+        `La letra de la NC/ND (${letraComprobante(input.tipo_comprobante)}) debe coincidir con la del comprobante asociado (${letraComprobante(asociado.tipo_comprobante)}).`
+      );
+    }
+    if ((asociado.cuit_cliente ?? null) !== (input.cuit_cliente ?? null)) {
+      errors.push("El receptor de la NC/ND debe coincidir con el del comprobante asociado.");
+    }
+    if (input.ambiente && asociado.ambiente !== input.ambiente) {
+      errors.push(
+        `El comprobante asociado pertenece a otro ambiente (${asociado.ambiente} ≠ ${input.ambiente}).`
+      );
+    }
   }
 
   // Identidad fiscal: ImpTotal = neto + iva + no gravado + exento + tributos.

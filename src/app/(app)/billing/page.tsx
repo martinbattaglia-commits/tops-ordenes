@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { listOrders } from "@/lib/data/orders";
-import { listInvoices } from "@/lib/invoicing/data";
+import { listInvoices, getFiscalConfig } from "@/lib/invoicing/data";
 import { INVOICE_STATUS_META, COMPROBANTE_LABEL } from "@/lib/invoicing/types";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { EmitInvoiceButton } from "./EmitInvoiceButton";
+import { AnularInvoiceButton } from "./AnularInvoiceButton";
 
 export const metadata = { title: "Facturación" };
 
@@ -19,13 +20,16 @@ export default async function BillingPage() {
   // claro en lugar de tirar y romper todo el shell (root error.tsx).
   let rows: Awaited<ReturnType<typeof listOrders>>["rows"];
   let invoicesResult: Awaited<ReturnType<typeof listInvoices>>;
+  let ambienteVigente: Awaited<ReturnType<typeof getFiscalConfig>>["ambiente"];
   try {
-    const [ordersRes, invRes] = await Promise.all([
+    const [ordersRes, invRes, config] = await Promise.all([
       listOrders({ pageSize: 1000 }),
       listInvoices({ pageSize: 50 }),
+      getFiscalConfig(),
     ]);
     rows = ordersRes.rows;
     invoicesResult = invRes;
+    ambienteVigente = config.ambiente;
   } catch (e) {
     return (
       <ModuleUnavailable
@@ -146,8 +150,15 @@ export default async function BillingPage() {
           <tbody>
             {invoices.map((inv) => {
               const meta = INVOICE_STATUS_META[inv.estado_arca];
+              const esNC = inv.tipo_comprobante.startsWith("NOTA_CREDITO");
+              const anulable =
+                inv.estado_arca === "AUTORIZADO_ARCA" &&
+                !inv.anulada &&
+                !esNC &&
+                inv.numero_comprobante !== null &&
+                inv.ambiente === ambienteVigente;
               return (
-                <tr key={inv.id}>
+                <tr key={inv.id} className={inv.anulada ? "opacity-60" : undefined}>
                   <td className="text-xs">{COMPROBANTE_LABEL[inv.tipo_comprobante]}</td>
                   <td className="font-mono text-xs">
                     {nroComprobante(inv.punto_venta, inv.numero_comprobante)}
@@ -156,24 +167,49 @@ export default async function BillingPage() {
                   <td className="text-xs">{fmtDate(inv.created_at)}</td>
                   <td className="font-mono text-xs">{inv.cae ?? "—"}</td>
                   <td>
-                    <span className={`badge ${meta.cls}`}>{meta.label}</span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`badge ${meta.cls}`}>{meta.label}</span>
+                      {/* H2: los comprobantes fuera del ambiente productivo se
+                          marcan explícitamente — sin validez fiscal. */}
+                      {inv.ambiente !== "PRODUCCION" && (
+                        <span
+                          className="badge bg-status-warning/10 text-status-warning border border-status-warning/30"
+                          title="Comprobante de prueba — excluido de KPIs, tesorería y libros"
+                        >
+                          {inv.ambiente}
+                        </span>
+                      )}
+                      {inv.anulada && (
+                        <span className="badge bg-status-danger/10 text-status-danger border border-status-danger/30">
+                          ANULADA
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="text-right tabular font-bold text-fg-brand">
                     {fmtCurrency(inv.total)}
                   </td>
                   <td className="text-right">
-                    {inv.estado_arca === "AUTORIZADO_ARCA" ? (
-                      <a
-                        href={`/api/invoices/${inv.id}/pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-ghost btn-sm"
-                      >
-                        <Icon name="file-pdf" size={12} /> Ver
-                      </a>
-                    ) : (
-                      <span className="text-xs text-fg-muted">—</span>
-                    )}
+                    <div className="inline-flex items-center gap-1">
+                      {inv.estado_arca === "AUTORIZADO_ARCA" ? (
+                        <a
+                          href={`/api/invoices/${inv.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-ghost btn-sm"
+                        >
+                          <Icon name="file-pdf" size={12} /> Ver
+                        </a>
+                      ) : (
+                        <span className="text-xs text-fg-muted">—</span>
+                      )}
+                      {anulable && (
+                        <AnularInvoiceButton
+                          invoiceId={inv.id}
+                          nro={nroComprobante(inv.punto_venta, inv.numero_comprobante)}
+                        />
+                      )}
+                    </div>
                   </td>
                 </tr>
               );

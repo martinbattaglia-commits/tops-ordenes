@@ -16,7 +16,9 @@ import { env } from "@/lib/env";
 import { fmtCurrency } from "@/lib/compras/format";
 import { listFleet, deriveLiveStatus } from "@/lib/tracking/data";
 import { listCamerasSafe } from "@/lib/cctv/hikvision";
-import { listInvoices } from "@/lib/invoicing/data";
+import { listInvoices, getFiscalConfig } from "@/lib/invoicing/data";
+import { isFiscallyValid } from "@/lib/invoicing/fiscal-validity";
+import { signoComprobante } from "@/lib/invoicing/calc";
 
 /** Vehículos online/total desde Tracking (Traccar). null si no hay fuente. */
 async function fleetOnline(): Promise<{ online: number; total: number } | null> {
@@ -45,23 +47,31 @@ async function camerasOnline(): Promise<{ online: number; total: number } | null
   }
 }
 
-/** Facturación de ventas del mes en curso (suma de customer_invoices). null si no hay fuente. */
+/**
+ * Facturación de ventas del mes en curso. null si no hay fuente.
+ * H2 (FISCAL-HARDENING): aplica la regla de corte de validez fiscal — solo
+ * comprobantes AUTORIZADOS, no anulados y del ambiente vigente; las NC restan.
+ */
 async function billingThisMonth(): Promise<number | null> {
   try {
-    const inv = await listInvoices({ pageSize: 500 });
+    const [inv, config] = await Promise.all([
+      listInvoices({ pageSize: 500 }),
+      getFiscalConfig(),
+    ]);
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth();
     let sum = 0;
     let matched = 0;
     for (const row of inv.rows) {
+      if (!isFiscallyValid(row, config.ambiente)) continue;
       const d = new Date(row.created_at);
       if (d.getFullYear() === y && d.getMonth() === m) {
-        sum += Number(row.total ?? 0);
+        sum += signoComprobante(row.tipo_comprobante) * Number(row.total ?? 0);
         matched++;
       }
     }
-    // Sin facturas reales en el mes → null (no inventar $0 como "dato real")
+    // Sin facturas válidas en el mes → null (no inventar $0 como "dato real")
     return matched > 0 ? sum : 0;
   } catch {
     return null;
