@@ -98,9 +98,67 @@ export const ITEMS: ComplianceItem[] = [
 // ── Selectores derivados (puros) ─────────────────────────────────────────────
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
-/** Ficha por ítem (ruta /anmat/[id]). */
+// ── Derivación dinámica de vencimientos (FIX confiabilidad · 2026-06-11) ────
+// ITEMS es un snapshot manual (auditoría AUDIT_META.fecha), pero los
+// vencimientos NO pueden quedar congelados: para los ítems CON fecha de
+// vencimiento, `dias`, `estado` y `riesgo` se recalculan en runtime contra la
+// fecha actual (zona AR). Los `dias` hardcodeados del snapshot dejan de ser
+// fuente de verdad (quedan solo como dato histórico del archivo).
+//
+// Reglas (deriveComplianceStatus):
+//   · sin vencimiento  → conserva estado/riesgo documental base (cubre
+//     faltante / inexistente / proyecto: siguen siendo hallazgo crítico).
+//   · vencido (d < 0)  → Rojo · "Vencido" (aunque figure "en trámite": computa
+//     riesgo hasta que exista fecha renovada / documento vigente).
+//   · 0–30 días        → Naranja · "Vencimiento inminente".
+//   · 31–60 días       → Amarillo · "Alerta preventiva".
+//   · > 60 días        → Verde · "Vigente".
+
+const AR_TZ = "America/Argentina/Buenos_Aires";
+
+/** Fecha actual (solo día) en zona AR, como "YYYY-MM-DD". */
+export function todayAr(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: AR_TZ }).format(now);
+}
+
+/** Diferencia en días entre una fecha YYYY-MM-DD y `today` (UTC date-only, sin DST). */
+function diffDays(venc: string, today: string): number {
+  const [vy, vm, vd] = venc.split("-").map(Number);
+  const [ty, tm, td] = today.split("-").map(Number);
+  return Math.round((Date.UTC(vy, vm - 1, vd) - Date.UTC(ty, tm - 1, td)) / 86_400_000);
+}
+
+/** Recalcula dias/estado/riesgo de UN ítem contra la fecha actual (o `today` inyectada para tests). */
+export function deriveComplianceStatus(item: ComplianceItem, today: string = todayAr()): ComplianceItem {
+  if (!item.vencimiento) return item; // sin fecha → manda el estado documental base
+  const dias = diffDays(item.vencimiento, today);
+  let riesgo: Riesgo;
+  let estado: string;
+  if (dias < 0) {
+    riesgo = "Rojo";
+    estado = "Vencido";
+  } else if (dias <= 30) {
+    riesgo = "Naranja";
+    estado = "Vencimiento inminente";
+  } else if (dias <= 60) {
+    riesgo = "Amarillo";
+    estado = "Alerta preventiva";
+  } else {
+    riesgo = "Verde";
+    estado = "Vigente";
+  }
+  return { ...item, dias, riesgo, estado };
+}
+
+/** Inventario con vencimientos VIVOS — la entrada que deben usar page/ficha/score. */
+export function deriveItems(items: ComplianceItem[] = ITEMS, today: string = todayAr()): ComplianceItem[] {
+  return items.map((i) => deriveComplianceStatus(i, today));
+}
+
+/** Ficha por ítem (ruta /anmat/[id]) — devuelve el ítem ya derivado a hoy. */
 export function getItem(id: string): ComplianceItem | undefined {
-  return ITEMS.find((i) => i.id === id);
+  const base = ITEMS.find((i) => i.id === id);
+  return base ? deriveComplianceStatus(base) : undefined;
 }
 
 // ── Modelo de score (parametrizable) ─────────────────────────────────────────
