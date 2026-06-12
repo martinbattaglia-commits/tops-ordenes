@@ -204,7 +204,7 @@ begin
     v_id,
     nullif(r->>'user_id','')::uuid,
     r->>'action',
-    r->>'estado',
+    (r->>'estado')::public.invoice_arca_status_t,
     nullif(r->>'cae',''),
     r->'request',
     r->'response',
