@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { Icon } from "@/components/Icon";
 import {
-  ITEMS, AUDIT_META, RISK_HEX, executiveKpis,
+  AUDIT_META, RISK_HEX, executiveKpis, deriveItems, todayAr,
   complianceScore, complianceColor, riskScore, riskBand, riskBandColor, criticalCount,
   riskDistribution, byCategory, timelineBuckets, alertCenter, recurringObligations, calendar,
   type Riesgo,
@@ -26,20 +26,26 @@ function SectionH({ id, title, hint }: { id?: string; title: string; hint?: stri
 }
 
 export default function AnmatCockpitPage() {
-  const cs = complianceScore(ITEMS);
-  const rs = riskScore(ITEMS);
+  // FIX 2026-06-11: el inventario se DERIVA a la fecha actual en cada render
+  // (force-dynamic) — dias/estado/riesgo vivos; los hardcodeados del snapshot
+  // dejan de ser fuente de verdad. Un vencimiento posterior a la auditoría
+  // impacta KPIs/score/alertas sin editar el archivo.
+  const hoy = todayAr();
+  const items = deriveItems(undefined, hoy);
+  const cs = complianceScore(items);
+  const rs = riskScore(items);
   const band = riskBand(rs);
-  const criticos = criticalCount(ITEMS);
-  const warnings = ITEMS.filter((i) => i.riesgo === "Naranja" || i.riesgo === "Amarillo").length;
+  const criticos = criticalCount(items);
+  const warnings = items.filter((i) => i.riesgo === "Naranja" || i.riesgo === "Amarillo").length;
   const csHex = RISK_HEX[complianceColor(cs)];
   const rsHex = RISK_HEX[riskBandColor(band)];
-  const kpis = executiveKpis(ITEMS);
-  const dist = riskDistribution(ITEMS);
-  const cats = byCategory(ITEMS);
-  const buckets = timelineBuckets(ITEMS);
-  const alerts = alertCenter(ITEMS);
-  const recur = recurringObligations(ITEMS);
-  const cal = calendar(ITEMS, 2026);
+  const kpis = executiveKpis(items);
+  const dist = riskDistribution(items);
+  const cats = byCategory(items);
+  const buckets = timelineBuckets(items);
+  const alerts = alertCenter(items);
+  const recur = recurringObligations(items);
+  const cal = calendar(items, Number(hoy.slice(0, 4)));
   const toneHex = (t: "neutral" | Riesgo) => (t === "neutral" ? "var(--fg-brand)" : RISK_HEX[t]);
 
   return (
@@ -59,7 +65,7 @@ export default function AnmatCockpitPage() {
           <span className="inline-flex items-center gap-1.5 text-[11px] text-fg-secondary border border-stroke-soft rounded-pill px-3 py-1">
             <span className="w-1.5 h-1.5 rounded-full bg-status-success" /> Drive auditado · {AUDIT_META.docsTotal} documentos
           </span>
-          <span className="text-[11px] text-fg-muted">Auditoría {AUDIT_META.fecha.split("-").reverse().join("/")}</span>
+          <span className="text-[11px] text-fg-muted">Auditoría {AUDIT_META.fecha.split("-").reverse().join("/")} · vencimientos recalculados al {hoy.split("-").reverse().join("/")}</span>
         </div>
       </div>
 
@@ -67,9 +73,15 @@ export default function AnmatCockpitPage() {
       <div className="card p-4 mb-5 flex items-start gap-3 border-l-4" style={{ borderColor: RISK_HEX.Rojo, background: `${RISK_HEX.Rojo}0e` } as CSSProperties}>
         <Icon name="bolt" size={18} className="mt-0.5 flex-shrink-0" style={{ color: RISK_HEX.Rojo } as CSSProperties} />
         <div>
-          <div className="text-sm font-bold" style={{ color: RISK_HEX.Rojo } as CSSProperties}>{criticos} hallazgos críticos · 1 vencimiento inminente</div>
+          <div className="text-sm font-bold" style={{ color: RISK_HEX.Rojo } as CSSProperties}>
+            {criticos} hallazgos críticos · {alerts.inmediatos.length} vencimiento{alerts.inmediatos.length === 1 ? "" : "s"} inminente{alerts.inmediatos.length === 1 ? "" : "s"}
+          </div>
           <div className="text-[12.5px] text-fg-secondary mt-0.5 leading-relaxed">
-            <b>CAA Nación (Residuos Peligrosos)</b> vencido desde 06/10/2023 — renovación en trámite · <b>Habilitación ANMAT</b> inexistente (sólo proyecto) · <b>Conservación Edilicia Ley 257 (Luján)</b> vence 10/06/2026.
+            {/* Derivado a hoy: los críticos reales, no narrativa congelada del snapshot. */}
+            {alerts.criticos.slice(0, 3).map((i, idx) => (
+              <span key={i.id}>{idx > 0 && " · "}<b>{i.documento.split(" – ")[0].split(" (")[0]}</b> ({i.dias !== null && i.dias < 0 ? `vencido ${i.venc_fmt}` : i.estado.toLowerCase()})</span>
+            ))}
+            {alerts.criticos.length > 3 && <span> · +{alerts.criticos.length - 3} más en el centro de alertas</span>}
           </div>
         </div>
       </div>
@@ -102,7 +114,7 @@ export default function AnmatCockpitPage() {
           ) : (
             <span className="mt-3 text-xs font-bold px-3 py-1 rounded-pill" style={{ color: RISK_HEX.Verde, background: `${RISK_HEX.Verde}22` } as CSSProperties}>Sin críticos</span>
           )}
-          <div className="text-[11px] text-fg-muted mt-2">{warnings} ítems a resolver · {ITEMS.filter((i) => i.riesgo === "Verde").length} vigentes</div>
+          <div className="text-[11px] text-fg-muted mt-2">{warnings} ítems a resolver · {items.filter((i) => i.riesgo === "Verde").length} vigentes</div>
         </div>
       </div>
       <div className="text-[11px] text-fg-muted mt-2 font-mono">
@@ -130,7 +142,7 @@ export default function AnmatCockpitPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-4">
         <div className="card p-5">
           <div className="text-xs font-bold uppercase tracking-wide text-fg-muted mb-1">Distribución de riesgo</div>
-          <div className="text-[11px] text-fg-muted mb-3">{ITEMS.length} ítems · 12 categorías · 2 sedes</div>
+          <div className="text-[11px] text-fg-muted mb-3">{items.length} ítems · 12 categorías · 2 sedes</div>
           <RiskDonut dist={dist} />
         </div>
         <div className="card p-5">
@@ -151,7 +163,7 @@ export default function AnmatCockpitPage() {
       {/* Sección 7 — Vista por Sede */}
       <SectionH id="sede" title="Vista por sede" hint="Magaldi · Luján" />
       <span id="sede-MAGALDI" className="block scroll-mt-20" /><span id="sede-LUJAN" className="block scroll-mt-20" />
-      <div className="card p-5"><SedeTabs items={ITEMS} /></div>
+      <div className="card p-5"><SedeTabs items={items} /></div>
 
       {/* Sección 8 — Calendario Regulatorio */}
       <SectionH title="Calendario regulatorio 2026" hint="Vencimientos por mes" />
@@ -164,7 +176,7 @@ export default function AnmatCockpitPage() {
       {/* Sección 10 — Matriz Regulatoria */}
       <SectionH id="matriz" title="Matriz regulatoria" hint="Búsqueda · filtros · orden" />
       <div className="card p-5">
-        <ComplianceMatrix items={ITEMS} />
+        <ComplianceMatrix items={items} />
       </div>
 
       {/* Futuro / metodología */}
@@ -179,7 +191,7 @@ export default function AnmatCockpitPage() {
           <div>• Persistencia DB (migración 0065_compliance_core)</div>
         </div>
         <div className="text-[11px] text-fg-muted mt-3 leading-relaxed">
-          <b>Metodología.</b> Auditoría documental sobre {AUDIT_META.docsTotal} archivos del Drive «AGENCIA GUBERNAMENTAL DE CONTROL» (Magaldi {AUDIT_META.docsMagaldi} / Luján {AUDIT_META.docsLujan}). Ventanas: Naranja ≤30 días · Amarillo ≤90 días o a verificar · Rojo vencido o faltante. No se asumieron fechas, vencimientos ni organismos. Fuente: COMPLIANCE-AUDIT-MASTER-REPORT · {AUDIT_META.fecha}.
+          <b>Metodología.</b> Auditoría documental sobre {AUDIT_META.docsTotal} archivos del Drive «AGENCIA GUBERNAMENTAL DE CONTROL» (Magaldi {AUDIT_META.docsMagaldi} / Luján {AUDIT_META.docsLujan}). Inventario manual del snapshot {AUDIT_META.fecha}; <b>vencimientos recalculados en runtime contra la fecha actual</b>: Rojo vencido o faltante · Naranja ≤30 días (inminente) · Amarillo 31–60 días (alerta preventiva) · Verde &gt;60 días. Ítems sin fecha conservan su estado documental auditado. Fuente: COMPLIANCE-AUDIT-MASTER-REPORT.
         </div>
       </div>
     </div>
