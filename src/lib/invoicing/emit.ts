@@ -37,7 +37,13 @@ import {
   toArcaDate,
   fromArcaDate,
 } from "./calc";
-import { getFiscalConfig, getInvoice, sumNotasCreditoDe, mockStore } from "./data";
+import {
+  getFiscalConfig,
+  getInvoice,
+  sumNotasCreditoDe,
+  maxNumeroComprobante,
+  mockStore,
+} from "./data";
 import type {
   ComprobanteTipo,
   CondicionIva,
@@ -192,7 +198,14 @@ export async function emitInvoice(
   let arcaResponse: unknown;
 
   try {
-    const ultimo = await arca.ultimoComprobanteAutorizado(puntoVenta, cbteTipo);
+    let ultimo = await arca.ultimoComprobanteAutorizado(puntoVenta, cbteTipo);
+    if (ambiente === "SANDBOX") {
+      // El mock numera en memoria por proceso (se resetea por instancia
+      // serverless): alinear con lo ya persistido del ambiente evita colisión
+      // con UNIQUE (punto_venta, cbte_tipo_arca, numero_comprobante).
+      const ultimoDb = await maxNumeroComprobante(puntoVenta, cbteTipo, ambiente);
+      ultimo = Math.max(ultimo, ultimoDb);
+    }
     numeroComprobante = ultimo + 1;
 
     const hoy = new Date();
