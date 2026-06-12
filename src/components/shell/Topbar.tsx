@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import { NotificationsBell } from "@/components/shell/NotificationsBell";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
+import { TopsConnectButton } from "@/components/shell/TopsConnectButton";
 import { PRODUCT } from "@/lib/org";
 
 export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
@@ -77,6 +78,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </form>
 
       <div className="ml-auto flex items-center gap-2">
+        <TopsConnectButton />
         <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-secondary border border-stroke-soft rounded-pill bg-bg-surface">
           <span className="nx-live-dot" />
           <span className="capitalize">{fechaHoy}</span>

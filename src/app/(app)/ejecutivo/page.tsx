@@ -114,12 +114,22 @@ function EstadoGeneral({ cc }: { cc: Awaited<ReturnType<typeof getCommandCenter>
             </span>
             <span className="text-sm font-bold text-fg-secondary">sistemas operativos</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1">
             {cc.systems.map((s) => (
-              <div key={s.id} className="flex items-center gap-2 min-w-0" title={s.detail}>
+              <Link
+                key={s.id}
+                href={s.href}
+                title={`${s.detail} · Ir al módulo`}
+                className="group flex items-center gap-2 min-w-0 rounded-md px-1.5 py-1 -mx-1.5 cursor-pointer transition-colors duration-200 hover:bg-fg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700/40"
+              >
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[s.status]} ${s.status !== "operative" ? "animate-pulse" : ""}`} />
                 <span className={`text-[13px] font-semibold truncate ${s.status !== "operative" ? (s.critical ? "text-tops-red" : "text-status-warning") : "text-fg-primary"}`}>{s.label}</span>
-              </div>
+                <Icon
+                  name="chevron-right"
+                  size={12}
+                  className="flex-shrink-0 text-fg-muted opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0"
+                />
+              </Link>
             ))}
           </div>
         </div>
@@ -140,18 +150,29 @@ function AlertasCriticas({ alerts }: { alerts: CriticalAlert[] }) {
       </div>
       <ul className="divide-y divide-stroke-soft">
         {alerts.map((a) => (
-          <li key={a.id} className="px-5 py-3 flex items-start gap-3">
-            <span
-              className={`w-8 h-8 rounded-md grid place-items-center flex-shrink-0 ${
-                a.severity === "critical" ? "bg-tops-red/10 text-tops-red" : "bg-status-warning/10 text-status-warning"
-              }`}
+          <li key={a.id}>
+            <Link
+              href={a.href}
+              title="Ir al sistema de origen"
+              className="group px-5 py-3 flex items-start gap-3 cursor-pointer transition-colors duration-200 hover:bg-fg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-tops-blue-700/40"
             >
-              <Icon name="bell" size={14} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="text-[13px] font-bold text-fg-primary">{a.title}</div>
-              <div className="text-[11px] text-fg-secondary">{a.detail}</div>
-            </div>
+              <span
+                className={`w-8 h-8 rounded-md grid place-items-center flex-shrink-0 ${
+                  a.severity === "critical" ? "bg-tops-red/10 text-tops-red" : "bg-status-warning/10 text-status-warning"
+                }`}
+              >
+                <Icon name="bell" size={14} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-bold text-fg-primary">{a.title}</div>
+                <div className="text-[11px] text-fg-secondary">{a.detail}</div>
+              </div>
+              <Icon
+                name="arrow-right"
+                size={14}
+                className="flex-shrink-0 self-center text-fg-muted opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0"
+              />
+            </Link>
           </li>
         ))}
       </ul>
@@ -159,9 +180,13 @@ function AlertasCriticas({ alerts }: { alerts: CriticalAlert[] }) {
   );
 }
 
-function MasterKpi({ master }: { master: { label: string; value: string | null; pendingReason?: string } }) {
+function MasterKpi({ master }: { master: { label: string; value: string | null; pendingReason?: string; href: string } }) {
   return (
-    <div className="nx-surface card featured-stroke relative overflow-hidden p-5 md:p-6 flex items-center justify-between gap-4">
+    <Link
+      href={master.href}
+      title={`Ir a ${master.label}`}
+      className="nx-interactive card featured-stroke relative overflow-hidden p-5 md:p-6 flex items-center justify-between gap-4 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700"
+    >
       <div
         className="absolute inset-0 pointer-events-none opacity-90"
         style={{ background: "radial-gradient(ellipse at right, rgba(33,69,118,0.10), transparent 65%)" }}
@@ -170,17 +195,22 @@ function MasterKpi({ master }: { master: { label: string; value: string | null; 
         <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-fg-muted">Resultado operativo</div>
         <div className="text-sm font-bold text-fg-secondary">{master.label}</div>
       </div>
-      <div className="relative text-right">
+      <div className="relative text-right flex items-center gap-3">
         {master.value !== null ? (
           <div className="text-3xl md:text-4xl font-black text-fg-brand tabular">{master.value}</div>
         ) : (
-          <>
+          <div>
             <div className="text-xl font-black text-fg-muted">Dato no disponible</div>
             {master.pendingReason && <div className="text-[10px] text-fg-muted mt-1">{master.pendingReason}</div>}
-          </>
+          </div>
         )}
+        <Icon
+          name="arrow-right"
+          size={16}
+          className="flex-shrink-0 text-fg-muted opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0"
+        />
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -188,10 +218,11 @@ function KpiCard({ kpi, index }: { kpi: ExecKpi; index: number }) {
   const pending = kpi.value === null;
   const numeric = kpi.value && /^\d+$/.test(kpi.value);
   return (
-    <div
+    <Link
+      href={kpi.href}
       style={{ animationDelay: `${index * 40}ms` }}
-      className="nx-surface nx-stagger card kpi relative overflow-hidden"
-      title={kpi.pendingReason ?? undefined}
+      className="nx-interactive nx-stagger card kpi relative overflow-hidden block cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700"
+      title={kpi.pendingReason ?? `Ir a ${kpi.label}`}
     >
       <div className="kpi-label">{kpi.label}</div>
       {pending ? (
@@ -205,7 +236,7 @@ function KpiCard({ kpi, index }: { kpi: ExecKpi; index: number }) {
           {kpi.sub && <div className="text-[10px] font-semibold text-fg-muted mt-1 uppercase tracking-wide">{kpi.sub}</div>}
         </>
       )}
-    </div>
+    </Link>
   );
 }
 
