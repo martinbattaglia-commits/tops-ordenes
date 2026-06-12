@@ -5,6 +5,7 @@
 process.env.NEXT_PUBLIC_DEMO_MODE = "1";
 
 import { emitInvoice } from "../../src/lib/invoicing/emit";
+import { mockStore } from "../../src/lib/invoicing/data";
 import { alicuotaToId, alicuotaFromId, AlicIvaId } from "../../src/lib/arca/types";
 import { round2 } from "../../src/lib/invoicing/calc";
 
@@ -139,6 +140,33 @@ async function main() {
     return b && round2(b.neto) === l.neto_gravado && round2(b.iva) === l.iva_importe;
   });
   check("V6 — backfill (GROUP BY items) ≡ vat_lines emitidas", backfillEq);
+
+  // V8: numeración SANDBOX consistente con lo persistido — si ya existe un
+  // comprobante Nro 50 para (PV, tipo), la próxima emisión debe ser 51 aunque
+  // el contador en memoria del mock esté más bajo (reinicio de instancia).
+  const maxPrevio = mockStore().invoices.reduce(
+    (a, i) => Math.max(a, i.numero_comprobante ?? 0),
+    0
+  );
+  mockStore().invoices.push({
+    ...stress.invoice!,
+    id: "seed-num-50",
+    numero_comprobante: 50,
+    items: [],
+    vat_lines: [],
+  });
+  const next = await emitInvoice(
+    {
+      ...baseInput,
+      items: [{ descripcion: "Post-reinicio", cantidad: 1, precio_unitario: 1000, alicuota_iva: 21 }],
+    },
+    ctx
+  );
+  check(
+    "V8 — numeración salta el máximo persistido (fix duplicate key)",
+    next.ok && (next.invoice?.numero_comprobante ?? 0) === 51,
+    `numero=${next.invoice?.numero_comprobante} maxPrevio=${maxPrevio}`
+  );
 
   // V7: roundtrip de mapeos Id ↔ alícuota.
   const ids = [AlicIvaId.CERO, AlicIvaId.DOS_CINCO, AlicIvaId.CINCO, AlicIvaId.DIEZ_CINCO, AlicIvaId.VEINTIUNO, AlicIvaId.VEINTISIETE];

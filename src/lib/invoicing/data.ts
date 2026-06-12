@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import type {
+  ArcaAmbiente,
   CustomerInvoice,
   FiscalConfig,
   PuntoVenta,
@@ -243,6 +244,42 @@ export async function findBilledOrderConflicts(
       orderId: r.orderId,
       comprobante: `${r.inv!.tipo_comprobante} ${r.inv!.punto_venta}-${r.inv!.numero_comprobante ?? "?"}`,
     }));
+}
+
+/**
+ * Mayor numero_comprobante ya persistido para (punto de venta, tipo, ambiente).
+ * Usado en SANDBOX: el mock ARCA numera en memoria por proceso (se resetea por
+ * instancia serverless) → sin esto, una lambda nueva propone números ya usados
+ * y colisiona con UNIQUE (punto_venta, cbte_tipo_arca, numero_comprobante).
+ * En HOMOLOGACION/PRODUCCION no se usa: la numeración la manda ARCA.
+ */
+export async function maxNumeroComprobante(
+  puntoVenta: number,
+  cbteTipo: number,
+  ambiente: ArcaAmbiente
+): Promise<number> {
+  if (isMock()) {
+    return MOCK_INVOICES.filter(
+      (i) =>
+        i.punto_venta === puntoVenta &&
+        i.cbte_tipo_arca === cbteTipo &&
+        i.ambiente === ambiente
+    ).reduce((a, i) => Math.max(a, i.numero_comprobante ?? 0), 0);
+  }
+  const supabase = createClient();
+  if (!supabase) return 0;
+  const { data, error } = await supabase
+    .from("customer_invoices")
+    .select("numero_comprobante")
+    .eq("punto_venta", puntoVenta)
+    .eq("cbte_tipo_arca", cbteTipo)
+    .eq("ambiente", ambiente)
+    .not("numero_comprobante", "is", null)
+    .order("numero_comprobante", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`maxNumeroComprobante: ${error.message}`);
+  return Number(data?.numero_comprobante ?? 0);
 }
 
 /**
