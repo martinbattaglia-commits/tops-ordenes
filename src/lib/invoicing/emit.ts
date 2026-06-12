@@ -20,17 +20,19 @@ import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { getArcaService } from "@/lib/arca/service";
 import { buildFiscalQr } from "@/lib/arca/qr";
-import { DocTipo, type FECAESolicitarRequest } from "@/lib/arca/types";
+import { DocTipo, type CbteAsoc, type FECAESolicitarRequest } from "@/lib/arca/types";
 import {
   comprobanteToCbteTipo,
   comprobanteParaReceptor,
   computeItem,
   computeInvoiceTotals,
   validateInvoice,
+  esNotaCredito,
+  round2,
   toArcaDate,
   fromArcaDate,
 } from "./calc";
-import { getFiscalConfig, mockStore } from "./data";
+import { getFiscalConfig, getInvoice, sumNotasCreditoDe, mockStore } from "./data";
 import type {
   ComprobanteTipo,
   CondicionIva,
@@ -118,6 +120,14 @@ export async function emitInvoice(
     tributos: input.tributos,
   });
 
+  // H1 — resolver el comprobante asociado (obligatorio en NC/ND, RG 4540).
+  const asociado = input.comprobante_asociado_id
+    ? await getInvoice(input.comprobante_asociado_id)
+    : null;
+  if (input.comprobante_asociado_id && !asociado) {
+    return { ok: false, errors: ["El comprobante asociado no existe."] };
+  }
+
   const validation = validateInvoice({
     tipo_comprobante: tipo,
     cuit_cliente: input.cuit_cliente ?? null,
@@ -126,10 +136,41 @@ export async function emitInvoice(
     concepto,
     fch_serv_desde: input.fch_serv_desde ?? null,
     fch_serv_hasta: input.fch_serv_hasta ?? null,
+    comprobante_asociado: asociado,
+    ambiente,
   });
   if (!validation.ok) {
     return { ok: false, errors: validation.errors };
   }
+
+  // H1 — tope de acreditación: ΣNC (autorizadas, no anuladas) ≤ total original.
+  if (asociado && esNotaCredito(tipo)) {
+    const acreditado = await sumNotasCreditoDe(asociado.id);
+    const restante = round2(Number(asociado.total) - acreditado);
+    if (totals.total > restante + 0.02) {
+      return {
+        ok: false,
+        errors: [
+          `La NC excede el saldo acreditable del comprobante asociado: restante $${restante.toFixed(2)}, NC $${totals.total.toFixed(2)}.`,
+        ],
+      };
+    }
+  }
+
+  // H1 — CbtesAsoc para el request ARCA (la identidad del original).
+  const cbtesAsoc: CbteAsoc[] | undefined = asociado
+    ? [
+        {
+          Tipo: asociado.cbte_tipo_arca,
+          PtoVta: asociado.punto_venta,
+          Nro: asociado.numero_comprobante!,
+          Cuit: config.cuit.replace(/\D/g, ""),
+          CbteFch: toArcaDate(
+            asociado.fecha_autorizacion_arca ?? asociado.created_at
+          ),
+        },
+      ]
+    : undefined;
 
   // Paso 4: pedir número + CAE a ARCA.
   const arca = getArcaService(ambiente);
@@ -176,6 +217,7 @@ export async function emitInvoice(
               }
             : {}),
           Iva: totals.alicuotas.length ? totals.alicuotas : undefined,
+          CbtesAsoc: cbtesAsoc,
         },
       ],
     };

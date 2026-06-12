@@ -188,6 +188,91 @@ export async function getInvoice(id: string): Promise<CustomerInvoice | null> {
   return (data as CustomerInvoice) ?? null;
 }
 
+/**
+ * H4 (FISCAL-HARDENING) — guard de idempotencia: OS ya referenciadas por un
+ * comprobante fiscalmente vigente (autorizado, no anulado, no NC). No depende
+ * del update post-CAE: aunque la marca FACTURADA haya fallado, el conflicto
+ * se detecta acá y bloquea la re-emisión.
+ */
+export async function findBilledOrderConflicts(
+  orderIds: string[]
+): Promise<{ orderId: string; comprobante: string }[]> {
+  if (orderIds.length === 0) return [];
+
+  if (isMock()) {
+    const conflicts: { orderId: string; comprobante: string }[] = [];
+    for (const inv of MOCK_INVOICES) {
+      if (
+        inv.estado_arca !== "AUTORIZADO_ARCA" ||
+        inv.anulada ||
+        inv.tipo_comprobante.startsWith("NOTA_CREDITO")
+      )
+        continue;
+      for (const it of inv.items ?? []) {
+        if (it.order_id && orderIds.includes(it.order_id)) {
+          conflicts.push({
+            orderId: it.order_id,
+            comprobante: `${inv.tipo_comprobante} ${inv.punto_venta}-${inv.numero_comprobante ?? "?"}`,
+          });
+        }
+      }
+    }
+    return conflicts;
+  }
+
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("invoice_items")
+    .select(
+      "order_id, invoice:customer_invoices!inner(tipo_comprobante, punto_venta, numero_comprobante, estado_arca, anulada)"
+    )
+    .in("order_id", orderIds)
+    .eq("invoice.estado_arca", "AUTORIZADO_ARCA")
+    .eq("invoice.anulada", false);
+  if (error) throw new Error(`findBilledOrderConflicts: ${error.message}`);
+
+  type InvRef = Pick<
+    CustomerInvoice,
+    "tipo_comprobante" | "punto_venta" | "numero_comprobante"
+  >;
+  return (data ?? [])
+    .map((r) => ({ orderId: r.order_id as string, inv: r.invoice as unknown as InvRef | null }))
+    .filter((r) => r.inv && !r.inv.tipo_comprobante.startsWith("NOTA_CREDITO"))
+    .map((r) => ({
+      orderId: r.orderId,
+      comprobante: `${r.inv!.tipo_comprobante} ${r.inv!.punto_venta}-${r.inv!.numero_comprobante ?? "?"}`,
+    }));
+}
+
+/**
+ * H1 — Total ya acreditado contra un comprobante: Σ de las NC autorizadas y
+ * no anuladas que lo referencian. Tope para nuevas NC (no se puede acreditar
+ * más que el total del original).
+ */
+export async function sumNotasCreditoDe(asociadoId: string): Promise<number> {
+  if (isMock()) {
+    return MOCK_INVOICES.filter(
+      (i) =>
+        i.comprobante_asociado_id === asociadoId &&
+        i.estado_arca === "AUTORIZADO_ARCA" &&
+        i.anulada === false &&
+        i.tipo_comprobante.startsWith("NOTA_CREDITO")
+    ).reduce((a, i) => a + Number(i.total ?? 0), 0);
+  }
+  const supabase = createClient();
+  if (!supabase) return 0;
+  const { data, error } = await supabase
+    .from("customer_invoices")
+    .select("total, tipo_comprobante")
+    .eq("comprobante_asociado_id", asociadoId)
+    .eq("estado_arca", "AUTORIZADO_ARCA")
+    .eq("anulada", false)
+    .in("tipo_comprobante", ["NOTA_CREDITO_A", "NOTA_CREDITO_B", "NOTA_CREDITO_C"]);
+  if (error) throw new Error(`sumNotasCreditoDe: ${error.message}`);
+  return (data ?? []).reduce((a, r) => a + Number(r.total ?? 0), 0);
+}
+
 export async function listInvoiceAudit(
   invoiceId: string
 ): Promise<InvoiceAuditEntry[]> {
