@@ -77,6 +77,7 @@ export interface SystemState {
   status: SystemStatus;
   detail: string;
   critical: boolean; // pesa más en la salud corporativa
+  href: string; // deep link al módulo relacionado
 }
 
 export interface CriticalAlert {
@@ -84,6 +85,7 @@ export interface CriticalAlert {
   severity: "warning" | "critical";
   title: string;
   detail: string;
+  href: string; // deep link al sistema de origen de la alerta
 }
 
 export interface ExecKpi {
@@ -91,6 +93,7 @@ export interface ExecKpi {
   value: string | null;
   sub?: string | null;
   pendingReason?: string;
+  href: string; // deep link al módulo que explica la métrica
 }
 
 export interface CommandCenter {
@@ -100,7 +103,7 @@ export interface CommandCenter {
   health: HealthLevel;
   headline: string;
   alerts: CriticalAlert[];
-  master: { label: string; value: string | null; pendingReason?: string };
+  master: { label: string; value: string | null; pendingReason?: string; href: string };
   kpis: ExecKpi[];
   generatedAt: string;
 }
@@ -129,23 +132,23 @@ export async function getCommandCenter(): Promise<CommandCenter> {
     : "offline";
 
   const systems: SystemState[] = [
-    { id: "comercial", label: "Comercial", critical: false, status: comercialStatus,
+    { id: "comercial", label: "Comercial", critical: false, status: comercialStatus, href: "/comercial/pipeline",
       detail: comercialStatus === "operative" ? "Clientify conectado" : comercialStatus === "degraded" ? "Clientify configurado, API con error" : "Clientify no configurado" },
-    { id: "compras", label: "Compras", critical: false, status: snap.compras.ok ? "operative" : "offline",
+    { id: "compras", label: "Compras", critical: false, status: snap.compras.ok ? "operative" : "offline", href: "/compras",
       detail: snap.compras.ok ? "OC y facturas operativas" : "Sin conexión a datos" },
-    { id: "operaciones", label: "Operaciones", critical: false, status: snap.operaciones.ok ? "operative" : "offline",
+    { id: "operaciones", label: "Operaciones", critical: false, status: snap.operaciones.ok ? "operative" : "offline", href: "/dashboard",
       detail: snap.operaciones.ok ? `${snap.operaciones.total} órdenes` : "Sin conexión a datos" },
-    { id: "finanzas", label: "Finanzas", critical: true, status: snap.financiero.ok ? "operative" : "offline",
+    { id: "finanzas", label: "Finanzas", critical: true, status: snap.financiero.ok ? "operative" : "offline", href: "/tesoreria",
       detail: snap.financiero.ok ? "Tesorería operativa" : "Sin conexión a Tesorería" },
-    { id: "compliance", label: "Compliance ANMAT", critical: true, status: dbOk ? "operative" : "offline",
+    { id: "compliance", label: "Compliance ANMAT", critical: true, status: dbOk ? "operative" : "offline", href: "/anmat",
       detail: dbOk ? "Base regulatoria operativa" : "Base no disponible" },
-    { id: "tracking", label: "Tracking", critical: false, status: env.tracking.configured ? "operative" : "offline",
+    { id: "tracking", label: "Tracking", critical: false, status: env.tracking.configured ? "operative" : "offline", href: "/operaciones/tracking",
       detail: env.tracking.configured ? "Ingesta Traccar habilitada" : "Ingesta no configurada" },
-    { id: "cctv", label: "CCTV", critical: false, status: env.hikvision.configured ? "operative" : "offline",
+    { id: "cctv", label: "CCTV", critical: false, status: env.hikvision.configured ? "operative" : "offline", href: "/cctv",
       detail: env.hikvision.configured ? "NVR Hikvision configurado" : "NVR no configurado" },
-    { id: "drive", label: "Drive Corporativo", critical: false, status: driveOk ? "operative" : "offline",
+    { id: "drive", label: "Drive Corporativo", critical: false, status: driveOk ? "operative" : "offline", href: "/drive",
       detail: driveOk ? "Google Drive conectado" : "Drive no configurado" },
-    { id: "rrhh", label: "RRHH", critical: false, status: dbOk ? "operative" : "offline",
+    { id: "rrhh", label: "RRHH", critical: false, status: dbOk ? "operative" : "offline", href: "/rrhh",
       detail: dbOk ? "Módulo RRHH operativo" : "Base no disponible" },
   ];
 
@@ -172,6 +175,7 @@ export async function getCommandCenter(): Promise<CommandCenter> {
     severity: s.critical ? "critical" : "warning",
     title: `${s.label} ${s.status === "degraded" ? "degradado" : "offline"}`,
     detail: s.detail,
+    href: s.href,
   }));
 
   // ---- KPI maestro: Cash Flow proyectado ----
@@ -179,6 +183,7 @@ export async function getCommandCenter(): Promise<CommandCenter> {
     label: "Cash Flow Proyectado",
     value: snap.financiero.ok ? fmtCurrency(snap.financiero.flujoProyectadoAcumulado) : null,
     pendingReason: snap.financiero.ok ? undefined : "Tesorería no disponible.",
+    href: "/tesoreria/flujo-fondos",
   };
 
   // ---- 8 KPIs ejecutivos (grid 4x2) ----
@@ -188,46 +193,54 @@ export async function getCommandCenter(): Promise<CommandCenter> {
       label: "Facturación del mes",
       value: facturacionMes !== null ? fmtCurrency(facturacionMes) : null,
       pendingReason: facturacionMes !== null ? undefined : "Facturación no disponible.",
+      href: "/billing",
     },
     {
       label: "Cobranza pendiente",
       value: snap.financiero.ok ? fmtCurrency(snap.financiero.porCobrar) : null,
       pendingReason: snap.financiero.ok ? undefined : "Tesorería no disponible.",
+      href: "/tesoreria/cobranzas",
     },
     {
       label: "Ocupación logística total",
       value: snap.wms.ok ? m2(snap.wms.ocupadoM2) : null,
       pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
+      href: "/wms",
     },
     {
       label: "Vacancia comercial",
       value: snap.wms.ok ? m2(snap.wms.comercializableM2) : null,
       sub: snap.wms.ok ? `${snap.wms.vacanciaComercialPct}% disponible` : null,
       pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
+      href: "/comercial/dashboard-vacancia",
     },
     {
       label: "Leads activos",
       value: snap.comercial.configured ? String(snap.comercial.leads) : null,
       sub: "Clientify",
       pendingReason: snap.comercial.configured ? undefined : "Clientify no configurado.",
+      href: "/comercial/leads",
     },
     {
       label: "Oportunidades abiertas",
       value: snap.comercial.configured ? String(snap.comercial.oportunidades) : null,
       sub: "Pipeline",
       pendingReason: snap.comercial.configured ? undefined : "Clientify no configurado.",
+      href: "/comercial/oportunidades",
     },
     {
       label: "Vehículos online",
       value: vehiculos ? `${vehiculos.online}/${vehiculos.total}` : null,
       sub: "Tracking",
       pendingReason: vehiculos ? undefined : "Tracking no disponible.",
+      href: "/operaciones/tracking",
     },
     {
       label: "Cámaras online",
       value: camaras ? `${camaras.online}/${camaras.total}` : null,
       sub: "CCTV",
       pendingReason: camaras ? undefined : "NVR no disponible.",
+      href: "/cctv",
     },
   ];
 

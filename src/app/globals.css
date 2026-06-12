@@ -451,6 +451,35 @@
       0 1px 2px rgba(15, 23, 42, 0.04);
   }
 
+  /* Acceso directo TOPS Connect (topbar) · hover premium: elevación + escala
+     mínima (1.03) + glow azul Connect (rgba(31,51,200,…), el del splash del portal). */
+  .nx-connect-btn {
+    @apply inline-flex items-center gap-2 rounded-[10px] border border-stroke-soft bg-bg-surface p-1 pr-2;
+    transition:
+      transform var(--nx-dur-base, 200ms) var(--nx-ease-out, cubic-bezier(0.25, 0.8, 0.25, 1)),
+      box-shadow var(--nx-dur-base, 200ms) var(--nx-ease-out, cubic-bezier(0.25, 0.8, 0.25, 1)),
+      border-color var(--nx-dur-base, 200ms) ease;
+  }
+  .nx-connect-btn:hover {
+    transform: translateY(-1px) scale(1.03);
+    border-color: rgba(62, 98, 244, 0.45);
+    box-shadow: 0 10px 26px -12px rgba(31, 51, 200, 0.55);
+  }
+  .nx-connect-btn:active {
+    transform: translateY(0) scale(0.99);
+  }
+  .nx-connect-btn:focus-visible {
+    @apply outline-none ring-2 ring-tops-blue-700/25;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nx-connect-btn,
+    .nx-connect-btn:hover,
+    .nx-connect-btn:active {
+      transition: none;
+      transform: none;
+    }
+  }
+
   /* ---- Chips / segmented ------------------------------------------ */
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm font-medium;
