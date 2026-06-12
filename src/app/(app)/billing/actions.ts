@@ -14,6 +14,7 @@ import {
   mockStore,
 } from "@/lib/invoicing/data";
 import { esRectificativo, notaCreditoPara } from "@/lib/invoicing/calc";
+import { ALICUOTAS_VALIDAS } from "@/lib/arca/types";
 import type { CustomerInvoice } from "@/lib/invoicing/types";
 
 /** Contexto de auditoría: usuario autenticado + IP. */
@@ -69,7 +70,12 @@ const ItemSchema = z.object({
   descripcion: z.string().min(1).max(300),
   cantidad: z.number().positive(),
   precio_unitario: z.number(),
-  alicuota_iva: z.number().optional(),
+  // G7 (IVA VENTAS V1): alícuota obligatoria, explícita y del set AFIP válido.
+  alicuota_iva: z
+    .number()
+    .refine((v) => (ALICUOTAS_VALIDAS as readonly number[]).includes(v), {
+      message: `Alícuota de IVA inválida. Válidas: ${ALICUOTAS_VALIDAS.join(", ")}.`,
+    }),
   order_id: z.string().uuid().optional().nullable(),
 });
 

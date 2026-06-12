@@ -55,7 +55,14 @@ export const AlicIvaId = {
 } as const;
 export type AlicIvaIdCode = (typeof AlicIvaId)[keyof typeof AlicIvaId];
 
-/** Mapea porcentaje de alícuota → Id ARCA. */
+/** Alícuotas de IVA válidas (espejo del CHECK de par AFIP en DB — G7). */
+export const ALICUOTAS_VALIDAS = [0, 2.5, 5, 10.5, 21, 27] as const;
+
+/**
+ * Mapea porcentaje de alícuota → Id ARCA.
+ * G7 (IVA VENTAS V1): una alícuota desconocida es un ERROR explícito —
+ * nunca más el default silencioso a 21% que declaraba mal el débito fiscal.
+ */
 export function alicuotaToId(pct: number): AlicIvaIdCode {
   switch (pct) {
     case 0:
@@ -66,11 +73,32 @@ export function alicuotaToId(pct: number): AlicIvaIdCode {
       return AlicIvaId.CINCO;
     case 10.5:
       return AlicIvaId.DIEZ_CINCO;
+    case 21:
+      return AlicIvaId.VEINTIUNO;
     case 27:
       return AlicIvaId.VEINTISIETE;
-    case 21:
     default:
-      return AlicIvaId.VEINTIUNO;
+      throw new Error(
+        `Alícuota de IVA inválida: ${pct}%. Válidas: ${ALICUOTAS_VALIDAS.join(", ")}.`
+      );
+  }
+}
+
+/** Inverso: Id ARCA → porcentaje de alícuota. */
+export function alicuotaFromId(id: AlicIvaIdCode): number {
+  switch (id) {
+    case AlicIvaId.CERO:
+      return 0;
+    case AlicIvaId.DOS_CINCO:
+      return 2.5;
+    case AlicIvaId.CINCO:
+      return 5;
+    case AlicIvaId.DIEZ_CINCO:
+      return 10.5;
+    case AlicIvaId.VEINTIUNO:
+      return 21;
+    case AlicIvaId.VEINTISIETE:
+      return 27;
   }
 }
 

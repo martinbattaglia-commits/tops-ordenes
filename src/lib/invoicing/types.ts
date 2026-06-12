@@ -139,6 +139,19 @@ export interface CustomerInvoice {
   updated_at: string;
 
   items?: InvoiceItem[];
+  /** IVA VENTAS V1 — detalle canónico del débito fiscal por alícuota. */
+  vat_lines?: CustomerInvoiceVatLine[];
+}
+
+/** Fila de customer_invoice_vat_lines (migración 0072) — fuente de verdad del IVA Ventas. */
+export interface CustomerInvoiceVatLine {
+  id?: string;
+  invoice_id?: string;
+  alic_iva_id: number;
+  alicuota_iva: number;
+  neto_gravado: number;
+  iva_importe: number;
+  created_at?: string;
 }
 
 export interface InvoiceAuditEntry {

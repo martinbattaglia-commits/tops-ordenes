@@ -20,7 +20,12 @@ import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { getArcaService } from "@/lib/arca/service";
 import { buildFiscalQr } from "@/lib/arca/qr";
-import { DocTipo, type CbteAsoc, type FECAESolicitarRequest } from "@/lib/arca/types";
+import {
+  DocTipo,
+  alicuotaFromId,
+  type CbteAsoc,
+  type FECAESolicitarRequest,
+} from "@/lib/arca/types";
 import {
   comprobanteToCbteTipo,
   comprobanteParaReceptor,
@@ -44,7 +49,8 @@ export interface EmitItemInput {
   descripcion: string;
   cantidad: number;
   precio_unitario: number;
-  alicuota_iva?: number; // default 21
+  /** G7: obligatoria y explícita — sin default silencioso. */
+  alicuota_iva: number;
   order_id?: string | null;
 }
 
@@ -96,24 +102,29 @@ export async function emitInvoice(
   const puntoVenta = input.punto_venta ?? config.default_punto_venta ?? 1;
   const docTipo = (input.doc_tipo ?? DocTipo.CUIT) as InvoiceItemDocTipo;
 
-  // Paso 1-2: armar renglones y validar.
-  const items: InvoiceItem[] = input.items.map((it, i) => {
-    const alic = it.alicuota_iva ?? 21;
-    const c = computeItem({
-      cantidad: it.cantidad,
-      precio_unitario: it.precio_unitario,
-      alicuota_iva: alic,
+  // Paso 1-2: armar renglones y validar. G7: la alícuota es explícita y debe
+  // ser válida — computeItem/alicuotaToId rechazan cualquier otra.
+  let items: InvoiceItem[];
+  try {
+    items = input.items.map((it, i) => {
+      const c = computeItem({
+        cantidad: it.cantidad,
+        precio_unitario: it.precio_unitario,
+        alicuota_iva: it.alicuota_iva,
+      });
+      return {
+        descripcion: it.descripcion,
+        cantidad: it.cantidad,
+        precio_unitario: it.precio_unitario,
+        alicuota_iva: it.alicuota_iva,
+        order_id: it.order_id ?? null,
+        orden: i,
+        ...c,
+      };
     });
-    return {
-      descripcion: it.descripcion,
-      cantidad: it.cantidad,
-      precio_unitario: it.precio_unitario,
-      alicuota_iva: alic,
-      order_id: it.order_id ?? null,
-      orden: i,
-      ...c,
-    };
-  });
+  } catch (e) {
+    return { ok: false, errors: [e instanceof Error ? e.message : String(e)] };
+  }
 
   const totals = computeInvoiceTotals(items, {
     percepciones: input.percepciones,
@@ -401,8 +412,18 @@ async function persistInvoice(args: PersistArgs): Promise<CustomerInvoice | null
     items: args.items,
   };
 
+  // IVA VENTAS V1 — detalle canónico del débito fiscal por alícuota.
+  // El importe canónico es LO DECLARADO A ARCA (totals.alicuotas = Σ de
+  // renglones redondeados): Σ líneas ≡ cabecera por construcción.
+  const vatLines = args.totals.alicuotas.map((a) => ({
+    alic_iva_id: a.Id,
+    alicuota_iva: alicuotaFromId(a.Id),
+    neto_gravado: a.BaseImp,
+    iva_importe: a.Importe,
+  }));
+
   if (env.app.demoMode || env.app.needsSupabase) {
-    const invoice: CustomerInvoice = { id: cryptoRandomId(), ...base };
+    const invoice: CustomerInvoice = { id: cryptoRandomId(), ...base, vat_lines: vatLines };
     mockStore().invoices.unshift(invoice);
     return invoice;
   }
@@ -410,33 +431,21 @@ async function persistInvoice(args: PersistArgs): Promise<CustomerInvoice | null
   const supabase = createClient();
   if (!supabase) return null;
 
-  const { items: _items, ...row } = base;
-  const { data, error } = await supabase
-    .from("customer_invoices")
-    .insert(row)
-    .select("*")
-    .single();
-  if (error) throw new Error(`persistInvoice: ${error.message}`);
-  const invoice = data as CustomerInvoice;
-
-  if (args.items.length) {
-    const itemRows = args.items.map((it) => ({ ...it, invoice_id: invoice.id }));
-    const { error: itErr } = await supabase.from("invoice_items").insert(itemRows);
-    if (itErr) throw new Error(`persistInvoice.items: ${itErr.message}`);
-  }
-
-  // Auditoría: emitir + resultado fiscal.
-  await supabase.from("invoice_audit").insert([
+  // V1 — persistencia TRANSACCIONAL: cabecera + items + vat_lines + auditoría
+  // en una sola transacción (RPC security definer; el trigger diferido
+  // trg_ci_vat_identity garantiza que no existan comprobantes sin líneas IVA).
+  const { items: _items, vat_lines: _vl, ...row } = base;
+  const auditEntries = [
     {
-      invoice_id: invoice.id,
       user_id: args.ctx.userId,
       action: "emitir",
       estado: "PENDIENTE_ARCA",
+      cae: null,
       request: args.request ?? null,
+      response: null,
       ip: args.ctx.ip ?? null,
     },
     {
-      invoice_id: invoice.id,
       user_id: args.ctx.userId,
       action:
         args.estado === "AUTORIZADO_ARCA"
@@ -450,9 +459,19 @@ async function persistInvoice(args: PersistArgs): Promise<CustomerInvoice | null
       response: args.response ?? null,
       ip: args.ctx.ip ?? null,
     },
-  ]);
+  ];
 
+  const { data, error } = await supabase.rpc("ventas_persist_invoice", {
+    p_invoice: row,
+    p_items: args.items,
+    p_vat_lines: vatLines,
+    p_audit: auditEntries,
+  });
+  if (error) throw new Error(`persistInvoice(ventas_persist_invoice): ${error.message}`);
+
+  const invoice = data as CustomerInvoice;
   invoice.items = args.items;
+  invoice.vat_lines = vatLines;
   return invoice;
 }
 
