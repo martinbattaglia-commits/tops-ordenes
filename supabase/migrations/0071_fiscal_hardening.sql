@@ -49,7 +49,7 @@ grant execute on function public.fiscal_ambiente() to authenticated;
 create or replace view public.customer_open_items
 with (security_invoker = true) as
 select ci.id as invoice_id, ci.client_id, ci.numero_comprobante,
-       (case when ci.tipo_comprobante::text like 'NOTA_CREDITO%' then -1 else 1 end) * ci.total as total,
+       ((case when ci.tipo_comprobante::text like 'NOTA_CREDITO%' then -1 else 1 end) * ci.total)::numeric(15,2) as total,
        ci.fch_vto_pago,
        coalesce(sum(ra.amount) filter (where cr.status='confirmado'), 0) as pagado,
        (case when ci.tipo_comprobante::text like 'NOTA_CREDITO%' then -1 else 1 end) * ci.total
@@ -87,15 +87,15 @@ select
   to_char(si.fecha_emision, 'YYYY-MM') as periodo,
   si.approval_status,
   sgn.f * coalesce(vl.neto_gravado, 0)        as neto_gravado,
-  sgn.f * si.importe_no_gravado               as importe_no_gravado,
-  sgn.f * si.importe_exento                   as importe_exento,
+  (sgn.f * si.importe_no_gravado)::numeric(14,2) as importe_no_gravado,
+  (sgn.f * si.importe_exento)::numeric(14,2)     as importe_exento,
   sgn.f * coalesce(vl.iva_credito_fiscal, 0)  as iva_pagado,
   sgn.f * coalesce(ot.percepciones, 0)        as percepciones,
   sgn.f * coalesce(ot.tributos, 0)            as tributos,
   sgn.f * ( coalesce(vl.neto_gravado,0) + si.importe_no_gravado + si.importe_exento
     + coalesce(vl.iva_credito_fiscal,0) + coalesce(ot.percepciones,0) + coalesce(ot.tributos,0)
   ) as total_derivado,
-  sgn.f * si.total as total_cabecera
+  (sgn.f * si.total)::numeric(14,2) as total_cabecera
 from public.supplier_invoices si
 cross join lateral (
   select case when si.tipo_comprobante::text like 'NOTA_CREDITO%' then -1 else 1 end as f
@@ -148,7 +148,7 @@ group by to_char(si.fecha_emision, 'YYYY-MM'), vl.alic_iva_id, vl.alicuota_iva;
 create or replace view public.supplier_open_items
 with (security_invoker = true) as
 select si.id as invoice_id, si.vendor_id, si.public_id,
-       (case when si.tipo_comprobante::text like 'NOTA_CREDITO%' then -1 else 1 end) * si.total as total,
+       ((case when si.tipo_comprobante::text like 'NOTA_CREDITO%' then -1 else 1 end) * si.total)::numeric(14,2) as total,
        si.fecha_vencimiento,
        coalesce(sum(pa.amount) filter (where sp.status='confirmado'), 0) as pagado,
        (case when si.tipo_comprobante::text like 'NOTA_CREDITO%' then -1 else 1 end) * si.total
