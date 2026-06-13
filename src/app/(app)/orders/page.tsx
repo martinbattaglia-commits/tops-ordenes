@@ -3,7 +3,7 @@ import { Icon } from "@/components/Icon";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { listOrders } from "@/lib/data/orders";
-import { fmtCurrency, fmtDate } from "@/lib/utils";
+import { fmtCurrency, fmtDate, isUrgentOrder } from "@/lib/utils";
 import type { OrderStatus, Depot } from "@/lib/types";
 import { OrdersToolbar } from "./OrdersToolbar";
 
@@ -118,6 +118,11 @@ export default async function OrdersPage({ searchParams }: PageProps) {
                     <Link href={`/orders/${o.public_id}`} className="order-num">
                       {o.public_id}
                     </Link>
+                    {isUrgentOrder(o) && (
+                      <span className="ml-2 align-middle text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-tops-red/15 text-tops-red">
+                        Urgente
+                      </span>
+                    )}
                   </td>
                   <td className="text-xs text-fg-secondary">{fmtDate(o.date)}</td>
                   <td className="cell-cliente">
@@ -177,7 +182,14 @@ export default async function OrdersPage({ searchParams }: PageProps) {
               className="block p-4 active:bg-neutral-50 transition-colors"
             >
               <div className="flex items-center justify-between mb-2">
-                <span className="order-num text-sm">{o.public_id}</span>
+                <span className="order-num text-sm">
+                  {o.public_id}
+                  {isUrgentOrder(o) && (
+                    <span className="ml-2 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-tops-red/15 text-tops-red">
+                      Urgente
+                    </span>
+                  )}
+                </span>
                 <StatusBadge status={o.status} />
               </div>
               <div className="text-sm font-semibold text-fg-primary mb-0.5">

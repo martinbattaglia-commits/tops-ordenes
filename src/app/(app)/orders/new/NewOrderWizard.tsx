@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
-import { cn, fmtCurrency, isValidCuit, sha256 } from "@/lib/utils";
+import { cn, fmtCurrency, isValidCuit, sha256, URGENT_SERVICE_SLUG } from "@/lib/utils";
 import { createOrder } from "./actions";
 import type { Client, Operator, ServiceCatalogItem } from "@/lib/types";
+import { DEPOT_META } from "@/lib/types";
 import {
   VEHICLES,
   getVehicle,
@@ -30,12 +31,34 @@ interface Props {
   catalog: ServiceCatalogItem[];
 }
 
+interface ConceptoLibre {
+  enabled: boolean;
+  label: string;
+  price: number;
+  observ: string;
+}
+
 interface TransportSelection {
   vehicle_slug: string;
   zone: VehicleZoneKey;
   trips: number;
   second_trip_discount: boolean;
   surcharge: "none" | "17_19" | "19_21" | "21_plus";
+}
+
+/**
+ * Bonificación comercial sobre una línea ya incorporada a la orden. Referencia
+ * a la línea destino por su `key` estable (svc:slug, trip:slug:zona,
+ * concepto-libre, etc.). Se modela como línea NEGATIVA propia para conservar la
+ * trazabilidad: el servicio original queda visible + la bonificación aparte.
+ */
+interface Bonification {
+  /** key del LineItem destino que se bonifica. */
+  target_key: string;
+  /** "pct" = porcentaje (100/75/50/25/10…) · "fixed" = importe fijo en ARS. */
+  type: "pct" | "fixed";
+  /** pct: 1..100 · fixed: importe positivo a descontar (se topea al subtotal). */
+  value: number;
 }
 
 interface WizardState {
@@ -50,14 +73,19 @@ interface WizardState {
   operator_id: string;
   services: string[];
   qty: Record<string, number>;
-  /** Configuración opcional de transporte (1 vehículo + zona por orden). */
-  transport: TransportSelection | null;
+  /** Transportes seleccionados (multi-vehículo: cada uno con su zona/viajes/recargo). */
+  transports: TransportSelection[];
+  /** Envío urgente (mismo día): aplica recargo del 100% sobre el transporte. */
+  transport_urgent: boolean;
+  /** Bonificaciones comerciales aplicadas a líneas de la orden (trazabilidad). */
+  bonifications: Bonification[];
   h_start: string;
   h_end: string;
   pallets: number;
   units: number;
   km: number;
   observ: string;
+  concepto_libre: ConceptoLibre;
   signer_name: string;
   signer_doc: string;
   signature_data: string | null;
@@ -67,7 +95,7 @@ interface WizardState {
 }
 
 const STEPS = ["Cliente", "Operativo", "Servicio", "Firma"];
-const DRAFT_KEY = "tops:new-order:draft:v2";
+const DRAFT_KEY = "tops:new-order:draft:v3";
 
 /** Parsea un value de <input type="number"> a entero ≥ 0. Nunca devuelve NaN. */
 function safeNonNegInt(raw: string): number {
@@ -121,23 +149,96 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
       const q = data.qty[slug] ?? 1;
       out.push(computeServiceLine(svc, q));
     }
-    if (data.transport) {
-      const v = getVehicle(data.transport.vehicle_slug);
-      const z = v ? getVehicleZone(v.slug, data.transport.zone) : undefined;
+    // Multi-vehículo: una línea de transporte por cada vehículo seleccionado.
+    let transportSum = 0;
+    for (const t of data.transports) {
+      const v = getVehicle(t.vehicle_slug);
+      const z = v ? getVehicleZone(v.slug, t.zone) : undefined;
       if (v && z) {
-        out.push(
-          computeTransportLine({
-            vehicle: v,
-            zone: z,
-            trips: data.transport.trips,
-            secondTripDiscount: data.transport.second_trip_discount,
-            surcharge: data.transport.surcharge,
-          })
-        );
+        const tl = computeTransportLine({
+          vehicle: v,
+          zone: z,
+          trips: t.trips,
+          secondTripDiscount: t.second_trip_discount,
+          surcharge: t.surcharge,
+        });
+        transportSum += tl.subtotal;
+        out.push(tl);
       }
     }
+    // Envío urgente (mismo día): recargo del 100% sobre el transporte. Se modela
+    // como línea propia para que persista y se refleje en resumen, comprobante,
+    // PDF, emails e historial SIN tocar el cálculo de transporte ni migraciones.
+    if (data.transport_urgent && transportSum > 0) {
+      out.push({
+        key: URGENT_SERVICE_SLUG,
+        label: "🚨 Recargo envío urgente (+100%)",
+        qty_requested: 1,
+        qty_effective: 1,
+        rate: transportSum,
+        unit: "un",
+        subtotal: transportSum,
+        min_applied: false,
+        min_reason: "Despacho prioritario para ejecución el mismo día.",
+        service_slug: URGENT_SERVICE_SLUG,
+        category: "transporte",
+      });
+    }
+    const cl = data.concepto_libre;
+    if (cl.enabled && cl.label.trim() && cl.price > 0) {
+      out.push({
+        key: "concepto-libre",
+        label: cl.label.trim(),
+        qty_requested: 1,
+        qty_effective: 1,
+        rate: cl.price,
+        unit: "un",
+        subtotal: cl.price,
+        min_applied: false,
+        service_slug: "concepto-libre",
+        category: "personalizado",
+      });
+    }
+    // Bonificaciones comerciales: por cada bonificación cuyo destino siga
+    // presente (línea positiva), se agrega una línea NEGATIVA propia. El
+    // servicio original queda intacto y visible → trazabilidad total. El
+    // descuento se topea al subtotal del destino (nunca deja la línea < $0).
+    for (const b of data.bonifications) {
+      const target = out.find((l) => l.key === b.target_key && l.subtotal > 0);
+      if (!target) continue;
+      const raw =
+        b.type === "pct"
+          ? Math.round(target.subtotal * (b.value / 100))
+          : Math.round(b.value);
+      const amount = Math.min(Math.max(0, raw), target.subtotal);
+      if (amount <= 0) continue;
+      out.push({
+        key: `bonif:${b.target_key}`,
+        label: `Bonificación · ${target.label}`,
+        qty_requested: 1,
+        qty_effective: 1,
+        rate: -amount,
+        unit: "un",
+        subtotal: -amount,
+        min_applied: false,
+        min_reason:
+          b.type === "pct"
+            ? `Bonificación comercial ${b.value}% sobre ${target.label}.`
+            : `Bonificación comercial (importe fijo) sobre ${target.label}.`,
+        service_slug: `bonif:${b.target_key}`,
+        category: "bonificacion",
+      });
+    }
     return out;
-  }, [data.services, data.qty, data.transport, catalog]);
+  }, [
+    data.services,
+    data.qty,
+    data.transports,
+    data.transport_urgent,
+    data.concepto_libre,
+    data.bonifications,
+    catalog,
+  ]);
 
   const total = useMemo(() => sumLines(lines), [lines]);
   const ivaEst = useMemo(() => ivaEstimate(total), [total]);
@@ -145,7 +246,11 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
   const canAdvance = () => {
     if (stepIdx === 0) return data.razon.trim().length > 1 && data.cuit.replace(/\D/g, "").length === 11;
     if (stepIdx === 1) return Boolean(data.depot && data.operator_id);
-    if (stepIdx === 2) return data.services.length > 0 || data.transport !== null;
+    if (stepIdx === 2) {
+      const cl = data.concepto_libre;
+      const conceptoOk = cl.enabled && cl.label.trim().length > 0 && cl.price > 0;
+      return data.services.length > 0 || data.transports.length > 0 || conceptoOk;
+    }
     return true;
   };
 
@@ -191,13 +296,23 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
           const label = isExtendedUnit
             ? `${ln.label} · ${unitLabel(realUnit)}`
             : ln.label;
+          // Las bonificaciones son líneas NEGATIVAS: NO se clampan a ≥0 (si no,
+          // se perdería el descuento). El resto de los servicios sí (no admiten
+          // importes negativos por error de cálculo).
+          const isBonif = slug.startsWith("bonif:");
+          const rate = isBonif
+            ? numOrDefault(ln.rate, 0)
+            : Math.max(0, numOrDefault(ln.rate, 0));
+          const subtotal = isBonif
+            ? numOrDefault(ln.subtotal, 0)
+            : Math.max(0, numOrDefault(ln.subtotal, 0));
           return {
             service_slug: slug,
             label,
             qty: Math.max(1, numOrDefault(ln.qty_effective, 1)),
             unit: normalizeUnit(realUnit),
-            rate: Math.max(0, numOrDefault(ln.rate, 0)),
-            subtotal: Math.max(0, numOrDefault(ln.subtotal, 0)),
+            rate,
+            subtotal,
           };
         });
 
@@ -214,6 +329,20 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         setSubmitting(false);
         return;
       }
+
+      // Fusionamos la observación del concepto libre (si la hay) en la
+      // observación general de la orden — así no se pierde al guardar
+      // (la línea de concepto libre sólo viaja con label/precio).
+      const cl = data.concepto_libre;
+      const conceptoObserv =
+        cl.enabled && cl.label.trim() && cl.observ.trim()
+          ? `${cl.label.trim()}: ${cl.observ.trim()}`
+          : "";
+      const combinedObserv = [data.observ ?? "", conceptoObserv]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" · ")
+        .slice(0, 2000);
 
       const result = await createOrder({
         client: {
@@ -233,7 +362,7 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         pallets: numOr0(data.pallets),
         units: numOr0(data.units),
         km: numOr0(data.km),
-        observ: (data.observ ?? "").slice(0, 2000),
+        observ: combinedObserv,
         total: Math.max(0, numOrDefault(total, 0)),
         signature: {
           signed_by: signerName,
@@ -629,17 +758,17 @@ function StepOperativo({
           <DepotCard
             selected={data.depot === "MAGALDI"}
             onClick={() => update({ depot: "MAGALDI" })}
-            name="Magaldi"
-            address="Agustín Magaldi 1765 · CABA"
-            badge="ANMAT"
+            name={DEPOT_META.MAGALDI.label}
+            address={DEPOT_META.MAGALDI.address}
+            capabilities={DEPOT_META.MAGALDI.capabilities}
             ops={6}
           />
           <DepotCard
             selected={data.depot === "LUJAN"}
             onClick={() => update({ depot: "LUJAN" })}
-            name="Luján"
-            address="Ruta 8 km 67.5 · BsAs"
-            badge="General"
+            name={DEPOT_META.LUJAN.label}
+            address={DEPOT_META.LUJAN.address}
+            capabilities={DEPOT_META.LUJAN.capabilities}
             ops={3}
           />
         </div>
@@ -657,7 +786,7 @@ function StepOperativo({
                   "p-3 border rounded-lg flex items-center gap-3 text-left transition-all duration-200",
                   data.operator_id === op.id
                     ? "border-tops-blue-700 bg-tops-blue-700/5 shadow-ring-brand"
-                    : "border-stroke-soft bg-white hover:border-tops-blue-700/40"
+                    : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/40"
                 )}
               >
                 <div className="w-9 h-9 rounded-full bg-tops-blue-700 text-white grid place-items-center font-bold text-xs">
@@ -684,14 +813,14 @@ function DepotCard({
   onClick,
   name,
   address,
-  badge,
+  capabilities,
   ops,
 }: {
   selected: boolean;
   onClick: () => void;
   name: string;
   address: string;
-  badge: string;
+  capabilities: string[];
   ops: number;
 }) {
   return (
@@ -702,23 +831,29 @@ function DepotCard({
         "p-4 rounded-lg border text-left transition-all duration-200 relative overflow-hidden",
         selected
           ? "bg-tops-blue-900 text-white border-tops-blue-900"
-          : "bg-white text-fg-primary border-stroke-soft hover:border-tops-blue-700/40"
+          : "bg-bg-surface text-fg-primary border-stroke-soft hover:border-tops-blue-700/40"
       )}
     >
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-2 mb-1.5 pr-6">
         <Icon name="building" size={15} />
         <span className="text-sm font-bold">{name}</span>
-        <span
-          className={cn(
-            "ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded",
-            selected ? "bg-white/16 text-white" : "bg-tops-red/10 text-tops-red"
-          )}
-        >
-          {badge}
-        </span>
       </div>
       <div className={cn("text-[11px] mb-2", selected ? "text-white/70" : "text-fg-muted")}>
         {address}
+      </div>
+      {/* Clasificación operativa real de la sede (ANMAT / General / Oficinas). */}
+      <div className="flex flex-wrap gap-1 mb-2">
+        {capabilities.map((c) => (
+          <span
+            key={c}
+            className={cn(
+              "text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded",
+              selected ? "bg-white/16 text-white" : "bg-tops-red/10 text-tops-red"
+            )}
+          >
+            {c}
+          </span>
+        ))}
       </div>
       <div className="flex items-center gap-1.5 text-[11px]">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -748,6 +883,8 @@ function StepServicio({
   lines: LineItem[];
   ivaEst: number;
 }) {
+  const patchConceptoLibre = (patch: Partial<ConceptoLibre>) =>
+    update({ concepto_libre: { ...data.concepto_libre, ...patch } });
   const toggle = (slug: string) => {
     const next = data.services.includes(slug)
       ? data.services.filter((s) => s !== slug)
@@ -792,7 +929,7 @@ function StepServicio({
           <CategorySection
             key={cat.key}
             title={cat.label}
-            iconName={cat.icon as "user" | "forklift" | "package" | "bill"}
+            iconName={cat.icon as "user" | "forklift" | "package" | "bill" | "building"}
             items={items}
             selected={data.services}
             qty={data.qty}
@@ -801,6 +938,20 @@ function StepServicio({
           />
         );
       })}
+
+      {/* ============ CONCEPTO LIBRE ============ */}
+      <ConceptoLibreSection
+        state={data.concepto_libre}
+        onToggle={() => patchConceptoLibre({ enabled: !data.concepto_libre.enabled })}
+        onChange={patchConceptoLibre}
+      />
+
+      {/* ============ BONIFICACIONES (al final del acordeón) ============ */}
+      <BonificacionesSection
+        bonifiableLines={lines.filter((l) => l.subtotal > 0 && l.category !== "bonificacion")}
+        bonifications={data.bonifications}
+        onChange={(next) => update({ bonifications: next })}
+      />
 
       {/* ============ Datos operativos complementarios ============ */}
       <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -873,186 +1024,301 @@ function TransportSection({
   data: WizardState;
   update: (p: Partial<WizardState>) => void;
 }) {
-  const [expanded, setExpanded] = useState<boolean>(data.transport !== null);
+  const hasTransport = data.transports.length > 0;
+  const [expanded, setExpanded] = useState<boolean>(hasTransport);
+  // Si se restaura un borrador con transportes, abrimos la sección.
+  useEffect(() => {
+    if (hasTransport) setExpanded(true);
+  }, [hasTransport]);
 
   const suggested = useMemo(
     () => (data.pallets > 0 ? suggestVehicleByPallets(data.pallets) : undefined),
     [data.pallets]
   );
 
-  const setVehicle = (slug: string) => {
-    if (data.transport?.vehicle_slug === slug) {
-      // toggle off
-      update({ transport: null });
+  const isSelected = (slug: string) => data.transports.some((t) => t.vehicle_slug === slug);
+
+  const toggleVehicle = (slug: string) => {
+    if (isSelected(slug)) {
+      update({ transports: data.transports.filter((t) => t.vehicle_slug !== slug) });
       return;
     }
+    const v = getVehicle(slug);
+    const defaultZone = (v?.zones[0]?.zone ?? "CABA") as VehicleZoneKey;
     update({
-      transport: {
-        vehicle_slug: slug,
-        zone: data.transport?.zone ?? "CABA",
-        trips: data.transport?.trips ?? 1,
-        second_trip_discount: data.transport?.second_trip_discount ?? false,
-        surcharge: data.transport?.surcharge ?? "none",
-      },
+      transports: [
+        ...data.transports,
+        {
+          vehicle_slug: slug,
+          zone: defaultZone,
+          trips: 1,
+          second_trip_discount: false,
+          surcharge: "none",
+        },
+      ],
     });
     setExpanded(true);
   };
 
-  const patchTransport = (patch: Partial<TransportSelection>) => {
-    if (!data.transport) return;
-    update({ transport: { ...data.transport, ...patch } });
+  const patchVehicle = (slug: string, patch: Partial<TransportSelection>) => {
+    update({
+      transports: data.transports.map((t) =>
+        t.vehicle_slug === slug ? { ...t, ...patch } : t
+      ),
+    });
   };
 
-  const currentVehicle = data.transport ? getVehicle(data.transport.vehicle_slug) : undefined;
-
   return (
-    <div className="mb-6">
+    <div className="mb-3">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
         className="w-full flex items-center justify-between p-3 rounded-lg bg-tops-blue-900 text-white"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <Icon name="truck" size={18} stroke={2} />
-          <div className="text-left">
+          <div className="text-left min-w-0">
             <div className="font-bold text-sm">Transporte por viaje</div>
-            <div className="text-[11px] text-white/70">
-              {data.transport
-                ? `${currentVehicle?.label ?? "—"} · ${getVehicleZone(data.transport.vehicle_slug, data.transport.zone)?.label ?? "—"}`
+            <div className="text-[11px] text-white/70 truncate">
+              {hasTransport
+                ? `${data.transports.length} vehículo${data.transports.length > 1 ? "s" : ""} seleccionado${data.transports.length > 1 ? "s" : ""}`
                 : "Tarifario febrero 2026 · Por viaje (no por hora)"}
             </div>
           </div>
         </div>
-        <Icon name={expanded ? "chevron-down" : "chevron-right"} size={14} />
+        <div className="flex items-center gap-2 shrink-0">
+          {hasTransport && (
+            <span className="text-[10px] font-bold tabular-nums bg-white/15 px-1.5 py-0.5 rounded">
+              {data.transports.length}
+            </span>
+          )}
+          <Icon
+            name="chevron-right"
+            size={14}
+            className={cn("transition-transform duration-200 ease-out", expanded && "rotate-90")}
+          />
+        </div>
       </button>
 
-      {expanded && (
-        <div className="mt-3 p-4 rounded-lg border border-stroke-soft bg-white">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-fg-muted mb-2">
-            Seleccioná vehículo
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
-            {VEHICLES.map((v) => {
-              const overCap = data.pallets > v.capacity_pallets;
-              const isSelected = data.transport?.vehicle_slug === v.slug;
-              const isSuggested = suggested?.slug === v.slug;
-              return (
-                <button
-                  type="button"
-                  key={v.slug}
-                  onClick={() => setVehicle(v.slug)}
-                  disabled={overCap}
-                  className={cn(
-                    "p-3 rounded-lg border text-left transition-all duration-200 relative",
-                    isSelected
-                      ? "border-tops-red bg-tops-red/5 shadow-ring-brand"
-                      : overCap
-                        ? "border-stroke-soft bg-neutral-50 opacity-50 cursor-not-allowed"
-                        : "border-stroke-soft bg-white hover:border-tops-blue-700/40"
-                  )}
-                  title={overCap ? `${v.label}: capacidad ${v.capacity_pallets} pallets, pediste ${data.pallets}` : undefined}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <Icon name="truck" size={14} />
-                    <span className="text-sm font-bold">{v.label}</span>
-                  </div>
-                  <div className="text-[10px] text-fg-muted">{v.brand}</div>
-                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-tops-blue-700/10 text-tops-blue-700">
-                      {v.capacity_pallets} pal
-                    </span>
-                    {isSuggested && !isSelected && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-success/10 text-status-success">
-                        Sugerido
-                      </span>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden" {...(expanded ? {} : ({ inert: "" } as object))}>
+          <div className="mt-2 p-4 rounded-lg border border-stroke-soft bg-bg-surface">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-fg-muted mb-2">
+              Seleccioná uno o más vehículos
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+              {VEHICLES.map((v) => {
+                const overCap = data.pallets > v.capacity_pallets;
+                const sel = isSelected(v.slug);
+                const isSuggested = suggested?.slug === v.slug;
+                return (
+                  <button
+                    type="button"
+                    key={v.slug}
+                    onClick={() => toggleVehicle(v.slug)}
+                    className={cn(
+                      "p-3 rounded-lg border text-left transition-all duration-200 relative",
+                      sel
+                        ? "border-tops-red bg-tops-red/5 shadow-ring-brand"
+                        : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/40"
                     )}
-                    {overCap && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-danger/10 text-status-danger">
-                        Excede
-                      </span>
-                    )}
-                  </div>
-                  {isSelected && (
-                    <Icon name="check-circle" size={14} className="absolute top-2 right-2 text-tops-red" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {data.transport && currentVehicle && (
-            <>
-              <div className="text-[11px] font-bold uppercase tracking-wider text-fg-muted mb-2">
-                Zona / distancia
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
-                {currentVehicle.zones.map((z) => {
-                  const isSel = data.transport!.zone === z.zone;
-                  return (
-                    <button
-                      type="button"
-                      key={z.zone}
-                      onClick={() => patchTransport({ zone: z.zone })}
-                      className={cn(
-                        "p-2.5 rounded-md border text-left transition-all duration-150",
-                        isSel
-                          ? "border-tops-blue-900 bg-tops-blue-900 text-white"
-                          : "border-stroke-soft bg-white hover:border-tops-blue-700/40"
-                      )}
-                    >
-                      <div className="text-xs font-bold">{z.label}</div>
-                      <div className={cn("text-[11px] tabular font-mono mt-0.5", isSel ? "text-white/85" : "text-fg-muted")}>
-                        {z.price === null ? "A cotizar" : fmtCurrency(z.price)}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-                <Field label="Cantidad de viajes">
-                  <input
-                    className="input"
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    step={1}
-                    value={data.transport.trips}
-                    onChange={(e) =>
-                      patchTransport({ trips: Math.max(1, safeNonNegInt(e.target.value) || 1) })
-                    }
-                  />
-                </Field>
-                <Field label="Recargo horario (camión)">
-                  <select
-                    className="input"
-                    value={data.transport.surcharge}
-                    onChange={(e) =>
-                      patchTransport({ surcharge: e.target.value as TransportSelection["surcharge"] })
+                    title={
+                      overCap
+                        ? `${v.label}: capacidad ${v.capacity_pallets} pallets, pediste ${data.pallets} — válido si repartís la carga entre varios vehículos`
+                        : undefined
                     }
                   >
-                    <option value="none">Horario diurno (sin recargo)</option>
-                    <option value="17_19">17–19 hs (+25%)</option>
-                    <option value="19_21">19–21 hs (+50%)</option>
-                    <option value="21_plus">+21 hs (+100%)</option>
-                  </select>
-                </Field>
-                <Field label="2do viaje al 50%" help="Aplica si hay retorno / vuelta vacío">
-                  <label className="input flex items-center gap-2 cursor-pointer h-[44px]">
-                    <input
-                      type="checkbox"
-                      checked={data.transport.second_trip_discount}
-                      onChange={(e) =>
-                        patchTransport({ second_trip_discount: e.target.checked })
-                      }
-                      className="w-4 h-4 accent-tops-blue-900"
-                    />
-                    <span className="text-sm">Activar descuento</span>
-                  </label>
-                </Field>
-              </div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <div
+                        className={cn(
+                          "w-4 h-4 rounded border-2 grid place-items-center shrink-0",
+                          sel ? "border-tops-red bg-tops-red" : "border-stroke-strong"
+                        )}
+                      >
+                        {sel && <Icon name="check" size={9} stroke={2.8} className="text-white" />}
+                      </div>
+                      <Icon name="truck" size={14} />
+                      <span className="text-sm font-bold">{v.label}</span>
+                    </div>
+                    <div className="text-[10px] text-fg-muted">{v.brand}</div>
+                    <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-tops-blue-700/10 text-tops-blue-700">
+                        {v.capacity_pallets} pal
+                      </span>
+                      {isSuggested && !sel && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-success/10 text-status-success">
+                          Sugerido
+                        </span>
+                      )}
+                      {overCap && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
+                          Excede
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
 
-              <details className="text-[11px] text-fg-muted">
+            {/* 🚨 ENVÍO URGENTE — recargo +100%, destacado en rojo corporativo */}
+            {hasTransport && (
+              <button
+                type="button"
+                onClick={() => update({ transport_urgent: !data.transport_urgent })}
+                aria-pressed={data.transport_urgent}
+                className={cn(
+                  "w-full flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all duration-200",
+                  data.transport_urgent
+                    ? "border-tops-red bg-tops-red/10 shadow-ring-brand"
+                    : "border-tops-red/40 bg-tops-red/[0.04] hover:bg-tops-red/[0.08]"
+                )}
+              >
+                <div
+                  className={cn(
+                    "w-5 h-5 rounded border-2 grid place-items-center shrink-0",
+                    data.transport_urgent ? "border-tops-red bg-tops-red" : "border-tops-red/60"
+                  )}
+                >
+                  {data.transport_urgent && (
+                    <Icon name="check" size={11} stroke={2.6} className="text-white" />
+                  )}
+                </div>
+                <span className="text-lg leading-none" aria-hidden>
+                  🚨
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-black uppercase tracking-wide text-tops-red">
+                    Envío urgente{" "}
+                    <span className="font-bold">(+100%)</span>
+                  </div>
+                  <div className="text-[11px] text-fg-secondary mt-0.5">
+                    Despacho prioritario para ejecución el mismo día. Aplica un recargo del 100%
+                    sobre el transporte.
+                  </div>
+                </div>
+                {data.transport_urgent && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-tops-red text-white shrink-0">
+                    Activo
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Bloque de configuración por cada vehículo seleccionado */}
+            {data.transports.map((t) => {
+              const v = getVehicle(t.vehicle_slug);
+              if (!v) return null;
+              return (
+                <div
+                  key={t.vehicle_slug}
+                  className="mt-3 p-3 rounded-lg border border-tops-red/30 bg-tops-red/[0.03]"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Icon name="truck" size={14} className="text-tops-red" />
+                      <span className="text-sm font-bold text-fg-primary">{v.label}</span>
+                      <span className="text-[10px] text-fg-muted">· {v.capacity_pallets} pal</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleVehicle(t.vehicle_slug)}
+                      className="text-[11px] text-fg-muted hover:text-status-danger inline-flex items-center gap-1"
+                    >
+                      <Icon name="x" size={11} /> Quitar
+                    </button>
+                  </div>
+
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-fg-muted mb-2">
+                    Zona / distancia
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
+                    {v.zones.map((z) => {
+                      const isSel = t.zone === z.zone;
+                      return (
+                        <button
+                          type="button"
+                          key={z.zone}
+                          onClick={() => patchVehicle(t.vehicle_slug, { zone: z.zone })}
+                          className={cn(
+                            "p-2.5 rounded-md border text-left transition-all duration-150",
+                            isSel
+                              ? "border-tops-blue-900 bg-tops-blue-900 text-white"
+                              : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/40"
+                          )}
+                        >
+                          <div className="text-xs font-bold">{z.label}</div>
+                          <div
+                            className={cn(
+                              "text-[11px] tabular font-mono mt-0.5",
+                              isSel ? "text-white/85" : "text-fg-muted"
+                            )}
+                          >
+                            {z.price === null ? "A cotizar" : fmtCurrency(z.price)}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Field label="Cantidad de viajes">
+                      <input
+                        className="input"
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        value={t.trips}
+                        onChange={(e) =>
+                          patchVehicle(t.vehicle_slug, {
+                            trips: Math.max(1, safeNonNegInt(e.target.value) || 1),
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="Recargo horario (camión)">
+                      <select
+                        className="input"
+                        value={t.surcharge}
+                        onChange={(e) =>
+                          patchVehicle(t.vehicle_slug, {
+                            surcharge: e.target.value as TransportSelection["surcharge"],
+                          })
+                        }
+                      >
+                        <option value="none">Horario diurno (sin recargo)</option>
+                        <option value="17_19">17–19 hs (+25%)</option>
+                        <option value="19_21">19–21 hs (+50%)</option>
+                        <option value="21_plus">+21 hs (+100%)</option>
+                      </select>
+                    </Field>
+                    <Field label="2do viaje al 50%" help="Aplica si hay retorno / vuelta vacío">
+                      <label className="input flex items-center gap-2 cursor-pointer h-[44px]">
+                        <input
+                          type="checkbox"
+                          checked={t.second_trip_discount}
+                          onChange={(e) =>
+                            patchVehicle(t.vehicle_slug, { second_trip_discount: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-tops-blue-900"
+                        />
+                        <span className="text-sm">Activar descuento</span>
+                      </label>
+                    </Field>
+                  </div>
+                </div>
+              );
+            })}
+
+            {hasTransport && (
+              <details className="text-[11px] text-fg-muted mt-3">
                 <summary className="cursor-pointer hover:text-fg-primary">
                   Ver reglas operativas del tarifario
                 </summary>
@@ -1062,10 +1328,81 @@ function TransportSection({
                   ))}
                 </ul>
               </details>
-            </>
-          )}
+            )}
+          </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Control de cantidad: botones −/+ + campo editable de ingreso directo.
+// Permite tipear superficies grandes (500, 1000, 2500 m²) sin clickear cientos
+// de veces. Sólo enteros positivos; bloquea 0, negativos, texto y símbolos.
+// ============================================================================
+
+function QtyStepper({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  // Buffer local de texto para permitir edición libre (incl. vacío transitorio)
+  // sin que el valor "salte" a 1 en cada tecla. El padre recibe el entero
+  // validado en vivo cuando es ≥ 1, y se normaliza al perder el foco.
+  const [text, setText] = useState(String(value));
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
+
+  const handleChange = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9]/g, ""); // sólo dígitos: bloquea −, texto, símbolos
+    setText(cleaned);
+    const n = parseInt(cleaned, 10);
+    if (Number.isFinite(n) && n >= 1) onChange(n); // actualiza en vivo (recalcula total)
+  };
+
+  // Normaliza al perder el foco leyendo el valor REAL del input (no el estado
+  // de React, que puede ir un tick atrasado ante ediciones muy rápidas).
+  const normalize = (raw: string) => {
+    const n = parseInt(raw.replace(/[^0-9]/g, ""), 10);
+    const safe = Number.isFinite(n) && n >= 1 ? n : 1; // vacío / 0 → 1
+    setText(String(safe));
+    onChange(safe);
+  };
+
+  return (
+    <div className="flex items-center gap-1 bg-bg-surface border border-stroke-soft rounded-md p-0.5">
+      <button
+        type="button"
+        aria-label="Restar"
+        onClick={() => onChange(Math.max(1, value - 1))}
+        className="w-7 h-7 grid place-items-center text-fg-secondary hover:bg-bg-surface-alt rounded"
+      >
+        −
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={text}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={(e) => normalize(e.currentTarget.value)}
+        aria-label="Cantidad"
+        className="w-16 text-center bg-transparent border-none font-bold text-fg-primary outline-none tabular"
+        style={{ fontSize: "14px" }}
+      />
+      <button
+        type="button"
+        aria-label="Sumar"
+        onClick={() => onChange(value + 1)}
+        className="w-7 h-7 grid place-items-center text-fg-secondary hover:bg-bg-surface-alt rounded"
+      >
+        +
+      </button>
     </div>
   );
 }
@@ -1084,22 +1421,58 @@ function CategorySection({
   onQty,
 }: {
   title: string;
-  iconName: "user" | "forklift" | "package" | "bill";
+  iconName: "user" | "forklift" | "package" | "bill" | "building";
   items: ServiceCatalogItem[];
   selected: string[];
   qty: Record<string, number>;
   onToggle: (slug: string) => void;
   onQty: (slug: string, qty: number) => void;
 }) {
+  const selectedCount = items.filter((i) => selected.includes(i.slug)).length;
+  const [open, setOpen] = useState<boolean>(selectedCount > 0);
+  // Abrir si aparecen selecciones (p. ej. al restaurar un borrador).
+  useEffect(() => {
+    if (selectedCount > 0) setOpen(true);
+  }, [selectedCount > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <div className="mb-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon name={iconName} size={14} className="text-tops-blue-700" />
-        <div className="text-[11px] font-bold uppercase tracking-wider text-fg-secondary">
-          {title}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-2">
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
+          selectedCount > 0
+            ? "border-tops-blue-700/40 bg-tops-blue-700/5"
+            : "border-stroke-soft bg-bg-surface-alt hover:border-tops-blue-700/40"
+        )}
+      >
+        <Icon name={iconName} size={16} className="text-tops-blue-700 shrink-0" />
+        <span className="flex-1 text-sm font-bold text-fg-primary">{title}</span>
+        {selectedCount > 0 && (
+          <span className="text-[10px] font-bold tabular-nums bg-tops-blue-700 text-white px-1.5 py-0.5 rounded">
+            {selectedCount}
+          </span>
+        )}
+        <Icon
+          name="chevron-right"
+          size={14}
+          className={cn(
+            "text-fg-muted shrink-0 transition-transform duration-200 ease-out",
+            open && "rotate-90"
+          )}
+        />
+      </button>
+
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden" {...(open ? {} : ({ inert: "" } as object))}>
+          <div className="grid grid-cols-1 gap-2 pt-2">
         {items.map((s) => {
           const isSel = selected.includes(s.slug);
           const q = qty[s.slug] ?? 1;
@@ -1110,7 +1483,7 @@ function CategorySection({
                 "rounded-md border transition-colors duration-150",
                 isSel
                   ? "border-tops-blue-700 bg-tops-blue-700/5"
-                  : "border-stroke-soft bg-white hover:border-tops-blue-700/30"
+                  : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/30"
               )}
             >
               <button
@@ -1151,39 +1524,353 @@ function CategorySection({
               {isSel && (
                 <div className="px-3 pb-2.5 flex items-center gap-3 border-t border-stroke-soft pt-2">
                   <div className="text-[11px] text-fg-muted font-bold uppercase">Cantidad</div>
-                  <div className="flex items-center gap-1 bg-white border border-stroke-soft rounded-md p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => onQty(s.slug, q - 1)}
-                      className="w-7 h-7 grid place-items-center text-fg-secondary hover:bg-neutral-100 rounded"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      value={q}
-                      min={1}
-                      step={1}
-                      onChange={(e) =>
-                        onQty(s.slug, Math.max(1, parseInt(e.target.value, 10) || 1))
-                      }
-                      className="w-12 text-center bg-transparent border-none font-bold text-sm outline-none"
-                      style={{ fontSize: "14px" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onQty(s.slug, q + 1)}
-                      className="w-7 h-7 grid place-items-center text-fg-secondary hover:bg-neutral-100 rounded"
-                    >
-                      +
-                    </button>
-                  </div>
+                  <QtyStepper value={q} onChange={(n) => onQty(s.slug, n)} />
                   <div className="text-[11px] text-fg-muted">{unitLabel(s.unit)}</div>
                 </div>
               )}
             </div>
           );
         })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Sección: Concepto libre (facturación de ítems no catalogados)
+// ============================================================================
+
+function ConceptoLibreSection({
+  state,
+  onToggle,
+  onChange,
+}: {
+  state: ConceptoLibre;
+  onToggle: () => void;
+  onChange: (patch: Partial<ConceptoLibre>) => void;
+}) {
+  const [open, setOpen] = useState<boolean>(state.enabled);
+  // Abrir si el concepto se habilita (incluye restauración de borrador).
+  useEffect(() => {
+    if (state.enabled) setOpen(true);
+  }, [state.enabled]);
+
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
+          state.enabled
+            ? "border-tops-blue-700/40 bg-tops-blue-700/5"
+            : "border-stroke-soft bg-bg-surface-alt hover:border-tops-blue-700/40"
+        )}
+      >
+        <Icon name="sparkle" size={16} className="text-tops-blue-700 shrink-0" />
+        <span className="flex-1 text-sm font-bold text-fg-primary">Servicios personalizados</span>
+        {state.enabled && (
+          <span className="text-[10px] font-bold tabular-nums bg-tops-blue-700 text-white px-1.5 py-0.5 rounded">
+            1
+          </span>
+        )}
+        <Icon
+          name="chevron-right"
+          size={14}
+          className={cn(
+            "text-fg-muted shrink-0 transition-transform duration-200 ease-out",
+            open && "rotate-90"
+          )}
+        />
+      </button>
+
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden" {...(open ? {} : ({ inert: "" } as object))}>
+          <div className="pt-2">
+      <div
+        className={cn(
+          "rounded-md border transition-colors duration-150",
+          state.enabled
+            ? "border-tops-blue-700 bg-tops-blue-700/5"
+            : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/30"
+        )}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+        >
+          <div
+            className={cn(
+              "w-5 h-5 rounded border-2 grid place-items-center shrink-0",
+              state.enabled ? "border-tops-blue-700 bg-tops-blue-700" : "border-stroke-strong"
+            )}
+          >
+            {state.enabled && <Icon name="check" size={11} stroke={2.6} className="text-white" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-fg-primary">Concepto libre</div>
+            <div className="text-[11px] text-fg-muted mt-0.5 italic">
+              Permite facturar conceptos no contemplados en el catálogo estándar.
+            </div>
+          </div>
+        </button>
+
+        {state.enabled && (
+          <div className="px-3 pb-3 border-t border-stroke-soft pt-3 space-y-3">
+            <Field label="Concepto" required>
+              <input
+                className="input"
+                placeholder="Ej: Gestión especial, Servicio extraordinario, Honorarios…"
+                value={state.label}
+                onChange={(e) => onChange({ label: e.target.value })}
+                autoFocus
+              />
+            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Precio neto sin IVA" required>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted text-sm font-mono">$</span>
+                  <input
+                    className="input pl-7 tabular"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step={1000}
+                    placeholder="150000"
+                    value={state.price || ""}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      onChange({ price: Number.isFinite(v) && v >= 0 ? v : 0 });
+                    }}
+                  />
+                </div>
+              </Field>
+              <Field label="Observaciones" help="Opcional">
+                <input
+                  className="input"
+                  placeholder="Detalle adicional…"
+                  value={state.observ}
+                  onChange={(e) => onChange({ observ: e.target.value })}
+                />
+              </Field>
+            </div>
+            {state.price > 0 && state.label.trim() && (
+              <div className="text-xs text-fg-secondary flex items-center gap-1.5">
+                <Icon name="check-circle" size={13} className="text-status-success shrink-0" />
+                <span>
+                  Se facturará: <strong className="text-fg-primary">{state.label.trim()}</strong> ·{" "}
+                  <strong className="text-fg-brand tabular">{fmtCurrency(state.price)}</strong> neto + IVA
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Sección: Bonificaciones comerciales (descuentos con trazabilidad)
+// ============================================================================
+
+const BONIF_PCT_OPTIONS = [100, 75, 50, 25, 10] as const;
+
+function BonificacionesSection({
+  bonifiableLines,
+  bonifications,
+  onChange,
+}: {
+  bonifiableLines: LineItem[];
+  bonifications: Bonification[];
+  onChange: (next: Bonification[]) => void;
+}) {
+  // Sólo cuentan las bonificaciones cuyo destino sigue presente.
+  const activeCount = bonifications.filter((b) =>
+    bonifiableLines.some((l) => l.key === b.target_key)
+  ).length;
+  const [open, setOpen] = useState<boolean>(activeCount > 0);
+  useEffect(() => {
+    if (activeCount > 0) setOpen(true);
+  }, [activeCount > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getBonif = (key: string) => bonifications.find((b) => b.target_key === key);
+  const toggle = (key: string) => {
+    const exists = bonifications.some((b) => b.target_key === key);
+    onChange(
+      exists
+        ? bonifications.filter((b) => b.target_key !== key)
+        : [...bonifications, { target_key: key, type: "pct", value: 100 }]
+    );
+  };
+  const patch = (key: string, p: Partial<Bonification>) =>
+    onChange(bonifications.map((b) => (b.target_key === key ? { ...b, ...p } : b)));
+
+  const computeAmount = (line: LineItem, b: Bonification) => {
+    const raw =
+      b.type === "pct" ? Math.round(line.subtotal * (b.value / 100)) : Math.round(b.value);
+    return Math.min(Math.max(0, raw), line.subtotal);
+  };
+
+  return (
+    <div className="mb-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
+          activeCount > 0
+            ? "border-status-success/50 bg-status-success/5"
+            : "border-stroke-soft bg-bg-surface-alt hover:border-tops-blue-700/40"
+        )}
+      >
+        <Icon name="tag-alt" size={16} className="text-status-success shrink-0" />
+        <span className="flex-1 text-sm font-bold text-fg-primary">Bonificaciones</span>
+        {activeCount > 0 && (
+          <span className="text-[10px] font-bold tabular-nums bg-status-success text-white px-1.5 py-0.5 rounded">
+            {activeCount}
+          </span>
+        )}
+        <Icon
+          name="chevron-right"
+          size={14}
+          className={cn(
+            "text-fg-muted shrink-0 transition-transform duration-200 ease-out",
+            open && "rotate-90"
+          )}
+        />
+      </button>
+
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden" {...(open ? {} : ({ inert: "" } as object))}>
+          <div className="pt-2">
+            <div className="text-[11px] text-fg-muted mb-2 italic">
+              Bonificá líneas ya cargadas. El servicio original queda visible y la bonificación se
+              registra como una línea aparte (trazabilidad comercial completa).
+            </div>
+            {bonifiableLines.length === 0 ? (
+              <div className="rounded-md border border-stroke-soft bg-bg-surface p-3 text-sm text-fg-muted italic text-center">
+                Agregá servicios o transporte para poder bonificarlos.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                {bonifiableLines.map((line) => {
+                  const b = getBonif(line.key);
+                  const sel = Boolean(b);
+                  const amount = b ? computeAmount(line, b) : 0;
+                  const net = line.subtotal - amount;
+                  return (
+                    <div
+                      key={line.key}
+                      className={cn(
+                        "rounded-md border transition-colors duration-150",
+                        sel
+                          ? "border-status-success/50 bg-status-success/5"
+                          : "border-stroke-soft bg-bg-surface hover:border-status-success/30"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggle(line.key)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                      >
+                        <div
+                          className={cn(
+                            "w-5 h-5 rounded border-2 grid place-items-center shrink-0",
+                            sel ? "border-status-success bg-status-success" : "border-stroke-strong"
+                          )}
+                        >
+                          {sel && <Icon name="check" size={11} stroke={2.6} className="text-white" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-fg-primary truncate">
+                            {line.label}
+                          </div>
+                          <div className="text-[11px] text-fg-muted">
+                            Vendido: <span className="tabular">{fmtCurrency(line.subtotal)}</span>
+                          </div>
+                        </div>
+                      </button>
+
+                      {sel && b && (
+                        <div className="px-3 pb-3 border-t border-stroke-soft pt-3 space-y-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-fg-muted">
+                              Tipo
+                            </span>
+                            <select
+                              className="input h-9 py-0 w-auto"
+                              value={b.type === "fixed" ? "fixed" : String(b.value)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "fixed") patch(line.key, { type: "fixed", value: b.value && b.type === "fixed" ? b.value : 0 });
+                                else patch(line.key, { type: "pct", value: parseInt(v, 10) });
+                              }}
+                            >
+                              {BONIF_PCT_OPTIONS.map((p) => (
+                                <option key={p} value={p}>
+                                  {p}%{p === 100 ? " (total)" : ""}
+                                </option>
+                              ))}
+                              <option value="fixed">Importe fijo</option>
+                            </select>
+                            {b.type === "fixed" && (
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted text-sm font-mono">
+                                  $
+                                </span>
+                                <input
+                                  className="input h-9 py-0 pl-7 tabular w-36"
+                                  type="number"
+                                  inputMode="numeric"
+                                  min={0}
+                                  step={1000}
+                                  placeholder="100000"
+                                  value={b.value || ""}
+                                  onChange={(e) => {
+                                    const v = parseFloat(e.target.value);
+                                    patch(line.key, { value: Number.isFinite(v) && v >= 0 ? v : 0 });
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="inline-flex items-center gap-1.5 text-status-success font-semibold">
+                              <Icon name="check-circle" size={13} className="shrink-0" />
+                              Bonificación: −{fmtCurrency(amount)}
+                            </span>
+                            <span className="text-fg-secondary">
+                              Subtotal: <strong className="text-fg-primary tabular">{fmtCurrency(net)}</strong>
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1204,7 +1891,7 @@ function BreakdownCard({
 }) {
   return (
     <div className="mt-6 rounded-lg border border-stroke-soft bg-gradient-to-br from-tops-blue-900/5 to-tops-red/5 overflow-hidden">
-      <div className="px-4 py-3 border-b border-stroke-soft flex items-center gap-3 bg-white/60">
+      <div className="px-4 py-3 border-b border-stroke-soft flex items-center gap-3 bg-bg-surface">
         <div className="w-8 h-8 rounded-md bg-tops-blue-900 text-white grid place-items-center shrink-0">
           <Icon name="sparkle" size={14} stroke={2} />
         </div>
@@ -1224,17 +1911,26 @@ function BreakdownCard({
         </div>
       ) : (
         <div className="p-3 space-y-1.5">
-          {lines.map((ln) => (
+          {lines.map((ln) => {
+            const isBonif = ln.category === "bonificacion";
+            return (
             <div
               key={ln.key}
-              className="grid grid-cols-[1fr_auto] gap-3 items-start px-3 py-2 bg-white/70 rounded-md"
+              className={cn(
+                "grid grid-cols-[1fr_auto] gap-3 items-start px-3 py-2 rounded-md",
+                isBonif ? "bg-status-success/5 border border-status-success/30" : "bg-bg-surface-alt"
+              )}
             >
               <div className="min-w-0">
-                <div className="text-sm font-semibold text-fg-primary truncate">{ln.label}</div>
+                <div className={cn("text-sm font-semibold truncate", isBonif ? "text-status-success" : "text-fg-primary")}>
+                  {ln.label}
+                </div>
                 <div className="text-[11px] text-fg-muted flex items-center gap-1.5 flex-wrap mt-0.5">
-                  <span>
-                    {ln.qty_effective} {unitLabel(ln.unit)} × {fmtCurrency(ln.rate)}
-                  </span>
+                  {!isBonif && (
+                    <span>
+                      {ln.qty_effective} {unitLabel(ln.unit)} × {fmtCurrency(ln.rate)}
+                    </span>
+                  )}
                   {ln.min_applied && ln.min_reason && (
                     <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
                       Mínimo aplicado
@@ -1242,18 +1938,26 @@ function BreakdownCard({
                   )}
                 </div>
                 {ln.min_reason && (
-                  <div className="text-[11px] text-status-warning mt-0.5">{ln.min_reason}</div>
+                  <div className={cn("text-[11px] mt-0.5", isBonif ? "text-status-success" : "text-status-warning")}>
+                    {ln.min_reason}
+                  </div>
                 )}
               </div>
-              <div className="text-sm font-bold text-fg-brand tabular shrink-0 self-center">
-                {fmtCurrency(ln.subtotal)}
+              <div
+                className={cn(
+                  "text-sm font-bold tabular shrink-0 self-center",
+                  isBonif ? "text-status-success" : "text-fg-brand"
+                )}
+              >
+                {isBonif ? `− ${fmtCurrency(Math.abs(ln.subtotal))}` : fmtCurrency(ln.subtotal)}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <div className="px-4 py-3 border-t border-stroke-soft bg-white/40 flex items-center justify-between">
+      <div className="px-4 py-3 border-t border-stroke-soft bg-bg-surface flex items-center justify-between">
         <div className="text-xs text-fg-secondary">
           IVA estimado (21%): <strong className="text-fg-primary">{fmtCurrency(ivaEst)}</strong>
         </div>
@@ -1455,7 +2159,7 @@ function StepFirma({
         </div>
       </Field>
 
-      <div className="mt-4 p-3 bg-neutral-50 rounded-lg flex gap-2 text-[11px] text-fg-secondary">
+      <div className="mt-4 p-3 bg-bg-surface-alt rounded-lg flex gap-2 text-[11px] text-fg-secondary">
         <Icon name="pin" size={14} className="text-tops-blue-700 shrink-0 mt-0.5" />
         <div>
           <strong className="text-fg-primary">Trazabilidad:</strong> al confirmar se registran
@@ -1514,6 +2218,15 @@ function SummaryCard({
       <div className="eyebrow-tiny">Resumen en vivo</div>
       <div className="text-base font-bold text-fg-brand mb-4">Comprobante a generar</div>
 
+      {data.transport_urgent && data.transports.length > 0 && (
+        <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-md bg-tops-red/10 border border-tops-red/40">
+          <span aria-hidden>🚨</span>
+          <span className="text-[11px] font-black uppercase tracking-wider text-tops-red">
+            Envío urgente · +100%
+          </span>
+        </div>
+      )}
+
       <SummaryRow label="Cliente" value={data.razon || "—"} />
       <SummaryRow label="CUIT" value={data.cuit || "—"} mono />
       <SummaryRow label="Depósito" value={data.depot === "MAGALDI" ? "Magaldi · CABA" : "Luján · BsAs"} />
@@ -1530,20 +2243,27 @@ function SummaryCard({
         {lines.length === 0 && (
           <div className="text-xs text-fg-muted italic">Sin items seleccionados.</div>
         )}
-        {lines.map((ln) => (
+        {lines.map((ln) => {
+          const isBonif = ln.category === "bonificacion";
+          return (
           <div
             key={ln.key}
             className="flex justify-between text-xs py-1.5 border-b border-stroke-soft last:border-b-0 gap-2"
           >
-            <span className="text-fg-primary min-w-0 truncate">
-              {ln.label}{" "}
-              <span className="text-fg-muted">
-                · {ln.qty_effective} {unitLabel(ln.unit)}
-              </span>
+            <span className={cn("min-w-0 truncate", isBonif ? "text-status-success" : "text-fg-primary")}>
+              {ln.label}
+              {!isBonif && (
+                <span className="text-fg-muted">
+                  {" "}· {ln.qty_effective} {unitLabel(ln.unit)}
+                </span>
+              )}
             </span>
-            <span className="font-bold tabular shrink-0">{fmtCurrency(ln.subtotal)}</span>
+            <span className={cn("font-bold tabular shrink-0", isBonif && "text-status-success")}>
+              {isBonif ? `− ${fmtCurrency(Math.abs(ln.subtotal))}` : fmtCurrency(ln.subtotal)}
+            </span>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-4 p-3 bg-tops-blue-900 text-white rounded-md flex items-center justify-between">
@@ -1614,7 +2334,10 @@ function initial(firstClient?: Client): WizardState {
     operator_id: "",
     services: [],
     qty: {},
-    transport: null,
+    transports: [],
+    transport_urgent: false,
+    bonifications: [],
+    concepto_libre: { enabled: false, label: "", price: 0, observ: "" },
     h_start: "08:00",
     h_end: "12:00",
     pallets: 0,
@@ -1629,3 +2352,4 @@ function initial(firstClient?: Client): WizardState {
     geo_lng: null,
   };
 }
+

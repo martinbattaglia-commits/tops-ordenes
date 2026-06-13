@@ -117,3 +117,18 @@ export function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentTyp
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return { bytes, contentType };
 }
+
+/**
+ * Envío urgente (Tarea E): slug sintético de la línea de recargo del 100% por
+ * despacho prioritario el mismo día. Modelado como línea de servicio para que
+ * persista en `order_services` (sin columna ni migración dedicada). La urgencia
+ * de una orden se DERIVA de la presencia de esta línea en sus servicios.
+ */
+export const URGENT_SERVICE_SLUG = "recargo-urgente";
+
+/** True si la orden incluye el recargo de envío urgente entre sus servicios. */
+export function isUrgentOrder(
+  order: { services?: ReadonlyArray<{ service_slug?: string }> | null } | null | undefined,
+): boolean {
+  return Boolean(order?.services?.some((s) => s.service_slug === URGENT_SERVICE_SLUG));
+}
