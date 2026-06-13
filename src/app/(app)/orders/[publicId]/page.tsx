@@ -5,7 +5,7 @@ import { Icon } from "@/components/Icon";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getOrder } from "@/lib/data/orders";
 import { env } from "@/lib/env";
-import { fmtCurrency, fmtDate, fmtDateTime } from "@/lib/utils";
+import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
 import { OrderActions } from "./OrderActions";
 import { PdfPreview } from "./PdfPreview";
 
@@ -54,7 +54,14 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
               {order.client?.razon ?? "—"}
             </h2>
             <div className="text-xs text-fg-secondary font-mono mb-3">{order.client?.cuit}</div>
-            <StatusBadge status={order.status} />
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={order.status} />
+              {isUrgentOrder(order) && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded bg-tops-red text-white">
+                  🚨 Urgente
+                </span>
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3 mt-4">
               <Meta label="Fecha" value={fmtDate(order.date)} />
               <Meta label="Depósito" value={order.depot === "MAGALDI" ? "Magaldi · CABA" : "Luján · BsAs"} />

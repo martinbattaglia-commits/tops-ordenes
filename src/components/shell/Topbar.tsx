@@ -52,7 +52,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
       {/* Desktop: NEXUS wordmark + module pill */}
       <div className="hidden lg:flex items-center gap-3">
-        <div className="text-[15px] font-black tracking-[0.18em] text-tops-blue-900">
+        <div className="text-[15px] font-black tracking-[0.18em] text-tops-blue-900 dark:text-fg-link">
           {PRODUCT.name}
         </div>
         <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-tops-red border border-tops-red/30 bg-tops-red/5 px-2 py-0.5 rounded">

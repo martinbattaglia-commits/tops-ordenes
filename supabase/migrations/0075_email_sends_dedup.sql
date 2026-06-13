@@ -1,0 +1,42 @@
+-- =========================================================================
+-- 0075_email_sends_dedup — idempotencia de notificaciones automáticas de OS
+-- =========================================================================
+-- Contexto:
+--   La generación de una Orden de Servicio dispara 4 correos diferenciados
+--   por rol (depósito / director / facturación / cliente), auditados en
+--   public.email_sends (tabla creada en 0001, hasta ahora sin uso en código).
+--
+--   Para garantizar "una sola vez por orden y por rol" a nivel de base de
+--   datos — y que un reintento del paso de envío no genere filas ni correos
+--   duplicados — agregamos un índice ÚNICO sobre (order_id, tag).
+--
+--   El código (src/app/(app)/orders/new/actions.ts) inserta una fila por rol
+--   con ON CONFLICT implícito: si la fila ya existe, el insert falla y el rol
+--   se saltea (no se reenvía). El índice es la garantía dura de esa lógica.
+--
+-- Notas:
+--   · NO confundir con public.po_email_sends (órdenes de COMPRA, tabla aparte).
+--   · email_sends.tag admite NULL en el esquema, pero el flujo de OS siempre
+--     escribe un tag no nulo ('depot' | 'director' | 'facturacion' | 'cliente').
+--     Un índice único trata múltiples NULL como distintos en Postgres, así que
+--     filas legacy con tag NULL (no existen hoy) no romperían el índice.
+--   · Idempotente: `create unique index if not exists`. Si hubiera duplicados
+--     preexistentes (no los hay — la tabla está vacía), el create fallaría;
+--     en ese caso deduplicar antes. Verificación al pie.
+-- =========================================================================
+
+create unique index if not exists email_sends_order_tag_uniq
+  on public.email_sends (order_id, tag);
+
+-- =========================================================================
+-- Verificación (correr post-migración):
+--   -- 1) El índice existe:
+--   select indexname from pg_indexes
+--    where tablename = 'email_sends' and indexname = 'email_sends_order_tag_uniq';
+--
+--   -- 2) No hay duplicados (debe devolver 0 filas):
+--   select order_id, tag, count(*)
+--     from public.email_sends
+--    group by order_id, tag
+--   having count(*) > 1;
+-- =========================================================================

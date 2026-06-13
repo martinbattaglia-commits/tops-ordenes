@@ -1,11 +1,17 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 import { PRODUCT } from "@/lib/org";
+
+/** Clave de persistencia del set de dominios abiertos del sidebar (Accordion Tree). */
+const SIDEBAR_OPEN_KEY = "tops:sidebar:open:v1";
+/** Evento para sincronizar el estado de apertura entre instancias del sidebar (desktop + drawer). */
+const SIDEBAR_SYNC_EVENT = "tops:sidebar-open-changed";
 
 interface NavItem {
   href: string;
@@ -117,7 +123,7 @@ const DOMAINS: Domain[] = [
   },
   {
     id: "analytics",
-    label: "Analytics & Finanzas",
+    label: "Facturación",
     items: [
       { href: "/reports", label: "Reportes", icon: "report" },
       { href: "/billing", label: "Facturación", icon: "bill" },
@@ -238,6 +244,75 @@ export default function Sidebar({
     return pathname.startsWith(href);
   };
 
+  // ── Accordion Tree: estado de dominios abiertos/cerrados ──────────────
+  // El dominio que contiene la ruta activa se abre siempre (para no ocultar
+  // dónde está parado el usuario). El resto arranca colapsado; las aperturas
+  // manuales se recuerdan en localStorage entre sesiones.
+  const activeDomainId = useMemo(() => {
+    for (const d of DOMAINS) {
+      if (d.items.some((it) => isActive(it.href))) return d.id;
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Estado inicial determinista (SSR-safe): sólo el dominio activo abierto.
+  const [openDomains, setOpenDomains] = useState<Record<string, boolean>>(() =>
+    activeDomainId ? { [activeDomainId]: true } : {},
+  );
+
+  // Tras montar, fusionamos el set persistido del usuario (evita mismatch SSR).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SIDEBAR_OPEN_KEY);
+      if (raw) {
+        const ids = JSON.parse(raw) as string[];
+        if (Array.isArray(ids)) {
+          setOpenDomains((prev) => {
+            const next = { ...prev };
+            for (const id of ids) next[id] = true;
+            return next;
+          });
+        }
+      }
+    } catch {}
+  }, []);
+
+  // Al navegar, garantizamos que el dominio de la ruta activa quede abierto.
+  useEffect(() => {
+    if (!activeDomainId) return;
+    setOpenDomains((prev) => (prev[activeDomainId] ? prev : { ...prev, [activeDomainId]: true }));
+  }, [activeDomainId]);
+
+  // Sincronización entre instancias (el shell monta Sidebar 2 veces: desktop +
+  // drawer mobile). El evento `storage` no se dispara en el mismo documento,
+  // así que usamos un CustomEvent para que ambas instancias reflejen el mismo
+  // estado de apertura al instante.
+  useEffect(() => {
+    const onSync = (e: Event) => {
+      const ids = (e as CustomEvent<string[]>).detail;
+      if (!Array.isArray(ids)) return;
+      setOpenDomains(Object.fromEntries(ids.map((id) => [id, true])));
+    };
+    window.addEventListener(SIDEBAR_SYNC_EVENT, onSync);
+    return () => window.removeEventListener(SIDEBAR_SYNC_EVENT, onSync);
+  }, []);
+
+  const toggleDomain = (id: string) => {
+    // En un handler de evento, `openDomains` es el estado committeado más
+    // reciente, así que podemos derivar `next` sin efectos dentro del updater.
+    const next = { ...openDomains, [id]: !openDomains[id] };
+    setOpenDomains(next);
+    const openIds = Object.keys(next).filter((k) => next[k]);
+    try {
+      localStorage.setItem(SIDEBAR_OPEN_KEY, JSON.stringify(openIds));
+    } catch {}
+    // Notificamos a la otra instancia del sidebar en el mismo documento.
+    try {
+      window.dispatchEvent(new CustomEvent(SIDEBAR_SYNC_EVENT, { detail: openIds }));
+    } catch {}
+  };
+
   return (
     <div className="sidebar w-full h-full flex flex-col px-3 pb-3 overflow-y-auto">
       {/* Brand block */}
@@ -264,8 +339,8 @@ export default function Sidebar({
         </div>
       </Link>
 
-      {/* Domain sections */}
-      <div className="flex flex-col gap-3">
+      {/* Domain sections — Accordion Tree */}
+      <div className="flex flex-col gap-0.5">
         {DOMAINS.map((domain) => {
           // Dominio gateado completo (ej. Sistema) sin permiso → no renderizar.
           if (!gateAllowed(domain.gate)) return null;
@@ -274,8 +349,15 @@ export default function Sidebar({
           );
           // Sección sin ítems visibles → no renderizar el encabezado vacío.
           if (items.length === 0) return null;
+          const hasActive = items.some((item) => isActive(item.href));
           return (
-            <Section key={domain.id} label={domain.label}>
+            <Section
+              key={domain.id}
+              label={domain.label}
+              open={Boolean(openDomains[domain.id])}
+              hasActive={hasActive}
+              onToggle={() => toggleDomain(domain.id)}
+            >
               {items.map((item) => (
                 <NavLink
                   key={item.href}
@@ -331,22 +413,67 @@ export default function Sidebar({
 
 function Section({
   label,
+  open,
+  hasActive,
+  onToggle,
   children,
   className,
 }: {
   label: string;
+  open: boolean;
+  hasActive: boolean;
+  onToggle: () => void;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      <div className="px-1.5 mb-1">
-        <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">
+    <div className={cn("flex flex-col", className)}>
+      {/* Encabezado del dominio: nodo expandible/colapsable */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="group w-full flex items-center gap-1.5 px-1.5 py-1.5 rounded-md hover:bg-white/5 transition-colors"
+      >
+        <Icon
+          name="chevron-right"
+          size={13}
+          stroke={2.6}
+          className={cn(
+            "shrink-0 transition-transform duration-200 ease-out",
+            open ? "rotate-90 text-white/85" : hasActive ? "text-tops-red" : "text-white/60",
+            "group-hover:text-white/90",
+          )}
+        />
+        {/* Nivel 1 — categoría madre: domina visualmente a sus ítems hijos
+            (13px bold uppercase, alto contraste) > hijos (14px medium, white/75). */}
+        <span
+          className={cn(
+            "flex-1 text-left text-sm font-bold uppercase tracking-[0.04em] leading-tight transition-colors",
+            open || hasActive ? "text-white" : "text-white/90",
+            "group-hover:text-white",
+          )}
+        >
           {label}
+        </span>
+        {/* Punto indicador: sección colapsada que contiene la ruta activa */}
+        {hasActive && !open && <span className="w-1.5 h-1.5 rounded-full bg-tops-red shrink-0" />}
+      </button>
+
+      {/* Contenido colapsable — animación de altura 200ms vía grid-rows */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        {/* inert cuando está colapsado: saca los links del orden de tabulación */}
+        <div className="overflow-hidden" {...(open ? {} : ({ inert: "" } as object))}>
+          <div className="ml-1.5 pl-2 border-l border-white/10 mt-0.5 mb-1">
+            <nav className="flex flex-col gap-0.5">{children}</nav>
+          </div>
         </div>
-        <div className="mt-1 h-[2px] rounded-xs bg-tops-red" />
       </div>
-      <nav className="flex flex-col gap-0.5">{children}</nav>
     </div>
   );
 }

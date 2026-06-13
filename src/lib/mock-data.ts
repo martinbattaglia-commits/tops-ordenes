@@ -90,6 +90,7 @@ export const MOCK_OPERATORS: Operator[] = [
   { id: "op1", full_name: "Juan Carlos", role: "Encargado Depósito · Magaldi", avatar: "JC", depot: "MAGALDI" },
   { id: "op2", full_name: "Jorge Merino", role: "Encargado Depósito · Luján", avatar: "JM", depot: "LUJAN" },
   { id: "op3", full_name: "José Luis Rodríguez", role: "Director de Operaciones", avatar: "JR", depot: null },
+  { id: "op4", full_name: "Ruth Carrasquero", role: "Administración y Atención al Cliente", avatar: "RC", depot: null },
 ];
 
 function pseudo(seed: number) {

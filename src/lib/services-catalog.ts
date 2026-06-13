@@ -187,6 +187,90 @@ export const SERVICES_CATALOG: ServiceCatalogItem[] = [
     active: true,
   },
 
+  // ---- Almacenamiento -------------------------------------------------------
+  // Tarifas en USD — valores ARS son aproximados (USD × ~1.500). Actualizar
+  // cuando cambie la paridad oficial. USD 10/m²/mes = general; USD 50 = ANMAT.
+  {
+    id: "s-alm-general",
+    slug: "alm-general",
+    label: "Almacenamiento Cargas Generales",
+    category: "almacenamiento",
+    unit: "m2",
+    rate: 20_000,
+    observ: "Servicio mensual de almacenamiento para mercadería general no regulada.",
+    icon: "building",
+    active: true,
+  },
+  {
+    id: "s-alm-anmat",
+    slug: "alm-anmat",
+    label: "Almacenamiento ANMAT",
+    category: "almacenamiento",
+    unit: "m2",
+    rate: 80_000,
+    observ: "Servicio mensual de almacenamiento para productos regulados ANMAT.",
+    icon: "building",
+    active: true,
+  },
+
+  // ---- Oficinas y coworking -------------------------------------------------
+  // Tarifas a cotizar — coordinar con Comercial según disponibilidad.
+  {
+    id: "s-oficina-privada",
+    slug: "oficina-privada",
+    label: "Oficina privada",
+    category: "coworking",
+    unit: "mes",
+    rate: 0,
+    observ: "Alquiler mensual de oficina privada. Tarifa a cotizar — coordiná con Comercial.",
+    icon: "building",
+    active: true,
+  },
+  {
+    id: "s-coworking-individual",
+    slug: "coworking-individual",
+    label: "Puesto coworking individual",
+    category: "coworking",
+    unit: "mes",
+    rate: 0,
+    observ: "Acceso mensual a puesto individual de coworking. Tarifa a cotizar.",
+    icon: "building",
+    active: true,
+  },
+  {
+    id: "s-coworking-isla-6",
+    slug: "coworking-isla-6",
+    label: "Isla coworking 6 personas",
+    category: "coworking",
+    unit: "mes",
+    rate: 0,
+    observ: "Espacio de coworking para equipo de hasta 6 personas. Tarifa a cotizar.",
+    icon: "building",
+    active: true,
+  },
+  {
+    id: "s-coworking-isla-4",
+    slug: "coworking-isla-4",
+    label: "Isla coworking 4 personas",
+    category: "coworking",
+    unit: "mes",
+    rate: 0,
+    observ: "Espacio de coworking para equipo de hasta 4 personas. Tarifa a cotizar.",
+    icon: "building",
+    active: true,
+  },
+  {
+    id: "s-coworking-isla-3",
+    slug: "coworking-isla-3",
+    label: "Isla coworking 3 personas",
+    category: "coworking",
+    unit: "mes",
+    rate: 0,
+    observ: "Espacio de coworking para equipo de hasta 3 personas. Tarifa a cotizar.",
+    icon: "building",
+    active: true,
+  },
+
   // ---- Administrativos ------------------------------------------------------
   {
     id: "s-admin-in",
@@ -217,6 +301,8 @@ export const SERVICE_CATEGORIES = [
   { key: "especial", label: "Servicios especiales", icon: "forklift" },
   { key: "carga", label: "Carga, descarga, picking", icon: "package" },
   { key: "desconsolidado", label: "Desconsolidado", icon: "package" },
+  { key: "almacenamiento", label: "Almacenamiento", icon: "building" },
+  { key: "coworking", label: "Oficinas y coworking", icon: "building" },
   { key: "admin", label: "Administrativos", icon: "bill" },
 ] as const;
 
@@ -237,6 +323,7 @@ export function unitLabel(unit: ServiceUnit | string): string {
     mes: "mes",
     un: "un",
     m3: "m³",
+    m2: "m²",
   };
   return map[unit] ?? unit;
 }

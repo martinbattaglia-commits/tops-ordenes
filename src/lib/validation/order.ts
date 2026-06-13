@@ -47,6 +47,17 @@ const numOr0 = z.preprocess((v) => {
   return Number.isFinite(n) ? n : 0;
 }, z.number().nonnegative("Debe ser ≥ 0"));
 
+/**
+ * Igual que numOr0 pero admite negativos. Sólo para líneas de bonificación
+ * comercial (importes negativos legítimos); el signo se valida por slug en el
+ * superRefine del servicio (ver abajo).
+ */
+const numAny = z.preprocess((v) => {
+  if (v === "" || v === null || v === undefined) return 0;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+}, z.number());
+
 /** Igual que `numOr0` pero entero (Math.trunc). */
 const intOr0 = z.preprocess((v) => {
   if (v === "" || v === null || v === undefined) return 0;
@@ -81,14 +92,32 @@ export const CreateOrderSchema = z.object({
   operator_id: z.string().min(1, "Seleccioná un responsable operativo"),
   services: z
     .array(
-      z.object({
-        service_slug: z.string(),
-        label: z.string(),
-        qty: qtyPositive,
-        unit: z.string(),
-        rate: numOr0,
-        subtotal: numOr0,
-      })
+      z
+        .object({
+          service_slug: z.string(),
+          label: z.string(),
+          qty: qtyPositive,
+          unit: z.string(),
+          rate: numAny,
+          subtotal: numAny,
+        })
+        // Las líneas de bonificación ("bonif:…") son descuentos → importes ≤ 0.
+        // Cualquier otra línea de servicio debe ser ≥ 0 (no se admiten negativos
+        // por error de cálculo). El signo se valida acá, por slug.
+        .superRefine((s, ctx) => {
+          const isBonif = s.service_slug.startsWith("bonif:");
+          if (isBonif) {
+            if (s.subtotal > 0)
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subtotal"], message: "Bonificación debe ser ≤ 0" });
+            if (s.rate > 0)
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate"], message: "Bonificación debe ser ≤ 0" });
+          } else {
+            if (s.subtotal < 0)
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subtotal"], message: "Debe ser ≥ 0" });
+            if (s.rate < 0)
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate"], message: "Debe ser ≥ 0" });
+          }
+        })
     )
     .min(1, "Seleccioná al menos un servicio"),
   h_start: z.string().regex(/^\d{2}:\d{2}$/, "Hora inicio inválida"),
