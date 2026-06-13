@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { dataUrlToBytes } from "@/lib/utils";
-import { sendOrderEmail, recipientsFor } from "@/lib/email";
+import { dataUrlToBytes, isUrgentOrder } from "@/lib/utils";
+import { sendOneOrderEmail } from "@/lib/email";
+import { orderEmailPlan, dedupeOrderEmails, renderRoleHtml } from "@/lib/order-email";
 import { buildOrderPdf } from "@/lib/pdf/build";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { CreateOrderSchema, formatZodIssues, type CreateOrderInput } from "@/lib/validation/order";
@@ -239,24 +240,76 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
     console.error("[createOrder] audit_log insert failed (non-blocking)", e);
   }
 
-  // 4i. Enviar email (best-effort, no bloquea — el email JAMÁS rompe la orden)
+  // 4i. Notificaciones automáticas por rol (best-effort, no bloquea — el email
+  //     JAMÁS rompe la orden). 4 correos diferenciados:
+  //       depósito (según sede) · director · facturación · cliente.
+  //     Auditoría + anti-duplicados vía `email_sends`. DORMIDO en dev/staging
+  //     sin RESEND_API_KEY (sendOneOrderEmail devuelve { skipped:true }).
   try {
     const publicUrl = `${env.app.url}/orders/${ord.public_id}`;
-    const fakeOrder = {
-      public_id: ord.public_id,
-      depot: ord.depot,
-      date: ord.date,
-      total: data.total,
-      client: { razon: data.client.razon },
-    } as unknown as Order;
-    sendOrderEmail({
-      order: fakeOrder,
-      to: recipientsFor(fakeOrder, data.client.email),
-      pdfUrl: pdf_url ?? undefined,
-      publicUrl,
-    }).catch((err) => console.error("[createOrder] sendOrderEmail rejected", err));
+    const orderForEmail: Order = {
+      ...(ord as Order),
+      signature_url,
+      pdf_url,
+      client: clientRow as unknown as Order["client"],
+      operator: opRow ? (opRow as unknown as Order["operator"]) : undefined,
+      services: data.services.map((s) => ({ ...s, unit: s.unit as ServiceUnit })),
+    };
+    const plan = orderEmailPlan(orderForEmail, data.client.email, {
+      depotMagaldi: env.email.depot.magaldi,
+      depotLujan: env.email.depot.lujan,
+      director: env.email.admin.joseluis,
+      facturacion: env.email.admin.ruth,
+    });
+
+    // Anti-duplicados: roles ya registrados (enviados o encolados) para la orden.
+    const { data: existing } = await admin
+      .from("email_sends")
+      .select("tag, status")
+      .eq("order_id", ord.id);
+    const alreadyTags = new Set<string>(
+      (existing ?? [])
+        .filter((r) => r.status === "sent" || r.status === "queued")
+        .map((r) => r.tag as string),
+    );
+    const pending = dedupeOrderEmails(plan, alreadyTags);
+
+    for (const item of pending) {
+      // Registrar el intento (auditoría). El índice único (order_id, tag) de la
+      // migración 0075 garantiza una sola fila por rol aunque el paso reintente.
+      const { data: row, error: insErr } = await admin
+        .from("email_sends")
+        .insert({ order_id: ord.id, to_email: item.to, tag: item.tag, status: "queued" })
+        .select("id")
+        .maybeSingle();
+      if (insErr || !row) {
+        // Conflicto de índice único → ya existe → no duplicamos.
+        continue;
+      }
+      const html = renderRoleHtml(
+        orderForEmail,
+        item.role,
+        publicUrl,
+        pdf_url ?? undefined,
+        isUrgentOrder(orderForEmail),
+      );
+      const res = await sendOneOrderEmail({ to: item.to, subject: item.subject, html });
+      if (res.skipped) {
+        // Dormido (sin RESEND_API_KEY): la fila queda 'queued' como intención auditada.
+        continue;
+      }
+      await admin
+        .from("email_sends")
+        .update({
+          status: res.ok ? "sent" : "failed",
+          provider_id: res.id ?? null,
+          error: res.ok ? null : res.error ?? "unknown",
+          sent_at: res.ok ? new Date().toISOString() : null,
+        })
+        .eq("id", row.id);
+    }
   } catch (e) {
-    console.error("[createOrder] email dispatch threw synchronously (non-blocking)", e);
+    console.error("[createOrder] order notifications failed (non-blocking)", e);
   }
 
   // 4j. Revalidate caches

@@ -67,6 +67,42 @@ export async function sendOrderEmail(opts: {
   return { ok: true, id: j.id };
 }
 
+/**
+ * Envío genérico de UN email vía Resend (usado por el flujo de 4 notificaciones
+ * diferenciadas por rol, ver order-email.ts). Si no hay RESEND_API_KEY devuelve
+ * { skipped: true } en lugar de fallar: el envío queda DORMIDO en dev/staging
+ * sin credenciales (no se dispara ningún correo real). La activación real la
+ * controla Dirección cargando RESEND_API_KEY en producción.
+ */
+export async function sendOneOrderEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<{ ok: boolean; id?: string; skipped?: boolean; error?: string }> {
+  if (!env.email.resendKey) {
+    return { ok: true, skipped: true };
+  }
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.email.resendKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: env.email.from,
+      to: [opts.to],
+      subject: opts.subject,
+      html: opts.html,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    return { ok: false, error: errText || `HTTP ${res.status}` };
+  }
+  const j = (await res.json()) as { id?: string };
+  return { ok: true, id: j.id };
+}
+
 function renderOrderHtml(order: Order, publicUrl: string, pdfUrl?: string): string {
   const depotLabel: Record<Depot, string> = { MAGALDI: "Magaldi · CABA", LUJAN: "Luján · BsAs" };
   const total = new Intl.NumberFormat("es-AR", {

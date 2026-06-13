@@ -69,8 +69,8 @@ export const env = {
       joseluis: process.env.EMAIL_ADMIN_JOSELUIS ?? "joseluis@logisticatops.com",
     },
     depot: {
-      magaldi: process.env.EMAIL_DEPOT_MAGALDI ?? "juancarlos@logisticatops.com",
-      lujan: process.env.EMAIL_DEPOT_LUJAN ?? "despachos@logisticatops.com",
+      magaldi: process.env.EMAIL_DEPOT_MAGALDI ?? "despachos-magaldi@logisticatops.com",
+      lujan: process.env.EMAIL_DEPOT_LUJAN ?? "despachos-lujan@logisticatops.com",
     },
   },
   clientify: {
