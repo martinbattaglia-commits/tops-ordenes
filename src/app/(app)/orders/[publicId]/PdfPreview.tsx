@@ -1,11 +1,11 @@
 import { Icon } from "@/components/Icon";
-import { fmtCurrency, fmtDate, fmtDateTime } from "@/lib/utils";
+import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
 import type { Order } from "@/lib/types";
 
 export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
   return (
     <div
-      className="card bg-white shadow-md mx-auto"
+      className="pdf-paper card bg-white shadow-md mx-auto"
       style={{
         aspectRatio: "1 / 1.414",
         maxWidth: 760,
@@ -36,6 +36,11 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
             Orden de Servicio
           </div>
           <div className="font-mono text-lg font-bold text-fg-brand mb-1">{order.public_id}</div>
+          {isUrgentOrder(order) && (
+            <div className="inline-flex items-center gap-1 mb-1 px-2 py-0.5 rounded bg-tops-red text-white text-[9px] font-black uppercase tracking-[0.12em]">
+              🚨 Urgente
+            </div>
+          )}
           <div className="text-[9px] text-fg-secondary leading-relaxed">
             Fecha: <strong className="text-fg-primary">{fmtDate(order.date)}</strong>
             <br />
@@ -155,7 +160,7 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
         <div className="w-[120px]">
           <SectionLabel>Verificar</SectionLabel>
           <div
-            className="p-1.5 bg-white border border-stroke-soft rounded"
+            className="pdf-qr p-1.5 bg-white border border-stroke-soft rounded"
             dangerouslySetInnerHTML={{ __html: qrSvg }}
           />
           <div className="text-[7px] text-fg-muted text-center mt-1 tracking-wider uppercase">

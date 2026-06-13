@@ -16,7 +16,7 @@ export type OrderStatus =
   | "CANCELADA"
   | "OBSERVADA";
 
-export type ServiceUnit = "hs" | "km" | "pal" | "mes" | "un" | "m3" | "viaje";
+export type ServiceUnit = "hs" | "km" | "pal" | "mes" | "un" | "m3" | "m2" | "viaje";
 
 /** Categorías visuales del wizard de servicios. */
 export type ServiceCategory =
@@ -25,6 +25,8 @@ export type ServiceCategory =
   | "carga"
   | "desconsolidado"
   | "admin"
+  | "almacenamiento"
+  | "coworking"
   | "transporte";
 
 export type UserRole = "admin" | "operaciones" | "supervisor" | "cliente";
@@ -125,15 +127,23 @@ export const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = 
   CANCELADA: { label: "Cancelada", cls: "badge-muted" },
 };
 
-export const DEPOT_META: Record<Depot, { label: string; address: string; tag: string }> = {
+export const DEPOT_META: Record<
+  Depot,
+  { label: string; address: string; tag: string; capabilities: string[] }
+> = {
+  // Sede central — opera ANMAT + cargas generales + oficinas.
   MAGALDI: {
     label: "Magaldi",
     address: "Agustín Magaldi 1765 · CABA",
-    tag: "ANMAT",
+    tag: "ANMAT · General",
+    capabilities: ["ANMAT", "Cargas generales", "Oficinas"],
   },
+  // Sede anexa Pedro de Luján 3159 (Pcia. de Buenos Aires) — ANMAT + cargas
+  // generales, SIN oficinas.
   LUJAN: {
     label: "Luján",
-    address: "Ruta 8 km 67.5 · BsAs",
-    tag: "General",
+    address: "Pedro de Luján 3159 · BsAs",
+    tag: "ANMAT · General",
+    capabilities: ["ANMAT", "Cargas generales"],
   },
 };

@@ -233,6 +233,45 @@
   .card {
     @apply rounded-lg border border-stroke-soft bg-bg-surface shadow-xs;
   }
+
+  /* ---- PDF / A4 paper -------------------------------------------------
+     El comprobante A4 es un documento "impreso": papel blanco con tinta
+     oscura SIEMPRE, sin importar el tema de la app. Sin este scope, en
+     dark mode los tokens de fg y neutral se invierten a colores claros
+     y el texto queda blanco-sobre-blanco (ilegible). Acá fijamos la paleta
+     light sobre el papel y sus descendientes (los valores se reforzaron
+     para garantizar contraste AA en los textos chicos del documento). */
+  .pdf-paper {
+    --bg-page: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-surface-alt: #f7f8fb;
+    --fg-primary: #0b1220;
+    --fg-secondary: #4a5365;
+    --fg-muted: #5a6577;
+    --fg-brand: #050555;
+    --fg-link: #214576;
+    --stroke-soft: #dde3ec;
+    --stroke-strong: #c2cad6;
+    --neutral-50: #f7f8fb;
+    --neutral-100: #eef1f6;
+    --neutral-200: #dde3ec;
+    --neutral-300: #c2cad6;
+    --neutral-400: #8a94a6;
+    --neutral-500: #5a6577;
+    --neutral-700: #2a3340;
+    --neutral-900: #0b1220;
+    color-scheme: light;
+    /* `color` se hereda como valor ya computado: sin esto, las celdas sin
+       clase text-fg-* heredarían la tinta clara del body en dark mode. */
+    color: var(--fg-primary);
+  }
+  /* El QR se inyecta como svg con width intrínseco de 160px; lo forzamos a
+     llenar su contenedor para que nunca desborde el área imprimible del A4. */
+  .pdf-qr > svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
   .card-pad {
     @apply p-5;
   }

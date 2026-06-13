@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
-import { fmtCurrency, fmtDate, fmtDateTime } from "@/lib/utils";
+import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
 import type { Order } from "@/lib/types";
 
 /**
@@ -36,6 +36,19 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   osNumber: { fontSize: 16, fontWeight: 700, color: "#050555", fontFamily: "Courier", marginBottom: 4 },
+  urgentBadge: {
+    alignSelf: "flex-end",
+    backgroundColor: "#C90812",
+    color: "white",
+    fontSize: 7.5,
+    fontWeight: 700,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 3,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
   sectionLabel: {
     fontSize: 7.5,
     color: "#69738A",
@@ -132,6 +145,7 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
           <View style={styles.rightHead}>
             <Text style={styles.osTag}>Orden de Servicio</Text>
             <Text style={styles.osNumber}>{order.public_id}</Text>
+            {isUrgentOrder(order) && <Text style={styles.urgentBadge}>Urgente · +100%</Text>}
             <Text style={styles.meta}>
               Fecha: {fmtDate(order.date)}
               {"\n"}
