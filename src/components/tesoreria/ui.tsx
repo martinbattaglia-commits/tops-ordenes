@@ -33,6 +33,22 @@ const STATUS_PILL: Record<string, string> = {
   anulado: "bg-neutral-400 text-white",
 };
 
+/**
+ * Variante "cuenta corriente" (Cobranzas / Pagos): un saldo PENDIENTE es deuda
+ * impaga, no un estado informativo → se muestra como ALERTA roja corporativa
+ * para que Tesorería identifique al instante qué sigue sin saldarse. Sólo
+ * cambia `pendiente`; el resto del semáforo se conserva. Las pantallas de
+ * movimientos/bancos (donde "pendiente" = movimiento por confirmar) mantienen
+ * el azul informativo usando la variante por defecto.
+ */
+const STATUS_PILL_CUENTA: Record<string, string> = {
+  ...STATUS_PILL,
+  pendiente: "bg-tops-red text-white",
+};
+
+/** Estados que exigen atención inmediata → badge más prominente (sólo cuenta). */
+const CUENTA_ALERTA = new Set(["pendiente", "vencida", "parcial"]);
+
 function diasTexto(estado: string, dueDate?: string | null): string | null {
   if (estado === "parcial") return "Saldo pendiente";
   if (!dueDate) return null;
@@ -50,17 +66,43 @@ function diasTexto(estado: string, dueDate?: string | null): string | null {
   return `Vence en ${diff} día${diff === 1 ? "" : "s"}`;
 }
 
-export function StatusPill({ status, dueDate }: { status: string; dueDate?: string | null }) {
+export function StatusPill({
+  status,
+  dueDate,
+  variant = "default",
+}: {
+  status: string;
+  dueDate?: string | null;
+  /** "cuenta" → semántica cobranzas/pagos: PENDIENTE = alerta roja + badge prominente. */
+  variant?: "default" | "cuenta";
+}) {
   const s = (status || "").toLowerCase();
-  const cls = STATUS_PILL[s] ?? "bg-neutral-400 text-white";
+  const map = variant === "cuenta" ? STATUS_PILL_CUENTA : STATUS_PILL;
+  const cls = map[s] ?? "bg-neutral-400 text-white";
+  const emphatic = variant === "cuenta" && CUENTA_ALERTA.has(s);
+  const overdue = s === "vencida";
   const dias = diasTexto(s, dueDate);
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-pill text-[10px] font-bold uppercase tracking-wide ${cls}`}>
+      <span
+        className={`inline-flex items-center gap-1 rounded-pill uppercase tracking-wide ${cls} ${
+          emphatic
+            ? "px-2.5 py-1 text-[11px] font-extrabold ring-1 ring-white/20 shadow-sm"
+            : "px-2 py-0.5 text-[10px] font-bold"
+        }`}
+      >
         <span className="w-1.5 h-1.5 rounded-full bg-white/80" />
         {status}
       </span>
-      {dias && <span className="text-[10px] text-fg-muted whitespace-nowrap">{dias}</span>}
+      {dias && (
+        <span
+          className={`text-[10px] whitespace-nowrap ${
+            emphatic && overdue ? "font-bold text-tops-red" : "text-fg-muted"
+          }`}
+        >
+          {dias}
+        </span>
+      )}
     </span>
   );
 }

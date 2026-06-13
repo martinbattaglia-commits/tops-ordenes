@@ -13,7 +13,17 @@ import { fmtCurrency } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function CobranzaForm({ accounts, openItems }: { accounts: BankAccount[]; openItems: CustomerOpenItem[] }) {
+export function CobranzaForm({
+  accounts,
+  openItems,
+  clientNames = {},
+}: {
+  accounts: BankAccount[];
+  openItems: CustomerOpenItem[];
+  /** client_id → nombre comercial (resuelto server-side). El <select> muestra el
+   *  nombre, pero sigue enviando el client_id: el contrato de la RPC no cambia. */
+  clientNames?: Record<string, string>;
+}) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [clientId, setClientId] = useState("");
@@ -24,8 +34,11 @@ export function CobranzaForm({ accounts, openItems }: { accounts: BankAccount[];
   const [alloc, setAlloc] = useState<Record<string, string>>({});
 
   const clients = useMemo(
-    () => Array.from(new Set(openItems.map((i) => i.client_id).filter((x): x is string => !!x))),
-    [openItems]
+    () =>
+      Array.from(new Set(openItems.map((i) => i.client_id).filter((x): x is string => !!x)))
+        .map((id) => ({ id, name: clientNames[id] ?? `Cliente ${id.slice(0, 8)}` }))
+        .sort((a, b) => a.name.localeCompare(b.name, "es")),
+    [openItems, clientNames]
   );
   const items = useMemo(() => openItems.filter((i) => i.client_id === clientId), [openItems, clientId]);
   const gross = useMemo(
@@ -62,7 +75,7 @@ export function CobranzaForm({ accounts, openItems }: { accounts: BankAccount[];
           <span className="field-label block mb-1.5">Cliente</span>
           <select className="input" value={clientId} onChange={(e) => { setClientId(e.target.value); setAlloc({}); }} required>
             <option value="">Seleccionar…</option>
-            {clients.map((c) => <option key={c} value={c}>{c}</option>)}
+            {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
         <label className="block">

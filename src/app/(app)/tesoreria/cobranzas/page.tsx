@@ -32,6 +32,13 @@ export default async function CobranzasPage() {
     const clientesConDeuda = current.filter((c) => Number(c.saldo_cuenta) > 0).length;
     const facturasPend = detail.length;
     const grupos = groupByClient(detail);
+    // client_id → nombre comercial, derivado del MISMO origen que los open items
+    // (listCobranzasDetail enriquece customer_open_items con customer_invoices.razon_social).
+    // Esto permite que el selector de "Registrar cobranza" muestre nombres, no UUIDs.
+    const clientNames: Record<string, string> = {};
+    for (const d of detail) {
+      if (d.clientId && d.cliente) clientNames[d.clientId] = d.cliente;
+    }
 
     return (
       <div className="p-4 lg:p-8 nx-page-fade">
@@ -82,34 +89,39 @@ export default async function CobranzasPage() {
                 const groupKey = grupo.clientId ?? `nc-${grupo.cliente ?? "unknown"}`;
                 return (
                   <Fragment key={groupKey}>
-                    {/* Encabezado de grupo — cliente */}
-                    <tr className="border-t-2 border-border bg-white/[0.03]">
-                      <td colSpan={5} className="py-2 px-1">
+                    {/* Encabezado de grupo — cliente (separador fuerte entre clientes) */}
+                    <tr className="border-t-2 border-stroke-strong">
+                      <td colSpan={5} className="pt-4 pb-1.5 px-1">
                         {grupo.clientId ? (
-                          <Link href={`/clientes/${grupo.clientId}`} className="font-semibold text-fg-link hover:underline">
+                          <Link
+                            href={`/clientes/${grupo.clientId}`}
+                            className="text-[13px] font-bold uppercase tracking-[0.08em] text-fg-link hover:underline"
+                          >
                             {grupo.cliente ?? "—"}
                           </Link>
                         ) : (
-                          <span className="font-semibold text-fg-primary">{grupo.cliente ?? "Sin cliente"}</span>
+                          <span className="text-[13px] font-bold uppercase tracking-[0.08em] text-fg-secondary">
+                            {grupo.cliente ?? "Sin cliente"}
+                          </span>
                         )}
                       </td>
                     </tr>
                     {/* Comprobantes del cliente */}
                     {grupo.items.map((it) => (
-                      <tr key={it.invoiceId} className="border-t border-border/60">
-                        <td className="py-2 pl-4 tabular">#{it.factura}</td>
-                        <td className="py-2">{fmtDate(it.emision)}</td>
-                        <td className="py-2">{fmtDate(it.vencimiento)}</td>
-                        <td className="py-2"><StatusPill status={it.estado} dueDate={it.vencimiento} /></td>
-                        <td className="py-2 text-right tabular">{fmtCurrency(it.saldo)}</td>
+                      <tr key={it.invoiceId} className="border-t border-stroke-soft">
+                        <td className="py-2 pl-4 tabular text-fg-secondary">#{it.factura}</td>
+                        <td className="py-2 text-fg-secondary">{fmtDate(it.emision)}</td>
+                        <td className="py-2 text-fg-secondary">{fmtDate(it.vencimiento)}</td>
+                        <td className="py-2"><StatusPill status={it.estado} dueDate={it.vencimiento} variant="cuenta" /></td>
+                        <td className="py-2 text-right tabular text-fg-primary">{fmtCurrency(it.saldo)}</td>
                       </tr>
                     ))}
-                    {/* Subtotal por cliente */}
-                    <tr className="border-t border-border/60 bg-white/[0.03]">
-                      <td colSpan={4} className="py-1.5 pl-4 text-xs text-fg-muted italic">
+                    {/* Subtotal por cliente — información crítica para Tesorería */}
+                    <tr className="border-t border-stroke-soft bg-tops-blue-900/[0.06]">
+                      <td colSpan={4} className="py-2.5 pl-4 text-[13px] font-bold uppercase tracking-wide text-fg-secondary">
                         Subtotal · {grupo.cliente ?? "sin cliente"}
                       </td>
-                      <td className="py-1.5 text-right tabular font-semibold text-fg-brand">
+                      <td className="py-2.5 pr-1 text-right tabular text-base md:text-lg font-extrabold text-fg-brand">
                         {fmtCurrency(subtotal)}
                       </td>
                     </tr>
@@ -119,9 +131,13 @@ export default async function CobranzasPage() {
             </tbody>
             {detail.length > 0 && (
               <tfoot>
-                <tr className="border-t-2 border-border font-semibold">
-                  <td className="py-2" colSpan={4}>Total pendiente</td>
-                  <td className="py-2 text-right tabular text-fg-brand">{fmtCurrency(pendiente)}</td>
+                <tr className="border-t-2 border-tops-blue-700 bg-tops-blue-900/[0.10]">
+                  <td className="py-3 pl-1 text-sm md:text-base font-black uppercase tracking-wide text-fg-primary" colSpan={4}>
+                    Total pendiente
+                  </td>
+                  <td className="py-3 pr-1 text-right tabular text-xl md:text-2xl font-black text-fg-brand">
+                    {fmtCurrency(pendiente)}
+                  </td>
                 </tr>
               </tfoot>
             )}
@@ -129,7 +145,7 @@ export default async function CobranzasPage() {
         </div>
 
         {/* Registro de cobro */}
-        <CobranzaForm accounts={accounts} openItems={openItems} />
+        <CobranzaForm accounts={accounts} openItems={openItems} clientNames={clientNames} />
       </div>
     );
   } catch (e) {
