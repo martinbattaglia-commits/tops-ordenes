@@ -138,6 +138,8 @@ export interface CobranzaDetailRow {
   estado: string;
   saldo: number;
   total: number;
+  /** tipo de comprobante (FACTURA_* | NOTA_CREDITO_*). Discrimina NC en la cuenta corriente V3. */
+  tipoComprobante: string | null;
 }
 
 export interface PagoDetailRow {
@@ -150,6 +152,8 @@ export interface PagoDetailRow {
   estado: string;
   saldo: number;
   total: number;
+  /** tipo de comprobante (FACTURA_* | NOTA_CREDITO_*). Discrimina NC en la cuenta corriente V3. */
+  tipoComprobante: string | null;
 }
 
 export async function listCobranzasDetail(): Promise<CobranzaDetailRow[]> {
@@ -160,9 +164,9 @@ export async function listCobranzasDetail(): Promise<CobranzaDetailRow[]> {
   const ids = Array.from(new Set(items.map((i) => i.invoice_id)));
   const { data: invs } = await supabase
     .from("customer_invoices")
-    .select("id, client_id, razon_social, created_at")
+    .select("id, client_id, razon_social, created_at, tipo_comprobante")
     .in("id", ids);
-  const meta = new Map((invs ?? []).map((r: { id: string; client_id: string | null; razon_social: string | null; created_at: string | null }) => [r.id, r]));
+  const meta = new Map((invs ?? []).map((r: { id: string; client_id: string | null; razon_social: string | null; created_at: string | null; tipo_comprobante: string | null }) => [r.id, r]));
   return items.map((it) => {
     const m = meta.get(it.invoice_id);
     return {
@@ -175,6 +179,7 @@ export async function listCobranzasDetail(): Promise<CobranzaDetailRow[]> {
       estado: it.estado_cobro,
       saldo: Number(it.saldo),
       total: Number(it.total),
+      tipoComprobante: m?.tipo_comprobante ?? null,
     };
   });
 }
@@ -187,9 +192,9 @@ export async function listPagosDetail(): Promise<PagoDetailRow[]> {
   const ids = Array.from(new Set(items.map((i) => i.invoice_id)));
   const { data: invs } = await supabase
     .from("supplier_invoices")
-    .select("id, vendor_id, fecha_emision")
+    .select("id, vendor_id, fecha_emision, tipo_comprobante")
     .in("id", ids);
-  const invMeta = new Map((invs ?? []).map((r: { id: string; vendor_id: string | null; fecha_emision: string | null }) => [r.id, r]));
+  const invMeta = new Map((invs ?? []).map((r: { id: string; vendor_id: string | null; fecha_emision: string | null; tipo_comprobante: string | null }) => [r.id, r]));
   const vendorIds = Array.from(new Set((invs ?? []).map((r: { vendor_id: string | null }) => r.vendor_id).filter(Boolean))) as string[];
   let vMeta = new Map<string, string | null>();
   if (vendorIds.length > 0) {
@@ -209,6 +214,7 @@ export async function listPagosDetail(): Promise<PagoDetailRow[]> {
       estado: it.estado_pago,
       saldo: Number(it.saldo),
       total: Number(it.total),
+      tipoComprobante: m?.tipo_comprobante ?? null,
     };
   });
 }

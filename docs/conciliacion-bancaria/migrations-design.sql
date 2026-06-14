@@ -5,8 +5,8 @@
 --     para evitar aplicación accidental. Al aprobar, mover a la ruta viva
 --     con los números definitivos (ver nota de colisión).
 --
--- NUMERACIÓN: 0077/0078/0079.  (0076 está RESERVADA por el módulo Contratos
---     en el worktree recursing-saha-e73036 — NO usar 0076.)
+-- NUMERACIÓN: 0078/0079/0080.  (0076 y 0077 OCUPADAS y APLICADAS a prod por el
+--     módulo Contratos: 0076_crm_contracts, 0077_contracts_drive_sync.)
 --
 -- Naturaleza: tablas + índices + vista + RLS + RPC (security definer,
 --     append-only) + storage. ADITIVO sobre treasury_movements (nullable).
@@ -14,7 +14,7 @@
 -- =====================================================================
 
 
--- ========================= 0077 · CORE ===============================
+-- ========================= 0078 · CORE ===============================
 do $$ begin
   create type public.bank_source_t       as enum ('csv','xls','pdf');               -- Santander CSV primario · XLS alterno · Galicia PDF
   create type public.recon_line_status_t as enum ('conciliado','posible','no_conciliado','diferencia','sistemico');
@@ -110,7 +110,7 @@ left join public.bank_statement_lines l on l.statement_id = s.id
 group by s.id;
 
 
--- ============== 0078 · RBAC + RLS + RPC (write-path) ==================
+-- ============== 0079 · RBAC + RLS + RPC (write-path) ==================
 -- Permisos (slugs). 'tesoreria' ya existe en permission_module_t (0052).
 insert into public.permissions (module, slug, label) values
   ('tesoreria','tesoreria.conciliacion.view',    'Conciliación · ver'),
@@ -160,12 +160,57 @@ begin
    where id = p_match_id and status = 'sugerido';
 end $$;
 
--- (tesoreria_recon_ingest, _create_adjustment y _accept_systemic_batch: mismo
---  patrón security-definer + has_permission; el batch sistémico genera UN ajuste
---  por lote con aprobación humana — respeta "nunca registra solo" · D7.)
+-- RPC: ingesta (persiste statement + lines + matches desde el payload jsonb del
+-- pipeline). Append-only; todo entra en estado 'sugerido' — nunca registra solo.
+create or replace function public.tesoreria_recon_ingest(
+  p_bank_account_id uuid, p_file_path text, p_saldo_ok boolean, p_payload jsonb
+) returns uuid language plpgsql security definer set search_path = public as $$
+declare v_stmt uuid; v_line jsonb; v_match jsonb; v_line_id uuid; v_match_id uuid; v_mov text;
+begin
+  if not public.has_permission('tesoreria.conciliacion.upload') then raise exception 'forbidden'; end if;
+  insert into public.bank_statements(bank_account_id, banco, source_kind, file_path, period_from, period_to,
+    opening_balance, closing_balance, hash, status, uploaded_by)
+  values (p_bank_account_id, (p_payload->'statement'->>'banco'), (p_payload->'statement'->>'source_kind')::public.bank_source_t,
+    p_file_path, (p_payload->'statement'->>'period_from')::date, (p_payload->'statement'->>'period_to')::date,
+    (p_payload->'statement'->>'opening_balance')::numeric, (p_payload->'statement'->>'closing_balance')::numeric,
+    (p_payload->'statement'->>'hash'), case when p_saldo_ok then 'procesado' else 'revisar' end, auth.uid())
+  returning id into v_stmt;
+  -- líneas (line_no como índice) + matches con su puente N:M
+  for v_line in select * from jsonb_array_elements(p_payload->'lines') loop
+    insert into public.bank_statement_lines(statement_id, line_no, fecha, descripcion, importe, direction, saldo,
+      referencia, contraparte, categoria, subtipo, codigo_concepto, match_status)
+    values (v_stmt, (v_line->>'line_no')::int, (v_line->>'fecha')::date, (v_line->>'descripcion'),
+      (v_line->>'importe')::numeric, (v_line->>'direction')::public.treasury_direction_t, (v_line->>'saldo')::numeric,
+      (v_line->>'referencia'), (v_line->>'contraparte'), (v_line->>'categoria'), (v_line->>'subtipo'),
+      (v_line->>'codigo_concepto'), (v_line->>'match_status')::public.recon_line_status_t)
+    returning id into v_line_id;
+    for v_match in select * from jsonb_array_elements(p_payload->'matches') where (value->>'line_no')::int = (v_line->>'line_no')::int loop
+      insert into public.bank_reconciliation_matches(statement_line_id, score, method, status, motivo)
+      values (v_line_id, (v_match->>'score')::int, (v_match->>'method')::public.recon_method_t, 'sugerido', (v_match->>'motivo'))
+      returning id into v_match_id;
+      for v_mov in select jsonb_array_elements_text(v_match->'movement_ids') loop
+        insert into public.bank_reconciliation_match_movements(match_id, movement_id, monto_imputado)
+        values (v_match_id, v_mov::uuid, 0) on conflict do nothing;
+      end loop;
+    end loop;
+  end loop;
+  return v_stmt;
+end $$;
+
+-- (tesoreria_recon_create_adjustment y _accept_systemic_batch: mismo patrón
+--  security-definer + has_permission('…approve'); el batch sistémico genera UN
+--  ajuste por lote con aprobación humana — respeta "nunca registra solo" · D7.)
+
+-- RBAC seed: asignar el permiso de aprobación al rol/operadora del piloto (Natalia).
+-- (Ejemplo; ajustar al modelo real de role_permissions/user_roles del proyecto.)
+insert into public.role_permissions (role, slug)
+select r.role, p.slug
+from (values ('admin'),('supervisor')) as r(role)
+cross join (values ('tesoreria.conciliacion.view'),('tesoreria.conciliacion.upload'),('tesoreria.conciliacion.approve')) as p(slug)
+on conflict do nothing;
 
 
--- ===================== 0079 · STORAGE ================================
+-- ===================== 0080 · STORAGE ================================
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('bank-statements','bank-statements', false, 20971520,
         array['application/pdf','text/csv','application/vnd.ms-excel','text/plain'])
