@@ -173,6 +173,34 @@ export const env = {
     ocrModel: process.env.OPENAI_OCR_MODEL?.trim() || "gpt-4o-mini",
     configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
   },
+  google: {
+    /** JSON de la Service Account de Drive (línea única). Compartida como lector. */
+    serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() ?? "",
+    /** Carpeta raíz a la que está acotada la SA (scope). */
+    driveRootFolderId: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim() ?? "",
+    /** True si la integración Drive corporativa está disponible. */
+    configured: Boolean(
+      process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() &&
+        process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim(),
+    ),
+  },
+  contratos: {
+    /**
+     * Carpeta «Comercial → Cynthia → Clientes» (fuente de verdad operativa).
+     * Preferido: ID directo de la carpeta. Si está vacío, el motor resuelve por
+     * nombre con `driveSubpath` partiendo del root de la SA.
+     */
+    driveFolderId: process.env.CONTRATOS_DRIVE_FOLDER_ID?.trim() ?? "",
+    /** Ruta por nombre desde el root (fallback si no hay id directo). */
+    driveSubpath: process.env.CONTRATOS_DRIVE_PATH?.trim() || "Comercial/Cynthia/Clientes",
+    /** ¿Extraer texto (texto nativo → Docs → Sheets → PDF → OCR) en el sync? */
+    extractText: process.env.CONTRATOS_SYNC_EXTRACT_TEXT !== "0",
+  },
+  cron: {
+    /** Secreto Bearer que exigen los endpoints de jobs (sync diario, etc.). */
+    secret: process.env.CRON_SECRET?.trim() ?? "",
+    configured: Boolean(process.env.CRON_SECRET?.trim()),
+  },
   hikvision: {
     host: process.env.HIKVISION_HOST?.trim() ?? "",
     httpPort: parseInt(process.env.HIKVISION_HTTP_PORT ?? "80", 10) || 80,

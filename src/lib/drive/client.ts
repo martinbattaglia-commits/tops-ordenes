@@ -601,3 +601,178 @@ export async function isUnderRoot(fileId: string, maxDepth = 6): Promise<boolean
   }
   return false;
 }
+
+// ==================================================================
+// SYNC — lectura recursiva, descarga y export
+// (módulo CRM Comercial → Contratos · ingesta diaria desde Drive)
+// ==================================================================
+//
+// Reutiliza la MISMA service account, cliente y logging que el resto del módulo.
+// No crea una integración nueva: agrega las operaciones de lectura profunda y
+// descarga/export que el motor de sincronización contractual necesita.
+
+/** Metadata extendida para detección de cambios (incluye md5Checksum). */
+const SYNC_FILE_FIELDS =
+  "files(id, name, mimeType, size, modifiedTime, md5Checksum, webViewLink, parents, trashed)";
+
+export interface DriveSyncEntry {
+  id: string;
+  name: string;
+  mimeType: string;
+  isFolder: boolean;
+  size: number | null;
+  modifiedAt: string | null;
+  /** Checksum MD5 de Drive (sólo archivos binarios; null en Google-native). */
+  md5Checksum: string | null;
+  webViewLink: string | null;
+  parents: string[];
+}
+
+function mapSyncEntry(f: drive_v3.Schema$File): DriveSyncEntry {
+  return {
+    id: f.id ?? "",
+    name: f.name ?? "(sin nombre)",
+    mimeType: f.mimeType ?? "",
+    isFolder: f.mimeType === "application/vnd.google-apps.folder",
+    size: f.size ? Number(f.size) : null,
+    modifiedAt: f.modifiedTime ?? null,
+    md5Checksum: (f as drive_v3.Schema$File & { md5Checksum?: string }).md5Checksum ?? null,
+    webViewLink: f.webViewLink ?? null,
+    parents: f.parents ?? [],
+  };
+}
+
+/**
+ * Resuelve una carpeta por ruta de NOMBRES desde un parent (default: root de la SA).
+ * Ej.: findFolderByPath(["Comercial","Cynthia","Clientes"]). Devuelve el id de la
+ * carpeta más profunda, o null si algún tramo no existe.
+ */
+export async function findFolderByPath(parts: string[], fromFolderId?: string): Promise<string | null> {
+  const drive = requireDrive();
+  let current = (fromFolderId || process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim();
+  if (!current) return null;
+  for (const raw of parts) {
+    const part = raw.trim();
+    if (!part) continue;
+    const res = await drive.files.list({
+      q: `'${escapeDriveQuery(current)}' in parents and name='${escapeDriveQuery(part)}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: "files(id, name)",
+      pageSize: 1,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    const id = res.data.files?.[0]?.id;
+    if (!id) return null;
+    current = id;
+  }
+  return current;
+}
+
+/** Resuelve la carpeta operativa de Contratos (id directo de env, por ruta, o root). */
+export async function resolveContratosFolderId(): Promise<{
+  id: string | null;
+  via: "env-id" | "path" | "root" | "none";
+}> {
+  const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim();
+  const direct = process.env.CONTRATOS_DRIVE_FOLDER_ID?.trim();
+  if (direct) {
+    // Enforce de scope: la carpeta debe estar dentro del subtree del root de la SA.
+    if (!root || direct === root || (await isUnderRoot(direct))) return { id: direct, via: "env-id" };
+    logDrive("warn", { op: "resolveContratos.scope-denied", folderId: direct });
+    return root ? { id: root, via: "root" } : { id: null, via: "none" };
+  }
+  // findFolderByPath parte del root → el resultado queda dentro del scope por construcción.
+  const subpath = (process.env.CONTRATOS_DRIVE_PATH?.trim() || "Comercial/Cynthia/Clientes")
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const byPath = await findFolderByPath(subpath);
+  if (byPath) return { id: byPath, via: "path" };
+  if (root) return { id: root, via: "root" };
+  return { id: null, via: "none" };
+}
+
+/** Lista todos los hijos directos de un folder (paginado completo) con metadata de sync. */
+export async function listFolderForSync(folderId: string): Promise<DriveSyncEntry[]> {
+  const drive = requireDrive();
+  const out: DriveSyncEntry[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${escapeDriveQuery(folderId)}' in parents and trashed=false`,
+      fields: `nextPageToken, ${SYNC_FILE_FIELDS}`,
+      pageSize: PAGE_SIZE_MAX,
+      pageToken,
+      orderBy: "folder,name",
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    for (const f of res.data.files ?? []) out.push(mapSyncEntry(f));
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return out;
+}
+
+export interface DriveWalkFile extends DriveSyncEntry {
+  /** Ruta de carpetas (nombres) desde la raíz del walk hasta el archivo. */
+  folderPath: string[];
+  /** Id de la carpeta contenedora directa. */
+  folderId: string;
+}
+
+/**
+ * Recorre recursivamente un folder (BFS) devolviendo sólo ARCHIVOS con su ruta.
+ * Acotado por `maxDepth` (default 4) y `maxFiles` (default 5000, marca `truncated`).
+ */
+export async function walkFolderForSync(
+  rootFolderId: string,
+  opts: { maxDepth?: number; maxFiles?: number } = {},
+): Promise<{ files: DriveWalkFile[]; folders: number; truncated: boolean }> {
+  const maxDepth = opts.maxDepth ?? 4;
+  const maxFiles = opts.maxFiles ?? 5000;
+  const files: DriveWalkFile[] = [];
+  let folders = 0;
+  let truncated = false;
+  const visited = new Set<string>(); // guarda contra ciclos (atajos/shortcuts de Drive)
+  const queue: { id: string; path: string[]; depth: number }[] = [
+    { id: rootFolderId, path: [], depth: 0 },
+  ];
+  return timed("walkFolderForSync", { rootFolderId, maxDepth }, async () => {
+    while (queue.length) {
+      const node = queue.shift()!;
+      if (visited.has(node.id)) continue;
+      visited.add(node.id);
+      const entries = await listFolderForSync(node.id);
+      for (const e of entries) {
+        if (e.isFolder) {
+          folders += 1;
+          if (node.depth < maxDepth && !visited.has(e.id)) {
+            queue.push({ id: e.id, path: [...node.path, e.name], depth: node.depth + 1 });
+          }
+        } else if (files.length >= maxFiles) {
+          truncated = true;
+        } else {
+          files.push({ ...e, folderPath: node.path, folderId: node.id });
+        }
+      }
+    }
+    return { files, folders, truncated };
+  });
+}
+
+/** Descarga el contenido binario de un archivo (PDF/XLSX/DOCX). */
+export async function downloadFileBuffer(fileId: string): Promise<Buffer> {
+  const drive = requireDrive();
+  const res = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" },
+  );
+  return Buffer.from(res.data as ArrayBuffer);
+}
+
+/** Exporta un archivo Google-native (Doc/Sheet) a texto (text/plain, text/csv). */
+export async function exportGoogleFile(fileId: string, mimeType: string): Promise<string> {
+  const drive = requireDrive();
+  const res = await drive.files.export({ fileId, mimeType }, { responseType: "text" });
+  return typeof res.data === "string" ? res.data : String(res.data ?? "");
+}

@@ -56,6 +56,7 @@ export type IconName =
   | "cloud-check"
   | "cloud"
   | "file-pdf"
+  | "contract"
   | "wallet"
   | "tag"
   | "tag-alt"
@@ -112,6 +113,15 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
       return (
         <svg {...common}>
           <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    case "contract":
+      return (
+        <svg {...common}>
+          <path d="M6 3h7l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+          <path d="M13 3v5h5" />
+          <path d="M8 12h6M8 15.5h4" />
+          <path d="M8.5 19c1-1.3 2.3-1.3 3.3 0" />
         </svg>
       );
     case "clients":
