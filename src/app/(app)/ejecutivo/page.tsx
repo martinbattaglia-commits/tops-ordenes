@@ -1,12 +1,63 @@
 import Link from "next/link";
+import type { User } from "@supabase/supabase-js";
 import { Icon, type IconName } from "@/components/Icon";
 import { CountUp } from "@/components/CountUp";
 import { getCommandCenter, type SystemState, type HealthLevel, type CriticalAlert, type ExecKpi } from "@/lib/ejecutivo/command-center";
 import { canViewExecutiveFinancialBlocks } from "@/lib/rbac/cockpit-visibility";
+import { getBootContext } from "@/lib/rbac/boot-permissions";
+import { env } from "@/lib/env";
 import { ORG, PRODUCT } from "@/lib/org";
 
 export const metadata = { title: "Cockpit ejecutivo" };
 export const dynamic = "force-dynamic";
+
+// ── Bienvenida contextual ─────────────────────────────────────────────────
+// Saludo según el momento del día. La hora se calcula SIEMPRE en zona horaria
+// de Argentina (no la del servidor SSR, que corre en UTC), para que el saludo
+// sea correcto. Bloque 100% server-side: sin estado de cliente ni mismatch de
+// hidratación.
+type Daypart = "manana" | "tarde" | "noche";
+
+const GREETINGS: Record<Daypart, { hi: string; wish: string; icon: IconName }> = {
+  manana: { hi: "Buenos días", wish: "Te deseamos una excelente jornada.", icon: "sun" },
+  tarde: { hi: "Buenas tardes", wish: "Que tengas una gran jornada de trabajo.", icon: "sun" },
+  noche: { hi: "Buenas noches", wish: "Esperamos que tengas una excelente noche.", icon: "moon" },
+};
+
+function buenosAiresHour(): number {
+  return Number(
+    new Intl.DateTimeFormat("es-AR", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date())
+  );
+}
+
+function daypartFor(hour: number): Daypart {
+  if (hour >= 6 && hour < 13) return "manana";
+  if (hour >= 13 && hour < 20) return "tarde";
+  return "noche";
+}
+
+function fechaLargaAr(): string {
+  const s = new Intl.DateTimeFormat("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function firstNameOf(user: User | null): string {
+  // Espeja la resolución del layout (full_name → name → local-part del email),
+  // quedándose con el primer nombre para un saludo cálido.
+  if (env.app.demoMode || !user) return "Ruth";
+  const meta = (user.user_metadata ?? {}) as Record<string, string | undefined>;
+  const full = meta.full_name || meta.name || user.email?.split("@")[0] || "Usuario";
+  return full.trim().split(/\s+/)[0];
+}
 
 const HEALTH_META: Record<HealthLevel, { dot: string; ring: string; text: string; label: string }> = {
   normal: { dot: "bg-status-success", ring: "ring-status-success/30", text: "text-status-success", label: "NORMAL" },
@@ -38,14 +89,25 @@ const MODULES: { href: string; icon: IconName; title: string; sub: string; enabl
 ];
 
 export default async function CockpitPage() {
-  const [cc, canExec] = await Promise.all([getCommandCenter(), canViewExecutiveFinancialBlocks()]);
+  // getBootContext está cacheado por request (lo resuelve el layout): reutilizarlo
+  // para el saludo no agrega round trips.
+  const [cc, canExec, boot] = await Promise.all([
+    getCommandCenter(),
+    canViewExecutiveFinancialBlocks(),
+    getBootContext(),
+  ]);
   // Visibilidad condicional (mismo Cockpit, sin split): se ocultan bloques
   // financieros/ejecutivos a quien no tenga permiso ejecutivo.
   const modules = MODULES.filter((m) => m.enabled !== false && (canExec || !m.exec));
   const kpis = canExec ? cc.kpis : cc.kpis.filter((k) => !FINANCIAL_KPI_LABELS.has(k.label));
+  const firstName = firstNameOf(boot.user);
+  const daypart = daypartFor(buenosAiresHour());
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1400px] mx-auto">
+      {/* BLOQUE 0 — Bienvenida contextual (saludo cálido al aterrizar) */}
+      <WelcomeBanner firstName={firstName} part={daypart} dateLabel={fechaLargaAr()} />
+
       {/* Header presidencial — slim. Cockpit = monitoreo/análisis/supervisión:
           sin CTAs transaccionales (Nueva OC/OS viven en sus módulos). */}
       <header className="flex flex-col gap-1">
@@ -85,6 +147,36 @@ export default async function CockpitPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function WelcomeBanner({ firstName, part, dateLabel }: { firstName: string; part: Daypart; dateLabel: string }) {
+  const g = GREETINGS[part];
+  return (
+    <section className="nx-surface card relative overflow-hidden">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{ background: "radial-gradient(120% 140% at 0% 0%, rgba(33,69,118,0.16), transparent 55%)" }}
+      />
+      <div className="relative p-5 md:p-6 flex items-center gap-4 md:gap-5">
+        <span className="hidden sm:grid place-items-center w-12 h-12 md:w-14 md:h-14 rounded-xl bg-tops-blue-900 text-white shrink-0 shadow-sm ring-1 ring-white/10">
+          <Icon name={g.icon} size={24} />
+        </span>
+        <div className="min-w-0">
+          <h2 className="text-2xl md:text-3xl font-black text-fg-primary leading-tight">
+            {g.hi}, {firstName}.
+          </h2>
+          <p className="text-sm md:text-[15px] text-fg-secondary mt-1.5">
+            Bienvenido a <span className="font-bold text-fg-primary">{PRODUCT.name}</span>.
+          </p>
+          <p className="text-sm text-fg-muted mt-0.5">{g.wish}</p>
+        </div>
+        <div className="ml-auto self-start hidden md:flex flex-col items-end text-right shrink-0">
+          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-muted">{PRODUCT.edition}</span>
+          <span className="text-sm font-semibold text-fg-secondary mt-1">{dateLabel}</span>
+        </div>
+      </div>
+    </section>
   );
 }
 

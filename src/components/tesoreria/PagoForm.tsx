@@ -8,7 +8,17 @@ import { fmtCurrency } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function PagoForm({ accounts, openItems }: { accounts: BankAccount[]; openItems: SupplierOpenItem[] }) {
+export function PagoForm({
+  accounts,
+  openItems,
+  vendorNames = {},
+}: {
+  accounts: BankAccount[];
+  openItems: SupplierOpenItem[];
+  /** vendor_id → nombre comercial (resuelto server-side). El <select> muestra el
+   *  nombre, pero sigue enviando el vendor_id: el contrato de la RPC no cambia. */
+  vendorNames?: Record<string, string>;
+}) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [vendorId, setVendorId] = useState("");
@@ -18,7 +28,13 @@ export function PagoForm({ accounts, openItems }: { accounts: BankAccount[]; ope
   const [date, setDate] = useState(today);
   const [alloc, setAlloc] = useState<Record<string, string>>({});
 
-  const vendors = useMemo(() => Array.from(new Set(openItems.map((i) => i.vendor_id))), [openItems]);
+  const vendors = useMemo(
+    () =>
+      Array.from(new Set(openItems.map((i) => i.vendor_id).filter((x): x is string => !!x)))
+        .map((id) => ({ id, name: vendorNames[id] ?? `Proveedor ${id.slice(0, 8)}` }))
+        .sort((a, b) => a.name.localeCompare(b.name, "es")),
+    [openItems, vendorNames]
+  );
   const items = useMemo(() => openItems.filter((i) => i.vendor_id === vendorId), [openItems, vendorId]);
   const amount = useMemo(() => Object.values(alloc).reduce((s, v) => s + (Number(v) || 0), 0), [alloc]);
 
@@ -51,7 +67,7 @@ export function PagoForm({ accounts, openItems }: { accounts: BankAccount[]; ope
           <span className="field-label block mb-1.5">Proveedor</span>
           <select className="input" value={vendorId} onChange={(e) => { setVendorId(e.target.value); setAlloc({}); }} required>
             <option value="">Seleccionar…</option>
-            {vendors.map((v) => <option key={v} value={v}>{v}</option>)}
+            {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
         </label>
         <label className="block">
