@@ -9,7 +9,7 @@
 
 El código entregado pasa **todas** las validaciones ejecutables (lógica, tablero, seguridad de diseño, no‑regresión, build). Las observaciones son **dependientes de operación** (credenciales/compartición de la carpeta Drive) o **aclaraciones de diseño**, no defectos del código. La prueba **end‑to‑end contra la carpeta real** «Comercial → Cynthia → Clientes» **no puede ejecutarse en este entorno** (requiere la Service Account compartida sobre esa carpeta + variables de entorno) y queda como gate de despliegue.
 
-> Por la condición establecida (“sólo si el resultado es APPROVED queda autorizado el commit”), **NO ejecuté el commit de revisión.** Ver §9.
+> **Actualización post‑gate (2026-06-13):** Dirección elevó el resultado a *APPROVED operativo* (O1 **DIFERIDA**; O2–O5 no bloqueantes) y autorizó el commit de revisión local `8beed0a` — **sin** push / merge / deploy / migraciones. Ver §7.1 y §9.
 
 ---
 
@@ -80,11 +80,32 @@ falsos positivos de baja (crítico) · scope/ciclos del walk · `ON CONFLICT` vs
 
 | Id | Tipo | Observación | Impacto |
 |---|---|---|---|
-| O1 | Operación | E2E contra Drive real pendiente de credenciales/compartición | Validar en 1er `?dry=1` del deploy |
+| O1 | Operación | **DIFERIDA POR DIRECCIÓN** — E2E real Drive→Sync→Base→Dashboard (ver §7.1) | Se ejecuta en despliegue controlado y autorizado |
 | O2 | Diseño | Rescisión → alerta, no auto‑cambia `estado` | Acción de Legal (intencional) |
 | O3 | Aclaración | Sin signed‑URLs/bucket: se usan enlaces de Drive | Cambio de alcance si se requiere bucket |
 | O4 | Límite | DOCX se cataloga sin extracción de texto | Documentos quedan trazados; texto opcional |
 | O5 | Operación | Timeout de función Netlify en carpetas muy grandes | Mitigado: budget 20s + estado `partial`; reintenta al día siguiente |
+
+### 7.1 · O1 — DIFERIDA POR DIRECCIÓN
+
+**Estado: DIFERIDA.**
+
+**Motivo.** La validación E2E real contra Google Drive no pudo ejecutarse durante esta revisión debido a restricciones del entorno de validación:
+
+- Ausencia de credenciales activas de Google Drive.
+- Ausencia de carpeta de prueba compartida con la Service Account.
+- Ausencia de una base de datos de prueba con las migraciones 0076/0077 aplicadas.
+- Prohibición expresa de utilizar producción para pruebas.
+
+**Se deja constancia de que:**
+
+- La lógica fue validada mediante Gate Determinista.
+- El resultado del Gate fue **32/32 PASS**.
+- La revisión adversarial fue completada.
+- Los defectos identificados fueron corregidos.
+- El riesgo residual queda limitado **exclusivamente** a la integración viva Drive → Sync → Base → Dashboard.
+
+La validación E2E real se ejecutará **únicamente durante un despliegue controlado y autorizado** (procedimiento en §8).
 
 ## 8 · Checklist de activación (post‑aprobación, acción de Dirección/Ops)
 
@@ -98,4 +119,4 @@ falsos positivos de baja (crítico) · scope/ciclos del walk · `ON CONFLICT` vs
 
 **APPROVED WITH OBSERVATIONS.** Todas las validaciones a mi alcance pasan; las observaciones son operativas o de diseño, no defectos.
 
-Conforme a la **condición establecida** (commit autorizado **sólo** con resultado *APPROVED*), **no realicé el commit de revisión**. Para avanzar, Dirección puede: (a) aceptar O1–O5 como **no bloqueantes** ⇒ elevar a *APPROVED* y autorizar el commit de revisión (sin push/merge/deploy); o (b) indicar cuáles observaciones desea resolver antes.
+**Decisión de Dirección (2026-06-13):** O2–O5 aceptadas como **no bloqueantes** y **O1 DIFERIDA** (ver §7.1). El gate se elevó a *APPROVED operativo* y se autorizó **únicamente el commit de revisión local** (`8beed0a`), **sin** push / merge / deploy / aplicación de migraciones; producción permanece intacta. La validación E2E real (Drive → Sync → Base → Dashboard) se ejecutará durante un despliegue controlado y autorizado.
