@@ -17,7 +17,13 @@ insert into public.contracts (
   ajuste_frecuencia, fecha_firma, plazo_meses, preaviso_dias, semaforo, hallazgos,
   recomendacion, penalidad
 )
-select * from (values
+select
+  razon_social, cuit, tipo, canon, moneda, m2, ubicacion,
+  fecha_inicio::date, fecha_fin::date, renovacion_automatica, riesgo, estado,
+  canon_desactualizado, ajuste, ajuste_indice, ajuste_frecuencia,
+  fecha_firma::date, plazo_meses, preaviso_dias, semaforo, hallazgos,
+  recomendacion, penalidad
+from (values
   ('DEO Distribuidora de Equipos Odontológicos S.A.', '30-71911511-6', 'ANMAT'::contract_tipo_t, 4000000, 'ARS'::contract_moneda_t, 50, 'Osvaldo Cruz 3201 / Magaldi 1765', '2026-06-01', '2028-05-31', true, 'Medio'::contract_riesgo_t, 'Vigente', false, 'CEDOL semestral', 'CEDOL', 'semestral'::contract_ajuste_frecuencia_t, '2026-05-21', 24, 60, 'Verde'::contract_semaforo_t, 'Ajuste semestral (resto trimestral); acuse firmado 02-08-26 posterior al inicio; dualidad normativa contrato/condiciones', 'Unificar contrato y condiciones; pasar el ajuste a trimestral; regularizar la fecha del acuse.', 'Indemnización sustitutiva de preaviso: 1 canon por cada 30 días omitidos (mín. 2, máx. 6 cánones) + multa Art. 1221 CCyCN: 10% del saldo de cánones futuros desde la notificación hasta el vencimiento + cláusula penal 2 cánones + 10% por incumplimiento + ocupación extemporánea U$S200/día.'),
   ('PEGHI Commerce S.A.S.', '30-71925571-6', 'ANMAT'::contract_tipo_t, 1500000, 'ARS'::contract_moneda_t, 17, 'Osvaldo Cruz 3201 / Magaldi 1765', '2026-02-01', '2027-01-31', true, 'Bajo'::contract_riesgo_t, 'Vigente', false, 'CEDOL trimestral', 'CEDOL', 'trimestral'::contract_ajuste_frecuencia_t, '2026-02-04', 12, 30, 'Verde'::contract_semaforo_t, 'Firma digital certificada; omisión de ''m²'' en cl.1.1', 'Corregir la omisión de «m²» en cl. 1.1; iniciar la renovación anticipadamente.', 'Indemnización sustitutiva: 1 canon por cada 30 días omitidos (mín. 1, máx. 6 cánones) + multa Art. 1221 CCyCN: 10% del saldo de cánones futuros + cláusula penal 2 cánones + 10% + ocupación U$S200/día.'),
   ('RO Latin Medical Argentina S.R.L.', '30-71899606-2', 'ANMAT'::contract_tipo_t, 1350000, 'ARS'::contract_moneda_t, 38, 'Nave 5 - Osvaldo Cruz 3201 / Magaldi 1765', '2026-01-01', '2027-12-31', true, 'Medio'::contract_riesgo_t, 'Vigente', false, 'CEDOL trimestral', 'CEDOL', 'trimestral'::contract_ajuste_frecuencia_t, '2026-01-08', 24, 90, 'Verde'::contract_semaforo_t, 'Contrato bajo razón social anterior (cambio de denominación); régimen de responsabilidad Art.1376 más gravoso; penalidades reducidas', 'Adenda urgente por cambio de denominación social; alinear el régimen de responsabilidad y elevar el tope de penalidades.', 'Indemnización sustitutiva: 1 canon por cada 30 días omitidos (mín. 2, máx. 3 cánones) + cláusula penal 2 cánones + 10% + ocupación U$S200/día. NO incluye la multa del 10% del Art. 1221 (penalidad reducida vs. el modelo estándar).'),
