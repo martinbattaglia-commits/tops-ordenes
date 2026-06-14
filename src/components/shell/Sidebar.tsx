@@ -142,6 +142,7 @@ const DOMAINS: Domain[] = [
       { href: "/tesoreria/cobranzas", label: "Cobranzas", icon: "download" },
       { href: "/tesoreria/pagos", label: "Pagos", icon: "cart" },
       { href: "/tesoreria/flujo-fondos", label: "Flujo de fondos", icon: "trend-up" },
+      { href: "/tesoreria/conciliacion", label: "Conciliación", icon: "check-circle" },
     ],
   },
   {
