@@ -24,6 +24,7 @@ export interface FleetPositionRow {
   battery: number | null;
   heading: number | null;
   recorded_at: string;
+  created_at: string;
 }
 
 /** Evento normalizado que consume la UI (un ping en vivo). */
@@ -35,6 +36,7 @@ export interface LivePositionEvent {
   battery: number | null;
   heading: number | null;
   recordedAt: string;
+  createdAt: string;
 }
 
 /** Normaliza la fila CDC al view-model de la UI. */
@@ -47,6 +49,7 @@ export function toLivePositionEvent(row: FleetPositionRow): LivePositionEvent {
     battery: row.battery,
     heading: row.heading,
     recordedAt: row.recorded_at,
+    createdAt: row.created_at,
   };
 }
 

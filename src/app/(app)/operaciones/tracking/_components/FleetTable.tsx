@@ -11,9 +11,13 @@ import { MOTION_TONE, type LiveVehicle } from "@/lib/tracking/live";
 // timeZone fijo (zona operativa): sin esto, el SSR (server en UTC) y el CSR
 // (browser en ART) formatean distinto → hydration mismatch React #425/#422.
 // Fijarla hace que server y cliente produzcan el MISMO string → sin mismatch.
-function formatLastComm(iso: string | null): string {
+// hour12:false → formato 24h (evita la ambigüedad 06:44 vs 18:44).
+function formatDateTime(iso: string | null): string {
   return iso
-    ? new Date(iso).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })
+    ? new Date(iso).toLocaleString("es-AR", {
+        timeZone: "America/Argentina/Buenos_Aires",
+        hour12: false,
+      })
     : "Sin datos";
 }
 
@@ -58,6 +62,7 @@ export function FleetTable({ vehicles, selectedId, onSelect }: FleetTableProps) 
                 <th className="px-4 py-2.5 font-semibold">Velocidad</th>
                 <th className="px-4 py-2.5 font-semibold">Batería</th>
                 <th className="px-4 py-2.5 font-semibold">Última comunicación</th>
+                <th className="px-4 py-2.5 font-semibold">Última posición GPS</th>
                 <th className="px-4 py-2.5 font-semibold">Estado</th>
               </tr>
             </thead>
@@ -83,7 +88,10 @@ export function FleetTable({ vehicles, selectedId, onSelect }: FleetTableProps) 
                       {v.last_position?.battery != null ? `${v.last_position.battery}%` : "—"}
                     </td>
                     <td className="px-4 py-3 text-fg-muted text-xs">
-                      {formatLastComm(v.last_position?.recorded_at ?? null)}
+                      {formatDateTime(v.last_position?.created_at ?? null)}
+                    </td>
+                    <td className="px-4 py-3 text-fg-muted text-xs">
+                      {formatDateTime(v.last_position?.recorded_at ?? null)}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${tone.text}`}>

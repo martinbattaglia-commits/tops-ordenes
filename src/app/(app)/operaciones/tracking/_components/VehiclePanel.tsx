@@ -9,6 +9,7 @@ import { MOTION_TONE, type LiveVehicle } from "@/lib/tracking/live";
  * Si no hay vehículo seleccionado, se desliza fuera de pantalla.
  */
 
+// hour12:false → formato 24h en el fallback absoluto (evita 06:44 vs 18:44).
 function formatRelative(iso: string, nowMs: number): string {
   const diff = Math.max(0, nowMs - new Date(iso).getTime());
   const s = Math.round(diff / 1000);
@@ -17,7 +18,10 @@ function formatRelative(iso: string, nowMs: number): string {
   if (m < 60) return `hace ${m} min`;
   const h = Math.round(m / 60);
   if (h < 24) return `hace ${h} h`;
-  return new Date(iso).toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+  return new Date(iso).toLocaleString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    hour12: false,
+  });
 }
 
 interface VehiclePanelProps {
@@ -81,6 +85,11 @@ export function VehiclePanel({ vehicle, nowMs, onClose }: VehiclePanelProps) {
               <Row
                 icon="clock"
                 label="Última comunicación"
+                value={pos ? formatRelative(pos.created_at, nowMs) : "Sin datos"}
+              />
+              <Row
+                icon="clock"
+                label="Última posición GPS"
                 value={pos ? formatRelative(pos.recorded_at, nowMs) : "Sin datos"}
               />
               <Row

@@ -8,8 +8,17 @@ import type { FleetLastPosition, FleetLiveStatus } from "./types";
  * una vez confirmada la unidad real que reporta el dispositivo.
  */
 
-/** Ventana de inactividad tras la cual un vehículo se considera OFFLINE. */
+/**
+ * Ventana de frescura del FIX GPS (recorded_at): si la última posición
+ * capturada supera esto, la posición se considera vieja (no fresca).
+ */
 export const FLEET_OFFLINE_AFTER_MS = 5 * 60 * 1000;
+
+/**
+ * Ventana de frescura de la COMUNICACIÓN (created_at): si el dispositivo no
+ * entrega nada hace más de esto, el vehículo está OFFLINE (sin contacto).
+ */
+export const FLEET_COMM_FRESH_MS = 5 * 60 * 1000;
 
 export function deriveLiveStatus(
   pos: FleetLastPosition | null,

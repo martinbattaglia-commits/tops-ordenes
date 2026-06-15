@@ -11,6 +11,7 @@ export interface FleetCounts {
   total: number;
   moving: number;
   idle: number;
+  degraded: number;
   offline: number;
 }
 
@@ -18,6 +19,7 @@ const TONE_CLASS: Record<string, string> = {
   brand: "bg-tops-red/10 text-tops-red",
   success: "bg-status-success/10 text-status-success",
   warning: "bg-status-warning/10 text-status-warning",
+  degraded: "bg-[#f4710f]/10 text-[#f4710f]",
   muted: "bg-bg-surface-alt text-fg-muted",
 };
 
@@ -26,11 +28,12 @@ export function FleetKpis({ counts }: { counts: FleetCounts }) {
     { label: "Vehículos", value: counts.total, icon: "truck", tone: "brand" },
     { label: "En movimiento", value: counts.moving, icon: "trend-up", tone: "success" },
     { label: "Detenidos", value: counts.idle, icon: "pause", tone: "warning" },
+    { label: "Señal degradada", value: counts.degraded, icon: "bolt", tone: "degraded" },
     { label: "Offline", value: counts.offline, icon: "moon", tone: "muted" },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 nx-stagger">
+    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 nx-stagger">
       {kpis.map((k, i) => (
         <div
           key={k.label}
