@@ -69,6 +69,10 @@ export async function updateSession(request: NextRequest) {
     pathname === "/api/clientify/webhook" ||
     pathname.startsWith("/api/clientify/webhook/") ||
     pathname === "/api/tracking/ingest" || // Traccar Client postea sin sesión; protegido por token propio
+    // Sync diario del Compliance Cockpit: el cron (GitHub Actions) postea con
+    // `Authorization: Bearer CRON_SECRET` sin cookie de sesión. La auth se valida
+    // DENTRO del handler (CRON_SECRET). Sólo la ruta exacta — no /api/compliance/*.
+    pathname === "/api/compliance/sync" ||
     pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
