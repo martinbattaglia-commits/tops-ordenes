@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { RiskBadge } from "@/components/compliance/ui";
-import { getItem, RISK_HEX, RISK_LABEL } from "@/lib/compliance/data";
+import { RISK_HEX, RISK_LABEL } from "@/lib/compliance/data";
+import { loadComplianceItem } from "@/lib/compliance/source";
 
 export const metadata = { title: "Ficha regulatoria · Compliance Cockpit" };
 export const dynamic = "force-dynamic";
@@ -17,8 +18,8 @@ function Field({ label, value, mono }: { label: string; value: React.ReactNode; 
   );
 }
 
-export default function FichaRegulatoriaPage({ params }: { params: { id: string } }) {
-  const item = getItem(params.id);
+export default async function FichaRegulatoriaPage({ params }: { params: { id: string } }) {
+  const item = await loadComplianceItem(params.id);
   if (!item) notFound();
   const hex = RISK_HEX[item.riesgo];
   const diasTxt = item.dias === null ? "—" : item.dias < 0 ? `${Math.abs(item.dias)} días vencido` : `${item.dias} días`;

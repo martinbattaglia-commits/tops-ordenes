@@ -196,6 +196,25 @@ export const env = {
     /** ¿Extraer texto (texto nativo → Docs → Sheets → PDF → OCR) en el sync? */
     extractText: process.env.CONTRATOS_SYNC_EXTRACT_TEXT !== "0",
   },
+  compliance: {
+    /**
+     * Carpeta regulatoria en Drive («AGENCIA GUBERNAMENTAL DE CONTROL» —
+     * habilitaciones, certificados, ANMAT, ambiental, seguros). Fuente documental
+     * de verdad del Compliance Cockpit (/anmat).
+     * Preferido: ID directo. Si está vacío, el motor resuelve por nombre con
+     * `driveSubpath` partiendo del root de la SA.
+     */
+    driveFolderId: process.env.COMPLIANCE_DRIVE_FOLDER_ID?.trim() ?? "",
+    /** Ruta por nombre desde el root (fallback si no hay id directo). */
+    driveSubpath:
+      process.env.COMPLIANCE_DRIVE_PATH?.trim() || "AGENCIA GUBERNAMENTAL DE CONTROL",
+    /**
+     * ¿Intentar extraer fechas del contenido del PDF (además del nombre)? Off por
+     * defecto: la extracción por nombre/metadata es robusta; el parseo de PDF es
+     * opcional y costoso. Activar con COMPLIANCE_SYNC_EXTRACT_TEXT=1.
+     */
+    extractText: process.env.COMPLIANCE_SYNC_EXTRACT_TEXT === "1",
+  },
   cron: {
     /** Secreto Bearer que exigen los endpoints de jobs (sync diario, etc.). */
     secret: process.env.CRON_SECRET?.trim() ?? "",

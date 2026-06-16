@@ -1,0 +1,50 @@
+name: Compliance · Drive Sync (diario 21:00 ART)
+
+# Ingesta diaria del Compliance Cockpit (/anmat) desde Google Drive
+# («AGENCIA GUBERNAMENTAL DE CONTROL» — habilitaciones, certificados, ANMAT,
+# ambiental, seguros), que es la fuente documental de verdad. Dispara el endpoint
+# protegido /api/compliance/sync, que recorre la carpeta, cataloga documentos,
+# recalcula alertas y actualiza Supabase.
+#
+# Horario: 00:00 UTC = 21:00 America/Argentina/Buenos_Aires (UTC-3 fijo, sin DST).
+#
+# Secrets requeridos (GitHub → Settings → Secrets and variables → Actions):
+#   - CRON_SECRET : mismo valor que la env var CRON_SECRET en Netlify.
+#   - APP_URL     : (opcional) base URL del deploy; default https://tops-ordenes.netlify.app
+#
+# La sincronización en sí se ejecuta en el servidor (Netlify): este workflow sólo
+# la dispara. Reutiliza la integración Drive corporativa (service account) ya
+# configurada en la app — no requiere credenciales de Google aquí.
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 00:00 UTC = 21:00 ART, diario
+  workflow_dispatch: {} # disparo manual on-demand
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compliance-drive-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Compliance ↔ Drive sync endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_URL:-https://tops-ordenes.netlify.app}"
+          echo "POST $BASE/api/compliance/sync"
+          code=$(curl -sS --max-time 120 -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "$BASE/api/compliance/sync")
+          echo "HTTP $code"
+          cat /tmp/resp.json || true
+          echo
+          test "$code" = "200"
