@@ -11,6 +11,7 @@ import {
 } from "@/components/compliance/ui";
 import { ComplianceMatrix } from "@/components/compliance/ComplianceMatrix";
 import { SedeTabs } from "@/components/compliance/SedeTabs";
+import { loadComplianceCockpit, type SyncStatus } from "@/lib/compliance/source";
 
 export const metadata = { title: "Compliance Cockpit" };
 export const dynamic = "force-dynamic";
@@ -25,13 +26,63 @@ function SectionH({ id, title, hint }: { id?: string; title: string; hint?: stri
   );
 }
 
-export default function AnmatCockpitPage() {
-  // FIX 2026-06-11: el inventario se DERIVA a la fecha actual en cada render
-  // (force-dynamic) — dias/estado/riesgo vivos; los hardcodeados del snapshot
-  // dejan de ser fuente de verdad. Un vencimiento posterior a la auditoría
-  // impacta KPIs/score/alertas sin editar el archivo.
+/** Fecha-hora ISO → "DD/MM/YYYY HH:mm" en zona AR. */
+function fmtSyncTs(iso: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Intl.DateTimeFormat("es-AR", {
+      timeZone: "America/Argentina/Buenos_Aires",
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return "—";
+  }
+}
+
+/**
+ * Indicador REAL de sincronización Drive → Supabase. No muestra "Drive auditado"
+ * salvo que exista evidencia de una corrida exitosa (estado "synced").
+ *   · synced   → verde, última corrida + documentos escaneados.
+ *   · errors   → rojo, última corrida con errores.
+ *   · fallback → ámbar, usando snapshot (sin DB / sin datos).
+ *   · never    → gris, datos en base pero nunca sincronizado con Drive.
+ */
+function SyncStatusBadge({ sync }: { sync: SyncStatus }) {
+  const cfg = {
+    synced: { dot: "bg-status-success", border: "border-status-success/40", label: "Sincronizado con Drive", anim: "" },
+    errors: { dot: "bg-tops-red", border: "border-tops-red/40", label: "Sincronización con errores", anim: "" },
+    fallback: { dot: "bg-status-warning", border: "border-status-warning/40", label: "Usando snapshot (sin sync en vivo)", anim: "" },
+    never: { dot: "bg-fg-muted", border: "border-stroke-soft", label: "Sin sincronización aún", anim: "" },
+  }[sync.state];
+  const lr = sync.lastRun;
+  const detail =
+    sync.state === "synced" && lr
+      ? `${lr.documentsScanned} doc · ${fmtSyncTs(lr.startedAt)}`
+      : sync.state === "errors" && lr
+        ? `${lr.errors} error(es) · ${fmtSyncTs(lr.startedAt)}`
+        : sync.state === "fallback"
+          ? "datos del inventario auditado"
+          : "datos en base · pendiente 1ª corrida";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] text-fg-secondary border ${cfg.border} rounded-pill px-3 py-1`}
+      title={lr?.message ?? undefined}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${cfg.anim}`} />
+      <b className="font-semibold">{cfg.label}</b>
+      <span className="text-fg-muted">· {detail}</span>
+    </span>
+  );
+}
+
+export default async function AnmatCockpitPage() {
+  // FUENTE DE DATOS (2026-06-15): el cockpit lee de Supabase (compliance_items)
+  // y cae al snapshot de data.ts si la base no tiene datos / no está configurada.
+  // El inventario se DERIVA a la fecha actual en cada render (force-dynamic):
+  // dias/estado/riesgo vivos sin editar archivos.
+  const { source, sync } = await loadComplianceCockpit();
   const hoy = todayAr();
-  const items = deriveItems(undefined, hoy);
+  const items = deriveItems(source.items, hoy);
   const cs = complianceScore(items);
   const rs = riskScore(items);
   const band = riskBand(rs);
@@ -62,9 +113,7 @@ export default function AnmatCockpitPage() {
           </p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <span className="inline-flex items-center gap-1.5 text-[11px] text-fg-secondary border border-stroke-soft rounded-pill px-3 py-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-status-success" /> Drive auditado · {AUDIT_META.docsTotal} documentos
-          </span>
+          <SyncStatusBadge sync={sync} />
           <span className="text-[11px] text-fg-muted">Auditoría {AUDIT_META.fecha.split("-").reverse().join("/")} · vencimientos recalculados al {hoy.split("-").reverse().join("/")}</span>
         </div>
       </div>
