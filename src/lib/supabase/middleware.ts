@@ -73,6 +73,10 @@ export async function updateSession(request: NextRequest) {
     // `Authorization: Bearer CRON_SECRET` sin cookie de sesión. La auth se valida
     // DENTRO del handler (CRON_SECRET). Sólo la ruta exacta — no /api/compliance/*.
     pathname === "/api/compliance/sync" ||
+    // Sync diario de Contratos (Comercial → Cynthia → Clientes): mismo patrón que
+    // compliance — el cron postea con `Authorization: Bearer CRON_SECRET` sin cookie;
+    // la auth se valida DENTRO del handler. Sólo la ruta exacta.
+    pathname === "/api/comercial/contratos/sync" ||
     pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
