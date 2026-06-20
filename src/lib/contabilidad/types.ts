@@ -225,3 +225,56 @@ export interface CustomerInvoiceOption {
   percepciones: number;
   tributos: number;
 }
+
+// ----- Fase 12: centros de costo, logística facturable, cierre -----
+
+export interface CentroCostoRow {
+  id: string;
+  code: string;
+  name: string;
+  type: string | null;
+  active: boolean;
+}
+
+export interface ResultadoCCRow {
+  periodo: string;
+  centroCostoCode: string;
+  centroCostoNombre: string;
+  tipo: string | null;
+  ingresos: number;
+  gastos: number;
+  resultado: number;
+  margenPct: number | null;
+}
+
+export interface OrdenFacturableRow {
+  orderId: string;
+  publicId: string;
+  clientName: string;
+  customerRef: string | null;
+  status: string;
+  fecha: string;
+  billingStatus: string;
+  billableAmount: number | null;
+}
+
+export interface OrdenFacturadaRow {
+  orderId: string;
+  publicId: string;
+  clientName: string;
+  customerInvoiceId: string | null;
+  facturaTotal: number | null;
+  periodoStart: string | null;
+  periodoEnd: string | null;
+}
+
+export interface PeriodoCierreRow {
+  periodId: string;
+  year: number;
+  month: number;
+  status: string;
+  descuadrados: number;
+  comprobantesSinAsiento: number;
+  ivaDiffs: number;
+  listo: boolean;
+}

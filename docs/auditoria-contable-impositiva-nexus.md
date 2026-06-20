@@ -172,7 +172,8 @@ reflejo contable (resuelto ahora por el motor de asientos 0085).
 | F9 | Documentación final | ✅ `docs/contabilidad-nexus.md` |
 | F10.A/B/C | Percepciones de venta desglosadas + retenciones practicadas + integración contable | ✅ 0087–0089 |
 | F11 | Tesorería con retenciones nativas (bruto/retención/neto) + formularios fiscales | ✅ 0090–0091 |
-| F12 (resto) | `logistics_orders`→facturación · asientos de cierre · centro de costo en ventas/tesorería | ⛔ Pendiente (siguiente iteración) |
+| F12 | Centros de costo (ventas/tesorería/contab.) · `logistics_orders`→facturación · base de cierre/refundición | ✅ 0092–0095 |
+| F13 (resto) | Facturación recurrente/tarifas (Flujo B) · refundición anual multi-período · pricing de órdenes logísticas | ⛔ Pendiente |
 
 > Las migraciones se **entregan**, no se aplican: las corre Martín a mano en Supabase
 > (gobernanza G3). No se ejecutó ninguna migración ni se modificó producción.
@@ -228,6 +229,34 @@ sin residual y con asiento balanceado.
 > Pagos legacy con retenciones cargadas por la vía de Fase 10 (allocations al neto) quedan
 > listados en `v_pagos_retencion_residual` para corrección manual; el diagnóstico no los
 > reescribe (allocations inmutables).
+
+### Fase 12 — Centros de costo, logística facturable y base de cierre (cerrada)
+
+- **12.B/C — Centro de costo como dimensión** (`0092`): `cost_centers` extendido
+  (`type`, `updated_at`) + seed de unidades de negocio (ALMACENAJE, ANMAT, CARGAS,
+  LOGISTICA, TRANSPORTE, OFICINAS) y sedes; `cost_center_id` agregado a
+  `customer_invoices` y `treasury_movements` (compras y `journal_entry_lines` ya lo tenían).
+  El asiento de venta (`0094`) imputa las Ventas al centro de costo de la factura.
+- **12.D/E — `logistics_orders` → facturación** (`0093`): `logistics_order_billing_links`
+  (1 vínculo por orden → sin duplicación) + RPC `logistics_set_billing_status` /
+  `logistics_link_invoice` + vistas de facturables/facturadas/no facturables. **Partial
+  seguro**: como `logistics_orders` no tiene precio ni `client_id`, NO se auto-emite ni
+  auto-tarifa; se detecta y se vincula a una factura emitida por el flujo de ventas existente.
+- **12.F — Base de cierre/refundición** (`0095`): `accounting_closing_runs` +
+  `acc_simulate_closing` (**read-only**) + `acc_execute_closing` (gateado: `p_confirm=true`
+  + `contabilidad.admin`, rechaza con descuadrados/comprobantes sin asiento/IVA diffs) +
+  `acc_reopen_period` (auditado, con reversa). Vistas `v_periodos_para_cierre`,
+  `v_refundicion_simulacion`.
+- **12.G — Reportes** (`0094`): `v_estado_resultados_cc`, `v_libro_mayor_cc`,
+  `v_resultado_por_cc` (rentabilidad por CC).
+- **12.H — UI**: `/contabilidad/centros-costo`, `/resultado-cc`, `/ordenes-facturar`,
+  `/cierre`.
+- **Validación**: `supabase/tests/PHASE12_VALIDATION.sql`.
+- **Detalle técnico**: ver `docs/contabilidad-nexus.md` § "Fase 12".
+
+> Pendiente real (F13): facturación recurrente/tarifas (Flujo B no implementado),
+> refundición **anual** multi-período (hoy el cierre es por período mensual), y pricing de
+> órdenes logísticas (sin tarifa no hay monto automático).
 
 ---
 

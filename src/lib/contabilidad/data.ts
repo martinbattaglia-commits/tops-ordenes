@@ -17,6 +17,11 @@ import type {
   BankOption,
   SupplierOpenItemOption,
   CustomerInvoiceOption,
+  CentroCostoRow,
+  ResultadoCCRow,
+  OrdenFacturableRow,
+  OrdenFacturadaRow,
+  PeriodoCierreRow,
 } from "./types";
 
 /**
@@ -365,5 +370,113 @@ export async function getCustomerInvoicesParaPercepciones(): Promise<CustomerInv
     label: `${r.tipo_comprobante as string} ${r.punto_venta as number}-${(r.numero_comprobante as number) ?? "—"} · ${r.razon_social as string}`,
     percepciones: n(r.percepciones),
     tributos: n(r.tributos),
+  }));
+}
+
+// ----- Fase 12: centros de costo, logística facturable, cierre -----
+
+export async function getCentrosCosto(): Promise<CentroCostoRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("cost_centers")
+    .select("id, code, name, type, active")
+    .order("type", { ascending: true })
+    .order("code", { ascending: true });
+  if (error) throw new Error(`contabilidad.centros-costo: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    code: r.code as string,
+    name: r.name as string,
+    type: (r.type as string | null) ?? null,
+    active: Boolean(r.active),
+  }));
+}
+
+export async function getResultadoPorCC(): Promise<ResultadoCCRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_resultado_por_cc")
+    .select("periodo, centro_costo_code, centro_costo_nombre, tipo, ingresos, gastos, resultado, margen_pct")
+    .order("periodo", { ascending: false })
+    .order("resultado", { ascending: false });
+  if (error) throw new Error(`contabilidad.resultado-cc: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    periodo: r.periodo as string,
+    centroCostoCode: r.centro_costo_code as string,
+    centroCostoNombre: r.centro_costo_nombre as string,
+    tipo: (r.tipo as string | null) ?? null,
+    ingresos: n(r.ingresos),
+    gastos: n(r.gastos),
+    resultado: n(r.resultado),
+    margenPct: r.margen_pct == null ? null : n(r.margen_pct),
+  }));
+}
+
+export async function getOrdenesFacturables(): Promise<OrdenFacturableRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_logistics_orders_facturables")
+    .select("order_id, public_id, client_name, customer_ref, status, fecha, billing_status, billable_amount")
+    .order("fecha", { ascending: true })
+    .limit(1000);
+  if (error) throw new Error(`contabilidad.ordenes-facturables: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    orderId: r.order_id as string,
+    publicId: r.public_id as string,
+    clientName: r.client_name as string,
+    customerRef: (r.customer_ref as string | null) ?? null,
+    status: r.status as string,
+    fecha: r.fecha as string,
+    billingStatus: r.billing_status as string,
+    billableAmount: r.billable_amount == null ? null : n(r.billable_amount),
+  }));
+}
+
+export async function getOrdenesFacturadas(): Promise<OrdenFacturadaRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_logistics_orders_facturadas")
+    .select("order_id, public_id, client_name, customer_invoice_id, factura_total, billing_period_start, billing_period_end")
+    .order("updated_at", { ascending: false })
+    .limit(1000);
+  if (error) throw new Error(`contabilidad.ordenes-facturadas: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    orderId: r.order_id as string,
+    publicId: r.public_id as string,
+    clientName: r.client_name as string,
+    customerInvoiceId: (r.customer_invoice_id as string | null) ?? null,
+    facturaTotal: r.factura_total == null ? null : n(r.factura_total),
+    periodoStart: (r.billing_period_start as string | null) ?? null,
+    periodoEnd: (r.billing_period_end as string | null) ?? null,
+  }));
+}
+
+export async function getPeriodosParaCierre(): Promise<PeriodoCierreRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_periodos_para_cierre")
+    .select("period_id, year, month, status, descuadrados, comprobantes_sin_asiento, iva_diffs, listo")
+    .order("year", { ascending: false })
+    .order("month", { ascending: false });
+  if (error) throw new Error(`contabilidad.periodos-cierre: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    periodId: r.period_id as string,
+    year: n(r.year),
+    month: n(r.month),
+    status: r.status as string,
+    descuadrados: n(r.descuadrados),
+    comprobantesSinAsiento: n(r.comprobantes_sin_asiento),
+    ivaDiffs: n(r.iva_diffs),
+    listo: Boolean(r.listo),
   }));
 }

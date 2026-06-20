@@ -417,4 +417,89 @@ Coincide con allocations (bruto) y con el movimiento (neto). El mayor de Proveed
 - **Pagos legacy** con retenciones cargadas a la manera de Fase 10 (allocations al neto):
   aparecen en `v_pagos_retencion_residual` para corrección manual (allocations inmutables).
 - Asientos de cierre, `logistics_orders`→facturación y centro de costo en ventas/tesorería
-  (ítems generales de cierre, ver §8).
+  (ítems generales de cierre, ver §8). → **Cerrados en Fase 12 (abajo).**
+
+---
+
+## 13. Fase 12 — Centros de costo, logística facturable y base de cierre contable
+
+Migraciones **0092–0095**; commit separado; aditivo, sin romper 0082–0091.
+
+### 13.1. Qué problema resuelve
+
+(1) No había rentabilidad por **unidad de negocio** (faltaba centro de costo en ventas y
+tesorería). (2) `logistics_orders` no se conectaba a facturación. (3) No existía base para
+**cierre/refundición** de resultados.
+
+### 13.2. Cómo se modelan los centros de costo
+
+`cost_centers` (0014) se extiende con `type` (unidad_negocio | sede | deposito | servicio |
+cliente_estrategico | proyecto | centro_operativo | centro_administrativo) y `updated_at`.
+Se seedean unidades de negocio 3PL y sedes. Es la **dimensión transversal**:
+`journal_entry_lines.cost_center_id` (0083) y `supplier_invoices.cost_center_id` (0014) ya
+existían; 0092 agrega `cost_center_id` a `customer_invoices` y `treasury_movements`.
+Gestionable desde `settings/centros-costo` (no se hardcodea en el front).
+
+### 13.3. Cómo impacta en contabilidad
+
+`acc_post_sales_invoice` (0094) imputa las líneas de **Ventas** al `cost_center_id` de la
+factura; las compras ya imputaban el gasto al CC. Reportes: `v_estado_resultados_cc`,
+`v_libro_mayor_cc`, `v_resultado_por_cc` (ingresos/gastos/resultado/margen por CC). La suma
+sobre todos los CC = total general (verificado en el kit). Líneas sin CC → `SIN_CC`.
+
+### 13.4. Cómo impacta en ventas y tesorería
+
+Ventas: la factura lleva centro de costo → su asiento lo propaga al EERR por CC. Tesorería:
+`treasury_movements.cost_center_id` es informativo (p. ej. gastos bancarios `ajuste`); los
+cobros/pagos impactan balance (banco/CxC/CxP), no P&L, por eso el CC relevante vive en las
+facturas.
+
+### 13.5. Cómo se vinculan órdenes logísticas con facturación
+
+`logistics_order_billing_links` (1 fila por orden, `UNIQUE(logistics_order_id)` → **sin
+facturación duplicada**). Estados: pending | ready_to_invoice | invoiced | cancelled |
+not_billable. RPCs: `logistics_set_billing_status` (no permite `invoiced`) y
+`logistics_link_invoice` (vincula 1..N órdenes a una factura **ya emitida**; bloquea
+re-facturar con otra factura; idempotente). Vistas: `v_logistics_orders_facturables`,
+`v_logistics_orders_facturadas`, `v_logistics_orders_no_facturables`,
+`v_facturas_desde_ordenes`.
+
+### 13.6. Qué se puede automatizar y qué queda manual
+
+`logistics_orders` **no tiene precio, tarifa ni `client_id`** → **no** se auto-tarifa ni
+auto-emite. El operador detecta órdenes facturables, las marca y las **vincula** a una
+factura emitida por el flujo de ventas existente (que calcula IVA, CAE, etc. y se contabiliza
+por `acc_post_sales_invoice`). La factura es la fuente contable; la orden nunca se contabiliza
+por separado. **Pendiente**: tarifas/recurrente (Flujo B) para generar el borrador automático.
+
+### 13.7. Cómo funciona la simulación de cierre
+
+`acc_simulate_closing(period_id)` es **STABLE / read-only**: calcula bloqueos (período
+cerrado, asientos descuadrados, comprobantes sin asiento, diffs IVA fiscal vs contable) y
+propone las líneas de refundición (cerrar ingresos/gastos del período contra **3.2.02
+Resultado del Ejercicio**) **sin escribir nada**. `acc_execute_closing(period_id, type,
+confirm=true)` ejecuta sólo con `contabilidad.admin` + confirmación, re-valida, crea
+`accounting_closing_runs`, postea el asiento de refundición (trazable,
+`source_type='adjustment'`, `source_id=run`) y marca el período `closed`.
+`acc_reopen_period(period_id, reason)` reabre con reversa del asiento (auditado).
+
+### 13.8. Validaciones obligatorias antes de cerrar un período
+
+`v_periodos_para_cierre.listo = true` exige: período `open`, **0** asientos descuadrados,
+**0** comprobantes sin asiento y **0** diffs IVA fiscal vs contable. El cierre real falla si
+alguno no se cumple.
+
+### 13.9. Qué queda pendiente para balance anual definitivo
+
+- **Refundición anual** multi-período (hoy el cierre opera por período mensual).
+- **Facturación recurrente / tarifas** (Flujo B) y **pricing de órdenes logísticas**.
+- Distribución del resultado (Resultados No Asignados) y asientos de apertura del ejercicio
+  siguiente.
+
+### 13.10. Cómo validar (Fase 12)
+
+1. Aplicar **0092 → 0093 → 0094 → 0095** en orden (a mano, G3).
+2. Correr `supabase/tests/PHASE12_VALIDATION.sql` (read-only) → todo `OK` (EERR por CC = total
+   general; mayor por CC = mayor general; sin duplicación de facturación; simulación read-only).
+3. Desde la app: asignar centro de costo a facturas y ver `/contabilidad/resultado-cc`;
+   vincular órdenes en `/contabilidad/ordenes-facturar`; simular cierre en `/contabilidad/cierre`.

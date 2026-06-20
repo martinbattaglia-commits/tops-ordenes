@@ -194,3 +194,72 @@ export async function cargarPercepcionesVenta(
     data: res,
   };
 }
+
+// ----- Fase 12: logística facturable + simulación de cierre -----
+
+/** Marca el estado de facturación de una orden logística (no 'invoiced'). */
+export async function marcarOrdenBilling(
+  orderId: string,
+  status: "pending" | "ready_to_invoice" | "not_billable" | "cancelled",
+  opts?: { billableAmount?: number; costCenterId?: string; notes?: string }
+): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("logistics_set_billing_status", {
+    p_order_id: orderId,
+    p_status: status,
+    p_billable_amount: opts?.billableAmount ?? null,
+    p_period_start: null,
+    p_period_end: null,
+    p_cost_center_id: opts?.costCenterId ?? null,
+    p_notes: opts?.notes ?? null,
+  });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/contabilidad/ordenes-facturar");
+  return { ok: true, message: `Orden marcada como ${status}.`, data };
+}
+
+/** Vincula órdenes logísticas a una factura de venta ya emitida (sin duplicar). */
+export async function vincularFacturaOrdenes(
+  orderIds: string[],
+  customerInvoiceId: string
+): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("logistics_link_invoice", {
+    p_order_ids: orderIds,
+    p_customer_invoice_id: customerInvoiceId,
+    p_period_start: null,
+    p_period_end: null,
+  });
+  if (error) return { ok: false, message: error.message };
+  const res = data as { linked?: number; skipped?: number } | null;
+  revalidatePath("/contabilidad/ordenes-facturar");
+  return { ok: true, message: `Vinculadas ${res?.linked ?? 0} órdenes (${res?.skipped ?? 0} ya vinculadas).`, data: res };
+}
+
+/** Simula el cierre de un período (READ-ONLY; no modifica datos). */
+export async function simularCierre(
+  periodId: string,
+  closingType = "income_statement_closing"
+): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("acc_simulate_closing", {
+    p_period_id: periodId,
+    p_closing_type: closingType,
+  });
+  if (error) return { ok: false, message: error.message };
+  const res = data as { ready?: boolean; resultado?: number; blockers?: unknown[] } | null;
+  const blockers = Array.isArray(res?.blockers) ? res!.blockers : [];
+  return {
+    ok: true,
+    message: res?.ready
+      ? `Período listo. Resultado a refundir: ${res?.resultado ?? 0}. (Simulación, no se modificó nada.)`
+      : `Período NO listo. Bloqueos: ${blockers.join(", ") || "—"}.`,
+    data: res,
+  };
+}
