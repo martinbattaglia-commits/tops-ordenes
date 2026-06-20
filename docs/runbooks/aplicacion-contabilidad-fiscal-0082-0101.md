@@ -1,7 +1,10 @@
 # Runbook — Aplicación contable/fiscal/facturación · migraciones 0082–0101
 
 > **Tipo:** runbook operativo de aplicación manual.
-> **Destino primario:** **STAGING** (`vrxosunxlhohmqymxots`). **NO producción.**
+> **Arquitectura:** **base Supabase única = `arsksytgdnzukbmfgkju`** (fuente de verdad, de
+> carácter PRODUCTIVO). **No existe staging operativo.** `vrxosunxlhohmqymxots` no se usa salvo
+> confirmación explícita. **Ensayo altamente recomendado en un proyecto efímero descartable**
+> para esta cadena (cambio estructural significativo) — ver §2.2.
 > **Ejecuta:** Martín (a mano, SQL Editor de Supabase). El asistente no aplica nada (G3).
 > **Estado de los archivos:** entregados en la branch `claude/nexus-accounting-tax-audit-mbpxjt`,
 > **sin aplicar a ninguna base**.
@@ -33,7 +36,10 @@ Esta cadena de 20 migraciones convierte la capa fiscal/operativa de Nexus en una
 
 **Reglas no negociables de este despliegue:**
 
-- ❌ **No aplicar directo en producción.** Primero **staging** completo y validado.
+- ❌ **No aplicar a la base única sin ensayo previo** cuando se trata de un cambio estructural
+  significativo como esta cadena: **altamente recomendado** validarla completa en un **proyecto
+  efímero descartable** y recién después aplicar en `arsksytgdnzukbmfgkju` con backup previo y
+  autorización explícita. Cambios menores: caso por caso.
 - ✅ **Cada bloque se valida antes de pasar al siguiente** (puntos go/no-go, §6).
 - ❌ **No ejecutar cierre mensual real ni refundición anual real sin el contador** (§8) y sin
   confirmación explícita (las RPC exigen `confirm=true` + permiso `contabilidad.admin`).
@@ -50,22 +56,26 @@ Esta cadena de 20 migraciones convierte la capa fiscal/operativa de Nexus en una
 
 Antes de aplicar **cualquier** migración de esta cadena, confirmar:
 
-- [ ] **Backup reciente de staging** (snapshot/restore point en Supabase). *Obligatorio.*
-- [ ] **Acceso admin** a la consola de Supabase de **staging** (`vrxosunxlhohmqymxots`).
+- [ ] **Confirmado el destino exacto** (ref del proyecto): **proyecto efímero** para el ensayo,
+      o **`arsksytgdnzukbmfgkju`** (base única) para la aplicación final. `arsksytgdnzukbmfgkju`
+      ES la base real → tratar cada ejecución como productiva.
+- [ ] **Backup / restore point** del destino tomado inmediatamente antes. *Obligatorio* (en la
+      base única es el rollback primario).
+- [ ] **Acceso admin** al destino (proyecto efímero y/o `arsksytgdnzukbmfgkju`).
 - [ ] **Branch correcta** desplegada: `claude/nexus-accounting-tax-audit-mbpxjt` (los archivos
       `.sql` salen de `supabase/migrations/` de esa branch).
-- [ ] **Migraciones 0001–0081 ya aplicadas** en staging (esta cadena depende de:
-      `clients`, `vendors`, `cost_centers`(0014), `customer_invoices`/`invoice_items`(0011),
-      `customer_invoice_vat_lines`(0072), `supplier_invoices`+detalle(0014/0056), `treasury_*`(0053/0054),
-      `logistics_orders`(0030), `contracts`(0076), RBAC(0009)).
-- [ ] **Variables de entorno** de staging correctas (Supabase URL/keys). No se requieren
-      secretos ARCA para esta cadena (no emite).
+- [ ] **Migraciones 0001–0081 ya aplicadas** en el destino (replicadas en el efímero; presentes
+      en la base única). Esta cadena depende de: `clients`, `vendors`, `cost_centers`(0014),
+      `customer_invoices`/`invoice_items`(0011), `customer_invoice_vat_lines`(0072),
+      `supplier_invoices`+detalle(0014/0056), `treasury_*`(0053/0054), `logistics_orders`(0030),
+      `contracts`(0076), RBAC(0009).
+- [ ] **Variables de entorno** apuntando al destino correcto (verificar el ref antes de cada
+      ejecución). No se requieren secretos ARCA para esta cadena (no emite).
 - [ ] **Usuario de aplicación** = rol con privilegios de owner/`postgres` en el SQL Editor
       (las migraciones crean tipos, funciones SECURITY DEFINER, policies).
 - [ ] **Contador informado**: deberá validar plan de cuentas, cuentas de IVA/percep/retenc,
       reglas de imputación y criterio de cierre/refundición (§8). No bloquea la aplicación
       estructural, pero **sí bloquea** ejecutar cierres/refundición reales.
-- [ ] **Confirmado que NO es producción.**
 
 ### 2.1. Notas técnicas críticas de aplicación
 
@@ -83,6 +93,24 @@ Antes de aplicar **cualquier** migración de esta cadena, confirmar:
 3. Todas las migraciones son **idempotentes** (`if not exists`, `on conflict do nothing`,
    `create or replace`, enums guardados). Re-ejecutar una migración no debería romper, pero
    **el orden importa** (respetar §3).
+
+### 2.2. Ensayo en proyecto efímero (recomendado para esta cadena)
+
+Como **no existe staging operativo** y la base única `arsksytgdnzukbmfgkju` es productiva, para
+un cambio estructural significativo como `0082–0101` se **recomienda altamente** ensayar primero
+en un **proyecto Supabase efímero descartable** (no productivo):
+
+1. Crear un proyecto Supabase nuevo y descartable ("nexus-erp-validation-temp").
+2. Replicar el esquema base `0001–0081` (dump de esquema, **sin PII real**) o seeds mínimos.
+3. Aplicar `0082–0101` (Bloques A→E, §3) + correr los 5 kits + pruebas de UI (§5).
+4. Validar (balance cuadra, 0 descuadrados, billing→BORRADOR, simulaciones read-only).
+5. Decidir GO/NO-GO (§6) con esa evidencia.
+6. Aplicar en `arsksytgdnzukbmfgkju` solo si GO, con **restore point previo** (§9–§10).
+7. Destruir el proyecto efímero al cerrar la validación (no queda como segundo entorno permanente).
+
+> Es una **recomendación altamente preferida**, no un requisito universal: cambios menores se
+> evalúan caso por caso. Para esta cadena (20 migraciones, motor contable/fiscal) el ensayo
+> efímero es la opción recomendada.
 
 ---
 
@@ -159,7 +187,7 @@ Antes de aplicar **cualquier** migración de esta cadena, confirmar:
 ### Después de Bloque C — `PHASE11_TREASURY_VALIDATION.sql`
 - [ ] Columnas `gross_amount`/`withheld_amount` + RPC nativa + vistas existen.
 - [ ] La RPC vieja `tesoreria_register_payment` sigue intacta.
-- [ ] **Prueba funcional (staging):** registrar un pago a proveedor con retención
+- [ ] **Prueba funcional (ensayo efímero):** registrar un pago a proveedor con retención
       (`tesoreria_register_supplier_payment_neto`) → verificar bruto/retención/neto.
 - [ ] `v_supplier_payment_detalle.balanceado = true`; `v_pagos_retencion_residual` **vacío**
       (sin residual en CxP).
@@ -188,7 +216,7 @@ Antes de aplicar **cualquier** migración de esta cadena, confirmar:
 
 ---
 
-## 5. Pruebas funcionales desde la UI (staging)
+## 5. Pruebas funcionales desde la UI (ensayo efímero)
 
 Navegar a la sección **Contabilidad** del sidebar. Para cada prueba, el resultado esperado:
 
@@ -262,7 +290,7 @@ Las migraciones son **aditivas** (no destructivas), por lo que la contención es
 - **Borrador de factura**: al ser `BORRADOR` (no fiscal) puede anularse lógicamente
   (`anulada=true`) sin impacto contable.
 - ⚠️ **No existe un rollback automático destructivo de las migraciones.** Si hace falta
-  deshacer estructura en staging, restaurar desde el **backup** del paso 2.
+  deshacer estructura, restaurar desde el **backup / restore point** del paso 2.
 
 ---
 
@@ -290,11 +318,11 @@ Antes de habilitar cierres/refundición reales, el contador debe validar:
 
 ---
 
-## 9. Checklist antes de producción
+## 9. Checklist antes de aplicar en la base única (`arsksytgdnzukbmfgkju`)
 
-Producción **sólo** puede considerarse si **todo** lo siguiente es verdadero:
+La aplicación en la base única (productiva) **sólo** puede considerarse si **todo** lo siguiente es verdadero:
 
-1. [ ] Staging aplicó **0082–0101** completo, sin errores.
+1. [ ] El **proyecto efímero** aplicó **0082–0101** completo, sin errores.
 2. [ ] **Los 5 kits** de validación dieron `OK` (o `REVISAR` explicados y aceptados).
 3. [ ] La **UI** de `/contabilidad` funciona (las 15 pruebas de §5).
 4. [ ] **Balance de sumas y saldos cuadra.**
@@ -303,28 +331,28 @@ Producción **sólo** puede considerarse si **todo** lo siguiente es verdadero:
 7. [ ] **0 duplicación de facturación** (órdenes/billing).
 8. [ ] El **billing run genera sólo borradores** (BORRADOR, sin ARCA).
 9. [ ] El **pricing logístico no inventa datos** (no priceable con motivos).
-10. [ ] La **refundición anual fue sólo simulada** (no ejecutada) en staging.
+10. [ ] La **refundición anual fue sólo simulada** (no ejecutada) en el ensayo.
 11. [ ] El **contador validó** plan de cuentas y reglas (§8).
-12. [ ] **Martín aprueba explícitamente** el pase a producción.
+12. [ ] **Martín aprueba explícitamente** el pase a la base única (productiva).
 
 ---
 
-## 10. Orden recomendado para producción
+## 10. Orden recomendado para la aplicación en la base única (`arsksytgdnzukbmfgkju`)
 
 Cuando los 12 puntos de §9 estén cumplidos:
 
 - **Replicar el mismo orden** de §3 (Bloques A→E, archivo por archivo). **No saltear bloques.**
 - **Ventana de mantenimiento** acordada (baja probabilidad de escrituras concurrentes en
   finanzas/tesorería durante la aplicación).
-- **Backup previo de producción** (restore point) inmediatamente antes.
+- **Backup / restore point de `arsksytgdnzukbmfgkju`** inmediatamente antes (rollback primario).
 - **Aplicar bloque por bloque** y **validar bloque por bloque** con los mismos kits (read-only).
 - **No activar cierres reales ni refundición real el mismo día** del despliegue estructural:
   primero observar que la operación normal (facturar, cobrar, pagar, contabilizar) funciona.
 - **Monitoreo posterior** (24–72 h): revisar `v_asientos_descuadrados`,
   `v_balance_sumas_saldos`, `v_iva_fiscal_vs_contable`, `v_pagos_retencion_residual` y
   `v_billing_vs_factura_diff` periódicamente.
-- Recordatorio de prod: en producción la fuente de verdad es `arsksytgdnzukbmfgkju` (G4);
-  confirmar que se aplica ahí y no en staging por error.
+- Recordatorio: `arsksytgdnzukbmfgkju` es la **única** base operativa; confirmar el ref antes de
+  cada ejecución y que el ensayo efímero ya validó la cadena.
 
 ---
 

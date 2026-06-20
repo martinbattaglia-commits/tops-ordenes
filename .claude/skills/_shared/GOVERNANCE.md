@@ -25,10 +25,15 @@ Aplicar en prod requiere autorización **aunque** sea aditiva/idempotente. **Pro
 → `docs/handoff/DEVELOPMENT_RULES.md:29-31`; `docs/handoff/OPEN-ISSUES.md:39`;
 `docs/ERP-DEPENDENCY-GRAPH.md:223`; `docs/handoff/MASTER_HANDOFF.md:61`.
 
-## G4 — Supabase productivo oficial
-**PROD = `arsksytgdnzukbmfgkju`** (RLS en todas las tablas, PostgREST + RPC, Realtime, PostGIS).
-`vrxosunxlhohmqymxots` es **staging de pruebas, NUNCA producción**. Ante cualquier duda, asumir
-`arsksytgdnzukbmfgkju` como prod.
+## G4 — Supabase: base única (fuente de verdad)
+**Base única operativa = `arsksytgdnzukbmfgkju`** (RLS en todas las tablas, PostgREST + RPC,
+Realtime, PostGIS). Es la **fuente de verdad** y se trata como **PRODUCTIVA**: toda escritura o
+migración es **potencialmente productiva**. **No existe un entorno staging operativo.** La
+referencia `vrxosunxlhohmqymxots` **NO se usa** salvo confirmación explícita de Martín. Para
+**cambios estructurales significativos** se **recomienda altamente** ensayar primero en un
+**proyecto Supabase efímero descartable** (no productivo) y recién después aplicar en
+`arsksytgdnzukbmfgkju` con backup/restore point previo y autorización explícita; los **cambios
+menores** se evalúan **caso por caso**.
 → `docs/handoff/MASTER_HANDOFF.md:3,43,187`; `docs/TOPS_NEXUS_CURRENT_STATE.md:66`;
 memoria permanente `supabase-source-of-truth`.
 

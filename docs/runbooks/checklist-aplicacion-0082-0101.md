@@ -1,17 +1,21 @@
-# Checklist ejecutivo — Aplicación en STAGING de 0082–0101
+# Checklist ejecutivo — Aplicación de 0082–0101 (base única)
 
 > Versión corta y práctica del runbook completo
 > (`docs/runbooks/aplicacion-contabilidad-fiscal-0082-0101.md`).
-> **Destino:** STAGING (`vrxosunxlhohmqymxots`). **NO producción.** Aplica Martín a mano (G3).
-> Marcá cada `[ ]` a medida que avanzás. **No saltees bloques.**
+> **Arquitectura:** base Supabase **única = `arsksytgdnzukbmfgkju`** (fuente de verdad,
+> PRODUCTIVA). **No existe staging operativo.** Para esta cadena se **recomienda altamente**
+> ensayar primero en un **proyecto efímero descartable** y luego aplicar en la base única con
+> backup previo. Aplica Martín a mano (G3). Marcá cada `[ ]`. **No saltees bloques.**
 
 ---
 
 ## 0. Antes de empezar (precondiciones mínimas)
 
-- [ ] **Backup / restore point** de staging tomado AHORA.
-- [ ] Estás en **staging**, no en producción (confirmado el proyecto Supabase).
-- [ ] Migraciones **0001–0081 ya aplicadas** en staging.
+- [ ] **Confirmaste el ref del proyecto activo** (efímero para ensayo, o `arsksytgdnzukbmfgkju`
+      para la aplicación final). `arsksytgdnzukbmfgkju` = base real/productiva.
+- [ ] **Backup / restore point** del destino tomado AHORA (en la base única es el rollback primario).
+- [ ] Migraciones **0001–0081 ya aplicadas** en el destino (replicadas en el efímero; presentes
+      en la base única).
 - [ ] Branch `claude/nexus-accounting-tax-audit-mbpxjt` (de ahí salen los `.sql`).
 - [ ] Usuario SQL con privilegios de owner/`postgres`.
 - [ ] **Aplicar UN archivo por ejecución** (no pegar varios en un solo run).
@@ -111,7 +115,7 @@ Puntos imprescindibles que deben dar bien en cada kit:
 
 - [ ] ❌ **Cierre de período real** (`acc_execute_closing`) — sólo **simular**.
 - [ ] ❌ **Refundición anual real** (`acc_execute_annual_closing`) — sólo **simular**.
-- [ ] ❌ **Emisión ARCA** (los borradores no se emiten en staging).
+- [ ] ❌ **Emisión ARCA** (los borradores no se emiten ni en el ensayo ni en la base única en esta fase).
 - [ ] ❌ **Producción** — recién después de validar todo y aprobar (ver §9 del runbook).
 
 ---
@@ -151,6 +155,6 @@ Por cada bloque (A–E):
 - [ ] UI funcional.
 - [ ] Evidencia guardada.
 - [ ] Contador validó plan de cuentas/reglas.
-- [ ] **Recién entonces** se evalúa producción (checklist §9 del runbook completo).
+- [ ] **Recién entonces** se evalúa la **aplicación en la base única** (checklist §9 del runbook completo).
 
 *Checklist operativo. No constituye aplicación. Las migraciones las aplica Martín a mano.*
