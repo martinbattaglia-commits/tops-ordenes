@@ -114,8 +114,8 @@ reflejo contable (resuelto ahora por el motor de asientos 0085).
 | B3 | Sin balance de sumas y saldos / EERR | Crítico | ✅ Implementado (0086) |
 | B4 | Sin posición mensual de IVA consolidada | Crítico | ✅ Implementado (`v_posicion_iva`, 0086) |
 | B5 | Operaciones sin asiento automático | Crítico | ✅ Motor de asientos (0085) |
-| B6 | Percepciones de venta sin desglose | Alto | ⛔ Pendiente (propuesto) |
-| B7 | Retenciones practicadas a proveedores | Alto | ⛔ Pendiente (cuenta y regla listas; falta el dato en `supplier_payments`) |
+| B6 | Percepciones de venta sin desglose | Alto | ✅ Cerrada en Fase 10 (`customer_invoice_other_taxes`, 0087) |
+| B7 | Retenciones practicadas a proveedores | Alto | ✅ Cerrada en Fase 10 (`supplier_payment_withholdings`, 0088) |
 | B8 | Sin períodos fiscales / cierre | Alto | ✅ `accounting_periods` (0083) — cierre por estado |
 | B9 | `logistics_orders` no facturable | Alto | ⛔ Pendiente (decisión de negocio) |
 | B10 | `cost_centers` ausente en ventas/tesorería | Medio | ⛔ Parcial (presente en líneas de asiento de compra) |
@@ -170,10 +170,37 @@ reflejo contable (resuelto ahora por el motor de asientos 0085).
 | F7 | Backfill histórico seguro (dry-run → real) | ✅ `acc_backfill` + UI |
 | F8 | Tests / validación | ✅ `ACCOUNTING_VALIDATION.sql` + typecheck verde |
 | F9 | Documentación final | ✅ `docs/contabilidad-nexus.md` |
-| F10 | Percepciones de venta + retenciones practicadas + logistics→facturación | ⛔ Pendiente (siguiente iteración) |
+| F10.A/B/C | Percepciones de venta desglosadas + retenciones practicadas + integración contable | ✅ 0087–0089 |
+| F10 (resto) | `logistics_orders`→facturación · asientos de cierre · centro de costo en ventas/tesorería | ⛔ Pendiente (siguiente iteración) |
 
 > Las migraciones se **entregan**, no se aplican: las corre Martín a mano en Supabase
 > (gobernanza G3). No se ejecutó ninguna migración ni se modificó producción.
+
+### Fase 10 — Percepciones de venta y retenciones practicadas (cerradas)
+
+Se cerraron las dos brechas fiscales/impositivas pendientes, de forma **aditiva** y
+compatible con 0082–0086 (commit separado):
+
+- **10.A — Percepciones de venta** (`0087`): tabla `customer_invoice_other_taxes`
+  (tipo/jurisdicción/base/alícuota/importe), RPC `ventas_persist_other_taxes`, cuentas
+  y reglas por tipo. No se mezcla con el IVA débito (que vive en `customer_invoice_vat_lines`).
+- **10.B — Retenciones practicadas** (`0088`): tabla `supplier_payment_withholdings`
+  (tipo/jurisdicción/base/alícuota/importe/certificado), RPC
+  `ap_register_payment_withholdings`, cuentas "a depositar" por tipo. Genera deuda fiscal.
+- **10.C — Integración contable** (`0089`): `acc_post_sales_invoice` desglosa percepciones
+  por tipo cuando el detalle cuadra con la cabecera; `acc_post_supplier_payment` arma
+  **DEBE Proveedores (neto+retenciones) / HABER Banco (neto) + Retenciones a depositar**.
+  Reportes: `v_percepciones_ventas`, `v_retenciones_practicadas`,
+  `v_pagos_proveedor_retenciones`, `v_posicion_fiscal_mensual`,
+  `v_percep_retenc_fiscal_vs_contable`, `v_comprobantes_diferencias_fiscales`.
+- **UI**: `/contabilidad/posicion-fiscal`, `/percepciones-ventas`, `/retenciones`.
+- **Validación**: `supabase/tests/PHASE10_FISCAL_VALIDATION.sql`.
+- **Detalle técnico**: ver `docs/contabilidad-nexus.md` § "Fase 10".
+
+> Limitación documentada: la vista de tesorería `supplier_open_items` reduce CxP por el
+> neto (allocations) y puede mostrar un residual = retención hasta que tesorería soporte
+> allocations por bruto. Es un gap de tesorería, no de contabilidad (el GL cierra
+> Proveedores en 0 al saldar). Ver `docs/contabilidad-nexus.md`.
 
 ---
 
@@ -185,8 +212,8 @@ reflejo contable (resuelto ahora por el motor de asientos 0085).
 - [x] Libro IVA Compras / Ventas (vistas + export compras)
 - [x] **Posición mensual de IVA consolidada** (`v_posicion_iva`)
 - [x] Percepciones IVA sufridas y retenciones sufridas en la posición
-- [ ] Percepciones de venta desglosadas (pendiente)
-- [ ] Retenciones practicadas a proveedores (pendiente)
+- [x] Percepciones de venta desglosadas (Fase 10 · 0087)
+- [x] Retenciones practicadas a proveedores (Fase 10 · 0088)
 
 ### Contable
 - [x] Plan de cuentas (`chart_of_accounts`) seedeado y gestionable

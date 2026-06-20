@@ -240,3 +240,102 @@ window function), `v_asientos_descuadrados` (control de integridad, debe estar v
 
 > Las migraciones se entregan; las aplica Martín. Esta capa no ejecuta migraciones ni
 > toca producción por sí sola.
+
+---
+
+## 11. Fase 10 — Percepciones de venta y retenciones practicadas
+
+Cierre de las dos brechas fiscales pendientes, **aditivo** y compatible con 0082–0086
+(migraciones **0087, 0088, 0089**; commit separado). No se modificó ninguna tabla
+existente ni las vistas de 0086; solo se hizo `create or replace` de dos RPC (misma
+firma) y se agregaron tablas, RPC y vistas nuevas.
+
+### 11.1. Qué se agregó
+
+| Componente | Migración | Rol |
+|---|---|---|
+| `customer_invoice_other_taxes` | 0087 | Detalle de percepciones/otros tributos de **venta** por tipo y jurisdicción |
+| `ventas_persist_other_taxes(invoice_id, jsonb)` | 0087 | Alta idempotente del detalle de ventas (RPC, guard `ventas.via_rpc`) |
+| `supplier_payment_withholdings` | 0088 | **Retenciones practicadas** al pagar a proveedores |
+| `ap_register_payment_withholdings(payment_id, jsonb)` | 0088 | Alta idempotente de retenciones (RPC, guard `ap.via_rpc`) |
+| Cuentas `2.1.12–2.1.16` | 0087/0088 | Retenciones (Gan/IVA/IIBB/SUSS) y Percepciones municipales a depositar |
+| Reglas `accounting_rules` por tipo | 0087/0088 | `percepcion_<TIPO>` y `withholding_<TIPO>` → cuenta |
+| `acc_post_sales_invoice` (replace) | 0089 | Desglosa percepciones por tipo si el detalle cuadra con la cabecera |
+| `acc_post_supplier_payment` (replace) | 0089 | Asiento con retenciones |
+| 6 vistas de reporte | 0089 | Ver §11.5 |
+
+### 11.2. Cómo impacta en IVA
+
+- Las **percepciones de venta** son percepciones **practicadas** (la empresa como agente
+  de percepción): son deuda fiscal "a depositar", **no** reducen el saldo técnico de IVA.
+  Por eso `v_posicion_iva` **no se tocó**; las percepciones aparecen en la nueva
+  `v_posicion_fiscal_mensual` como una columna separada (`percepciones_ventas_a_depositar`).
+- El **IVA débito fiscal** sigue saliendo exclusivamente de `customer_invoice_vat_lines`
+  (no se mezcla con el detalle de percepciones).
+
+### 11.3. Cómo impacta en contabilidad
+
+- **Venta**: si la factura tiene detalle de percepciones y `Σ detalle == cabecera
+  (percepciones+tributos) ± 0,02`, el asiento imputa cada percepción a su cuenta
+  (`2.1.04` IVA, `2.1.05` IIBB, `2.1.16` municipal, `2.1.10` otros). Si no hay detalle o
+  no cuadra, usa el lump de Fase 9 (retrocompatible). El total y el balance **no cambian**.
+- **Pago con retención**:
+  ```
+  DEBE  2.1.01 Proveedores            (neto + Σ retenciones = bruto)
+  HABER 1.1.01/1.1.02 Caja/Banco      (neto efectivamente pagado)
+  HABER 2.1.12/13/14/15/06 Retenciones a depositar (por tipo)
+  ```
+  Internamente consistente: la factura acreditó Proveedores por el bruto; los pagos lo
+  debitan por `neto + retención` → al saldar, Proveedores cierra en 0.
+
+### 11.4. Cómo impacta en tesorería
+
+- **No se tocó** tesorería (append-only intacto). `supplier_payments.amount` se interpreta
+  como el **neto pagado**; las retenciones son un detalle aditivo.
+- **Limitación conocida y documentada**: `supplier_open_items` (vista de tesorería) reduce
+  CxP por las allocations (= neto), por lo que puede mostrar un **residual = Σ retenciones**
+  hasta que tesorería soporte allocations por bruto. Es un gap de **tesorería**, no de
+  contabilidad (el mayor de Proveedores sí cierra correctamente). Recomendación: extender
+  `tesoreria_register_payment` para imputar el bruto y registrar las retenciones en la misma
+  transacción (fuera del alcance de esta fase para no romper el modelo append-only validado).
+
+### 11.5. Reportes nuevos
+
+| Vista | Responde |
+|---|---|
+| `v_percepciones_ventas` | ¿Qué percepciones apliqué en ventas (período/tipo/jurisdicción)? |
+| `v_retenciones_practicadas` | ¿Qué retenciones practiqué (período/tipo/jurisdicción)? |
+| `v_pagos_proveedor_retenciones` | ¿Bruto / retención / neto por proveedor y pago? |
+| `v_posicion_fiscal_mensual` | Posición IVA + percep/retenc practicadas y sufridas del mes |
+| `v_percep_retenc_fiscal_vs_contable` | ¿Coincide lo fiscal con lo contable (cuentas a depositar)? |
+| `v_comprobantes_diferencias_fiscales` | ¿Qué comprobantes tienen detalle que no cuadra con la cabecera? |
+
+UI: `/contabilidad/posicion-fiscal`, `/contabilidad/percepciones-ventas`,
+`/contabilidad/retenciones`.
+
+### 11.6. Cómo validarlo
+
+1. Aplicar **0087 → 0088 → 0089** en orden (a mano, G3).
+2. Correr `supabase/tests/PHASE10_FISCAL_VALIDATION.sql` (read-only) → todo `OK`.
+3. Cargar percepciones de una venta con `ventas_persist_other_taxes` y retenciones de un
+   pago con `ap_register_payment_withholdings`.
+4. Re-contabilizar (revertir + re-postear, o backfill) y verificar:
+   - `v_balance_sumas_saldos` sigue cuadrando y `v_asientos_descuadrados` vacío.
+   - `v_percep_retenc_fiscal_vs_contable` con diferencias ≈ 0.
+   - `v_comprobantes_diferencias_fiscales` vacío.
+
+### 11.7. Qué queda pendiente para cierre anual
+
+- **Tesorería con retenciones nativas** (allocations por bruto) para eliminar el residual
+  en `supplier_open_items`.
+- **Carga de percepciones/retenciones en la UI de emisión/pago** (hoy se cargan vía RPC;
+  el front muestra/reporta pero no tiene formulario de alta).
+- Asientos de cierre, `logistics_orders`→facturación y centro de costo en ventas/tesorería
+  (ítems generales de cierre, ver §8).
+
+### 11.8. Recomendaciones para validación con contador (Fase 10)
+
+- Confirmar las **cuentas "a depositar"** por tipo (`2.1.12–2.1.16`) y si conviene
+  unificarlas o abrirlas por organismo/jurisdicción.
+- Validar el **criterio de período** de la retención (`withheld_at`, default fecha de pago).
+- Acordar el tratamiento del **residual de tesorería** mientras no haya allocations por bruto.

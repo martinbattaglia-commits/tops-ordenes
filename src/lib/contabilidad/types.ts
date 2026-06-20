@@ -124,3 +124,74 @@ export interface ComprobanteSinAsiento {
   entidad: string | null;
   importe: number;
 }
+
+// ----- Fase 10: percepciones de venta y retenciones practicadas -----
+
+export type SalesOtherTaxType =
+  | "PERCEPCION_IVA"
+  | "PERCEPCION_IIBB"
+  | "PERCEPCION_MUNICIPAL"
+  | "IMPUESTO_INTERNO"
+  | "OTRO";
+
+export const SALES_OTHER_TAX_LABEL: Record<string, string> = {
+  PERCEPCION_IVA: "Percepción IVA",
+  PERCEPCION_IIBB: "Percepción IIBB",
+  PERCEPCION_MUNICIPAL: "Percepción Municipal",
+  IMPUESTO_INTERNO: "Impuesto interno",
+  OTRO: "Otro tributo",
+};
+
+export type SupplierWithholdingType =
+  | "RETENCION_IVA"
+  | "RETENCION_GANANCIAS"
+  | "RETENCION_IIBB"
+  | "RETENCION_SUSS"
+  | "OTRA";
+
+export const WITHHOLDING_LABEL: Record<string, string> = {
+  RETENCION_IVA: "Retención IVA",
+  RETENCION_GANANCIAS: "Retención Ganancias",
+  RETENCION_IIBB: "Retención IIBB",
+  RETENCION_SUSS: "Retención SUSS",
+  OTRA: "Otra retención",
+};
+
+export interface PercepcionVentaRow {
+  periodo: string;
+  taxType: string;
+  jurisdiction: string;
+  comprobantes: number;
+  baseImponible: number;
+  importe: number;
+}
+
+export interface RetencionPracticadaRow {
+  periodo: string;
+  withholdingType: string;
+  jurisdiction: string;
+  pagos: number;
+  retenciones: number;
+  baseImponible: number;
+  importe: number;
+}
+
+export interface PagoProveedorRetencionRow {
+  paymentId: string;
+  publicId: string | null;
+  proveedor: string | null;
+  periodo: string;
+  pagoBruto: number;
+  retenciones: number;
+  pagoNeto: number;
+}
+
+export interface PosicionFiscalRow {
+  periodo: string;
+  ivaSaldoPosicion: number;
+  ivaResultado: string;
+  percepcionesVentasADepositar: number;
+  retencionesPracticadasADepositar: number;
+  percepcionesIvaSufridas: number;
+  retencionesSufridas: number;
+}

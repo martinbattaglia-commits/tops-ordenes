@@ -9,6 +9,10 @@ import type {
   ResultadoRow,
   ComprobanteSinAsiento,
   AccountType,
+  PercepcionVentaRow,
+  RetencionPracticadaRow,
+  PagoProveedorRetencionRow,
+  PosicionFiscalRow,
 } from "./types";
 
 /**
@@ -200,5 +204,89 @@ export async function getComprobantesSinAsiento(): Promise<ComprobanteSinAsiento
     referencia: (r.referencia as string | null) ?? null,
     entidad: (r.entidad as string | null) ?? null,
     importe: n(r.importe),
+  }));
+}
+
+// ----- Fase 10: percepciones de venta y retenciones practicadas -----
+
+export async function getPercepcionesVentas(): Promise<PercepcionVentaRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_percepciones_ventas")
+    .select("periodo, tax_type, jurisdiction, comprobantes, base_imponible, importe")
+    .order("periodo", { ascending: false });
+  if (error) throw new Error(`contabilidad.percepciones-ventas: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    periodo: r.periodo as string,
+    taxType: r.tax_type as string,
+    jurisdiction: (r.jurisdiction as string) ?? "",
+    comprobantes: n(r.comprobantes),
+    baseImponible: n(r.base_imponible),
+    importe: n(r.importe),
+  }));
+}
+
+export async function getRetencionesPracticadas(): Promise<RetencionPracticadaRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_retenciones_practicadas")
+    .select("periodo, withholding_type, jurisdiction, pagos, retenciones, base_imponible, importe")
+    .order("periodo", { ascending: false });
+  if (error) throw new Error(`contabilidad.retenciones-practicadas: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    periodo: r.periodo as string,
+    withholdingType: r.withholding_type as string,
+    jurisdiction: (r.jurisdiction as string) ?? "",
+    pagos: n(r.pagos),
+    retenciones: n(r.retenciones),
+    baseImponible: n(r.base_imponible),
+    importe: n(r.importe),
+  }));
+}
+
+export async function getPagosProveedorRetenciones(soloConRetencion = true): Promise<PagoProveedorRetencionRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  let q = supabase
+    .from("v_pagos_proveedor_retenciones")
+    .select("payment_id, public_id, proveedor, periodo, pago_bruto, retenciones, pago_neto")
+    .order("periodo", { ascending: false })
+    .limit(2000);
+  if (soloConRetencion) q = q.gt("retenciones", 0);
+  const { data, error } = await q;
+  if (error) throw new Error(`contabilidad.pagos-retenciones: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    paymentId: r.payment_id as string,
+    publicId: (r.public_id as string | null) ?? null,
+    proveedor: (r.proveedor as string | null) ?? null,
+    periodo: r.periodo as string,
+    pagoBruto: n(r.pago_bruto),
+    retenciones: n(r.retenciones),
+    pagoNeto: n(r.pago_neto),
+  }));
+}
+
+export async function getPosicionFiscalMensual(): Promise<PosicionFiscalRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_posicion_fiscal_mensual")
+    .select("*")
+    .order("periodo", { ascending: false });
+  if (error) throw new Error(`contabilidad.posicion-fiscal: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    periodo: r.periodo as string,
+    ivaSaldoPosicion: n(r.iva_saldo_posicion),
+    ivaResultado: r.iva_resultado as string,
+    percepcionesVentasADepositar: n(r.percepciones_ventas_a_depositar),
+    retencionesPracticadasADepositar: n(r.retenciones_practicadas_a_depositar),
+    percepcionesIvaSufridas: n(r.percepciones_iva_sufridas),
+    retencionesSufridas: n(r.retenciones_sufridas),
   }));
 }

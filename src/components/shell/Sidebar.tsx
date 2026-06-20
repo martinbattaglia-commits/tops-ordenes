@@ -151,6 +151,9 @@ const DOMAINS: Domain[] = [
     items: [
       { href: "/contabilidad", label: "Resumen contable", icon: "dashboard" },
       { href: "/contabilidad/posicion-iva", label: "Posición de IVA", icon: "report" },
+      { href: "/contabilidad/posicion-fiscal", label: "Posición fiscal", icon: "report" },
+      { href: "/contabilidad/percepciones-ventas", label: "Percepciones de venta", icon: "report" },
+      { href: "/contabilidad/retenciones", label: "Retenciones practicadas", icon: "report" },
       { href: "/contabilidad/plan-cuentas", label: "Plan de cuentas", icon: "database" },
       { href: "/contabilidad/libro-diario", label: "Libro diario", icon: "report" },
       { href: "/contabilidad/mayor", label: "Mayor por cuenta", icon: "report" },
