@@ -173,7 +173,8 @@ reflejo contable (resuelto ahora por el motor de asientos 0085).
 | F10.A/B/C | Percepciones de venta desglosadas + retenciones practicadas + integración contable | ✅ 0087–0089 |
 | F11 | Tesorería con retenciones nativas (bruto/retención/neto) + formularios fiscales | ✅ 0090–0091 |
 | F12 | Centros de costo (ventas/tesorería/contab.) · `logistics_orders`→facturación · base de cierre/refundición | ✅ 0092–0095 |
-| F13 (resto) | Facturación recurrente/tarifas (Flujo B) · refundición anual multi-período · pricing de órdenes logísticas | ⛔ Pendiente |
+| F13 | Tarifas + servicios facturables + facturación recurrente + pricing logístico + borradores + refundición anual | ✅ 0096–0101 |
+| F14 (resto) | Mapeo orden→cliente/servicio para pricing automático · ARCA producción · migración histórica Neuralsoft | ⛔ Pendiente |
 
 > Las migraciones se **entregan**, no se aplican: las corre Martín a mano en Supabase
 > (gobernanza G3). No se ejecutó ninguna migración ni se modificó producción.
@@ -256,7 +257,34 @@ sin residual y con asiento balanceado.
 
 > Pendiente real (F13): facturación recurrente/tarifas (Flujo B no implementado),
 > refundición **anual** multi-período (hoy el cierre es por período mensual), y pricing de
-> órdenes logísticas (sin tarifa no hay monto automático).
+> órdenes logísticas (sin tarifa no hay monto automático). → **Cerrado en Fase 13.**
+
+### Fase 13 — Tarifas, facturación recurrente, pricing logístico y refundición anual (cerrada)
+
+- **13.B — Servicios facturables** (`0096`): `billable_services` (catálogo fiscal: IVA,
+  cuenta y centro de costo por defecto), separado del catálogo operativo de OS.
+- **13.C — Tarifas** (`0097`): `customer_service_rates` (cliente × servicio × vigencia),
+  con **EXCLUDE constraint** (btree_gist) que impide solapamientos activos; resolver
+  `customer_service_rate_for()`; vistas vigentes/vencidas.
+- **13.D — Facturación recurrente** (`0098`): `billing_runs` + `billing_run_items` +
+  RPCs `billing_run_create` / `_calculate_recurring` / `_add_item` / `_set_item_status` /
+  `_set_status`. Calcula **borradores** (no factura, no contabiliza, no ARCA). Dedup por
+  `(run, cliente, servicio, source)`.
+- **13.E — Pricing logístico** (`0099`): `billing_price_logistics_order()` **read-only**;
+  honesto sobre datos faltantes (sin `client_id`/servicio/tarifa → “no priceable” con motivos).
+- **13.F — Borradores de factura** (`0100`): `invoice_items` + columnas de origen
+  (source/service/cost_center/billing_run_item); RPC `billing_run_create_draft_invoice`
+  crea un `customer_invoice` **BORRADOR** (no fiscal) con trazabilidad; vistas de diff.
+- **13.H — Refundición anual** (`0101`): `acc_simulate_annual_closing()` **read-only** +
+  `acc_execute_annual_closing(confirm=true)` gateada (transfiere 3.2.02→3.2.01, sin
+  períodos abiertos, sin doble refundición) + `acc_reopen`/reversa; `v_resultado_anual`.
+- **13.I — UI**: `/contabilidad/servicios`, `/tarifas`, `/billing`, `/pricing-logistica`,
+  `/refundicion-anual`.
+- **Validación**: `supabase/tests/PHASE13_VALIDATION.sql`.
+- **Detalle técnico**: ver `docs/contabilidad-nexus.md` § "Fase 13".
+
+> Pendiente real (F14): mapeo `logistics_order`→cliente/servicio para **pricing
+> automático** (hoy el dato no existe → safe partial); ARCA producción; migración histórica.
 
 ---
 

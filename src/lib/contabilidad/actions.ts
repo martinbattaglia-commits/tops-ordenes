@@ -263,3 +263,83 @@ export async function simularCierre(
     data: res,
   };
 }
+
+// ----- Fase 13: billing runs, pricing y refundición anual -----
+
+export async function crearBillingRun(periodStart: string, periodEnd: string, runType = "recurring"): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("billing_run_create", {
+    p_period_start: periodStart, p_period_end: periodEnd, p_run_type: runType, p_notes: null,
+  });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/contabilidad/billing");
+  return { ok: true, message: "Billing run creado.", data };
+}
+
+export async function calcularRecurrente(runId: string): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("billing_run_calculate_recurring", { p_run_id: runId });
+  if (error) return { ok: false, message: error.message };
+  const res = data as { items_creados?: number } | null;
+  revalidatePath("/contabilidad/billing");
+  return { ok: true, message: `Ítems recurrentes creados: ${res?.items_creados ?? 0}.`, data: res };
+}
+
+export async function setBillingItemStatus(itemId: string, status: "pending" | "approved" | "excluded"): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("billing_run_set_item_status", { p_item_id: itemId, p_status: status });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/contabilidad/billing");
+  return { ok: true, message: `Ítem → ${status}.`, data };
+}
+
+export async function generarBorradorFactura(runId: string, customerId: string): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("billing_run_create_draft_invoice", { p_run_id: runId, p_customer_id: customerId });
+  if (error) return { ok: false, message: error.message };
+  const res = data as { total?: number; items?: number } | null;
+  revalidatePath("/contabilidad/billing");
+  return { ok: true, message: `Borrador de factura creado (${res?.items ?? 0} ítems, total ${res?.total ?? 0}). No fiscal — revisar y emitir.`, data: res };
+}
+
+export async function simularPricingOrden(orderId: string, serviceId?: string): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("billing_price_logistics_order", {
+    p_order_id: orderId, p_period_start: null, p_period_end: null, p_service_id: serviceId ?? null,
+  });
+  if (error) return { ok: false, message: error.message };
+  const res = data as { priceable?: boolean; reasons?: unknown[]; gross_amount?: number } | null;
+  const reasons = Array.isArray(res?.reasons) ? res!.reasons : [];
+  return {
+    ok: true,
+    message: res?.priceable ? `Priceable. Bruto estimado: ${res?.gross_amount ?? 0}. (Simulación.)` : `No priceable: ${reasons.join("; ") || "—"}`,
+    data: res,
+  };
+}
+
+export async function simularRefundicionAnual(year: number): Promise<AccActionResult> {
+  if (env.app.demoMode || env.app.needsSupabase) return unavailable();
+  const supabase = createClient();
+  if (!supabase) return unavailable();
+  const { data, error } = await supabase.rpc("acc_simulate_annual_closing", { p_year: year });
+  if (error) return { ok: false, message: error.message };
+  const res = data as { ready?: boolean; resultado_ejercicio?: number; transferencia_a_resultados_no_asignados?: number; blockers?: unknown[]; nota?: string } | null;
+  const blockers = Array.isArray(res?.blockers) ? res!.blockers : [];
+  return {
+    ok: true,
+    message: res?.ready
+      ? `Ejercicio ${year}: resultado ${res?.resultado_ejercicio ?? 0}, a transferir a Resultados No Asignados ${res?.transferencia_a_resultados_no_asignados ?? 0}. ${res?.nota ?? ""}`
+      : `Ejercicio ${year} NO listo. Bloqueos: ${blockers.join(", ") || "—"}. ${res?.nota ?? ""}`,
+    data: res,
+  };
+}

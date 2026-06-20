@@ -503,3 +503,99 @@ alguno no se cumple.
    general; mayor por CC = mayor general; sin duplicación de facturación; simulación read-only).
 3. Desde la app: asignar centro de costo a facturas y ver `/contabilidad/resultado-cc`;
    vincular órdenes en `/contabilidad/ordenes-facturar`; simular cierre en `/contabilidad/cierre`.
+
+---
+
+## 14. Fase 13 — Tarifas, facturación recurrente, pricing logístico y refundición anual
+
+Migraciones **0096–0101**; commit separado; aditivo, sin romper 0082–0095.
+
+### 14.1. Qué problema resuelve
+
+No había (1) catálogo de servicios facturables con datos fiscales, (2) tarifas por cliente,
+(3) facturación recurrente, (4) pricing de órdenes logísticas, (5) borradores de factura
+desde un ciclo, ni (6) refundición **anual**.
+
+### 14.2. Servicios facturables (`billable_services`, 0096)
+
+Catálogo fiscal: `code`, `service_type`, `unit`, `default_vat_rate`, `default_account_id`
+(cuenta de ingreso), `default_cost_center_id`. Independiente de `services_catalog` (OS
+operativo). Configurable; no hardcodeado en el front.
+
+### 14.3. Tarifas por cliente (`customer_service_rates`, 0097)
+
+Tarifa por (cliente, servicio) con vigencia (`valid_from`/`valid_to`), `unit_price`,
+`vat_rate`, `billing_frequency`, `currency`. **Sin solapamientos activos**: EXCLUDE
+constraint `csr_no_overlap` (btree_gist) sobre el rango de fechas. `customer_service_rate_for(cliente, servicio, fecha)`
+resuelve la tarifa aplicable; el `rate_id` viaja a billing_run_items e invoice_items
+(trazabilidad). Vistas `v_tarifas_vigentes` / `v_tarifas_vencidas`.
+
+### 14.4. Cómo funciona el billing run
+
+`billing_runs` (período + estado draft→calculated→reviewed→approved→invoiced→cancelled) +
+`billing_run_items`. `billing_run_calculate_recurring(run)` crea ítems borrador desde las
+tarifas **mensuales vigentes** (qty=1 = abono/canon; ajustable). Revisión humana:
+`billing_run_set_item_status` (approved/excluded). Dedup por `(run, cliente, servicio,
+source)`. **No** factura, **no** contabiliza, **no** ARCA.
+
+### 14.5. Qué se puede automatizar y qué queda manual
+
+- **Automatizable hoy**: recurrentes con tarifa mensual (almacenaje/abonos) → billing run
+  calcula los borradores; el humano aprueba y genera el borrador de factura.
+- **Manual / pendiente**: pricing de órdenes logísticas — `logistics_orders` no tiene
+  `client_id` ni servicio ni tarifa, así que el motor (`billing_price_logistics_order`)
+  devuelve “no priceable” con motivos. Para automatizarlo falta: (a) `logistics_orders.client_id`,
+  (b) mapeo orden→servicio facturable, (c) cantidad con unidad fiscal.
+
+### 14.6. Por qué no se emite factura automáticamente
+
+El borrador (`billing_run_create_draft_invoice`) crea un `customer_invoice` en estado
+**BORRADOR**: sin número, sin CAE, sin ARCA. Los borradores no entran en `libro_iva_ventas`
+ni en `v_comprobantes_sin_asiento` (filtran `AUTORIZADO_ARCA`), por lo que **no se
+contabilizan** hasta emitirse por el flujo de ventas existente. Trazabilidad:
+`invoice_items.billing_run_item_id` / `source_type='billing_run'`; vistas
+`v_facturas_borrador_billing` y `v_billing_vs_factura_diff` (diferencia debe ser 0).
+
+### 14.7. Cómo se detectan órdenes no priceables
+
+`v_logistics_orders_pricing` clasifica cada orden despachada/entregada: `priceable=false` +
+`motivo_no_priceable` (cliente no resuelto, sin servicio/tarifa). `billing_price_logistics_order(order, …, p_service_id)`
+simula con un servicio sugerido y enumera exactamente qué falta. **Read-only** (STABLE).
+
+### 14.8. Qué datos faltan para facturación automática completa
+
+`logistics_orders.client_id` (hoy `client_name` texto), mapeo orden→`billable_service`,
+y cantidad con unidad fiscal por servicio. Con eso, `billing_price_logistics_order` pasaría
+a “priceable” y el billing run podría generar borradores desde órdenes automáticamente.
+
+### 14.9. Cómo funciona la simulación de refundición anual
+
+`acc_simulate_annual_closing(year)` es **read-only**: calcula bloqueos (períodos abiertos
+con movimiento, descuadrados, comprobantes sin asiento, diffs IVA), el **resultado del
+ejercicio** (Σ ingreso/gasto del año, = EERR) y el saldo de 3.2.02; propone el asiento de
+transferencia 3.2.02 → 3.2.01 (Resultados No Asignados). Si 3.2.02 está en 0 pero hay
+resultado, avisa que faltan los cierres mensuales. `acc_execute_annual_closing(year,
+confirm=true)` ejecuta gateado (contabilidad.admin), sin doble refundición.
+
+### 14.10. Validaciones obligatorias antes de ejecutar refundición real
+
+`acc_annual_blockers(year).ready = true`: **0** períodos abiertos con movimiento, **0**
+descuadrados, **0** comprobantes sin asiento, **0** diffs IVA. Además: 3.2.02 ≠ 0 y no debe
+existir una refundición anual posteada del mismo ejercicio.
+
+### 14.11. Qué queda pendiente para cierre contable definitivo
+
+- Mapeo `logistics_order`→cliente/servicio para **pricing automático** de órdenes.
+- ARCA en producción (emisión real de los borradores).
+- Distribución de resultados / política de dividendos sobre 3.2.01.
+- Migración de saldos históricos (apertura del primer ejercicio en el sistema).
+
+### 14.12. Cómo validar (Fase 13)
+
+1. Aplicar **0096 → 0097 → 0098 → 0099 → 0100 → 0101** en orden (a mano, G3).
+2. Correr `supabase/tests/PHASE13_VALIDATION.sql` (read-only) → todo `OK` (sin tarifas
+   solapadas, sin ítems duplicados, billing→BORRADOR, trazabilidad billing↔factura,
+   resultado anual = EERR, simulaciones read-only).
+3. Desde la app: cargar servicios/tarifas, crear billing run y calcular recurrente, aprobar
+   ítems y generar borrador; simular pricing en `/contabilidad/pricing-logistica`; simular
+   refundición en `/contabilidad/refundicion-anual`.

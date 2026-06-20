@@ -22,6 +22,13 @@ import type {
   OrdenFacturableRow,
   OrdenFacturadaRow,
   PeriodoCierreRow,
+  BillableServiceRow,
+  TarifaRow,
+  TarifaVencidaRow,
+  BillingRunRow,
+  BillingRunItemRow,
+  OrdenPricingRow,
+  ResultadoAnualRow,
 } from "./types";
 
 /**
@@ -478,5 +485,157 @@ export async function getPeriodosParaCierre(): Promise<PeriodoCierreRow[]> {
     comprobantesSinAsiento: n(r.comprobantes_sin_asiento),
     ivaDiffs: n(r.iva_diffs),
     listo: Boolean(r.listo),
+  }));
+}
+
+// ----- Fase 13 -----
+
+export async function getBillableServices(): Promise<BillableServiceRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("billable_services")
+    .select("id, code, name, service_type, unit, default_vat_rate, is_active")
+    .order("service_type", { ascending: true })
+    .order("code", { ascending: true });
+  if (error) throw new Error(`contabilidad.billable-services: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    code: r.code as string,
+    name: r.name as string,
+    serviceType: r.service_type as string,
+    unit: r.unit as string,
+    defaultVatRate: n(r.default_vat_rate),
+    isActive: Boolean(r.is_active),
+  }));
+}
+
+export async function getTarifasVigentes(): Promise<TarifaRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_tarifas_vigentes")
+    .select("rate_id, cliente, servicio_code, servicio, currency, unit_price, vat_rate, billing_frequency, valid_from, valid_to")
+    .order("cliente", { ascending: true });
+  if (error) throw new Error(`contabilidad.tarifas-vigentes: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    rateId: r.rate_id as string,
+    cliente: r.cliente as string,
+    servicioCode: r.servicio_code as string,
+    servicio: r.servicio as string,
+    currency: r.currency as string,
+    unitPrice: n(r.unit_price),
+    vatRate: n(r.vat_rate),
+    billingFrequency: r.billing_frequency as string,
+    validFrom: r.valid_from as string,
+    validTo: (r.valid_to as string | null) ?? null,
+  }));
+}
+
+export async function getTarifasVencidas(): Promise<TarifaVencidaRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_tarifas_vencidas")
+    .select("rate_id, cliente, servicio_code, servicio, unit_price, valid_from, valid_to")
+    .order("valid_to", { ascending: true });
+  if (error) throw new Error(`contabilidad.tarifas-vencidas: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    rateId: r.rate_id as string,
+    cliente: r.cliente as string,
+    servicioCode: r.servicio_code as string,
+    servicio: r.servicio as string,
+    unitPrice: n(r.unit_price),
+    validFrom: r.valid_from as string,
+    validTo: (r.valid_to as string | null) ?? null,
+  }));
+}
+
+export async function getBillingRuns(): Promise<BillingRunRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_billing_runs")
+    .select("billing_run_id, period_start, period_end, run_type, status, items, total_bruto")
+    .order("period_start", { ascending: false });
+  if (error) throw new Error(`contabilidad.billing-runs: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    billingRunId: r.billing_run_id as string,
+    periodStart: r.period_start as string,
+    periodEnd: r.period_end as string,
+    runType: r.run_type as string,
+    status: r.status as string,
+    items: n(r.items),
+    totalBruto: n(r.total_bruto),
+  }));
+}
+
+export async function getBillingRunItems(runId: string): Promise<BillingRunItemRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_billing_run_items")
+    .select("item_id, billing_run_id, customer_id, cliente, servicio_code, servicio, quantity, unit_price, net_amount, vat_rate, vat_amount, gross_amount, status, customer_invoice_id")
+    .eq("billing_run_id", runId)
+    .order("cliente", { ascending: true });
+  if (error) throw new Error(`contabilidad.billing-run-items: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    itemId: r.item_id as string,
+    billingRunId: r.billing_run_id as string,
+    cliente: r.cliente as string,
+    servicioCode: r.servicio_code as string,
+    servicio: r.servicio as string,
+    quantity: n(r.quantity),
+    unitPrice: n(r.unit_price),
+    netAmount: n(r.net_amount),
+    vatRate: n(r.vat_rate),
+    vatAmount: n(r.vat_amount),
+    grossAmount: n(r.gross_amount),
+    status: r.status as string,
+    customerInvoiceId: (r.customer_invoice_id as string | null) ?? null,
+    customerId: r.customer_id as string,
+  }));
+}
+
+export async function getOrdenesPricing(): Promise<OrdenPricingRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_logistics_orders_pricing")
+    .select("order_id, public_id, client_name, client_matches, items_count, priceable, motivo_no_priceable")
+    .order("fecha", { ascending: false })
+    .limit(1000);
+  if (error) throw new Error(`contabilidad.ordenes-pricing: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    orderId: r.order_id as string,
+    publicId: r.public_id as string,
+    clientName: r.client_name as string,
+    clientMatches: n(r.client_matches),
+    itemsCount: n(r.items_count),
+    priceable: Boolean(r.priceable),
+    motivoNoPriceable: r.motivo_no_priceable as string,
+  }));
+}
+
+export async function getResultadoAnual(): Promise<ResultadoAnualRow[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("v_resultado_anual")
+    .select("ejercicio, ingresos, gastos, resultado_ejercicio")
+    .order("ejercicio", { ascending: false });
+  if (error) throw new Error(`contabilidad.resultado-anual: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    ejercicio: n(r.ejercicio),
+    ingresos: n(r.ingresos),
+    gastos: n(r.gastos),
+    resultadoEjercicio: n(r.resultado_ejercicio),
   }));
 }

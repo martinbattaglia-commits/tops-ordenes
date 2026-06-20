@@ -278,3 +278,82 @@ export interface PeriodoCierreRow {
   ivaDiffs: number;
   listo: boolean;
 }
+
+// ----- Fase 13: servicios, tarifas, billing runs, pricing, refundición anual -----
+
+export interface BillableServiceRow {
+  id: string;
+  code: string;
+  name: string;
+  serviceType: string;
+  unit: string;
+  defaultVatRate: number;
+  isActive: boolean;
+}
+
+export interface TarifaRow {
+  rateId: string;
+  cliente: string;
+  servicioCode: string;
+  servicio: string;
+  currency: string;
+  unitPrice: number;
+  vatRate: number;
+  billingFrequency: string;
+  validFrom: string;
+  validTo: string | null;
+}
+
+export interface TarifaVencidaRow {
+  rateId: string;
+  cliente: string;
+  servicioCode: string;
+  servicio: string;
+  unitPrice: number;
+  validFrom: string;
+  validTo: string | null;
+}
+
+export interface BillingRunRow {
+  billingRunId: string;
+  periodStart: string;
+  periodEnd: string;
+  runType: string;
+  status: string;
+  items: number;
+  totalBruto: number;
+}
+
+export interface BillingRunItemRow {
+  itemId: string;
+  billingRunId: string;
+  cliente: string;
+  servicioCode: string;
+  servicio: string;
+  quantity: number;
+  unitPrice: number;
+  netAmount: number;
+  vatRate: number;
+  vatAmount: number;
+  grossAmount: number;
+  status: string;
+  customerInvoiceId: string | null;
+  customerId: string;
+}
+
+export interface OrdenPricingRow {
+  orderId: string;
+  publicId: string;
+  clientName: string;
+  clientMatches: number;
+  itemsCount: number;
+  priceable: boolean;
+  motivoNoPriceable: string;
+}
+
+export interface ResultadoAnualRow {
+  ejercicio: number;
+  ingresos: number;
+  gastos: number;
+  resultadoEjercicio: number;
+}
