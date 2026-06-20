@@ -167,6 +167,40 @@ Estado al momento de redactar (aplicadas **0082–0084**; pendientes 0085+):
 > No avanzar a Etapa 2 (IVA Compras), 3 (Ventas), 4 (IVA Ventas), 5 (Posición IVA) ni 6
 > (Asientos → Balance) hasta cerrar la Etapa 1 con evidencia real.
 
+### Cierre de Etapa 1 (evidencia real)
+- C1 / C2 / C3 → **OK REAL**. C4 → **RESUELTO** tras la migración `0102` (libro fiscal = solo
+  `aprobada`; nuevo prelibro `libro_iva_compras_preliminar`; `anulada` fuera de ambas). C5 →
+  **NO_VERIFICABLE** (desglose de percepción por tipo requiere `0087`).
+- Ver `docs/auditoria/c4-libro-iva-compras-propuesta.md` y `supabase/tests/C4_LIBRO_IVA_COMPRAS_VALIDATION.sql`.
+
+---
+
+## Ejecución Etapa 2 — IVA Compras
+
+> Audita el IVA Compras **post-`0102`**: que `libro_iva_compras` (fiscal, solo `aprobada`) cuadre
+> exactamente contra `supplier_invoices` aprobadas + sus líneas IVA, y que el prelibro conserve
+> `cargada`/`en_revision`. Controles **IC1–IC5**.
+
+1. **Archivo SQL a correr:** `supabase/tests/AUDIT_ETAPA2_IVA_COMPRAS.sql` (100 % read-only).
+2. **Dónde correrlo:** **Supabase → SQL Editor** del proyecto `arsksytgdnzukbmfgkju`, con rol de
+   lectura. El kit **no** escribe. **Requiere `0102` aplicada** (crea `libro_iva_compras_preliminar`).
+3. **Qué salida copiar:**
+   - **PREFLIGHT** (las 4 objetos en `existe=true`; en especial `libro_iva_compras_preliminar`).
+   - **RESUMEN ETAPA 2** (`control · descripcion · estado · cantidad_fallas · monto_diferencia ·
+     criterio_ok`) — es el último bloque; esa es la salida principal a pegar.
+   - **Detalles de controles en `FALLA`:** los bloques `3.a IC1`, `4.a IC2`, `5.a IC3`, `6.a IC4`,
+     `7.a IC5` están rotulados; correr y pegar el del control que falle.
+4. **Cómo interpretar:**
+   - `OK` → vista == recompute (o sin huérfanas) → **OK REAL**.
+   - `FALLA` → diferencia por período/alícuota/comprobante → se aísla con el detalle.
+   - `NO_VERIFICABLE` → IC5 sin `NOTA_CREDITO` aprobadas para evidenciar el signo (no es falla).
+5. **Qué hacer si hay diferencias:**
+   - **No ajustar manualmente.** Aislar el período/alícuota/comprobante con el detalle.
+   - Causa raíz con dato real (¿cabecera≠líneas? ¿estado mal seteado? ¿fecha nula?).
+   - Documentar evidencia antes de cualquier corrección, siempre por flujo válido (RPC/migración),
+     nunca por `UPDATE` directo.
+6. **No avanzar a Etapa 3 (Ventas)** hasta cerrar la **Etapa 2** con evidencia real.
+
 ---
 
 *Documento de método. Read-only. No constituye ejecución ni modificación de datos.*
