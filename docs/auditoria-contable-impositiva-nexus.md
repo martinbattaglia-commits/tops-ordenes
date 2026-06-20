@@ -171,7 +171,8 @@ reflejo contable (resuelto ahora por el motor de asientos 0085).
 | F8 | Tests / validación | ✅ `ACCOUNTING_VALIDATION.sql` + typecheck verde |
 | F9 | Documentación final | ✅ `docs/contabilidad-nexus.md` |
 | F10.A/B/C | Percepciones de venta desglosadas + retenciones practicadas + integración contable | ✅ 0087–0089 |
-| F10 (resto) | `logistics_orders`→facturación · asientos de cierre · centro de costo en ventas/tesorería | ⛔ Pendiente (siguiente iteración) |
+| F11 | Tesorería con retenciones nativas (bruto/retención/neto) + formularios fiscales | ✅ 0090–0091 |
+| F12 (resto) | `logistics_orders`→facturación · asientos de cierre · centro de costo en ventas/tesorería | ⛔ Pendiente (siguiente iteración) |
 
 > Las migraciones se **entregan**, no se aplican: las corre Martín a mano en Supabase
 > (gobernanza G3). No se ejecutó ninguna migración ni se modificó producción.
@@ -197,10 +198,36 @@ compatible con 0082–0086 (commit separado):
 - **Validación**: `supabase/tests/PHASE10_FISCAL_VALIDATION.sql`.
 - **Detalle técnico**: ver `docs/contabilidad-nexus.md` § "Fase 10".
 
-> Limitación documentada: la vista de tesorería `supplier_open_items` reduce CxP por el
-> neto (allocations) y puede mostrar un residual = retención hasta que tesorería soporte
-> allocations por bruto. Es un gap de tesorería, no de contabilidad (el GL cierra
-> Proveedores en 0 al saldar). Ver `docs/contabilidad-nexus.md`.
+> Limitación documentada en Fase 10 (residual en `supplier_open_items` por allocations al
+> neto) → **RESUELTA en Fase 11** con la RPC nativa que imputa el bruto. Ver abajo.
+
+### Fase 11 — Tesorería con retenciones nativas y formularios fiscales (cerrada)
+
+Cierra el gap operativo de Fase 10: ahora un pago a proveedor con retención **cancela la
+cuenta corriente por el bruto, egresa el neto por banco/caja y registra la retención**,
+sin residual y con asiento balanceado.
+
+- **11.B/C — RPC nativa** (`0090`): `tesoreria_register_supplier_payment_neto` imputa
+  `payment_allocations = bruto` (cancela CxP por bruto), `supplier_payments.amount = neto`
+  (+ columnas `gross_amount`/`withheld_amount`), `treasury_movements = neto`, y registra
+  `supplier_payment_withholdings`. La RPC vieja `tesoreria_register_payment` queda **intacta**
+  (pagos sin retención). El asiento (acc_post de 0089) ya daba DEBE Proveedores (neto+ret=bruto)
+  / HABER Banco (neto) + Retenciones → todo coincide. **Sin residual.**
+- **11.D/F — Reportes y diagnóstico** (`0091`): `v_supplier_payment_detalle`
+  (bruto/retención/neto + balanceado), `v_pagos_retencion_residual` (detecta pagos
+  desbalanceados — los nativos no aparecen), `v_pagos_tesoreria_vs_contable` (conciliación) y
+  `tesoreria_diagnose_payment_withholdings(dry_run)` (diagnóstico read-only; **no** corrige
+  automáticamente porque las allocations son inmutables).
+- **11.E — UI**: `/contabilidad/pagos-retenciones` (alta de pago con retención, muestra
+  bruto/retención/neto) y `/contabilidad/percepciones-cargar` (alta de percepciones de venta).
+- **Validación**: `supabase/tests/PHASE11_TREASURY_VALIDATION.sql`.
+- **Detalle técnico**: ver `docs/contabilidad-nexus.md` § "Fase 11".
+
+> Edge documentado: la RPC nativa exige **neto > 0** (no soporta retención del 100% del
+> pago, caso virtualmente inexistente, por el `check (amount > 0)` de `supplier_payments`).
+> Pagos legacy con retenciones cargadas por la vía de Fase 10 (allocations al neto) quedan
+> listados en `v_pagos_retencion_residual` para corrección manual; el diagnóstico no los
+> reescribe (allocations inmutables).
 
 ---
 

@@ -13,6 +13,10 @@ import type {
   RetencionPracticadaRow,
   PagoProveedorRetencionRow,
   PosicionFiscalRow,
+  VendorOption,
+  BankOption,
+  SupplierOpenItemOption,
+  CustomerInvoiceOption,
 } from "./types";
 
 /**
@@ -288,5 +292,78 @@ export async function getPosicionFiscalMensual(): Promise<PosicionFiscalRow[]> {
     retencionesPracticadasADepositar: n(r.retenciones_practicadas_a_depositar),
     percepcionesIvaSufridas: n(r.percepciones_iva_sufridas),
     retencionesSufridas: n(r.retenciones_sufridas),
+  }));
+}
+
+// ----- Fase 11: opciones para formularios (alta de pago/percepciones) -----
+
+export async function getVendores(): Promise<VendorOption[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("vendors")
+    .select("id, razon, cuit")
+    .eq("active", true)
+    .order("razon", { ascending: true });
+  if (error) throw new Error(`contabilidad.vendors: ${error.message}`);
+  return (data ?? []).map((r) => ({ id: r.id as string, razon: r.razon as string, cuit: (r.cuit as string) ?? "" }));
+}
+
+export async function getBankAccountsSimple(): Promise<BankOption[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("bank_accounts")
+    .select("id, bank_name, account_name, is_system, active")
+    .eq("active", true)
+    .order("is_system", { ascending: false })
+    .order("bank_name", { ascending: true });
+  if (error) throw new Error(`contabilidad.bank-accounts: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    label: `${r.bank_name as string} · ${r.account_name as string}`,
+    isSystem: Boolean(r.is_system),
+  }));
+}
+
+export async function getSupplierOpenItems(): Promise<SupplierOpenItemOption[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("supplier_open_items")
+    .select("invoice_id, vendor_id, public_id, total, saldo, estado_pago")
+    .gt("saldo", 0)
+    .order("public_id", { ascending: true });
+  if (error) throw new Error(`contabilidad.supplier-open-items: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    invoiceId: r.invoice_id as string,
+    vendorId: r.vendor_id as string,
+    publicId: r.public_id as string,
+    total: n(r.total),
+    saldo: n(r.saldo),
+    estadoPago: r.estado_pago as string,
+  }));
+}
+
+export async function getCustomerInvoicesParaPercepciones(): Promise<CustomerInvoiceOption[]> {
+  if (isUnavailable()) return [];
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("customer_invoices")
+    .select("id, tipo_comprobante, punto_venta, numero_comprobante, razon_social, percepciones, tributos, estado_arca, anulada, created_at")
+    .eq("estado_arca", "AUTORIZADO_ARCA")
+    .eq("anulada", false)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw new Error(`contabilidad.customer-invoices: ${error.message}`);
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    label: `${r.tipo_comprobante as string} ${r.punto_venta as number}-${(r.numero_comprobante as number) ?? "—"} · ${r.razon_social as string}`,
+    percepciones: n(r.percepciones),
+    tributos: n(r.tributos),
   }));
 }

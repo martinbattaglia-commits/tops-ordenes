@@ -339,3 +339,82 @@ UI: `/contabilidad/posicion-fiscal`, `/contabilidad/percepciones-ventas`,
   unificarlas o abrirlas por organismo/jurisdicción.
 - Validar el **criterio de período** de la retención (`withheld_at`, default fecha de pago).
 - Acordar el tratamiento del **residual de tesorería** mientras no haya allocations por bruto.
+
+---
+
+## 12. Fase 11 — Tesorería con retenciones nativas y formularios fiscales
+
+Resuelve el gap operativo de Fase 10 (residual en `supplier_open_items`). Migraciones
+**0090, 0091**; commit separado; aditivo, sin tocar `tesoreria_register_payment` (0054)
+ni las vistas de 0086/0089.
+
+### 12.1. Qué problema resolvía
+
+Al practicar retenciones, la única RPC de pago (0054) imputaba `payment_allocations =
+importe pagado (neto)` y movía banco = neto. Como `supplier_open_items.pagado = Σ
+allocations`, la factura quedaba con un **residual = retención** (no cancelaba por el bruto).
+
+### 12.2. Cómo se modela bruto / retención / neto
+
+Nueva RPC **`tesoreria_register_supplier_payment_neto`** (0090), en una transacción:
+
+| Concepto | Dónde se guarda |
+|---|---|
+| **Bruto** (obligación cancelada) | `payment_allocations.amount` (por factura) + `supplier_payments.gross_amount` |
+| **Retención** | `supplier_payment_withholdings` (por tipo) + `supplier_payments.withheld_amount` |
+| **Neto** (egreso real) | `supplier_payments.amount` + `treasury_movements.amount` |
+
+Invariante: `bruto = neto + retenciones`. Validaciones: `neto > 0` (no soporta retención
+100%), bruto ≤ saldo de cada factura (con lock `FOR UPDATE`), retención > 0 por línea.
+Columnas `gross_amount`/`withheld_amount` agregadas a `supplier_payments` (aditivas,
+nullables; legacy = NULL → los reportes hacen coalesce). La RPC vieja queda intacta.
+
+### 12.3. Impacto en cuenta corriente proveedor
+
+`supplier_open_items.pagado = Σ payment_allocations.amount = bruto` → la factura **cancela
+por el bruto, sin residual**. No se modificó la vista (allocations = bruto basta).
+Ejemplo: factura $100.000, retención $10.000 → allocations $100.000 (CxP cancelada),
+banco $90.000, retenciones a pagar $10.000.
+
+### 12.4. Impacto en banco/caja
+
+`treasury_movements` registra **solo el neto** ($90.000) → `treasury_bank_balances`
+refleja el egreso real. Sin cambios en tesorería append-only.
+
+### 12.5. Impacto en contabilidad
+
+`acc_post_supplier_payment` (0089, sin cambios) lee `amount` (neto) + Σ withholdings →
+`DEBE Proveedores (bruto) / HABER Banco (neto) + Retenciones a depositar (por tipo)`.
+Coincide con allocations (bruto) y con el movimiento (neto). El mayor de Proveedores cierra.
+
+### 12.6. Impacto en reportes fiscales
+
+| Vista (0091) | Para qué |
+|---|---|
+| `v_supplier_payment_detalle` | Bruto/retención/neto por pago + `balanceado` |
+| `v_pagos_retencion_residual` | Pagos con residual (los nativos no aparecen) |
+| `v_pagos_tesoreria_vs_contable` | Conciliación egreso neto tesorería vs. asientos de pago |
+| `tesoreria_diagnose_payment_withholdings(dry_run)` | Diagnóstico read-only de residuales |
+
+`v_retenciones_practicadas`, `v_pagos_proveedor_retenciones`, `v_posicion_fiscal_mensual`
+(0089) siguen vigentes. UI: `/contabilidad/pagos-retenciones`, `/contabilidad/percepciones-cargar`.
+
+### 12.7. Cómo validar
+
+1. Aplicar **0090 → 0091** (a mano, G3).
+2. Correr `supabase/tests/PHASE11_TREASURY_VALIDATION.sql` (read-only) → todo `OK`.
+3. Desde la app (sesión con `tesoreria.create`): registrar un pago con retención en
+   `/contabilidad/pagos-retenciones`.
+4. Verificar: `supplier_open_items.saldo` de la factura = 0; `v_supplier_payment_detalle`
+   `balanceado = true`; `v_pagos_retencion_residual` vacío; contabilizar el pago en
+   “Pendientes de contabilizar” y confirmar que `v_balance_sumas_saldos` cuadra y
+   `v_pagos_tesoreria_vs_contable.dif_neto ≈ 0`.
+
+### 12.8. Qué queda pendiente para cierre contable anual
+
+- **Retención del 100%** del pago (neto = 0): no soportada por el `check (amount > 0)`;
+  caso marginal, requeriría un mecanismo aparte.
+- **Pagos legacy** con retenciones cargadas a la manera de Fase 10 (allocations al neto):
+  aparecen en `v_pagos_retencion_residual` para corrección manual (allocations inmutables).
+- Asientos de cierre, `logistics_orders`→facturación y centro de costo en ventas/tesorería
+  (ítems generales de cierre, ver §8).

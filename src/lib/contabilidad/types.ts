@@ -195,3 +195,33 @@ export interface PosicionFiscalRow {
   percepcionesIvaSufridas: number;
   retencionesSufridas: number;
 }
+
+// ----- Fase 11: opciones para formularios -----
+
+export interface VendorOption {
+  id: string;
+  razon: string;
+  cuit: string;
+}
+
+export interface BankOption {
+  id: string;
+  label: string;
+  isSystem: boolean;
+}
+
+export interface SupplierOpenItemOption {
+  invoiceId: string;
+  vendorId: string;
+  publicId: string;
+  total: number;
+  saldo: number;
+  estadoPago: string;
+}
+
+export interface CustomerInvoiceOption {
+  id: string;
+  label: string;
+  percepciones: number;
+  tributos: number;
+}
