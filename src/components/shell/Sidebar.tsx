@@ -146,6 +146,19 @@ const DOMAINS: Domain[] = [
     ],
   },
   {
+    id: "contabilidad",
+    label: "Contabilidad",
+    items: [
+      { href: "/contabilidad", label: "Resumen contable", icon: "dashboard" },
+      { href: "/contabilidad/posicion-iva", label: "Posición de IVA", icon: "report" },
+      { href: "/contabilidad/plan-cuentas", label: "Plan de cuentas", icon: "database" },
+      { href: "/contabilidad/libro-diario", label: "Libro diario", icon: "report" },
+      { href: "/contabilidad/mayor", label: "Mayor por cuenta", icon: "report" },
+      { href: "/contabilidad/balance", label: "Sumas y saldos", icon: "calculator" },
+      { href: "/contabilidad/comprobantes", label: "Pendientes de contabilizar", icon: "refresh" },
+    ],
+  },
+  {
     id: "rrhh",
     label: "Recursos Humanos",
     items: [
