@@ -201,6 +201,40 @@ Estado al momento de redactar (aplicadas **0082–0084**; pendientes 0085+):
      nunca por `UPDATE` directo.
 6. **No avanzar a Etapa 3 (Ventas)** hasta cerrar la **Etapa 2** con evidencia real.
 
+### Cierre de Etapa 2 (evidencia real)
+- IC1 / IC2 / IC3 / IC4 → **OK REAL**. IC5 → **NO_VERIFICABLE** (no hay notas de crédito de
+  proveedor aprobadas para evidenciar el signo). `libro_iva_compras` post-`0102` cuadra contra
+  `supplier_invoices` aprobadas; el prelibro conserva `cargada`/`en_revision`; `anulada` fuera.
+
+---
+
+## Ejecución Etapa 3 — Ventas
+
+> Audita el subdiario de ventas (`customer_invoices`) y su correspondencia con `libro_iva_ventas`.
+> Controles **V1–V5**. El libro de ventas (0073) ya filtra `estado_arca='AUTORIZADO_ARCA'` +
+> `anulada=false` + `ambiente=public.fiscal_ambiente()` y aplica signo a notas de crédito.
+
+1. **Archivo SQL a correr:** `supabase/tests/AUDIT_ETAPA3_VENTAS.sql` (100 % read-only).
+2. **Dónde correrlo:** **Supabase → SQL Editor** del proyecto `arsksytgdnzukbmfgkju`, rol de lectura.
+   El kit **no** escribe.
+3. **Qué salida copiar:**
+   - **PREFLIGHT** (4 objetos en `existe=true`).
+   - **RESUMEN ETAPA 3** (`control · descripcion · estado · cantidad_fallas · monto_diferencia ·
+     criterio_ok`) — último bloque; salida principal a pegar.
+   - **Detalles de controles en `FALLA`:** bloques rotulados `3.a V1`, `4.a V2`, `5.a/5.b V3`,
+     `6.a V4`, `7.a V5`.
+4. **Cómo interpretar:**
+   - `OK` → cumplido. `FALLA` → diferencia/anomalía → aislar con el detalle.
+   - `NO_VERIFICABLE` → V5 sin comprobantes A/B para evaluar.
+   - **V4 `gaps`**: se informa, **no** dispara FALLA por sí solo (numeración compartida / intentos
+     rechazados) → revisar con criterio fiscal.
+   - **V5** es **heurística** (regla emisor RI): las inconsistencias son **hallazgo para contador**,
+     no necesariamente defecto del sistema; tipos C/E quedan fuera de la evaluación.
+5. **Qué hacer si hay diferencias:**
+   - **No ajustar manualmente.** Aislar el comprobante con el detalle; causa raíz con dato real;
+     documentar evidencia antes de cualquier corrección (por flujo válido, nunca `UPDATE` directo).
+6. **No avanzar a Etapa 4 (IVA Ventas)** hasta cerrar la **Etapa 3** con evidencia real.
+
 ---
 
 *Documento de método. Read-only. No constituye ejecución ni modificación de datos.*
