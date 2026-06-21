@@ -152,5 +152,48 @@ No corresponde: `0087` **no** crea `supplier_invoice_other_taxes` (esa es de `00
 
 ---
 
-*Plan de aplicación rev. 2. Doc-first, read-only. No constituye ejecución ni modificación de datos.
-Sujeto al re-probe del §7 y a aprobación explícita por migración.*
+## Validación post-0086 sin backfill
+`0085` y `0086` quedaron **aplicadas y OK REAL** (8 funciones de posteo + 8 vistas; sin asientos
+generados por el DDL). Kit: **`supabase/tests/POST_0086_VALIDATION.sql`** (100 % read-only).
+
+1. **Qué valida:** `v_comprobantes_sin_asiento` (universo a contabilizar), `v_asientos_descuadrados`
+   (integridad), `v_balance_sumas_saldos` (movimiento), conteos de `journal_entries` /
+   `journal_entry_lines` / `v_libro_diario`, y `accounting_rules` con `(*)`.
+2. **Resultados esperados ANTES del backfill:** comprobantes **pendientes** en
+   `v_comprobantes_sin_asiento`; `v_asientos_descuadrados` = **0**; balance **sin movimiento**
+   (debe/haber/saldos = 0); `journal_entries` = `journal_entry_lines` = `v_libro_diario` = **0**.
+3. **Por qué `v_comprobantes_sin_asiento` debe tener pendientes:** como aún **no se contabilizó nada**,
+   todos los documentos elegibles (ventas autorizadas, compras aprobadas, cobranzas/pagos confirmados)
+   aparecen como "sin asiento". Es el insumo del backfill.
+4. **Por qué `journal_entries` sigue en 0:** aplicar el DDL de `0085` **crea funciones**, no contabiliza;
+   y `0086` crea **vistas** derivadas. Ningún asiento nace hasta correr `acc_backfill` (real).
+5. **Por qué revisar las reglas `(*)`:** son **defaults de imputación provisorios** (p. ej.
+   `customer_invoice.revenue`→`4.1.05`, `supplier_invoice.expense`→`6.1.10`). Definen a qué cuenta
+   van los asientos; deben **validarse con el contador** (editando `accounting_rules`, sin tocar
+   código) **antes** del backfill real, porque los asientos son append-only.
+6. **Próximo paso = dry-run de `acc_backfill` (NO backfill real):** `p_dry_run=true` no escribe;
+   sirve para validar la mecánica. Requiere impersonar un usuario con `contabilidad.create`
+   (el gate `acc_require_post_permission`). El **backfill real** queda postergado (ver decisión abajo).
+
+## Decisión: Objetivo B estricto hasta `0094`
+1. **`0089` redefine parte del posteo:** `acc_post_sales_invoice` y `acc_post_supplier_payment`
+   (percepciones/retenciones desglosadas).
+2. **`0094` vuelve a redefinir `acc_post_sales_invoice`** (centro de costo en la venta) — es la
+   **última** redefinición de esa función.
+3. **El backfill real se posterga hasta aplicar la cadena necesaria hasta `0094`** (no solo `0089`).
+4. **Motivo:** backfillear antes de `0094` generaría asientos de venta **sin la lógica final**
+   (sin centro de costo); aplicar `0094` después **no re-postea** → habría que **reversar/repostear**.
+   Aplicar primero toda la infraestructura de posteo evita ese retrabajo (un único backfill definitivo).
+5. **Cada migración `0087–0094` requiere autorización explícita** (una por vez, validar, luego la
+   siguiente — G7). Dependencias a revisar en el camino: `0092` (cost_centers / `cost_center_id`),
+   `0090/0091` (tesorería con retenciones), etc.
+
+> Secuencia definitiva (Objetivo B estricto): `0087 → 0088 → 0089 → 0090 → 0091 → 0092 → 0093 → 0094`
+> (DDL idempotente, una por vez) → validar `accounting_rules` con contador → **dry-run final** →
+> **backfill real** (gated) → validar `v_asientos_descuadrados` vacío, `v_iva_fiscal_vs_contable`
+> diff 0, `v_balance_sumas_saldos` cuadrado.
+
+---
+
+*Plan de aplicación rev. 3. Doc-first, read-only. No constituye ejecución ni modificación de datos.
+Sujeto a aprobación explícita por migración. Backfill real postergado hasta `0094` + validación contador.*
