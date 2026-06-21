@@ -266,6 +266,35 @@ Estado al momento de redactar (aplicadas **0082–0084**; pendientes 0085+):
      documentar evidencia antes de cualquier corrección (flujo válido, nunca `UPDATE` directo).
 6. **No avanzar a Etapa 5 (Posición IVA)** hasta cerrar la **Etapa 4** con evidencia real.
 
+### Cierre de Etapa 4 (evidencia real)
+- IV1 / IV2 / IV3 / IV4 / IV5 → **OK REAL**. IV4 con **NC de venta autorizadas restando −747.180,00**
+  (signo validado empíricamente). `libro_iva_ventas` cuadra contra `customer_invoices` fiscales.
+
+---
+
+## Ejecución Etapa 5 — Posición IVA
+
+> Calcula la **posición IVA manual** desde los libros ya validados (`libro_iva_ventas` Etapa 4 OK;
+> `libro_iva_compras` post-`0102` Etapa 2 OK). Controles **P1–P5**.
+> **La posición manual se calcula desde los libros IVA ya validados** — no desde la vista nativa.
+
+1. **Archivo SQL a correr:** `supabase/tests/AUDIT_ETAPA5_POSICION_IVA.sql` (100 % read-only).
+2. **Dónde correrlo:** **Supabase → SQL Editor** del proyecto `arsksytgdnzukbmfgkju`, rol de lectura.
+3. **Qué salida copiar:**
+   - **PREFLIGHT** (7 objetos; se espera `v_posicion_iva` y las estructuras 0087+ en `existe=false`).
+   - **RESUMEN ETAPA 5** (`control · descripcion · estado · cantidad_fallas · monto_diferencia ·
+     criterio_ok`) — último bloque; salida principal a pegar.
+   - **Detalles relevantes:** `3.a P1` (posición por período), `7.a P5` (períodos de un solo lado);
+     `4` P2 si interesa el desglose por alícuota.
+4. **Cómo interpretar:**
+   - `OK` → cálculo/observación producidos. `FALLA` → dato imposible/nulo indebido (no esperado).
+   - `NO_VERIFICABLE` → **P3** si `v_posicion_iva` no existe; **P4** si las estructuras 0087+ no están.
+5. **Cálculo manual:** P1 = **saldo técnico = débito (ventas) − crédito (compras)**, **sin**
+   percepciones/retenciones (esas requieren 0087+; P4 lo marca NO_VERIFICABLE). No se inventan importes.
+6. **`v_posicion_iva` ausente NO es falla funcional:** se registra como **NO_VERIFICABLE / NO_APLICADA**
+   (la vista pertenece a `0086` y además depende de `supplier_invoice_other_taxes` de `0087`, no aplicadas).
+7. **No avanzar a Etapa 6 (Asientos → Balance)** hasta cerrar la **Etapa 5** con evidencia real.
+
 ---
 
 *Documento de método. Read-only. No constituye ejecución ni modificación de datos.*
