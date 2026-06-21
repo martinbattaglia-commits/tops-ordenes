@@ -235,6 +235,37 @@ Estado al momento de redactar (aplicadas **0082–0084**; pendientes 0085+):
      documentar evidencia antes de cualquier corrección (por flujo válido, nunca `UPDATE` directo).
 6. **No avanzar a Etapa 4 (IVA Ventas)** hasta cerrar la **Etapa 3** con evidencia real.
 
+### Cierre de Etapa 3 (evidencia real)
+- V1 / V2 / V3 / V4 / V5 → **OK REAL**. **Hallazgo abierto V4: `gaps=2`** en la numeración
+  correlativa de ventas (no es FALLA; observación para revisión fiscal/contador con el detalle `6.a`).
+
+---
+
+## Ejecución Etapa 4 — IVA Ventas
+
+> Verifica que `libro_iva_ventas` cuadre contra `customer_invoices` fiscalmente válidas + líneas
+> IVA por período/alícuota, con ambiente vigente y signo de notas de crédito. Controles **IV1–IV5**.
+> "Recompute fiscal" = `estado_arca='AUTORIZADO_ARCA'` + `cae` no nulo + `anulada=false` +
+> `ambiente=public.fiscal_ambiente()`, con signo NC.
+
+1. **Archivo SQL a correr:** `supabase/tests/AUDIT_ETAPA4_IVA_VENTAS.sql` (100 % read-only).
+2. **Dónde correrlo:** **Supabase → SQL Editor** del proyecto `arsksytgdnzukbmfgkju`, rol de lectura.
+   El kit **no** escribe.
+3. **Qué salida copiar:**
+   - **PREFLIGHT** (4 objetos en `existe=true`, incl. `fiscal_ambiente()`).
+   - **RESUMEN ETAPA 4** (`control · descripcion · estado · cantidad_fallas · monto_diferencia ·
+     criterio_ok`) — último bloque; salida principal a pegar.
+   - **Detalles de controles en `FALLA`:** bloques `3.a IV1`, `4.a IV2`, `5.a IV3`, `6.a IV4`, `7.a IV5`.
+4. **Cómo interpretar:**
+   - `OK` → vista == recompute / sin leak. `FALLA` → diferencia → aislar con el detalle.
+   - `NO_VERIFICABLE` → IV4 sin notas de crédito de venta autorizadas; IV5 sin ambiente vigente.
+   - **IV3** `comprobantes_no_fiscales_con_lineas` es informativo (lo que se excluye correctamente);
+     la FALLA real sería un *leak* (libro > recompute fiscal).
+5. **Qué hacer si hay diferencias:**
+   - **No ajustar manualmente.** Aislar el período/alícuota/comprobante; causa raíz con dato real;
+     documentar evidencia antes de cualquier corrección (flujo válido, nunca `UPDATE` directo).
+6. **No avanzar a Etapa 5 (Posición IVA)** hasta cerrar la **Etapa 4** con evidencia real.
+
 ---
 
 *Documento de método. Read-only. No constituye ejecución ni modificación de datos.*
