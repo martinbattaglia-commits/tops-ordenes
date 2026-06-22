@@ -40,13 +40,29 @@ interface RunOpts {
 const norm = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
 
+/** Tamaño de lote para upserts a Supabase (1 round-trip por bloque). */
+const UPSERT_BATCH = 250;
+
+/** Parte un array en bloques de tamaño `size` (>=1). */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += Math.max(1, size)) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
   const { trigger } = opts;
   const dryRun = opts.dryRun ?? false;
-  // Margen bajo el límite de funciones de Netlify (~10-26s según plan).
-  const timeBudgetMs = opts.timeBudgetMs ?? 20_000;
+  // Margen bajo el límite de las funciones de Netlify (corte del edge ~26-30s).
+  const timeBudgetMs = opts.timeBudgetMs ?? 18_000;
   const maxFiles = opts.maxFiles ?? 4000;
   const t0 = Date.now();
+  // El walk reserva una franja para escrituras; la extracción de texto (lo más
+  // caro: descarga + parseo/OCR de PDFs) corta aún antes. Los documentos no
+  // extraídos quedan catalogados con text_source NULL y se reintentan en la
+  // próxima corrida (ver `missingText`), de modo que nada queda sin texto a la larga.
+  const walkDeadlineMs = t0 + Math.max(4_000, timeBudgetMs - 5_000);
+  const extractDeadlineMs = t0 + Math.max(3_000, timeBudgetMs - 6_000);
   const startedAt = new Date(t0).toISOString();
   const events: SyncEvent[] = [];
 
@@ -115,7 +131,11 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
   let errors = 0;
   let truncated = false;
   let extractionDisabled = false;
+  let extractDeferred = false;
 
+  // Buffer de documentos a upsertar (se escribe en lotes al final — 1 round-trip
+  // por bloque en vez de uno por documento).
+  const docUpserts: Record<string, unknown>[] = [];
   const seenDriveIds = new Set<string>();
   // Contratos efectivamente recorridos en esta corrida (para baja segura de docs).
   const scannedContractIds = new Set<string>();
@@ -133,11 +153,11 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
 
     const { data: docRows } = await db
       .from("contract_documents")
-      .select("id, drive_file_id, md5_checksum, drive_modified_at, contract_id, sync_status")
+      .select("id, drive_file_id, md5_checksum, drive_modified_at, contract_id, sync_status, text_source")
       .not("drive_file_id", "is", null);
     const docByDriveId = new Map<
       string,
-      { id: string; md5: string | null; modified: string | null; status: string; contractId: string | null }
+      { id: string; md5: string | null; modified: string | null; status: string; contractId: string | null; textSource: string | null }
     >();
     for (const d of (docRows ?? []) as {
       id: string;
@@ -146,6 +166,7 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
       drive_modified_at: string | null;
       contract_id: string | null;
       sync_status: string;
+      text_source: string | null;
     }[]) {
       docByDriveId.set(d.drive_file_id, {
         id: d.id,
@@ -153,6 +174,7 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
         modified: d.drive_modified_at,
         status: d.sync_status,
         contractId: d.contract_id,
+        textSource: d.text_source,
       });
     }
 
@@ -181,33 +203,41 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
 
       try {
         if (!contractId) {
-          const { data, error } = await db
-            .from("contracts")
-            .insert({
-              razon_social: razon,
-              cuit: cuitRaw,
-              tipo: "Cargas Generales",
-              estado: "Vigente",
-              riesgo: "Medio",
-              semaforo: "Azul",
-              source: "drive",
-              drive_folder_id: cf.id,
-              drive_modified_at: cf.modifiedAt,
-              last_synced_at: new Date().toISOString(),
-            })
-            .select("id")
-            .single();
-          if (error) throw new Error(error.message);
-          contractId = (data as { id: string }).id;
-          byRazon.set(norm(razon), contractId);
-          if (cuit) byCuit.set(cuit, contractId);
-          contractsUpserted += 1;
-          events.push({ level: "info", category: "contract", action: "new", contractId, titulo: razon, detail: `Nuevo dossier de cliente detectado en Drive.` });
+          if (dryRun) {
+            // Dry-run: no se crea el contrato; se reporta como alta potencial.
+            contractsUpserted += 1;
+            events.push({ level: "info", category: "contract", action: "new", titulo: razon, detail: `(dry-run) Nuevo dossier de cliente detectado en Drive.` });
+          } else {
+            const { data, error } = await db
+              .from("contracts")
+              .insert({
+                razon_social: razon,
+                cuit: cuitRaw,
+                tipo: "Cargas Generales",
+                estado: "Vigente",
+                riesgo: "Medio",
+                semaforo: "Azul",
+                source: "drive",
+                drive_folder_id: cf.id,
+                drive_modified_at: cf.modifiedAt,
+                last_synced_at: new Date().toISOString(),
+              })
+              .select("id")
+              .single();
+            if (error) throw new Error(error.message);
+            contractId = (data as { id: string }).id;
+            byRazon.set(norm(razon), contractId);
+            if (cuit) byCuit.set(cuit, contractId);
+            contractsUpserted += 1;
+            events.push({ level: "info", category: "contract", action: "new", contractId, titulo: razon, detail: `Nuevo dossier de cliente detectado en Drive.` });
+          }
         } else {
-          await db
-            .from("contracts")
-            .update({ source: "drive", drive_folder_id: cf.id, drive_modified_at: cf.modifiedAt, last_synced_at: new Date().toISOString() })
-            .eq("id", contractId);
+          if (!dryRun) {
+            await db
+              .from("contracts")
+              .update({ source: "drive", drive_folder_id: cf.id, drive_modified_at: cf.modifiedAt, last_synced_at: new Date().toISOString() })
+              .eq("id", contractId);
+          }
           contractsUpserted += 1;
         }
       } catch (e) {
@@ -219,7 +249,7 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
       // Documentos del dossier (recursivo: incluye «Documentación contractual»).
       let walk: Awaited<ReturnType<typeof walkFolderForSync>>;
       try {
-        walk = await walkFolderForSync(cf.id, { maxDepth: 3, maxFiles });
+        walk = await walkFolderForSync(cf.id, { maxDepth: 3, maxFiles, deadlineMs: walkDeadlineMs });
       } catch (e) {
         errors += 1;
         events.push({ level: "error", category: "folder", action: "walk_error", titulo: cf.name, detail: msg(e) });
@@ -240,11 +270,23 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
         const changed = change !== "unchanged";
         const tipo = classifyDocTipo(file.name);
 
+        // Extraer texto si el doc cambió, o si nunca se le intentó (text_source
+        // NULL) — así lo diferido por presupuesto de tiempo se reintenta luego.
+        const missingText = !existing || existing.textSource == null;
+        let wantText =
+          (changed || missingText) && env.contratos.extractText && !extractionDisabled && !dryRun;
+        if (wantText && Date.now() > extractDeadlineMs) {
+          // Sin tiempo para descargar/parsear: se cataloga sin texto y se reintenta
+          // la extracción en la próxima corrida.
+          wantText = false;
+          extractDeferred = true;
+        }
+
         let extractedText: string | null = null;
         let textSource = "none";
         let quality = "pendiente";
         let didExtract = false;
-        if (changed && env.contratos.extractText && !extractionDisabled) {
+        if (wantText) {
           try {
             const ex = await extractDocumentText(file);
             extractedText = ex.text || null;
@@ -263,34 +305,29 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
           }
         }
 
-        if (changed) {
-          try {
-            const row = {
-              contract_id: contractId,
-              tipo_doc: tipo,
-              titulo: file.name,
-              drive_file_id: file.id,
-              url: file.webViewLink,
-              md5_checksum: file.md5Checksum,
-              drive_modified_at: file.modifiedAt,
-              size_bytes: file.size,
-              mime_type: file.mimeType,
-              sync_status: "synced",
-              last_synced_at: new Date().toISOString(),
-              fecha: file.modifiedAt ? file.modifiedAt.slice(0, 10) : null,
-              // Sólo tocar las columnas de texto si realmente se ejecutó la extracción.
-              ...(didExtract ? { extracted_text: extractedText, text_source: textSource, quality } : {}),
-            };
-            const { error } = await db
-              .from("contract_documents")
-              .upsert(row, { onConflict: "drive_file_id" });
-            if (error) throw new Error(error.message);
-          } catch (e) {
-            errors += 1;
-            events.push({ level: "error", category: "document", action: "upsert_error", driveFileId: file.id, titulo: file.name, detail: msg(e) });
-            continue;
-          }
+        // Se persiste si cambió la metadata, o si recién se extrajo texto de un doc
+        // que estaba catalogado sin él. Docs sin cambios y ya texteados: no-op.
+        // El upsert real se hace en lotes al final de la corrida (docUpserts).
+        if (!dryRun && (changed || didExtract)) {
+          docUpserts.push({
+            contract_id: contractId,
+            tipo_doc: tipo,
+            titulo: file.name,
+            drive_file_id: file.id,
+            url: file.webViewLink,
+            md5_checksum: file.md5Checksum,
+            drive_modified_at: file.modifiedAt,
+            size_bytes: file.size,
+            mime_type: file.mimeType,
+            sync_status: "synced",
+            last_synced_at: new Date().toISOString(),
+            fecha: file.modifiedAt ? file.modifiedAt.slice(0, 10) : null,
+            // Sólo tocar las columnas de texto si realmente se ejecutó la extracción.
+            ...(didExtract ? { extracted_text: extractedText, text_source: textSource, quality } : {}),
+          });
+        }
 
+        if (changed) {
           if (change === "new") {
             docsNew += 1;
             events.push({ level: "info", category: "document", action: "new", driveFileId: file.id, contractId, titulo: file.name, detail: `Documento nuevo (${tipo}).` });
@@ -313,6 +350,20 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
                   : `Adenda/renovación modificada: ${file.name}.`,
             });
           }
+        }
+      }
+    }
+
+    // Upsert de documentos en lotes (1 consulta por bloque) — evita N round-trips
+    // secuenciales que hacían que la corrida superara el límite serverless.
+    if (!dryRun && docUpserts.length) {
+      for (const batch of chunk(docUpserts, UPSERT_BATCH)) {
+        const { error } = await db
+          .from("contract_documents")
+          .upsert(batch, { onConflict: "drive_file_id" });
+        if (error) {
+          errors += 1;
+          events.push({ level: "error", category: "document", action: "upsert_error", detail: `Lote de ${batch.length}: ${error.message}` });
         }
       }
     }
@@ -352,9 +403,12 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
 
   const alertsRaised = countAlerts(events);
   const status: SyncRunStatus = truncated ? "partial" : "completed";
+  const deferNote = extractDeferred
+    ? " Extracción de texto diferida en algunos documentos (se completa en próximas corridas)."
+    : "";
   const message = truncated
     ? "Sincronización parcial (presupuesto de tiempo/archivos agotado)."
-    : `Sincronización completa: ${docsNew} nuevos, ${docsUpdated} modificados, ${docsRemoved} eliminados.`;
+    : `Sincronización completa: ${docsNew} nuevos, ${docsUpdated} modificados, ${docsRemoved} eliminados.${deferNote}`;
   const report = make(status, message, {
     runId,
     folderId,

@@ -720,41 +720,90 @@ export interface DriveWalkFile extends DriveSyncEntry {
   folderId: string;
 }
 
+/** Concurrencia del listado de carpetas durante el walk (round-trips a Drive en paralelo). */
+const WALK_CONCURRENCY = 6;
+
+/**
+ * Ejecuta `fn` sobre cada item con un tope de concurrencia, preservando el orden
+ * del resultado. Sin dependencias externas (no p-limit). Ante error de un item,
+ * el rechazo se propaga (Promise.all) — el caller decide cómo manejarlo.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i], i);
+    }
+  };
+  const n = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: n }, worker));
+  return out;
+}
+
 /**
  * Recorre recursivamente un folder (BFS) devolviendo sólo ARCHIVOS con su ruta.
- * Acotado por `maxDepth` (default 4) y `maxFiles` (default 5000, marca `truncated`).
+ * Acotado por `maxDepth` (default 4), `maxFiles` (default 5000) y opcionalmente
+ * por `deadlineMs` (epoch ms); cualquier corte marca `truncated`.
+ *
+ * El recorrido es BFS POR NIVELES con listado de carpetas en PARALELO
+ * (`WALK_CONCURRENCY`): cada nivel resuelve todas sus carpetas concurrentemente,
+ * reduciendo ~N round-trips secuenciales a ~N/concurrencia. Es la diferencia
+ * entre terminar bajo el límite de las funciones serverless o hacer timeout.
  */
 export async function walkFolderForSync(
   rootFolderId: string,
-  opts: { maxDepth?: number; maxFiles?: number } = {},
+  opts: { maxDepth?: number; maxFiles?: number; deadlineMs?: number } = {},
 ): Promise<{ files: DriveWalkFile[]; folders: number; truncated: boolean }> {
   const maxDepth = opts.maxDepth ?? 4;
   const maxFiles = opts.maxFiles ?? 5000;
+  const deadlineMs = opts.deadlineMs ?? Infinity;
   const files: DriveWalkFile[] = [];
   let folders = 0;
   let truncated = false;
   const visited = new Set<string>(); // guarda contra ciclos (atajos/shortcuts de Drive)
-  const queue: { id: string; path: string[]; depth: number }[] = [
-    { id: rootFolderId, path: [], depth: 0 },
-  ];
+  type Node = { id: string; path: string[]; depth: number };
+  let level: Node[] = [{ id: rootFolderId, path: [], depth: 0 }];
+
   return timed("walkFolderForSync", { rootFolderId, maxDepth }, async () => {
-    while (queue.length) {
-      const node = queue.shift()!;
-      if (visited.has(node.id)) continue;
-      visited.add(node.id);
-      const entries = await listFolderForSync(node.id);
-      for (const e of entries) {
-        if (e.isFolder) {
-          folders += 1;
-          if (node.depth < maxDepth && !visited.has(e.id)) {
-            queue.push({ id: e.id, path: [...node.path, e.name], depth: node.depth + 1 });
+    while (level.length) {
+      if (Date.now() > deadlineMs) {
+        truncated = true;
+        break;
+      }
+      // Deduplicar el nivel contra lo ya visto (shortcuts/ciclos).
+      const nodes = level.filter((n) => !visited.has(n.id));
+      for (const n of nodes) visited.add(n.id);
+      if (!nodes.length) break;
+
+      // Listar todas las carpetas del nivel en paralelo (acotado).
+      const listings = await mapWithConcurrency(nodes, WALK_CONCURRENCY, async (n) => ({
+        node: n,
+        entries: await listFolderForSync(n.id),
+      }));
+
+      const next: Node[] = [];
+      for (const { node, entries } of listings) {
+        for (const e of entries) {
+          if (e.isFolder) {
+            folders += 1;
+            if (node.depth < maxDepth && !visited.has(e.id)) {
+              next.push({ id: e.id, path: [...node.path, e.name], depth: node.depth + 1 });
+            }
+          } else if (files.length >= maxFiles) {
+            truncated = true;
+          } else {
+            files.push({ ...e, folderPath: node.path, folderId: node.id });
           }
-        } else if (files.length >= maxFiles) {
-          truncated = true;
-        } else {
-          files.push({ ...e, folderPath: node.path, folderId: node.id });
         }
       }
+      level = next;
     }
     return { files, folders, truncated };
   });
