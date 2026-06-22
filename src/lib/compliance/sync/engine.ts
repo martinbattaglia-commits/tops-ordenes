@@ -238,15 +238,26 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
     // que hacían que la corrida superara el límite de la función serverless.
     if (!dryRun && docRows.length) {
       for (const batch of chunk(docRows, UPSERT_BATCH)) {
-        try {
-          const { error } = await db
-            .from("compliance_documents")
-            .upsert(batch, { onConflict: "drive_file_id" });
-          if (error) throw new Error(error.message);
+        const { error } = await db
+          .from("compliance_documents")
+          .upsert(batch, { onConflict: "drive_file_id" });
+        if (!error) {
           documentsUpserted += batch.length;
-        } catch (e) {
-          errors += 1;
-          events.push({ level: "error", category: "document", action: "upsert_error", detail: `Lote de ${batch.length}: ${msg(e)}` });
+          continue;
+        }
+        // Fallback: una fila inválida no debe tirar el lote entero — reintento
+        // fila por fila para aislar y reportar el/los registros que fallan.
+        events.push({ level: "warn", category: "document", action: "batch_fallback", detail: `Lote de ${batch.length} falló (${error.message}); reintentando fila por fila.` });
+        for (const row of batch) {
+          const { error: rowErr } = await db
+            .from("compliance_documents")
+            .upsert(row, { onConflict: "drive_file_id" });
+          if (rowErr) {
+            errors += 1;
+            events.push({ level: "error", category: "document", action: "upsert_error", detail: msg(rowErr) });
+          } else {
+            documentsUpserted += 1;
+          }
         }
       }
     }
