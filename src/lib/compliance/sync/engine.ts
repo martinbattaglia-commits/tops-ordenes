@@ -49,8 +49,18 @@ interface RunOpts {
 
 type AdminDb = NonNullable<ReturnType<typeof createAdminClient>>;
 
+/** Tamaño de lote para upserts a Supabase (1 round-trip por bloque). */
+const UPSERT_BATCH = 250;
+
 function msg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** Parte un array en bloques de tamaño `size` (>=1). */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += Math.max(1, size)) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 /** Resuelve la carpeta regulatoria de Drive (id directo, por ruta, o root). */
@@ -71,7 +81,12 @@ async function resolveComplianceFolder(): Promise<{ id: string | null; via: stri
 export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncReport> {
   const { trigger } = opts;
   const dryRun = opts.dryRun ?? false;
-  const timeBudgetMs = opts.timeBudgetMs ?? 20_000;
+  // Margen bajo el límite de las funciones de Netlify (corte del edge ~26-30s):
+  // dejamos holgura para escribir docs + recalcular alertas + persistir.
+  const timeBudgetMs = opts.timeBudgetMs ?? 18_000;
+  // El walk no debe consumir todo el presupuesto: se reserva una franja para las
+  // escrituras posteriores (upserts batched, alertas, persist).
+  const walkDeadlineMs = Date.now() + Math.max(4_000, timeBudgetMs - 5_000);
   const maxFiles = opts.maxFiles ?? 2000;
   const t0 = Date.now();
   const startedAt = new Date(t0).toISOString();
@@ -171,7 +186,7 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
     // Recorrido recursivo de la carpeta regulatoria.
     let walk: Awaited<ReturnType<typeof walkFolderForSync>>;
     try {
-      walk = await walkFolderForSync(folderId, { maxDepth: 4, maxFiles });
+      walk = await walkFolderForSync(folderId, { maxDepth: 4, maxFiles, deadlineMs: walkDeadlineMs });
     } catch (e) {
       const report = make("error", `Error recorriendo Drive: ${msg(e)}`, { runId, folderId, folderVia, errors: 1 });
       await persist(db, runId, dryRun, report, events);
@@ -179,6 +194,8 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
     }
     if (walk.truncated) truncated = true;
 
+    const nowIso = new Date().toISOString();
+    const docRows: Record<string, unknown>[] = [];
     for (const file of walk.files) {
       if (Date.now() - t0 > timeBudgetMs) {
         truncated = true;
@@ -197,33 +214,40 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
 
       if (dryRun) continue;
 
-      try {
-        const row = {
-          item_id: itemId,
-          sede,
-          categoria,
-          tipo_doc: tipo,
-          titulo: file.name,
-          drive_file_id: file.id,
-          url: file.webViewLink,
-          mime_type: file.mimeType,
-          size_bytes: file.size,
-          md5_checksum: file.md5Checksum,
-          drive_modified_at: file.modifiedAt,
-          fecha_emision: emision,
-          fecha_vencimiento: vencimiento,
-          sync_status: "synced",
-          sync_error: null,
-          last_synced_at: new Date().toISOString(),
-        };
-        const { error } = await db
-          .from("compliance_documents")
-          .upsert(row, { onConflict: "drive_file_id" });
-        if (error) throw new Error(error.message);
-        documentsUpserted += 1;
-      } catch (e) {
-        errors += 1;
-        events.push({ level: "error", category: "document", action: "upsert_error", driveFileId: file.id, titulo: file.name, detail: msg(e) });
+      docRows.push({
+        item_id: itemId,
+        sede,
+        categoria,
+        tipo_doc: tipo,
+        titulo: file.name,
+        drive_file_id: file.id,
+        url: file.webViewLink,
+        mime_type: file.mimeType,
+        size_bytes: file.size,
+        md5_checksum: file.md5Checksum,
+        drive_modified_at: file.modifiedAt,
+        fecha_emision: emision,
+        fecha_vencimiento: vencimiento,
+        sync_status: "synced",
+        sync_error: null,
+        last_synced_at: nowIso,
+      });
+    }
+
+    // Upsert en lotes (una consulta por bloque) — evita N round-trips secuenciales
+    // que hacían que la corrida superara el límite de la función serverless.
+    if (!dryRun && docRows.length) {
+      for (const batch of chunk(docRows, UPSERT_BATCH)) {
+        try {
+          const { error } = await db
+            .from("compliance_documents")
+            .upsert(batch, { onConflict: "drive_file_id" });
+          if (error) throw new Error(error.message);
+          documentsUpserted += batch.length;
+        } catch (e) {
+          errors += 1;
+          events.push({ level: "error", category: "document", action: "upsert_error", detail: `Lote de ${batch.length}: ${msg(e)}` });
+        }
       }
     }
 
@@ -254,7 +278,6 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
 
     // Actualizar ítems asociados: docs live + last_synced_at + source='drive'.
     if (!dryRun) {
-      const nowIso = new Date().toISOString();
       for (const [itemId, count] of docsPerItem) {
         try {
           await db
