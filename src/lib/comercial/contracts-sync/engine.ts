@@ -322,8 +322,14 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
             sync_status: "synced",
             last_synced_at: new Date().toISOString(),
             fecha: file.modifiedAt ? file.modifiedAt.slice(0, 10) : null,
-            // Sólo tocar las columnas de texto si realmente se ejecutó la extracción.
-            ...(didExtract ? { extracted_text: extractedText, text_source: textSource, quality } : {}),
+            // `quality` es NOT NULL: hay que enviarlo SIEMPRE. En un upsert por lotes,
+            // una columna presente en algunas filas se envía como NULL en las demás
+            // (pisa el default de la tabla) → si se omite, el lote entero falla.
+            // 'pendiente' marca extracción diferida; se reintenta cuando
+            // text_source IS NULL (ver `missingText`).
+            quality: didExtract ? quality : "pendiente",
+            text_source: didExtract ? textSource : null,
+            extracted_text: didExtract ? extractedText : null,
           });
         }
 
@@ -361,9 +367,18 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
         const { error } = await db
           .from("contract_documents")
           .upsert(batch, { onConflict: "drive_file_id" });
-        if (error) {
-          errors += 1;
-          events.push({ level: "error", category: "document", action: "upsert_error", detail: `Lote de ${batch.length}: ${error.message}` });
+        if (!error) continue;
+        // Fallback: si el lote falla (p.ej. una fila inválida), reintenta fila por
+        // fila para que un registro malo no tire el lote entero y se aísle el error.
+        events.push({ level: "warn", category: "document", action: "batch_fallback", detail: `Lote de ${batch.length} falló (${error.message}); reintentando fila por fila.` });
+        for (const row of batch) {
+          const { error: rowErr } = await db
+            .from("contract_documents")
+            .upsert(row, { onConflict: "drive_file_id" });
+          if (rowErr) {
+            errors += 1;
+            events.push({ level: "error", category: "document", action: "upsert_error", driveFileId: (row as { drive_file_id?: string }).drive_file_id ?? null, detail: rowErr.message });
+          }
         }
       }
     }
