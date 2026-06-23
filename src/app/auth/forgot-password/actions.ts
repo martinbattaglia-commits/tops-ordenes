@@ -33,8 +33,11 @@ export async function sendPasswordResetLink(
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const origin = host ? `${proto}://${host}` : env.app.url;
 
+  // El link del email pasa por el callback para canjear el `code` (PKCE) por una
+  // sesión ANTES de llegar al form. Sin este paso `updateUser` falla con
+  // "Auth session missing!" porque no hay sesión establecida.
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${origin}/auth/reset-password`,
+    redirectTo: `${origin}/api/auth/callback?next=/auth/reset-password`,
   });
   if (error) return { ok: false, error: error.message };
   return { ok: true };

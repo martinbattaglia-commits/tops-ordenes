@@ -53,7 +53,9 @@ export async function inviteUser(
         role: parsed.data.role,
         invited_by: user.email,
       },
-      redirectTo: `${env.app.url}/auth/reset-password`,
+      // Pasa por el callback para canjear el `code` por sesión antes del form
+      // (si no, el set de contraseña falla con "Auth session missing!").
+      redirectTo: `${env.app.url}/api/auth/callback?next=/auth/reset-password`,
     });
   if (invErr) return { ok: false, error: invErr.message };
 
