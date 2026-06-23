@@ -243,6 +243,7 @@ Código en rama `feat/tesoreria-caja-chica` → `git revert` del PR; ítem de si
 2. Definir lista por defecto de `CAJA_CHICA_PERIODOS` (propuesta: `[año_actual]`; opción `[año_actual, año_actual-1]` para captar ediciones tardías del ejercicio previo).
 3. Aprobación final del contador/Tesorería sobre el set de reglas de categoría semilla.
 4. Aplicación de `0082` a prod: solo tras validar en branch efímero + OK explícito de Martín.
+5. **Deuda de seguridad (TEMPORAL):** la política RLS de lectura `for select to authenticated using (true)` deja Caja Chica visible a cualquier usuario autenticado (patrón actual de `compliance_items`). Documentado como temporal; **revisar en una futura auditoría de seguridad financiera** para restringir la lectura a roles de finanzas.
 
 ## 11. Fuera de alcance (YAGNI)
 

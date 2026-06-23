@@ -174,6 +174,12 @@ create or replace view public.v_cash_box_resumen as
 -- ---- RLS ----------------------------------------------------------------
 -- Lectura: cualquier autenticado (datos de staff). Escritura: roles tesorería.
 -- El job escribe con service-role → bypassa RLS de todos modos.
+--
+-- ⚠️ TEMPORAL — REVISAR EN AUDITORÍA DE SEGURIDAD FINANCIERA:
+-- la política de lectura `for select to authenticated using (true)` deja la
+-- Caja Chica visible a CUALQUIER usuario autenticado. Es una decisión TEMPORAL
+-- (alineada al patrón actual de compliance_items). Debe revisarse en una futura
+-- auditoría de seguridad financiera para restringir la lectura a roles de finanzas.
 alter table public.cash_box_transactions   enable row level security;
 alter table public.cash_box_category_rules enable row level security;
 alter table public.cash_box_sync_log        enable row level security;
