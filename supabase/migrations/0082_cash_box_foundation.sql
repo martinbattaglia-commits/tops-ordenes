@@ -114,8 +114,9 @@ create trigger trg_cash_box_rules_touch
 
 -- ---- (E) Snapshot-replace ATÓMICO por ejercicio (DELETE+INSERT) ---------
 -- security definer + search_path fijo (mismo criterio que tg_touch_updated_at).
--- EXECUTE restringido a service_role (lo llama el job con createAdminClient);
--- así un usuario authenticated NO puede invocar el wipe.
+-- EXECUTE restringido a service_role (lo llama el job con createAdminClient).
+-- IMPORTANTE: hay que revocar de public Y de anon/authenticated, porque Supabase
+-- otorga EXECUTE a esos roles vía default privileges (revoke from public no alcanza).
 create or replace function public.cash_box_replace_periodo(p_periodo int, p_rows jsonb, p_run_id uuid)
 returns int
 language plpgsql
@@ -142,20 +143,24 @@ begin
   return v_count;
 end $$;
 
-revoke all on function public.cash_box_replace_periodo(int, jsonb, uuid) from public;
+revoke all on function public.cash_box_replace_periodo(int, jsonb, uuid) from public, anon, authenticated;
 grant execute on function public.cash_box_replace_periodo(int, jsonb, uuid) to service_role;
 
 -- ---- (F) Vistas de lectura ---------------------------------------------
-create or replace view public.v_cash_box_movimientos as
+-- security_invoker=true: la vista respeta RLS/permisos del usuario que consulta
+-- (sin esto Supabase las marca como SECURITY DEFINER VIEW — advisor nivel ERROR).
+create or replace view public.v_cash_box_movimientos
+  with (security_invoker = true) as
   select id, periodo, direction, tx_date, tx_date_raw, concepto, importe,
          coalesce(categoria, 'Otros') as categoria, source_row, sync_run_id
   from public.cash_box_transactions;
 
-create or replace view public.v_cash_box_resumen as
+create or replace view public.v_cash_box_resumen
+  with (security_invoker = true) as
   with agg as (
     select periodo,
-           sum(importe) filter (where direction = 'acreditado') as total_acreditado,
-           sum(importe) filter (where direction = 'gasto')      as total_gasto,
+           coalesce(sum(importe) filter (where direction = 'acreditado'), 0) as total_acreditado,
+           coalesce(sum(importe) filter (where direction = 'gasto'), 0)      as total_gasto,
            count(*) as movimientos
     from public.cash_box_transactions
     group by periodo),
