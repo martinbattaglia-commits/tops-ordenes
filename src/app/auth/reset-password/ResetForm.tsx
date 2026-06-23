@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
-import { updatePassword } from "./actions";
+import { createClient } from "@/lib/supabase/client";
+import { env } from "@/lib/env";
 
 export default function ResetForm() {
   const router = useRouter();
@@ -12,15 +13,73 @@ export default function ResetForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // Estado del link de recuperación: mientras `checking` resolvemos si la URL
+  // trae una sesión válida; `ready` indica que ya hay sesión para poder guardar.
+  const [checking, setChecking] = useState(true);
+  const [ready, setReady] = useState(false);
+
+  const supabase = useMemo(() => createClient(), []);
+
+  // El cliente de browser (@supabase/ssr) detecta automáticamente el token que
+  // Supabase deja en la URL al volver del email de recuperación —ya sea `?code=`
+  // (PKCE) o `#access_token=...` (hash)— y establece la sesión sincronizándola a
+  // cookies. Esperamos ese evento antes de habilitar el guardado; sin sesión,
+  // updateUser fallaría con "Auth session missing!".
+  useEffect(() => {
+    if (env.app.demoMode) {
+      setReady(true);
+      setChecking(false);
+      return;
+    }
+    if (!supabase) {
+      setError("Supabase no está configurado.");
+      setChecking(false);
+      return;
+    }
+
+    let active = true;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      if (session) {
+        setReady(true);
+        setChecking(false);
+      }
+    });
+
+    // Chequeo inicial por si la sesión ya quedó establecida (p. ej. el callback
+    // ya canjeó el code) antes de montar este componente.
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      if (data.session) setReady(true);
+      setChecking(false);
+    });
+
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (password.length < 8) return setError("Mínimo 8 caracteres.");
     if (password !== confirm) return setError("Las contraseñas no coinciden.");
+
     startTransition(async () => {
-      const res = await updatePassword({ password });
-      if (!res.ok) {
-        setError(res.error ?? "No pudimos actualizar la contraseña.");
+      if (env.app.demoMode) {
+        router.replace("/dashboard");
+        router.refresh();
+        return;
+      }
+      if (!supabase) {
+        setError("Supabase no está configurado.");
+        return;
+      }
+
+      const { error: updErr } = await supabase.auth.updateUser({ password });
+      if (updErr) {
+        setError(updErr.message);
         return;
       }
       router.replace("/dashboard");
@@ -66,14 +125,25 @@ export default function ResetForm() {
         />
       </div>
 
+      {!checking && !ready && !error && (
+        <div className="rounded-md bg-status-warning/10 text-status-warning text-sm px-3 py-2 border border-status-warning/20">
+          El link de recuperación es inválido o expiró. Pedí uno nuevo desde
+          «Olvidé mi contraseña».
+        </div>
+      )}
+
       {error && (
         <div className="rounded-md bg-status-danger/10 text-status-danger text-sm px-3 py-2 border border-status-danger/20">
           {error}
         </div>
       )}
 
-      <button type="submit" className="btn btn-primary w-full" disabled={pending}>
-        {pending ? "Guardando…" : "Guardar contraseña"}
+      <button
+        type="submit"
+        className="btn btn-primary w-full"
+        disabled={pending || checking || !ready}
+      >
+        {pending ? "Guardando…" : checking ? "Validando link…" : "Guardar contraseña"}
       </button>
     </form>
   );
