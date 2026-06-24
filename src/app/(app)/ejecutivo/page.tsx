@@ -6,6 +6,8 @@ import { getCommandCenter, type SystemState, type HealthLevel, type CriticalAler
 import { canViewExecutiveFinancialBlocks } from "@/lib/rbac/cockpit-visibility";
 import { getBootContext } from "@/lib/rbac/boot-permissions";
 import { env } from "@/lib/env";
+import { ws } from "@/lib/google/workspace";
+import { getAnnouncements, type Announcement } from "@/lib/ejecutivo/announcements";
 import { ORG, PRODUCT } from "@/lib/org";
 
 export const metadata = { title: "Cockpit ejecutivo" };
@@ -71,9 +73,6 @@ const STATUS_DOT: Record<SystemState["status"], string> = {
   offline: "bg-tops-red",
 };
 
-// KPIs financieros — sólo visibles con permiso ejecutivo (cockpit.view).
-const FINANCIAL_KPI_LABELS = new Set(["Facturación del mes", "Cobranza pendiente"]);
-
 // BLOQUE 3 — módulos estratégicos. RRHH se incorpora automáticamente seteando `enabled:true`
 // (el grid auto-fluye; no requiere cambiar el layout).
 const MODULES: { href: string; icon: IconName; title: string; sub: string; enabled?: boolean; exec?: boolean }[] = [
@@ -91,15 +90,16 @@ const MODULES: { href: string; icon: IconName; title: string; sub: string; enabl
 export default async function CockpitPage() {
   // getBootContext está cacheado por request (lo resuelve el layout): reutilizarlo
   // para el saludo no agrega round trips.
-  const [cc, canExec, boot] = await Promise.all([
+  const [cc, canExec, boot, announcements] = await Promise.all([
     getCommandCenter(),
     canViewExecutiveFinancialBlocks(),
     getBootContext(),
+    getAnnouncements(),
   ]);
   // Visibilidad condicional (mismo Cockpit, sin split): se ocultan bloques
   // financieros/ejecutivos a quien no tenga permiso ejecutivo.
   const modules = MODULES.filter((m) => m.enabled !== false && (canExec || !m.exec));
-  const kpis = canExec ? cc.kpis : cc.kpis.filter((k) => !FINANCIAL_KPI_LABELS.has(k.label));
+  const kpis = canExec ? cc.kpis : cc.kpis.filter((k) => !k.exec);
   const firstName = firstNameOf(boot.user);
   const daypart = daypartFor(buenosAiresHour());
 
@@ -108,15 +108,12 @@ export default async function CockpitPage() {
       {/* BLOQUE 0 — Bienvenida contextual (saludo cálido al aterrizar) */}
       <WelcomeBanner firstName={firstName} part={daypart} dateLabel={fechaLargaAr()} />
 
-      {/* Header presidencial — slim. Cockpit = monitoreo/análisis/supervisión:
-          sin CTAs transaccionales (Nueva OC/OS viven en sus módulos). */}
-      <header className="flex flex-col gap-1">
-        <div className="eyebrow-tiny">{PRODUCT.name} · Command Center</div>
-        <h1 className="page-title">Estado de la compañía</h1>
-        <p className="page-subtitle">
-          {ORG.legalName} · ahora mismo
-        </p>
-      </header>
+      {/* Título de página — sólo accesibilidad/SEO. El liderazgo visual lo toman
+          la bienvenida y el Command Center; el header presidencial se retiró. */}
+      <h1 className="sr-only">Estado de la compañía · {ORG.legalName} · {PRODUCT.name}</h1>
+
+      {/* BLOQUE 0B — Centro de comunicaciones corporativas (Command Center) */}
+      <CommandCenterBanner announcements={announcements} />
 
       {/* BLOQUE 1 + 1A — Estado General TOPS + Salud Corporativa */}
       <EstadoGeneral cc={cc} />
@@ -124,13 +121,15 @@ export default async function CockpitPage() {
       {/* BLOQUE 1B — Centro de Alertas Críticas (no se renderiza si no hay alertas) */}
       {cc.alerts.length > 0 && <AlertasCriticas alerts={cc.alerts} />}
 
-      {/* BLOQUE 2 — KPIs Ejecutivos */}
+      {/* BLOQUE 1C — Accesos rápidos (Mail · Calendario · Drive · Compliance) */}
+      <QuickAccessRow />
+
+      {/* BLOQUE 2 — KPIs Ejecutivos (FILA 1 financiero+operativo · FILA 2 ocupación).
+          Responsive: 1 col mobile · 2 col tablet · 4 col desktop. */}
       <section className="space-y-4">
-        {/* KPI maestro (Cash Flow) — financiero: sólo con permiso ejecutivo */}
-        {canExec && <MasterKpi master={cc.master} />}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           {kpis.map((k, i) => (
-            <KpiCard key={i} kpi={k} index={i} />
+            <KpiCard key={k.label} kpi={k} index={i} />
           ))}
         </div>
       </section>
@@ -272,36 +271,113 @@ function AlertasCriticas({ alerts }: { alerts: CriticalAlert[] }) {
   );
 }
 
-function MasterKpi({ master }: { master: { label: string; value: string | null; pendingReason?: string; href: string } }) {
+// ── Command Center — Centro de comunicaciones corporativas (BLOQUE 0B) ────────
+// Banner premium (fondo oscuro + acento ámbar corporativo) que consolida los
+// comunicados activos. El primero (mayor prioridad) se destaca como bloque
+// principal; el resto se listan en celdas separadas. Datos: getAnnouncements()
+// — hoy curados en código, mañana gestionables desde Supabase sin tocar la UI.
+function CommandCenterBanner({ announcements }: { announcements: Announcement[] }) {
+  if (announcements.length === 0) return null;
+  const [lead, ...rest] = announcements;
   return (
-    <Link
-      href={master.href}
-      title={`Ir a ${master.label}`}
-      className="nx-interactive card featured-stroke relative overflow-hidden p-5 md:p-6 flex items-center justify-between gap-4 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700"
-    >
+    <section className="space-y-2">
+      <div className="eyebrow-tiny text-tops-red">{PRODUCT.name} · Command Center</div>
       <div
-        className="absolute inset-0 pointer-events-none opacity-90"
-        style={{ background: "radial-gradient(ellipse at right, rgba(33,69,118,0.10), transparent 65%)" }}
-      />
-      <div className="relative">
-        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-fg-muted">Resultado operativo</div>
-        <div className="text-sm font-bold text-fg-secondary">{master.label}</div>
-      </div>
-      <div className="relative text-right flex items-center gap-3">
-        {master.value !== null ? (
-          <div className="text-3xl md:text-4xl font-black text-fg-brand tabular">{master.value}</div>
-        ) : (
-          <div>
-            <div className="text-xl font-black text-fg-muted">Dato no disponible</div>
-            {master.pendingReason && <div className="text-[10px] text-fg-muted mt-1">{master.pendingReason}</div>}
+        className="card relative overflow-hidden ring-1 ring-amber-400/45"
+        style={{ background: "linear-gradient(180deg, rgba(8,11,20,0.97), rgba(8,11,20,0.86))" }}
+      >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "radial-gradient(120% 140% at 0% 0%, rgba(245,180,30,0.12), transparent 60%)" }}
+        />
+        <div className="relative p-4 md:p-5 flex flex-col lg:flex-row lg:items-stretch gap-4">
+          {/* Comunicado destacado */}
+          <div className="flex items-center gap-3 shrink-0 lg:min-w-[260px] lg:max-w-[330px] lg:pr-5">
+            <span className="grid place-items-center w-11 h-11 rounded-xl bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/30 shrink-0">
+              <Icon name={lead.icon} size={22} />
+            </span>
+            <div className="min-w-0">
+              <div className="text-lg md:text-xl font-black uppercase tracking-tight text-amber-300 leading-none">
+                {lead.title}
+              </div>
+              <div className="mt-1 text-[11px] md:text-xs font-bold uppercase tracking-[0.14em] text-white/80">
+                {lead.description}
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* Resto de comunicados */}
+          {rest.length > 0 && (
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-0 lg:divide-x lg:divide-white/10 lg:border-l lg:border-white/10">
+              {rest.map((a) => (
+                <div key={a.id} className="flex items-start gap-2.5 lg:px-4">
+                  <Icon name={a.icon} size={16} className="mt-0.5 shrink-0 text-amber-300/90" />
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-bold text-white">{a.title}</div>
+                    <div className="text-[11px] leading-snug text-white/65">{a.description}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Icon name="chevron-right" size={18} className="hidden lg:block self-center shrink-0 text-white/40" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Accesos rápidos (BLOQUE 1C) ───────────────────────────────────────────────
+// Cuatro destinos de productividad, mismo ancho. Mail/Calendario/Drive abren el
+// Workspace corporativo en pestaña nueva (helper ws()); Compliance navega al
+// módulo ANMAT interno. Estética y motion: tiles nx (igual a Módulos).
+type QuickAccess = { title: string; sub: string; icon: IconName; href: string; external?: boolean };
+
+const QUICK_ACCESS: QuickAccess[] = [
+  { title: "Mail", sub: "Correo electrónico", icon: "mail", href: ws("mail"), external: true },
+  { title: "Calendario", sub: "Agenda y eventos", icon: "calendar", href: ws("calendar"), external: true },
+  { title: "Drive", sub: "Documentos y archivos", icon: "drive", href: ws("drive"), external: true },
+  { title: "Compliance", sub: "Normativas y políticas", icon: "shield", href: "/anmat" },
+];
+
+function QuickAccessRow() {
+  return (
+    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+      {QUICK_ACCESS.map((q, i) => (
+        <QuickAccessCard key={q.title} item={q} index={i} />
+      ))}
+    </section>
+  );
+}
+
+function QuickAccessCard({ item, index }: { item: QuickAccess; index: number }) {
+  const cls =
+    "nx-interactive nx-stagger card p-4 relative overflow-hidden group flex flex-col cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700";
+  const style = { animationDelay: `${index * 40}ms` };
+  const body = (
+    <>
+      <div className="flex items-center justify-between">
+        <span className="w-10 h-10 rounded-md bg-tops-blue-900 text-white grid place-items-center group-hover:bg-tops-blue-700 transition-colors">
+          <Icon name={item.icon} size={18} />
+        </span>
         <Icon
           name="arrow-right"
           size={16}
           className="flex-shrink-0 text-fg-muted opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0"
         />
       </div>
+      <div className="mt-2.5 text-sm font-bold uppercase tracking-wide text-fg-primary">{item.title}</div>
+      <div className="text-[11px] text-fg-muted">{item.sub}</div>
+    </>
+  );
+  return item.external ? (
+    <a href={item.href} target="_blank" rel="noopener noreferrer" className={cls} style={style} title={`Abrir ${item.title}`}>
+      {body}
+    </a>
+  ) : (
+    <Link href={item.href} className={cls} style={style} title={`Abrir ${item.title}`}>
+      {body}
     </Link>
   );
 }
@@ -324,8 +400,18 @@ function KpiCard({ kpi, index }: { kpi: ExecKpi; index: number }) {
         </>
       ) : (
         <>
-          <div className="kpi-value">{numeric ? <CountUp to={Number(kpi.value)} format="int" /> : kpi.value}</div>
+          <div className="kpi-value" style={kpi.tone ? { color: kpi.tone } : undefined}>
+            {numeric ? <CountUp to={Number(kpi.value)} format="int" /> : kpi.value}
+          </div>
           {kpi.sub && <div className="text-[10px] font-semibold text-fg-muted mt-1 uppercase tracking-wide">{kpi.sub}</div>}
+          {typeof kpi.progress === "number" && (
+            <div className="mt-2 h-1.5 rounded-full bg-bg-surface-alt overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${Math.min(100, Math.max(0, kpi.progress))}%`, background: kpi.tone ?? "#16a34a" }}
+              />
+            </div>
+          )}
         </>
       )}
     </Link>
