@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Logística TOPS · Facturación y Rentabilidad ANMAT · Junio 2026</title>
+<style>
+/* ===== LOGÍSTICA TOPS — Dashboard de Facturación/Rentabilidad ANMAT
+   Standalone · Vanilla JS · SaaS claro (azul + blanco + gris oscuro) ===== */
+:root{
+  --bg:#eef2f8; --bg2:#e7edf6; --surface:#ffffff; --surface-2:#f6f9fd;
+  --ink:#1f2a3d; --ink-soft:#3b4960; --muted:#6b7a93; --muted-2:#93a0b6;
+  --line:#e4ebf5; --line-strong:#d3deee;
+  --primary:#1f5fd1; --primary-2:#2f7df6; --primary-deep:#163e8c; --primary-soft:#e7f0ff;
+  --accent:#0ea5a8; --ok:#16a34a; --warn:#e8a300; --down:#dc2626;
+  --shadow:0 12px 32px -16px rgba(20,45,90,.30); --shadow-sm:0 6px 18px -12px rgba(20,45,90,.28);
+  --ring:0 0 0 3px rgba(47,125,246,.25);
+  --r:16px; --r-sm:10px;
+  --font:"Inter","Segoe UI",-apple-system,BlinkMacSystemFont,Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:var(--font);color:var(--ink);background:
+  radial-gradient(900px 500px at 100% -10%,rgba(47,125,246,.10),transparent 60%),
+  linear-gradient(180deg,var(--bg),var(--bg2));min-height:100vh;-webkit-font-smoothing:antialiased;letter-spacing:.1px}
+::selection{background:rgba(47,125,246,.22)}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:#cdd8e8;border-radius:20px;border:3px solid transparent;background-clip:padding-box}
+.app{max-width:1440px;margin:0 auto;padding:20px clamp(12px,2.6vw,30px) 56px}
+
+/* topbar */
+.topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);padding:14px 18px;box-shadow:var(--shadow-sm);margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:13px;min-width:0}
+.logo{width:46px;height:46px;border-radius:12px;flex:0 0 auto;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--primary-2),var(--primary-deep));box-shadow:0 8px 18px -8px rgba(31,95,209,.65)}
+.logo svg{width:27px;height:27px}
+.brand .b1{font-weight:800;font-size:17px;letter-spacing:.4px}
+.brand .b1 span{color:var(--primary)}
+.brand .b2{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:1.3px;text-transform:uppercase;margin-top:2px}
+.title-block{padding-left:16px;border-left:1px solid var(--line);min-width:0}
+.title-block h1{font-size:15.5px;margin:0;font-weight:750}
+.title-block p{margin:2px 0 0;font-size:11.5px;color:var(--muted)}
+.sp{flex:1 1 30px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:650;
+  color:var(--ink-soft);background:var(--surface-2);border:1px solid var(--line-strong);padding:9px 13px;border-radius:10px;transition:.16s;white-space:nowrap}
+.btn svg{width:15px;height:15px}
+.btn:hover{background:#eef4fd;color:var(--primary-deep);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,var(--primary-2),var(--primary-deep));color:#fff;border-color:transparent;box-shadow:0 8px 18px -10px rgba(31,95,209,.8)}
+.btn:focus-visible{outline:none;box-shadow:var(--ring)}
+
+/* tabs */
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;padding:6px;box-shadow:var(--shadow-sm)}
+.tab{position:relative;font-family:inherit;font-size:13px;font-weight:650;color:var(--muted);background:transparent;border:0;
+  padding:10px 14px;border-radius:9px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:8px}
+.tab svg{width:16px;height:16px}
+.tab:hover{color:var(--ink);background:var(--surface-2)}
+.tab.active{color:#fff;background:linear-gradient(135deg,var(--primary-2),var(--primary-deep));box-shadow:var(--shadow-sm)}
+
+.view{display:none;animation:fade .35s ease both}
+.view.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(3,1fr)}
+.kpis-2{grid-template-columns:repeat(4,1fr)}
+.two{grid-template-columns:1.3fr 1fr}
+@media(max-width:1024px){.kpis,.kpis-2{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+@media(max-width:560px){.kpis,.kpis-2{grid-template-columns:1fr}}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow-sm);overflow:hidden}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px 2px}
+.card-h h3{margin:0;font-size:14px;font-weight:750}
+.card-h .sub{font-size:11.5px;color:var(--muted);font-weight:600}
+.tag{font-size:10px;font-weight:750;letter-spacing:.5px;text-transform:uppercase;color:var(--primary);background:var(--primary-soft);padding:4px 9px;border-radius:20px}
+
+/* KPI */
+.kpi{padding:16px 17px;position:relative;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--primary-2),var(--primary-deep))}
+.kpi.k2::before{background:linear-gradient(180deg,#16a34a,#0f7d39)}
+.kpi.k3::before{background:linear-gradient(180deg,var(--accent),#0a7e80)}
+.kpi.k4::before{background:linear-gradient(180deg,#e8a300,#c07e00)}
+.kpi .lab{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:7px}
+.kpi .lab svg{width:15px;height:15px;color:var(--primary)}
+.kpi .val{font-size:27px;font-weight:820;letter-spacing:-.4px;margin-top:9px;font-variant-numeric:tabular-nums;line-height:1}
+.kpi .val .u{font-size:13px;color:var(--muted);font-weight:700;margin-left:4px}
+.kpi .foot{margin-top:8px;font-size:11.5px;color:var(--muted);font-weight:600}
+.kpi .foot b{color:var(--ink-soft)}
+
+/* params */
+.params{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;padding:14px 18px 18px}
+.pfield{display:flex;flex-direction:column;gap:5px}
+.pfield label{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+.pfield input{font-family:inherit;font-size:14px;font-weight:700;color:var(--primary-deep);background:#fffbe9;border:1px solid #ecdca0;border-radius:9px;padding:9px 11px;width:150px}
+.pfield input:focus{outline:none;box-shadow:var(--ring);border-color:var(--primary)}
+.pnote{font-size:11.5px;color:var(--muted);max-width:380px;line-height:1.5}
+
+/* banner */
+.banner{display:flex;gap:12px;align-items:flex-start;background:#fff7e6;border:1px solid #f3dca0;border-radius:12px;padding:13px 15px;margin-top:14px}
+.banner svg{width:20px;height:20px;color:var(--warn);flex:0 0 auto;margin-top:1px}
+.banner b{color:var(--ink)}
+.banner p{margin:0;font-size:12.5px;color:var(--ink-soft);line-height:1.55}
+
+/* filters */
+.filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;padding:14px 18px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+.control{appearance:none;font-family:inherit;font-size:13px;color:var(--ink);background:var(--surface-2);border:1px solid var(--line-strong);border-radius:9px;padding:9px 12px;min-height:40px}
+.control:focus{outline:none;box-shadow:var(--ring);border-color:var(--primary)}
+select.control{padding-right:30px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7a93' stroke-width='2.6' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 11px center;cursor:pointer}
+.field.grow{flex:1 1 200px}.field.grow .control{width:100%}
+.search{position:relative;display:flex}
+.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted)}
+.search .control{padding-left:34px;width:100%}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:9px;padding:3px}
+.seg button{font-family:inherit;font-size:12px;font-weight:650;color:var(--muted);background:transparent;border:0;border-radius:7px;padding:6px 11px;cursor:pointer}
+.seg button.active{background:var(--primary);color:#fff}
+.chip{margin-left:auto;font-size:11.5px;color:var(--muted);font-weight:650;align-self:flex-end;padding-bottom:10px}
+.chip b{color:var(--primary)}
+
+/* table */
+.tw{overflow:auto}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+table.t thead th{position:sticky;top:0;background:var(--surface-2);text-align:left;padding:11px 13px;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.5px;color:var(--muted);font-weight:750;border-bottom:2px solid var(--line-strong);cursor:pointer;white-space:nowrap;user-select:none}
+table.t thead th.num,table.t td.num{text-align:right;font-variant-numeric:tabular-nums}
+table.t thead th .ar{opacity:.35;margin-left:4px}
+table.t thead th.sorted{color:var(--primary)} table.t thead th.sorted .ar{opacity:1}
+table.t tbody td{padding:10px 13px;border-bottom:1px solid var(--line)}
+table.t tbody tr:hover{background:#f3f8ff}
+.cli{display:flex;align-items:center;gap:10px}
+.cli .ic{width:28px;height:28px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;font-weight:800;font-size:11px;color:#fff}
+.cli .nm{font-weight:650}
+.pos{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;font-size:11px;font-weight:800;background:var(--surface-2);color:var(--ink-soft)}
+.pos.t1{background:linear-gradient(135deg,#ffd76a,#f0a93a);color:#3a2300}.pos.t2{background:linear-gradient(135deg,#dde6f2,#aab8cc);color:#283a52}.pos.t3{background:linear-gradient(135deg,#f0b483,#d68b53);color:#3a2300}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:650;padding:3px 9px;border-radius:20px;background:var(--primary-soft);color:var(--primary-deep);white-space:nowrap}
+.tfoot td{padding:11px 13px;font-weight:800;border-top:2px solid var(--line-strong);background:var(--surface-2);font-variant-numeric:tabular-nums}
+.obs{color:var(--muted);font-size:11.5px;max-width:280px}
+
+/* bars */
+.bars{display:flex;flex-direction:column;gap:9px;padding:8px 18px 18px}
+.bar-row{display:grid;grid-template-columns:190px 1fr 130px;align-items:center;gap:12px}
+.bar-row .nm{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-soft)}
+.bar-row .nm small{display:block;color:var(--muted-2);font-size:10px}
+.track{height:24px;border-radius:7px;background:var(--surface-2);overflow:hidden;position:relative;border:1px solid var(--line)}
+.fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:7px;transition:width .9s cubic-bezier(.22,1,.36,1)}
+.bar-row .vv{text-align:right;font-size:12px;font-weight:750;font-variant-numeric:tabular-nums}
+.bar-row .vv small{display:block;color:var(--muted);font-size:10px;font-weight:600}
+@media(max-width:560px){.bar-row{grid-template-columns:120px 1fr 92px;gap:8px}}
+
+/* donut */
+.donuts{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:8px 18px 18px}
+@media(max-width:720px){.donuts{grid-template-columns:1fr}}
+.donut-box{display:flex;flex-direction:column;align-items:center;gap:10px}
+.donut-box h4{margin:4px 0 0;font-size:12.5px;color:var(--ink-soft);font-weight:700}
+.dwrap{position:relative;width:190px;height:190px}
+.dctr{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.dctr .v{font-size:17px;font-weight:820;font-variant-numeric:tabular-nums}.dctr .l{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase}
+.leg{display:flex;flex-direction:column;gap:6px;width:100%;max-width:260px}
+.leg .row{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}
+.leg .dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
+.leg .ln{flex:1;color:var(--ink-soft)}.leg .lv{color:var(--muted);font-weight:750;font-variant-numeric:tabular-nums}
+
+/* heatmap */
+.heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;padding:12px 18px 18px}
+.hc{border-radius:11px;padding:11px 12px;color:#fff;min-height:84px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:inset 0 1px 0 rgba(255,255,255,.25);transition:transform .15s}
+.hc:hover{transform:translateY(-2px)}
+.hc .hn{font-size:12px;font-weight:750;line-height:1.15;text-shadow:0 1px 3px rgba(0,0,0,.25);overflow:hidden}
+.hc .hm{font-size:16px;font-weight:850;font-variant-numeric:tabular-nums;text-shadow:0 1px 3px rgba(0,0,0,.3)}
+.hc .hs{font-size:10.5px;opacity:.95;font-weight:600}
+.heat-legend{display:flex;align-items:center;gap:10px;padding:6px 18px 0;font-size:11.5px;color:var(--muted);font-weight:600}
+.heat-bar{height:10px;width:160px;border-radius:6px;background:linear-gradient(90deg,#dc2626,#e8a300,#16a34a)}
+
+footer{margin-top:22px;text-align:center;font-size:11px;color:var(--muted-2);line-height:1.7}
+footer b{color:var(--muted)}
+#tip{position:fixed;z-index:200;pointer-events:none;opacity:0;transition:opacity .12s;background:#0f1b30;color:#eaf1ff;border-radius:9px;padding:8px 11px;font-size:11.5px;box-shadow:var(--shadow);max-width:240px}
+#tip.show{opacity:1}#tip b{color:#fff}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(18px);z-index:300;background:#0f1b30;color:#fff;border-radius:11px;padding:11px 17px;font-size:12.5px;font-weight:650;box-shadow:var(--shadow);opacity:0;transition:.25s;display:flex;gap:9px;align-items:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}#toast svg{width:17px;height:17px;color:#5fe0a8}
+.print-only{display:none}
+@media print{
+  @page{size:A4 landscape;margin:11mm}
+  body{background:#fff}.actions,.tabs,.seg,.chip,.btn,#tip,#toast{display:none!important}
+  .app{max-width:none;padding:0}.view{display:block!important;animation:none;page-break-inside:avoid;margin-bottom:12px}
+  .card{box-shadow:none;border:1px solid #cdd8e8}.print-only{display:block}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/></svg></div>
+      <div><div class="b1">LOGÍSTICA <span>TOPS</span></div><div class="b2">3PL · Almacenaje ANMAT</div></div>
+    </div>
+    <div class="title-block">
+      <h1>Facturación &amp; Rentabilidad por Cliente</h1>
+      <p>Sede Central — Agustín Magaldi 1765 / Osvaldo Cruz 3201 · Período Junio 2026</p>
+    </div>
+    <div class="sp"></div>
+    <div class="actions">
+      <button class="btn" id="bXls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 13 6 6M15 13l-6 6"/></svg>Excel</button>
+      <button class="btn" id="bCsv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>CSV</button>
+      <button class="btn primary" id="bPdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>PDF</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-v="resumen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>Resumen</button>
+    <button class="tab" data-v="tabla"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Tabla</button>
+    <button class="tab" data-v="ocup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></svg>Ocupación</button>
+    <button class="tab" data-v="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Facturación</button>
+    <button class="tab" data-v="unidad"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15.5A9 9 0 1 1 8.5 3"/><path d="M21.5 12A9.5 9.5 0 0 0 12 2.5V12z"/></svg>Unidades de negocio</button>
+    <button class="tab" data-v="heat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Mapa de calor</button>
+  </nav>
+
+  <div class="print-only" id="printTitle"></div>
+
+  <!-- RESUMEN -->
+  <section class="view active" id="v-resumen">
+    <div class="grid kpis" id="kpisMain"></div>
+    <div class="grid kpis-2" style="margin-top:14px" id="kpisSec"></div>
+    <div class="card" style="margin-top:14px">
+      <div class="card-h"><div><h3>Parámetros de cálculo</h3><div class="sub">Editá la tarifa y todo se recalcula al instante</div></div><span class="tag">Editable</span></div>
+      <div class="params">
+        <div class="pfield"><label>Tarifa ANMAT ($/m²/mes, neto)</label><input id="tAnmat" type="number" value="80000" min="0" step="1000"></div>
+        <div class="pfield"><label>Tarifa Cargas Grales ($/m²/mes)</label><input id="tCargas" type="number" value="20000" min="0" step="1000"></div>
+        <div class="pfield"><label>IVA (%)</label><input id="tIva" type="number" value="21" min="0" step="0.5"></div>
+        <div class="pnote">La facturación se estima como <b>tarifa × m²</b>. La ocupación (m²) es real (planilla ANMAT de Drive); la tarifa es el parámetro que definiste.</div>
+      </div>
+      <div class="banner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+        <p><b>Hallazgo de auditoría:</b> la única factura real de junio que figura en los correos (Business for Pharma: $553.275 ÷ 35 m² ≈ <b>$15.808/m²</b>) no coincide con la tarifa cargada de <b id="bnTar">$80.000/m²</b>. Conviene confirmar la tarifa ANMAT vigente antes de usar estos importes para decisiones.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TABLA -->
+  <section class="view" id="v-tabla">
+    <div class="card">
+      <div class="card-h"><div><h3>Tabla principal de facturación</h3><div class="sub" id="tSub"></div></div><span class="tag">Detalle</span></div>
+      <div class="filters">
+        <div class="field grow"><label>Buscar cliente</label><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><input class="control" id="fSearch" type="search" placeholder="Nombre del cliente…"></div></div>
+        <div class="field"><label>Categoría</label><select class="control" id="fCat"><option value="ALL">Todas</option></select></div>
+        <div class="field"><label>Ordenar por</label><select class="control" id="fSort"><option value="fact">Facturación</option><option value="m2">m² ocupados</option><option value="cliente">Nombre</option></select></div>
+        <div class="field"><label>Dirección</label><div class="seg" id="fDir"><button data-d="desc" class="active">Desc ↓</button><button data-d="asc">Asc ↑</button></div></div>
+        <div class="chip" id="tChip"></div>
+      </div>
+      <div class="tw"><table class="t" id="tbl">
+        <thead><tr>
+          <th style="width:46px">#</th>
+          <th data-k="cliente">Cliente <span class="ar"></span></th>
+          <th data-k="deposito">Depósito</th>
+          <th data-k="categoria">Categoría</th>
+          <th data-k="m2" class="num">m² <span class="ar"></span></th>
+          <th data-k="pm2" class="num">$/m²</th>
+          <th data-k="fact" class="num">Facturación <span class="ar"></span></th>
+          <th data-k="iva" class="num">IVA</th>
+          <th data-k="total" class="num">Total c/IVA</th>
+          <th>Observaciones</th>
+        </tr></thead>
+        <tbody id="tBody"></tbody>
+        <tfoot id="tFoot"></tfoot>
+      </table></div>
+    </div>
+  </section>
+
+  <!-- OCUPACIÓN -->
+  <section class="view" id="v-ocup">
+    <div class="card"><div class="card-h"><div><h3>Ocupación por cliente</h3><div class="sub">m² ocupados — mayor a menor</div></div><span class="tag">m²</span></div>
+      <div class="bars" id="ocupBars"></div></div>
+  </section>
+
+  <!-- FACTURACIÓN -->
+  <section class="view" id="v-fact">
+    <div class="card"><div class="card-h"><div><h3>Facturación por cliente</h3><div class="sub">Facturación mensual neta (estimada s/ tarifa)</div></div><span class="tag">$ neto</span></div>
+      <div class="bars" id="factBars"></div></div>
+  </section>
+
+  <!-- UNIDADES DE NEGOCIO -->
+  <section class="view" id="v-unidad">
+    <div class="card"><div class="card-h"><div><h3>Distribución por unidad de negocio</h3><div class="sub">Participación por categoría — m² ocupados e ingresos</div></div><span class="tag">Mix</span></div>
+      <div class="donuts" id="donuts"></div>
+      <div style="padding:0 18px 16px"><div class="banner" style="background:#eef4ff;border-color:#cfe0ff"><svg viewBox="0 0 24 24" fill="none" stroke="#2f7df6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><p>La base de datos actual corresponde 100% a <b>Almacenaje ANMAT</b> (Sede Central). Cargas Generales, Oficinas y Coworking quedan en $0 hasta cargar sus m². El tablero ya está preparado para incorporarlas.</p></div></div>
+    </div>
+  </section>
+
+  <!-- HEATMAP -->
+  <section class="view" id="v-heat">
+    <div class="card"><div class="card-h"><div><h3>Mapa de calor de aporte / rentabilidad</h3><div class="sub">Verde = mayor facturación · Rojo = menor</div></div><span class="tag">Heatmap</span></div>
+      <div class="heat-legend">Menor <span class="heat-bar"></span> Mayor · <span id="heatNote" style="color:var(--muted)"></span></div>
+      <div class="heat" id="heat"></div>
+    </div>
+  </section>
+
+  <footer>
+    <div><b>Logística TOPS</b> · Facturación &amp; Rentabilidad ANMAT · Sede Central (Agustín Magaldi 1765 / Osvaldo Cruz 3201), Barracas, CABA</div>
+    <div id="footMeta" style="margin-top:4px"></div>
+  </footer>
+</div>
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+/* ===== Datos REALES de ocupación ANMAT (planilla Cynthia/Drive, 18/06/2026) ===== */
+var CONFIG = { tarifas:{ "Almacenaje ANMAT":80000, "Cargas Generales":20000, "Oficina":0, "Coworking":0 }, iva:0.21, moneda:"ARS", periodo:"Junio 2026" };
+var CLIENTES = [
+ {cliente:"Royal Packs S.A.",deposito:"PB6",categoria:"Almacenaje ANMAT",m2:400,obs:"Mayor ocupante (31% del m² ANMAT). Seguimiento de cobranza."},
+ {cliente:"Silvia Noemí Willging",deposito:"PB7",categoria:"Almacenaje ANMAT",m2:70,obs:""},
+ {cliente:"DEO Distribuidores de Equipos Odontológicos S.R.L.",deposito:"PB8",categoria:"Almacenaje ANMAT",m2:50,obs:""},
+ {cliente:"Medimpo S.R.L.",deposito:"PB9",categoria:"Almacenaje ANMAT",m2:50,obs:""},
+ {cliente:"Técnicas Mínimo Invasivas S.A.",deposito:"PB10",categoria:"Almacenaje ANMAT",m2:50,obs:""},
+ {cliente:"Compañía de Higiene S.R.L.",deposito:"PB11",categoria:"Almacenaje ANMAT",m2:50,obs:""},
+ {cliente:"Lion Business",deposito:"PB12",categoria:"Almacenaje ANMAT",m2:70,obs:"Pago por adelantado (al día)."},
+ {cliente:"Korean Skin SRL",deposito:"PB14",categoria:"Almacenaje ANMAT",m2:15,obs:""},
+ {cliente:"Padeco S.A.",deposito:"PB15",categoria:"Almacenaje ANMAT",m2:17,obs:""},
+ {cliente:"Robi Insumos Médicos SRL",deposito:"PB16",categoria:"Almacenaje ANMAT",m2:17,obs:""},
+ {cliente:"Migliore SRL",deposito:"PB17",categoria:"Almacenaje ANMAT",m2:25,obs:""},
+ {cliente:"Medical Inputs S.R.L.",deposito:"PB18",categoria:"Almacenaje ANMAT",m2:30,obs:""},
+ {cliente:"Dana Yasmín Atena",deposito:"PB19",categoria:"Almacenaje ANMAT",m2:17,obs:""},
+ {cliente:"Kodent S.A.",deposito:"PB20+PB21",categoria:"Almacenaje ANMAT",m2:37,obs:"Ocupa 2 depósitos (20+17 m²); consolidado como un cliente."},
+ {cliente:"Amaoto S.R.L.",deposito:"PB22",categoria:"Almacenaje ANMAT",m2:17,obs:""},
+ {cliente:"Business for Pharma SRL",deposito:"PB23",categoria:"Almacenaje ANMAT",m2:35,obs:"Factura junio real ≈ $553.275 ($15.808/m²) — revisar tarifa."},
+ {cliente:"Tinu SRL",deposito:"PB24",categoria:"Almacenaje ANMAT",m2:17,obs:""},
+ {cliente:"Peghi Commerce S.A.S.",deposito:"PB25",categoria:"Almacenaje ANMAT",m2:17,obs:"Consulta de pago junio enviada (seguimiento)."},
+ {cliente:"Bio Analítica S.A.",deposito:"PB26",categoria:"Almacenaje ANMAT",m2:50,obs:""},
+ {cliente:"Wintrade S.A.",deposito:"PB27",categoria:"Almacenaje ANMAT",m2:70,obs:""},
+ {cliente:"Forever Living Products Argentina SRL",deposito:"PB28",categoria:"Almacenaje ANMAT",m2:35,obs:"PB28/29 (70 m²) dividido 35+35 con Panalab."},
+ {cliente:"Panalab S.A.",deposito:"PB29",categoria:"Almacenaje ANMAT",m2:35,obs:"PB28/29 (70 m²) dividido 35+35 con Forever Living."},
+ {cliente:"Rol Latino Medical SRL",deposito:"PB (junto al taller)",categoria:"Almacenaje ANMAT",m2:38,obs:"Agregado por Cynthia; no figuraba en el plano original."},
+ {cliente:"Medicina del Plata SRL",deposito:"PB31",categoria:"Almacenaje ANMAT",m2:70,obs:""},
+ {cliente:"Ingemed S.A.",deposito:"PB32",categoria:"Almacenaje ANMAT",m2:10,obs:""}
+];
+var NO_FACT = [
+ {cliente:"Recepción y Expedición",deposito:"PB13",m2:30,tipo:"Espacio interno (no facturable)"},
+ {cliente:"Disponible / LIBRE",deposito:"PB30",m2:107,tipo:"Vacante — oportunidad comercial"}
+];
+
+/* ===== Helpers ===== */
+var nf0=new Intl.NumberFormat('es-AR',{maximumFractionDigits:0});
+var nf1=new Intl.NumberFormat('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1});
+function ar(x){return nf0.format(Math.round(x||0));}
+function money(x){return '$'+nf0.format(Math.round(x||0));}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function ini(n){return String(n).trim().split(/\s+/).slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();}
+function $(s){return document.querySelector(s);}
+var PALette=['#1f5fd1','#2f7df6','#4f9bff','#0ea5a8','#16a34a','#7c5cff','#e8a300','#dc2626','#d6409f','#0891b2','#65a30d','#9333ea'];
+function colorFor(name,i){return PALette[i%PALette.length];}
+
+var state={cat:'ALL',search:'',sort:'fact',dir:'desc',view:'resumen'};
+
+/* ===== Cálculo ===== */
+function rate(cat){return CONFIG.tarifas[cat]!=null?CONFIG.tarifas[cat]:0;}
+function derive(){
+  return CLIENTES.map(function(c,i){
+    var pm2=rate(c.categoria), neto=c.m2*pm2, iva=neto*CONFIG.iva;
+    return Object.assign({},c,{idx:i,pm2:pm2,fact:neto,iva:iva,total:neto+iva,color:colorFor(c.cliente,i)});
+  });
+}
+function filtered(){
+  var arr=derive().filter(function(c){
+    if(state.cat!=='ALL'&&c.categoria!==state.cat)return false;
+    if(state.search&&c.cliente.toLowerCase().indexOf(state.search.toLowerCase())<0)return false;
+    return true;
+  });
+  var dir=state.dir==='asc'?1:-1,k=state.sort;
+  arr.sort(function(a,b){
+    if(k==='cliente')return a.cliente.localeCompare(b.cliente,'es')*dir;
+    if(k==='m2')return (a.m2-b.m2)*dir;
+    return (a.fact-b.fact)*dir;
+  });
+  return arr;
+}
+function totals(){
+  var all=derive();
+  var m2=all.reduce(function(s,c){return s+c.m2;},0);
+  var neto=all.reduce(function(s,c){return s+c.fact;},0);
+  var iva=all.reduce(function(s,c){return s+c.iva;},0);
+  var libres=NO_FACT.filter(function(x){return /LIBRE|Disponible/i.test(x.cliente);}).reduce(function(s,x){return s+x.m2;},0);
+  var internos=NO_FACT.filter(function(x){return !/LIBRE|Disponible/i.test(x.cliente);}).reduce(function(s,x){return s+x.m2;},0);
+  return {clientes:all.length,m2:m2,neto:neto,iva:iva,total:neto+iva,
+    ticket:all.length?neto/all.length:0, pm2:m2?neto/m2:0,
+    libres:libres,internos:internos, ocup:(m2+libres)?m2/(m2+libres):0,
+    lucro:libres*rate("Almacenaje ANMAT")};
+}
+
+/* ===== Render KPIs ===== */
+function ic(p){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';}
+function renderResumen(){
+  var t=totals();
+  var main=[
+    {c:'',l:'Clientes activos',v:ar(t.clientes),u:'',f:'Categoría: Almacenaje ANMAT',i:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
+    {c:'',l:'m² ocupados',v:ar(t.m2),u:'m²',f:'<b>'+ar(t.libres)+' m²</b> libres · '+nf1.format(t.ocup*100)+'% ocupación',i:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>'},
+    {c:'k2',l:'Facturación mensual (neto)',v:money(t.neto),u:'',f:'IVA: <b>'+money(t.iva)+'</b>',i:'<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'}
+  ];
+  $('#kpisMain').innerHTML=main.map(function(k){return kpiCard(k);}).join('');
+  var sec=[
+    {c:'k3',l:'Total facturado c/IVA',v:money(t.total),u:'',f:'Neto + IVA 21%',i:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>'},
+    {c:'',l:'Ingreso prom. / cliente',v:money(t.ticket),u:'',f:'Ticket promedio (neto)',i:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>'},
+    {c:'k3',l:'Valor promedio por m²',v:money(t.pm2),u:'',f:'Tarifa ANMAT vigente (param.)',i:'<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>'},
+    {c:'k4',l:'Lucro cesante (vacancia)',v:money(t.lucro),u:'',f:'<b>'+ar(t.libres)+' m²</b> libres (PB30)',i:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>'}
+  ];
+  $('#kpisSec').innerHTML=sec.map(function(k){return kpiCard(k);}).join('');
+  $('#bnTar').textContent=money(rate("Almacenaje ANMAT"))+'/m²';
+}
+function kpiCard(k){
+  return '<div class="card kpi '+(k.c||'')+'"><div class="lab">'+ic(k.i)+esc(k.l)+'</div>'
+    +'<div class="val">'+k.v+(k.u?'<span class="u">'+k.u+'</span>':'')+'</div>'
+    +'<div class="foot">'+k.f+'</div></div>';
+}
+
+/* ===== Tabla ===== */
+function renderTable(){
+  var arr=filtered(); var body=$('#tBody');
+  var tot=arr.reduce(function(a,c){a.m2+=c.m2;a.fact+=c.fact;a.iva+=c.iva;a.total+=c.total;return a;},{m2:0,fact:0,iva:0,total:0});
+  $('#tSub').textContent=arr.length+' cliente'+(arr.length===1?'':'s')+' · '+CONFIG.periodo;
+  $('#tChip').innerHTML='<b>'+arr.length+'</b> de '+CLIENTES.length+' clientes';
+  body.innerHTML=arr.map(function(c,i){
+    var p=i===0?'t1':i===1?'t2':i===2?'t3':'';
+    return '<tr>'
+      +'<td><span class="pos '+p+'">'+(i+1)+'</span></td>'
+      +'<td><div class="cli"><span class="ic" style="background:'+c.color+'">'+esc(ini(c.cliente))+'</span><span class="nm">'+esc(c.cliente)+'</span></div></td>'
+      +'<td>'+esc(c.deposito)+'</td>'
+      +'<td><span class="pill">'+esc(c.categoria)+'</span></td>'
+      +'<td class="num">'+ar(c.m2)+'</td>'
+      +'<td class="num">'+money(c.pm2)+'</td>'
+      +'<td class="num"><b>'+money(c.fact)+'</b></td>'
+      +'<td class="num">'+money(c.iva)+'</td>'
+      +'<td class="num">'+money(c.total)+'</td>'
+      +'<td class="obs">'+esc(c.obs||'')+'</td></tr>';
+  }).join('');
+  $('#tFoot').innerHTML='<tr class="tfoot"><td></td><td>TOTAL ('+arr.length+')</td><td></td><td></td><td class="num">'+ar(tot.m2)+'</td><td></td><td class="num">'+money(tot.fact)+'</td><td class="num">'+money(tot.iva)+'</td><td class="num">'+money(tot.total)+'</td><td></td></tr>';
+  document.querySelectorAll('#tbl thead th').forEach(function(th){var k=th.getAttribute('data-k');th.classList.toggle('sorted',k===state.sort);var a=th.querySelector('.ar');if(a)a.textContent=k===state.sort?(state.dir==='asc'?'▲':'▼'):'';});
+}
+
+/* ===== Barras ===== */
+function renderBars(id,key,fmt,sub){
+  var arr=derive().slice().sort(function(a,b){return b[key]-a[key];});
+  var max=Math.max.apply(null,arr.map(function(c){return c[key];}))||1;
+  $('#'+id).innerHTML=arr.map(function(c){
+    var w=(c[key]/max*100);
+    return '<div class="bar-row" data-tip="'+esc(c.cliente)+'|'+esc(c.deposito)+'|'+ar(c.m2)+' m²|'+money(c.fact)+' neto">'
+      +'<div class="nm">'+esc(c.cliente)+'<small>'+esc(c.deposito)+'</small></div>'
+      +'<div class="track"><div class="fill" data-w="'+w.toFixed(2)+'%" style="background:linear-gradient(90deg,'+c.color+',#2f7df6)"></div></div>'
+      +'<div class="vv">'+fmt(c[key])+'<small>'+sub(c)+'</small></div></div>';
+  }).join('');
+  requestAnimationFrame(function(){document.querySelectorAll('#'+id+' .fill').forEach(function(f){f.style.width=f.getAttribute('data-w');});});
+}
+
+/* ===== Donuts por unidad de negocio ===== */
+function renderDonuts(){
+  var cats=Object.keys(CONFIG.tarifas);
+  var all=derive();
+  function agg(valFn){return cats.map(function(cat,i){return {label:cat,value:all.filter(function(c){return c.categoria===cat;}).reduce(function(s,c){return s+valFn(c);},0),color:PALette[i]};}).filter(function(x){return true;});}
+  var byM2=agg(function(c){return c.m2;}), byIng=agg(function(c){return c.fact;});
+  $('#donuts').innerHTML=donut('Por m² ocupados',byM2,function(v){return ar(v)+' m²';})+donut('Por ingresos (neto)',byIng,function(v){return money(v);});
+}
+function donut(title,slices,fmt){
+  var total=slices.reduce(function(s,x){return s+x.value;},0);
+  var R=70,SW=24,C=2*Math.PI*R,cum=0;
+  var segs=slices.map(function(s){
+    if(s.value<=0||total<=0)return '';
+    var frac=s.value/total,len=frac*C,off=-cum*C;cum+=frac;
+    return '<circle r="'+R+'" cx="84" cy="84" fill="none" stroke="'+s.color+'" stroke-width="'+SW+'" stroke-dasharray="'+len.toFixed(2)+' '+(C-len).toFixed(2)+'" stroke-dashoffset="'+off.toFixed(2)+'"></circle>';
+  }).join('');
+  var leg=slices.map(function(s){return '<div class="row"><span class="dot" style="background:'+s.color+'"></span><span class="ln">'+esc(s.label)+'</span><span class="lv">'+(total?nf1.format(s.value/total*100):'0,0')+'% · '+fmt(s.value)+'</span></div>';}).join('');
+  return '<div class="donut-box"><h4>'+title+'</h4><div class="dwrap"><svg viewBox="0 0 168 168" width="190" height="190" style="transform:rotate(-90deg)"><circle r="'+R+'" cx="84" cy="84" fill="none" stroke="#eef2f8" stroke-width="'+SW+'"></circle>'+segs+'</svg><div class="dctr"><div class="v">'+fmt(total)+'</div><div class="l">Total</div></div></div><div class="leg">'+leg+'</div></div>';
+}
+
+/* ===== Heatmap ===== */
+function lerp(a,b,t){return a+(b-a)*t;}
+function heatColor(t){ // t 0=rojo .5=ambar 1=verde
+  var stops=[[220,38,38],[232,163,0],[22,163,74]];
+  var seg=t<.5?0:1, lt=t<.5?t/.5:(t-.5)/.5;
+  var a=stops[seg],b=stops[seg+1];
+  return 'rgb('+Math.round(lerp(a[0],b[0],lt))+','+Math.round(lerp(a[1],b[1],lt))+','+Math.round(lerp(a[2],b[2],lt))+')';
+}
+function renderHeat(){
+  var arr=derive().slice().sort(function(a,b){return b.fact-a.fact;});
+  var max=Math.max.apply(null,arr.map(function(c){return c.fact;}))||1;
+  var min=Math.min.apply(null,arr.map(function(c){return c.fact;}))||0;
+  $('#heatNote').textContent='$/m² uniforme ('+money(rate("Almacenaje ANMAT"))+'); el aporte lo define la superficie.';
+  $('#heat').innerHTML=arr.map(function(c){
+    var t=max===min?1:(c.fact-min)/(max-min);
+    return '<div class="hc" style="background:linear-gradient(150deg,'+heatColor(t)+','+heatColor(Math.max(0,t-.12))+')" data-tip="'+esc(c.cliente)+'|'+ar(c.m2)+' m²|'+money(c.fact)+' neto|'+money(c.total)+' c/IVA">'
+      +'<div class="hn">'+esc(c.cliente)+'</div>'
+      +'<div><div class="hm">'+money(c.fact)+'</div><div class="hs">'+ar(c.m2)+' m² · '+esc(c.deposito)+'</div></div></div>';
+  }).join('');
+}
+
+/* ===== Orquestación ===== */
+function renderAll(){renderResumen();renderTable();renderBars('ocupBars','m2',function(v){return ar(v)+' m²';},function(c){return money(c.fact);});renderBars('factBars','fact',function(v){return money(v);},function(c){return ar(c.m2)+' m²';});renderDonuts();renderHeat();renderMeta();}
+function renderMeta(){
+  var t=totals();var d=new Date();
+  $('#footMeta').innerHTML='Generado el '+d.toLocaleDateString('es-AR',{day:'2-digit',month:'long',year:'numeric'})+' · '+t.clientes+' clientes · '+ar(t.m2)+' m² · '+money(t.neto)+' neto/mes · Fuente: planilla ANMAT (Drive) + tarifa parámetro.';
+}
+
+/* ===== Tabs ===== */
+function switchView(v){state.view=v;document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active',t.getAttribute('data-v')===v);});document.querySelectorAll('.view').forEach(function(s){s.classList.toggle('active',s.id==='v-'+v);});}
+
+/* ===== Filtros / eventos ===== */
+function populate(){var cats={};CLIENTES.forEach(function(c){cats[c.categoria]=1;});var sel=$('#fCat');Object.keys(cats).forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});}
+function bind(){
+  $('#tabs').addEventListener('click',function(e){var b=e.target.closest('.tab');if(b)switchView(b.getAttribute('data-v'));});
+  var to=null;$('#fSearch').addEventListener('input',function(){var v=this.value;clearTimeout(to);to=setTimeout(function(){state.search=v.trim();renderTable();},120);});
+  $('#fCat').addEventListener('change',function(){state.cat=this.value;renderTable();});
+  $('#fSort').addEventListener('change',function(){state.sort=this.value;renderTable();});
+  $('#fDir').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;state.dir=b.getAttribute('data-d');this.querySelectorAll('button').forEach(function(x){x.classList.toggle('active',x===b);});renderTable();});
+  document.querySelectorAll('#tbl thead th[data-k]').forEach(function(th){th.addEventListener('click',function(){var k=th.getAttribute('data-k');if(['cliente','m2','fact'].indexOf(k)<0)k='fact';if(state.sort===k)state.dir=state.dir==='asc'?'desc':'asc';else{state.sort=k;state.dir=k==='cliente'?'asc':'desc';}$('#fSort').value=k;$('#fDir').querySelectorAll('button').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-d')===state.dir);});renderTable();});});
+  ['tAnmat','tCargas','tIva'].forEach(function(id){$('#'+id).addEventListener('input',function(){
+     CONFIG.tarifas["Almacenaje ANMAT"]=+$('#tAnmat').value||0;
+     CONFIG.tarifas["Cargas Generales"]=+$('#tCargas').value||0;
+     CONFIG.iva=(+$('#tIva').value||0)/100; renderAll();});});
+  $('#bXls').addEventListener('click',exportCSV);$('#bCsv').addEventListener('click',exportCSV);$('#bPdf').addEventListener('click',exportPDF);
+  document.body.addEventListener('mouseover',function(e){var t=e.target.closest('[data-tip]');if(t)showTip(t,e);});
+  document.body.addEventListener('mousemove',function(e){if($('#tip').classList.contains('show'))moveTip(e);});
+  document.body.addEventListener('mouseout',function(e){if(e.target.closest('[data-tip]'))$('#tip').classList.remove('show');});
+}
+function showTip(el,e){var p=(el.getAttribute('data-tip')||'').split('|');var h='<b>'+esc(p[0])+'</b>';for(var i=1;i<p.length;i++)if(p[i])h+='<br>'+esc(p[i]);var t=$('#tip');t.innerHTML=h;t.classList.add('show');moveTip(e);}
+function moveTip(e){var t=$('#tip');var x=e.clientX+13,y=e.clientY+13;if(x+t.offsetWidth>innerWidth-8)x=e.clientX-t.offsetWidth-13;if(y+t.offsetHeight>innerHeight-8)y=e.clientY-t.offsetHeight-13;t.style.left=x+'px';t.style.top=y+'px';}
+
+/* ===== Export ===== */
+function exportCSV(){
+  var arr=filtered();var sep=';';var L=[];
+  L.push(['#','Cliente','Depósito','Categoría','m²','$/m² (neto)','Facturación neto','IVA 21%','Total c/IVA','Observaciones'].join(sep));
+  arr.forEach(function(c,i){L.push([i+1,q(c.cliente),q(c.deposito),q(c.categoria),c.m2,Math.round(c.pm2),Math.round(c.fact),Math.round(c.iva),Math.round(c.total),q(c.obs||'')].join(sep));});
+  var t=totals();
+  L.push('');L.push(['','TOTAL','','',t.m2,'',Math.round(t.neto),Math.round(t.iva),Math.round(t.total),''].join(sep));
+  var csv='﻿'+L.join('\r\n');
+  dl(new Blob([csv],{type:'text/csv;charset=utf-8;'}),'TOPS_facturacion_ANMAT_junio2026.csv');
+  toast('Exportado (CSV / Excel)');
+}
+function q(v){v=String(v==null?'':v);return /[";\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function exportPDF(){$('#printTitle').innerHTML='<h2 style="margin:0 0 8px;color:#1f3a68">Logística TOPS — Facturación &amp; Rentabilidad ANMAT · '+CONFIG.periodo+'</h2>';document.querySelectorAll('.view').forEach(function(s){s.classList.add('active');});toast('Abriendo impresión…');setTimeout(function(){window.print();setTimeout(function(){document.querySelectorAll('.view').forEach(function(s){s.classList.toggle('active',s.id==='v-'+state.view);});},400);},250);}
+function dl(blob,name){var u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){a.remove();URL.revokeObjectURL(u);},300);}
+var tT=null;function toast(m){var t=$('#toast');t.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'+esc(m);t.classList.add('show');clearTimeout(tT);tT=setTimeout(function(){t.classList.remove('show');},2400);}
+
+populate();bind();renderAll();
+</script>
+</body>
+</html>

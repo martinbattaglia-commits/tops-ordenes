@@ -77,6 +77,10 @@ export async function updateSession(request: NextRequest) {
     // compliance — el cron postea con `Authorization: Bearer CRON_SECRET` sin cookie;
     // la auth se valida DENTRO del handler. Sólo la ruta exacta.
     pathname === "/api/comercial/contratos/sync" ||
+    // Sync diario de Caja Chica (Tesorería): mismo patrón — el cron postea con
+    // `Authorization: Bearer CRON_SECRET` sin cookie; la auth se valida DENTRO
+    // del handler. Sólo la ruta exacta.
+    pathname === "/api/tesoreria/caja-chica/sync" ||
     pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
