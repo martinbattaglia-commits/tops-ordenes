@@ -168,6 +168,7 @@ const DOMAINS: Domain[] = [
       { href: "/settings/centros-costo", label: "Centros de costo", icon: "tag-alt" },
       { href: "/settings/tracking", label: "Tracking", icon: "truck" },
       { href: "/templates", label: "Plantillas OS", icon: "mail" },
+      { href: "/sistema/comunicados", label: "Comunicados", icon: "megaphone" },
       { href: "/settings", label: "Configuración", icon: "gear" },
     ],
   },
