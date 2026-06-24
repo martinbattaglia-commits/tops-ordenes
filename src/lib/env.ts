@@ -186,9 +186,12 @@ export const env = {
   },
   contratos: {
     /**
-     * Carpeta «Comercial → Cynthia → Clientes» (fuente de verdad operativa).
-     * Preferido: ID directo de la carpeta. Si está vacío, el motor resuelve por
-     * nombre con `driveSubpath` partiendo del root de la SA.
+     * Carpeta(s) de CATEGORÍA de clientes bajo «… → Clientes → DOCUMENTACION CLIENTES»
+     * (CLIENTES DE ANMAT, CLIENTES CARGAS GENERALES…), fuente de verdad operativa.
+     * Preferido: ID(s) directo(s), SEPARADOS POR COMA (los hijos directos de cada
+     * contenedor son los dossiers de cliente). Si está vacío, el motor resuelve por
+     * nombre con `driveSubpath` partiendo del root de la SA. Lo lee
+     * `resolveContratosFolderIds()`; las carpetas deben estar compartidas con la SA.
      */
     driveFolderId: process.env.CONTRATOS_DRIVE_FOLDER_ID?.trim() ?? "",
     /** Ruta por nombre desde el root (fallback si no hay id directo). */
