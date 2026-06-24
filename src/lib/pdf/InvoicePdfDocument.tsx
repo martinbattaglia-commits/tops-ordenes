@@ -582,6 +582,35 @@ export function InvoicePdfDocument({ invoice, config, qrDataUrl }: Props) {
             ))}
           </View>
 
+          {/* Observaciones (ancla a OS + observación de la OS) */}
+          {invoice.observ ? (
+            <View
+              style={{
+                marginTop: 10,
+                borderWidth: 0.8,
+                borderColor: C.hairline,
+                borderLeftWidth: 2.4,
+                borderLeftColor: C.slate500,
+                paddingVertical: 7,
+                paddingHorizontal: 10,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 7.5,
+                  color: C.slate500,
+                  letterSpacing: 0.4,
+                  marginBottom: 2.5,
+                }}
+              >
+                Observaciones
+              </Text>
+              <Text style={{ fontSize: 8.4, color: C.slate700, lineHeight: 1.5 }}>
+                {invoice.observ}
+              </Text>
+            </View>
+          ) : null}
+
           {/* Totales */}
           <View style={styles.totals} wrap={false}>
             <View style={styles.letrasCard}>

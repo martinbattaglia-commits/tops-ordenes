@@ -6,7 +6,6 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { listOrders } from "@/lib/data/orders";
-import { unitLabel } from "@/lib/services-catalog";
 import type { Order } from "@/lib/types";
 import { emitInvoice, type EmitInvoiceInput } from "@/lib/invoicing/emit";
 import {
@@ -171,24 +170,53 @@ export async function emitInvoiceAction(
 // ============================================================================
 
 /**
- * Compone el detalle de un renglón de factura a partir del detalle COMPLETO de
- * la OS (servicios + observaciones), con ancla a la OS de origen. Snapshot:
- * el texto se persiste en invoice_items.descripcion al emitir y queda congelado
- * (tg_lock_authorized_invoice). NO altera importes ni el payload a ARCA
- * (la descripción no se transmite al WS). Espeja el formato del PDF de la OS
- * (OrderPdfDocument: label · qty · unidad). Nunca devuelve vacío (la columna es
- * NOT NULL).
+ * Explota los servicios de una OS en renglones de factura, cada uno con su
+ * precio unitario propio (cantidad = qty, precio_unitario = rate). El total de
+ * la factura es la suma de los importes: Σ(subtotales de servicios) == total de
+ * la OS por construcción (las bonificaciones son rate negativo; los servicios
+ * incluidos, rate 0). Se filtran líneas con qty ≤ 0 (subtotal 0, no afectan el
+ * total) para respetar el ItemSchema (cantidad > 0). Si la OS no tiene
+ * servicios, cae a un único renglón con el total (nunca vacío). El detalle se
+ * persiste en invoice_items y queda congelado por tg_lock_authorized_invoice;
+ * NO altera el payload a ARCA (los renglones no se transmiten al WS).
  */
-function buildOrderDetalle(o: Order): string {
-  const lineas = (o.services ?? [])
-    .map((s) => `• ${s.label} — ${s.qty} ${unitLabel(s.unit)}`)
-    .join("\n");
-  const cuerpo = lineas || "Servicios de logística";
-  const observ = o.observ?.trim() ? `\n${o.observ.trim()}` : "";
-  const ancla = `\nSegún OS N° ${o.public_id} de fecha ${new Date(
-    o.date
-  ).toLocaleDateString("es-AR")}.`;
-  return `${cuerpo}${observ}${ancla}`;
+function buildOrderItems(o: Order) {
+  const servicios = (o.services ?? []).filter((s) => Number(s.qty) > 0);
+  if (servicios.length === 0) {
+    return [
+      {
+        descripcion: "Servicios de logística",
+        cantidad: 1,
+        precio_unitario: Number(o.total ?? 0),
+        alicuota_iva: 21,
+        order_id: o.id,
+      },
+    ];
+  }
+  return servicios.map((s) => ({
+    descripcion: s.label,
+    cantidad: Number(s.qty),
+    precio_unitario: Number(s.rate),
+    alicuota_iva: 21,
+    order_id: o.id,
+  }));
+}
+
+/**
+ * Texto de "Observaciones" del comprobante: ancla a cada OS facturada + su
+ * observación. Se persiste en customer_invoices.observ y se imprime en el PDF
+ * (bloque Observaciones). Acotado a 2000 chars (límite del EmitSchema).
+ */
+function buildInvoiceObserv(orders: Order[]): string {
+  return orders
+    .map((o) => {
+      const ancla = `Según OS N° ${o.public_id} de fecha ${new Date(
+        o.date
+      ).toLocaleDateString("es-AR")}.`;
+      return o.observ?.trim() ? `${ancla} ${o.observ.trim()}` : ancla;
+    })
+    .join("\n")
+    .slice(0, 2000);
 }
 
 export async function emitFromClientOrdersAction(
@@ -221,13 +249,8 @@ export async function emitFromClientOrdersAction(
 
     const client = orders[0].client!;
     const periodo = new Date().toISOString().slice(0, 7);
-    const items = orders.map((o) => ({
-      descripcion: buildOrderDetalle(o),
-      cantidad: 1,
-      precio_unitario: Number(o.total ?? 0),
-      alicuota_iva: 21,
-      order_id: o.id,
-    }));
+    const items = orders.flatMap(buildOrderItems);
+    const observ = buildInvoiceObserv(orders);
 
     const input: EmitInvoiceInput = {
       client_id: client.id,
@@ -238,6 +261,7 @@ export async function emitFromClientOrdersAction(
       tipo_comprobante: "FACTURA_A",
       concepto: 2,
       items,
+      observ,
       periodo,
       fch_serv_desde: orders[orders.length - 1].date,
       fch_serv_hasta: orders[0].date,
