@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
-// Acotado SOLO a Caja Chica: no introduce un framework de testing global.
+// Acotado a módulos con tests unitarios (puras, sin IO).
 export default defineConfig({
   resolve: {
     alias: { "@": resolve(process.cwd(), "src") },
@@ -10,6 +10,7 @@ export default defineConfig({
     include: [
       "src/lib/tesoreria/caja-chica/**/*.test.ts",
       "src/app/api/tesoreria/caja-chica/**/*.test.ts",
+      "src/lib/comercial/**/*.test.ts",
     ],
     environment: "node",
   },
