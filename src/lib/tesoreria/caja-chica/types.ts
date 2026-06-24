@@ -46,3 +46,49 @@ export interface CategoryRule {
   prioridad: number;
   activo: boolean;
 }
+
+// ---- Sync (FASE 4) ------------------------------------------------------
+export type SyncTrigger = "cron" | "manual" | "api";
+export type SyncStatus = "running" | "completed" | "partial" | "error" | "skipped";
+
+export interface SyncEvent {
+  level: "info" | "warn" | "error";
+  periodo?: number;
+  msg: string;
+}
+
+export interface PeriodoResult {
+  periodo: number;
+  status: "completed" | "partial" | "skipped" | "error";
+  rowsParsed: number;
+  rowsInserted: number;
+  rowsChanged: number;
+  rowsRemoved: number;
+  saldoExcel: number | null;
+  saldoCalc: number;
+  saldoDelta: number | null;
+  saldoSource: SaldoSource | null;
+  warnings: number;
+  guard?: string;
+}
+
+export interface CajaChicaSyncReport {
+  runId: string | null;
+  trigger: SyncTrigger;
+  status: SyncStatus;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number;
+  fileId: string | null;
+  periodos: number[];
+  rowsParsed: number;
+  rowsInserted: number;
+  rowsChanged: number;
+  rowsRemoved: number;
+  warnings: number;
+  errors: number;
+  dryRun: boolean;
+  message: string;
+  perPeriodo: PeriodoResult[];
+  events: SyncEvent[];
+}

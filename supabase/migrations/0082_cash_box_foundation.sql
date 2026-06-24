@@ -73,6 +73,9 @@ create table if not exists public.cash_box_sync_log (
   rows_inserted int default 0,
   rows_changed  int default 0,
   rows_removed  int default 0,
+  saldo_excel   numeric(14,2),                         -- saldo del período primario (celda o fallback Σ)
+  saldo_calc    numeric(14,2),                         -- Σ(acreditado) − Σ(gasto) del período primario
+  saldo_delta   numeric(14,2),                         -- conciliación (saldo_excel − saldo_calc)
   warnings      int default 0,                         -- p.ej. etiqueta SALDO no encontrada → fallback Σ
   errors        int default 0,
   message       text,
