@@ -1,88 +1,103 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import { listDeals, listPipelines, ClientifyError } from "@/lib/clientify/client";
 import { mapDeal } from "@/lib/clientify/mappers";
+import { isVisibleCommercialPipeline } from "@/lib/comercial/pipeline-filter";
+import { persistDealsSync } from "@/lib/comercial/dashboard-sync-db";
+import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
- * GET /api/clientify/sync-deals
- *
- * Endpoint cron-friendly que tira un snapshot de deals de Clientify
- * y devuelve el resumen. En F2.7 se conecta a Supabase para persistir
- * un cache local (tabla `clientify_deals_cache`).
- *
- * Auth: si está seteado `CRON_SECRET`, requiere `Authorization: Bearer <secret>`.
- * Caso contrario, abierto (útil para testing local).
+ * GET|POST /api/clientify/sync-deals
+ * Snapshot diario de deals de Clientify → Supabase (caché + snapshots).
+ * Cron 21:00 ART vía .github/workflows/clientify-dashboard-sync.yml.
+ * Auth: si CRON_SECRET está seteado, exige Authorization: Bearer <secret>.
+ * `?dry=1` recorre y reporta sin escribir. Status: 401 cron · 200 ok · 502 error · 503 sin key.
  */
-export async function GET(req: Request) {
-  // Optional cron secret protection
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
+async function handle(req: Request): Promise<Response> {
+  const secret = process.env.CRON_SECRET;
+  if (secret) {
     const auth = req.headers.get("authorization") || "";
-    if (auth !== `Bearer ${cronSecret}`) {
+    if (auth !== `Bearer ${secret}`) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
   }
-
   if (!env.clientify.configured) {
-    return NextResponse.json(
-      { ok: false, error: "CLIENTIFY_API_KEY no configurada" },
-      { status: 503 }
-    );
+    return NextResponse.json({ ok: false, error: "CLIENTIFY_API_KEY no configurada" }, { status: 503 });
   }
 
+  const dryRun = new URL(req.url).searchParams.get("dry") === "1";
+  const runId = randomUUID();
   const started = Date.now();
+
+  // Cliente service-role para la bitácora. En escritura (no dry-run) es obligatorio:
+  // si falta, devolvemos 503 en vez de sincronizar sin dejar fila de auditoría.
+  const admin = createAdminClient();
+  if (!dryRun && !admin) {
+    return NextResponse.json({ ok: false, error: "Supabase admin no disponible" }, { status: 503 });
+  }
+
   try {
     const pipelinesRes = await listPipelines();
-    const pipelineIds = pipelinesRes.results.map((p) => p.id);
+    // Solo pipelines comerciales visibles (ANMAT / Cargas Generales / Oficinas).
+    const pipelines = pipelinesRes.results.filter((p) => isVisibleCommercialPipeline(p.name));
 
-    // Para cada pipeline traemos hasta 500 deals modificados recientemente
     const dealsByPipeline = await Promise.all(
-      pipelineIds.map(async (pid) => {
-        const res = await listDeals({
-          pipeline_id: pid,
-          page_size: 500,
-          ordering: "-modified",
-        });
-        return { pipelineId: pid, deals: res.results.map(mapDeal) };
+      pipelines.map(async (p) => {
+        const res = await listDeals({ pipeline_id: p.id, page_size: 500, ordering: "-modified" });
+        return res.results.map(mapDeal);
       })
     );
+    const deals = dealsByPipeline.flat();
 
-    const allDeals = dealsByPipeline.flatMap((p) => p.deals);
-    const open = allDeals.filter((d) => d.status === "open");
-    const won = allDeals.filter((d) => d.status === "won");
-    const lost = allDeals.filter((d) => d.status === "lost");
+    let persisted = { cached: 0, snapshots: 0 };
+    if (!dryRun) {
+      persisted = await persistDealsSync(deals, runId);
+      const elapsed = Date.now() - started;
+      await admin?.from("clientify_sync_log").insert({
+        run_id: runId,
+        trigger: "cron",
+        status: "completed",
+        finished_at: new Date().toISOString(),
+        duration_ms: elapsed,
+        pipelines: pipelines.length,
+        deals_synced: deals.length,
+        errors: 0,
+        message: `OK ${deals.length} deals / ${persisted.snapshots} snapshots`,
+      });
+    }
 
-    const elapsed = Date.now() - started;
     return NextResponse.json({
       ok: true,
+      runId,
+      dryRun,
       syncedAt: new Date().toISOString(),
-      elapsedMs: elapsed,
-      pipelines: pipelinesRes.results.length,
-      totalDeals: allDeals.length,
-      summary: {
-        open: { count: open.length, amount: open.reduce((a, d) => a + d.amount, 0) },
-        won: { count: won.length, amount: won.reduce((a, d) => a + d.amount, 0) },
-        lost: { count: lost.length, amount: lost.reduce((a, d) => a + d.amount, 0) },
-      },
-      byPipeline: dealsByPipeline.map((p) => ({
-        pipelineId: p.pipelineId,
-        pipelineName: pipelinesRes.results.find((pp) => pp.id === p.pipelineId)?.name ?? "—",
-        dealsCount: p.deals.length,
-      })),
+      elapsedMs: Date.now() - started,
+      pipelines: pipelines.length,
+      totalDeals: deals.length,
+      cached: persisted.cached,
+      snapshots: persisted.snapshots,
     });
   } catch (e) {
-    if (e instanceof ClientifyError) {
-      return NextResponse.json(
-        { ok: false, error: e.message, status: e.status },
-        { status: e.status >= 400 && e.status < 600 ? e.status : 502 }
-      );
-    }
+    const status = e instanceof ClientifyError && e.status >= 400 && e.status < 600 ? e.status : 502;
+    // Bitácora de error (best-effort, no rompe la respuesta).
+    try {
+      await admin?.from("clientify_sync_log").insert({
+        run_id: runId, trigger: "cron", status: "error",
+        finished_at: new Date().toISOString(), duration_ms: Date.now() - started,
+        errors: 1, message: e instanceof Error ? e.message : String(e),
+      });
+    } catch { /* noop */ }
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : String(e) },
-      { status: 502 }
+      { ok: false, runId, error: e instanceof Error ? e.message : String(e) },
+      { status }
     );
   }
 }
+
+export async function GET(req: Request): Promise<Response> { return handle(req); }
+export async function POST(req: Request): Promise<Response> { return handle(req); }
