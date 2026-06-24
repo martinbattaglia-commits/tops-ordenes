@@ -215,6 +215,27 @@ export const env = {
      */
     extractText: process.env.COMPLIANCE_SYNC_EXTRACT_TEXT === "1",
   },
+  cajaChica: {
+    /**
+     * Planilla «Caja chica .xlsx» en Drive (espejo read-only de Tesorería).
+     * Se lee por fileId directo: downloadFileBuffer NO aplica el guard de root,
+     * así que alcanza con compartir el archivo con la Service Account.
+     */
+    driveFileId: process.env.CAJA_CHICA_DRIVE_FILE_ID?.trim() ?? "",
+    /**
+     * Ejercicios (solapas) a sincronizar, ej. "2026,2027". Vacío → [año actual].
+     * Una solapa por año; cada período se reemplaza de forma independiente.
+     */
+    periodos: (process.env.CAJA_CHICA_PERIODOS ?? "")
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isInteger(n)),
+    /** True si el job puede correr (fileId presente + Drive corporativo configurado). */
+    configured: Boolean(
+      process.env.CAJA_CHICA_DRIVE_FILE_ID?.trim() &&
+        process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim(),
+    ),
+  },
   cron: {
     /** Secreto Bearer que exigen los endpoints de jobs (sync diario, etc.). */
     secret: process.env.CRON_SECRET?.trim() ?? "",
