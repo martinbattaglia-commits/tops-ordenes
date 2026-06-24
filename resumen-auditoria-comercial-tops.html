@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="es-AR" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="author" content="Logística TOPS" />
+<title>Logística TOPS · Auditoría Comercial & Plan de Captación 90 días</title>
+<style>
+/* =====================================================================
+   LOGÍSTICA TOPS · RESUMEN INTERACTIVO DE AUDITORÍA COMERCIAL
+   Single-file standalone · Vanilla JS · Sin dependencias externas
+   ===================================================================== */
+:root{
+  --bg:#0a1020; --bg-grad-1:#0b1224; --bg-grad-2:#0a0f1d;
+  --surface:#121c33; --surface-2:#16223e; --surface-3:#1b2a4a;
+  --border:rgba(255,255,255,.08); --border-strong:rgba(255,255,255,.14);
+  --text:#eaf1ff; --text-soft:#c2cee6; --muted:#8a99b8; --muted-2:#6c7c9e;
+  --primary:#2f7df6; --primary-2:#4f9bff; --primary-deep:#1b50b8;
+  --accent:#ff8c42; --accent-2:#ffb15c; --accent-deep:#f26a1b;
+  --ok:#33d6a6; --ok-soft:rgba(51,214,166,.14);
+  --down:#ff6079; --down-soft:rgba(255,96,121,.14); --warn:#ffc24b;
+  --shadow:0 18px 48px -16px rgba(0,0,0,.65); --shadow-sm:0 8px 24px -12px rgba(0,0,0,.5);
+  --ring:0 0 0 3px rgba(47,125,246,.28);
+  --r-lg:20px; --r-md:14px; --r-sm:10px;
+  --c0:#2f7df6;--c1:#4f9bff;--c2:#22b8cf;--c3:#33d6a6;--c4:#7c5cff;
+  --c5:#ff8c42;--c6:#ffb15c;--c7:#ff6079;--c8:#e15bd9;--c9:#9aa6ff;
+  --font:"Inter","SF Pro Display",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+html[data-theme="light"]{
+  --bg:#eef2f9; --bg-grad-1:#f4f7fc; --bg-grad-2:#e9eef7;
+  --surface:#ffffff; --surface-2:#f7f9fd; --surface-3:#eef3fb;
+  --border:rgba(15,30,60,.10); --border-strong:rgba(15,30,60,.18);
+  --text:#0f1c34; --text-soft:#27384f; --muted:#5a6b86; --muted-2:#7a8aa5;
+  --shadow:0 18px 44px -20px rgba(20,40,80,.30); --shadow-sm:0 8px 22px -14px rgba(20,40,80,.28);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:var(--font); color:var(--text);
+  background:
+    radial-gradient(1200px 700px at 12% -8%, rgba(47,125,246,.16), transparent 60%),
+    radial-gradient(1000px 620px at 110% 0%, rgba(255,140,66,.12), transparent 55%),
+    linear-gradient(180deg,var(--bg-grad-1),var(--bg-grad-2));
+  background-attachment:fixed; min-height:100vh;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; letter-spacing:.1px;
+}
+::selection{background:rgba(47,125,246,.35)}
+*::-webkit-scrollbar{width:11px;height:11px}
+*::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:20px;border:3px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:var(--muted-2)}
+a{color:var(--primary-2);text-decoration:none}
+
+.app{max-width:1320px;margin:0 auto;padding:22px clamp(14px,3vw,34px) 80px}
+
+/* Header */
+.topbar{
+  display:flex;align-items:center;gap:18px;flex-wrap:wrap;
+  padding:16px 20px;margin-bottom:18px;
+  background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
+  border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-sm);backdrop-filter:blur(8px);
+  position:sticky;top:10px;z-index:50;
+}
+html[data-theme="light"] .topbar{background:linear-gradient(135deg,#fff,#f3f7ff)}
+.brand{display:flex;align-items:center;gap:14px;min-width:0}
+.logo{
+  width:50px;height:50px;border-radius:13px;flex:0 0 auto;position:relative;
+  background:linear-gradient(135deg,var(--primary),var(--primary-deep));
+  box-shadow:0 10px 22px -8px rgba(47,125,246,.7), inset 0 1px 0 rgba(255,255,255,.25);
+  display:grid;place-items:center;overflow:hidden;
+}
+.logo svg{width:30px;height:30px}
+.logo::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.18),transparent 45%)}
+.brand-txt{display:flex;flex-direction:column;line-height:1.05;min-width:0}
+.brand-txt .b1{font-weight:800;font-size:18px;letter-spacing:.6px}
+.brand-txt .b1 span{color:var(--accent)}
+.brand-txt .b2{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:1.4px;text-transform:uppercase;margin-top:3px}
+.spacer{flex:1 1 auto}
+.meta-chip{display:flex;flex-direction:column;align-items:flex-end;font-size:11px;color:var(--muted);gap:2px}
+.meta-chip b{color:var(--text-soft);font-size:13px}
+.tbtn{
+  display:inline-flex;align-items:center;gap:7px;cursor:pointer;
+  border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text-soft);
+  padding:9px 13px;border-radius:11px;font-size:12.5px;font-weight:600;transition:.18s;
+}
+.tbtn:hover{background:var(--surface-3);color:var(--text)}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 22px}
+.tab{
+  cursor:pointer;border:1px solid var(--border);background:var(--surface);
+  color:var(--muted);padding:9px 15px;border-radius:11px;font-size:12.5px;font-weight:700;
+  transition:.16s;display:flex;align-items:center;gap:7px;
+}
+.tab:hover{color:var(--text-soft);border-color:var(--border-strong)}
+.tab.active{color:#fff;background:linear-gradient(135deg,var(--primary),var(--primary-deep));border-color:transparent;box-shadow:0 8px 20px -10px rgba(47,125,246,.8)}
+.tab .dot{width:7px;height:7px;border-radius:50%;background:currentColor;opacity:.6}
+
+.panel{display:none;animation:fade .35s ease}
+.panel.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Sections / cards */
+.section-title{font-size:13px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);margin:30px 2px 14px;display:flex;align-items:center;gap:10px}
+.section-title::before{content:"";width:4px;height:16px;border-radius:3px;background:linear-gradient(var(--primary),var(--accent))}
+.section-title:first-child{margin-top:6px}
+.lead{color:var(--text-soft);font-size:14.5px;line-height:1.65;max-width:920px;margin:0 0 8px}
+.muted{color:var(--muted)}
+
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+@media(max-width:1000px){.g3,.g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+.card{
+  background:linear-gradient(160deg,var(--surface),var(--surface-2));
+  border:1px solid var(--border);border-radius:var(--r-lg);padding:20px;
+  box-shadow:var(--shadow-sm);position:relative;overflow:hidden;
+}
+.card h3{margin:0 0 4px;font-size:15.5px;font-weight:800}
+.card .sub{color:var(--muted);font-size:12.5px;margin-bottom:14px}
+
+/* KPI */
+.kpi{position:relative}
+.kpi .v{font-size:34px;font-weight:850;line-height:1;letter-spacing:-.5px;background:linear-gradient(135deg,var(--text),var(--primary-2));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.kpi .v.accent{background:linear-gradient(135deg,var(--accent-2),var(--accent-deep));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.kpi .v.ok{background:linear-gradient(135deg,#7ef0cf,var(--ok));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.kpi .v.down{background:linear-gradient(135deg,#ff9aac,var(--down));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.kpi .l{font-size:12px;color:var(--muted);font-weight:600;margin-top:8px;line-height:1.4}
+.kpi .ico{position:absolute;top:16px;right:16px;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:rgba(47,125,246,.12);font-size:20px}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase}
+.b-crit{background:var(--down-soft);color:#ff8497}
+.b-high{background:rgba(255,140,66,.15);color:var(--accent-2)}
+.b-med{background:rgba(255,194,75,.14);color:var(--warn)}
+.b-ok{background:var(--ok-soft);color:#5fe3bc}
+.b-blue{background:rgba(47,125,246,.15);color:var(--primary-2)}
+
+/* Bar chart (segments) */
+.barrow{display:grid;grid-template-columns:230px 1fr 52px;align-items:center;gap:12px;padding:7px 0;cursor:pointer;border-radius:8px;transition:.15s}
+.barrow:hover{background:rgba(255,255,255,.03)}
+.barrow .nm{font-size:13px;font-weight:600;color:var(--text-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bartrack{height:13px;background:var(--surface-3);border-radius:999px;overflow:hidden;position:relative}
+.barfill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--primary),var(--primary-2));transition:width 1s cubic-bezier(.2,.8,.2,1);width:0}
+.barrow .sc{font-size:14px;font-weight:850;text-align:right;color:var(--text)}
+@media(max-width:680px){.barrow{grid-template-columns:130px 1fr 40px}}
+
+/* Tables */
+.tablewrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-md);background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:12.8px;min-width:640px}
+th,td{padding:11px 13px;text-align:left;border-bottom:1px solid var(--border)}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:800;background:var(--surface-2);position:sticky;top:0}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:.12s}
+tbody tr:hover{background:rgba(47,125,246,.06)}
+td b{color:var(--text)}
+.cell-num{font-weight:800;font-variant-numeric:tabular-nums}
+.heat{display:inline-block;min-width:26px;text-align:center;padding:2px 6px;border-radius:7px;font-weight:800;font-size:11.5px}
+
+/* Pills filters */
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.pill{cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--muted);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;transition:.15s}
+.pill:hover{color:var(--text-soft)}
+.pill.active{background:var(--surface-3);color:var(--text);border-color:var(--border-strong)}
+
+/* ICP cards */
+.icp{border-left:4px solid var(--primary)}
+.icp .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px}
+.icp .conv{font-size:12px;color:var(--muted)}
+.icp dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:12.5px}
+.icp dt{color:var(--muted);font-weight:700;white-space:nowrap}
+.icp dd{margin:0;color:var(--text-soft);line-height:1.45}
+.icp .quote{margin-top:12px;padding:10px 12px;background:rgba(47,125,246,.08);border-radius:10px;font-style:italic;color:var(--text-soft);font-size:12.5px}
+
+/* Packages */
+.pkg{display:flex;flex-direction:column}
+.pkg .price{font-size:30px;font-weight:850;letter-spacing:-.5px;margin:6px 0 2px}
+.pkg .price small{font-size:13px;font-weight:600;color:var(--muted)}
+.pkg ul{margin:12px 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px;flex:1}
+.pkg li{position:relative;padding-left:24px;font-size:13px;color:var(--text-soft);line-height:1.45}
+.pkg li::before{content:"✓";position:absolute;left:0;top:0;color:var(--ok);font-weight:900}
+.pkg.feat{border:1px solid var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow)}
+.pkg .cta{margin-top:8px;text-align:center;padding:11px;border-radius:11px;background:linear-gradient(135deg,var(--primary),var(--primary-deep));color:#fff;font-weight:800;font-size:12.5px}
+.pkg.feat .cta{background:linear-gradient(135deg,var(--accent),var(--accent-deep))}
+
+/* Timeline */
+.timeline{position:relative;padding-left:30px}
+.timeline::before{content:"";position:absolute;left:9px;top:6px;bottom:6px;width:2px;background:linear-gradient(var(--primary),var(--accent))}
+.tl-item{position:relative;padding:0 0 22px 14px}
+.tl-item::before{content:"";position:absolute;left:-26px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--primary);box-shadow:0 0 0 4px var(--bg-grad-1)}
+.tl-item:nth-child(n+4)::before{background:var(--accent)}
+.tl-item h4{margin:0 0 4px;font-size:14.5px;font-weight:800;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tl-item .ph{font-size:11px;font-weight:800;color:var(--primary-2);letter-spacing:.5px}
+.tl-item ul{margin:8px 0 0;padding-left:18px;color:var(--text-soft);font-size:12.8px;line-height:1.6}
+
+/* Accordion */
+.acc{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;margin-bottom:10px;background:var(--surface)}
+.acc-h{display:flex;align-items:center;gap:12px;padding:15px 17px;cursor:pointer;font-weight:700;font-size:14px}
+.acc-h:hover{background:var(--surface-2)}
+.acc-h .seqn{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:rgba(47,125,246,.15);color:var(--primary-2);font-weight:850;font-size:13px;flex:0 0 auto}
+.acc-h .arrow{margin-left:auto;transition:.25s;color:var(--muted)}
+.acc.open .arrow{transform:rotate(90deg)}
+.acc-b{max-height:0;overflow:hidden;transition:max-height .35s ease}
+.acc.open .acc-b{max-height:900px}
+.acc-b-inner{padding:4px 17px 17px}
+.mail{border-left:3px solid var(--primary);padding:8px 0 8px 14px;margin:10px 0;font-size:12.8px}
+.mail .step{font-size:11px;font-weight:800;color:var(--accent-2);text-transform:uppercase;letter-spacing:.5px}
+.mail .subj{color:var(--text);font-weight:600;margin-top:3px}
+.mail .focus{color:var(--muted);font-size:12px;margin-top:2px}
+
+/* Alliance grid */
+.ally{display:flex;flex-direction:column;gap:8px;padding:15px}
+.ally .top{display:flex;align-items:center;gap:10px}
+.ally .n{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(255,140,66,.15);color:var(--accent-2);font-weight:850;font-size:13px;flex:0 0 auto}
+.ally h4{margin:0;font-size:13.5px;font-weight:800}
+.ally .inc{font-size:12.3px;color:var(--text-soft);line-height:1.45}
+.ally .comm{font-size:11.5px;color:var(--ok);font-weight:700;margin-top:auto;padding-top:6px;border-top:1px solid var(--border)}
+
+/* List blocks */
+.bullets{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:11px}
+.bullets li{position:relative;padding-left:26px;font-size:13.5px;color:var(--text-soft);line-height:1.55}
+.bullets li::before{content:"";position:absolute;left:0;top:7px;width:9px;height:9px;border-radius:3px;background:linear-gradient(135deg,var(--primary),var(--accent))}
+.bullets li b{color:var(--text)}
+
+.callout{border-left:4px solid var(--accent);background:rgba(255,140,66,.07);padding:14px 18px;border-radius:0 var(--r-md) var(--r-md) 0;margin:14px 0;font-size:13.5px;color:var(--text-soft);line-height:1.6}
+.callout b{color:var(--text)}
+
+.donut-wrap{display:flex;align-items:center;gap:24px;flex-wrap:wrap}
+.legend{display:flex;flex-direction:column;gap:10px}
+.legend .li{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-soft)}
+.legend .sw{width:14px;height:14px;border-radius:4px;flex:0 0 auto}
+.legend .li b{color:var(--text);font-variant-numeric:tabular-nums}
+
+.footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:11.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+.slogan-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media(max-width:680px){.slogan-grid{grid-template-columns:1fr}}
+.slogan{padding:14px 16px;background:linear-gradient(135deg,rgba(47,125,246,.08),rgba(255,140,66,.05));border:1px solid var(--border);border-radius:var(--r-md);font-size:13.5px;font-weight:600;color:var(--text-soft);line-height:1.45;position:relative;padding-left:42px}
+.slogan::before{content:"“";position:absolute;left:14px;top:6px;font-size:32px;color:var(--primary);font-family:Georgia,serif;opacity:.5}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ================= HEADER ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 9l9-5 9 5v8l-9 5-9-5V9z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M3 9l9 5 9-5M12 14v8" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="brand-txt">
+        <div class="b1">LOGÍSTICA <span>TOPS</span></div>
+        <div class="b2">Auditoría Comercial · Plan 90 días</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="meta-chip">
+      <b>Verotin S.A. · Barracas, CABA</b>
+      <span>Captación de Cargas Generales · Jun 2026</span>
+    </div>
+    <button class="tbtn" id="themeBtn">🌙 Tema</button>
+  </header>
+
+  <!-- ================= TABS ================= -->
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="resumen"><span class="dot"></span>Resumen Ejecutivo</button>
+    <button class="tab" data-tab="diag"><span class="dot"></span>Diagnóstico</button>
+    <button class="tab" data-tab="seg"><span class="dot"></span>Segmentos & ICP</button>
+    <button class="tab" data-tab="canales"><span class="dot"></span>Canales</button>
+    <button class="tab" data-tab="oferta"><span class="dot"></span>Oferta & Precios</button>
+    <button class="tab" data-tab="mensajes"><span class="dot"></span>Mensajes & Outbound</button>
+    <button class="tab" data-tab="alianzas"><span class="dot"></span>Alianzas</button>
+    <button class="tab" data-tab="plan"><span class="dot"></span>Plan & CRM</button>
+  </nav>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: RESUMEN EJECUTIVO -->
+  <!-- ============================================================= -->
+  <section class="panel active" id="p-resumen">
+    <div class="section-title">Situación crítica</div>
+    <p class="lead">La reubicación del cliente <b>GEVECO</b> a GBA Norte dejó <b>3.000 m²</b> y <b>1.500 posiciones de racks Mecalux</b> vacantes en Barracas. Con la facturación del área ANMAT cubierta al 90%, la sostenibilidad de la unidad de Cargas Generales depende de una estrategia coordinada de generación de demanda en el corto plazo.</p>
+
+    <div class="grid g4" style="margin-top:16px">
+      <div class="card kpi"><div class="ico">📦</div><div class="v accent">3.000</div><div class="l">m² cubiertos vacantes a ocupar</div></div>
+      <div class="card kpi"><div class="ico">🏗️</div><div class="v">1.500</div><div class="l">posiciones de racks Mecalux listas</div></div>
+      <div class="card kpi"><div class="ico">⚠️</div><div class="v down">95%</div><div class="l">del pipeline depende de Google Search</div></div>
+      <div class="card kpi"><div class="ico">🎯</div><div class="v ok">90</div><div class="l">días para consolidar la ocupación</div></div>
+    </div>
+
+    <div class="section-title">Hallazgos críticos</div>
+    <div class="grid g2">
+      <div class="card">
+        <h3>🔎 Dependencia de canal único</h3>
+        <p class="sub">El 95% de los prospectos ingresa por buscadores (SEO + Google Ads); 5–10% por referidos.</p>
+        <ul class="bullets">
+          <li>Solo se accede a <b>demanda activa</b> y transaccional: el cliente compara cotizaciones y los diferenciales tecnológicos se diluyen frente al precio bruto por m².</li>
+          <li>El volumen de búsquedas para logística corporativa en CABA es <b>finito</b> y sensible al ciclo económico.</li>
+          <li>El embudo está estancado en una <b>fase reactiva</b>: se aguarda al cliente en vez de provocar oportunidades.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>📉 Fracaso del outbound previo</h3>
+        <p class="sub">La campaña de email masivo con "Radar" para importadores no rindió.</p>
+        <ul class="bullets">
+          <li>Falta de <b>enriquecimiento</b> de bases de datos de comex.</li>
+          <li>Ausencia de <b>secuenciación multicanal</b> (email + LinkedIn + alianzas).</li>
+          <li>Mensajes sin hipersegmentación por dolor real, reduciendo la respuesta a niveles marginales.</li>
+          <li>Diferenciales premium (TOPS Connect, WMS NeuralSoft, seguridad redundante) <b>infrautilizados</b> como argumento financiero.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title">Quick wins de impacto rápido</div>
+    <div class="grid g3">
+      <div class="card"><h3>📧 Email frío hipersegmentado</h3><p class="sub" style="margin:0">CUITs de comex enriquecidos + secuencias de 4 correos por dolor. <span class="badge b-ok">15 días · costo bajo</span></p></div>
+      <div class="card"><h3>💼 Social selling del Presidente</h3><p class="sub" style="margin:0">LinkedIn outbound consultivo a directores de supply chain. <span class="badge b-high">30 días · costo medio</span></p></div>
+      <div class="card"><h3>🤝 Alianzas con despachantes CDA</h3><p class="sub" style="margin:0">Comisión de derivación por storage post-puerto. <span class="badge b-ok">45 días · comisión</span></p></div>
+    </div>
+
+    <div class="callout">
+      <b>Recomendación final.</b> TOPS cuenta con la infraestructura física, el respaldo tecnológico (TOPS Connect, WMS NeuralSoft, seguridad Verisure) y 40 años de trayectoria para consolidarse como el principal <b>hub de cargas generales en el centro de consumo de CABA</b>. Debe abandonar definitivamente la mentalidad comercial pasiva: activar secuencias de email frío, social selling de la presidencia y alianzas con el CDA permitiría cubrir la vacancia en un período óptimo de <b>90 días</b>.
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: DIAGNÓSTICO -->
+  <!-- ============================================================= -->
+  <section class="panel" id="p-diag">
+    <div class="section-title">A · Diagnóstico comercial actual</div>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Origen de los prospectos</h3>
+        <p class="sub">Concentración casi total en canales pasivos de búsqueda.</p>
+        <div class="donut-wrap">
+          <svg width="180" height="180" viewBox="0 0 180 180" id="donut"></svg>
+          <div class="legend">
+            <div class="li"><span class="sw" style="background:var(--primary)"></span>Google Search (SEO + Ads) — <b>95%</b></div>
+            <div class="li"><span class="sw" style="background:var(--accent)"></span>Referidos / vínculos históricos — <b>5–10%</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Demanda activa vs. demanda latente</h3>
+        <p class="sub">El verdadero potencial está fuera de Google.</p>
+        <div class="grid g2" style="gap:12px">
+          <div style="padding:14px;background:rgba(255,96,121,.08);border-radius:12px;border:1px solid var(--border)">
+            <div class="badge b-crit">Activa · transaccional</div>
+            <p style="font-size:12.5px;color:var(--text-soft);line-height:1.5;margin:10px 0 0">Busca "depósito en CABA", pide cotizaciones simultáneas y compite por <b>precio bruto/m²</b>. Diferenciales se diluyen.</p>
+          </div>
+          <div style="padding:14px;background:var(--ok-soft);border-radius:12px;border:1px solid var(--border)">
+            <div class="badge b-ok">Latente · estratégica</div>
+            <p style="font-size:12.5px;color:var(--text-soft);line-height:1.5;margin:10px 0 0">Sufre ineficiencias (depósito colapsado, sobrecostos en Pilar, sin trazabilidad) pero <b>no busca</b>. Se activa con outbound calificado.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Activos infrautilizados como argumento de venta</div>
+    <div class="grid g4">
+      <div class="card"><h3>🖥️ TOPS Connect</h3><p class="sub" style="margin:0">Portal B2B con control de stock en tiempo real y cámaras IP en vivo.</p></div>
+      <div class="card"><h3>🧠 WMS NeuralSoft</h3><p class="sub" style="margin:0">Trazabilidad por número de serie / QR en 6 estados inalterables.</p></div>
+      <div class="card"><h3>🏗️ Racks Mecalux</h3><p class="sub" style="margin:0">1.500 posiciones selectivas instaladas y listas para onboarding 24 h.</p></div>
+      <div class="card"><h3>🔒 Seguridad redundante</h3><p class="sub" style="margin:0">Naves estancas AAA + monitoreo Verisure y estándar de seguridad superior.</p></div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: SEGMENTOS & ICP -->
+  <!-- ============================================================= -->
+  <section class="panel" id="p-seg">
+    <div class="section-title">C · Ranking de atractivo comercial (10 segmentos)</div>
+    <p class="lead">Clasificación ponderada para guiar al equipo comercial en los próximos 90 días. Clic en un segmento para ver su perfil de puntuación.</p>
+    <div class="card">
+      <div id="segBars"></div>
+    </div>
+
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card">
+        <h3>Perfil del segmento <span id="radarName" style="color:var(--primary-2)"></span></h3>
+        <p class="sub">9 dimensiones de ponderación (escala 1–10)</p>
+        <svg width="100%" height="320" viewBox="0 0 320 320" id="radar"></svg>
+      </div>
+      <div class="card">
+        <h3>Matriz completa de ponderación</h3>
+        <p class="sub">Mapa de calor — verde = mayor atractivo.</p>
+        <div class="tablewrap" id="heatTable"></div>
+      </div>
+    </div>
+
+    <div class="section-title">B · Perfiles de cliente ideal (ICP) prioritarios</div>
+    <div class="filters" id="icpFilters">
+      <span class="pill active" data-pri="all">Todos</span>
+      <span class="pill" data-pri="1">Crítica (P1)</span>
+      <span class="pill" data-pri="2">Alta (P2)</span>
+      <span class="pill" data-pri="4">Media (P4)</span>
+    </div>
+    <div class="grid g2" id="icpGrid"></div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: CANALES -->
+  <!-- ============================================================= -->
+  <section class="panel" id="p-canales">
+    <div class="section-title">D · Canales de adquisición B2B recomendados</div>
+    <p class="lead">Distribución equilibrada entre inbound (búsqueda pasiva) y outbound (captación proactiva) para llenar los 3.000 m². Filtrá por prioridad.</p>
+    <div class="filters" id="chFilters">
+      <span class="pill active" data-f="all">Todos</span>
+      <span class="pill" data-f="Alta">Prioridad Alta</span>
+      <span class="pill" data-f="Media">Prioridad Media</span>
+    </div>
+    <div class="tablewrap" id="chTable"></div>
+
+    <div class="section-title">H · Google Ads / SEO · estructura de campañas</div>
+    <div class="grid g3">
+      <div class="card"><h3>🎯 B2B Operador 3PL CABA</h3><p class="sub" style="margin:0 0 8px">Tercerización de depósito + racks listos Barracas.</p><div style="font-size:11.5px;color:var(--muted);line-height:1.6"><i>operador logistico cargas generales caba · alquiler posiciones de pallet · deposito con racks mecalux instalados</i></div></div>
+      <div class="card"><h3>🚢 Importadores & Comex</h3><p class="sub" style="margin:0 0 8px">Almacenamiento post-nacionalización cerca del puerto.</p><div style="font-size:11.5px;color:var(--muted);line-height:1.6"><i>deposito logistico cerca puerto buenos aires · almacenamiento para importadores caba · deposito de mercaderia importada</i></div></div>
+      <div class="card"><h3>🛒 E-commerce & Retail</h3><p class="sub" style="margin:0 0 8px">Overflow Mercado Libre y stock pulmón.</p><div style="font-size:11.5px;color:var(--muted);line-height:1.6"><i>deposito overflow mercado libre full · almacenamiento para e-commerce buenos aires · stock pulmon e-commerce caba</i></div></div>
+    </div>
+    <div class="callout">🚫 <b>Filtro B2C indispensable.</b> Palabras clave negativas para excluir búsquedas de mudanzas, baulera, guardamuebles particular y self-storage doméstico, optimizando el ROI publicitario hacia el cliente corporativo.</div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: OFERTA & PRECIOS -->
+  <!-- ============================================================= -->
+  <section class="panel" id="p-oferta">
+    <div class="section-title">J · Modalidades de tarificación</div>
+    <p class="lead">La tarifa base actual es de <b>USD 10 + IVA por m² mensual</b>. La comercialización exclusiva por m² limita la captación de clientes que prefieren previsibilidad por pallet o paquete cerrado.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Modalidad</th><th>Ventaja cliente</th><th>Ventaja TOPS</th><th>Riesgo</th><th>Uso recomendado</th></tr></thead>
+        <tbody>
+          <tr><td><b>Por m²</b></td><td>Predictibilidad de espacio físico reservado.</td><td>Facturación estable de superficie fija.</td><td>Baja densidad si no usa estanterías.</td><td>Mercadería voluminosa / estibas no rackeables.</td></tr>
+          <tr><td><b>Por posición de rack</b></td><td>Paga solo por unidad de carga almacenada.</td><td>Optimiza altura útil con racks Mecalux.</td><td>Vacancia remanente si bajan los pallets.</td><td>Importadores / SKUs uniformes de alto valor.</td></tr>
+          <tr><td><b>Paquete cerrado</b></td><td>Costo integrado simplificado, sin variables.</td><td>Retención a largo plazo, contratos estables.</td><td>Exige auditoría de volumetría precisa.</td><td>E-commerce estable y marcas corporativas.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Paquetes comerciales para captación</div>
+    <div class="grid g3">
+      <div class="card pkg">
+        <div class="badge b-blue">Entrada</div>
+        <h3 style="margin-top:8px">Plan Piloto Cargas Generales</h3>
+        <div class="price">USD 12<small> /posición + IVA</small></div>
+        <div class="sub">Facturación variable por pallets ocupados.</div>
+        <ul>
+          <li>Desde 100 posiciones de racks Mecalux</li>
+          <li>Plataforma B2B TOPS Connect incluida</li>
+          <li>Recepción inicial de mercadería</li>
+          <li>Sin permanencia mínima los primeros 90 días</li>
+        </ul>
+        <div class="cta">Inicie su piloto sin costos de entrada</div>
+      </div>
+      <div class="card pkg feat">
+        <div class="badge b-high">Operación Estable</div>
+        <h3 style="margin-top:8px">Plan Operación Estable</h3>
+        <div class="price">USD 10<small> /m² + IVA</small></div>
+        <div class="sub">Tarifa base con servicios integrados.</div>
+        <ul>
+          <li>Espacio rackeado + manipuleo in/out</li>
+          <li>WMS NeuralSoft + trazabilidad QR</li>
+          <li>Cámaras IP y seguridad redundante</li>
+          <li>SLA operativo y soporte dedicado</li>
+        </ul>
+        <div class="cta">Migre su operación a Barracas</div>
+      </div>
+      <div class="card pkg">
+        <div class="badge b-ok">Estratégico</div>
+        <h3 style="margin-top:8px">Cliente Estratégico</h3>
+        <div class="price">Paquete<small> a medida</small></div>
+        <div class="sub">Consolidación con contrato a largo plazo.</div>
+        <ul>
+          <li>Tarifa por paquete cerrado integrado</li>
+          <li>Integración API ERP ↔ WMS</li>
+          <li>Oficinas coworking amobladas</li>
+          <li>Onboarding tecnológico bonificado</li>
+        </ul>
+        <div class="cta">Consolide su hub logístico en CABA</div>
+      </div>
+    </div>
+
+    <div class="section-title">I · Slogans comerciales reformulados</div>
+    <div class="slogan-grid">
+      <div class="slogan">Control logístico absoluto a metros de la gerencia: depósito premium en Barracas.</div>
+      <div class="slogan">3.000 m² listos en CABA con el cerebro tecnológico de TOPS Connect.</div>
+      <div class="slogan">1.500 posiciones de racks Mecalux con onboarding operativo en 24 horas.</div>
+      <div class="slogan">Trazabilidad verificada en 6 estados inalterables: vea su stock físico como datos online.</div>
+      <div class="slogan">Barracas o Pilar: la distancia consume su margen en fletes metropolitanos.</div>
+      <div class="slogan">Su stock pulmón en CABA para evitar penalizaciones por stock antiguo en Mercado Libre.</div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: MENSAJES & OUTBOUND -->
+  <!-- ============================================================= -->
+  <section class="panel" id="p-mensajes">
+    <div class="section-title">F · Secuencias de email frío (Cold Email)</div>
+    <p class="lead">4 secuencias consultivas de 4 correos cada una, hipersegmentadas por dolor. Clic para desplegar la cadencia.</p>
+    <div id="seqAcc"></div>
+
+    <div class="section-title">G · Social selling en LinkedIn</div>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Mensajes de conexión por perfil</h3>
+        <ul class="bullets" style="margin-top:6px">
+          <li><b>Directores de Supply Chain / Logística</b> — foco en visibilidad y reducción de quiebres.</li>
+          <li><b>CFOs / Finanzas</b> — convertir costos fijos de depósito en variables.</li>
+          <li><b>Gerentes de E-commerce</b> — escalar ventas sin colapso de fulfillment.</li>
+          <li><b>Despachantes de Aduana</b> — alianzas comex y storage post-puerto.</li>
+          <li><b>Gerentes de Operaciones</b> — tecnología, trazabilidad y control online.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Cadencia de seguimiento</h3>
+        <ul class="bullets" style="margin-top:6px">
+          <li><b>Día 2</b> — mensaje tras aceptación del contacto.</li>
+          <li><b>Día 5</b> — presentación del portal TOPS Connect.</li>
+          <li><b>Día 10</b> — enfoque en las 1.500 posiciones listas.</li>
+          <li><b>Día 15</b> — invitación a visita de planta y coworking.</li>
+          <li><b>Día 20</b> — cierre de contacto consultivo.</li>
+        </ul>
+        <div class="callout" style="margin:14px 0 0">Campaña desde el perfil del <b>Presidente, Martín Battaglia</b>, con 5 publicaciones de contenido sobre eficiencia y costos logísticos (CEDOL) en AMBA.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: ALIANZAS -->
+  <!-- ============================================================= -->
+  <section class="panel" id="p-alianzas">
+    <div class="section-title">K · Red de alianzas estratégicas (14 socios)</div>
+    <p class="lead">Acuerdos de recomendación comercial con actores clave del ecosistema industrial y de comercio exterior argentino para acelerar el pipeline.</p>
+    <div class="grid g3" id="allyGrid"></div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PANEL: PLAN & CRM -->
+  <!-- ============================================================= -->
+  <section class="panel" id="p-plan">
+    <div class="section-title">L · Cronograma operativo de 90 días</div>
+    <div class="card">
+      <div class="timeline" id="timeline"></div>
+    </div>
+
+    <div class="section-title">M · CRM, scoring y pipeline</div>
+    <div class="grid g2">
+      <div class="card">
+        <h3>🧮 Scoring de leads (0–100)</h3>
+        <p class="sub">Algoritmo automatizado de priorización comercial.</p>
+        <ul class="bullets" style="margin-top:4px">
+          <li><b>Urgencia del dolor</b> — depósito colapsado, sobrecostos de flete.</li>
+          <li><b>Capacidad de pago & ticket</b> — USD esperado mensual.</li>
+          <li><b>Compatibilidad técnica</b> — racks Mecalux y superficie 3.000 m².</li>
+          <li><b>Facilidad de contacto</b> y probabilidad de tercerizar.</li>
+          <li><b>Potencial de cross-selling</b> y permanencia de contrato.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>⚙️ Automatizaciones & alertas</h3>
+        <ul class="bullets" style="margin-top:4px">
+          <li><b>Reactivación:</b> lead en "Propuesta Presentada" sin actividad en 3 días hábiles → tarea de seguimiento por WhatsApp.</li>
+          <li><b>Visita agendada:</b> al cambiar a "Visita a Planta" → email automático con plano de Agustín Magaldi, normas de seguridad y accesos.</li>
+          <li><b>Sincronización IT:</b> al pasar a "Negociación" → tarea a Sistemas para validar compatibilidad ERP ↔ WMS NeuralSoft.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <span>Logística TOPS · Verotin S.A. — Auditoría Comercial y Plan de Captación de Cargas Generales</span>
+    <span>Panel interactivo standalone · Junio 2026</span>
+  </footer>
+</div>
+
+<script>
+/* ===================== DATA ===================== */
+const SEGMENTS = [
+  {n:"Importadores de Tecnología / IT", sc:9.3, d:[10,10,9,9,9,10,9,9,9]},
+  {n:"Overflow E-commerce (ML)", sc:8.8, d:[10,9,8,10,9,8,9,8,9]},
+  {n:"Depósitos Propios Saturados", sc:8.6, d:[9,8,9,8,8,9,10,9,8]},
+  {n:"Mayoristas Insumos Industriales", sc:8.2, d:[8,8,9,8,7,10,9,9,8]},
+  {n:"Consumo Masivo Alimentos Secos", sc:8.0, d:[7,8,10,7,8,9,9,10,8]},
+  {n:"Distribuidores Electro / Línea Blanca", sc:7.8, d:[8,9,8,8,6,10,8,8,7]},
+  {n:"Operaciones Bazar y Hogar", sc:7.6, d:[7,7,9,9,8,8,9,8,7]},
+  {n:"Farmacia / Cosmética (No Regulada)", sc:7.5, d:[8,9,7,7,8,8,7,9,8]},
+  {n:"Empresas en Pilar con foco CABA", sc:7.2, d:[7,8,8,7,6,9,8,7,6]},
+  {n:"Juguetes (Operación Estacional)", sc:6.9, d:[9,7,8,8,8,7,8,5,5]},
+];
+const DIMS = ["Urgencia dolor","Capacidad pago","Volumen pot.","Facilidad contacto","Prob. tercerizar","Compat. racks","Compat. 3.000m²","Permanencia","Cross-selling"];
+
+const ICPS = [
+  {pri:1, t:"Evitar inversión en depósito propio", conv:"Muy Alta · 85%", ticket:"USD 7.000–16.000/mes", comp:"Baja-Media",
+   dolor:"Presupuesto inicial restrictivo, temor a pasivos laborales de depósito y burocracia de habilitaciones.",
+   signal:"Constitución de nuevas unidades de negocio o subsidiarias de corporaciones extranjeras.",
+   canal:"Estudios contables, consultoras comex y LinkedIn.",
+   msg:"Establezca su operación logística en 24 horas en CABA sin inversiones iniciales de capital."},
+  {pri:2, t:"E-commerce en crecimiento", conv:"Alta · 70%", ticket:"USD 3.000–7.000/mes", comp:"Baja-Media",
+   dolor:"Colapso operativo in-house en Hot Sale / CyberMonday, falta de espacio y errores de picking.",
+   signal:"Aumento de despachos diarios o quejas en redes por demoras de entrega.",
+   canal:"Agencias de marketing digital y plataformas de software e-commerce.",
+   msg:"Escale sus ventas digitales sin preocuparse por el depósito: fulfillment automatizado en CABA."},
+  {pri:2, t:"Valoran trazabilidad y portal B2B", conv:"Alta · 70%", ticket:"USD 6.000–14.000/mes", comp:"Media-Alta",
+   dolor:"Tiempo administrativo en disputas de inventario, consultas por estado de entrega y falta de control.",
+   signal:"Auditorías negativas de stock o quejas de la gerencia comercial por falta de info online.",
+   canal:"LinkedIn outbound a directores de supply chain de tecnología y salud.",
+   msg:"Trazabilidad B2B absoluta: controle su inventario en tiempo real desde el portal TOPS Connect."},
+  {pri:4, t:"Operaciones estacionales (picos)", conv:"Media-Alta · 60%", ticket:"USD 5.000–15.000/mes", comp:"Baja-Media",
+   dolor:"Costo de depósitos propios vacíos en temporada baja vs. falta de capacidad en picos.",
+   signal:"Preparación de campañas estacionales (juguetes en Navidad, ventiladores en primavera).",
+   canal:"Prospección ABM dirigida a rubros según la estación.",
+   msg:"Logística flexible y elástica: pague únicamente por el espacio físico que utiliza mes a mes."},
+];
+
+const CHANNELS = [
+  {c:"Email Frío Hipersegmentado", r:"Excelente", impl:"Secuencias automatizadas a CUITs de comex validados.", res:"Tasa de respuesta ~8%, leads calificados constantes.", plazo:"15 días", costo:"Bajo", pri:"Alta"},
+  {c:"LinkedIn Outbound", r:"Excelente", impl:"Campaña desde el perfil del Presidente a directores de supply chain.", res:"Reuniones de venta directa con corporaciones medianas.", plazo:"30 días", costo:"Medio", pri:"Alta"},
+  {c:"Alianzas con Despachantes", r:"Excelente", impl:"Acuerdos con despachantes del CDA con comisión de derivación.", res:"Derivación directa de importadores con necesidad real.", plazo:"45 días", costo:"Comisión", pri:"Alta"},
+  {c:"Google Ads Search", r:"Alta", impl:"Campañas hípersegmentadas por dolor y geolocalizadas.", res:"Captura demanda activa calificada del mercado metropolitano.", plazo:"7 días", costo:"Alto", pri:"Alta"},
+  {c:"Brokers Logísticos", r:"Alta", impl:"Inscripción en carteras de brokers de real estate corporativo.", res:"Propuestas a grandes cuentas corporativas.", plazo:"30 días", costo:"Comisión", pri:"Media"},
+  {c:"Remarketing", r:"Alta", impl:"Anuncios Meta / Google Display a visitantes de landings.", res:"TOPS como opción preferida en fase de decisión.", plazo:"15 días", costo:"Bajo", pri:"Media"},
+  {c:"Campañas ABM", r:"Media-Alta", impl:"50 cuentas objetivo con depósitos saturados.", res:"Contratos a largo plazo con clientes estratégicos.", plazo:"60 días", costo:"Alto", pri:"Media"},
+];
+
+const SEQ = [
+  {t:"Importadores de Tecnología / IT", focus:"Trazabilidad por nº de serie, control QR y seguridad in-situ", mails:[
+    {s:"Correo 1 · Día 0", subj:"Costo logístico puerto-depósito / Barracas", f:"El dolor del número de serie"},
+    {s:"Correo 2 · Día 4", subj:"Control de stock y cámaras IP en vivo (TOPS Connect)", f:"Control visual en vivo"},
+    {s:"Correo 3 · Día 7", subj:"Racks Mecalux disponibles / Onboarding express en Barracas", f:"Prueba piloto y racks incluidos"},
+    {s:"Correo 4 · Día 14", subj:"¿Cerramos el expediente por el momento?", f:"Break-up / cierre"},
+  ]},
+  {t:"E-commerce con escala (ML Full Overflow)", focus:"Evitar cargos por stock antiguo en Mercado Libre", mails:[
+    {s:"Correo 1 · Día 0", subj:"Evitar sobrecostos de stock antiguo en Mercado Libre", f:"El trigger del cargo por antigüedad"},
+    {s:"Correo 2 · Día 4", subj:"Logística flexible para e-commerce en Barracas", f:"Sincronización y velocidad"},
+    {s:"Correo 3 · Día 7", subj:"Recorrer el predio de Barracas / Almacenamiento e-commerce", f:"Visita al predio y coworking"},
+    {s:"Correo 4 · Día 14", subj:"¿Mantenemos la logística de e-commerce in-house?", f:"Break-up / cierre"},
+  ]},
+  {t:"Depósito propio saturado", focus:"Reducción de sobrecostos, optimización física y racks listos", mails:[
+    {s:"Correo 1 · Día 0", subj:"[Nombre], colapso de depósito / Overflow en Barracas", f:"El dolor del hacinamiento"},
+    {s:"Correo 2 · Día 4", subj:"Trazabilidad de stock sin planillas de Excel", f:"Trazabilidad y WMS"},
+    {s:"Correo 3 · Día 7", subj:"Beneficios comerciales de transición en Barracas", f:"Primer mes gratis"},
+    {s:"Correo 4 · Día 14", subj:"Cierre de contacto por disponibilidad de racks", f:"Break-up / cierre"},
+  ]},
+  {t:"Empresas lejos de CABA (Pilar)", focus:"Reducción del flete por km en distribución AMBA", mails:[
+    {s:"Correo 1 · Día 0", subj:"Almacenar en Pilar vs. distribuir en CABA / Última milla", f:"El costo oculto del flete interurbano"},
+    {s:"Correo 2 · Día 4", subj:"Última milla garantizada en AMBA sin intermediarios", f:"Flota propia y velocidad"},
+    {s:"Correo 3 · Día 7", subj:"Mudanza logística sin cargo y puesta en marcha inmediata", f:"Beneficios de mudanza"},
+    {s:"Correo 4 · Día 14", subj:"Costos de flete metropolitano / Cierre de contacto", f:"Break-up / cierre"},
+  ]},
+];
+
+const ALLIES = [
+  {t:"Despachantes de aduana", inc:"Storage inmediato post-puerto para destrabar operaciones.", comm:"50% del primer mes del cliente derivado"},
+  {t:"Freight forwarders", inc:"Alianza 3PL para última milla AMBA tras la aduana.", comm:"Tarifa preferencial o 5% mensual"},
+  {t:"Agentes de carga internacional", inc:"Espacio pulmón para consolidación/desconsolidación.", comm:"10% en eslingaje y manipuleo"},
+  {t:"Estudios contables corporativos", inc:"Eliminar pasivos laborales de depósito propio.", comm:"USD 500 por contrato firmado"},
+  {t:"Consultoras de comercio exterior", inc:"Depósito habilitado con racks e integración WMS.", comm:"5% de facturación el primer año"},
+  {t:"Empresas de packaging", inc:"Partner para insumos voluminosos listos para entrega.", comm:"Descuento cruzado en embalaje"},
+  {t:"Proveedores de software e-commerce", inc:"Integración nativa que mejora su control de stock.", comm:"Comisión por licencia recíproca"},
+  {t:"Agencias de Mercado Libre", inc:"Alternativa para reducir multas de stock antiguo.", comm:"10% mensual los primeros 6 meses"},
+  {t:"Cámaras empresarias sectoriales", inc:"Charlas y contenido educativo sobre costos CEDOL.", comm:"Membresía + patrocinio de eventos"},
+  {t:"Asociaciones de importadores", inc:"Oferta preferencial para socios con depósito inmediato.", comm:"5% descuento grupal en m²"},
+  {t:"Brokers industriales", inc:"Espacio en CABA para solicitudes urgentes de alquiler.", comm:"1 mes de alquiler bruto"},
+  {t:"Inmobiliarias logísticas", inc:"Operador flexible para clientes no tradicionales.", comm:"Comisión estándar de corretaje"},
+  {t:"Transportistas AMBA", inc:"Depósito urbano receptor para descarga inmediata.", comm:"Cross-docking o comisión por pallet"},
+  {t:"Proveedores de fulfillment", inc:"Depósito pulmón y racks para operadores de última milla.", comm:"Tarifa mayorista por volumen"},
+];
+
+const TIMELINE = [
+  {ph:"Primeras 72 horas", t:"Auditoría de sistemas y fichas técnicas", items:["Auditar TOPS Connect y WMS NeuralSoft","Generar fichas técnicas de naves Agustín Magaldi / Pedro de Luján","Preparar material comercial premium"]},
+  {ph:"Primeros 7 días", t:"Lanzamiento digital y campañas inbound", items:["Activar Google Ads Search hipersegmentado","Publicar landing pages críticas con keywords B2B","Instalar pixeles de remarketing"]},
+  {ph:"Primeros 15 días", t:"Social selling y remarketing activo", items:["Lanzar email frío a CUITs de comex enriquecidos","Iniciar LinkedIn outbound desde la presidencia","Campañas de remarketing Meta / Display"]},
+  {ph:"Primeros 30 días", t:"Llamadas de venta y visitas a planta", items:["Foco prioritario: importadores de tecnología / IT","Coordinar visitas a planta y demos de coworking","Activar alianzas con despachantes del CDA"]},
+  {ph:"Primeros 60 días", t:"Negociaciones de contratos y SLAs", items:["Negociar contratos y acuerdos de nivel de servicio","Validar compatibilidad ERP ↔ WMS","Cerrar campañas ABM de cuentas estratégicas"]},
+  {ph:"Primeros 90 días", t:"Consolidación de ocupación y onboarding", items:["Onboarding técnico de clientes firmados","Consolidar ocupación de los 3.000 m²","Medir KPIs y optimizar el pipeline"]},
+];
+
+/* ===================== RENDER HELPERS ===================== */
+const $ = s=>document.querySelector(s), ce=(t,c)=>{const e=document.createElement(t);if(c)e.className=c;return e};
+const heatColor=v=>{const t=(v-5)/5;const r=Math.round(255-(255-51)*t),g=Math.round(96+(214-96)*t),b=Math.round(121+(166-121)*t);return `rgba(${r},${g},${b},.22)`};
+
+/* Tabs */
+document.querySelectorAll('.tab').forEach(tb=>tb.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  tb.classList.add('active');
+  $('#p-'+tb.dataset.tab).classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(tb.dataset.tab==='seg') setTimeout(animBars,80);
+  if(tb.dataset.tab==='diag') setTimeout(drawDonut,80);
+}));
+
+/* Theme */
+$('#themeBtn').addEventListener('click',()=>{
+  const h=document.documentElement;
+  const dark=h.getAttribute('data-theme')==='dark';
+  h.setAttribute('data-theme',dark?'light':'dark');
+  $('#themeBtn').textContent=dark?'☀️ Tema':'🌙 Tema';
+});
+
+/* Donut */
+function drawDonut(){
+  const svg=$('#donut'); if(!svg) return; svg.innerHTML='';
+  const cx=90,cy=90,r=64,sw=24, segs=[{v:95,c:'var(--primary)'},{v:5,c:'var(--accent)'}];
+  let off=0; const C=2*Math.PI*r;
+  segs.forEach(s=>{
+    const len=C*s.v/100;
+    const ci=document.createElementNS('http://www.w3.org/2000/svg','circle');
+    ci.setAttribute('cx',cx);ci.setAttribute('cy',cy);ci.setAttribute('r',r);
+    ci.setAttribute('fill','none');ci.setAttribute('stroke',s.c);ci.setAttribute('stroke-width',sw);
+    ci.setAttribute('stroke-dasharray',`${len} ${C-len}`);ci.setAttribute('stroke-dashoffset',-off);
+    ci.setAttribute('transform',`rotate(-90 ${cx} ${cy})`);
+    ci.style.transition='stroke-dasharray 1s ease';
+    svg.appendChild(ci); off+=len;
+  });
+  const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+  tx.setAttribute('x',cx);tx.setAttribute('y',cy-4);tx.setAttribute('text-anchor','middle');
+  tx.setAttribute('fill','var(--text)');tx.setAttribute('font-size','30');tx.setAttribute('font-weight','850');tx.textContent='95%';
+  svg.appendChild(tx);
+  const t2=document.createElementNS('http://www.w3.org/2000/svg','text');
+  t2.setAttribute('x',cx);t2.setAttribute('y',cy+15);t2.setAttribute('text-anchor','middle');
+  t2.setAttribute('fill','var(--muted)');t2.setAttribute('font-size','11');t2.textContent='Google Search';
+  svg.appendChild(t2);
+}
+
+/* Segment bars */
+function renderBars(){
+  const c=$('#segBars'); c.innerHTML='';
+  SEGMENTS.forEach((s,i)=>{
+    const row=ce('div','barrow'); row.dataset.i=i;
+    row.innerHTML=`<div class="nm">${i+1}. ${s.n}</div>
+      <div class="bartrack"><div class="barfill" data-w="${s.sc*10}"></div></div>
+      <div class="sc">${s.sc.toFixed(1)}</div>`;
+    row.addEventListener('click',()=>drawRadar(i));
+    c.appendChild(row);
+  });
+}
+function animBars(){document.querySelectorAll('.barfill').forEach(f=>f.style.width=f.dataset.w+'%')}
+
+/* Radar */
+function drawRadar(idx){
+  const s=SEGMENTS[idx]; $('#radarName').textContent='· '+s.n;
+  const svg=$('#radar'); svg.innerHTML='';
+  const cx=160,cy=155,R=110,N=DIMS.length;
+  const ns='http://www.w3.org/2000/svg';
+  [2,4,6,8,10].forEach(lvl=>{
+    const pts=[];for(let i=0;i<N;i++){const a=-Math.PI/2+i*2*Math.PI/N;const rr=R*lvl/10;pts.push(`${cx+rr*Math.cos(a)},${cy+rr*Math.sin(a)}`)}
+    const pg=document.createElementNS(ns,'polygon');pg.setAttribute('points',pts.join(' '));
+    pg.setAttribute('fill','none');pg.setAttribute('stroke','var(--border)');pg.setAttribute('stroke-width','1');svg.appendChild(pg);
+  });
+  for(let i=0;i<N;i++){const a=-Math.PI/2+i*2*Math.PI/N;
+    const ln=document.createElementNS(ns,'line');ln.setAttribute('x1',cx);ln.setAttribute('y1',cy);
+    ln.setAttribute('x2',cx+R*Math.cos(a));ln.setAttribute('y2',cy+R*Math.sin(a));
+    ln.setAttribute('stroke','var(--border)');svg.appendChild(ln);
+    const lx=cx+(R+16)*Math.cos(a),ly=cy+(R+16)*Math.sin(a);
+    const tx=document.createElementNS(ns,'text');tx.setAttribute('x',lx);tx.setAttribute('y',ly);
+    tx.setAttribute('text-anchor',Math.abs(Math.cos(a))<0.3?'middle':(Math.cos(a)>0?'start':'end'));
+    tx.setAttribute('fill','var(--muted)');tx.setAttribute('font-size','8.5');tx.setAttribute('font-weight','700');
+    tx.textContent=DIMS[i];svg.appendChild(tx);
+  }
+  const pts=s.d.map((v,i)=>{const a=-Math.PI/2+i*2*Math.PI/N;const rr=R*v/10;return `${cx+rr*Math.cos(a)},${cy+rr*Math.sin(a)}`});
+  const area=document.createElementNS(ns,'polygon');area.setAttribute('points',pts.join(' '));
+  area.setAttribute('fill','rgba(47,125,246,.25)');area.setAttribute('stroke','var(--primary-2)');area.setAttribute('stroke-width','2');
+  area.style.transition='all .4s';svg.appendChild(area);
+  s.d.forEach((v,i)=>{const a=-Math.PI/2+i*2*Math.PI/N;const rr=R*v/10;
+    const ci=document.createElementNS(ns,'circle');ci.setAttribute('cx',cx+rr*Math.cos(a));ci.setAttribute('cy',cy+rr*Math.sin(a));
+    ci.setAttribute('r','3');ci.setAttribute('fill','var(--accent)');svg.appendChild(ci);});
+  document.querySelectorAll('.barrow').forEach(r=>r.style.background=r.dataset.i==idx?'rgba(47,125,246,.1)':'');
+}
+
+/* Heat table */
+function renderHeat(){
+  let h='<table><thead><tr><th>Segmento</th>'+DIMS.map(d=>`<th title="${d}">${d.split(' ')[0].slice(0,4)}</th>`).join('')+'<th>Final</th></tr></thead><tbody>';
+  SEGMENTS.forEach(s=>{
+    h+=`<tr><td><b>${s.n}</b></td>`+s.d.map(v=>`<td style="text-align:center"><span class="heat" style="background:${heatColor(v)}">${v}</span></td>`).join('')+`<td class="cell-num" style="color:var(--primary-2)">${s.sc.toFixed(1)}</td></tr>`;
+  });
+  $('#heatTable').innerHTML=h+'</tbody></table>';
+}
+
+/* ICP cards */
+function renderICP(filter='all'){
+  const g=$('#icpGrid'); g.innerHTML='';
+  ICPS.filter(i=>filter==='all'||i.pri==filter).forEach(i=>{
+    const pb=i.pri==1?'b-crit':i.pri==2?'b-high':'b-med';
+    const pl=i.pri==1?'Crítica P1':i.pri==2?'Alta P2':'Media P4';
+    const c=ce('div','card icp');
+    c.innerHTML=`<div class="row"><h3>${i.t}</h3><span class="badge ${pb}">${pl}</span></div>
+      <dl>
+        <dt>Dolor</dt><dd>${i.dolor}</dd>
+        <dt>Señal</dt><dd>${i.signal}</dd>
+        <dt>Canal</dt><dd>${i.canal}</dd>
+        <dt>Conversión</dt><dd><b style="color:var(--ok)">${i.conv}</b></dd>
+        <dt>Ticket</dt><dd>${i.ticket} · complejidad ${i.comp}</dd>
+      </dl>
+      <div class="quote">“${i.msg}”</div>`;
+    g.appendChild(c);
+  });
+}
+document.querySelectorAll('#icpFilters .pill').forEach(p=>p.addEventListener('click',()=>{
+  document.querySelectorAll('#icpFilters .pill').forEach(x=>x.classList.remove('active'));
+  p.classList.add('active'); renderICP(p.dataset.pri);
+}));
+
+/* Channels table */
+function renderChannels(filter='all'){
+  const recBadge=r=>r==='Excelente'?'b-ok':r==='Alta'?'b-high':'b-med';
+  let h='<table><thead><tr><th>Canal</th><th>Recom.</th><th>Cómo implementar</th><th>Resultado esperado</th><th>Plazo</th><th>Costo</th><th>Prioridad</th></tr></thead><tbody>';
+  CHANNELS.filter(c=>filter==='all'||c.pri===filter).forEach(c=>{
+    h+=`<tr><td><b>${c.c}</b></td><td><span class="badge ${recBadge(c.r)}">${c.r}</span></td><td>${c.impl}</td><td>${c.res}</td><td>${c.plazo}</td><td>${c.costo}</td><td><span class="badge ${c.pri==='Alta'?'b-high':'b-blue'}">${c.pri}</span></td></tr>`;
+  });
+  $('#chTable').innerHTML=h+'</tbody></table>';
+}
+document.querySelectorAll('#chFilters .pill').forEach(p=>p.addEventListener('click',()=>{
+  document.querySelectorAll('#chFilters .pill').forEach(x=>x.classList.remove('active'));
+  p.classList.add('active'); renderChannels(p.dataset.f);
+}));
+
+/* Sequences accordion */
+function renderSeq(){
+  const c=$('#seqAcc'); c.innerHTML='';
+  SEQ.forEach((s,i)=>{
+    const a=ce('div','acc'); if(i===0)a.classList.add('open');
+    a.innerHTML=`<div class="acc-h"><span class="seqn">${i+1}</span><div><div>${s.t}</div><div style="font-size:11.5px;color:var(--muted);font-weight:500">Foco: ${s.focus}</div></div><span class="arrow">▸</span></div>
+      <div class="acc-b"><div class="acc-b-inner">${s.mails.map(m=>`<div class="mail"><div class="step">${m.s} · ${m.f}</div><div class="subj">Asunto: ${m.subj}</div></div>`).join('')}</div></div>`;
+    a.querySelector('.acc-h').addEventListener('click',()=>a.classList.toggle('open'));
+    c.appendChild(a);
+  });
+}
+
+/* Allies */
+function renderAllies(){
+  const g=$('#allyGrid'); g.innerHTML='';
+  ALLIES.forEach((a,i)=>{
+    const c=ce('div','card ally');
+    c.innerHTML=`<div class="top"><span class="n">${i+1}</span><h4>${a.t}</h4></div><div class="inc">${a.inc}</div><div class="comm">💰 ${a.comm}</div>`;
+    g.appendChild(c);
+  });
+}
+
+/* Timeline */
+function renderTimeline(){
+  const c=$('#timeline'); c.innerHTML='';
+  TIMELINE.forEach(t=>{
+    const d=ce('div','tl-item');
+    d.innerHTML=`<h4><span class="ph">${t.ph}</span> ${t.t}</h4><ul>${t.items.map(i=>`<li>${i}</li>`).join('')}</ul>`;
+    c.appendChild(d);
+  });
+}
+
+/* INIT */
+renderBars(); drawRadar(0); renderHeat(); renderICP(); renderChannels(); renderSeq(); renderAllies(); renderTimeline();
+setTimeout(animBars,300);
+</script>
+</body>
+</html>
