@@ -64,8 +64,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname === "/api/whatsapp/webhook" ||
     // Webhook de Clientify: ruta tokenizada /api/clientify/webhook/<token>. El token-en-URL
-    // se valida dentro del handler (verifyWebhookToken). NO incluye /api/clientify/ping ni
-    // /api/clientify/sync-* (siguen privados: no empiezan con ".../webhook/").
+    // se valida dentro del handler (verifyWebhookToken). /api/clientify/ping sigue privado;
+    // /api/clientify/sync-deals es cron (Bearer CRON_SECRET) → ver allowlist más abajo.
     pathname === "/api/clientify/webhook" ||
     pathname.startsWith("/api/clientify/webhook/") ||
     pathname === "/api/tracking/ingest" || // Traccar Client postea sin sesión; protegido por token propio
@@ -81,6 +81,10 @@ export async function updateSession(request: NextRequest) {
     // `Authorization: Bearer CRON_SECRET` sin cookie; la auth se valida DENTRO
     // del handler. Sólo la ruta exacta.
     pathname === "/api/tesoreria/caja-chica/sync" ||
+    // Sync diario del Tablero Comercial (Clientify → Supabase): el cron (GitHub Actions)
+    // postea con `Authorization: Bearer CRON_SECRET` sin cookie; la auth se valida DENTRO
+    // del handler. Sólo la ruta exacta — no /api/clientify/* (ping sigue privado).
+    pathname === "/api/clientify/sync-deals" ||
     pathname.startsWith("/compras/validar") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
