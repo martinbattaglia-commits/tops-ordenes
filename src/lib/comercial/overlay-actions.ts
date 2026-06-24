@@ -9,19 +9,17 @@ const HORIZONTES = new Set([
 
 export async function upsertDealOverlay(input: {
   dealId: number;
-  probabilidad?: number | null;
   horizonte?: string | null;
   observaciones?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
+  // La probabilidad NO se edita en Nexus: sale siempre de Clientify. Acá solo
+  // se anotan horizonte y observaciones (la RLS exige rol operaciones/admin/supervisor).
   const supabase = createClient();
   if (!supabase) return { ok: false, error: "Supabase no disponible" };
 
   const { data: auth } = await supabase.auth.getUser();
   if (!auth?.user) return { ok: false, error: "No autenticado" };
 
-  // Validación (defensa en profundidad; la RLS exige rol operaciones/admin/supervisor).
-  if (input.probabilidad != null && (input.probabilidad < 0 || input.probabilidad > 100))
-    return { ok: false, error: "Probabilidad fuera de rango" };
   if (input.horizonte != null && !HORIZONTES.has(input.horizonte))
     return { ok: false, error: "Horizonte inválido" };
   const obs = input.observaciones?.slice(0, 2000) ?? null;
@@ -29,7 +27,6 @@ export async function upsertDealOverlay(input: {
   const { error } = await supabase.from("crm_deal_overlay").upsert(
     {
       clientify_deal_id: input.dealId,
-      probabilidad: input.probabilidad ?? null,
       horizonte: input.horizonte ?? null,
       observaciones: obs,
       updated_by: auth.user.id,

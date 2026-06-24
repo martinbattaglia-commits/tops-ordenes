@@ -11,16 +11,25 @@ function ed(p: Partial<EnrichedDeal>): EnrichedDeal {
 }
 
 describe("computeKpis", () => {
-  it("forecast solo sobre activos no-expired; pipeline vivo excluye won/lost/expired", () => {
+  const today = new Date("2026-06-24T12:00:00");
+  it("forecast/pipeline solo sobre vivos; concreción ponderada, bandas y vencidas", () => {
     const k = computeKpis([
-      ed({ amount: 1000, effective_probability: 50, status: "open" }),
-      ed({ amount: 2000, effective_probability: 80, status: "expired" }),
-      ed({ amount: 5000, effective_probability: 100, status: "won" }),
-    ]);
-    expect(k.count).toBe(3);
-    expect(k.activePipeline).toBe(1000);  // solo open
-    expect(k.forecast).toBe(500);          // 1000*0.5
+      ed({ amount: 1000, effective_probability: 50, status: "open", expected_close: "2026-06-01" }), // vencido, banda alta
+      ed({ amount: 3000, effective_probability: 10, status: "open" }),                                // banda baja, no vencido
+      ed({ amount: 2000, effective_probability: 80, status: "expired" }),                             // excluido (vivos = open/other)
+      ed({ amount: 5000, effective_probability: 100, status: "won" }),                                // excluido
+    ], today);
+    expect(k.count).toBe(4);
+    expect(k.activePipeline).toBe(4000);     // open: 1000+3000
+    expect(k.forecast).toBe(800);             // 1000*0.5 + 3000*0.1
     expect(k.wonAmount).toBe(5000);
+    expect(k.weightedConcretion).toBe(20);    // 800/4000*100, ponderada por monto
+    expect(k.overdueCount).toBe(1);           // solo el de fecha 2026-06-01
+    expect(k.overdueAmount).toBe(1000);
+    const alta = k.bands.find((b) => b.key === "alta")!;
+    const baja = k.bands.find((b) => b.key === "baja")!;
+    expect(alta.count).toBe(1); expect(alta.amount).toBe(1000); // prob 50
+    expect(baja.count).toBe(1); expect(baja.amount).toBe(3000); // prob 10
   });
 });
 

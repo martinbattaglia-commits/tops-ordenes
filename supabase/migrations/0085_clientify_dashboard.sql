@@ -48,7 +48,8 @@ create index if not exists clientify_cache_modified_idx on public.clientify_deal
 -- Reemplaza el localStorage per-device del artefacto. 1 fila por deal.
 create table if not exists public.crm_deal_overlay (
   clientify_deal_id bigint primary key,                 -- = clientify_deals_cache.deal_id
-  probabilidad      int check (probabilidad between 0 and 100), -- override manual (null = usar la de Clientify)
+  -- La PROBABILIDAD de concreción NO vive acá: se toma siempre de Clientify (foto
+  -- del último corte). En Nexus solo se anotan horizonte y observaciones.
   horizonte         text,                               -- 'Esta semana' | '15 días' | ... | 'A definir'
   observaciones     text,
   updated_by        uuid references auth.users(id) on delete set null,
@@ -150,11 +151,10 @@ grant execute on function public.clientify_replace_deals_cache(jsonb, uuid) to s
 create or replace view public.v_clientify_deals_enriched
   with (security_invoker = true) as
   select c.*,
-         o.probabilidad  as overlay_probabilidad,
          o.horizonte     as overlay_horizonte,
          o.observaciones as overlay_observaciones,
          o.updated_at    as overlay_updated_at,
-         coalesce(o.probabilidad, c.probability) as effective_probability
+         c.probability   as effective_probability   -- prob. SIEMPRE de Clientify (foto de hoy); el overlay no la pisa
   from public.clientify_deals_cache c
   left join public.crm_deal_overlay o on o.clientify_deal_id = c.deal_id;
 

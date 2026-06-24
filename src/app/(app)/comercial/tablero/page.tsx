@@ -1,5 +1,7 @@
 import { getTableroData } from "@/lib/comercial/dashboard-data";
 import { KpiCards } from "@/components/comercial/tablero/KpiCards";
+import { PipelineDonut } from "@/components/comercial/tablero/PipelineDonut";
+import { ConcretionBars } from "@/components/comercial/tablero/ConcretionBars";
 import { FunnelChart } from "@/components/comercial/tablero/FunnelChart";
 import { DealsTable } from "@/components/comercial/tablero/DealsTable";
 
@@ -35,6 +37,10 @@ export default async function TableroPage() {
       </header>
 
       <KpiCards kpis={data.kpis} trends={data.trends} />
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <PipelineDonut byPipeline={data.kpis.byPipeline} />
+        <ConcretionBars bands={data.kpis.bands} />
+      </section>
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <FunnelChart deals={data.deals} />
       </section>

@@ -12,7 +12,8 @@ export interface TableroData {
 }
 
 const EMPTY_KPIS: Kpis = {
-  count: 0, totalPipeline: 0, activePipeline: 0, forecast: 0, wonAmount: 0, avgProbability: 0, byPipeline: [],
+  count: 0, totalPipeline: 0, activePipeline: 0, forecast: 0, wonAmount: 0, avgProbability: 0,
+  weightedConcretion: 0, overdueCount: 0, overdueAmount: 0, bands: [], byPipeline: [],
 };
 
 export async function getTableroData(): Promise<TableroData> {
@@ -54,7 +55,7 @@ export async function getTableroData(): Promise<TableroData> {
   return {
     configured: env.clientify.configured,
     deals,
-    kpis: deals.length ? computeKpis(deals) : EMPTY_KPIS,
+    kpis: deals.length ? computeKpis(deals, new Date()) : EMPTY_KPIS,
     trends,
     lastSync: log?.[0]?.finished_at ?? null,
   };

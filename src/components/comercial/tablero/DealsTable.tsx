@@ -7,6 +7,8 @@ import { dealAlerts, type EnrichedDeal } from "@/lib/comercial/dashboard-kpis";
 const HORIZONTES = ["Esta semana", "15 días", "30 días", "60 días", "90 días", "+90 días", "A definir"];
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n || 0);
+const probTone = (p: number) =>
+  p >= 50 ? "text-emerald-600 dark:text-emerald-400" : p <= 20 ? "text-red-600 dark:text-red-400" : "text-slate-700 dark:text-slate-200";
 
 export function DealsTable({ deals }: { deals: EnrichedDeal[] }) {
   const today = useMemo(() => new Date(), []); // estable entre renders (evita recomputar alertas)
@@ -14,7 +16,7 @@ export function DealsTable({ deals }: { deals: EnrichedDeal[] }) {
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
         <h3 className="text-sm font-semibold">Oportunidades</h3>
-        <p className="text-[11px] text-slate-400">Probabilidad, horizonte y observaciones se guardan para todo el equipo.</p>
+        <p className="text-[11px] text-slate-400">La probabilidad viene de Clientify (foto de hoy). Horizonte y observaciones se editan acá para todo el equipo.</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -23,7 +25,7 @@ export function DealsTable({ deals }: { deals: EnrichedDeal[] }) {
               <th className="px-4 py-3 text-left">Cliente</th>
               <th className="px-4 py-3 text-left">Pipeline</th>
               <th className="px-4 py-3 text-right">Importe</th>
-              <th className="px-4 py-3 text-left">Prob. ★</th>
+              <th className="px-4 py-3 text-left">Prob. concreción</th>
               <th className="px-4 py-3 text-left">Horizonte ★</th>
               <th className="px-4 py-3 text-left">Observaciones ★</th>
             </tr>
@@ -38,7 +40,6 @@ export function DealsTable({ deals }: { deals: EnrichedDeal[] }) {
 }
 
 function Row({ d, today }: { d: EnrichedDeal; today: Date }) {
-  const [prob, setProb] = useState(d.effective_probability);
   const [hor, setHor] = useState(d.overlay_horizonte ?? "A definir");
   const [obs, setObs] = useState(d.overlay_observaciones ?? "");
   const [pending, start] = useTransition();
@@ -50,7 +51,6 @@ function Row({ d, today }: { d: EnrichedDeal; today: Date }) {
       if (!res.ok) {
         // Guardado rechazado (p.ej. la RLS exige rol operaciones): revertir al
         // valor del servidor y avisar, en vez de dejar el cambio "pegado".
-        setProb(d.effective_probability);
         setHor(d.overlay_horizonte ?? "A definir");
         setObs(d.overlay_observaciones ?? "");
         setErr(res.error ?? "No se pudo guardar");
@@ -72,12 +72,9 @@ function Row({ d, today }: { d: EnrichedDeal; today: Date }) {
       </td>
       <td className="px-4 py-3 text-xs text-slate-500">{d.pipeline}</td>
       <td className="px-4 py-3 text-right font-mono">{fmt(d.amount)}</td>
-      <td className="px-4 py-3">
-        <input type="range" min={0} max={100} step={5} value={prob}
-          onChange={(e) => setProb(+e.target.value)}
-          onMouseUp={() => save({ probabilidad: prob })}
-          onTouchEnd={() => save({ probabilidad: prob })} className="w-28" />
-        <span className="ml-2 font-mono text-xs">{prob}%</span>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <span className={`font-mono text-sm font-semibold ${probTone(d.effective_probability)}`}>{d.effective_probability}%</span>
+        <span className="ml-1 text-[10px] text-slate-400">Clientify</span>
       </td>
       <td className="px-4 py-3">
         <select value={hor} onChange={(e) => { setHor(e.target.value); save({ horizonte: e.target.value }); }}
