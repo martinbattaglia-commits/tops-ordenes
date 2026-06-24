@@ -8,9 +8,9 @@ import { createDriveSheetSource } from "./sync-drive";
 import { createSupabaseCashBoxDb } from "./sync-db";
 import type { CajaChicaSyncReport } from "./types";
 
-export async function runCajaChicaSync(opts: RunOpts): Promise<CajaChicaSyncReport> {
+export async function runCajaChicaSync(opts: RunOpts, periodosOverride?: number[]): Promise<CajaChicaSyncReport> {
   const fileId = env.cajaChica.driveFileId || null;
-  const periodos = env.cajaChica.periodos;
+  const periodos = periodosOverride && periodosOverride.length ? periodosOverride : env.cajaChica.periodos;
   const now = () => new Date();
   const db = createSupabaseCashBoxDb();
 

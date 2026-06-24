@@ -1,0 +1,50 @@
+name: Caja Chica · Drive Sync (diario 21:05 ART)
+
+# Espejo diario de la Caja Chica (Tesorería) desde la planilla de Google Drive
+# «Caja chica .xlsx» (solapa por ejercicio: 2026, 2027…), fuente de verdad
+# operativa. Dispara el endpoint protegido /api/tesoreria/caja-chica/sync, que
+# baja el XLSX por fileId, parsea, categoriza y hace snapshot-replace en Supabase.
+#
+# Horario: 00:05 UTC = 21:05 America/Argentina/Buenos_Aires (UTC-3 fijo, sin DST).
+# Se corre 5 min después de Compliance/Contratos (21:00) para no solaparse.
+#
+# Secrets requeridos (GitHub → Settings → Secrets and variables → Actions):
+#   - CRON_SECRET : mismo valor que la env var CRON_SECRET en Netlify.
+#   - APP_URL     : (opcional) base URL del deploy; default https://tops-ordenes.netlify.app
+#
+# Env requerida en Netlify (no acá): CAJA_CHICA_DRIVE_FILE_ID (+ la Service Account
+# de Drive ya compartida sobre la planilla). La sync corre en el servidor (Netlify);
+# este workflow sólo la dispara.
+
+on:
+  schedule:
+    - cron: "5 0 * * *" # 00:05 UTC = 21:05 ART, diario
+  workflow_dispatch: {} # disparo manual on-demand
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caja-chica-drive-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Caja Chica ↔ Drive sync endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_URL:-https://tops-ordenes.netlify.app}"
+          echo "POST $BASE/api/tesoreria/caja-chica/sync"
+          code=$(curl -sS --max-time 120 -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "$BASE/api/tesoreria/caja-chica/sync")
+          echo "HTTP $code"
+          cat /tmp/resp.json || true
+          echo
+          test "$code" = "200"

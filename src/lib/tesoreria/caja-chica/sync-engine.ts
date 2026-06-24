@@ -93,7 +93,7 @@ function aggByCategoria(rows: ParsedRow[]): Record<string, number> {
   return acc;
 }
 
-function pickPrimary(perPeriodo: PeriodoResult[]): PeriodoResult | null {
+export function pickPrimary(perPeriodo: PeriodoResult[]): PeriodoResult | null {
   const completed = perPeriodo.filter((p) => p.status === "completed");
   const pool = completed.length ? completed : perPeriodo;
   return pool.length ? pool.reduce((a, b) => (b.periodo > a.periodo ? b : a)) : null;
