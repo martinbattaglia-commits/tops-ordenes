@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   dateValue: { fontFamily: "JetBrains Mono", fontSize: 9.5, fontWeight: 600, color: "#ffffff" },
 
   // ---- Body ----
-  body: { padding: `20 ${PAD_X}`, gap: 17.6 },
+  body: { padding: `16 ${PAD_X}`, gap: 12.5 },
 
   parties: { flexDirection: "row", gap: 11 },
   card: {
@@ -571,7 +571,7 @@ export function InvoicePdfDocument({ invoice, config, qrDataUrl }: Props) {
             </View>
             {items.map((it, i) => (
               <View key={i} style={[styles.tRow, ...(i > 0 ? [styles.tRowBorder] : [])]}>
-                <View style={[styles.colDesc, { paddingVertical: 10.8 }]}>
+                <View style={[styles.colDesc, { paddingVertical: 8.6 }]}>
                   <Text style={styles.cellTitle}>{it.descripcion}</Text>
                 </View>
                 <Text style={[styles.cellMono, styles.colCant]}>{it.cantidad}</Text>
@@ -586,7 +586,6 @@ export function InvoicePdfDocument({ invoice, config, qrDataUrl }: Props) {
           {invoice.observ ? (
             <View
               style={{
-                marginTop: 10,
                 borderWidth: 0.8,
                 borderColor: C.hairline,
                 borderLeftWidth: 2.4,
