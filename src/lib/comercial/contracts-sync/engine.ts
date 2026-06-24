@@ -108,7 +108,24 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
     return make("error", `No se pudo resolver la carpeta de contratos: ${msg(e)}`);
   }
   if (!folderId) {
-    return make("skipped", `Carpeta de contratos no encontrada (${env.contratos.driveSubpath}).`);
+    // Drive SÍ está configurado (se chequeó arriba): no resolver la carpeta de
+    // clientes es una MISCONFIG, no un "skip". Falla fuerte para que el cron lo vea.
+    return make(
+      "error",
+      `Carpeta de Contratos no resuelta (${env.contratos.driveSubpath}). Seteá CONTRATOS_DRIVE_FOLDER_ID con el ID de la carpeta de clientes y compartila con la Service Account (Lector).`,
+      { folderId: null, folderVia },
+    );
+  }
+  // Guarda anti-misconfig: la carpeta de Contratos NUNCA debe ser el root de la SA
+  // (que es la carpeta de Compliance). Si coinciden, el sync ingeriría el árbol
+  // equivocado (docs de Compliance como "contratos") → fallar fuerte y visible.
+  const driveRoot = env.google.driveRootFolderId;
+  if (driveRoot && folderId === driveRoot) {
+    return make(
+      "error",
+      `Carpeta de Contratos mal configurada: apunta al root de la Service Account (carpeta de Compliance: ${driveRoot}). Configurá CONTRATOS_DRIVE_FOLDER_ID con la carpeta de clientes «${env.contratos.driveSubpath}» y compartila con la Service Account.`,
+      { folderId, folderVia },
+    );
   }
 
   // Crear fila de corrida (para FK de eventos).
@@ -417,7 +434,10 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
   }
 
   const alertsRaised = countAlerts(events);
-  const status: SyncRunStatus = truncated ? "partial" : "completed";
+  // 'partial' si hubo errores de upsert/extracción O si se truncó por presupuesto:
+  // una corrida con errores NO debe reportarse 'completed' (paridad con Compliance,
+  // que ya lo hace en su engine). Evita que el cron vea verde un sync degradado.
+  const status: SyncRunStatus = errors > 0 || truncated ? "partial" : "completed";
   const deferNote = extractDeferred
     ? " Extracción de texto diferida en algunos documentos (se completa en próximas corridas)."
     : "";

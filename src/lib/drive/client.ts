@@ -668,27 +668,33 @@ export async function findFolderByPath(parts: string[], fromFolderId?: string): 
   return current;
 }
 
-/** Resuelve la carpeta operativa de Contratos (id directo de env, por ruta, o root). */
+/**
+ * Resuelve la carpeta operativa de Contratos: id directo de env, o por ruta de nombres.
+ *
+ * IMPORTANTE: NO degrada al root de la Service Account. Ese root es la carpeta de
+ * Compliance (AGENCIA GUBERNAMENTAL DE CONTROL); caer ahí hacía que el sync de
+ * Contratos ingiriera el árbol equivocado en silencio (docs ANMAT como "contratos")
+ * y se reportara verde. Si no se puede resolver la carpeta de clientes, devuelve
+ * { id: null } y el motor falla fuerte (status 'error'), en vez de sincronizar mal.
+ */
 export async function resolveContratosFolderId(): Promise<{
   id: string | null;
   via: "env-id" | "path" | "root" | "none";
 }> {
-  const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim();
+  // 1) ID explícito en env: se confía (es un secreto de servidor, no input de usuario).
+  //    Sólo requiere que la SA tenga acceso a la carpeta (compartida como Lector). NO se
+  //    exige que esté bajo el root: la carpeta de clientes vive en otro subtree (Comercial/…),
+  //    distinto al root de Compliance.
   const direct = process.env.CONTRATOS_DRIVE_FOLDER_ID?.trim();
-  if (direct) {
-    // Enforce de scope: la carpeta debe estar dentro del subtree del root de la SA.
-    if (!root || direct === root || (await isUnderRoot(direct))) return { id: direct, via: "env-id" };
-    logDrive("warn", { op: "resolveContratos.scope-denied", folderId: direct });
-    return root ? { id: root, via: "root" } : { id: null, via: "none" };
-  }
-  // findFolderByPath parte del root → el resultado queda dentro del scope por construcción.
+  if (direct) return { id: direct, via: "env-id" };
+  // 2) Resolución por ruta de NOMBRES desde el root de la SA.
   const subpath = (process.env.CONTRATOS_DRIVE_PATH?.trim() || "Comercial/Cynthia/Clientes")
     .split("/")
     .map((s) => s.trim())
     .filter(Boolean);
-  const byPath = await findFolderByPath(subpath);
+  const byPath = subpath.length ? await findFolderByPath(subpath) : null;
   if (byPath) return { id: byPath, via: "path" };
-  if (root) return { id: root, via: "root" };
+  // 3) Sin id ni ruta resuelta → NO caer al root (= carpeta de Compliance). Misconfig.
   return { id: null, via: "none" };
 }
 

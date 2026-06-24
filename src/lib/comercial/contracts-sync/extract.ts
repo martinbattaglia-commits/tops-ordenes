@@ -23,6 +23,9 @@ const MIME = {
 const MAX_TEXT = 200_000;
 const clamp = (t: string) => (t.length > MAX_TEXT ? t.slice(0, MAX_TEXT) : t);
 
+/** Tope para el parseo nativo de un PDF: un PDF malformado no debe colgar la corrida. */
+const PDF_PARSE_TIMEOUT_MS = 8_000;
+
 function qualityOf(text: string): DocQuality {
   const n = text.trim().length;
   if (n === 0) return "sin_texto";
@@ -47,16 +50,45 @@ function isCriticalError(e: unknown): boolean {
   return /\b401\b|\b403\b|\b429\b|unauthor|forbidden|quota|rate.?limit|invalid.?api.?key|invalid.?credential|permission.?denied/.test(m);
 }
 
-/** Texto nativo de un PDF vía pdf-parse (sin costo, sin OpenAI). */
-async function pdfNativeText(buf: Buffer): Promise<string> {
+/** Timeout duro para una promesa: evita que un PDF malformado cuelgue getText()/
+ *  destroy() y queme el presupuesto de la corrida en silencio. */
+async function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label}: timeout tras ${ms}ms`)), ms);
+  });
+  try {
+    return await Promise.race([p, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Texto nativo de un PDF vía pdf-parse (sin costo, sin OpenAI). Devuelve el texto y,
+ * si falló, el `error` — en vez de tragarlo en un `catch` desnudo. Así el motor puede
+ * distinguir un fallo de infraestructura (auth/cuota → propagar) de un PDF ilegible,
+ * y un cuelgue del parser no consume el deadline sin dejar rastro.
+ */
+async function pdfNativeText(buf: Buffer): Promise<{ text: string; error?: string }> {
+  let parser: { getText(): Promise<{ text?: string }>; destroy(): Promise<void> } | null = null;
   try {
     const { PDFParse } = await import("pdf-parse");
-    const parser = new PDFParse({ data: new Uint8Array(buf) });
-    const res = await parser.getText();
-    await parser.destroy();
-    return (res.text ?? "").trim();
-  } catch {
-    return "";
+    parser = new PDFParse({ data: new Uint8Array(buf) });
+    const res = await withTimeout(parser.getText(), PDF_PARSE_TIMEOUT_MS, "pdf-parse getText");
+    return { text: (res.text ?? "").trim() };
+  } catch (e) {
+    return { text: "", error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    // destroy con guarda: liberar recursos es best-effort, no debe colgar ni
+    // enmascarar el resultado/error principal.
+    if (parser) {
+      try {
+        await withTimeout(parser.destroy(), 2_000, "pdf-parse destroy");
+      } catch {
+        /* noop */
+      }
+    }
   }
 }
 
@@ -97,7 +129,10 @@ export async function extractDocumentText(file: DriveWalkFile): Promise<ExtractR
     }
     if (file.mimeType === MIME.PDF) {
       const buf = await downloadFileBuffer(file.id);
-      const native = await pdfNativeText(buf);
+      const { text: native, error: pdfErr } = await pdfNativeText(buf);
+      // Un fallo crítico del parser (auth/cuota/rate-limit) se propaga; uno simple
+      // (PDF ilegible/corrupto) se cataloga sin texto pero queda registrado en `error`.
+      if (pdfErr && isCriticalError(pdfErr)) throw new Error(pdfErr);
       if (native.length >= 100) {
         return { text: clamp(native), source: "pdf_text", quality: qualityOf(native) };
       }
@@ -118,7 +153,12 @@ export async function extractDocumentText(file: DriveWalkFile): Promise<ExtractR
           };
         }
       }
-      return { text: native, source: "pdf_text", quality: native ? "parcial" : "sin_texto" };
+      return {
+        text: native,
+        source: "pdf_text",
+        quality: native ? "parcial" : "sin_texto",
+        error: pdfErr,
+      };
     }
     // DOCX y otros formatos binarios: se registra el documento sin texto.
     return { text: "", source: "none", quality: "sin_texto" };
