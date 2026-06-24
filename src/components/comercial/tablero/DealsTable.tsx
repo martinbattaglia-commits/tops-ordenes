@@ -42,9 +42,22 @@ function Row({ d, today }: { d: EnrichedDeal; today: Date }) {
   const [hor, setHor] = useState(d.overlay_horizonte ?? "A definir");
   const [obs, setObs] = useState(d.overlay_observaciones ?? "");
   const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
   type Patch = Omit<Parameters<typeof upsertDealOverlay>[0], "dealId">;
   const save = (patch: Patch) =>
-    start(async () => { await upsertDealOverlay({ dealId: d.deal_id, ...patch }); });
+    start(async () => {
+      const res = await upsertDealOverlay({ dealId: d.deal_id, ...patch });
+      if (!res.ok) {
+        // Guardado rechazado (p.ej. la RLS exige rol operaciones): revertir al
+        // valor del servidor y avisar, en vez de dejar el cambio "pegado".
+        setProb(d.effective_probability);
+        setHor(d.overlay_horizonte ?? "A definir");
+        setObs(d.overlay_observaciones ?? "");
+        setErr(res.error ?? "No se pudo guardar");
+      } else {
+        setErr(null);
+      }
+    });
   const alerts = dealAlerts(d, today);
 
   return (
@@ -55,6 +68,7 @@ function Row({ d, today }: { d: EnrichedDeal; today: Date }) {
         {alerts.map((a) => (
           <span key={a.kind} className="mr-1 mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">{a.label}</span>
         ))}
+        {err && <div className="mt-1 text-[10px] text-red-600" title={err}>⚠ {err}</div>}
       </td>
       <td className="px-4 py-3 text-xs text-slate-500">{d.pipeline}</td>
       <td className="px-4 py-3 text-right font-mono">{fmt(d.amount)}</td>
