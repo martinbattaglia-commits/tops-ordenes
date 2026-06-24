@@ -171,13 +171,25 @@ create or replace view public.v_cash_box_resumen
     select distinct on (periodo)
            periodo, saldo_excel, saldo_delta, saldo_source, snapshot_date
     from public.cash_box_snapshots
-    order by periodo, snapshot_date desc)
+    order by periodo, snapshot_date desc),
+  lastsync as (  -- última corrida del log que tocó el período (run_id/estado/warnings)
+    select p.periodo, l.run_id, l.status, l.warnings, l.finished_at
+    from (select distinct periodo from public.cash_box_transactions) p
+    left join lateral (
+      select run_id, status, warnings, finished_at
+      from public.cash_box_sync_log
+      where p.periodo = any(periodos)
+      order by started_at desc
+      limit 1
+    ) l on true)
   select a.periodo,
          a.total_acreditado, a.total_gasto, a.movimientos,
          (a.total_acreditado - a.total_gasto) as saldo_calculado,
-         u.saldo_excel, u.saldo_delta, u.saldo_source, u.snapshot_date as ultimo_snapshot
+         u.saldo_excel, u.saldo_delta, u.saldo_source, u.snapshot_date as ultimo_snapshot,
+         ls.run_id as last_run_id, ls.status as last_status, ls.warnings as last_warnings, ls.finished_at as ultima_sync
   from agg a
-  left join ult u using (periodo);
+  left join ult u using (periodo)
+  left join lastsync ls using (periodo);
 
 -- ---- RLS ----------------------------------------------------------------
 -- Lectura: cualquier autenticado (datos de staff). Escritura: roles tesorería.
