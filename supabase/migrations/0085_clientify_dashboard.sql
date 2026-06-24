@@ -114,7 +114,7 @@ set search_path = public, pg_temp
 as $$
 declare v_count int;
 begin
-  delete from public.clientify_deals_cache;
+  delete from public.clientify_deals_cache where true;  -- where true: prod tiene guard anti-DELETE-sin-WHERE (safeupdate)
   insert into public.clientify_deals_cache
     (deal_id, title, contact_name, company_name, amount, currency, stage, stage_id,
      pipeline, pipeline_id, probability, status, status_label, owner_name,
