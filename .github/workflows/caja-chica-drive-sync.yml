@@ -19,7 +19,12 @@ name: Caja Chica · Drive Sync (diario 21:05 ART)
 on:
   schedule:
     - cron: "5 0 * * *" # 00:05 UTC = 21:05 ART, diario
-  workflow_dispatch: {} # disparo manual on-demand
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Dry-run (1 = recorre y reporta sin escribir; 0 = sync real). El cron programado siempre corre real."
+        default: "1"
+        required: false
 
 permissions:
   contents: read
@@ -37,13 +42,15 @@ jobs:
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          DRY: ${{ github.event.inputs.dry || '0' }}
         run: |
           set -euo pipefail
           BASE="${APP_URL:-https://tops-ordenes.netlify.app}"
-          echo "POST $BASE/api/tesoreria/caja-chica/sync"
+          URL="$BASE/api/tesoreria/caja-chica/sync?dry=${DRY}"
+          echo "POST $URL"
           code=$(curl -sS --max-time 120 -o /tmp/resp.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            "$BASE/api/tesoreria/caja-chica/sync")
+            "$URL")
           echo "HTTP $code"
           cat /tmp/resp.json || true
           echo
