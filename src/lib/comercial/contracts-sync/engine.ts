@@ -15,7 +15,8 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   isDriveConfigured,
-  resolveContratosFolderId,
+  resolveContratosFolderIds,
+  getFileName,
   listFolderForSync,
   walkFolderForSync,
 } from "@/lib/drive/client";
@@ -97,18 +98,39 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
     return make("skipped", "Supabase service-role no configurado (SUPABASE_SERVICE_ROLE_KEY).");
   }
 
-  // Resolver carpeta operativa.
-  let folderId: string | null = null;
+  // Resolver carpeta(s) contenedora(s). Cada contenedor es una carpeta de categoría
+  // (p.ej. «CLIENTES DE ANMAT», «CLIENTES CARGAS GENERALES») cuyos hijos directos son
+  // los dossiers de cliente. CONTRATOS_DRIVE_FOLDER_ID admite varias separadas por coma;
+  // si está vacío, se resuelve por ruta de nombres.
+  let containerIds: string[] = [];
   let folderVia = "none";
   try {
-    const r = await resolveContratosFolderId();
-    folderId = r.id;
+    const r = await resolveContratosFolderIds();
+    containerIds = r.ids;
     folderVia = r.via;
   } catch (e) {
     return make("error", `No se pudo resolver la carpeta de contratos: ${msg(e)}`);
   }
-  if (!folderId) {
-    return make("skipped", `Carpeta de contratos no encontrada (${env.contratos.driveSubpath}).`);
+  if (!containerIds.length) {
+    // Drive SÍ está configurado (se chequeó arriba): no resolver la carpeta de
+    // clientes es una MISCONFIG, no un "skip". Falla fuerte para que el cron lo vea.
+    return make(
+      "error",
+      `Carpeta de Contratos no resuelta (${env.contratos.driveSubpath}). Seteá CONTRATOS_DRIVE_FOLDER_ID con el/los ID(s) de la(s) carpeta(s) de categoría de clientes (separados por coma) y compartilas con la Service Account (Lector).`,
+      { folderVia },
+    );
+  }
+  const folderId = containerIds.join(",");
+  // Guarda anti-misconfig: ningún contenedor de Contratos debe ser el root de la SA
+  // (que es la carpeta de Compliance). Si coincide, el sync ingeriría el árbol
+  // equivocado (docs de Compliance como "contratos") → fallar fuerte y visible.
+  const driveRoot = env.google.driveRootFolderId;
+  if (driveRoot && containerIds.includes(driveRoot)) {
+    return make(
+      "error",
+      `Carpeta de Contratos mal configurada: incluye el root de la Service Account (carpeta de Compliance: ${driveRoot}). Configurá CONTRATOS_DRIVE_FOLDER_ID con la(s) carpeta(s) de clientes «${env.contratos.driveSubpath}», no el root.`,
+      { folderId, folderVia },
+    );
   }
 
   // Crear fila de corrida (para FK de eventos).
@@ -178,16 +200,27 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
       });
     }
 
-    // Carpetas de cliente (dossiers) directamente bajo "Clientes".
-    const top = await listFolderForSync(folderId);
-    const clientFolders = top.filter((e) => e.isFolder);
-    const looseFiles = top.filter((e) => !e.isFolder);
-    foldersScanned = clientFolders.length;
-    if (looseFiles.length) {
-      events.push({ level: "info", category: "folder", action: "loose_files", detail: `${looseFiles.length} archivo(s) sueltos en la raíz (sin dossier de cliente).` });
+    // Dossiers de cliente bajo cada contenedor de categoría. El `tipo` del contrato se
+    // deriva del nombre de la categoría (CLIENTES DE ANMAT → ANMAT; resto → Cargas
+    // Generales) para no etiquetar mal a los clientes regulados.
+    type ClientDossier = { cf: Awaited<ReturnType<typeof listFolderForSync>>[number]; tipo: "ANMAT" | "Cargas Generales" };
+    const clientDossiers: ClientDossier[] = [];
+    let looseCount = 0;
+    for (const containerId of containerIds) {
+      const containerName = (await getFileName(containerId)) ?? "";
+      const tipo: "ANMAT" | "Cargas Generales" = /anmat/i.test(containerName) ? "ANMAT" : "Cargas Generales";
+      const top = await listFolderForSync(containerId);
+      for (const e of top) {
+        if (e.isFolder) clientDossiers.push({ cf: e, tipo });
+        else looseCount += 1;
+      }
+    }
+    foldersScanned = clientDossiers.length;
+    if (looseCount) {
+      events.push({ level: "info", category: "folder", action: "loose_files", detail: `${looseCount} archivo(s) sueltos en la raíz de los contenedores (sin dossier de cliente).` });
     }
 
-    for (const cf of clientFolders) {
+    for (const { cf, tipo: contractTipo } of clientDossiers) {
       if (Date.now() - t0 > timeBudgetMs) {
         truncated = true;
         events.push({ level: "warn", category: "folder", action: "time_budget", detail: `Presupuesto de tiempo agotado; quedan dossiers sin procesar.` });
@@ -213,7 +246,7 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
               .insert({
                 razon_social: razon,
                 cuit: cuitRaw,
-                tipo: "Cargas Generales",
+                tipo: contractTipo,
                 estado: "Vigente",
                 riesgo: "Medio",
                 semaforo: "Azul",
@@ -417,7 +450,10 @@ export async function runContractsSync(opts: RunOpts): Promise<SyncRunReport> {
   }
 
   const alertsRaised = countAlerts(events);
-  const status: SyncRunStatus = truncated ? "partial" : "completed";
+  // 'partial' si hubo errores de upsert/extracción O si se truncó por presupuesto:
+  // una corrida con errores NO debe reportarse 'completed' (paridad con Compliance,
+  // que ya lo hace en su engine). Evita que el cron vea verde un sync degradado.
+  const status: SyncRunStatus = errors > 0 || truncated ? "partial" : "completed";
   const deferNote = extractDeferred
     ? " Extracción de texto diferida en algunos documentos (se completa en próximas corridas)."
     : "";

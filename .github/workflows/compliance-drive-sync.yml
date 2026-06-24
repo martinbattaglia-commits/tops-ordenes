@@ -47,4 +47,14 @@ jobs:
           echo "HTTP $code"
           cat /tmp/resp.json || true
           echo
+          # La corrida es exitosa SÓLO si el endpoint respondió 200 Y el reporte cerró
+          # 'completed' sin errores. Un 200 con status 'partial'/'skipped'/'error' o
+          # errors>0 es una sincronización degradada (no debe verse verde en el cron).
           test "$code" = "200"
+          status=$(jq -r '.status // "unknown"' /tmp/resp.json)
+          errors=$(jq -r '.errors // 0' /tmp/resp.json)
+          echo "report.status=$status report.errors=$errors"
+          if [ "$status" != "completed" ] || [ "$errors" != "0" ]; then
+            echo "::error::Sync degradado (status=$status, errors=$errors). Revisar el reporte arriba."
+            exit 1
+          fi

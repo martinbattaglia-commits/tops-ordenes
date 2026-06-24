@@ -668,28 +668,48 @@ export async function findFolderByPath(parts: string[], fromFolderId?: string): 
   return current;
 }
 
-/** Resuelve la carpeta operativa de Contratos (id directo de env, por ruta, o root). */
-export async function resolveContratosFolderId(): Promise<{
-  id: string | null;
-  via: "env-id" | "path" | "root" | "none";
+/** Nombre de un archivo/carpeta por id (metadata mínima). NO aplica el guard de root:
+ *  pensado para contenedores configurados explícitamente (Contratos), que viven fuera
+ *  del root de la SA. */
+export async function getFileName(fileId: string): Promise<string | null> {
+  const drive = requireDrive();
+  const res = await drive.files.get({ fileId, fields: "name", supportsAllDrives: true });
+  return res.data.name ?? null;
+}
+
+/**
+ * Resuelve la(s) carpeta(s) contenedora(s) de Contratos: id(s) directo(s) de env
+ * (CONTRATOS_DRIVE_FOLDER_ID, separados por coma), o por ruta de nombres.
+ *
+ * Cada contenedor es una carpeta de CATEGORÍA («CLIENTES DE ANMAT», «CLIENTES
+ * CARGAS GENERALES»…) cuyos hijos directos son los dossiers de cliente.
+ *
+ * IMPORTANTE: NO degrada al root de la Service Account. Ese root es la carpeta de
+ * Compliance (AGENCIA GUBERNAMENTAL DE CONTROL); caer ahí hacía que el sync de
+ * Contratos ingiriera el árbol equivocado en silencio (docs ANMAT como "contratos")
+ * y se reportara verde. Si no resuelve, devuelve { ids: [] } y el motor falla fuerte.
+ */
+export async function resolveContratosFolderIds(): Promise<{
+  ids: string[];
+  via: "env-id" | "path" | "none";
 }> {
-  const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim();
-  const direct = process.env.CONTRATOS_DRIVE_FOLDER_ID?.trim();
-  if (direct) {
-    // Enforce de scope: la carpeta debe estar dentro del subtree del root de la SA.
-    if (!root || direct === root || (await isUnderRoot(direct))) return { id: direct, via: "env-id" };
-    logDrive("warn", { op: "resolveContratos.scope-denied", folderId: direct });
-    return root ? { id: root, via: "root" } : { id: null, via: "none" };
+  // 1) ID(s) explícito(s) en env: se confía (secreto de servidor, no input de usuario).
+  //    Sólo requiere que la SA tenga acceso (carpeta compartida como Lector). NO se exige
+  //    que estén bajo el root: la carpeta de clientes vive en otro subtree (Comercial/…).
+  const directRaw = process.env.CONTRATOS_DRIVE_FOLDER_ID?.trim();
+  if (directRaw) {
+    const ids = directRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    if (ids.length) return { ids, via: "env-id" };
   }
-  // findFolderByPath parte del root → el resultado queda dentro del scope por construcción.
+  // 2) Resolución por ruta de NOMBRES desde el root de la SA (un solo contenedor).
   const subpath = (process.env.CONTRATOS_DRIVE_PATH?.trim() || "Comercial/Cynthia/Clientes")
     .split("/")
     .map((s) => s.trim())
     .filter(Boolean);
-  const byPath = await findFolderByPath(subpath);
-  if (byPath) return { id: byPath, via: "path" };
-  if (root) return { id: root, via: "root" };
-  return { id: null, via: "none" };
+  const byPath = subpath.length ? await findFolderByPath(subpath) : null;
+  if (byPath) return { ids: [byPath], via: "path" };
+  // 3) Sin id ni ruta resuelta → NO caer al root (= carpeta de Compliance). Misconfig.
+  return { ids: [], via: "none" };
 }
 
 /** Lista todos los hijos directos de un folder (paginado completo) con metadata de sync. */
