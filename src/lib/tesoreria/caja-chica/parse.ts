@@ -169,7 +169,13 @@ export function extractMatrix(ws: Worksheet): CellMatrix {
     const cells: Cell[] = [];
     for (let c = 1; c <= MAX_COL; c++) {
       const cell = row.getCell(c);
-      cells.push({ value: cell.value, text: cell.text ?? "" });
+      // Defensa: algunas celdas (fórmulas con result null, tipos raros) hacen
+      // throw al leer .value/.text. No deben tumbar el parseo del período.
+      let value: unknown = null;
+      let text = "";
+      try { value = cell.value; } catch { value = null; }
+      try { text = cell.text ?? ""; } catch { text = value == null ? "" : String(value); }
+      cells.push({ value, text });
     }
     m.push(cells);
   });
