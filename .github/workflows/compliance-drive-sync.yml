@@ -19,7 +19,12 @@ name: Compliance · Drive Sync (diario 21:00 ART)
 on:
   schedule:
     - cron: "0 0 * * *" # 00:00 UTC = 21:00 ART, diario
-  workflow_dispatch: {} # disparo manual on-demand
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run: recorre Drive y reporta SIN escribir en Supabase (no upsert, no alertas, no bajas). Validación segura."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -37,13 +42,20 @@ jobs:
         env:
           APP_URL: ${{ secrets.APP_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          # En corridas por `schedule` este input viene vacío ('') → falsy → sync real.
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           BASE="${APP_URL:-https://tops-ordenes.netlify.app}"
-          echo "POST $BASE/api/compliance/sync"
+          URL="$BASE/api/compliance/sync"
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            URL="$URL?dry=1"
+            echo "::notice::DRY-RUN activado — el endpoint recorre y reporta pero NO escribe en Supabase."
+          fi
+          echo "POST $URL"
           code=$(curl -sS --max-time 120 -o /tmp/resp.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${CRON_SECRET}" \
-            "$BASE/api/compliance/sync")
+            "$URL")
           echo "HTTP $code"
           cat /tmp/resp.json || true
           echo
