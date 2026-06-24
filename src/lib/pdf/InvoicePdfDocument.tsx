@@ -570,7 +570,7 @@ export function InvoicePdfDocument({ invoice, config, qrDataUrl }: Props) {
               <Text style={[styles.th, styles.colImp]}>Importe</Text>
             </View>
             {items.map((it, i) => (
-              <View key={i} style={[styles.tRow, ...(i > 0 ? [styles.tRowBorder] : [])]} wrap={false}>
+              <View key={i} style={[styles.tRow, ...(i > 0 ? [styles.tRowBorder] : [])]}>
                 <View style={[styles.colDesc, { paddingVertical: 10.8 }]}>
                   <Text style={styles.cellTitle}>{it.descripcion}</Text>
                 </View>

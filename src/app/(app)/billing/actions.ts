@@ -6,6 +6,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { listOrders } from "@/lib/data/orders";
+import { unitLabel } from "@/lib/services-catalog";
+import type { Order } from "@/lib/types";
 import { emitInvoice, type EmitInvoiceInput } from "@/lib/invoicing/emit";
 import {
   getFiscalConfig,
@@ -168,6 +170,27 @@ export async function emitInvoiceAction(
 // Action: consolidar órdenes FIRMADAS de un cliente en una Factura A
 // ============================================================================
 
+/**
+ * Compone el detalle de un renglón de factura a partir del detalle COMPLETO de
+ * la OS (servicios + observaciones), con ancla a la OS de origen. Snapshot:
+ * el texto se persiste en invoice_items.descripcion al emitir y queda congelado
+ * (tg_lock_authorized_invoice). NO altera importes ni el payload a ARCA
+ * (la descripción no se transmite al WS). Espeja el formato del PDF de la OS
+ * (OrderPdfDocument: label · qty · unidad). Nunca devuelve vacío (la columna es
+ * NOT NULL).
+ */
+function buildOrderDetalle(o: Order): string {
+  const lineas = (o.services ?? [])
+    .map((s) => `• ${s.label} — ${s.qty} ${unitLabel(s.unit)}`)
+    .join("\n");
+  const cuerpo = lineas || "Servicios de logística";
+  const observ = o.observ?.trim() ? `\n${o.observ.trim()}` : "";
+  const ancla = `\nSegún OS N° ${o.public_id} de fecha ${new Date(
+    o.date
+  ).toLocaleDateString("es-AR")}.`;
+  return `${cuerpo}${observ}${ancla}`;
+}
+
 export async function emitFromClientOrdersAction(
   clientId: string
 ): Promise<EmitResult> {
@@ -199,7 +222,7 @@ export async function emitFromClientOrdersAction(
     const client = orders[0].client!;
     const periodo = new Date().toISOString().slice(0, 7);
     const items = orders.map((o) => ({
-      descripcion: `OS ${o.public_id} — ${new Date(o.date).toLocaleDateString("es-AR")}`,
+      descripcion: buildOrderDetalle(o),
       cantidad: 1,
       precio_unitario: Number(o.total ?? 0),
       alicuota_iva: 21,
