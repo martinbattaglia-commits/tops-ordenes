@@ -180,11 +180,14 @@ begin
   end loop;
 end $$;
 
--- Escritura del overlay: solo roles comerciales (los demás writes van por service-role).
+-- Escritura del overlay: roles del equipo comercial. user_role_t (0001) = admin|
+-- operaciones|supervisor|cliente → el equipo comercial opera como 'operaciones'
+-- (misma convención que crm_opportunities/0042 y caja-chica/0082). Los demás writes
+-- (caché/snapshots/log) van por service-role.
 drop policy if exists "crm_deal_overlay write" on public.crm_deal_overlay;
 create policy "crm_deal_overlay write" on public.crm_deal_overlay
   for all to authenticated
-  using (public.current_role() in ('admin','supervisor','comercial'))
-  with check (public.current_role() in ('admin','supervisor','comercial'));
+  using (public.current_role() in ('admin','supervisor','operaciones'))
+  with check (public.current_role() in ('admin','supervisor','operaciones'));
 
 notify pgrst, 'reload schema';

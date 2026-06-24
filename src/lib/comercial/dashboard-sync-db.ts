@@ -24,7 +24,10 @@ export async function persistDealsSync(
 
   const snapRows = buildSnapshotRows(deals, runId).map((r) => ({
     ...r,
-    snapshot_date: new Date().toISOString().slice(0, 10),
+    // Fecha en horario ART (el cron corre 00:00 UTC = 21:00 ART): sin esto el
+    // snapshot quedaría etiquetado 1 día adelante y un re-run manual del mismo día
+    // ART crearía una fila nueva en vez de upsert. en-CA → formato YYYY-MM-DD.
+    snapshot_date: new Date().toLocaleDateString("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }),
   }));
   if (snapRows.length) {
     const { error: snapErr } = await admin
