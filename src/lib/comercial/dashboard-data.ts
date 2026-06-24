@@ -32,7 +32,7 @@ export interface TableroData {
 }
 
 const EMPTY_KPIS: Kpis = {
-  count: 0, totalPipeline: 0, activePipeline: 0, forecast: 0, wonAmount: 0, avgProbability: 0,
+  count: 0, liveCount: 0, totalPipeline: 0, activePipeline: 0, forecast: 0, wonAmount: 0, avgProbability: 0,
   weightedConcretion: 0, highProbPipeline: 0, nextCloseValue: 0, overdueCount: 0, overdueAmount: 0,
   noActionCount: 0, bands: [], byPipeline: [],
 };

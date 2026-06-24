@@ -86,7 +86,7 @@ export function ForecastTrend({ series, deltas }: Props) {
       <div className="p-3">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="w-full h-[180px]"
+          className="w-full h-[180px] text-fg-muted"
           preserveAspectRatio="none"
           aria-hidden="true"
         >
@@ -109,14 +109,15 @@ export function ForecastTrend({ series, deltas }: Props) {
                 y1={t.y}
                 x2={W - pad.r}
                 y2={t.y}
-                stroke="#EEF1F6"
+                stroke="currentColor"
+                strokeOpacity="0.15"
                 strokeWidth="1"
               />
               <text
                 x={pad.l - 8}
                 y={t.y + 4}
                 fontSize="10"
-                fill="#8A94A6"
+                fill="currentColor"
                 textAnchor="end"
               >
                 {Math.abs(t.v) >= 1e6
@@ -127,10 +128,10 @@ export function ForecastTrend({ series, deltas }: Props) {
           ))}
 
           {/* X-axis date labels */}
-          <text x={pad.l} y={H - 4} fontSize="10" fill="#8A94A6" textAnchor="start">
+          <text x={pad.l} y={H - 4} fontSize="10" fill="currentColor" textAnchor="start">
             {firstDate}
           </text>
-          <text x={W - pad.r} y={H - 4} fontSize="10" fill="#8A94A6" textAnchor="end">
+          <text x={W - pad.r} y={H - 4} fontSize="10" fill="currentColor" textAnchor="end">
             {lastDate}
           </text>
 

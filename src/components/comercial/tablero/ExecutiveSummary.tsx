@@ -117,7 +117,7 @@ export function ExecutiveSummary({
     {
       icon: "wallet",
       label: "Pipeline vivo",
-      desc: `${kpis.count} oportunidades activas`,
+      desc: `${kpis.liveCount} oportunidades activas`,
       colorClass: "text-fg-brand",
       content: (
         <div className="kpi-value text-fg-brand">

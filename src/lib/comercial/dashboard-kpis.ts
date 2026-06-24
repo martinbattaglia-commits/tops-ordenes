@@ -27,7 +27,8 @@ export interface ProbBand {
 }
 
 export interface Kpis {
-  count: number;
+  count: number;               // total de oportunidades visibles (incluye vencidas/ganadas/perdidas)
+  liveCount: number;           // oportunidades vivas (open/other) — las que realmente cuentan
   totalPipeline: number;       // Σ amount (todos)
   activePipeline: number;      // Σ amount (open/other) — pipeline vivo
   forecast: number;            // Σ amount*prob/100 (open/other)
@@ -86,6 +87,7 @@ export function computeKpis(deals: EnrichedDeal[], today: Date): Kpis {
 
   return {
     count: deals.length,
+    liveCount: live.length,
     totalPipeline: sum(deals, (d) => d.amount),
     activePipeline,
     forecast,

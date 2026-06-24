@@ -22,18 +22,22 @@ export async function upsertDealOverlay(input: {
 
   if (input.horizonte != null && !HORIZONTES.has(input.horizonte))
     return { ok: false, error: "Horizonte inválido" };
-  const obs = input.observaciones?.slice(0, 2000) ?? null;
 
-  const { error } = await supabase.from("crm_deal_overlay").upsert(
-    {
-      clientify_deal_id: input.dealId,
-      horizonte: input.horizonte ?? null,
-      observaciones: obs,
-      updated_by: auth.user.id,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "clientify_deal_id" }
-  );
+  // Escribir SOLO el campo provisto. Si se manda horizonte, no tocar observaciones
+  // (y viceversa): en un upsert, las columnas omitidas conservan su valor en ON CONFLICT,
+  // evitando que editar un campo borre el otro.
+  const payload: {
+    clientify_deal_id: number; updated_by: string; updated_at: string;
+    horizonte?: string | null; observaciones?: string | null;
+  } = {
+    clientify_deal_id: input.dealId,
+    updated_by: auth.user.id,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.horizonte !== undefined) payload.horizonte = input.horizonte;
+  if (input.observaciones !== undefined) payload.observaciones = input.observaciones?.slice(0, 2000) ?? null;
+
+  const { error } = await supabase.from("crm_deal_overlay").upsert(payload, { onConflict: "clientify_deal_id" });
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/comercial/tablero");
