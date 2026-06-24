@@ -34,8 +34,11 @@ export interface Kpis {
   wonAmount: number;
   avgProbability: number;      // promedio simple de prob. (sin ponderar)
   weightedConcretion: number;  // forecast/activePipeline*100 — prob. de concreción ponderada por monto
+  highProbPipeline: number;    // Σ amount de vivas con prob ≥ 70
+  nextCloseValue: number;      // Σ amount de vivas con cierre estimado en ≤ 30 días (no vencidas)
   overdueCount: number;        // deals vivos con fecha estimada vencida
   overdueAmount: number;
+  noActionCount: number;       // vivas sin movimiento ≥ 21 días (proxy "sin próxima acción")
   bands: ProbBand[];           // pipeline vivo por banda de prob. (alta/media/baja)
   byPipeline: { id: number; name: string; active: number; forecast: number; count: number }[];
 }
@@ -78,6 +81,8 @@ export function computeKpis(deals: EnrichedDeal[], today: Date): Kpis {
   const overdue = live.filter(
     (d) => d.expected_close && new Date(d.expected_close + "T12:00:00") < today
   );
+  const daysTo = (s: string) => (new Date(s + "T12:00:00").getTime() - today.getTime()) / 86_400_000;
+  const daysSince = (s: string) => (today.getTime() - new Date(s).getTime()) / 86_400_000;
 
   return {
     count: deals.length,
@@ -87,8 +92,14 @@ export function computeKpis(deals: EnrichedDeal[], today: Date): Kpis {
     wonAmount: sum(deals.filter((d) => d.status === "won"), (d) => d.amount),
     avgProbability: live.length ? Math.round(sum(live, (d) => d.effective_probability) / live.length) : 0,
     weightedConcretion: activePipeline > 0 ? Math.round((forecast / activePipeline) * 1000) / 10 : 0,
+    highProbPipeline: sum(live.filter((d) => d.effective_probability >= 70), (d) => d.amount),
+    nextCloseValue: sum(
+      live.filter((d) => d.expected_close && daysTo(d.expected_close) >= 0 && daysTo(d.expected_close) <= 30),
+      (d) => d.amount
+    ),
     overdueCount: overdue.length,
     overdueAmount: sum(overdue, (d) => d.amount),
+    noActionCount: live.filter((d) => d.modified_src && daysSince(d.modified_src) >= 21).length,
     bands,
     byPipeline: [...byMap.values()].sort((a, b) => b.active - a.active),
   };
