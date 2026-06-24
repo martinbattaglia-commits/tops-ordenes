@@ -1,0 +1,52 @@
+name: Clientify · Tablero Comercial Sync (diario 21:00 ART)
+
+# Snapshot diario de deals de Clientify → Supabase (caché + snapshots históricos),
+# fuente del Tablero Comercial de Nexus. Dispara el endpoint protegido
+# /api/clientify/sync-deals, que recorre los pipelines comerciales visibles.
+#
+# Horario: 00:00 UTC = 21:00 America/Argentina/Buenos_Aires (UTC-3 fijo, sin DST).
+#
+# Secrets (GitHub → Settings → Secrets and variables → Actions):
+#   - CRON_SECRET : mismo valor que la env var CRON_SECRET en Netlify.
+#   - APP_URL     : (opcional) base URL del deploy; default https://tops-ordenes.netlify.app
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # 00:00 UTC = 21:00 ART, diario
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clientify-dashboard-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Clientify dashboard sync endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_URL:-https://tops-ordenes.netlify.app}"
+          echo "POST $BASE/api/clientify/sync-deals"
+          code=$(curl -sS --max-time 120 -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "$BASE/api/clientify/sync-deals")
+          echo "HTTP $code"
+          cat /tmp/resp.json || true
+          echo
+          test "$code" = "200"
+          ok=$(jq -r '.ok // false' /tmp/resp.json)
+          deals=$(jq -r '.totalDeals // 0' /tmp/resp.json)
+          echo "ok=$ok totalDeals=$deals"
+          if [ "$ok" != "true" ]; then
+            echo "::error::Sync Clientify falló (ok=$ok). Revisar el reporte arriba."
+            exit 1
+          fi
+          echo "Sync Clientify completo ($deals deals)."
