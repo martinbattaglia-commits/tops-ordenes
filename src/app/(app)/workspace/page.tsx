@@ -4,18 +4,14 @@ import { Icon } from "@/components/Icon";
 import { CountUp } from "@/components/CountUp";
 import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 import { canAccess } from "@/lib/rbac/guard";
-import { ORG, PRODUCT } from "@/lib/org";
+import { PRODUCT } from "@/lib/org";
+import { ws } from "@/lib/google/workspace";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Google Workspace" };
 
-/* ── Enlaces al Workspace corporativo ────────────────────────────────────────
- * Gmail, Calendar y Drive soportan el path oficial `/a/<dominio>/`, que fuerza
- * la sesión del Workspace de la empresa (evita el selector de cuentas / la
- * cuenta personal). Meet, Contacts y Gemini no tienen ese path → URL canónica. */
-const WS_DOMAIN = ORG.googleWorkspaceDomain;
-const ws = (sub: string) => `https://${sub}.google.com/a/${WS_DOMAIN}/`;
+// Enlaces al Workspace corporativo: helper `ws()` compartido en @/lib/google/workspace.
 
 /* ── Iconos oficiales de marca (SVG inline, multicolor) ──────────────────── */
 

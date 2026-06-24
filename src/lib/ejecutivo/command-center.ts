@@ -104,6 +104,12 @@ export interface ExecKpi {
   sub?: string | null;
   pendingReason?: string;
   href: string; // deep link al módulo que explica la métrica
+  /** Color del valor (hex). Da identidad por tarjeta sin romper el tema oscuro. */
+  tone?: string;
+  /** 0-100 → dibuja una barra de progreso bajo el valor (p. ej. vacancia). */
+  progress?: number;
+  /** KPI financiero: sólo visible con permiso ejecutivo (cockpit.view). */
+  exec?: boolean;
 }
 
 export interface CommandCenter {
@@ -196,47 +202,29 @@ export async function getCommandCenter(): Promise<CommandCenter> {
     href: "/tesoreria/flujo-fondos",
   };
 
-  // ---- 8 KPIs ejecutivos (grid 4x2) ----
+  // ---- 8 KPIs ejecutivos (grilla 4×2) ----
+  // FILA 1: financieros (gated a ejecutivo vía `exec`) + operativos en vivo.
+  // FILA 2: ocupación logística (capacidad / disponible / ocupado / vacancia).
+  // `tone` da color por tarjeta; `progress` dibuja la barra (vacancia). Verdes
+  // y rojo alineados con el dashboard de vacancia (#16a34a / #dc2626).
   const m2 = (n: number) => `${n.toLocaleString("es-AR")} m²`;
   const kpis: ExecKpi[] = [
+    // ── Fila 1 — Financiero + Operativo ──
     {
-      label: "Facturación del mes",
+      label: "Facturación mensual",
       value: facturacionMes !== null ? fmtCurrency(facturacionMes) : null,
       pendingReason: facturacionMes !== null ? undefined : "Facturación no disponible.",
       href: "/billing",
+      tone: "#16a34a",
+      exec: true,
     },
     {
       label: "Cobranza pendiente",
       value: snap.financiero.ok ? fmtCurrency(snap.financiero.porCobrar) : null,
       pendingReason: snap.financiero.ok ? undefined : "Tesorería no disponible.",
       href: "/tesoreria/cobranzas",
-    },
-    {
-      label: "Ocupación logística total",
-      value: snap.wms.ok ? m2(snap.wms.ocupadoM2) : null,
-      pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
-      href: "/wms",
-    },
-    {
-      label: "Vacancia comercial",
-      value: snap.wms.ok ? m2(snap.wms.comercializableM2) : null,
-      sub: snap.wms.ok ? `${snap.wms.vacanciaComercialPct}% disponible` : null,
-      pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
-      href: "/comercial/dashboard-vacancia",
-    },
-    {
-      label: "Leads activos",
-      value: snap.comercial.configured ? String(snap.comercial.leads) : null,
-      sub: "Clientify",
-      pendingReason: snap.comercial.configured ? undefined : "Clientify no configurado.",
-      href: "/comercial/leads",
-    },
-    {
-      label: "Oportunidades abiertas",
-      value: snap.comercial.configured ? String(snap.comercial.oportunidades) : null,
-      sub: "Pipeline",
-      pendingReason: snap.comercial.configured ? undefined : "Clientify no configurado.",
-      href: "/comercial/oportunidades",
+      tone: "#f59e0b",
+      exec: true,
     },
     {
       label: "Vehículos online",
@@ -244,6 +232,7 @@ export async function getCommandCenter(): Promise<CommandCenter> {
       sub: "Tracking",
       pendingReason: vehiculos ? undefined : "Tracking no disponible.",
       href: "/operaciones/tracking",
+      tone: "#3b82f6",
     },
     {
       label: "Cámaras online",
@@ -251,6 +240,37 @@ export async function getCommandCenter(): Promise<CommandCenter> {
       sub: "CCTV",
       pendingReason: camaras ? undefined : "NVR no disponible.",
       href: "/cctv",
+      tone: "#06b6d4",
+    },
+    // ── Fila 2 — Ocupación logística ──
+    {
+      label: "Capacidad comercializable",
+      value: snap.wms.ok ? m2(snap.wms.comercializableM2) : null,
+      pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
+      href: "/comercial/dashboard-vacancia",
+    },
+    {
+      label: "Ocupado",
+      value: snap.wms.ok ? m2(snap.wms.ocupadoM2) : null,
+      pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
+      href: "/wms",
+      tone: "#dc2626",
+    },
+    {
+      label: "Disponible",
+      value: snap.wms.ok ? m2(snap.wms.disponibleM2) : null,
+      pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
+      href: "/comercial/dashboard-vacancia",
+      tone: "#16a34a",
+    },
+    {
+      label: "Vacancia corporativa",
+      value: snap.wms.ok ? `${snap.wms.vacanciaComercialPct}%` : null,
+      sub: snap.wms.ok ? `${m2(snap.wms.disponibleM2)} libres` : null,
+      pendingReason: snap.wms.ok ? undefined : "WMS no disponible.",
+      href: "/comercial/dashboard-vacancia",
+      tone: "#16a34a",
+      progress: snap.wms.vacanciaComercialPct,
     },
   ];
 
