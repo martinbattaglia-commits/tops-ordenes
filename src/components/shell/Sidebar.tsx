@@ -106,6 +106,7 @@ const DOMAINS: Domain[] = [
     items: [
       { href: "/comercial/contactos", label: "Contactos", icon: "users", badge: "Clientify" },
       { href: "/comercial/pipeline", label: "Pipeline", icon: "trend-up", badge: "Clientify" },
+      { href: "/comercial/tablero", label: "Tablero", icon: "dashboard", badge: "Clientify" },
       { href: "/comercial/oportunidades", label: "Oportunidades", icon: "clients", badge: "360°" },
       { href: "/comercial/contratos", label: "Contratos", icon: "contract", badge: "Cartera" },
       { href: "/comercial/mapa-lujan", label: "Mapa Luján 3159", icon: "building", badge: "Premium" },
@@ -229,6 +230,7 @@ export default function Sidebar({
       "/workspace",
       "/comercial/contactos",
       "/comercial/pipeline",
+      "/comercial/tablero",
       "/comercial/contratos",
       "/comercial/herramientas",
       "/comercial/herramientas/cotizador",
