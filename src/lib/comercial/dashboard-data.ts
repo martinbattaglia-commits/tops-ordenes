@@ -87,7 +87,7 @@ export async function getTableroData(): Promise<TableroData> {
     : null;
 
   const { data: lastLog } = await supabase
-    .from("clientify_sync_log")
+    .from("clientify_dashboard_sync_log")
     .select("status,finished_at,deals_synced,pipelines,errors,message")
     .order("started_at", { ascending: false })
     .limit(1);

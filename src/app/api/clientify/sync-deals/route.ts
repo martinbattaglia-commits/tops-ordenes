@@ -58,7 +58,7 @@ async function handle(req: Request): Promise<Response> {
     if (!dryRun) {
       persisted = await persistDealsSync(deals, runId);
       const elapsed = Date.now() - started;
-      await admin?.from("clientify_sync_log").insert({
+      await admin?.from("clientify_dashboard_sync_log").insert({
         run_id: runId,
         trigger: "cron",
         status: "completed",
@@ -86,7 +86,7 @@ async function handle(req: Request): Promise<Response> {
     const status = e instanceof ClientifyError && e.status >= 400 && e.status < 600 ? e.status : 502;
     // Bitácora de error (best-effort, no rompe la respuesta).
     try {
-      await admin?.from("clientify_sync_log").insert({
+      await admin?.from("clientify_dashboard_sync_log").insert({
         run_id: runId, trigger: "cron", status: "error",
         finished_at: new Date().toISOString(), duration_ms: Date.now() - started,
         errors: 1, message: e instanceof Error ? e.message : String(e),

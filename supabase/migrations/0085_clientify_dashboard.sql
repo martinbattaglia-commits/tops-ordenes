@@ -80,7 +80,7 @@ create table if not exists public.clientify_dashboard_snapshots (
 create index if not exists clientify_snap_idx on public.clientify_dashboard_snapshots (pipeline_id, snapshot_date desc);
 
 -- ---- (D) Bitácora de sync ----------------------------------------------
-create table if not exists public.clientify_sync_log (
+create table if not exists public.clientify_dashboard_sync_log (
   id            bigserial primary key,
   run_id        uuid not null unique default gen_random_uuid(),
   trigger       text not null check (trigger in ('cron','manual','api')),
@@ -96,7 +96,7 @@ create table if not exists public.clientify_sync_log (
   created_by    uuid references auth.users(id) on delete set null,
   created_at    timestamptz not null default now()
 );
-create index if not exists clientify_sync_started_idx on public.clientify_sync_log (started_at desc);
+create index if not exists clientify_dash_sync_started_idx on public.clientify_dashboard_sync_log (started_at desc);
 
 -- ---- Triggers updated_at (usa public.tg_touch_updated_at() de 0005) ------
 drop trigger if exists trg_crm_deal_overlay_touch on public.crm_deal_overlay;
@@ -164,13 +164,13 @@ create or replace view public.v_clientify_deals_enriched
 alter table public.clientify_deals_cache         enable row level security;
 alter table public.crm_deal_overlay              enable row level security;
 alter table public.clientify_dashboard_snapshots enable row level security;
-alter table public.clientify_sync_log            enable row level security;
+alter table public.clientify_dashboard_sync_log            enable row level security;
 
 do $$
 declare t text;
 begin
   foreach t in array array[
-    'clientify_deals_cache','crm_deal_overlay','clientify_dashboard_snapshots','clientify_sync_log'
+    'clientify_deals_cache','crm_deal_overlay','clientify_dashboard_snapshots','clientify_dashboard_sync_log'
   ] loop
     execute format('drop policy if exists "%1$s read" on public.%1$s', t);
     execute format($f$
