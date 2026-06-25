@@ -11,6 +11,7 @@ export default defineConfig({
       "src/lib/tesoreria/caja-chica/**/*.test.ts",
       "src/app/api/tesoreria/caja-chica/**/*.test.ts",
       "src/lib/comercial/**/*.test.ts",
+      "src/lib/prospeccion/**/*.test.ts",
     ],
     environment: "node",
   },
