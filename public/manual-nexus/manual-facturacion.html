@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual – Facturación y Reportes | TOPS Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0f172a;
+      --navy-light: #1e293b;
+      --navy-mid: #263348;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --amber-light: #fbbf24;
+      --amber-dim: rgba(245,158,11,0.15);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.12);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --border: rgba(255,255,255,0.1);
+      --border-amber: rgba(245,158,11,0.35);
+      --card: rgba(255,255,255,0.05);
+      --card-hover: rgba(255,255,255,0.08);
+      --sidebar-width: 260px;
+      --nav-height: 60px;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; font-size: 15px; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background-color: var(--navy);
+      color: var(--text);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── TOP NAV ── */
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--nav-height);
+      background: rgba(15,23,42,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      gap: 16px;
+    }
+
+    .topnav-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .topnav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    .topnav-logo span.badge {
+      background: var(--amber);
+      color: var(--navy);
+      border-radius: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 1px 5px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+
+    .breadcrumb a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .breadcrumb a:hover { color: var(--amber); }
+    .breadcrumb .sep { color: var(--text-dim); }
+    .breadcrumb .current { color: var(--amber); font-weight: 500; }
+
+    .topnav-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--amber-dim);
+      border: 1px solid var(--border-amber);
+      border-radius: var(--radius-sm);
+      color: var(--amber-light);
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: background 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .btn-back:hover {
+      background: rgba(245,158,11,0.25);
+      border-color: var(--amber);
+    }
+
+    /* ── LAYOUT ── */
+    .layout {
+      display: flex;
+      min-height: calc(100vh - var(--nav-height));
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-width);
+      flex-shrink: 0;
+      position: sticky;
+      top: var(--nav-height);
+      height: calc(100vh - var(--nav-height));
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 24px 0 40px;
+      border-right: 1px solid var(--border);
+      background: rgba(15,23,42,0.6);
+      scrollbar-width: thin;
+      scrollbar-color: var(--navy-mid) transparent;
+    }
+
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--navy-mid); border-radius: 4px; }
+
+    .sidebar-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      padding: 0 20px;
+      margin-bottom: 8px;
+    }
+
+    .sidebar-nav { list-style: none; padding: 0; }
+
+    .sidebar-nav li a {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 20px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.82rem;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+      line-height: 1.4;
+    }
+
+    .sidebar-nav li a:hover,
+    .sidebar-nav li a.active {
+      color: var(--amber-light);
+      border-left-color: var(--amber);
+      background: var(--amber-dim);
+    }
+
+    .sidebar-nav li a .icon { font-size: 1em; line-height: 1; }
+
+    .sidebar-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 16px 20px;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 40px 48px 80px;
+      max-width: 900px;
+    }
+
+    @media (max-width: 1024px) {
+      .content { padding: 32px 28px 60px; }
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .layout { display: block; }
+      .content { padding: 24px 20px 60px; max-width: 100%; }
+    }
+
+    /* ── HEADINGS ── */
+    h1.page-title {
+      font-size: 2rem;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 6px;
+      background: linear-gradient(135deg, #f8fafc 0%, var(--amber-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .page-subtitle {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin-bottom: 32px;
+      max-width: 620px;
+    }
+
+    h2.section-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 48px 0 16px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--amber-dim);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h2.section-title .icon { font-size: 1.2em; }
+
+    h3.sub-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--amber-light);
+      margin: 24px 0 10px;
+    }
+
+    p { margin-bottom: 12px; color: var(--text-muted); }
+    p strong { color: var(--text); }
+
+    /* ── HERO CARD ── */
+    .hero-card {
+      background: linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(15,23,42,0) 60%);
+      border: 1px solid var(--border-amber);
+      border-radius: var(--radius);
+      padding: 28px 32px;
+      margin-bottom: 40px;
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .hero-card .hero-icon {
+      font-size: 2.8rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .hero-card h1 { margin-bottom: 4px; }
+
+    /* ── CARDS GRID ── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin: 20px 0 28px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 16px;
+      transition: background 0.2s, border-color 0.2s, transform 0.15s;
+      cursor: default;
+    }
+
+    .card:hover {
+      background: var(--card-hover);
+      border-color: var(--border-amber);
+      transform: translateY(-2px);
+    }
+
+    .card .card-icon { font-size: 1.6rem; margin-bottom: 10px; display: block; }
+    .card .card-title { font-weight: 600; font-size: 0.9rem; color: var(--text); margin-bottom: 4px; }
+    .card .card-desc { font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; }
+    .card .card-badge {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      background: var(--amber-dim);
+      color: var(--amber-light);
+      border-radius: 4px;
+      padding: 1px 7px;
+      border: 1px solid var(--border-amber);
+    }
+
+    /* ── ROLE TABLE ── */
+    .role-table-wrap {
+      overflow-x: auto;
+      margin: 16px 0 28px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    table th {
+      background: var(--navy-mid);
+      color: var(--text);
+      font-weight: 600;
+      text-align: left;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    table td {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      color: var(--text-muted);
+      vertical-align: middle;
+    }
+
+    table tr:last-child td { border-bottom: none; }
+    table tr:hover td { background: var(--card-hover); }
+
+    .tick { color: var(--green); font-size: 1.1em; }
+    .cross { color: var(--red); font-size: 1.1em; }
+    .partial { color: var(--amber); font-size: 1.1em; }
+
+    .role-badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 30px;
+    }
+    .role-badge.director { background: rgba(139,92,246,0.2); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+    .role-badge.admin { background: rgba(59,130,246,0.2); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+    .role-badge.operaciones { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+    .role-badge.comercial { background: rgba(245,158,11,0.15); color: #fde68a; border: 1px solid rgba(245,158,11,0.25); }
+    .role-badge.deposito { background: rgba(100,116,139,0.2); color: #94a3b8; border: 1px solid rgba(100,116,139,0.3); }
+    .role-badge.auditor { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
+
+    /* ── ALERTS ── */
+    .alert {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      margin: 16px 0;
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .alert .alert-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+
+    .alert.warning {
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.3);
+      color: #fde68a;
+    }
+
+    .alert.info {
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: #93c5fd;
+    }
+
+    .alert.danger {
+      background: var(--red-dim);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5;
+    }
+
+    .alert.success {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.25);
+      color: #86efac;
+    }
+
+    .alert.pending {
+      background: rgba(139,92,246,0.1);
+      border: 1px solid rgba(139,92,246,0.3);
+      color: #c4b5fd;
+    }
+
+    /* ── PERM BADGE ── */
+    .perm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      background: rgba(245,158,11,0.12);
+      border: 1px solid var(--border-amber);
+      color: var(--amber-light);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* ── ACCORDIONS ── */
+    .accordion-group { margin: 20px 0; }
+
+    details.accordion {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    details.accordion[open] {
+      border-color: var(--border-amber);
+    }
+
+    details.accordion summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: var(--card);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.9rem;
+      color: var(--text);
+      list-style: none;
+      user-select: none;
+      transition: background 0.15s;
+    }
+
+    details.accordion summary::-webkit-details-marker { display: none; }
+
+    details.accordion summary:hover { background: var(--card-hover); }
+
+    details.accordion summary .summary-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    details.accordion summary .chevron {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      transition: transform 0.2s;
+    }
+
+    details.accordion[open] summary .chevron { transform: rotate(180deg); }
+
+    .accordion-body {
+      padding: 18px 20px;
+      background: rgba(15,23,42,0.5);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .accordion-body p { color: var(--text-muted); margin-bottom: 10px; }
+    .accordion-body p:last-child { margin-bottom: 0; }
+
+    /* ── FLOW DIAGRAM ── */
+    .flow {
+      margin: 24px 0;
+      overflow-x: auto;
+    }
+
+    .flow-inner {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      min-width: max-content;
+      padding: 4px 0;
+    }
+
+    .flow-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 0 4px;
+    }
+
+    .flow-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      text-align: center;
+      min-width: 120px;
+      max-width: 160px;
+      transition: border-color 0.2s;
+    }
+
+    .flow-box:hover { border-color: var(--amber); }
+
+    .flow-box.amber {
+      border-color: var(--border-amber);
+      background: var(--amber-dim);
+    }
+
+    .flow-box .flow-icon { font-size: 1.4rem; display: block; margin-bottom: 4px; }
+    .flow-box .flow-label { font-size: 0.75rem; font-weight: 500; color: var(--text); line-height: 1.3; }
+    .flow-box .flow-sub { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+
+    .flow-arrow {
+      color: var(--text-dim);
+      font-size: 1.2rem;
+      padding: 0 4px;
+      user-select: none;
+    }
+
+    /* ── CHECKLIST ── */
+    .checklist { list-style: none; margin: 16px 0; }
+
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .checklist li:last-child { border-bottom: none; }
+
+    .checklist .check-box {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--text-dim);
+      border-radius: 4px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .checklist li strong { color: var(--text); }
+
+    /* ── API ENDPOINT ── */
+    .endpoint {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(15,23,42,0.8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      margin: 8px 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+      flex-wrap: wrap;
+    }
+
+    .method {
+      font-weight: 700;
+      font-size: 0.72rem;
+      padding: 2px 7px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .method.get { background: rgba(34,197,94,0.2); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+
+    .endpoint .path { color: var(--text); }
+    .endpoint .desc { color: var(--text-muted); font-family: 'Inter', sans-serif; font-size: 0.78rem; margin-left: auto; }
+
+    /* ── TAG / INFO PAIRS ── */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 600px) { .info-grid { grid-template-columns: 1fr; } }
+
+    .info-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+    }
+
+    .info-item .info-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      margin-bottom: 5px;
+    }
+
+    .info-item .info-val {
+      font-size: 0.88rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* ── STEPS ── */
+    .steps { list-style: none; margin: 16px 0; counter-reset: step-counter; }
+
+    .steps li {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+      counter-increment: step-counter;
+    }
+
+    .steps li::before {
+      content: counter(step-counter);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--amber);
+      color: var(--navy);
+      font-weight: 700;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .steps li .step-body { font-size: 0.85rem; color: var(--text-muted); }
+    .steps li .step-body strong { color: var(--text); }
+
+    /* ── GLOSSARY ── */
+    .glossary { margin: 16px 0; }
+
+    .glossary dt {
+      font-weight: 600;
+      color: var(--amber-light);
+      font-size: 0.88rem;
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .glossary dd {
+      font-size: 0.83rem;
+      color: var(--text-muted);
+      margin: 4px 0 0 16px;
+      line-height: 1.5;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, var(--amber), transparent);
+      margin: 40px 0;
+      opacity: 0.3;
+    }
+
+    /* ── PENDING BADGE ── */
+    .pending-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 30px;
+      background: rgba(139,92,246,0.15);
+      color: #c4b5fd;
+      border: 1px solid rgba(139,92,246,0.3);
+      white-space: nowrap;
+    }
+
+    /* ── BACK TO TOP ── */
+    .back-top {
+      text-align: center;
+      margin-top: 60px;
+    }
+
+    .back-top a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-dim);
+      font-size: 0.82rem;
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .back-top a:hover { color: var(--amber); }
+
+    /* ── FOOTER ── */
+    footer {
+      margin-top: 60px;
+      padding: 20px 0 0;
+      border-top: 1px solid var(--border);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--amber); }
+
+    /* ── INLINE CODE ── */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 0.82em;
+      color: var(--amber-light);
+    }
+
+    /* ── UL/OL defaults ── */
+    ul.default, ol.default {
+      margin: 12px 0 16px 20px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    ul.default li, ol.default li {
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    /* ── SECTION ANCHOR OFFSET ── */
+    [id] { scroll-margin-top: calc(var(--nav-height) + 24px); }
+
+  </style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topnav">
+  <div class="topnav-left">
+    <a href="index.html" class="topnav-logo">
+      🚚 TOPS Nexus
+      <span class="badge">Manual</span>
+    </a>
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="index.html">Inicio</a>
+      <span class="sep">›</span>
+      <span class="current">Facturación y Reportes</span>
+    </nav>
+  </div>
+  <div class="topnav-right">
+    <a href="index.html" class="btn-back">← Volver al índice</a>
+  </div>
+</nav>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" aria-label="Tabla de contenidos">
+    <div class="sidebar-label">Contenidos</div>
+    <ul class="sidebar-nav">
+      <li><a href="#objetivo"><span class="icon">🎯</span> Objetivo del módulo</a></li>
+      <li><a href="#quienes"><span class="icon">👥</span> ¿Quién puede usarlo?</a></li>
+      <li><a href="#reportes"><span class="icon">📊</span> Suite de Reportes</a></li>
+      <li><a href="#facturacion"><span class="icon">🧾</span> Módulo de Facturación</a></li>
+      <li><a href="#exportaciones"><span class="icon">📤</span> Exportaciones</a></li>
+      <li><a href="#drive"><span class="icon">💾</span> Drive Sync</a></li>
+      <li><a href="#email"><span class="icon">📧</span> Plantilla de Email</a></li>
+    </ul>
+    <div class="sidebar-divider"></div>
+    <ul class="sidebar-nav">
+      <li><a href="#flujo"><span class="icon">🔄</span> Flujo de facturación</a></li>
+      <li><a href="#casos"><span class="icon">💼</span> Casos frecuentes</a></li>
+      <li><a href="#errores"><span class="icon">⚠️</span> Errores comunes</a></li>
+      <li><a href="#checklist"><span class="icon">✅</span> Checklist mensual</a></li>
+    </ul>
+    <div class="sidebar-divider"></div>
+    <ul class="sidebar-nav">
+      <li><a href="#faq"><span class="icon">❓</span> FAQ</a></li>
+      <li><a href="#glosario"><span class="icon">📖</span> Glosario</a></li>
+    </ul>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="content">
+
+    <!-- HERO -->
+    <div class="hero-card">
+      <span class="hero-icon">🧾</span>
+      <div>
+        <h1 class="page-title">Facturación y Reportes</h1>
+        <p class="page-subtitle">
+          Módulo central para la gestión financiera del sistema TOPS Nexus. Permite emitir facturas a clientes,
+          consultar reportes ejecutivos, exportar libros de IVA y sincronizar documentos con Google Drive.
+        </p>
+      </div>
+    </div>
+
+    <!-- OBJETIVO -->
+    <section id="objetivo">
+      <h2 class="section-title"><span class="icon">🎯</span> Objetivo del módulo</h2>
+      <p>
+        El módulo de <strong>Facturación y Reportes</strong> centraliza las operaciones de facturación de TOPS hacia sus clientes,
+        la consulta de métricas ejecutivas y la gestión de documentos financieros. Está diseñado para que el equipo
+        administrativo y la dirección puedan operar con información precisa y oportuna sobre el estado financiero de la empresa.
+      </p>
+
+      <div class="cards-grid">
+        <div class="card">
+          <span class="card-icon">📊</span>
+          <div class="card-title">Reportes ejecutivos</div>
+          <div class="card-desc">Suite de métricas y paneles avanzados para la toma de decisiones.</div>
+          <span class="card-badge">analytics.view</span>
+        </div>
+        <div class="card">
+          <span class="card-icon">🧾</span>
+          <div class="card-title">Facturación</div>
+          <div class="card-desc">Generación de facturas a clientes a partir de Órdenes de Servicio.</div>
+        </div>
+        <div class="card">
+          <span class="card-icon">💾</span>
+          <div class="card-title">Drive Sync</div>
+          <div class="card-desc">Sincronización automatizada de documentos con Google Drive.</div>
+        </div>
+        <div class="card">
+          <span class="card-icon">📧</span>
+          <div class="card-title">Plantilla Email</div>
+          <div class="card-desc">Configuración de templates para el envío de comprobantes por correo.</div>
+        </div>
+      </div>
+
+      <div class="alert info">
+        <span class="alert-icon">💡</span>
+        <div>
+          Este módulo se accede desde la sección <strong>FACTURACIÓN</strong> del menú lateral del sistema.
+          Algunas funciones requieren permisos específicos que se detallan más adelante.
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ROLES -->
+    <section id="quienes">
+      <h2 class="section-title"><span class="icon">👥</span> ¿Quién puede usarlo?</h2>
+      <p>El acceso a cada subsección depende del rol asignado al usuario. A continuación se resume qué puede hacer cada rol:</p>
+
+      <div class="alert warning">
+        <span class="alert-icon">🔒</span>
+        <div>
+          La Suite de Reportes requiere el permiso <span class="perm-badge">analytics.view</span>.
+          Solo cuentan con este permiso: <strong>Director</strong>, <strong>Administración</strong> y <strong>Auditor</strong>.
+        </div>
+      </div>
+
+      <div class="role-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rol</th>
+              <th>Reportes</th>
+              <th>Facturación</th>
+              <th>Exportaciones</th>
+              <th>Drive Sync</th>
+              <th>Email Template</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="role-badge director">Director</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+            </tr>
+            <tr>
+              <td><span class="role-badge admin">Administración</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="tick">✅</span></td>
+            </tr>
+            <tr>
+              <td><span class="role-badge operaciones">Operaciones</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="partial">⚠️</span></td>
+              <td><span class="partial">⚠️</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td><span class="role-badge comercial">Comercial</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td><span class="role-badge deposito">Depósito</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+            <tr>
+              <td><span class="role-badge auditor">Auditor</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="tick">✅</span></td>
+              <td><span class="cross">❌</span></td>
+              <td><span class="cross">❌</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p style="font-size:0.78rem; color: var(--text-dim);">
+        ⚠️ = Acceso parcial (solo visualización, sin edición ni emisión). ❌ = Sin acceso al módulo.
+      </p>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- REPORTES -->
+    <section id="reportes">
+      <h2 class="section-title"><span class="icon">📊</span> Suite de Reportes</h2>
+
+      <div class="alert warning">
+        <span class="alert-icon">🔒</span>
+        <div>
+          Esta sección está disponible en la ruta <code>/reports</code> y requiere el permiso
+          <span class="perm-badge">analytics.view</span>. Si no ves el acceso, contactá a tu administrador.
+        </div>
+      </div>
+
+      <p>
+        La Suite de Reportes ofrece paneles ejecutivos con métricas clave del negocio. Es el punto de acceso
+        para que dirección y administración monitoreen el estado operativo y financiero de TOPS Nexus.
+      </p>
+
+      <h3 class="sub-title">¿Cómo acceder?</h3>
+      <ol class="steps">
+        <li>
+          <div class="step-body">En el menú lateral, hacé clic en la sección <strong>FACTURACIÓN</strong>.</div>
+        </li>
+        <li>
+          <div class="step-body">Seleccioná <strong>Reportes</strong>. Serás redirigido a <code>/reports</code>.</div>
+        </li>
+        <li>
+          <div class="step-body">El panel cargará automáticamente los datos del período actual. Podés aplicar filtros de fecha o categoría según estén disponibles en la interfaz.</div>
+        </li>
+      </ol>
+
+      <h3 class="sub-title">Tipos de reportes disponibles</h3>
+      <div class="accordion-group">
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>📈</span> Reportes operativos</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Incluyen métricas sobre el estado de las Órdenes de Servicio (OS): cantidad de OS abiertas, cerradas, firmadas y entregadas por período. Permiten monitorear la productividad operativa y detectar cuellos de botella en el proceso de servicios.</p>
+            <p><strong>Cómo leer:</strong> Cada fila representa una OS. Podés ordenar por fecha, cliente o estado para priorizar el seguimiento.</p>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>💰</span> Reportes financieros</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Resumen de ingresos facturados, pendientes de cobro y comparativas entre períodos. Incluyen métricas de facturación mensual y acumulado anual.</p>
+            <p><strong>Nota:</strong> Los montos mostrados corresponden a lo registrado en el sistema. La conciliación final con los sistemas contables externos es responsabilidad del área de Administración.</p>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>🛒</span> Reportes de compras</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Detalle de órdenes de compra ingresadas al sistema, incluyendo proveedor, monto, fecha y estado. Permite auditar el gasto y comparar con el presupuesto.</p>
+            <p><strong>Exportación disponible:</strong> Ver sección <a href="#exportaciones">Exportaciones</a> para descargar el listado en formato compatible con herramientas externas.</p>
+          </div>
+        </details>
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>📋</span> Otros paneles <span class="pending-tag">🔮 Pendiente de validación</span></span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Pueden existir paneles adicionales según la configuración del sistema (tableros de clientes, métricas de SLA, etc.). La disponibilidad exacta de cada panel depende de la versión del sistema y de los permisos asignados.</p>
+            <div class="alert pending">
+              <span class="alert-icon">🔮</span>
+              <div>El detalle de los paneles específicos está <strong>pendiente de validación</strong> con el equipo de sistema. La descripción anterior es orientativa.</div>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <h3 class="sub-title">Exportar desde Reportes</h3>
+      <p>Desde la vista de reportes podés descargar la información utilizando los botones de exportación disponibles en la interfaz. Los formatos disponibles suelen ser PDF o Excel (.xlsx). Para exportaciones específicas del módulo de compras, ver la sección <a href="#exportaciones">Exportaciones</a>.</p>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- FACTURACION -->
+    <section id="facturacion">
+      <h2 class="section-title"><span class="icon">🧾</span> Módulo de Facturación</h2>
+
+      <p>
+        Accesible desde <code>/billing</code>. Este módulo permite generar facturas a clientes de TOPS a partir de
+        las <strong>Órdenes de Servicio (OS)</strong> que se encuentran en estado <strong>FIRMADA</strong> o <strong>ENTREGADA</strong>.
+      </p>
+
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Ruta del módulo</div>
+          <div class="info-val"><code>/billing</code></div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Permisos requeridos</div>
+          <div class="info-val">Director / Administración</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Estado de OS requerido</div>
+          <div class="info-val">FIRMADA o ENTREGADA</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Documento generado</div>
+          <div class="info-val">Factura + PDF</div>
+        </div>
+      </div>
+
+      <h3 class="sub-title">¿Qué se necesita para facturar?</h3>
+      <ul class="default">
+        <li>Una Orden de Servicio en estado <strong>FIRMADA</strong> o <strong>ENTREGADA</strong>.</li>
+        <li>Los datos del cliente asociado a la OS (razón social, CUIT, condición IVA, etc.) deben estar cargados en el sistema.</li>
+        <li>El monto y la descripción del servicio prestado deben estar correctos en la OS antes de facturar.</li>
+      </ul>
+
+      <h3 class="sub-title">Proceso de generación de factura <span class="pending-tag">🔮 Pendiente de validación</span></h3>
+
+      <div class="alert pending">
+        <span class="alert-icon">🔮</span>
+        <div>
+          El formulario exacto de creación de factura y sus campos específicos están <strong>pendientes de validación</strong> con el equipo de sistema.
+          La descripción a continuación es orientativa basada en la estructura general del módulo.
+          No se asumen integraciones con AFIP ni e-factura sin confirmación.
+        </div>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <div class="step-body">Ingresá a <strong>Facturación</strong> desde el menú lateral.</div>
+        </li>
+        <li>
+          <div class="step-body">Buscá la Orden de Servicio correspondiente usando el buscador o los filtros disponibles. Solo aparecerán las OS en estado FIRMADA o ENTREGADA.</div>
+        </li>
+        <li>
+          <div class="step-body">Seleccioná la OS y verificá que los datos del cliente y el monto sean correctos.</div>
+        </li>
+        <li>
+          <div class="step-body">Completá los campos del formulario de facturación (pendiente de validación: tipos de comprobante, condición IVA, etc.).</div>
+        </li>
+        <li>
+          <div class="step-body">Confirmá la operación. El sistema generará la factura y la asociará a la OS.</div>
+        </li>
+        <li>
+          <div class="step-body">Descargá el PDF usando el botón disponible o accedé a través del endpoint <code>GET /api/invoices/[id]/pdf</code>.</div>
+        </li>
+      </ol>
+
+      <div class="alert danger">
+        <span class="alert-icon">🚫</span>
+        <div>
+          <strong>No se documenta integración con AFIP / e-factura.</strong> Si el sistema genera comprobantes electrónicos,
+          ese proceso debe ser validado y documentado por el área contable antes de operar en producción.
+        </div>
+      </div>
+
+      <h3 class="sub-title">Ver o descargar una factura existente</h3>
+      <p>Podés consultar o descargar cualquier factura ya emitida a través de la interfaz de Facturación o usando los siguientes endpoints:</p>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/invoices/[id]</span>
+        <span class="desc">Detalle completo de la factura</span>
+      </div>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="path">/api/invoices/[id]/pdf</span>
+        <span class="desc">Descarga el PDF de la factura</span>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- EXPORTACIONES -->
+    <section id="exportaciones">
+      <h2 class="section-title"><span class="icon">📤</span> Exportaciones disponibles</h2>
+      <p>
+        El sistema ofrece tres exportaciones principales que pueden realizarse desde las vistas correspondientes
+        o directamente via los endpoints de la API. Son útiles para conciliar información con herramientas externas,
+        importar datos a sistemas contables o preparar reportes para auditorías.
+      </p>
+
+      <div class="accordion-group">
+        <details class="accordion" open>
+          <summary>
+            <span class="summary-left"><span>📄</span> Exportar listado de Órdenes de Servicio</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Descarga un listado completo de las Órdenes de Servicio del sistema con sus estados, montos, fechas y clientes asociados.</p>
+            <div class="endpoint">
+              <span class="method get">GET</span>
+              <span class="path">/api/orders/export</span>
+              <span class="desc">Exportar listado de OS</span>
+            </div>
+            <p><strong>Cómo usar:</strong> Ingresá a la vista de reportes o facturación, aplicá los filtros de período si necesitás y usá el botón de exportación. El archivo se descargará en tu equipo.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>🛒</span> Exportar listado de Órdenes de Compra</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Descarga el listado de órdenes de compra registradas en el sistema, incluyendo proveedor, monto, fecha y estado.</p>
+            <div class="endpoint">
+              <span class="method get">GET</span>
+              <span class="path">/api/compras/export</span>
+              <span class="desc">Exportar listado de órdenes de compra</span>
+            </div>
+            <p><strong>Uso típico:</strong> Preparación del cierre mensual y conciliación con proveedores.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>📚</span> Exportar Libro IVA Compras</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Genera el Libro IVA Compras del período seleccionado. Este documento registra el IVA de todas las compras del período y es fundamental para la liquidación impositiva.</p>
+            <div class="endpoint">
+              <span class="method get">GET</span>
+              <span class="path">/api/compras/libro-iva/export</span>
+              <span class="desc">Exportar Libro IVA Compras</span>
+            </div>
+            <div class="alert warning">
+              <span class="alert-icon">⚠️</span>
+              <div>Verificá siempre el período antes de exportar. El Libro IVA debe coincidir con el período declarado ante AFIP. Cualquier inconsistencia debe ser resuelta antes de presentar la declaración.</div>
+            </div>
+            <p><strong>Cómo usar:</strong> Seleccioná el mes y año, luego hacé clic en exportar. El sistema generará un archivo compatible con herramientas contables.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- DRIVE SYNC -->
+    <section id="drive">
+      <h2 class="section-title"><span class="icon">💾</span> Drive Sync – Sincronización con Google Drive</h2>
+
+      <p>
+        Accesible desde <code>/compras/drive</code>. Esta función permite sincronizar documentos del módulo de compras
+        (facturas de proveedores, remitos, órdenes de compra) con una carpeta de <strong>Google Drive</strong> configurada
+        previamente por el administrador del sistema.
+      </p>
+
+      <div class="alert info">
+        <span class="alert-icon">💡</span>
+        <div>
+          La sincronización es <strong>automatizada</strong>: el sistema detecta nuevos documentos y los sube a Drive sin
+          intervención manual en cada operación. El usuario de administración puede revisar el estado de la sincronización
+          desde esta pantalla.
+        </div>
+      </div>
+
+      <h3 class="sub-title">¿Para qué sirve?</h3>
+      <ul class="default">
+        <li>Mantener respaldo automático de comprobantes de compra en la nube.</li>
+        <li>Facilitar el acceso remoto a documentación por parte del equipo contable.</li>
+        <li>Evitar la gestión manual de archivos y carpetas.</li>
+        <li>Integrar la documentación del sistema con el repositorio de archivos de la empresa en Google Drive.</li>
+      </ul>
+
+      <h3 class="sub-title">Cómo verificar el estado de la sincronización</h3>
+      <ol class="steps">
+        <li>
+          <div class="step-body">Ingresá a <strong>Compras → Drive Sync</strong> desde el menú lateral (ruta <code>/compras/drive</code>).</div>
+        </li>
+        <li>
+          <div class="step-body">La pantalla mostrará el estado de la última sincronización: fecha, hora y resultado.</div>
+        </li>
+        <li>
+          <div class="step-body">Si hay errores de sincronización, aparecerán indicados. Anotá el detalle del error y contactá a soporte técnico.</div>
+        </li>
+      </ol>
+
+      <div class="alert warning">
+        <span class="alert-icon">⚠️</span>
+        <div>
+          La configuración inicial de la carpeta de Google Drive (credenciales, folder ID) es tarea del área de sistemas.
+          No modificar los parámetros de conexión sin autorización.
+        </div>
+      </div>
+
+      <div class="alert pending">
+        <span class="alert-icon">🔮</span>
+        <div>
+          El detalle de los tipos de documentos que se sincronizan, la frecuencia exacta y la estructura de carpetas en Drive
+          está <strong>pendiente de validación</strong> con el equipo de sistema.
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- EMAIL -->
+    <section id="email">
+      <h2 class="section-title"><span class="icon">📧</span> Plantilla de Email</h2>
+
+      <p>
+        Accesible desde <code>/compras/email</code>. Permite configurar los <strong>templates de correo electrónico</strong>
+        que el sistema utiliza para el envío de comprobantes, notificaciones de compra y comunicaciones relacionadas al módulo de compras.
+      </p>
+
+      <h3 class="sub-title">¿Qué se puede configurar? <span class="pending-tag">🔮 Pendiente de validación</span></h3>
+
+      <div class="alert pending">
+        <span class="alert-icon">🔮</span>
+        <div>
+          El detalle de los campos configurables del template (remitente, asunto, cuerpo, firma, adjuntos automáticos)
+          está <strong>pendiente de validación</strong>. La información a continuación es orientativa.
+        </div>
+      </div>
+
+      <ul class="default">
+        <li><strong>Remitente:</strong> La dirección de correo que aparece como emisor del email.</li>
+        <li><strong>Asunto:</strong> El texto del asunto del correo (puede incluir variables como nombre del cliente, número de comprobante, etc.).</li>
+        <li><strong>Cuerpo del email:</strong> El contenido principal del mensaje, donde se informa al proveedor o cliente sobre el comprobante enviado.</li>
+        <li><strong>Firma:</strong> Firma institucional de TOPS Logística.</li>
+        <li><strong>Adjuntos automáticos:</strong> Configuración de qué archivos se adjuntan automáticamente (PDF de factura, remito, etc.).</li>
+      </ul>
+
+      <h3 class="sub-title">Cómo acceder y editar</h3>
+      <ol class="steps">
+        <li>
+          <div class="step-body">Ingresá a <strong>Compras → Plantilla Email</strong> desde el menú lateral (<code>/compras/email</code>).</div>
+        </li>
+        <li>
+          <div class="step-body">Revisá el template actual antes de modificarlo.</div>
+        </li>
+        <li>
+          <div class="step-body">Realizá los cambios necesarios y guardá. Los cambios aplican a los próximos envíos automáticos.</div>
+        </li>
+      </ol>
+
+      <div class="alert danger">
+        <span class="alert-icon">🚫</span>
+        <div>
+          Modificar el template de email puede afectar todas las comunicaciones automatizadas del módulo.
+          Realizá pruebas antes de confirmar cambios en producción. Cualquier cambio debe ser aprobado por el área de Administración.
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- FLUJO -->
+    <section id="flujo">
+      <h2 class="section-title"><span class="icon">🔄</span> Flujo de facturación</h2>
+      <p>El siguiente diagrama muestra el proceso completo desde la creación de una Orden de Servicio hasta la emisión de la factura y su entrega al cliente.</p>
+
+      <div class="flow">
+        <div class="flow-inner">
+
+          <div class="flow-step">
+            <div class="flow-box">
+              <span class="flow-icon">📋</span>
+              <div class="flow-label">OS creada</div>
+              <div class="flow-sub">Estado: ABIERTA</div>
+            </div>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="flow-box">
+              <span class="flow-icon">🔧</span>
+              <div class="flow-label">Servicio prestado</div>
+              <div class="flow-sub">Operaciones</div>
+            </div>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="flow-box">
+              <span class="flow-icon">✍️</span>
+              <div class="flow-label">OS firmada</div>
+              <div class="flow-sub">Estado: FIRMADA</div>
+            </div>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="flow-box amber">
+              <span class="flow-icon">🧾</span>
+              <div class="flow-label">Generar factura</div>
+              <div class="flow-sub">/billing</div>
+            </div>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="flow-box">
+              <span class="flow-icon">📄</span>
+              <div class="flow-label">PDF generado</div>
+              <div class="flow-sub">/invoices/[id]/pdf</div>
+            </div>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="flow-box">
+              <span class="flow-icon">📧</span>
+              <div class="flow-label">Envío al cliente</div>
+              <div class="flow-sub">Email automático</div>
+            </div>
+          </div>
+
+          <div class="flow-arrow">→</div>
+
+          <div class="flow-step">
+            <div class="flow-box">
+              <span class="flow-icon">✅</span>
+              <div class="flow-label">OS entregada</div>
+              <div class="flow-sub">Estado: ENTREGADA</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="alert info">
+        <span class="alert-icon">💡</span>
+        <div>
+          La factura solo puede generarse cuando la OS está en estado <strong>FIRMADA</strong> o <strong>ENTREGADA</strong>.
+          OS en estados ABIERTA o PENDIENTE no están habilitadas para facturación.
+        </div>
+      </div>
+
+      <h3 class="sub-title">Estados de una OS y su relación con facturación</h3>
+      <div class="role-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Estado OS</th>
+              <th>¿Puede facturarse?</th>
+              <th>Observaciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>ABIERTA</code></td>
+              <td><span class="cross">❌</span></td>
+              <td>Servicio en curso, sin cierre</td>
+            </tr>
+            <tr>
+              <td><code>PENDIENTE</code></td>
+              <td><span class="cross">❌</span></td>
+              <td>Requiere acciones adicionales</td>
+            </tr>
+            <tr>
+              <td><code>FIRMADA</code></td>
+              <td><span class="tick">✅</span></td>
+              <td>Lista para facturación</td>
+            </tr>
+            <tr>
+              <td><code>ENTREGADA</code></td>
+              <td><span class="tick">✅</span></td>
+              <td>Servicio completo, apta para facturación</td>
+            </tr>
+            <tr>
+              <td><code>FACTURADA</code></td>
+              <td><span class="cross">❌</span></td>
+              <td>Ya tiene factura asociada</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- CASOS -->
+    <section id="casos">
+      <h2 class="section-title"><span class="icon">💼</span> Casos frecuentes</h2>
+      <p>Situaciones habituales del área de Administración y cómo resolverlas en el sistema.</p>
+
+      <div class="accordion-group">
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>📅</span> Preparar el reporte de fin de mes</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <ol class="steps">
+              <li><div class="step-body">Ingresá a <strong>Reportes</strong> (<code>/reports</code>).</div></li>
+              <li><div class="step-body">Filtrá por el mes y año correspondiente.</div></li>
+              <li><div class="step-body">Revisá los paneles de OS, facturación y compras para confirmar que todos los registros estén completos.</div></li>
+              <li><div class="step-body">Exportá el listado de OS (<code>/api/orders/export</code>) y el Libro IVA compras (<code>/api/compras/libro-iva/export</code>).</div></li>
+              <li><div class="step-body">Compartí los archivos con el área contable para el cierre del período.</div></li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>🧾</span> Facturar a un cliente al cierre del mes</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <ol class="steps">
+              <li><div class="step-body">Verificá que todas las OS del cliente correspondientes al mes estén en estado <strong>FIRMADA</strong> o <strong>ENTREGADA</strong>.</div></li>
+              <li><div class="step-body">Ingresá al módulo de <strong>Facturación</strong> (<code>/billing</code>).</div></li>
+              <li><div class="step-body">Seleccioná las OS a incluir en la factura. Si el cliente tiene múltiples OS, consultá con dirección si se factura por OS o se agrupa en una sola factura.</div></li>
+              <li><div class="step-body">Completá el formulario y confirmá la emisión.</div></li>
+              <li><div class="step-body">Descargá el PDF y envialo al cliente (manual o automáticamente según la configuración del sistema).</div></li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>📚</span> Preparar el Libro IVA para el contador</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <ol class="steps">
+              <li><div class="step-body">Asegurate de que todas las órdenes de compra del período estén registradas en el sistema.</div></li>
+              <li><div class="step-body">Ingresá a Reportes o Compras y buscá la opción de exportar el Libro IVA.</div></li>
+              <li><div class="step-body">Seleccioná el mes y año exacto. No exportes un período incompleto si el mes aún no cerró.</div></li>
+              <li><div class="step-body">Descargá el archivo desde <code>/api/compras/libro-iva/export</code>.</div></li>
+              <li><div class="step-body">Revisá que el total de IVA del archivo coincida con lo esperado antes de enviarlo al contador.</div></li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>🔍</span> Buscar y descargar una factura específica</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Si necesitás encontrar una factura ya emitida:</p>
+            <ol class="steps">
+              <li><div class="step-body">Ingresá al módulo de <strong>Facturación</strong> y usá el buscador por cliente, número de OS o fecha.</div></li>
+              <li><div class="step-body">Una vez ubicada la factura, hacé clic en ella para ver el detalle.</div></li>
+              <li><div class="step-body">Usá el botón de descarga PDF para obtener el comprobante.</div></li>
+            </ol>
+            <p>También podés acceder directamente al PDF si conocés el ID de la factura: <code>/api/invoices/[id]/pdf</code></p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ERRORES -->
+    <section id="errores">
+      <h2 class="section-title"><span class="icon">⚠️</span> Errores comunes</h2>
+      <p>Situaciones que pueden surgir durante el uso del módulo y cómo resolverlas.</p>
+
+      <div class="accordion-group">
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>🚫</span> "No se puede facturar": la OS no está habilitada</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p><strong>Causa:</strong> La Orden de Servicio no está en estado FIRMADA o ENTREGADA. Solo las OS en esos estados pueden ser facturadas.</p>
+            <p><strong>Solución:</strong> Verificá el estado actual de la OS en el módulo de Órdenes de Servicio. Si está en estado ABIERTA o PENDIENTE, coordinar con el área de Operaciones para que completen el cierre de la OS antes de proceder con la facturación.</p>
+            <div class="alert warning">
+              <span class="alert-icon">⚠️</span>
+              <div>No fuerces el cambio de estado de una OS sin confirmar que el servicio fue realmente prestado y documentado correctamente.</div>
+            </div>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>📤</span> Exportación falla o descarga un archivo vacío</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p><strong>Causa más común:</strong> No hay datos en el período seleccionado, o el filtro aplicado es demasiado restrictivo.</p>
+            <p><strong>Solución:</strong></p>
+            <ul class="default">
+              <li>Verificá que el rango de fechas incluya el período deseado.</li>
+              <li>Eliminá filtros adicionales y probá con una exportación general.</li>
+              <li>Si el problema persiste, contactá a soporte técnico con la pantalla del error.</li>
+            </ul>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>🔒</span> "Sin permiso" al acceder a Reportes</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p><strong>Causa:</strong> El usuario no tiene el permiso <span class="perm-badge">analytics.view</span> asignado a su rol.</p>
+            <p><strong>Solución:</strong> Contactá al administrador del sistema para que verifique el rol asignado a tu usuario. Los roles con acceso a reportes son: Director, Administración y Auditor.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>💾</span> Drive Sync muestra error de conexión</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p><strong>Causa:</strong> Las credenciales de Google Drive pueden haber expirado, o la carpeta de destino fue eliminada o movida.</p>
+            <p><strong>Solución:</strong> Notificá al área de sistemas. No intentes reconfigurar las credenciales sin soporte técnico, ya que un error puede interrumpir la sincronización de todos los documentos.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left"><span>📋</span> La OS aparece "sin cliente" al facturar</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p><strong>Causa:</strong> La Orden de Servicio fue creada sin asociar un cliente, o los datos del cliente están incompletos (falta CUIT, razón social, etc.).</p>
+            <p><strong>Solución:</strong> Completá los datos del cliente en el módulo correspondiente antes de intentar facturar. Si no tenés acceso, coordiná con el área comercial o de administración.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- CHECKLIST -->
+    <section id="checklist">
+      <h2 class="section-title"><span class="icon">✅</span> Checklist de facturación mensual</h2>
+      <p>Usá este checklist al final de cada mes para asegurarte de completar todas las tareas del módulo.</p>
+
+      <ul class="checklist">
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Verificar OS del mes:</strong> Confirmá que todas las OS del período estén en estado FIRMADA o ENTREGADA antes del cierre.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Revisar datos de clientes:</strong> Asegurarte de que los datos fiscales (CUIT, razón social, condición IVA) estén completos y actualizados para todos los clientes a facturar.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Generar facturas pendientes:</strong> Facturar todas las OS habilitadas desde el módulo <code>/billing</code>.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Descargar y archivar PDFs:</strong> Guardar localmente o en Drive los PDF de cada factura emitida en el mes.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Exportar listado de OS:</strong> Descargar el reporte de OS del período (<code>/api/orders/export</code>) para el archivo mensual.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Exportar Libro IVA Compras:</strong> Generar el Libro IVA compras del mes (<code>/api/compras/libro-iva/export</code>) y enviarlo al contador.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Verificar Drive Sync:</strong> Confirmar que la sincronización automática esté activa y sin errores en <code>/compras/drive</code>.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Revisar Reportes ejecutivos:</strong> Acceder a <code>/reports</code> y confirmar que los totales del mes coincidan con lo facturado y las OS cerradas.</div>
+        </li>
+        <li>
+          <div class="check-box"></div>
+          <div><strong>Comunicar cierre al área contable:</strong> Notificar que los archivos del mes están disponibles para el proceso contable.</div>
+        </li>
+      </ul>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- FAQ -->
+    <section id="faq">
+      <h2 class="section-title"><span class="icon">❓</span> Preguntas frecuentes (FAQ)</h2>
+
+      <div class="accordion-group">
+        <details class="accordion">
+          <summary>
+            <span class="summary-left">¿Puedo facturar varias OS en una sola factura?</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Esto depende de la configuración del módulo de facturación. Si el formulario permite seleccionar múltiples OS para un mismo cliente, sí es posible agruparlas. En caso de duda, consultá con el área de sistemas o con Dirección sobre el criterio de agrupación de facturas. Como regla general, TOPS puede emitir una factura mensual consolidada por cliente.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left">¿El sistema se conecta con AFIP para emitir e-facturas?</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <div class="alert pending">
+              <span class="alert-icon">🔮</span>
+              <div>Esta integración no está documentada en el sistema actual. Si se requiere integración con AFIP para comprobantes electrónicos (CAE), debe validarse con el área de sistemas y el contador. No asumir que el sistema genera comprobantes fiscales válidos sin confirmación explícita.</div>
+            </div>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left">¿Dónde veo el historial de facturas emitidas?</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>En el módulo de <strong>Facturación</strong> (<code>/billing</code>) podés ver el historial de facturas emitidas. Podés filtrar por fecha, cliente o estado para encontrar comprobantes específicos. Si necesitás el PDF de una factura anterior, accedé a través del endpoint <code>/api/invoices/[id]/pdf</code>.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left">¿Qué pasa si una factura fue emitida con error?</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>Notificá inmediatamente al área de Administración y al área de sistemas. En principio, las facturas emitidas no se eliminan del sistema para mantener la trazabilidad. El proceso de anulación o nota de crédito dependerá de los procedimientos internos y de si existe integración con un sistema de facturación electrónica. Nunca eliminés registros manualmente.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left">¿Con qué frecuencia se sincroniza con Google Drive?</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>La frecuencia exacta de sincronización está pendiente de validación con el equipo de sistemas. Como regla general, la sincronización ocurre de forma automática cada vez que se registra un nuevo documento. Podés verificar el estado de la última sincronización en la pantalla de Drive Sync (<code>/compras/drive</code>).</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left">¿Puedo ver los reportes en mi celular?</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>El sistema TOPS Nexus es responsive y puede usarse desde dispositivos móviles. Sin embargo, para el trabajo con reportes y exportaciones se recomienda usar una computadora de escritorio o laptop, ya que las tablas y paneles de datos son más cómodos de navegar en pantallas más grandes.</p>
+          </div>
+        </details>
+
+        <details class="accordion">
+          <summary>
+            <span class="summary-left">¿El Auditor puede emitir facturas?</span>
+            <span class="chevron">▼</span>
+          </summary>
+          <div class="accordion-body">
+            <p>No. El rol <span class="role-badge auditor">Auditor</span> tiene acceso de <strong>solo lectura</strong> a los reportes (tiene el permiso <span class="perm-badge">analytics.view</span>) pero no puede emitir facturas, modificar registros ni configurar el sistema. Su función es consultar y auditar información.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- GLOSARIO -->
+    <section id="glosario">
+      <h2 class="section-title"><span class="icon">📖</span> Glosario</h2>
+      <p>Términos clave del módulo explicados en lenguaje simple.</p>
+
+      <dl class="glossary">
+        <dt>🧾 Factura</dt>
+        <dd>Documento comercial que certifica la prestación de un servicio y habilita al cliente a reconocer el gasto. En TOPS, se emite a partir de una Orden de Servicio firmada o entregada.</dd>
+
+        <dt>📋 Orden de Servicio (OS)</dt>
+        <dd>Registro en el sistema que detalla el servicio logístico prestado por TOPS a un cliente. Es la base para la facturación.</dd>
+
+        <dt>💰 IVA (Impuesto al Valor Agregado)</dt>
+        <dd>Impuesto indirecto que se aplica sobre la mayoría de los bienes y servicios en Argentina. Las empresas deben registrar el IVA de sus compras (IVA Crédito Fiscal) y ventas (IVA Débito Fiscal) para la liquidación mensual ante AFIP.</dd>
+
+        <dt>📚 Libro IVA Compras</dt>
+        <dd>Registro obligatorio que detalla todas las compras realizadas por la empresa en un período, con el IVA correspondiente. Se presenta a AFIP en la declaración mensual.</dd>
+
+        <dt>📄 PDF</dt>
+        <dd>Formato de archivo para documentos (Portable Document Format). Los PDFs de facturas son el comprobante oficial que se entrega al cliente.</dd>
+
+        <dt>📤 Exportar</dt>
+        <dd>Descargar un conjunto de datos del sistema en un archivo externo (Excel, CSV o PDF) para su uso fuera del sistema.</dd>
+
+        <dt>💾 Drive Sync</dt>
+        <dd>Función que sincroniza automáticamente documentos del sistema con una carpeta de Google Drive, manteniendo un respaldo en la nube.</dd>
+
+        <dt>📧 Template / Plantilla de Email</dt>
+        <dd>Modelo predefinido de correo electrónico que el sistema usa para enviar comunicaciones automatizadas (comprobantes, notificaciones, etc.).</dd>
+
+        <dt>🔑 analytics.view</dt>
+        <dd>Permiso del sistema que habilita el acceso a la Suite de Reportes. Solo tienen este permiso los roles: Director, Administración y Auditor.</dd>
+
+        <dt>🔄 Sincronización</dt>
+        <dd>Proceso automático por el cual el sistema mantiene actualizados los archivos en Google Drive con los nuevos documentos registrados en TOPS Nexus.</dd>
+
+        <dt>✍️ OS Firmada</dt>
+        <dd>Estado de una Orden de Servicio que indica que el servicio fue prestado y el documento fue firmado por las partes. Es uno de los estados que habilita la facturación.</dd>
+
+        <dt>✅ OS Entregada</dt>
+        <dd>Estado de una OS que indica que el servicio fue completamente entregado al cliente. También habilita la facturación.</dd>
+
+        <dt>🏷️ CUIT</dt>
+        <dd>Clave Única de Identificación Tributaria. Número fiscal que identifica a las empresas y personas jurídicas ante la AFIP. Es obligatorio para emitir y recibir facturas.</dd>
+
+        <dt>🏢 AFIP</dt>
+        <dd>Administración Federal de Ingresos Públicos. Organismo tributario de Argentina que regula la facturación electrónica y la presentación de declaraciones impositivas.</dd>
+      </dl>
+    </section>
+
+    <!-- BACK TO TOP -->
+    <div class="back-top">
+      <a href="#objetivo">↑ Volver al inicio de esta página</a>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      <div>📚 Manual de Usuario — TOPS Nexus &nbsp;|&nbsp; Módulo: Facturación y Reportes</div>
+      <div>
+        <a href="index.html">← Índice de manuales</a>
+        &nbsp;|&nbsp;
+        <span>Actualizado: Junio 2026</span>
+      </div>
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  // Active sidebar link on scroll
+  (function () {
+    const sections = document.querySelectorAll('[id]');
+    const links = document.querySelectorAll('.sidebar-nav a[href^="#"]');
+
+    if (!links.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            links.forEach((link) => link.classList.remove('active'));
+            const active = document.querySelector(
+              `.sidebar-nav a[href="#${entry.target.id}"]`
+            );
+            if (active) active.classList.add('active');
+          }
+        });
+      },
+      { rootMargin: `-${getComputedStyle(document.documentElement).getPropertyValue('--nav-height').trim() || '60px'} 0px -70% 0px` }
+    );
+
+    sections.forEach((section) => {
+      if (document.querySelector(`.sidebar-nav a[href="#${section.id}"]`)) {
+        observer.observe(section);
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>

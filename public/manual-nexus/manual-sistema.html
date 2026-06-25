@@ -1,0 +1,2155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema y Administración — Manual TOPS Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0f172a;
+      --navy-light: #1e293b;
+      --navy-lighter: #293548;
+      --blue: #3b82f6;
+      --blue-dim: rgba(59,130,246,0.15);
+      --green: #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245,158,11,0.12);
+      --red: #ef4444;
+      --red-dim: rgba(239,68,68,0.12);
+      --slate: #64748b;
+      --slate-light: #94a3b8;
+      /* Sistema accent: slate/pizarra */
+      --accent: #64748b;
+      --accent-bright: #94a3b8;
+      --accent-dim: rgba(100,116,139,0.15);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --border: rgba(255,255,255,0.08);
+      --border-accent: rgba(100,116,139,0.3);
+      --card: rgba(255,255,255,0.04);
+      --card-hover: rgba(255,255,255,0.07);
+      --sidebar-w: 260px;
+      --topbar-h: 60px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; font-size: 15px; }
+
+    body {
+      background: var(--navy);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      line-height: 1.65;
+      min-height: 100vh;
+    }
+
+    /* ── TOP NAV ────────────────────────────────────────────── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--topbar-h);
+      background: rgba(15,23,42,0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+    }
+
+    .topbar-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .topbar-back:hover { background: var(--card-hover); color: var(--text); border-color: var(--border-accent); }
+
+    .topbar-sep { color: var(--text-dim); font-size: 0.75rem; }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+    .breadcrumb a { color: var(--text-muted); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--accent-bright); }
+    .breadcrumb .current { color: var(--accent-bright); font-weight: 600; }
+    .breadcrumb .sep { color: var(--text-dim); }
+
+    .topbar-badge {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-dim);
+      border: 1px solid var(--border-accent);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent-bright);
+      white-space: nowrap;
+    }
+
+    /* ── LAYOUT ─────────────────────────────────────────────── */
+    .layout {
+      display: flex;
+      min-height: calc(100vh - var(--topbar-h));
+    }
+
+    /* ── SIDEBAR ────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      position: sticky;
+      top: var(--topbar-h);
+      height: calc(100vh - var(--topbar-h));
+      overflow-y: auto;
+      padding: 24px 16px;
+      border-right: 1px solid var(--border);
+      background: rgba(15,23,42,0.6);
+    }
+
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--navy-lighter); border-radius: 4px; }
+
+    .toc-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      padding: 0 8px;
+    }
+
+    .toc-list { list-style: none; }
+    .toc-list li { margin: 2px 0; }
+
+    .toc-list a {
+      display: block;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: all 0.15s;
+      line-height: 1.3;
+    }
+    .toc-list a:hover, .toc-list a.active {
+      background: var(--accent-dim);
+      color: var(--accent-bright);
+    }
+    .toc-list a.sub {
+      padding-left: 20px;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+    .toc-list a.sub:hover { color: var(--accent-bright); }
+
+    .toc-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 10px 8px;
+    }
+
+    /* ── MAIN CONTENT ───────────────────────────────────────── */
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 40px 48px;
+      max-width: 900px;
+    }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 24px 20px; max-width: 100%; }
+    }
+
+    /* ── TYPOGRAPHY ─────────────────────────────────────────── */
+    h1.page-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1.2;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+    h1.page-title .icon { font-size: 2rem; margin-right: 12px; }
+
+    .page-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+      max-width: 680px;
+      line-height: 1.6;
+    }
+
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 52px;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2 .section-icon {
+      font-size: 1.1rem;
+      background: var(--accent-dim);
+      border: 1px solid var(--border-accent);
+      border-radius: 8px;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+    }
+
+    h4 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent-bright);
+      margin-top: 20px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    p {
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      max-width: 720px;
+    }
+    p:last-child { margin-bottom: 0; }
+
+    strong { color: var(--text); font-weight: 600; }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8em;
+      background: var(--navy-lighter);
+      color: var(--accent-bright);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    ul, ol {
+      padding-left: 20px;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+    li { margin-bottom: 4px; }
+    li strong { color: var(--text); }
+
+    /* ── CARDS ──────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      transition: background 0.15s;
+    }
+    .card:hover { background: var(--card-hover); }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .card-icon {
+      font-size: 1.6rem;
+      margin-bottom: 10px;
+    }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .card-desc {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .card-path {
+      display: inline-block;
+      margin-top: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent-bright);
+      background: var(--accent-dim);
+      border: 1px solid var(--border-accent);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* ── ALERTS ─────────────────────────────────────────────── */
+    .alert {
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    .alert-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+    .alert-body strong { display: block; margin-bottom: 4px; font-size: 0.9rem; }
+    .alert-body p { color: inherit; margin: 0; font-size: 0.85rem; }
+
+    .alert-danger {
+      background: var(--red-dim);
+      border: 1px solid rgba(239,68,68,0.25);
+      color: #fca5a5;
+    }
+    .alert-warning {
+      background: var(--amber-dim);
+      border: 1px solid rgba(245,158,11,0.25);
+      color: #fcd34d;
+    }
+    .alert-info {
+      background: var(--blue-dim);
+      border: 1px solid rgba(59,130,246,0.25);
+      color: #93c5fd;
+    }
+    .alert-success {
+      background: var(--green-dim);
+      border: 1px solid rgba(34,197,94,0.25);
+      color: #86efac;
+    }
+    .alert-slate {
+      background: var(--accent-dim);
+      border: 1px solid var(--border-accent);
+      color: var(--accent-bright);
+    }
+
+    /* ── ROLES GRID ─────────────────────────────────────────── */
+    .roles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .role-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      transition: all 0.15s;
+    }
+    .role-card:hover { background: var(--card-hover); transform: translateY(-1px); }
+    .role-card.director { border-color: rgba(245,158,11,0.3); }
+    .role-card.administracion { border-color: rgba(59,130,246,0.3); }
+    .role-card.operaciones { border-color: rgba(34,197,94,0.25); }
+    .role-card.comercial { border-color: rgba(168,85,247,0.25); }
+    .role-card.deposito { border-color: rgba(100,116,139,0.3); }
+    .role-card.auditor { border-color: rgba(239,68,68,0.25); }
+
+    .role-name {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .role-slug {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    .role-perms {
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 12px;
+      display: inline-block;
+      margin-bottom: 8px;
+    }
+    .role-perms.full { background: rgba(245,158,11,0.15); color: #fcd34d; }
+    .role-perms.high { background: rgba(59,130,246,0.15); color: #93c5fd; }
+    .role-perms.mid { background: rgba(34,197,94,0.12); color: #86efac; }
+    .role-perms.low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+    .role-perms.readonly { background: var(--red-dim); color: #fca5a5; }
+
+    .role-desc {
+      font-size: 0.77rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* ── PERMS TABLE ────────────────────────────────────────── */
+    .perms-table-wrap {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin: 20px 0;
+    }
+    .perms-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+      min-width: 700px;
+    }
+    .perms-table th {
+      background: var(--navy-lighter);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 10px 12px;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      font-size: 0.74rem;
+    }
+    .perms-table th.mod-col {
+      text-align: left;
+      color: var(--text);
+    }
+    .perms-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+      vertical-align: middle;
+    }
+    .perms-table tr:last-child td { border-bottom: none; }
+    .perms-table tr:hover td { background: var(--card-hover); }
+    .perms-table td.mod-name {
+      text-align: left;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .perms-table td.mod-name .mod-icon { margin-right: 6px; }
+    .perms-table td.mod-name .mod-actions {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .perm-check { color: #22c55e; font-size: 1rem; }
+    .perm-partial { color: #f59e0b; font-size: 1rem; }
+    .perm-none { color: #334155; font-size: 1rem; }
+    .perm-pending { color: #475569; font-size: 0.7rem; font-style: italic; }
+
+    .thead-role {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .thead-role.director { color: #fcd34d; }
+    .thead-role.admin { color: #93c5fd; }
+    .thead-role.ops { color: #86efac; }
+    .thead-role.comercial { color: #d8b4fe; }
+    .thead-role.deposito { color: #94a3b8; }
+    .thead-role.auditor { color: #fca5a5; }
+
+    /* ── PERMS LEGEND ───────────────────────────────────────── */
+    .perms-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin: 12px 0 20px;
+      font-size: 0.78rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-muted);
+    }
+
+    /* ── ACCORDEONS ─────────────────────────────────────────── */
+    .accordion {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      overflow: hidden;
+    }
+
+    .accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      cursor: pointer;
+      background: var(--card);
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .accordion-header:hover { background: var(--card-hover); }
+
+    .accordion-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .accordion-title .acc-icon { font-size: 1rem; }
+
+    .accordion-arrow {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      transition: transform 0.2s;
+    }
+    .accordion.open .accordion-arrow { transform: rotate(180deg); }
+
+    .accordion-body {
+      display: none;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      background: rgba(15,23,42,0.4);
+    }
+    .accordion.open .accordion-body { display: block; }
+    .accordion-body p { font-size: 0.85rem; }
+    .accordion-body ul { font-size: 0.85rem; }
+
+    /* ── CHECKLIST ──────────────────────────────────────────── */
+    .checklist {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+    }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .checklist li:hover { background: var(--card-hover); }
+    .checklist li.checked {
+      background: var(--green-dim);
+      border-color: rgba(34,197,94,0.2);
+      color: #86efac;
+      text-decoration: line-through;
+      text-decoration-color: rgba(134,239,172,0.4);
+    }
+    .checklist li .check-box {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 2px solid var(--border-accent);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      transition: all 0.15s;
+      margin-top: 1px;
+    }
+    .checklist li.checked .check-box {
+      background: var(--green);
+      border-color: var(--green);
+      color: white;
+    }
+    .checklist li .check-num {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      background: var(--navy-lighter);
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-right: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── FAQ ────────────────────────────────────────────────── */
+    .faq-section { margin: 20px 0; }
+
+    /* ── GLOSARIO ───────────────────────────────────────────── */
+    .glosario {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .glos-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .glos-term {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent-bright);
+      margin-bottom: 4px;
+    }
+    .glos-def {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* ── BADGES ─────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 10px;
+      vertical-align: middle;
+    }
+    .badge-green { background: var(--green-dim); color: #86efac; border: 1px solid rgba(34,197,94,0.2); }
+    .badge-amber { background: var(--amber-dim); color: #fcd34d; border: 1px solid rgba(245,158,11,0.2); }
+    .badge-blue { background: var(--blue-dim); color: #93c5fd; border: 1px solid rgba(59,130,246,0.2); }
+    .badge-red { background: var(--red-dim); color: #fca5a5; border: 1px solid rgba(239,68,68,0.2); }
+    .badge-slate { background: var(--accent-dim); color: var(--accent-bright); border: 1px solid var(--border-accent); }
+
+    /* ── STEP LIST ──────────────────────────────────────────── */
+    .steps {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+      counter-reset: step-counter;
+    }
+    .steps li {
+      display: flex;
+      gap: 16px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      counter-increment: step-counter;
+    }
+    .steps li:last-child { border-bottom: none; }
+    .steps li::before {
+      content: counter(step-counter);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      min-width: 24px;
+      border-radius: 50%;
+      background: var(--accent-dim);
+      border: 1px solid var(--border-accent);
+      color: var(--accent-bright);
+      font-size: 0.72rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── CASE CARDS ─────────────────────────────────────────── */
+    .case-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-bottom: 14px;
+    }
+    .case-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .case-steps {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .case-steps li {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      padding: 4px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+    .case-steps li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--accent-bright);
+    }
+
+    /* ── ERROR CARDS ────────────────────────────────────────── */
+    .error-card {
+      background: var(--red-dim);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+    .error-title {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fca5a5;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .error-desc { font-size: 0.82rem; color: #fca5a5; opacity: 0.85; margin-bottom: 8px; }
+    .error-fix { font-size: 0.82rem; color: #86efac; }
+    .error-fix strong { color: #86efac; }
+
+    /* ── BEST PRACTICES ─────────────────────────────────────── */
+    .bp-list {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+    }
+    .bp-list li {
+      display: flex;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      align-items: flex-start;
+    }
+    .bp-list li .bp-icon { font-size: 1rem; flex-shrink: 0; }
+
+    /* ── ACCESS TABLE ───────────────────────────────────────── */
+    .access-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.83rem;
+    }
+    .access-table th {
+      background: var(--navy-lighter);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .access-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .access-table tr:last-child td { border-bottom: none; }
+    .access-table tr:hover td { background: var(--card-hover); }
+    .access-table td:first-child { color: var(--text); font-weight: 500; }
+
+    /* ── FOOTER ─────────────────────────────────────────────── */
+    .manual-footer {
+      margin-top: 64px;
+      padding: 32px 0 20px;
+      border-top: 1px solid var(--border);
+    }
+    .footer-nav {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .footer-nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .footer-nav a:hover { background: var(--card-hover); color: var(--text); border-color: var(--border-accent); }
+    .footer-meta {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    /* ── SEPARATOR ──────────────────────────────────────────── */
+    .section-sep {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--border), transparent);
+      margin: 8px 0 16px;
+    }
+
+    /* ── MODULE TAG ─────────────────────────────────────────── */
+    .module-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--navy-lighter);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topbar">
+  <a href="index.html" class="topbar-back">← Volver al índice</a>
+  <span class="topbar-sep">/</span>
+  <div class="breadcrumb">
+    <a href="index.html">Inicio</a>
+    <span class="sep">›</span>
+    <span class="current">⚙️ Sistema y Administración</span>
+  </div>
+  <div class="topbar-badge">
+    🔒 Solo Admins
+  </div>
+</nav>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR TOC -->
+  <aside class="sidebar">
+    <div class="toc-title">Contenido</div>
+    <ul class="toc-list">
+      <li><a href="#intro">¿Qué es Sistema?</a></li>
+      <li><a href="#acceso">¿Quién puede acceder?</a></li>
+      <li><a href="#subsecciones">Subsecciones</a></li>
+      <div class="toc-divider"></div>
+      <li><a href="#rbac">Sistema RBAC</a></li>
+      <li><a href="#roles" class="sub">Los 6 roles</a></li>
+      <li><a href="#tabla-permisos" class="sub">Tabla de permisos</a></li>
+      <li><a href="#acciones" class="sub">Acciones disponibles</a></li>
+      <div class="toc-divider"></div>
+      <li><a href="#gestion-roles">Gestión de Roles</a></li>
+      <li><a href="#gestion-usuarios">Gestión de Usuarios</a></li>
+      <li><a href="#centros-costo">Centros de Costo</a></li>
+      <li><a href="#tracking">Tracking (Mapbox)</a></li>
+      <li><a href="#plantillas">Plantillas OS</a></li>
+      <li><a href="#comunicados">Comunicados</a></li>
+      <li><a href="#config-general">Config. General</a></li>
+      <div class="toc-divider"></div>
+      <li><a href="#casos">Casos frecuentes</a></li>
+      <li><a href="#errores">Errores comunes</a></li>
+      <li><a href="#buenas-practicas">Buenas prácticas</a></li>
+      <li><a href="#checklist">Checklist incorporación</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="#glosario">Glosario</a></li>
+    </ul>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- HEADER -->
+    <div id="intro">
+      <h1 class="page-title">
+        <span class="icon">⚙️</span>Administración del Sistema
+      </h1>
+      <p class="page-subtitle">
+        Módulo central de configuración de <strong>TOPS Nexus</strong>: gestión de roles, permisos, usuarios, centros de costo, plantillas y comunicados del sistema. Acceso restringido a perfiles con autorización explícita.
+      </p>
+
+      <div class="alert alert-danger">
+        <span class="alert-icon">🔐</span>
+        <div class="alert-body">
+          <strong>Módulo de acceso restringido</strong>
+          <p>La sección Sistema solo está disponible para los roles <strong>Director</strong> y <strong>Administración</strong>. Cualquier cambio en permisos o roles puede afectar el acceso de todos los usuarios al sistema. Proceder con precaución y siempre con autorización del Director.</p>
+        </div>
+      </div>
+
+      <p>
+        El módulo <strong>Sistema y Administración</strong> es el núcleo de gobierno de TOPS Nexus. Desde acá se define quién puede ver qué, quién puede hacer qué, cómo se clasifican los gastos contablemente y cómo se configura la integración con servicios externos como Mapbox para el tracking de flota.
+      </p>
+      <p>
+        Es la capa de seguridad y configuración que sustenta todo lo demás. Un cambio incorrecto aquí puede dejar usuarios sin acceso o, peor, dar acceso indebido a módulos sensibles como Compras o Finanzas.
+      </p>
+    </div>
+
+    <!-- QUIÉN PUEDE ACCEDER -->
+    <h2 id="acceso">
+      <span class="section-icon">👤</span>
+      ¿Quién puede acceder?
+    </h2>
+
+    <p>El acceso a la sección Sistema está controlado por el permiso <code>sistema.view</code> (para ver) y <code>sistema.admin</code> (para administrar). Solo dos roles del sistema tienen estos permisos:</p>
+
+    <table class="access-table">
+      <thead>
+        <tr>
+          <th>Rol</th>
+          <th>sistema.view</th>
+          <th>sistema.admin</th>
+          <th>Qué puede hacer</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🏆 Director</td>
+          <td><span class="perm-check">✓</span></td>
+          <td><span class="perm-check">✓</span></td>
+          <td>Acceso total: ver, crear, editar y eliminar roles, usuarios, centros de costo y toda la configuración</td>
+        </tr>
+        <tr>
+          <td>📊 Administración</td>
+          <td><span class="perm-check">✓</span></td>
+          <td><span class="perm-none">—</span></td>
+          <td>Puede ver la configuración del sistema pero no modificar roles ni permisos</td>
+        </tr>
+        <tr>
+          <td>📦 Operaciones</td>
+          <td><span class="perm-none">—</span></td>
+          <td><span class="perm-none">—</span></td>
+          <td>Sin acceso a Sistema</td>
+        </tr>
+        <tr>
+          <td>💼 Comercial</td>
+          <td><span class="perm-none">—</span></td>
+          <td><span class="perm-none">—</span></td>
+          <td>Sin acceso a Sistema</td>
+        </tr>
+        <tr>
+          <td>🏭 Depósito</td>
+          <td><span class="perm-none">—</span></td>
+          <td><span class="perm-none">—</span></td>
+          <td>Sin acceso a Sistema</td>
+        </tr>
+        <tr>
+          <td>🔍 Auditor</td>
+          <td><span class="perm-none">—</span></td>
+          <td><span class="perm-none">—</span></td>
+          <td>Sin acceso a Sistema (el auditor tiene solo lectura en otros módulos)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-body">
+        <strong>Distinción importante: ver vs. administrar</strong>
+        <p>El rol <strong>Administración</strong> tiene <code>sistema.view</code> pero NO tiene <code>sistema.admin</code>. Esto significa que puede consultar la configuración (roles, usuarios, centros de costo) pero no puede crear, editar ni eliminar nada en este módulo. Para cualquier cambio estructural en el sistema, es obligatorio el rol <strong>Director</strong>.</p>
+      </div>
+    </div>
+
+    <!-- SUBSECCIONES -->
+    <h2 id="subsecciones">
+      <span class="section-icon">🗂️</span>
+      Subsecciones del módulo
+    </h2>
+
+    <p>El módulo Sistema y Administración agrupa las siguientes subsecciones:</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">🔑</div>
+        <div class="card-title">Roles y Permisos</div>
+        <div class="card-desc">Gestión del sistema RBAC. Crear, editar y configurar los roles del sistema y sus permisos por módulo.</div>
+        <span class="card-path">/settings/roles</span>
+      </div>
+      <div class="card">
+        <div class="card-icon">👥</div>
+        <div class="card-title">Usuarios</div>
+        <div class="card-desc">Asignación de roles a los usuarios registrados en el sistema.</div>
+        <span class="card-path">/settings/users</span>
+      </div>
+      <div class="card">
+        <div class="card-icon">🏛️</div>
+        <div class="card-title">Centros de Costo</div>
+        <div class="card-desc">Catálogo de centros de costo para imputaciones contables en compras y servicios.</div>
+        <span class="card-path">/settings/centros-costo</span>
+      </div>
+      <div class="card">
+        <div class="card-icon">📍</div>
+        <div class="card-title">Tracking</div>
+        <div class="card-desc">Configuración de la integración con Mapbox para el seguimiento de la flota.</div>
+        <span class="card-path">/settings/tracking</span>
+      </div>
+      <div class="card">
+        <div class="card-icon">📋</div>
+        <div class="card-title">Plantillas OS</div>
+        <div class="card-desc">Templates predefinidos para órdenes de servicio recurrentes.</div>
+        <span class="card-path">/templates</span>
+      </div>
+      <div class="card">
+        <div class="card-icon">📢</div>
+        <div class="card-title">Comunicados</div>
+        <div class="card-desc">Avisos y comunicados visibles para todos los usuarios del sistema.</div>
+        <span class="card-path">/sistema/comunicados</span>
+      </div>
+      <div class="card">
+        <div class="card-icon">⚙️</div>
+        <div class="card-title">Configuración General</div>
+        <div class="card-desc">Settings generales del sistema y parámetros globales.</div>
+        <span class="card-path">/settings</span>
+      </div>
+    </div>
+
+    <!-- ── RBAC ─────────────────────────────────────────────── -->
+    <h2 id="rbac">
+      <span class="section-icon">🔑</span>
+      Sistema de Roles y Permisos (RBAC)
+    </h2>
+
+    <p>TOPS Nexus implementa un modelo de control de acceso basado en roles (<strong>RBAC</strong>, Role-Based Access Control). Esto significa que los permisos se asignan a <em>roles</em>, no directamente a usuarios. Cada usuario tiene un rol, y ese rol determina qué puede ver y hacer en el sistema.</p>
+
+    <div class="alert alert-info">
+      <span class="alert-icon">ℹ️</span>
+      <div class="alert-body">
+        <strong>¿Cómo funciona el RBAC en TOPS Nexus?</strong>
+        <p>Al iniciar sesión, el sistema carga los permisos del rol del usuario (<strong>boot flags</strong>). Estos flags determinan qué secciones aparecen en el sidebar, qué botones son visibles y qué acciones están habilitadas. Todo esto ocurre en tiempo real al cargar la aplicación.</p>
+      </div>
+    </div>
+
+    <h3>Estrategia de visibilidad (Estrategia B)</h3>
+    <p>El sistema RBAC de TOPS Nexus aplica la seguridad en dos niveles:</p>
+    <ul>
+      <li><strong>Nivel dominio:</strong> oculta secciones completas del sidebar si el usuario no tiene acceso al módulo (ej: un Depósito no ve "Sistema" en el menú).</li>
+      <li><strong>Nivel ítem:</strong> dentro de una sección visible, oculta opciones individuales según los permisos específicos (ej: dentro de Compras, oculta el botón "Firmar OC" si el usuario no tiene <code>compras.sign</code>).</li>
+    </ul>
+
+    <p>Los <strong>flags de boot</strong> más relevantes para el módulo Sistema son:</p>
+    <ul>
+      <li><code>canViewSistema</code> — habilita la sección Sistema en el sidebar</li>
+      <li><code>canViewExecutive</code> — acceso a vistas ejecutivas del Cockpit</li>
+      <li><code>canViewRrhhDocs</code> — visibilidad de documentación de RRHH</li>
+    </ul>
+
+    <!-- LOS 6 ROLES -->
+    <h2 id="roles">
+      <span class="section-icon">🎭</span>
+      Los 6 roles del sistema
+    </h2>
+
+    <p>TOPS Nexus tiene 6 roles predefinidos que cubren todas las necesidades operativas de la empresa:</p>
+
+    <div class="roles-grid">
+      <div class="role-card director">
+        <div class="role-name">🏆 Director</div>
+        <div class="role-slug">slug: director</div>
+        <span class="role-perms full">22/22 permisos</span>
+        <div class="role-desc">Máxima autoridad del sistema. Único rol con capacidad de firma de Órdenes de Compra (<code>compras.sign</code>). Acceso completo a todos los módulos incluyendo la administración del sistema.</div>
+      </div>
+      <div class="role-card administracion">
+        <div class="role-name">📊 Administración</div>
+        <div class="role-slug">slug: administracion</div>
+        <span class="role-perms high">21/22 permisos</span>
+        <div class="role-desc">Equipo financiero y administrativo. Tiene acceso a casi todo excepto la firma de OC (<code>compras.sign</code>), que es exclusiva del Director. Puede ver el módulo Sistema pero no administrarlo.</div>
+      </div>
+      <div class="role-card operaciones">
+        <div class="role-name">📦 Operaciones</div>
+        <div class="role-slug">slug: operaciones</div>
+        <span class="role-perms mid">Permisos operativos</span>
+        <div class="role-desc">Coordinación de depósitos y servicios. Accede a módulos de servicios, WMS y tracking. Sin acceso a módulos financieros ni a la administración del sistema.</div>
+      </div>
+      <div class="role-card comercial">
+        <div class="role-name">💼 Comercial</div>
+        <div class="role-slug">slug: comercial</div>
+        <span class="role-perms mid">Permisos CRM</span>
+        <div class="role-desc">CRM y pipeline de ventas. Accede al módulo Comercial y Cockpit. Sin acceso a compras, finanzas ni administración del sistema.</div>
+      </div>
+      <div class="role-card deposito">
+        <div class="role-name">🏭 Depósito</div>
+        <div class="role-slug">slug: deposito</div>
+        <span class="role-perms low">Permisos básicos</span>
+        <div class="role-desc">Operarios de depósito. Picking, recepción de mercadería y firma de órdenes de servicio. Acceso limitado a los módulos necesarios para la operación diaria del depósito.</div>
+      </div>
+      <div class="role-card auditor">
+        <div class="role-name">🔍 Auditor</div>
+        <div class="role-slug">slug: auditor</div>
+        <span class="role-perms readonly">Solo lectura</span>
+        <div class="role-desc">Rol de auditoría con acceso de <strong>solo lectura</strong> a todos los módulos. Puede ver pero nunca crear, editar ni eliminar información. Ideal para revisiones de control interno.</div>
+      </div>
+    </div>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-body">
+        <strong>Permiso crítico: compras.sign</strong>
+        <p>El permiso <code>compras.sign</code> (firma de Órdenes de Compra) es <strong>exclusivo del rol Director</strong>. Ningún otro rol puede activarlo, independientemente de los demás permisos asignados. Esto es una restricción de seguridad intencional. Si una OC requiere firma y el Director no está disponible, el proceso debe quedar en pausa hasta su disponibilidad.</p>
+      </div>
+    </div>
+
+    <!-- TABLA DE PERMISOS -->
+    <h2 id="tabla-permisos">
+      <span class="section-icon">📊</span>
+      Tabla completa de permisos
+    </h2>
+
+    <p>La siguiente tabla muestra qué módulos y acciones tiene disponible cada rol. Es la referencia principal para entender el modelo de seguridad del sistema.</p>
+
+    <div class="perms-legend">
+      <div class="legend-item"><span class="perm-check">✓</span> Acceso completo</div>
+      <div class="legend-item"><span class="perm-partial">◑</span> Acceso parcial (solo lectura)</div>
+      <div class="legend-item"><span class="perm-none">—</span> Sin acceso</div>
+      <div class="legend-item"><span class="perm-pending">pend.</span> Módulo pendiente de implementación</div>
+    </div>
+
+    <div class="perms-table-wrap">
+      <table class="perms-table">
+        <thead>
+          <tr>
+            <th class="mod-col">Módulo</th>
+            <th><span class="thead-role director">Director</span></th>
+            <th><span class="thead-role admin">Admin.</span></th>
+            <th><span class="thead-role ops">Oper.</span></th>
+            <th><span class="thead-role comercial">Comer.</span></th>
+            <th><span class="thead-role deposito">Depós.</span></th>
+            <th><span class="thead-role auditor">Auditor</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📊</span>Cockpit
+              <span class="mod-actions">view · export</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-partial">◑</span></td>
+            <td><span class="perm-partial">◑</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">🛒</span>Compras
+              <span class="mod-actions">view · create · edit · sign · export · delete</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-partial">◑</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">🔧</span>Servicios (OS)
+              <span class="mod-actions">view · create · sign</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">💼</span>Comercial (CRM)
+              <span class="mod-actions">view · edit</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-partial">◑</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📋</span>Compliance
+              <span class="mod-actions">view · edit</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📷</span>CCTV
+              <span class="mod-actions">view · admin</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-partial">◑</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📁</span>Documental
+              <span class="mod-actions">view · create · delete</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-partial">◑</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📈</span>Analytics
+              <span class="mod-actions">view</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">⚙️</span>Sistema
+              <span class="mod-actions">view · admin</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-partial">◑</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">👥</span>RRHH
+              <span class="mod-actions">view · export · documentacion.view</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-partial">◑</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">🏠</span>Mi Espacio
+              <span class="mod-actions">view</span>
+            </td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+            <td><span class="perm-check">✓</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📦</span>WMS
+              <span class="mod-actions" style="color:var(--amber);">pendiente</span>
+            </td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📍</span>Tracking
+              <span class="mod-actions" style="color:var(--amber);">pendiente</span>
+            </td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">📝</span>Pedidos
+              <span class="mod-actions" style="color:var(--amber);">pendiente</span>
+            </td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">🏦</span>Tesorería
+              <span class="mod-actions" style="color:var(--amber);">pendiente</span>
+            </td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+          </tr>
+          <tr>
+            <td class="mod-name">
+              <span class="mod-icon">💰</span>Cuentas a Pagar
+              <span class="mod-actions" style="color:var(--amber);">pendiente</span>
+            </td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-none">—</span></td>
+            <td><span class="perm-pending">pend.</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-slate">
+      <span class="alert-icon">📌</span>
+      <div class="alert-body">
+        <strong>Nota sobre módulos pendientes</strong>
+        <p>Los módulos marcados como <em>pendiente</em> (WMS, Tracking, Pedidos, Tesorería, Cuentas a Pagar) están en desarrollo o en etapa de diseño. Los permisos se definirán cuando se activen. La tabla se actualizará en cada versión del manual.</p>
+      </div>
+    </div>
+
+    <!-- ACCIONES DE PERMISO -->
+    <h2 id="acciones">
+      <span class="section-icon">🎯</span>
+      Acciones de permiso disponibles
+    </h2>
+
+    <p>Cada módulo puede tener habilitadas distintas acciones. Las acciones estándar del sistema son:</p>
+
+    <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+      <div class="card" style="padding:14px 16px;">
+        <div style="font-size:1.2rem;margin-bottom:6px;">👁️</div>
+        <div class="card-title" style="font-size:0.85rem;"><code>view</code></div>
+        <div class="card-desc" style="font-size:0.78rem;">Permite ver el módulo y su contenido. Sin este permiso, el módulo ni siquiera aparece en el menú.</div>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <div style="font-size:1.2rem;margin-bottom:6px;">➕</div>
+        <div class="card-title" style="font-size:0.85rem;"><code>create</code></div>
+        <div class="card-desc" style="font-size:0.78rem;">Permite crear nuevos registros dentro del módulo (órdenes, documentos, etc.).</div>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <div style="font-size:1.2rem;margin-bottom:6px;">✏️</div>
+        <div class="card-title" style="font-size:0.85rem;"><code>edit</code></div>
+        <div class="card-desc" style="font-size:0.78rem;">Permite modificar registros existentes. No incluye eliminación.</div>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <div style="font-size:1.2rem;margin-bottom:6px;">🗑️</div>
+        <div class="card-title" style="font-size:0.85rem;"><code>delete</code></div>
+        <div class="card-desc" style="font-size:0.78rem;">Permite eliminar registros. Generalmente restringido a roles administrativos.</div>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <div style="font-size:1.2rem;margin-bottom:6px;">✍️</div>
+        <div class="card-title" style="font-size:0.85rem;"><code>sign</code></div>
+        <div class="card-desc" style="font-size:0.78rem;">Firma digital de documentos. Solo disponible para compras (OC) y servicios (OS).</div>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <div style="font-size:1.2rem;margin-bottom:6px;">📤</div>
+        <div class="card-title" style="font-size:0.85rem;"><code>export</code></div>
+        <div class="card-desc" style="font-size:0.78rem;">Permite exportar datos del módulo (CSV, Excel, PDF).</div>
+      </div>
+      <div class="card" style="padding:14px 16px;">
+        <div style="font-size:1.2rem;margin-bottom:6px;">🔧</div>
+        <div class="card-title" style="font-size:0.85rem;"><code>admin</code></div>
+        <div class="card-desc" style="font-size:0.78rem;">Acceso de administración al módulo. Permite configurar y gestionar la sección.</div>
+      </div>
+    </div>
+
+    <!-- GESTIÓN DE ROLES -->
+    <h2 id="gestion-roles">
+      <span class="section-icon">🔑</span>
+      Gestión de Roles
+    </h2>
+
+    <p>Desde <code>/settings/roles</code> podés ver, crear y editar los roles del sistema. Esta sección requiere el permiso <code>sistema.admin</code> (solo Director).</p>
+
+    <h3>Ver un rol existente</h3>
+    <p>Cada rol tiene su propia página de detalle en <code>/settings/roles/[slug]</code> donde se puede ver:</p>
+    <ul>
+      <li>Nombre y slug del rol</li>
+      <li>Descripción y propósito</li>
+      <li>Lista completa de permisos habilitados por módulo</li>
+      <li>Usuarios que tienen este rol asignado actualmente</li>
+    </ul>
+
+    <h3>Crear un nuevo rol</h3>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">➕</span> Pasos para crear un rol desde cero</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <ol class="steps">
+          <li>Navegar a <code>/settings/roles</code></li>
+          <li>Hacer clic en el botón <strong>"Nuevo rol"</strong> (visible solo con <code>sistema.admin</code>)</li>
+          <li>Completar el <strong>nombre</strong> del rol (ej: "Supervisor de Depósito")</li>
+          <li>El <strong>slug</strong> se genera automáticamente desde el nombre. Se puede personalizar (solo letras minúsculas, guiones bajos, sin espacios)</li>
+          <li>Agregar una descripción clara del propósito del rol</li>
+          <li>Seleccionar los permisos por módulo usando las casillas de verificación</li>
+          <li>Guardar el rol</li>
+          <li>Ir a <strong>Usuarios</strong> para asignar este rol a las personas que lo requieran</li>
+        </ol>
+        <div class="alert alert-warning" style="margin-top:12px;">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-body">
+            <strong>Principio de mínimo privilegio</strong>
+            <p>Al crear un rol nuevo, comenzar siempre con el mínimo de permisos necesarios. Es más fácil agregar permisos después que revocarlos una vez que el usuario ya está trabajando con ellos.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">✏️</span> Editar un rol existente</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Para editar los permisos de un rol existente:</p>
+        <ol class="steps">
+          <li>Ir a <code>/settings/roles</code> y seleccionar el rol a editar</li>
+          <li>Usar el botón <strong>"Editar"</strong> en la página de detalle del rol</li>
+          <li>Agregar o quitar permisos según se necesite</li>
+          <li>Guardar los cambios</li>
+          <li>Los cambios se aplican de forma inmediata para todos los usuarios con ese rol (al recargar su sesión)</li>
+        </ol>
+        <div class="alert alert-danger" style="margin-top:12px;">
+          <span class="alert-icon">🔴</span>
+          <div class="alert-body">
+            <strong>Atención: cambios con impacto inmediato</strong>
+            <p>Editar un rol afecta a <strong>todos los usuarios</strong> que lo tienen asignado. Si quitás un permiso a un rol que muchas personas usan, esas personas perderán acceso a esa funcionalidad de forma inmediata. Coordinar los cambios fuera del horario operativo cuando sea posible.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GESTIÓN DE USUARIOS -->
+    <h2 id="gestion-usuarios">
+      <span class="section-icon">👥</span>
+      Gestión de Usuarios
+    </h2>
+
+    <p>Desde <code>/settings/users</code> se gestiona la asignación de roles a los usuarios del sistema. Acá no se crean cuentas (eso depende del proveedor de autenticación), sino que se asocia cada cuenta con un rol de TOPS Nexus.</p>
+
+    <h3>Asignar un rol a un usuario</h3>
+    <ol class="steps">
+      <li>Ir a <code>/settings/users</code></li>
+      <li>Buscar el usuario por nombre o email</li>
+      <li>Hacer clic en el usuario para ver su perfil</li>
+      <li>En el selector de rol, elegir el rol apropiado</li>
+      <li>Confirmar el cambio</li>
+      <li>El usuario verá los nuevos permisos la próxima vez que inicie sesión</li>
+    </ol>
+
+    <h3>Cambiar el rol de un usuario</h3>
+    <p>El proceso es idéntico a la asignación. Al cambiar el rol, el usuario pierde todos los permisos del rol anterior y gana los del nuevo. Si el usuario está actualmente logueado, los cambios se aplicarán al recargar la sesión.</p>
+
+    <div class="alert alert-info">
+      <span class="alert-icon">💡</span>
+      <div class="alert-body">
+        <strong>Un usuario, un rol</strong>
+        <p>TOPS Nexus implementa un modelo de rol único por usuario. Cada persona tiene exactamente un rol asignado. Si alguien necesita permisos de múltiples roles, hay que crear un rol personalizado que combine los permisos necesarios, o revisar si el rol existente más cercano puede ampliarse.</p>
+      </div>
+    </div>
+
+    <!-- CENTROS DE COSTO -->
+    <h2 id="centros-costo">
+      <span class="section-icon">🏛️</span>
+      Centros de Costo
+    </h2>
+
+    <p>Los <strong>centros de costo</strong> son etiquetas contables que permiten clasificar los gastos e ingresos por área o proyecto dentro de la empresa. Son utilizados en el módulo de <strong>Compras</strong> y en <strong>Servicios</strong> para imputar correctamente cada transacción.</p>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">❓</span> ¿Para qué sirven los centros de costo?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Permiten responder preguntas como:</p>
+        <ul>
+          <li>¿Cuánto gastó el área de Operaciones este mes?</li>
+          <li>¿Qué porcentaje del gasto corresponde al depósito de Palermo vs. el de Tigre?</li>
+          <li>¿Cuánto costó el proyecto X en total?</li>
+        </ul>
+        <p>Sin centros de costo, todos los gastos se acumularían sin diferenciación, imposibilitando el análisis financiero por área.</p>
+      </div>
+    </div>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">➕</span> Crear un nuevo centro de costo</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <ol class="steps">
+          <li>Ir a <code>/settings/centros-costo</code></li>
+          <li>Hacer clic en <strong>"Nuevo centro de costo"</strong></li>
+          <li>Ingresar el código del centro (ej: <code>CC-001</code>, <code>OPS-DEP</code>)</li>
+          <li>Ingresar el nombre descriptivo (ej: "Depósito Central", "Administración", "Comercial")</li>
+          <li>Opcionalmente, agregar una descripción</li>
+          <li>Guardar. El centro de costo estará disponible de inmediato en Compras y Servicios.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">🔗</span> ¿Cuándo se usa el centro de costo?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Al crear o editar una:</p>
+        <ul>
+          <li><strong>Orden de Compra (OC):</strong> se requiere seleccionar el centro de costo al que se imputará el gasto.</li>
+          <li><strong>Orden de Servicio (OS):</strong> permite identificar qué área o proyecto genera el servicio.</li>
+        </ul>
+        <p>El campo de centro de costo suele ser obligatorio en Compras para garantizar la trazabilidad contable completa.</p>
+      </div>
+    </div>
+
+    <!-- TRACKING -->
+    <h2 id="tracking">
+      <span class="section-icon">📍</span>
+      Configuración de Tracking
+    </h2>
+
+    <p>La sección de Tracking en <code>/settings/tracking</code> permite configurar la integración con <strong>Mapbox</strong> para el seguimiento de la flota de vehículos.</p>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">🗺️</span> Configuración de Mapbox</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Para configurar la integración con Mapbox:</p>
+        <ul>
+          <li><strong>Token de acceso (API Key):</strong> ingresar el token público de Mapbox. Este token habilita los mapas y la geolocalización en tiempo real.</li>
+          <li><strong>Estilo del mapa:</strong> se puede seleccionar entre el mapa estándar, satelital o dark mode para la vista de flota.</li>
+          <li><strong>Centro del mapa:</strong> coordenadas de inicio (latitud/longitud) para centrar la vista por defecto.</li>
+        </ul>
+        <div class="alert alert-warning" style="margin-top:12px;">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-body">
+            <strong>Token de Mapbox</strong>
+            <p>El token de Mapbox es una clave de API que tiene asociados los límites de uso y la facturación. No compartirlo ni publicarlo. Renovarlo periódicamente según las políticas de seguridad de la empresa.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">🚛</span> Configuración de flota</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>La configuración de flota incluye:</p>
+        <ul>
+          <li>Registro de vehículos activos (dominio, descripción, tipo)</li>
+          <li>Asignación de dispositivos GPS a vehículos</li>
+          <li>Zonas geográficas de operación</li>
+        </ul>
+        <p>Esta funcionalidad está en etapa de diseño activo. Consultar con el equipo de Sistemas para el estado actual de implementación.</p>
+      </div>
+    </div>
+
+    <!-- PLANTILLAS OS -->
+    <h2 id="plantillas">
+      <span class="section-icon">📋</span>
+      Plantillas de Órdenes de Servicio
+    </h2>
+
+    <p>Las <strong>plantillas de OS</strong> (accesibles desde <code>/templates</code>) son modelos predefinidos para órdenes de servicio recurrentes. Permiten crear nuevas OS a partir de una estructura ya configurada, reduciendo el tiempo de carga y minimizando errores.</p>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">❓</span> ¿Cuándo usar una plantilla?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Las plantillas son útiles para servicios que se repiten frecuentemente con las mismas características:</p>
+        <ul>
+          <li>Mantenimiento preventivo mensual de equipos</li>
+          <li>Servicios de limpieza periódicos</li>
+          <li>Revisiones técnicas estándar</li>
+          <li>Cualquier OS que se genere más de 2-3 veces por mes con la misma estructura</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">➕</span> Crear una nueva plantilla</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <ol class="steps">
+          <li>Ir a <code>/templates</code></li>
+          <li>Hacer clic en <strong>"Nueva plantilla"</strong></li>
+          <li>Definir el <strong>nombre</strong> de la plantilla (descriptivo, ej: "Mantenimiento mensual - Refrigeración")</li>
+          <li>Completar los campos base: proveedor habitual, descripción del servicio, centro de costo</li>
+          <li>Agregar los ítems estándar de la OS</li>
+          <li>Guardar la plantilla</li>
+          <li>Para usar la plantilla al crear una OS nueva, seleccionarla desde el botón "Usar plantilla" en la creación de OS</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">✏️</span> Editar y gestionar plantillas</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Desde la lista de plantillas se puede:</p>
+        <ul>
+          <li><strong>Editar</strong> una plantilla existente para actualizarla con nuevos datos</li>
+          <li><strong>Duplicar</strong> una plantilla como base para una nueva variante</li>
+          <li><strong>Archivar</strong> plantillas que ya no se usan (no se eliminan para mantener el historial)</li>
+        </ul>
+        <p>Las plantillas son compartidas por todos los usuarios con permiso de creación de OS.</p>
+      </div>
+    </div>
+
+    <!-- COMUNICADOS -->
+    <h2 id="comunicados">
+      <span class="section-icon">📢</span>
+      Comunicados del Sistema
+    </h2>
+
+    <p>Los <strong>comunicados</strong> (<code>/sistema/comunicados</code>) son avisos que aparecen en el sistema para todos los usuarios. Se usan para informar sobre mantenimientos programados, cambios importantes en procesos, o cualquier novedad relevante.</p>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">📝</span> Publicar un comunicado</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <ol class="steps">
+          <li>Ir a <code>/sistema/comunicados</code></li>
+          <li>Hacer clic en <strong>"Nuevo comunicado"</strong></li>
+          <li>Definir el <strong>tipo</strong> de comunicado: Informativo, Mantenimiento, Urgente o Crítico</li>
+          <li>Escribir el <strong>título</strong> (breve y claro)</li>
+          <li>Redactar el <strong>contenido</strong> del comunicado</li>
+          <li>Seleccionar la <strong>fecha de publicación</strong> y, opcionalmente, una fecha de expiración</li>
+          <li>Publicar. El comunicado será visible para todos los usuarios en el sistema</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="accordion" onclick="toggleAccordion(this)">
+      <div class="accordion-header">
+        <div class="accordion-title"><span class="acc-icon">🏷️</span> Tipos de comunicados</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <ul>
+          <li><strong>Informativo:</strong> novedades generales, nuevas funcionalidades, cambios de proceso. Aparece como banner azul.</li>
+          <li><strong>Mantenimiento:</strong> avisos de interrupciones programadas. Aparece como banner amarillo.</li>
+          <li><strong>Urgente:</strong> situaciones que requieren atención inmediata. Aparece como banner naranja.</li>
+          <li><strong>Crítico:</strong> incidentes en curso, datos afectados, acciones requeridas de todos. Aparece como banner rojo.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- CONFIG GENERAL -->
+    <h2 id="config-general">
+      <span class="section-icon">🔧</span>
+      Configuración General
+    </h2>
+
+    <p>La pantalla principal de <code>/settings</code> concentra los parámetros globales del sistema. Esta sección se irá completando a medida que el módulo avance en su implementación.</p>
+
+    <div class="alert alert-slate">
+      <span class="alert-icon">🚧</span>
+      <div class="alert-body">
+        <strong>Sección en construcción</strong>
+        <p>Los detalles específicos de la Configuración General están pendientes de validación. El equipo de Sistemas comunicará las opciones disponibles cuando estén implementadas. Por ahora, la pantalla principal de Settings funciona como portal de acceso a las demás subsecciones.</p>
+      </div>
+    </div>
+
+    <!-- ── CASOS FRECUENTES ──────────────────────────────────── -->
+    <h2 id="casos">
+      <span class="section-icon">💡</span>
+      Casos frecuentes
+    </h2>
+
+    <div class="case-card">
+      <div class="case-title">🆕 Nuevo empleado: dar acceso al sistema</div>
+      <ol class="case-steps">
+        <li>Confirmar con RRHH y el responsable del área qué rol corresponde al nuevo empleado</li>
+        <li>Asegurarse de que el empleado ya tenga cuenta de acceso al sistema (proceso fuera de TOPS Nexus)</li>
+        <li>Ir a <code>/settings/users</code></li>
+        <li>Buscar al usuario por nombre o email</li>
+        <li>Asignarle el rol correspondiente</li>
+        <li>Verificar con el empleado que puede ingresar y que ve las secciones correctas</li>
+        <li>Registrar el cambio en el legajo del empleado (RRHH)</li>
+      </ol>
+    </div>
+
+    <div class="case-card">
+      <div class="case-title">🔄 Cambio de rol: empleado cambia de área o cargo</div>
+      <ol class="case-steps">
+        <li>Recibir la solicitud formal del cambio (email de RRHH o del Director)</li>
+        <li>Ir a <code>/settings/users</code> y buscar al usuario</li>
+        <li>Cambiar el rol al nuevo que corresponde</li>
+        <li>Notificar al empleado del cambio y verificar que pueda acceder a las nuevas secciones</li>
+        <li>Si hay acceso a datos sensibles que ya no corresponde (ej: pasaba de Director a Comercial), confirmar que ya no puede ver lo que no debe</li>
+      </ol>
+    </div>
+
+    <div class="case-card">
+      <div class="case-title">🏛️ Agregar un nuevo centro de costo para un proyecto</div>
+      <ol class="case-steps">
+        <li>Recibir la solicitud de Contabilidad o del responsable del proyecto</li>
+        <li>Definir el código y nombre del centro de costo (coordinar con Contabilidad para seguir la nomenclatura existente)</li>
+        <li>Ir a <code>/settings/centros-costo</code> y crear el nuevo centro</li>
+        <li>Comunicar a los usuarios de Compras y Servicios que ya está disponible</li>
+      </ol>
+    </div>
+
+    <div class="case-card">
+      <div class="case-title">👋 Baja de empleado: revocar acceso</div>
+      <ol class="case-steps">
+        <li>Recibir la comunicación de baja de RRHH</li>
+        <li>Revocar o deshabilitar la cuenta del empleado en el proveedor de autenticación (fuera de TOPS Nexus)</li>
+        <li>En <code>/settings/users</code>, verificar que el usuario ya no pueda ingresar</li>
+        <li>Registrar la baja en el legajo del empleado</li>
+      </ol>
+      <div class="alert alert-danger" style="margin-top:12px;">
+        <span class="alert-icon">🔴</span>
+        <div class="alert-body">
+          <strong>Acción inmediata requerida</strong>
+          <p>La revocación de acceso ante una baja debe realizarse el mismo día, idealmente antes del último día laboral del empleado. No esperar.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ERRORES COMUNES ─────────────────────────────────────── -->
+    <h2 id="errores">
+      <span class="section-icon">🔴</span>
+      Errores comunes
+    </h2>
+
+    <div class="error-card">
+      <div class="error-title">🚫 "No tenés permisos para ver esta sección"</div>
+      <div class="error-desc">El usuario intenta acceder a un módulo para el que su rol no tiene el permiso <code>view</code>.</div>
+      <div class="error-fix">
+        <strong>Solución:</strong> verificar el rol del usuario en <code>/settings/users</code>. Si el acceso es legítimo, asignar el rol correcto o crear un rol personalizado con el permiso necesario. Si no es legítimo, informar al usuario que debe solicitar acceso formalmente.
+      </div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🚫 Usuario no aparece en la lista de usuarios</div>
+      <div class="error-desc">El usuario existe pero no aparece en <code>/settings/users</code> para asignarle un rol.</div>
+      <div class="error-fix">
+        <strong>Solución:</strong> verificar que el usuario haya iniciado sesión al menos una vez en TOPS Nexus. El sistema registra a los usuarios cuando se loguean por primera vez. Si nunca ingresó, pedirle que lo haga antes de intentar asignarle un rol.
+      </div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🚫 Usuario con rol correcto pero sin ver la sección</div>
+      <div class="error-desc">El rol tiene los permisos correctos pero el usuario no ve la sección en el menú.</div>
+      <div class="error-fix">
+        <strong>Solución:</strong> pedirle al usuario que cierre sesión y vuelva a ingresar. Los boot flags de permisos se cargan al iniciar sesión; si el rol fue cambiado mientras la sesión estaba activa, se necesita un nuevo login para aplicar los cambios.
+      </div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🚫 No se puede firmar la OC ("Firma no disponible")</div>
+      <div class="error-desc">El botón de firma de Orden de Compra no aparece o está deshabilitado.</div>
+      <div class="error-fix">
+        <strong>Solución:</strong> <code>compras.sign</code> es un permiso exclusivo del rol <strong>Director</strong>. Si el usuario que necesita firmar no tiene el rol Director, no puede hacerlo. No es un error del sistema; es una restricción intencional. La OC debe ser firmada por el Director.
+      </div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🚫 El centro de costo no aparece en el selector de Compras</div>
+      <div class="error-desc">Al crear una OC o OS, el centro de costo recién creado no aparece en el desplegable.</div>
+      <div class="error-fix">
+        <strong>Solución:</strong> verificar que el centro de costo fue guardado correctamente en <code>/settings/centros-costo</code>. Si fue creado hace muy poco, intentar recargar la página del módulo de Compras.
+      </div>
+    </div>
+
+    <!-- BUENAS PRÁCTICAS -->
+    <h2 id="buenas-practicas">
+      <span class="section-icon">🛡️</span>
+      Buenas prácticas de seguridad
+    </h2>
+
+    <ul class="bp-list">
+      <li>
+        <span class="bp-icon">🔒</span>
+        <div><strong>Principio de mínimo privilegio.</strong> Asignar siempre el rol con los permisos mínimos necesarios para la tarea del usuario. No dar rol Director o Administración a alguien que solo necesita operar en Depósito. Si hay duda, empezar con el rol más restrictivo y escalar solo si hay necesidad probada.</div>
+      </li>
+      <li>
+        <span class="bp-icon">📋</span>
+        <div><strong>Auditar el listado de usuarios periódicamente.</strong> Al menos una vez por trimestre, revisar la lista de usuarios y verificar que todos tienen el rol correcto. Los roles cambian cuando las personas cambian de función y no siempre se actualiza en tiempo real.</div>
+      </li>
+      <li>
+        <span class="bp-icon">🔍</span>
+        <div><strong>Usar el rol Auditor para revisiones.</strong> Cuando un externo necesita revisar información del sistema (consultor, auditor contable), asignarle el rol Auditor. Tiene solo lectura de todos los módulos activos, sin posibilidad de modificar nada.</div>
+      </li>
+      <li>
+        <span class="bp-icon">⏱️</span>
+        <div><strong>Revocar accesos de forma inmediata.</strong> Ante una baja, renuncia o cambio de área, revocar el acceso el mismo día. No esperar al proceso burocrático completo para quitar los permisos.</div>
+      </li>
+      <li>
+        <span class="bp-icon">📝</span>
+        <div><strong>Documentar los cambios de rol.</strong> Registrar quién autorizó el cambio de rol de cada usuario. Esto facilita las auditorías futuras y ayuda a resolver disputas sobre accesos.</div>
+      </li>
+      <li>
+        <span class="bp-icon">🔐</span>
+        <div><strong>Proteger el permiso sistema.admin.</strong> Solo el Director debería tener <code>sistema.admin</code>. No ceder este permiso a roles de administración general. Es el permiso más crítico del sistema porque permite modificar todos los demás permisos.</div>
+      </li>
+      <li>
+        <span class="bp-icon">📢</span>
+        <div><strong>Coordinar cambios de roles masivos.</strong> Si necesitás editar un rol que tiene muchos usuarios asignados, coordinar el cambio fuera del horario laboral o con previo aviso a los afectados. Los cambios son inmediatos y pueden interrumpir el trabajo en curso.</div>
+      </li>
+      <li>
+        <span class="bp-icon">🔑</span>
+        <div><strong>Rotar las claves de API periódicamente.</strong> El token de Mapbox y cualquier otra clave de integración configurada en Sistema debe renovarse según la política de seguridad de la empresa. Nunca compartir estas claves por canales inseguros.</div>
+      </li>
+    </ul>
+
+    <!-- CHECKLIST INCORPORACIÓN -->
+    <h2 id="checklist">
+      <span class="section-icon">✅</span>
+      Checklist: Incorporar un nuevo usuario
+    </h2>
+
+    <p>Seguir estos pasos cada vez que se incorpora un nuevo miembro al equipo. Hacer clic en cada ítem para marcarlo como completado.</p>
+
+    <ul class="checklist" id="checklist-incorporacion">
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">01</span>
+        Confirmar con RRHH el nombre completo, email y fecha de inicio del nuevo empleado
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">02</span>
+        Confirmar con el responsable del área qué rol de TOPS Nexus corresponde al nuevo empleado
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">03</span>
+        Coordinar con IT/Sistemas la creación de la cuenta de acceso (usuario y contraseña inicial)
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">04</span>
+        Solicitar al nuevo empleado que ingrese a TOPS Nexus por primera vez para que quede registrado en el sistema
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">05</span>
+        Ir a <code>/settings/users</code> y buscar al usuario recién registrado
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">06</span>
+        Asignar el rol correspondiente según lo confirmado en el paso 02
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">07</span>
+        Pedir al nuevo empleado que cierre sesión y vuelva a entrar para aplicar los permisos
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">08</span>
+        Verificar con el empleado que ve las secciones correctas del sistema y no ve las que no debería
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">09</span>
+        Registrar el acceso otorgado en el legajo del empleado (fecha, rol asignado, quién autorizó)
+      </li>
+      <li onclick="toggleCheck(this)">
+        <span class="check-box"></span>
+        <span class="check-num">10</span>
+        Compartir con el empleado el acceso al Manual de Usuario de TOPS Nexus para autogestión
+      </li>
+    </ul>
+
+    <div id="checklist-progress" style="font-size:0.8rem;color:var(--text-dim);margin-top:8px;"></div>
+
+    <!-- FAQ -->
+    <h2 id="faq">
+      <span class="section-icon">❓</span>
+      Preguntas frecuentes (FAQ)
+    </h2>
+
+    <div class="faq-section">
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿Puedo crear roles personalizados?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>Sí. El sistema permite crear roles completamente personalizados desde <code>/settings/roles/new</code>. Se puede definir cualquier combinación de permisos. Esto es útil si los 6 roles estándar no se ajustan a alguna necesidad particular de la empresa (ej: un "Supervisor de Depósito" con más permisos que Depósito pero menos que Operaciones).</p>
+        </div>
+      </div>
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿Un usuario puede tener más de un rol?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>No. TOPS Nexus implementa un modelo de <strong>un usuario, un rol</strong>. Si alguien necesita permisos de múltiples áreas, la solución es crear un rol personalizado que combine todos los permisos necesarios. Esto mantiene el modelo de seguridad simple y auditable.</p>
+        </div>
+      </div>
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿Qué pasa si modifico los permisos de un rol mientras los usuarios están trabajando?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>Los cambios de permisos de rol se aplican al recargar la sesión. Los usuarios que tienen sesión activa continuarán con los permisos anteriores hasta que cierren sesión y vuelvan a entrar, o hasta que recarguen la página. En algunos casos el sistema puede detectar el cambio y forzar una recarga. Para cambios críticos, recomendamos hacerlos fuera del horario operativo.</p>
+        </div>
+      </div>
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿El Auditor puede ver los datos de Sistema y Administración?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>No. El rol <strong>Auditor</strong> tiene solo lectura en los módulos operativos (Compras, Servicios, Comercial, etc.) pero <strong>no tiene acceso al módulo Sistema</strong>. Esto es intencional: un auditor externo no debería poder ver la configuración de seguridad interna del sistema. Si se necesita que un auditor revise la configuración de roles, debe hacerse con supervisión del Director.</p>
+        </div>
+      </div>
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿Se pueden eliminar los 6 roles base del sistema?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>Los 6 roles base (<code>director</code>, <code>administracion</code>, <code>operaciones</code>, <code>comercial</code>, <code>deposito</code>, <code>auditor</code>) son roles del sistema y no deben eliminarse. Son los pilares del modelo de seguridad. Sin embargo, sus permisos pueden editarse si hay una necesidad justificada. Cualquier cambio a un rol base debe ser autorizado explícitamente por el Director y documentado.</p>
+        </div>
+      </div>
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿Las plantillas de OS se comparten entre todos los usuarios?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>Sí. Las plantillas de OS son compartidas por todos los usuarios que tienen acceso al módulo de creación de órdenes de servicio. No son plantillas personales; cualquier usuario autorizado puede verlas y usarlas. La creación y edición de plantillas requiere permisos específicos del módulo Sistema.</p>
+        </div>
+      </div>
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿Cómo sé qué rol tiene asignado un usuario?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>Desde <code>/settings/users</code>, buscar al usuario y ver su perfil. El rol asignado aparece claramente. Los usuarios también pueden ver su propio rol en la sección "Mi Espacio" de su perfil.</p>
+        </div>
+      </div>
+
+      <div class="accordion" onclick="toggleAccordion(this)">
+        <div class="accordion-header">
+          <div class="accordion-title"><span class="acc-icon">❓</span> ¿Los comunicados del sistema son permanentes?</div>
+          <span class="accordion-arrow">▼</span>
+        </div>
+        <div class="accordion-body">
+          <p>No. Al crear un comunicado se puede definir una <strong>fecha de expiración</strong>. Una vez pasada esa fecha, el comunicado deja de mostrarse automáticamente. Los comunicados sin fecha de expiración quedan activos indefinidamente hasta que se archiven manualmente.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- GLOSARIO -->
+    <h2 id="glosario">
+      <span class="section-icon">📖</span>
+      Glosario técnico
+    </h2>
+
+    <p>Términos clave del módulo Sistema y del modelo de seguridad de TOPS Nexus:</p>
+
+    <div class="glosario">
+      <div class="glos-item">
+        <div class="glos-term">RBAC</div>
+        <div class="glos-def">Role-Based Access Control. Modelo de seguridad donde los permisos se asignan a roles, y los roles a usuarios. Permite gestionar el acceso de forma centralizada y escalable.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Rol</div>
+        <div class="glos-def">Conjunto predefinido de permisos que define qué puede hacer un usuario en el sistema. Cada usuario tiene exactamente un rol asignado.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Slug</div>
+        <div class="glos-def">Identificador único de un rol en formato texto simple (sin espacios ni caracteres especiales). Ej: <code>director</code>, <code>operaciones</code>. Es el identificador interno que usa el sistema.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Permiso</div>
+        <div class="glos-def">Autorización específica para realizar una acción en un módulo. Se expresa como <code>modulo.accion</code>. Ej: <code>compras.view</code>, <code>sistema.admin</code>.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Módulo</div>
+        <div class="glos-def">Sección funcional del sistema con su propio conjunto de permisos. Ej: Compras, Servicios, Sistema, Comercial.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Acción</div>
+        <div class="glos-def">Operación concreta que se puede realizar dentro de un módulo. Las acciones disponibles son: <code>view</code>, <code>create</code>, <code>edit</code>, <code>delete</code>, <code>sign</code>, <code>export</code>, <code>admin</code>.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Boot flags</div>
+        <div class="glos-def">Variables de configuración que se calculan al iniciar sesión y determinan qué secciones y funcionalidades son visibles para el usuario. Se derivan de los permisos del rol.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">sistema.admin</div>
+        <div class="glos-def">Permiso crítico que permite administrar la configuración del módulo Sistema (roles, usuarios, centros de costo). Exclusivo del rol Director en la configuración estándar.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">compras.sign</div>
+        <div class="glos-def">Permiso de firma de Órdenes de Compra. El único permiso que es exclusivo del rol Director. Ningún otro rol puede tenerlo activado.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Centro de costo</div>
+        <div class="glos-def">Etiqueta contable que identifica el área o proyecto al que se imputa un gasto o ingreso. Permite el análisis financiero por departamento o proyecto.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Plantilla OS</div>
+        <div class="glos-def">Modelo predefinido para una Orden de Servicio recurrente. Contiene la estructura base (proveedor, ítems, centro de costo) para agilizar la creación de nuevas OS.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Principio de mínimo privilegio</div>
+        <div class="glos-def">Buena práctica de seguridad que indica asignar siempre el conjunto mínimo de permisos necesarios para que el usuario pueda hacer su trabajo. Reduce el riesgo de accesos indebidos.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">Mapbox</div>
+        <div class="glos-def">Proveedor de mapas y geolocalización utilizado por TOPS Nexus para el módulo de Tracking de flota. Requiere una clave de API (token) configurada en Sistema.</div>
+      </div>
+      <div class="glos-item">
+        <div class="glos-term">canViewSistema</div>
+        <div class="glos-def">Boot flag que habilita la sección Sistema en el sidebar de navegación. Se activa cuando el rol del usuario tiene al menos el permiso <code>sistema.view</code>.</div>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="manual-footer">
+      <div class="footer-nav">
+        <a href="index.html">← Inicio del manual</a>
+        <a href="manual-compras.html">Compras →</a>
+        <a href="manual-servicios.html">Servicios →</a>
+      </div>
+      <div class="footer-meta">
+        Manual TOPS Nexus · Módulo Sistema y Administración · Versión 1.0 · Junio 2026
+        <br>Para reportar errores o sugerencias sobre este manual, contactar al equipo de Sistemas.
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // Toggle accordion
+  function toggleAccordion(el) {
+    el.classList.toggle('open');
+  }
+
+  // Toggle checklist items
+  function toggleCheck(el) {
+    el.classList.toggle('checked');
+    const checkBox = el.querySelector('.check-box');
+    if (el.classList.contains('checked')) {
+      checkBox.textContent = '✓';
+    } else {
+      checkBox.textContent = '';
+    }
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const items = document.querySelectorAll('#checklist-incorporacion li');
+    const checked = document.querySelectorAll('#checklist-incorporacion li.checked');
+    const progress = document.getElementById('checklist-progress');
+    const pct = Math.round((checked.length / items.length) * 100);
+
+    if (checked.length === items.length) {
+      progress.innerHTML = '🎉 ¡Todos los pasos completados! El usuario está listo para usar el sistema.';
+      progress.style.color = '#86efac';
+    } else if (checked.length > 0) {
+      progress.textContent = `Progreso: ${checked.length}/${items.length} pasos completados (${pct}%)`;
+      progress.style.color = 'var(--text-muted)';
+    } else {
+      progress.textContent = '';
+    }
+  }
+
+  // Sidebar active link highlight
+  const sections = document.querySelectorAll('h2[id], div[id="intro"]');
+  const tocLinks = document.querySelectorAll('.toc-list a');
+
+  function updateActiveLink() {
+    let current = '';
+    sections.forEach(section => {
+      const sectionTop = section.getBoundingClientRect().top;
+      if (sectionTop <= 100) {
+        current = section.id;
+      }
+    });
+
+    tocLinks.forEach(link => {
+      link.classList.remove('active');
+      const href = link.getAttribute('href');
+      if (href === '#' + current) {
+        link.classList.add('active');
+      }
+    });
+  }
+
+  window.addEventListener('scroll', updateActiveLink);
+  updateActiveLink();
+</script>
+
+</body>
+</html>

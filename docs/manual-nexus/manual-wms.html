@@ -1,0 +1,2010 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WMS - Sistema de Gestión de Depósito | TOPS Nexus</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0f172a;
+  --navy-light: #1e293b;
+  --navy-mid: #162032;
+  --blue: #3b82f6;
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --orange: #f97316;
+  --orange-dim: rgba(249,115,22,0.15);
+  --orange-border: rgba(249,115,22,0.4);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.15);
+  --card: rgba(255,255,255,0.04);
+  --card-hover: rgba(255,255,255,0.07);
+  --sidebar-w: 260px;
+  --nav-h: 56px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+/* NAV */
+.topnav {
+  position: sticky; top: 0; z-index: 100;
+  height: var(--nav-h);
+  background: rgba(15,23,42,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-strong);
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 12px;
+}
+.topnav-logo {
+  font-weight: 700; font-size: 16px;
+  color: var(--orange);
+  text-decoration: none;
+  letter-spacing: -0.3px;
+}
+.topnav-sep { color: var(--text-dim); }
+.breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+.breadcrumb a { color: var(--text-muted); text-decoration: none; }
+.breadcrumb a:hover { color: var(--text); }
+.topnav-badge {
+  margin-left: auto;
+  background: var(--orange-dim);
+  border: 1px solid var(--orange-border);
+  color: var(--orange);
+  font-size: 11px; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px;
+  letter-spacing: 0.5px;
+}
+.back-btn {
+  margin-left: 8px;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: 12px; font-weight: 500;
+  padding: 4px 12px; border-radius: 6px;
+  text-decoration: none;
+  transition: all .2s;
+}
+.back-btn:hover { background: var(--card-hover); color: var(--text); }
+
+/* LAYOUT */
+.layout {
+  display: flex;
+  min-height: calc(100vh - var(--nav-h));
+}
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  position: sticky;
+  top: var(--nav-h);
+  height: calc(100vh - var(--nav-h));
+  overflow-y: auto;
+  padding: 20px 0;
+  border-right: 1px solid var(--border);
+  background: var(--navy-mid);
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+.sidebar-label {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1.2px;
+  color: var(--text-dim);
+  padding: 0 20px 8px;
+}
+.sidebar-link {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 20px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  border-left: 2px solid transparent;
+  transition: all .15s;
+}
+.sidebar-link:hover { color: var(--text); background: var(--card); }
+.sidebar-link.active { color: var(--orange); border-left-color: var(--orange); background: var(--orange-dim); }
+.sidebar-link .icon { font-size: 14px; flex-shrink: 0; }
+.sidebar-divider { height: 1px; background: var(--border); margin: 12px 16px; }
+
+/* MAIN */
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 40px 48px;
+  max-width: 900px;
+}
+
+/* SECTIONS */
+section { margin-bottom: 56px; scroll-margin-top: calc(var(--nav-h) + 16px); }
+h1 { font-size: 32px; font-weight: 700; line-height: 1.2; margin-bottom: 12px; letter-spacing: -0.5px; }
+h2 { font-size: 22px; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.3px; }
+h3 { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+p { margin-bottom: 12px; color: var(--text-muted); }
+p strong { color: var(--text); }
+ul, ol { padding-left: 20px; color: var(--text-muted); margin-bottom: 12px; }
+li { margin-bottom: 5px; }
+li strong { color: var(--text); }
+
+/* HERO */
+.hero {
+  background: linear-gradient(135deg, rgba(249,115,22,0.12) 0%, rgba(15,23,42,0) 60%);
+  border: 1px solid var(--orange-border);
+  border-radius: 16px;
+  padding: 32px 36px;
+  margin-bottom: 40px;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '📦';
+  position: absolute; right: 32px; top: 50%; transform: translateY(-50%);
+  font-size: 80px; opacity: 0.12;
+}
+.hero-tag {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--orange-dim); border: 1px solid var(--orange-border);
+  color: var(--orange); font-size: 11px; font-weight: 700;
+  padding: 4px 12px; border-radius: 20px; margin-bottom: 14px;
+  text-transform: uppercase; letter-spacing: 0.8px;
+}
+.hero h1 { color: var(--text); margin-bottom: 10px; }
+.hero p { color: var(--text-muted); font-size: 16px; margin-bottom: 0; max-width: 560px; }
+.hero-url {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; color: var(--orange);
+  background: var(--orange-dim); border: 1px solid var(--orange-border);
+  padding: 4px 10px; border-radius: 6px;
+  margin-top: 14px;
+}
+
+/* CARDS GRID */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all .2s;
+}
+.card:hover { background: var(--card-hover); border-color: var(--border-strong); }
+.card-icon { font-size: 24px; margin-bottom: 8px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.card-desc { font-size: 12px; color: var(--text-muted); }
+.card-url {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; color: var(--orange);
+  margin-top: 6px;
+}
+
+/* KPI CARDS */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+.kpi-icon { font-size: 22px; margin-bottom: 6px; }
+.kpi-value { font-size: 26px; font-weight: 700; color: var(--orange); margin-bottom: 2px; }
+.kpi-label { font-size: 12px; color: var(--text-muted); }
+.kpi-hint { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+
+/* TABLE */
+.table-wrap { overflow-x: auto; margin-bottom: 20px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; padding: 10px 14px;
+  background: var(--navy-light);
+  color: var(--text-muted); font-weight: 600;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
+  border-bottom: 1px solid var(--border-strong);
+}
+td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--card); }
+.td-strong { color: var(--text); font-weight: 500; }
+.badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.badge-green { background: rgba(34,197,94,0.15); color: var(--green); border: 1px solid rgba(34,197,94,0.3); }
+.badge-amber { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+.badge-red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+.badge-orange { background: var(--orange-dim); color: var(--orange); border: 1px solid var(--orange-border); }
+.badge-blue { background: rgba(59,130,246,0.15); color: var(--blue); border: 1px solid rgba(59,130,246,0.3); }
+.badge-gray { background: rgba(148,163,184,0.1); color: var(--text-muted); border: 1px solid var(--border-strong); }
+
+/* ACCORDION */
+.accordion { margin-bottom: 8px; }
+.accordion-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all .15s;
+  user-select: none;
+}
+.accordion-header:hover { background: var(--card-hover); border-color: var(--border-strong); }
+.accordion-header.open {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-color: var(--orange-border);
+  background: var(--orange-dim);
+}
+.accordion-title { font-size: 14px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.accordion-arrow { color: var(--text-dim); font-size: 12px; transition: transform .2s; }
+.accordion-header.open .accordion-arrow { transform: rotate(180deg); }
+.accordion-body {
+  display: none;
+  padding: 18px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+.accordion-body.open { display: block; }
+
+/* STEPS */
+.steps { display: flex; flex-direction: column; gap: 0; }
+.step {
+  display: flex; gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.step:last-child { border-bottom: none; }
+.step-num {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  background: var(--orange);
+  color: #fff; font-weight: 700; font-size: 13px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+}
+.step-content {}
+.step-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.step-desc { font-size: 13px; color: var(--text-muted); }
+
+/* FLOW DIAGRAM */
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 24px 0;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.flow-node {
+  flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px;
+}
+.flow-box {
+  background: var(--card);
+  border: 2px solid var(--orange-border);
+  border-radius: 10px;
+  padding: 10px 16px;
+  text-align: center;
+  min-width: 90px;
+}
+.flow-icon { font-size: 20px; }
+.flow-label { font-size: 11px; font-weight: 600; color: var(--text); }
+.flow-url { font-size: 10px; color: var(--orange); font-family: 'JetBrains Mono', monospace; }
+.flow-arrow {
+  color: var(--orange);
+  font-size: 20px;
+  padding: 0 6px;
+  flex-shrink: 0;
+  margin-top: -20px;
+}
+
+/* ALERT BOXES */
+.alert {
+  display: flex; gap: 12px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.alert-content { color: var(--text-muted); }
+.alert-content strong { color: var(--text); }
+.alert-warning { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); }
+.alert-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); }
+.alert-info { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); }
+.alert-success { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); }
+.alert-orange { background: var(--orange-dim); border: 1px solid var(--orange-border); }
+
+/* TABS */
+.tabs { margin-bottom: 20px; }
+.tab-list {
+  display: flex; gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.tab-btn {
+  padding: 8px 16px;
+  background: none; border: none;
+  color: var(--text-muted);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: all .15s;
+  font-family: inherit;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--orange); border-bottom-color: var(--orange); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* CHECKLIST */
+.checklist { list-style: none; padding: 0; }
+.checklist li {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background .15s;
+}
+.checklist li:hover { background: var(--card); }
+.checklist li:last-child { border-bottom: none; }
+.check-box {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border-strong);
+  border-radius: 4px; flex-shrink: 0;
+  margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--green);
+  transition: all .15s;
+}
+.checklist li.checked .check-box {
+  background: var(--green); border-color: var(--green); color: #fff;
+}
+.checklist li.checked .check-label { text-decoration: line-through; color: var(--text-dim); }
+.check-label { font-size: 13px; color: var(--text-muted); }
+
+/* CODE */
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--orange);
+}
+.code-block {
+  background: var(--navy-light);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow-x: auto;
+  margin-bottom: 12px;
+  line-height: 1.7;
+}
+
+/* GLOSARIO */
+.glosario-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+.glosario-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+.glosario-term {
+  font-size: 13px; font-weight: 700; color: var(--orange);
+  margin-bottom: 4px; font-family: 'JetBrains Mono', monospace;
+}
+.glosario-def { font-size: 12px; color: var(--text-muted); }
+
+/* DEPOSITO CARDS */
+.deposito-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.deposito-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+.deposito-card.primary { border-color: var(--orange-border); }
+.deposito-name { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.deposito-addr { font-size: 12px; color: var(--orange); margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; }
+.deposito-detail { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+
+/* SECTION HEADER */
+.section-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.section-icon {
+  font-size: 28px;
+  width: 48px; height: 48px;
+  background: var(--orange-dim);
+  border: 1px solid var(--orange-border);
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+/* SCENARIO CARDS */
+.scenario {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 12px;
+}
+.scenario-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600; color: var(--text);
+  margin-bottom: 8px;
+}
+.scenario-body { font-size: 13px; color: var(--text-muted); }
+.scenario-body ol { padding-left: 16px; margin-top: 6px; }
+
+/* ERROR CARDS */
+.error-card {
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 10px;
+}
+.error-title { font-size: 13px; font-weight: 600; color: var(--red); margin-bottom: 6px; }
+.error-cause { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.error-fix { font-size: 12px; color: var(--green); }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .main { padding: 24px 20px; }
+  .deposito-grid { grid-template-columns: 1fr; }
+  .flow { flex-wrap: nowrap; }
+}
+@media (max-width: 640px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .cards-grid { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="topnav">
+  <a class="topnav-logo" href="index.html">TOPS Nexus</a>
+  <span class="topnav-sep">›</span>
+  <div class="breadcrumb">
+    <a href="index.html">Inicio</a>
+    <span>›</span>
+    <span>WMS · Depósito</span>
+  </div>
+  <span class="topnav-badge">📦 WMS</span>
+  <a class="back-btn" href="index.html">← Volver al índice</a>
+</nav>
+
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-label">Contenidos</div>
+  <a class="sidebar-link active" href="#intro"><span class="icon">📖</span> ¿Qué es el WMS?</a>
+  <a class="sidebar-link" href="#roles"><span class="icon">👥</span> Roles y accesos</a>
+  <a class="sidebar-link" href="#depositos"><span class="icon">🏭</span> Los depósitos TOPS</a>
+  <a class="sidebar-link" href="#dashboard"><span class="icon">📊</span> Dashboard WMS</a>
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-label">Operaciones</div>
+  <a class="sidebar-link" href="#inventario"><span class="icon">📋</span> Inventario</a>
+  <a class="sidebar-link" href="#recepciones"><span class="icon">📥</span> Recepciones</a>
+  <a class="sidebar-link" href="#movimientos"><span class="icon">🔄</span> Movimientos</a>
+  <a class="sidebar-link" href="#picking"><span class="icon">🎯</span> Picking</a>
+  <a class="sidebar-link" href="#packing"><span class="icon">📦</span> Packing</a>
+  <a class="sidebar-link" href="#despachos"><span class="icon">🚚</span> Despachos</a>
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-label">Funciones Especiales</div>
+  <a class="sidebar-link" href="#custodia"><span class="icon">🔐</span> Custodia</a>
+  <a class="sidebar-link" href="#lotes"><span class="icon">🏷️</span> Lotes</a>
+  <a class="sidebar-link" href="#vencimientos"><span class="icon">⏰</span> Vencimientos</a>
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-label">Referencia</div>
+  <a class="sidebar-link" href="#flujo-visual"><span class="icon">🗺️</span> Flujo visual</a>
+  <a class="sidebar-link" href="#casos"><span class="icon">📌</span> Casos frecuentes</a>
+  <a class="sidebar-link" href="#errores"><span class="icon">⚠️</span> Errores comunes</a>
+  <a class="sidebar-link" href="#checklist"><span class="icon">✅</span> Checklist diario</a>
+  <a class="sidebar-link" href="#faq"><span class="icon">❓</span> FAQ</a>
+  <a class="sidebar-link" href="#glosario"><span class="icon">📚</span> Glosario</a>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag">📦 Módulo WMS</div>
+    <h1>Sistema de Gestión de Depósito</h1>
+    <p>Todo lo que necesitás saber para operar el depósito desde TOPS Nexus: recepciones, picking, packing, despachos y más.</p>
+    <div class="hero-url">/wms</div>
+  </div>
+
+  <!-- INTRO -->
+  <section id="intro">
+    <div class="section-header">
+      <div class="section-icon">📖</div>
+      <div>
+        <h2 style="margin-bottom:0">¿Qué es el WMS?</h2>
+        <p style="margin:0;font-size:13px">Warehouse Management System — Sistema de Gestión de Depósito</p>
+      </div>
+    </div>
+
+    <p>El <strong>WMS (Warehouse Management System)</strong> es el módulo de TOPS Nexus que te permite gestionar todo lo que pasa adentro del depósito. Desde que entra una mercadería hasta que sale hacia el cliente.</p>
+
+    <p>En palabras simples: <strong>es el sistema donde registrás cada movimiento de los productos</strong>. Quién los trajo, dónde están guardados, qué pedido se está preparando, y cuándo salió.</p>
+
+    <div class="alert alert-orange">
+      <div class="alert-icon">💡</div>
+      <div class="alert-content">
+        <strong>Para operarios:</strong> Vas a usar principalmente Recepciones, Picking, Packing y Despachos. Son los cuatro pasos del trabajo diario en el depósito.
+      </div>
+    </div>
+
+    <h3>¿Qué hace el WMS?</h3>
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-icon">📥</div>
+        <div class="card-title">Registra ingresos</div>
+        <div class="card-desc">Cuando llega mercadería, la anotás en el sistema con todos sus datos</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📍</div>
+        <div class="card-title">Ubica productos</div>
+        <div class="card-desc">Cada producto tiene una posición física en el depósito (estantería, fila, nivel)</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🎯</div>
+        <div class="card-title">Gestiona pedidos</div>
+        <div class="card-desc">Te dice qué productos juntar para preparar cada orden de un cliente</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🚚</div>
+        <div class="card-title">Registra salidas</div>
+        <div class="card-desc">Cuando sale mercadería, el sistema descuenta el stock automáticamente</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Muestra el stock</div>
+        <div class="card-desc">En cualquier momento podés ver cuánto hay de cada producto</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">⏰</div>
+        <div class="card-title">Alerta vencimientos</div>
+        <div class="card-desc">Te avisa cuando un producto está próximo a vencer</div>
+      </div>
+    </div>
+
+    <h3>El concepto de "Digital Twin"</h3>
+    <p>El WMS funciona como una <strong>copia digital del depósito real</strong>. Cada estantería, fila y nivel del depósito físico tiene su representación en el sistema. Cuando movés un producto físicamente, también lo movés en el sistema.</p>
+
+    <div class="alert alert-warning">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <strong>Importante:</strong> Si el sistema muestra el módulo como "no disponible", es porque las migraciones de base de datos (0020 o 0024) no están aplicadas en el servidor. Avisale a Administración o al equipo técnico.
+      </div>
+    </div>
+  </section>
+
+  <!-- ROLES -->
+  <section id="roles">
+    <div class="section-header">
+      <div class="section-icon">👥</div>
+      <div><h2 style="margin-bottom:0">¿Quién puede usar qué?</h2></div>
+    </div>
+
+    <p>No todos los usuarios tienen acceso a todo el WMS. Según tu rol en TOPS Nexus, podés ver y hacer distintas cosas.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Rol</th>
+            <th>Dashboard</th>
+            <th>Inventario</th>
+            <th>Recepciones</th>
+            <th>Picking/Packing</th>
+            <th>Despachos</th>
+            <th>Custodia/Lotes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-strong">Director</td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+          </tr>
+          <tr>
+            <td class="td-strong">Administración</td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+          </tr>
+          <tr>
+            <td class="td-strong">Operaciones</td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+            <td><span class="badge badge-green">Completo</span></td>
+          </tr>
+          <tr>
+            <td class="td-strong">Depósito</td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+            <td><span class="badge badge-orange">Crear/editar</span></td>
+            <td><span class="badge badge-orange">Crear/editar</span></td>
+            <td><span class="badge badge-orange">Crear/editar</span></td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+          </tr>
+          <tr>
+            <td class="td-strong">Auditor</td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+            <td><span class="badge badge-blue">Solo ver</span></td>
+          </tr>
+          <tr>
+            <td class="td-strong">Comercial</td>
+            <td><span class="badge badge-gray">Sin acceso</span></td>
+            <td><span class="badge badge-gray">Sin acceso</span></td>
+            <td><span class="badge badge-gray">Sin acceso</span></td>
+            <td><span class="badge badge-gray">Sin acceso</span></td>
+            <td><span class="badge badge-gray">Sin acceso</span></td>
+            <td><span class="badge badge-gray">Sin acceso</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-info">
+      <div class="alert-icon">ℹ️</div>
+      <div class="alert-content">
+        <strong>Nota técnica:</strong> Los permisos granulares del WMS (permiso <code>wms.*</code>) están en definición. Por ahora el acceso se controla a nivel de rol completo. Si necesitás un acceso específico, hablá con tu coordinador.
+      </div>
+    </div>
+  </section>
+
+  <!-- DEPOSITOS -->
+  <section id="depositos">
+    <div class="section-header">
+      <div class="section-icon">🏭</div>
+      <div><h2 style="margin-bottom:0">Los depósitos TOPS</h2></div>
+    </div>
+
+    <p>TOPS opera dos depósitos físicos, y ambos están representados en el sistema:</p>
+
+    <div class="deposito-grid">
+      <div class="deposito-card primary">
+        <div class="deposito-name">🏢 Magaldi</div>
+        <div class="deposito-addr">Magaldi 1765 · CABA</div>
+        <div class="deposito-detail">📋 <strong>Habilitado ANMAT:</strong> Sí</div>
+        <div class="deposito-detail">📦 Depósito principal de operaciones</div>
+        <div class="deposito-detail">🔐 Apto para productos regulados (ANMAT)</div>
+        <div class="deposito-detail">🏙️ Ciudad Autónoma de Buenos Aires</div>
+      </div>
+      <div class="deposito-card">
+        <div class="deposito-name">🏭 Luján</div>
+        <div class="deposito-addr">Luján 3159 · Buenos Aires</div>
+        <div class="deposito-detail">📋 Depósito secundario</div>
+        <div class="deposito-detail">📦 Gran Volumen / Logística regional</div>
+        <div class="deposito-detail">🌍 Provincia de Buenos Aires</div>
+      </div>
+    </div>
+
+    <div class="alert alert-warning">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <strong>¡Atención!</strong> Al registrar una recepción o movimiento, siempre verificá que estás seleccionando el depósito correcto. Confundir Magaldi con Luján puede generar errores de stock en el sistema.
+      </div>
+    </div>
+
+    <h3>Sistema de posiciones físicas</h3>
+    <p>Cada ubicación en el depósito tiene una <strong>posición física</strong> que el sistema identifica con coordenadas. Ejemplo:</p>
+    <div class="code-block">Fila A · Columna 03 · Nivel 2  →  A-03-2
+Pasillo B · Estantería 07 · Nivel 1  →  B-07-1</div>
+    <p>Cuando guardás un producto en una posición, el sistema lo registra. Así, en cualquier momento podés saber exactamente dónde está cada cosa sin tener que buscar físicamente.</p>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="dashboard">
+    <div class="section-header">
+      <div class="section-icon">📊</div>
+      <div>
+        <h2 style="margin-bottom:0">Dashboard WMS</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms</code></p>
+      </div>
+    </div>
+
+    <p>El Dashboard es la pantalla de inicio del WMS. Te muestra un resumen rápido del estado actual del depósito con 4 indicadores clave (KPIs).</p>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-icon">📦</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-label">Stock total</div>
+        <div class="kpi-hint">Unidades disponibles en sistema</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">🏢</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-label">Clientes activos</div>
+        <div class="kpi-hint">Depositantes con stock</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">📍</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-label">Posiciones ocupadas</div>
+        <div class="kpi-hint">vs. posiciones disponibles</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">📏</div>
+        <div class="kpi-value">—</div>
+        <div class="kpi-label">Disponibilidad</div>
+        <div class="kpi-hint">% de espacio libre en depósito</div>
+      </div>
+    </div>
+
+    <h3>Cómo leer los KPIs</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>KPI</th><th>Qué significa</th><th>Cuándo preocuparse</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="td-strong">Stock total</td>
+            <td>La suma de todas las unidades de todos los productos de todos los clientes</td>
+            <td>Si cae abruptamente sin despachos registrados → puede haber un ajuste mal hecho</td>
+          </tr>
+          <tr>
+            <td class="td-strong">Clientes activos</td>
+            <td>Cuántos clientes (depositantes) tienen mercadería en el depósito ahora mismo</td>
+            <td>Si un cliente esperado no aparece → su stock puede estar en cero o sin registrar</td>
+          </tr>
+          <tr>
+            <td class="td-strong">Posiciones ocupadas</td>
+            <td>Cuántas posiciones físicas tienen al menos un producto</td>
+            <td>Si supera el 90% de las posiciones totales → el depósito está casi lleno</td>
+          </tr>
+          <tr>
+            <td class="td-strong">Disponibilidad</td>
+            <td>Porcentaje de espacio libre para recibir más mercadería</td>
+            <td>Bajo 20% → coordiná con Operaciones antes de aceptar nuevas recepciones</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- INVENTARIO -->
+  <section id="inventario">
+    <div class="section-header">
+      <div class="section-icon">📋</div>
+      <div>
+        <h2 style="margin-bottom:0">Gestión de Inventario</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/inventario</code></p>
+      </div>
+    </div>
+
+    <p>La pantalla de Inventario muestra el stock completo del depósito. Podés ver qué hay, cuánto hay, de quién es y dónde está ubicado.</p>
+
+    <h3>¿Qué ves en el listado?</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Columna</th><th>Qué es</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-strong">SKU / Código</td><td>Identificador único del producto</td></tr>
+          <tr><td class="td-strong">Descripción</td><td>Nombre del producto</td></tr>
+          <tr><td class="td-strong">Cliente</td><td>A quién pertenece ese stock (depositante)</td></tr>
+          <tr><td class="td-strong">Cantidad</td><td>Unidades disponibles en este momento</td></tr>
+          <tr><td class="td-strong">Posición física</td><td>Coordenada en el depósito donde está guardado</td></tr>
+          <tr><td class="td-strong">Lote</td><td>Número de lote (si aplica)</td></tr>
+          <tr><td class="td-strong">Vencimiento</td><td>Fecha de vencimiento (si aplica)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Cómo buscar un producto</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Ir a /wms/inventario</div>
+          <div class="step-desc">En el menú lateral, hacé click en "Inventario" dentro del módulo WMS.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Usar el buscador</div>
+          <div class="step-desc">Podés buscar por nombre del producto, SKU o código. El listado se filtra en tiempo real.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Filtrar por cliente</div>
+          <div class="step-desc">Si manejás varios clientes/depositantes, usá el filtro de cliente para ver solo su stock.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Ver la posición física</div>
+          <div class="step-desc">La columna "Posición" te dice exactamente dónde está el producto en el depósito.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-info">
+      <div class="alert-icon">ℹ️</div>
+      <div class="alert-content">
+        El inventario que ves en pantalla refleja el stock <strong>en tiempo real</strong>. Cada vez que se registra una recepción o un despacho, el número se actualiza automáticamente.
+      </div>
+    </div>
+  </section>
+
+  <!-- RECEPCIONES -->
+  <section id="recepciones">
+    <div class="section-header">
+      <div class="section-icon">📥</div>
+      <div>
+        <h2 style="margin-bottom:0">Recepciones</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/recepciones</code> — Ingreso de mercadería</p>
+      </div>
+    </div>
+
+    <p>Las Recepciones son el punto de entrada de mercadería al depósito. Cada vez que llega un camión o un envío, tenés que registrar una <strong>nueva recepción</strong> en el sistema.</p>
+
+    <h3>Paso a paso: Registrar una nueva recepción</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Ir a Recepciones y hacer click en "Nueva recepción"</div>
+          <div class="step-desc">En la pantalla <code>/wms/recepciones</code>, buscá el botón "Nueva recepción" (generalmente arriba a la derecha).</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Seleccionar el cliente / depositante</div>
+          <div class="step-desc">Elegí a quién pertenece la mercadería que estás recibiendo. Si no encontrás el cliente, avisá a Operaciones.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Seleccionar el depósito de destino</div>
+          <div class="step-desc">Indicá si la mercadería va a Magaldi (CABA) o Luján (BsAs). Verificá el depósito antes de confirmar.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Cargar los productos recibidos</div>
+          <div class="step-desc">Para cada producto: ingresá el SKU o buscalo por nombre, la cantidad recibida, el número de lote (si tiene), y la fecha de vencimiento (si aplica).</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <div class="step-title">Asignar posición física</div>
+          <div class="step-desc">Indicá en qué posición del depósito va a guardarse el producto (ej: A-03-2). Si todavía no sabés dónde va, coordiná con el coordinador de depósito antes de confirmar.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-content">
+          <div class="step-title">Confirmar la recepción</div>
+          <div class="step-desc">Revisá todos los datos y hacé click en "Confirmar". El stock se suma automáticamente al inventario.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Campos del formulario de recepción</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Campo</th><th>Obligatorio</th><th>Descripción</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="td-strong">Cliente</td><td><span class="badge badge-red">Sí</span></td><td>Depositante dueño de la mercadería</td></tr>
+          <tr><td class="td-strong">Depósito</td><td><span class="badge badge-red">Sí</span></td><td>Magaldi o Luján</td></tr>
+          <tr><td class="td-strong">Fecha de recepción</td><td><span class="badge badge-red">Sí</span></td><td>Fecha en que ingresó físicamente la mercadería</td></tr>
+          <tr><td class="td-strong">Número de remito</td><td><span class="badge badge-amber">Recomendado</span></td><td>Número del remito del proveedor o del cliente</td></tr>
+          <tr><td class="td-strong">Productos</td><td><span class="badge badge-red">Sí</span></td><td>Lista de ítems con SKU y cantidad</td></tr>
+          <tr><td class="td-strong">Número de lote</td><td><span class="badge badge-gray">Según producto</span></td><td>Solo si el producto requiere trazabilidad de lote</td></tr>
+          <tr><td class="td-strong">Fecha de vencimiento</td><td><span class="badge badge-gray">Según producto</span></td><td>Solo si el producto tiene fecha de vencimiento</td></tr>
+          <tr><td class="td-strong">Posición física</td><td><span class="badge badge-amber">Recomendado</span></td><td>Ubicación en el depósito donde se guardará</td></tr>
+          <tr><td class="td-strong">Observaciones</td><td><span class="badge badge-gray">Opcional</span></td><td>Notas sobre el estado de la mercadería, daños, etc.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-warning">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <strong>¡No confirmes una recepción sin verificar la mercadería físicamente!</strong> Contá las unidades, revisá el estado de los bultos, y anotá cualquier diferencia en el campo Observaciones antes de confirmar.
+      </div>
+    </div>
+  </section>
+
+  <!-- MOVIMIENTOS -->
+  <section id="movimientos">
+    <div class="section-header">
+      <div class="section-icon">🔄</div>
+      <div>
+        <h2 style="margin-bottom:0">Movimientos</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/movimientos</code> — Ajustes y transferencias</p>
+      </div>
+    </div>
+
+    <p>Los Movimientos son la traza de <strong>todos los cambios de stock que no son recepciones ni despachos</strong>. Se usan para ajustes por conteo, transferencias entre posiciones, o correcciones.</p>
+
+    <h3>Tipos de movimiento</h3>
+    <div class="cards-grid">
+      <div class="card">
+        <div class="card-icon">➕</div>
+        <div class="card-title">Ajuste positivo</div>
+        <div class="card-desc">Se suma stock. Ej: se encontraron unidades que no estaban registradas</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">➖</div>
+        <div class="card-title">Ajuste negativo</div>
+        <div class="card-desc">Se resta stock. Ej: producto roto, merma, diferencia de inventario</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔀</div>
+        <div class="card-title">Transferencia</div>
+        <div class="card-desc">Se mueve stock de una posición física a otra dentro del mismo depósito</div>
+      </div>
+    </div>
+
+    <h3>Cómo registrar un movimiento</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Ir a /wms/movimientos</div>
+          <div class="step-desc">Desde el menú WMS, hacé click en "Movimientos".</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Seleccionar el tipo de movimiento</div>
+          <div class="step-desc">Ajuste positivo, ajuste negativo, o transferencia.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Buscar el producto</div>
+          <div class="step-desc">Ingresá el SKU o buscá por nombre del producto afectado.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Ingresar la cantidad y el motivo</div>
+          <div class="step-desc">Indicá cuántas unidades se ajustan/transfieren. El campo "Motivo" es obligatorio: explicá brevemente por qué estás haciendo el movimiento.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <div class="step-title">Confirmar</div>
+          <div class="step-desc">El movimiento queda registrado y el inventario se actualiza. Todos los movimientos quedan en el historial.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-info">
+      <div class="alert-icon">ℹ️</div>
+      <div class="alert-content">
+        Los movimientos quedan registrados con fecha, hora y usuario que los realizó. Son auditables. <strong>Nunca borres un movimiento</strong>; si te equivocaste, hacé un movimiento contrario.
+      </div>
+    </div>
+  </section>
+
+  <!-- PICKING -->
+  <section id="picking">
+    <div class="section-header">
+      <div class="section-icon">🎯</div>
+      <div>
+        <h2 style="margin-bottom:0">Proceso de Picking</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/picking</code> y <code>/wms/picking/[id]</code></p>
+      </div>
+    </div>
+
+    <p><strong>Picking</strong> es el proceso de <em>juntar</em> los productos de un pedido. El sistema te dice qué buscar, en qué posición está, y vos lo vas agarrando del estante.</p>
+
+    <p>En español simple: <strong>es ir a buscar los productos al depósito para armar un pedido</strong>.</p>
+
+    <div class="tabs">
+      <div class="tab-list">
+        <button class="tab-btn active" onclick="switchTab(this,'tab-picking-lista')">📋 Lista de Pickings</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-picking-detalle')">🎯 Detalle de una orden</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-picking-como')">📖 Cómo hacer picking</button>
+      </div>
+
+      <div id="tab-picking-lista" class="tab-panel active">
+        <p>En <code>/wms/picking</code> ves la lista de órdenes de picking disponibles. Cada fila es un pedido que hay que preparar.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Columna</th><th>Qué significa</th></tr></thead>
+            <tbody>
+              <tr><td class="td-strong">Número de orden</td><td>Identificador único de esta orden de picking</td></tr>
+              <tr><td class="td-strong">Cliente</td><td>Para quién es el pedido</td></tr>
+              <tr><td class="td-strong">Fecha</td><td>Cuándo se creó la orden</td></tr>
+              <tr><td class="td-strong">Ítems</td><td>Cuántos productos distintos tiene el pedido</td></tr>
+              <tr><td class="td-strong">Estado</td><td>Pendiente / En proceso / Completado</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tab-picking-detalle" class="tab-panel">
+        <p>Al entrar a <code>/wms/picking/[id]</code> ves el detalle de esa orden: qué productos juntar, en qué posición están y cuántas unidades necesitás de cada uno.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Campo</th><th>Descripción</th></tr></thead>
+            <tbody>
+              <tr><td class="td-strong">SKU / Producto</td><td>Qué producto juntar</td></tr>
+              <tr><td class="td-strong">Posición</td><td>Dónde está en el depósito (ej: A-03-2)</td></tr>
+              <tr><td class="td-strong">Cantidad pedida</td><td>Cuántas unidades necesitás</td></tr>
+              <tr><td class="td-strong">Cantidad confirmada</td><td>Cuántas juntaste (lo completás vos)</td></tr>
+              <tr><td class="td-strong">Estado ítem</td><td>Pendiente / Parcial / Completo / Sin stock</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="tab-picking-como" class="tab-panel">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Abrir la orden de picking</div>
+              <div class="step-desc">Entrá a <code>/wms/picking</code> y hacé click en la orden asignada a vos o la que corresponda preparar.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">Leer la lista de ítems</div>
+              <div class="step-desc">El sistema te muestra cada producto, su posición física y cuántas unidades necesitás. Podés imprimir la lista o usarla desde el dispositivo.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <div class="step-title">Ir a la posición y retirar los productos</div>
+              <div class="step-desc">Caminá hasta la posición indicada. Retirá la cantidad exacta. Si hay menos de lo necesario, anotá cuánto pudiste juntar.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <div class="step-title">Confirmar cada ítem en el sistema</div>
+              <div class="step-desc">Para cada producto, ingresá la cantidad que realmente juntaste. Si fue la cantidad completa, el ítem queda como "Completo". Si fue menos, queda "Parcial".</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <div class="step-title">Completar el picking</div>
+              <div class="step-desc">Cuando todos los ítems están confirmados, hacé click en "Completar picking". La orden pasa a estado Packing.</div>
+            </div>
+          </div>
+        </div>
+        <div class="alert alert-warning">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <strong>Si no encontrás un producto en la posición indicada:</strong> No inventes la cantidad. Marcá el ítem como "Sin stock en posición" y avisá inmediatamente a tu coordinador. El sistema guarda esta incidencia.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PACKING -->
+  <section id="packing">
+    <div class="section-header">
+      <div class="section-icon">📦</div>
+      <div>
+        <h2 style="margin-bottom:0">Proceso de Packing</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/packing</code> y <code>/wms/packing/[id]</code></p>
+      </div>
+    </div>
+
+    <p><strong>Packing</strong> es el proceso de <em>empaquetar</em> los productos que ya juntaste en el picking. Acá los metés en cajas, las cerrás, las pesás y las etiquetás.</p>
+
+    <p>En español simple: <strong>es armar las cajas con lo que juntaste</strong>.</p>
+
+    <div class="tabs">
+      <div class="tab-list">
+        <button class="tab-btn active" onclick="switchTab(this,'tab-packing-lista')">📋 Lista de Packings</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-packing-como')">📖 Cómo hacer packing</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-packing-cajas')">📦 Gestión de cajas</button>
+      </div>
+
+      <div id="tab-packing-lista" class="tab-panel active">
+        <p>En <code>/wms/packing</code> ves las órdenes de picking que ya están completas y esperan ser empaquetadas. Solo aparecen las órdenes listas para packing.</p>
+        <div class="alert alert-info">
+          <div class="alert-icon">ℹ️</div>
+          <div class="alert-content">Una orden solo pasa a Packing cuando el Picking está 100% completado.</div>
+        </div>
+      </div>
+
+      <div id="tab-packing-como" class="tab-panel">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Abrir la orden de packing</div>
+              <div class="step-desc">Entrá a <code>/wms/packing</code> y seleccioná la orden a empaquetar.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">Revisar los productos</div>
+              <div class="step-desc">Verificá que los productos físicos coincidan con lo que muestra el sistema (lo que se juntó en picking).</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <div class="step-title">Armar las cajas</div>
+              <div class="step-desc">Empaquetá los productos. Podés crear una o varias cajas según corresponda. Para cada caja, registrá su contenido en el sistema.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <div class="step-title">Registrar el peso y dimensiones</div>
+              <div class="step-desc">Pesá cada caja y registrá el peso en el sistema. Esto es importante para el cálculo de costos logísticos.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <div class="step-title">Confirmar el packing</div>
+              <div class="step-desc">Una vez que todas las cajas están armadas y registradas, confirmá el packing. La orden pasa a estado "Listo para despacho".</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-packing-cajas" class="tab-panel">
+        <p>En el detalle de packing podés gestionar múltiples cajas para una misma orden:</p>
+        <ul>
+          <li><strong>Agregar caja:</strong> Si el pedido entra en más de una caja, podés crear varias y distribuir los productos.</li>
+          <li><strong>Consolidar en pallet:</strong> Si hay muchas cajas, podés agruparlas en un pallet dentro del sistema.</li>
+          <li><strong>Peso por caja:</strong> Cada caja tiene su peso individual registrado.</li>
+          <li><strong>Etiquetas:</strong> El sistema puede generar la etiqueta de cada caja para pegarla físicamente.</li>
+        </ul>
+        <div class="alert alert-orange">
+          <div class="alert-icon">💡</div>
+          <div class="alert-content">
+            <strong>Tip:</strong> Siempre cerrá y etiquetá las cajas antes de confirmar el packing. Una caja sin etiqueta puede confundirse con otro pedido.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DESPACHOS -->
+  <section id="despachos">
+    <div class="section-header">
+      <div class="section-icon">🚚</div>
+      <div>
+        <h2 style="margin-bottom:0">Proceso de Despacho</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/despachos</code> y <code>/wms/despachos/[id]</code></p>
+      </div>
+    </div>
+
+    <p><strong>Despacho</strong> es el último paso: <em>la salida física de la mercadería del depósito</em>. Cuando sube al camión, registrás el despacho en el sistema.</p>
+
+    <div class="tabs">
+      <div class="tab-list">
+        <button class="tab-btn active" onclick="switchTab(this,'tab-desp-como')">📖 Cómo despachar</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-desp-doc')">📄 Documentación</button>
+        <button class="tab-btn" onclick="switchTab(this,'tab-desp-estados')">🔄 Estados</button>
+      </div>
+
+      <div id="tab-desp-como" class="tab-panel active">
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <div class="step-title">Ir a /wms/despachos</div>
+              <div class="step-desc">Ves las órdenes listas para despachar (las que ya pasaron por packing).</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <div class="step-title">Verificar físicamente las cajas</div>
+              <div class="step-desc">Antes de despachar, verificá que las cajas físicas coincidan con lo registrado en el sistema.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <div class="step-title">Ingresar datos del transporte</div>
+              <div class="step-desc">Registrá el transportista, número de patente, nombre del chofer, y número de remito de salida.</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <div class="step-title">Confirmar el despacho</div>
+              <div class="step-desc">Al confirmar, el stock se descuenta del inventario y la orden queda registrada como "Despachada".</div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <div class="step-title">Imprimir documentación</div>
+              <div class="step-desc">El sistema genera el remito de salida. Imprimí 2 copias: una va con el camión y la otra queda en el depósito.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-desp-doc" class="tab-panel">
+        <h3>Documentación requerida para el despacho</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Documento</th><th>Quién lo genera</th><th>Cuántas copias</th></tr></thead>
+            <tbody>
+              <tr><td class="td-strong">Remito de salida</td><td>TOPS Nexus (automático)</td><td>2 (camión + depósito)</td></tr>
+              <tr><td class="td-strong">Etiquetas de cajas</td><td>TOPS Nexus (automático)</td><td>1 por caja</td></tr>
+              <tr><td class="td-strong">Remito del cliente</td><td>El cliente / Operaciones</td><td>Según acuerdo</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="alert alert-warning">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-content">
+            <strong>Nunca salga mercadería sin remito de salida registrado en el sistema.</strong> Si el camión se va sin confirmar el despacho, el stock queda registrado como "disponible" aunque ya no esté en el depósito.
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-desp-estados" class="tab-panel">
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Estado</th><th>Qué significa</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge badge-amber">Pendiente</span></td><td>Listo para despachar, esperando camión</td></tr>
+              <tr><td><span class="badge badge-blue">En proceso</span></td><td>El operario está cargando el camión</td></tr>
+              <tr><td><span class="badge badge-green">Despachado</span></td><td>El camión salió, stock descontado</td></tr>
+              <tr><td><span class="badge badge-red">Cancelado</span></td><td>El despacho fue cancelado, el stock volvió</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CUSTODIA -->
+  <section id="custodia">
+    <div class="section-header">
+      <div class="section-icon">🔐</div>
+      <div>
+        <h2 style="margin-bottom:0">Custodia de Terceros</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/custody</code> y <code>/wms/custody/pod/[id]</code></p>
+      </div>
+    </div>
+
+    <p>La <strong>Custodia</strong> es el servicio de almacenamiento que TOPS ofrece a clientes externos. Un cliente nos entrega su mercadería para que la guardemos y la distribuyamos en su nombre.</p>
+
+    <h3>¿Qué es el POD?</h3>
+    <p>El <strong>POD (Proof of Delivery)</strong> es la <em>prueba de entrega</em>. Es el documento que confirma que la mercadería llegó al destino final. En el sistema, cada despacho de custodia puede tener asociado un POD.</p>
+
+    <div class="cards-grid" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="card">
+        <div class="card-icon">📋</div>
+        <div class="card-title">Gestión de custodia</div>
+        <div class="card-desc">Registrá ingresos y egresos de mercadería de clientes en custodia. Funciona igual que el WMS normal pero con seguimiento extra de POD.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📝</div>
+        <div class="card-title">POD (Proof of Delivery)</div>
+        <div class="card-desc">Registrá la confirmación de entrega: fecha, receptor, firma digital o número de remito firmado. El cliente puede ver el POD de su mercadería.</div>
+      </div>
+    </div>
+
+    <h3>Cómo registrar un POD</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Ir a /wms/custody</div>
+          <div class="step-desc">Encontrá el despacho de custodia correspondiente en el listado.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Abrir el detalle del despacho</div>
+          <div class="step-desc">Hacé click en el despacho para ver su detalle en <code>/wms/custody/pod/[id]</code>.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Registrar la entrega</div>
+          <div class="step-desc">Completá: fecha y hora de entrega, nombre de quien recibió, número de remito firmado, y cualquier observación (daños, faltantes, etc.).</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Confirmar el POD</div>
+          <div class="step-desc">Al confirmar, el despacho queda marcado como "Entregado" y el cliente puede ver la confirmación.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOTES -->
+  <section id="lotes">
+    <div class="section-header">
+      <div class="section-icon">🏷️</div>
+      <div>
+        <h2 style="margin-bottom:0">Control por Lotes</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/lotes</code></p>
+      </div>
+    </div>
+
+    <p>Un <strong>lote</strong> es un grupo de productos que se fabricaron juntos en una misma producción. El control por lotes permite rastrear exactamente qué unidades se produjeron cuándo y dónde están o estuvieron.</p>
+
+    <p>Ejemplo práctico: si hay un problema con un producto (contaminación, defecto de fábrica), con los lotes podés identificar exactamente cuáles unidades están afectadas y dónde están.</p>
+
+    <h3>Información que lleva un lote</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Campo</th><th>Descripción</th><th>Ejemplo</th></tr></thead>
+        <tbody>
+          <tr><td class="td-strong">Número de lote</td><td>Identificador único del lote</td><td>LOT-2024-0432</td></tr>
+          <tr><td class="td-strong">Producto</td><td>Qué producto es</td><td>Crema Hidratante 250ml</td></tr>
+          <tr><td class="td-strong">Fecha de fabricación</td><td>Cuándo se fabricó</td><td>15/03/2024</td></tr>
+          <tr><td class="td-strong">Fecha de vencimiento</td><td>Hasta cuándo es válido</td><td>15/03/2026</td></tr>
+          <tr><td class="td-strong">Cantidad inicial</td><td>Unidades que ingresaron con este lote</td><td>500 unidades</td></tr>
+          <tr><td class="td-strong">Stock actual</td><td>Cuántas quedan en depósito</td><td>234 unidades</td></tr>
+          <tr><td class="td-strong">Posición</td><td>Dónde están guardadas</td><td>B-07-1</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Cuándo usar lotes</h3>
+    <ul>
+      <li>Productos farmacéuticos o de salud (ANMAT requiere trazabilidad)</li>
+      <li>Alimentos y bebidas con fecha de vencimiento</li>
+      <li>Cosméticos y dermocosméticos</li>
+      <li>Cualquier producto donde el cliente exige rastreabilidad por lote</li>
+    </ul>
+
+    <div class="alert alert-warning">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <strong>No mezcles lotes distintos en la misma posición física</strong> si el producto requiere trazabilidad. Cada lote debe ocupar su propia posición para mantener la trazabilidad correcta.
+      </div>
+    </div>
+  </section>
+
+  <!-- VENCIMIENTOS -->
+  <section id="vencimientos">
+    <div class="section-header">
+      <div class="section-icon">⏰</div>
+      <div>
+        <h2 style="margin-bottom:0">Control de Vencimientos</h2>
+        <p style="margin:0;font-size:13px">Ruta: <code>/wms/vencimientos</code></p>
+      </div>
+    </div>
+
+    <p>El módulo de Vencimientos te muestra todos los productos que tienen fecha de vencimiento registrada, ordenados por proximidad al vencimiento.</p>
+
+    <h3>Cómo interpretar las alertas</h3>
+    <div class="alert alert-error">
+      <div class="alert-icon">🔴</div>
+      <div class="alert-content">
+        <strong>Vencido:</strong> El producto ya venció. No puede despacharse. Requiere acción inmediata: segregar físicamente y avisar al cliente.
+      </div>
+    </div>
+    <div class="alert alert-warning">
+      <div class="alert-icon">🟡</div>
+      <div class="alert-content">
+        <strong>Por vencer (próximos 30 días):</strong> El producto vence pronto. Hay que coordinar con el cliente su retiro o uso prioritario (FEFO: First Expired, First Out).
+      </div>
+    </div>
+    <div class="alert alert-success">
+      <div class="alert-icon">🟢</div>
+      <div class="alert-content">
+        <strong>Vigente:</strong> El producto está dentro de su vida útil. No requiere acción urgente.
+      </div>
+    </div>
+
+    <h3>¿Qué hacer si un producto está por vencer?</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Revisar el listado de vencimientos</div>
+          <div class="step-desc">Entrá a <code>/wms/vencimientos</code> y ordená por fecha más próxima primero.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Identificar el producto físicamente</div>
+          <div class="step-desc">Ir a la posición indicada y verificar físicamente el estado de la mercadería.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Avisar al cliente y a Operaciones</div>
+          <div class="step-desc">El cliente decide si retira el producto, lo destruye, o lo dona (según protocolo de cada cliente).</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Registrar la acción en el sistema</div>
+          <div class="step-desc">Si el producto se destruye o retira, registrá el movimiento correspondiente (ajuste negativo con motivo "Vencimiento").</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-warning">
+      <div class="alert-icon">⚠️</div>
+      <div class="alert-content">
+        <strong>FEFO:</strong> En productos con vencimiento, siempre despachá primero los que vencen antes (<em>First Expired, First Out</em>). El sistema te indica la fecha de vencimiento de cada lote.
+      </div>
+    </div>
+  </section>
+
+  <!-- FLUJO VISUAL -->
+  <section id="flujo-visual">
+    <div class="section-header">
+      <div class="section-icon">🗺️</div>
+      <div><h2 style="margin-bottom:0">Flujo visual del WMS</h2></div>
+    </div>
+
+    <p>El ciclo completo de una mercadería en TOPS sigue siempre este camino:</p>
+
+    <div class="flow">
+      <div class="flow-node">
+        <div class="flow-box">
+          <div class="flow-icon">📥</div>
+          <div class="flow-label">Recepción</div>
+          <div class="flow-url">/recepciones</div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-box">
+          <div class="flow-icon">📋</div>
+          <div class="flow-label">Inventario</div>
+          <div class="flow-url">/inventario</div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-box">
+          <div class="flow-icon">🎯</div>
+          <div class="flow-label">Picking</div>
+          <div class="flow-url">/picking</div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-box">
+          <div class="flow-icon">📦</div>
+          <div class="flow-label">Packing</div>
+          <div class="flow-url">/packing</div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-box">
+          <div class="flow-icon">🚚</div>
+          <div class="flow-label">Despacho</div>
+          <div class="flow-url">/despachos</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top:20px">
+      <table>
+        <thead><tr><th>Etapa</th><th>Quién lo hace</th><th>Qué pasa en el sistema</th><th>Resultado</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="td-strong">📥 Recepción</td>
+            <td>Operario de depósito</td>
+            <td>Se crea un registro de entrada con los productos recibidos</td>
+            <td>Stock disponible en inventario</td>
+          </tr>
+          <tr>
+            <td class="td-strong">📋 Inventario</td>
+            <td>Sistema (automático)</td>
+            <td>El stock se refleja en la pantalla de inventario con su posición</td>
+            <td>Producto ubicado y disponible</td>
+          </tr>
+          <tr>
+            <td class="td-strong">🎯 Picking</td>
+            <td>Operario de depósito</td>
+            <td>Se genera una orden de picking, se confirman los ítems juntados</td>
+            <td>Productos físicamente reunidos</td>
+          </tr>
+          <tr>
+            <td class="td-strong">📦 Packing</td>
+            <td>Operario de depósito</td>
+            <td>Se arman cajas, se registran pesos, se confirma el embalaje</td>
+            <td>Cajas listas para despacho</td>
+          </tr>
+          <tr>
+            <td class="td-strong">🚚 Despacho</td>
+            <td>Operario de depósito</td>
+            <td>Se registra la salida con datos del transporte, se descuenta el stock</td>
+            <td>Mercadería entregada, stock actualizado</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CASOS FRECUENTES -->
+  <section id="casos">
+    <div class="section-header">
+      <div class="section-icon">📌</div>
+      <div><h2 style="margin-bottom:0">Casos frecuentes</h2></div>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-title">📦 Caso 1 — Llega un camión con mercadería nueva</div>
+      <div class="scenario-body">
+        Un proveedor llega con 500 unidades de un producto para el cliente "Laboratorio X".
+        <ol>
+          <li>Contás las unidades físicamente y verificás el estado.</li>
+          <li>Vas a <code>/wms/recepciones</code> → Nueva recepción.</li>
+          <li>Seleccionás el cliente "Laboratorio X" y el depósito Magaldi.</li>
+          <li>Cargás el producto, cantidad (500), número de lote y fecha de vencimiento.</li>
+          <li>Asignás la posición física donde lo vas a guardar.</li>
+          <li>Confirmás. El stock queda registrado.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-title">🎯 Caso 2 — Preparar un pedido de 3 productos distintos</div>
+      <div class="scenario-body">
+        El sistema tiene una orden de picking para el cliente "Farmacia Central" con 3 productos.
+        <ol>
+          <li>Vas a <code>/wms/picking</code> y abrís la orden.</li>
+          <li>Leés la lista: Producto A en A-01-1 (x10), Producto B en B-03-2 (x5), Producto C en C-07-1 (x20).</li>
+          <li>Caminás a cada posición y juntás los productos en la cantidad indicada.</li>
+          <li>Para cada ítem, confirmás la cantidad juntada en el sistema.</li>
+          <li>Cuando todos están "Completo", hacés click en "Completar picking".</li>
+          <li>La orden pasa automáticamente a Packing.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-title">🔄 Caso 3 — Se encontraron 10 unidades de más en un conteo</div>
+      <div class="scenario-body">
+        Hacés un conteo de inventario y encontrás 10 unidades que no están registradas en el sistema.
+        <ol>
+          <li>Vas a <code>/wms/movimientos</code> → Nuevo movimiento.</li>
+          <li>Seleccionás tipo: "Ajuste positivo".</li>
+          <li>Buscás el producto afectado.</li>
+          <li>Ingresás cantidad: 10. Motivo: "Diferencia de inventario - conteo físico 24/06/2026".</li>
+          <li>Confirmás. El inventario se actualiza.</li>
+          <li>Avisás a tu coordinador para que audite el motivo de la diferencia.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-title">⏰ Caso 4 — Un producto está por vencer en 15 días</div>
+      <div class="scenario-body">
+        Revisando <code>/wms/vencimientos</code> ves que hay 50 unidades del "Producto Y" que vencen en 15 días.
+        <ol>
+          <li>Anotás el lote, la cantidad, la posición y la fecha de vencimiento.</li>
+          <li>Avisás a Operaciones y al cliente "Laboratorio Y".</li>
+          <li>El cliente decide: despacharlo urgente o retirarlo.</li>
+          <li>Si se despacha: se hace el proceso normal de picking → packing → despacho, priorizando este lote.</li>
+          <li>Si se destruye: se registra un ajuste negativo con motivo "Destrucción por vencimiento".</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-title">🔐 Caso 5 — Un cliente de custodia pide la prueba de entrega</div>
+      <div class="scenario-body">
+        El cliente "Empresa Z" quiere confirmar que su envío llegó al destino final.
+        <ol>
+          <li>Vas a <code>/wms/custody</code> y buscás el despacho de "Empresa Z".</li>
+          <li>Abrís el detalle en <code>/wms/custody/pod/[id]</code>.</li>
+          <li>Si el POD ya está registrado, lo podés ver y compartir con el cliente.</li>
+          <li>Si todavía no hay POD, contactás al transportista para obtener la confirmación de entrega.</li>
+          <li>Registrás el POD con fecha, receptor y número de remito firmado.</li>
+          <li>El cliente puede ver el POD en su portal.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ERRORES COMUNES -->
+  <section id="errores">
+    <div class="section-header">
+      <div class="section-icon">⚠️</div>
+      <div><h2 style="margin-bottom:0">Errores comunes</h2></div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🔴 Stock negativo en inventario</div>
+      <div class="error-cause">Causa: Se registró un despacho de más unidades de las que había en stock, o un ajuste negativo excesivo.</div>
+      <div class="error-fix">✅ Solución: Verificá el conteo físico real. Si hay unidades físicamente, hacé un ajuste positivo. Si no hay, el stock negativo indica un error anterior que hay que investigar. Avisá a Operaciones.</div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🔴 Producto sin posición asignada</div>
+      <div class="error-cause">Causa: Se registró una recepción sin asignar posición física, o el producto fue movido físicamente sin actualizar el sistema.</div>
+      <div class="error-fix">✅ Solución: Buscá el producto físicamente en el depósito, confirmá dónde está, y actualizá la posición en el sistema con un movimiento de transferencia.</div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🔴 Recepción confirmada con cantidad incorrecta</div>
+      <div class="error-cause">Causa: Se cargó mal la cantidad al registrar la recepción (ej: 500 en vez de 50).</div>
+      <div class="error-fix">✅ Solución: Hacé un ajuste negativo por la diferencia con motivo "Corrección de recepción [fecha] - cantidad incorrecta". Avisá a tu coordinador para que quede auditado.</div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🔴 El módulo muestra "No disponible"</div>
+      <div class="error-cause">Causa: Las migraciones de base de datos 0020 (warehouse_positions) o 0024 (inventory_items) no están aplicadas en el servidor.</div>
+      <div class="error-fix">✅ Solución: Este no es un error tuyo como operario. Avisá urgente al equipo técnico (Administración o IT) para que apliquen las migraciones pendientes.</div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🔴 Picking de un producto que no aparece en la posición indicada</div>
+      <div class="error-cause">Causa: El producto fue movido físicamente sin registrar la transferencia en el sistema, o fue despachado dos veces por error.</div>
+      <div class="error-fix">✅ Solución: Buscá el producto en otras posiciones del depósito. Si lo encontrás, actualizá la posición en el sistema. Si no está físicamente, marcá el ítem como "Sin stock en posición" y avisá a tu coordinador antes de continuar.</div>
+    </div>
+
+    <div class="error-card">
+      <div class="error-title">🔴 Se despachó mercadería sin confirmar en el sistema</div>
+      <div class="error-cause">Causa: El camión salió antes de registrar el despacho en el sistema.</div>
+      <div class="error-fix">✅ Solución: Registrá el despacho retroactivamente con la fecha y hora real de salida. En observaciones anotá "Despacho registrado retroactivo - camión salió a las HH:MM sin confirmación previa". Avisá al coordinador.</div>
+    </div>
+  </section>
+
+  <!-- CHECKLIST -->
+  <section id="checklist">
+    <div class="section-header">
+      <div class="section-icon">✅</div>
+      <div><h2 style="margin-bottom:0">Checklist diario del operario</h2></div>
+    </div>
+
+    <p>Antes de arrancar el turno y al cerrarlo, repasá estos puntos. Hacé click en cada ítem para marcarlo.</p>
+
+    <h3 style="margin-bottom:12px;">🌅 Al iniciar el turno</h3>
+    <ul class="checklist" id="checklist-inicio">
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Revisar el Dashboard WMS: verificar KPIs de stock y disponibilidad</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Revisar <code>/wms/vencimientos</code>: hay productos próximos a vencer?</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Revisar órdenes de picking pendientes en <code>/wms/picking</code></span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Verificar si hay recepciones programadas para el día</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Confirmar con coordinador las prioridades del turno</span></li>
+    </ul>
+
+    <h3 style="margin-bottom:12px;margin-top:20px;">📦 Durante el turno</h3>
+    <ul class="checklist" id="checklist-turno">
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Registrar CADA recepción en el sistema antes de guardar la mercadería</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Asignar posición física a cada producto recibido</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Confirmar ítems de picking en tiempo real (no acumularlo para el final)</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">No mover mercadería físicamente sin actualizar el sistema</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Registrar despacho ANTES de que salga el camión</span></li>
+    </ul>
+
+    <h3 style="margin-bottom:12px;margin-top:20px;">🌙 Al cerrar el turno</h3>
+    <ul class="checklist" id="checklist-cierre">
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Verificar que no queden órdenes de picking en estado "En proceso" sin completar</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Verificar que no queden órdenes de packing sin confirmar</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Verificar que todos los despachos del día estén confirmados en el sistema</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Comunicar al coordinador cualquier incidencia del turno</span></li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div><span class="check-label">Revisar el inventario: ¿coincide lo que ves en pantalla con lo físico?</span></li>
+    </ul>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="section-header">
+      <div class="section-icon">❓</div>
+      <div><h2 style="margin-bottom:0">Preguntas frecuentes (FAQ)</h2></div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>🤔</span> ¿Qué hago si el sistema me dice que un producto tiene stock cero pero físicamente lo veo en el depósito?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Esto puede pasar por varias razones: el producto se recibió pero no se registró en el sistema, o se registró con un SKU diferente. <strong>No hagas el despacho si el sistema muestra cero aunque tengas el producto físico.</strong> Primero registrá el ajuste positivo en <code>/wms/movimientos</code> con el motivo correspondiente, y después coordiná con tu supervisor para entender por qué hay esa diferencia. El despacho de stock negativo genera problemas contables y de trazabilidad.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>📍</span> ¿Puedo cambiar la posición de un producto una vez que ya está asignada?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Sí. Si movés físicamente un producto a otra posición, tenés que registrarlo en el sistema usando un movimiento de tipo "Transferencia" en <code>/wms/movimientos</code>. Indicás la posición de origen, la posición de destino, y el producto. <strong>Nunca muevas mercadería sin actualizar el sistema.</strong></p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>🏷️</span> ¿Todos los productos necesitan número de lote?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>No. El número de lote solo es obligatorio para productos que requieren trazabilidad: farmacéuticos, alimentos, cosméticos, y cualquier producto donde el cliente o la normativa (ANMAT) lo exija. Si no sabés si un producto necesita lote, consultá a tu coordinador antes de registrar la recepción.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>🚚</span> ¿Qué pasa si el camión salió antes de que yo confirme el despacho?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>El stock va a seguir apareciendo como "disponible" en el sistema aunque físicamente ya no esté. Registrá el despacho retroactivamente lo antes posible con la fecha y hora real de salida. En el campo de observaciones, anotá que fue registrado retroactivo y el motivo. Avisá a tu coordinador para que quede documentado. Esta situación debe evitarse: <strong>el despacho siempre se confirma antes de que el camión se vaya.</strong></p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>📦</span> ¿Cuántas cajas puede tener una orden de packing?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>No hay un límite fijo de cajas por orden. Una orden puede empaquetarse en 1 o en 100 cajas según el tamaño del pedido. Cada caja se registra individualmente con su contenido y peso. Si hay muchas cajas, también podés agruparlas en pallets dentro del sistema.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>⏰</span> ¿Cada cuánto tiempo debo revisar los vencimientos?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>Se recomienda revisar <code>/wms/vencimientos</code> al menos una vez por turno, o todos los días si manejás productos con fechas de vencimiento. El sistema no envía alertas automáticas al correo (pendiente de configuración), así que la revisión manual es importante.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>🔐</span> ¿Qué diferencia hay entre un despacho normal y un despacho de custodia?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>En un despacho normal, la mercadería es de un cliente interno o se despacha a un cliente final. En custodia, la mercadería pertenece a un tercero que nos la dejó almacenada, y nosotros la despachamos en su nombre. La diferencia principal en el sistema es que los despachos de custodia tienen un paso extra: el <strong>POD (Proof of Delivery)</strong>, que es la confirmación de que llegó al destino final.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <div class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-title"><span>🏭</span> ¿Cómo sé en qué depósito está guardado un producto?</div>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-body">
+        <p>En la pantalla de inventario (<code>/wms/inventario</code>), cada producto muestra el depósito donde está (Magaldi o Luján) junto con su posición física. Si el mismo producto tiene stock en ambos depósitos, va a aparecer en dos filas diferentes, una por depósito.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- GLOSARIO -->
+  <section id="glosario">
+    <div class="section-header">
+      <div class="section-icon">📚</div>
+      <div><h2 style="margin-bottom:0">Glosario de términos WMS</h2></div>
+    </div>
+
+    <div class="glosario-grid">
+      <div class="glosario-item">
+        <div class="glosario-term">SKU</div>
+        <div class="glosario-def">Stock Keeping Unit. El código único que identifica a cada producto. Es como el "documento de identidad" del producto en el sistema.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Posición física</div>
+        <div class="glosario-def">La ubicación exacta de un producto dentro del depósito, expresada en coordenadas (ej: A-03-2 = Fila A, Columna 3, Nivel 2).</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Lote</div>
+        <div class="glosario-def">Grupo de productos fabricados en la misma producción. Permite rastrear qué se hizo, cuándo, y dónde está cada unidad.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Picking</div>
+        <div class="glosario-def">El proceso de ir a buscar los productos al depósito para armar un pedido. El "juntado" de la mercadería.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Packing</div>
+        <div class="glosario-def">El proceso de empaquetar los productos juntados en picking. El "embalaje" en cajas o pallets.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">POD</div>
+        <div class="glosario-def">Proof of Delivery. Prueba de entrega. Documento que confirma que la mercadería llegó al destino final.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Digital Twin</div>
+        <div class="glosario-def">Gemelo digital. La representación en el sistema informático del depósito físico real. Lo que pasa físicamente debe reflejarse en el sistema.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Custodia</div>
+        <div class="glosario-def">Servicio de almacenamiento para terceros. TOPS guarda la mercadería de un cliente externo y la gestiona en su nombre.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Depositante</div>
+        <div class="glosario-def">El cliente que nos confía su mercadería para almacenar. En el sistema aparece como "Cliente" en el módulo de custodia.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">FEFO</div>
+        <div class="glosario-def">First Expired, First Out. "Lo que vence primero, sale primero." Regla para gestionar productos con fecha de vencimiento.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">FIFO</div>
+        <div class="glosario-def">First In, First Out. "Lo que entró primero, sale primero." Regla para rotar el stock en orden de ingreso.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">KPI</div>
+        <div class="glosario-def">Key Performance Indicator. Indicador clave de rendimiento. Los números del Dashboard que muestran cómo está funcionando el depósito.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Ajuste de stock</div>
+        <div class="glosario-def">Corrección de la cantidad registrada en el sistema (positiva o negativa) cuando hay una diferencia con el inventario físico real.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Remito</div>
+        <div class="glosario-def">Documento que acompaña a la mercadería y detalla qué hay dentro. El remito de entrada acompaña las recepciones; el de salida, los despachos.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">ANMAT</div>
+        <div class="glosario-def">Administración Nacional de Medicamentos, Alimentos y Tecnología Médica. Organismo que regula y habilita el depósito Magaldi para almacenar productos regulados.</div>
+      </div>
+      <div class="glosario-item">
+        <div class="glosario-term">Trazabilidad</div>
+        <div class="glosario-def">La capacidad de rastrear el recorrido completo de un producto: desde que se fabricó, pasó por el depósito, y llegó al cliente final.</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 32px; padding: 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; text-align: center;">
+      <p style="margin:0; font-size: 13px; color: var(--text-dim);">
+        Manual WMS · TOPS Nexus · Versión 1.0 · Junio 2026<br>
+        Para soporte técnico: <strong style="color:var(--orange)">Operaciones / Administración</strong>
+      </p>
+      <a href="index.html" style="display:inline-block; margin-top:12px; background: var(--orange); color:#fff; padding: 8px 20px; border-radius: 8px; text-decoration:none; font-size:13px; font-weight:600;">← Volver al índice de manuales</a>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script>
+// ACCORDION
+function toggleAccordion(header) {
+  const body = header.nextElementSibling;
+  const isOpen = header.classList.contains('open');
+  header.classList.toggle('open', !isOpen);
+  body.classList.toggle('open', !isOpen);
+}
+
+// TABS
+function switchTab(btn, panelId) {
+  const tabList = btn.closest('.tab-list');
+  const tabContainer = tabList.closest('.tabs');
+  tabList.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  tabContainer.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+// CHECKLIST
+function toggleCheck(li) {
+  li.classList.toggle('checked');
+}
+
+// SIDEBAR ACTIVE LINK ON SCROLL
+const sections = document.querySelectorAll('section[id]');
+const sidebarLinks = document.querySelectorAll('.sidebar-link');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      sidebarLinks.forEach(link => link.classList.remove('active'));
+      const activeLink = document.querySelector(`.sidebar-link[href="#${entry.target.id}"]`);
+      if (activeLink) activeLink.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -71,7 +71,8 @@ export type IconName =
   | "calculator"
   | "sun"
   | "moon"
-  | "megaphone";
+  | "megaphone"
+  | "book";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "stroke"> {
   name: IconName;
@@ -593,6 +594,13 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
         <svg {...common}>
           <path d="m3 11 18-5v12L3 14v-3Z" />
           <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+        </svg>
+      );
+    case "book":
+      return (
+        <svg {...common}>
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
       );
     default:

@@ -24,6 +24,8 @@ interface NavItem {
   exec?: boolean;
   /** Gate RBAC: "sistema" (requiere sistema.view) · "rrhhDocs" (requiere rrhh.documentacion.view). */
   gate?: "sistema" | "rrhhDocs";
+  /** Abre el link en nueva pestaña (para assets estáticos o recursos externos). */
+  external?: boolean;
 }
 
 interface Domain {
@@ -53,6 +55,7 @@ const DOMAINS: Domain[] = [
       { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
       { href: "/organigrama", label: "Organigrama", icon: "building", gate: "sistema" },
       { href: "/analytics", label: "Analytics Ejecutivo", icon: "report", exec: true },
+      { href: "/manual-nexus/index.html", label: "Manual de usuario", icon: "book", badge: "Docs", external: true, exec: true },
     ],
   },
   {
@@ -494,12 +497,9 @@ function NavLink({
   active: boolean;
   onNavigate?: () => void;
 }) {
-  return (
-    <Link
-      href={item.href}
-      onClick={onNavigate}
-      className={cn("sidebar-link", active && "active", item.accent && "danger-accent")}
-    >
+  const className = cn("sidebar-link", active && "active", item.accent && "danger-accent");
+  const content = (
+    <>
       <Icon name={item.icon} size={16} />
       <span className="flex-1 truncate">{item.label}</span>
       {item.count != null && (
@@ -512,6 +512,18 @@ function NavLink({
           {item.badge}
         </span>
       )}
+    </>
+  );
+  if (item.external) {
+    return (
+      <a href={item.href} target="_blank" rel="noopener noreferrer" className={className}>
+        {content}
+      </a>
+    );
+  }
+  return (
+    <Link href={item.href} onClick={onNavigate} className={className}>
+      {content}
     </Link>
   );
 }

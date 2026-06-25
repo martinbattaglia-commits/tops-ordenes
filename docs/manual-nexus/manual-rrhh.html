@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual RRHH — TOPS Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0f172a;
+      --navy-light: #1e293b;
+      --navy-mid: #162035;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --pink: #ec4899;
+      --pink-light: #f472b6;
+      --pink-dark: #be185d;
+      --pink-glow: rgba(236, 72, 153, 0.15);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --border: rgba(255,255,255,0.08);
+      --border-pink: rgba(236, 72, 153, 0.3);
+      --card: rgba(255,255,255,0.04);
+      --card-hover: rgba(255,255,255,0.07);
+      --sidebar-w: 260px;
+      --nav-h: 60px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 16px); }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    /* ── TOPBAR ── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--nav-h);
+      background: rgba(15,23,42,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+    }
+    .topbar-logo {
+      font-weight: 800;
+      font-size: 17px;
+      color: var(--text);
+      letter-spacing: -0.3px;
+      text-decoration: none;
+    }
+    .topbar-logo span { color: var(--pink); }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .breadcrumb a { color: var(--text-muted); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--pink-light); }
+    .breadcrumb-sep { color: var(--text-dim); }
+    .breadcrumb-current { color: var(--pink-light); font-weight: 600; }
+    .topbar-back {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--pink-glow);
+      border: 1px solid var(--border-pink);
+      color: var(--pink-light);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+    .topbar-back:hover { background: rgba(236,72,153,0.25); }
+
+    /* ── LAYOUT ── */
+    .layout {
+      display: flex;
+      min-height: calc(100vh - var(--nav-h));
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      position: sticky;
+      top: var(--nav-h);
+      height: calc(100vh - var(--nav-h));
+      overflow-y: auto;
+      padding: 24px 16px;
+      border-right: 1px solid var(--border);
+      background: rgba(15,23,42,0.6);
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .sidebar-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--text-dim);
+      padding: 0 8px;
+      margin-bottom: 12px;
+    }
+    .toc-list { list-style: none; }
+    .toc-list li { margin-bottom: 2px; }
+    .toc-list a {
+      display: block;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: all 0.15s;
+      line-height: 1.4;
+    }
+    .toc-list a:hover { background: var(--card-hover); color: var(--text); }
+    .toc-list a.active { background: var(--pink-glow); color: var(--pink-light); }
+    .toc-list .toc-sub { padding-left: 18px; }
+    .toc-list .toc-sub a { font-size: 12px; }
+    .toc-section { margin-top: 16px; }
+
+    /* ── MAIN ── */
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 48px 60px 80px;
+      max-width: 900px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      margin-bottom: 48px;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--pink-glow);
+      border: 1px solid var(--border-pink);
+      border-radius: 20px;
+      padding: 4px 14px 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--pink-light);
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .hero h1 .accent { color: var(--pink); }
+    .hero-desc {
+      font-size: 17px;
+      color: var(--text-muted);
+      max-width: 640px;
+      line-height: 1.6;
+    }
+    .hero-meta {
+      margin-top: 20px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── SECTIONS ── */
+    .section {
+      margin-bottom: 56px;
+    }
+    .section-anchor { display: block; height: 0; visibility: hidden; }
+
+    h2 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    h2 .section-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--pink-glow);
+      border: 1px solid var(--border-pink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 28px 0 12px;
+      color: var(--text);
+    }
+
+    h4 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 20px 0 10px;
+    }
+
+    p { margin-bottom: 14px; color: var(--text-muted); }
+
+    ul, ol { padding-left: 20px; margin-bottom: 14px; color: var(--text-muted); }
+    li { margin-bottom: 6px; }
+
+    strong { color: var(--text); }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: var(--pink-light);
+    }
+
+    /* ── CARDS ── */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin: 20px 0;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      transition: all 0.2s;
+    }
+    .card:hover { background: var(--card-hover); border-color: var(--border-pink); }
+    .card-icon { font-size: 28px; margin-bottom: 12px; }
+    .card-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .card-url {
+      margin-top: 10px;
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--pink-light);
+    }
+    .card.pink-border { border-color: var(--border-pink); background: var(--pink-glow); }
+
+    /* ── KPI CARDS ── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .kpi-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .kpi-icon { font-size: 24px; margin-bottom: 8px; }
+    .kpi-label { font-size: 11px; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+    .kpi-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+    /* ── ALERTS ── */
+    .alert {
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin: 20px 0;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .alert-icon { font-size: 20px; flex-shrink: 0; margin-top: 1px; }
+    .alert-content { flex: 1; }
+    .alert-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .alert-text { font-size: 13px; color: var(--text-muted); }
+    .alert.pink { background: var(--pink-glow); border: 1px solid var(--border-pink); }
+    .alert.pink .alert-title { color: var(--pink-light); }
+    .alert.amber { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); }
+    .alert.amber .alert-title { color: var(--amber); }
+    .alert.blue { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); }
+    .alert.blue .alert-title { color: #60a5fa; }
+    .alert.green { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); }
+    .alert.green .alert-title { color: #4ade80; }
+    .alert.red { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); }
+    .alert.red .alert-title { color: #f87171; }
+
+    /* ── TABLE ── */
+    .table-wrap { overflow-x: auto; margin: 20px 0; border-radius: 12px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { background: rgba(236,72,153,0.08); }
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--pink-light);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: var(--text-muted);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--card); }
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .badge-green { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+    .badge-amber { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+    .badge-red { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+    .badge-blue { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+    .badge-pink { background: rgba(236,72,153,0.15); color: var(--pink-light); border: 1px solid rgba(236,72,153,0.3); }
+    .badge-gray { background: rgba(148,163,184,0.1); color: var(--text-muted); border: 1px solid rgba(148,163,184,0.2); }
+
+    /* ── TABS ── */
+    .tabs {
+      margin: 24px 0;
+    }
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      background: var(--navy-light);
+      border: 1px solid var(--border);
+      border-radius: 12px 12px 0 0;
+      padding: 6px 6px 0;
+      border-bottom: none;
+    }
+    .tab-btn {
+      padding: 9px 20px;
+      border-radius: 8px 8px 0 0;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      background: var(--navy);
+      color: var(--pink-light);
+      border-top: 2px solid var(--pink);
+    }
+    .tab-panel {
+      display: none;
+      background: var(--navy-light);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+      padding: 24px;
+    }
+    .tab-panel.active { display: block; }
+    .tab-panel h3 { margin-top: 0; }
+
+    /* ── ACCORDION ── */
+    .accordion { margin: 16px 0; }
+    .accordion-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .accordion-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--card);
+      border: none;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 600;
+      text-align: left;
+      transition: background 0.15s;
+    }
+    .accordion-btn:hover { background: var(--card-hover); }
+    .accordion-icon { flex-shrink: 0; font-size: 18px; }
+    .accordion-chevron {
+      margin-left: auto;
+      color: var(--text-muted);
+      transition: transform 0.25s;
+      font-size: 12px;
+    }
+    .accordion-item.open .accordion-chevron { transform: rotate(180deg); }
+    .accordion-body {
+      display: none;
+      padding: 16px 18px 18px;
+      border-top: 1px solid var(--border);
+      background: rgba(15,23,42,0.4);
+    }
+    .accordion-item.open .accordion-body { display: block; }
+    .accordion-body p, .accordion-body ul, .accordion-body ol { font-size: 13.5px; }
+
+    /* ── CHECKLIST ── */
+    .checklist { list-style: none; padding: 0; }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .check-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      border: 2px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-top: 2px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .check-box.checked {
+      background: var(--pink);
+      border-color: var(--pink);
+      color: white;
+      font-size: 11px;
+    }
+    .checklist li.done { color: var(--text-dim); text-decoration: line-through; }
+
+    /* ── FLOW DIAGRAM ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 24px 0;
+    }
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+    }
+    .flow-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .flow-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--pink-glow);
+      border: 2px solid var(--pink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--pink-light);
+      flex-shrink: 0;
+    }
+    .flow-line {
+      width: 2px;
+      height: 32px;
+      background: linear-gradient(to bottom, var(--pink), transparent);
+      margin: 0 auto;
+    }
+    .flow-content {
+      flex: 1;
+      padding: 6px 0 32px 16px;
+    }
+    .flow-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .flow-desc { font-size: 13px; color: var(--text-muted); }
+
+    /* ── FAQ ── */
+    .faq-item {
+      border-bottom: 1px solid var(--border);
+      padding: 16px 0;
+    }
+    .faq-item:first-child { padding-top: 0; }
+    .faq-q {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 0;
+    }
+    .faq-q span { color: var(--pink); flex-shrink: 0; }
+    .faq-a {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-top: 10px;
+      padding-left: 26px;
+      display: none;
+    }
+    .faq-item.open .faq-a { display: block; }
+
+    /* ── GLOSARIO ── */
+    .glossary {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .gloss-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .gloss-term {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--pink-light);
+      margin-bottom: 5px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .gloss-def {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* ── ROLE BLOCK ── */
+    .role-list { display: flex; flex-direction: column; gap: 10px; margin: 16px 0; }
+    .role-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .role-name {
+      min-width: 130px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .role-perms {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .perm {
+      font-size: 11px;
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .perm.yes { color: #4ade80; border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); }
+    .perm.no { color: var(--text-dim); border-color: rgba(100,116,139,0.2); text-decoration: line-through; }
+
+    /* ── SCENARIO CARDS ── */
+    .scenario-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 14px;
+    }
+    .scenario-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .scenario-icon { font-size: 24px; }
+    .scenario-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .scenario-steps { padding-left: 18px; font-size: 13.5px; }
+    .scenario-steps li { margin-bottom: 8px; color: var(--text-muted); }
+
+    /* ── ERROR CARD ── */
+    .error-card {
+      background: rgba(239,68,68,0.05);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+    .error-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f87171;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .error-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+    .error-fix {
+      font-size: 13px;
+      color: #4ade80;
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
+    }
+    .error-fix::before { content: "✓"; flex-shrink: 0; font-weight: 700; }
+
+    /* ── PENDING BADGE ── */
+    .pending-inline {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      background: rgba(245,158,11,0.15);
+      color: var(--amber);
+      border: 1px solid rgba(245,158,11,0.3);
+      padding: 1px 8px;
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+
+    /* ── DIVIDER ── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1024px) {
+      .sidebar { display: none; }
+      .main { padding: 32px 24px 60px; max-width: 100%; }
+    }
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 30px; }
+      .cards-grid { grid-template-columns: 1fr 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════ TOPBAR ══ -->
+<nav class="topbar">
+  <a href="index.html" class="topbar-logo">TOPS <span>Nexus</span></a>
+  <div class="breadcrumb">
+    <span class="breadcrumb-sep">›</span>
+    <a href="index.html">Manual</a>
+    <span class="breadcrumb-sep">›</span>
+    <span class="breadcrumb-current">Recursos Humanos</span>
+  </div>
+  <a href="index.html" class="topbar-back">← Volver al índice</a>
+</nav>
+
+<!-- ══════════════════════════════════════════ LAYOUT ══ -->
+<div class="layout">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="sidebar-title">Tabla de contenidos</div>
+    <ul class="toc-list">
+      <li><a href="#objetivo">🎯 Objetivo del módulo</a></li>
+      <li><a href="#quien-puede">👤 ¿Quién puede usar qué?</a></li>
+      <li class="toc-section">
+        <div class="sidebar-title" style="margin-top:4px">Módulo RRHH (Admin)</div>
+      </li>
+      <li><a href="#dashboard">📊 Dashboard RRHH</a></li>
+      <li><a href="#empleados">👥 Gestión de Empleados</a></li>
+      <li class="toc-sub"><li><a href="#nuevo-empleado" class="toc-sub" style="padding-left:22px;font-size:12px">Nuevo empleado</a></li>
+      <li><a href="#perfil-empleado" class="toc-sub" style="padding-left:22px;font-size:12px">Perfil del empleado</a></li>
+      <li><a href="#solicitudes">📋 Solicitudes</a></li>
+      <li><a href="#novedades">🔔 Novedades</a></li>
+      <li><a href="#documentacion">🗂️ Documentación y Legajos</a></li>
+      <li class="toc-section">
+        <div class="sidebar-title" style="margin-top:4px">Autoservicio</div>
+      </li>
+      <li><a href="#mi-espacio">🏠 Mi Espacio</a></li>
+      <li class="toc-section">
+        <div class="sidebar-title" style="margin-top:4px">Guías prácticas</div>
+      </li>
+      <li><a href="#flujo-solicitud">🔄 Flujo de una solicitud</a></li>
+      <li><a href="#checklist">✅ Checklist de incorporación</a></li>
+      <li><a href="#casos">💡 Casos frecuentes</a></li>
+      <li><a href="#errores">⚠️ Errores comunes</a></li>
+      <li><a href="#faq">❓ Preguntas frecuentes</a></li>
+      <li><a href="#glosario">📖 Glosario</a></li>
+    </ul>
+  </aside>
+
+  <!-- ── MAIN CONTENT ── -->
+  <main class="main">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-badge">
+        <span>👥</span> Módulo RRHH
+      </div>
+      <h1>Recursos <span class="accent">Humanos</span></h1>
+      <p class="hero-desc">
+        Gestión digital de la nómina, solicitudes y legajos del personal de TOPS.
+        Diseñado para el equipo de administración y también para cada empleado que quiera
+        consultar su información de manera autónoma.
+      </p>
+      <div class="hero-meta">
+        <span class="meta-chip">📍 /rrhh</span>
+        <span class="meta-chip">🔑 rrhh.view</span>
+        <span class="meta-chip">🔑 rrhh.documentacion.view</span>
+        <span class="meta-chip">🔑 mi_espacio.view</span>
+      </div>
+    </div>
+
+    <div class="alert amber">
+      <div class="alert-icon">🚧</div>
+      <div class="alert-content">
+        <div class="alert-title">Módulo en fase de diseño</div>
+        <div class="alert-text">El módulo RRHH está actualmente en proceso de construcción. Algunas funcionalidades indicadas como <span class="pending-inline">PENDIENTE</span> pueden no estar disponibles todavía en el sistema. Consultá con el área de Sistemas antes de operar.</div>
+      </div>
+    </div>
+
+    <!-- ── 1. OBJETIVO ── -->
+    <span class="section-anchor" id="objetivo"></span>
+    <section class="section">
+      <h2><span class="section-icon">🎯</span> Objetivo del módulo</h2>
+      <p>
+        El módulo de <strong>Recursos Humanos</strong> centraliza toda la información del personal en un solo lugar dentro de TOPS Nexus.
+        Reemplaza el manejo de planillas sueltas, correos dispersos y carpetas físicas de legajos,
+        brindando una vista digital y actualizada de la nómina.
+      </p>
+      <p>
+        Tiene dos grandes públicos:
+      </p>
+      <div class="cards-grid" style="grid-template-columns:1fr 1fr;gap:12px;margin:16px 0;">
+        <div class="card pink-border">
+          <div class="card-icon">🏢</div>
+          <div class="card-title">Equipo RRHH / Admin</div>
+          <div class="card-desc">Dirección, Administración y Operaciones. Acceden a la nómina completa, solicitudes, novedades y legajos según su perfil.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">👤</div>
+          <div class="card-title">Empleados (autoservicio)</div>
+          <div class="card-desc">Cada empleado accede a <strong>Mi Espacio</strong> para ver sus propios datos, vacaciones disponibles y solicitudes enviadas.</div>
+        </div>
+      </div>
+
+      <h3>Qué resuelve</h3>
+      <ul>
+        <li>Nómina centralizada con datos actualizados de cada empleado</li>
+        <li>Registro digital de solicitudes de vacaciones, licencias y cambios</li>
+        <li>Historial de novedades (altas, bajas, ascensos, traslados)</li>
+        <li>Legajos digitales seguros con acceso restringido</li>
+        <li>Autoservicio para que el empleado consulte su propia información sin depender de nadie</li>
+      </ul>
+    </section>
+
+    <!-- ── 2. QUIÉN PUEDE ── -->
+    <span class="section-anchor" id="quien-puede"></span>
+    <section class="section">
+      <h2><span class="section-icon">👤</span> ¿Quién puede usar qué?</h2>
+
+      <div class="alert pink" style="margin-bottom:20px">
+        <div class="alert-icon">🔑</div>
+        <div class="alert-content">
+          <div class="alert-title">Tres permisos independientes</div>
+          <div class="alert-text">
+            <code>rrhh.view</code> y <code>rrhh.documentacion.view</code> son permisos <strong>separados</strong>.
+            Alguien puede tener acceso a los legajos sin tener acceso a la nómina general, y viceversa.
+            <code>mi_espacio.view</code> es exclusivo para el autoservicio del empleado.
+          </div>
+        </div>
+      </div>
+
+      <div class="role-list">
+        <div class="role-row">
+          <div class="role-name">👑 Director</div>
+          <div class="role-perms">
+            <span class="perm yes">rrhh.view</span>
+            <span class="perm yes">rrhh.export</span>
+            <span class="perm yes">rrhh.documentacion.view</span>
+            <span class="perm yes">mi_espacio.view</span>
+          </div>
+        </div>
+        <div class="role-row">
+          <div class="role-name">🏢 Administración</div>
+          <div class="role-perms">
+            <span class="perm yes">rrhh.view</span>
+            <span class="perm yes">rrhh.export</span>
+            <span class="perm yes">rrhh.documentacion.view</span>
+            <span class="perm yes">mi_espacio.view</span>
+          </div>
+        </div>
+        <div class="role-row">
+          <div class="role-name">⚙️ Operaciones</div>
+          <div class="role-perms">
+            <span class="perm yes">rrhh.view</span>
+            <span class="perm no">rrhh.export</span>
+            <span class="perm no">rrhh.documentacion.view</span>
+            <span class="perm yes">mi_espacio.view</span>
+          </div>
+        </div>
+        <div class="role-row">
+          <div class="role-name">🛒 Comercial</div>
+          <div class="role-perms">
+            <span class="perm no">rrhh.view</span>
+            <span class="perm no">rrhh.export</span>
+            <span class="perm no">rrhh.documentacion.view</span>
+            <span class="perm yes">mi_espacio.view</span>
+          </div>
+        </div>
+        <div class="role-row">
+          <div class="role-name">📦 Depósito</div>
+          <div class="role-perms">
+            <span class="perm no">rrhh.view</span>
+            <span class="perm no">rrhh.export</span>
+            <span class="perm no">rrhh.documentacion.view</span>
+            <span class="perm yes">mi_espacio.view</span>
+          </div>
+        </div>
+        <div class="role-row">
+          <div class="role-name">🔍 Auditor</div>
+          <div class="role-perms">
+            <span class="perm yes">rrhh.view</span>
+            <span class="perm no">rrhh.export</span>
+            <span class="perm no">rrhh.documentacion.view</span>
+            <span class="perm yes">mi_espacio.view</span>
+          </div>
+        </div>
+      </div>
+
+      <h3>Tabla resumen de acceso</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Función</th>
+              <th>Director / Admin</th>
+              <th>Operaciones</th>
+              <th>Depósito / Comercial</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Dashboard RRHH</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Ver nómina de empleados</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Dar de alta un empleado</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-red">No</span></td>
+              <td><span class="badge badge-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Ver solicitudes</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Aprobar / rechazar solicitudes</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-red">No</span></td>
+              <td><span class="badge badge-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Ver legajos</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-red">No</span></td>
+              <td><span class="badge badge-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Exportar datos</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-red">No</span></td>
+              <td><span class="badge badge-red">No</span></td>
+            </tr>
+            <tr>
+              <td>Mi Espacio (propio)</td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-green">Sí</span></td>
+              <td><span class="badge badge-green">Sí</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── 3. DASHBOARD ── -->
+    <span class="section-anchor" id="dashboard"></span>
+    <section class="section">
+      <h2><span class="section-icon">📊</span> Dashboard RRHH</h2>
+      <p>
+        La pantalla principal del módulo muestra un resumen ejecutivo del estado actual del personal.
+        Es lo primero que ves cuando entrás a <code>/rrhh</code>.
+      </p>
+
+      <h3>KPIs disponibles</h3>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon">👥</div>
+          <div class="kpi-label">Dotación total</div>
+          <div class="kpi-desc">Total de empleados registrados en la nómina, incluyendo activos y en licencia.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">✅</div>
+          <div class="kpi-label">Activos</div>
+          <div class="kpi-desc">Empleados con estado "activo" que están trabajando normalmente.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">🏥</div>
+          <div class="kpi-label">En licencia</div>
+          <div class="kpi-desc">Empleados con una licencia (médica, personal u otra) activa en este momento.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">📥</div>
+          <div class="kpi-label">Solicitudes pendientes</div>
+          <div class="kpi-desc">Pedidos de vacaciones, licencias o cambios que todavía no tienen respuesta.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">🏖️</div>
+          <div class="kpi-label">Vacaciones pendientes</div>
+          <div class="kpi-desc">Días de vacaciones acumulados que el personal aún no tomó.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">📋</div>
+          <div class="kpi-label">Licencias activas</div>
+          <div class="kpi-desc">Licencias médicas u otras en curso durante el período actual.</div>
+        </div>
+      </div>
+
+      <div class="alert blue">
+        <div class="alert-icon">💡</div>
+        <div class="alert-content">
+          <div class="alert-title">Tip de lectura</div>
+          <div class="alert-text">Los KPIs reflejan el estado al momento de cargar la página. Si hubo cambios recientes (alta/baja de un empleado, aprobación de una solicitud), refrescá la página para ver los números actualizados.</div>
+        </div>
+      </div>
+
+      <h3>Novedades recientes</h3>
+      <p>
+        Debajo de los KPIs, el dashboard muestra las últimas novedades registradas:
+        nuevos ingresos, cambios de cargo, bajas o licencias iniciadas. Permite ver el historial
+        reciente sin tener que ir a cada sección por separado.
+      </p>
+    </section>
+
+    <!-- ── 4. EMPLEADOS ── -->
+    <span class="section-anchor" id="empleados"></span>
+    <section class="section">
+      <h2><span class="section-icon">👥</span> Gestión de Empleados</h2>
+      <p>
+        La sección de Empleados (<code>/rrhh/empleados</code>) muestra la nómina completa de la empresa.
+        Es el punto de entrada para consultar datos de cualquier integrante del equipo.
+      </p>
+
+      <h3>Vista de listado</h3>
+      <p>La tabla de nómina incluye las siguientes columnas:</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Columna</th>
+              <th>Descripción</th>
+              <th>Ejemplo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Nombre</strong></td>
+              <td>Nombre y apellido del empleado</td>
+              <td>María García</td>
+            </tr>
+            <tr>
+              <td><strong>CUIL</strong></td>
+              <td>CUIL único del empleado (formato XX-XXXXXXXX-X)</td>
+              <td>27-30456789-3</td>
+            </tr>
+            <tr>
+              <td><strong>Cargo</strong></td>
+              <td>Puesto actual dentro de la empresa</td>
+              <td>Operario de Depósito</td>
+            </tr>
+            <tr>
+              <td><strong>Depósito</strong></td>
+              <td>Depósito o sede asignado</td>
+              <td>Depósito Central</td>
+            </tr>
+            <tr>
+              <td><strong>Ingreso</strong></td>
+              <td>Fecha de inicio de la relación laboral</td>
+              <td>15/03/2022</td>
+            </tr>
+            <tr>
+              <td><strong>Estado</strong></td>
+              <td>Estado actual del empleado</td>
+              <td><span class="badge badge-green">Activo</span> <span class="badge badge-amber">En licencia</span> <span class="badge badge-red">Baja</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Búsqueda y filtros</h3>
+      <ul>
+        <li><strong>Barra de búsqueda:</strong> buscá por nombre, CUIL o cargo</li>
+        <li><strong>Filtro por depósito:</strong> mostrá solo los empleados de una sede específica</li>
+        <li><strong>Filtro por estado:</strong> activo, en licencia, baja</li>
+      </ul>
+
+      <div class="alert green" style="margin-top:16px">
+        <div class="alert-icon">📤</div>
+        <div class="alert-content">
+          <div class="alert-title">Exportar nómina</div>
+          <div class="alert-text">Si tenés el permiso <code>rrhh.export</code>, podés descargar la nómina filtrada en formato Excel o CSV desde el botón "Exportar" arriba a la derecha de la tabla. <span class="pending-inline">PENDIENTE</span></div>
+        </div>
+      </div>
+
+      <!-- Nuevo empleado -->
+      <span class="section-anchor" id="nuevo-empleado"></span>
+      <h3>➕ Alta de Nuevo Empleado</h3>
+      <p>
+        Para dar de alta un empleado, hacé clic en el botón <strong>"Nuevo empleado"</strong>
+        arriba a la derecha del listado. Se abre el formulario en <code>/rrhh/empleados/nuevo</code>.
+      </p>
+      <h4>Campos del formulario</h4>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Campo</th><th>Requerido</th><th>Notas</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Nombre y apellido</td><td><span class="badge badge-red">Sí</span></td><td>Nombre legal completo</td></tr>
+            <tr><td>CUIL</td><td><span class="badge badge-red">Sí</span></td><td>Formato XX-XXXXXXXX-X, único en el sistema</td></tr>
+            <tr><td>Cargo</td><td><span class="badge badge-red">Sí</span></td><td>Puesto de la empresa</td></tr>
+            <tr><td>Depósito asignado</td><td><span class="badge badge-red">Sí</span></td><td>Seleccioná de la lista de sedes disponibles</td></tr>
+            <tr><td>Fecha de ingreso</td><td><span class="badge badge-red">Sí</span></td><td>Fecha real de inicio de actividad</td></tr>
+            <tr><td>Email laboral</td><td><span class="badge badge-amber">Opt.</span></td><td>Si tiene correo corporativo de TOPS</td></tr>
+            <tr><td>Teléfono</td><td><span class="badge badge-amber">Opt.</span></td><td>Contacto del empleado</td></tr>
+            <tr><td>Observaciones</td><td><span class="badge badge-amber">Opt.</span></td><td>Notas internas del área de RRHH</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="alert amber">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-content">
+          <div class="alert-title">CUIL duplicado</div>
+          <div class="alert-text">El sistema valida que no existan dos empleados con el mismo CUIL. Si intentás cargar uno que ya existe, aparece un error indicando el empleado duplicado.</div>
+        </div>
+      </div>
+
+      <!-- Perfil -->
+      <span class="section-anchor" id="perfil-empleado"></span>
+      <h3>📄 Perfil del Empleado</h3>
+      <p>
+        Al hacer clic en cualquier fila del listado, se abre el perfil del empleado en
+        <code>/rrhh/empleados/[id]</code>. Esta pantalla concentra toda la información disponible:
+      </p>
+      <div class="accordion">
+        <div class="accordion-item open">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">👤</span>
+            Datos personales y laborales
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <ul>
+              <li>Nombre completo y CUIL</li>
+              <li>Cargo actual y depósito asignado</li>
+              <li>Fecha de ingreso y antigüedad calculada automáticamente</li>
+              <li>Estado laboral (activo / en licencia / baja)</li>
+              <li>Email y teléfono de contacto</li>
+            </ul>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">📋</span>
+            Solicitudes del empleado
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Historial de todas las solicitudes enviadas por este empleado: vacaciones, licencias y cambios. Cada una muestra su estado actual (pendiente, aprobada, rechazada).</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">🔔</span>
+            Novedades del empleado
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Línea de tiempo con todos los movimientos registrados: alta inicial, cambios de cargo, cambios de depósito, ascensos y baja (si aplica).</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">🏖️</span>
+            Vacaciones y licencias
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Días de vacaciones disponibles, días tomados y días pendientes según la antigüedad. También aparecen las licencias históricas. <span class="pending-inline">PENDIENTE cálculo automático</span></p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">🗂️</span>
+            Legajo digital
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Acceso al legajo del empleado. <strong>Solo visible</strong> para quienes tengan el permiso <code>rrhh.documentacion.view</code>. Sin ese permiso, esta sección está oculta.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 5. SOLICITUDES ── -->
+    <span class="section-anchor" id="solicitudes"></span>
+    <section class="section">
+      <h2><span class="section-icon">📋</span> Solicitudes</h2>
+      <p>
+        El módulo de solicitudes (<code>/rrhh/solicitudes</code>) centraliza todos los pedidos formales del personal.
+        El equipo de RRHH los revisa desde acá y decide aprobar o rechazar.
+      </p>
+
+      <h3>Tipos de solicitudes</h3>
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-icon">🏖️</div>
+          <div class="card-title">Vacaciones</div>
+          <div class="card-desc">El empleado solicita un período de descanso. Debe indicar fechas de inicio y fin.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🏥</div>
+          <div class="card-title">Licencia médica</div>
+          <div class="card-desc">Solicitud de ausencia por motivos de salud. Generalmente requiere documentación.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🧳</div>
+          <div class="card-title">Licencia personal</div>
+          <div class="card-desc">Ausencias por motivos personales (mudanza, trámites, etc.) no cubiertas por otras categorías.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔄</div>
+          <div class="card-title">Cambio de cargo</div>
+          <div class="card-desc">Solicitud de modificación del puesto o función del empleado.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🚪</div>
+          <div class="card-title">Baja</div>
+          <div class="card-desc">Solicitud de egreso del empleado. Puede ser voluntaria o iniciada desde RRHH.</div>
+        </div>
+      </div>
+
+      <h3>Flujo de una solicitud</h3>
+      <p>Cada solicitud pasa por los siguientes estados:</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Estado</th><th>Significado</th><th>Quién actúa</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge badge-amber">Pendiente</span></td>
+              <td>La solicitud fue enviada pero nadie la revisó aún</td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-blue">En revisión</span></td>
+              <td>RRHH está evaluando la solicitud</td>
+              <td>RRHH / Admin</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-green">Aprobada</span></td>
+              <td>La solicitud fue aceptada</td>
+              <td>RRHH / Director</td>
+            </tr>
+            <tr>
+              <td><span class="badge badge-red">Rechazada</span></td>
+              <td>La solicitud fue denegada. Debe incluir motivo</td>
+              <td>RRHH / Director</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Cómo aprobar o rechazar una solicitud</h3>
+      <ol>
+        <li>Ingresá a <code>/rrhh/solicitudes</code></li>
+        <li>Encontrá la solicitud pendiente en la lista (aparecen primero las más antiguas)</li>
+        <li>Hacé clic sobre la solicitud para abrir el detalle</li>
+        <li>Revisá la información: empleado, tipo, fechas y observaciones</li>
+        <li>Hacé clic en <strong>"Aprobar"</strong> o <strong>"Rechazar"</strong></li>
+        <li>Si rechazás, completá el campo de motivo (obligatorio)</li>
+        <li>Confirmá la acción</li>
+      </ol>
+      <div class="alert amber">
+        <div class="alert-icon">📢</div>
+        <div class="alert-content">
+          <div class="alert-title">Notificaciones al empleado</div>
+          <div class="alert-text">Cuando se aprueba o rechaza una solicitud, el empleado puede verlo en <strong>Mi Espacio</strong>. La notificación por email depende de la configuración del sistema. <span class="pending-inline">PENDIENTE</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 6. NOVEDADES ── -->
+    <span class="section-anchor" id="novedades"></span>
+    <section class="section">
+      <h2><span class="section-icon">🔔</span> Novedades</h2>
+      <p>
+        Las novedades (<code>/rrhh/novedades</code>) son el registro histórico de todos los cambios
+        de estado que ocurren en la vida laboral de un empleado dentro de TOPS.
+        Cada vez que algo cambia, queda documentado acá.
+      </p>
+
+      <h3>Tipos de movimiento</h3>
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-icon">🆕</div>
+          <div class="card-title">Alta</div>
+          <div class="card-desc">Ingreso de un empleado nuevo a la nómina. Se genera automáticamente al crear un empleado.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🚪</div>
+          <div class="card-title">Baja</div>
+          <div class="card-desc">Egreso del empleado. Incluye fecha de baja y motivo (renuncia, despido, jubilación, etc.).</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔄</div>
+          <div class="card-title">Cambio de cargo</div>
+          <div class="card-desc">Modificación del puesto o función. Se registra el cargo anterior y el nuevo.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🏭</div>
+          <div class="card-title">Cambio de depósito</div>
+          <div class="card-desc">Traslado del empleado a otra sede o depósito.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">⬆️</div>
+          <div class="card-title">Ascenso</div>
+          <div class="card-desc">Promoción a un cargo de mayor jerarquía.</div>
+        </div>
+      </div>
+
+      <h3>Cómo registrar una novedad manualmente</h3>
+      <p>Las novedades se pueden generar de dos formas:</p>
+      <ul>
+        <li><strong>Automática:</strong> el sistema las crea al aprobar una solicitud de cambio de cargo, al dar el alta o baja de un empleado.</li>
+        <li><strong>Manual:</strong> desde <code>/rrhh/novedades</code> con el botón "Nueva novedad", ingresando el empleado, tipo de movimiento, fecha y observaciones. <span class="pending-inline">PENDIENTE</span></li>
+      </ul>
+
+      <div class="alert blue">
+        <div class="alert-icon">🗓️</div>
+        <div class="alert-content">
+          <div class="alert-title">Filtro por período</div>
+          <div class="alert-text">Podés filtrar las novedades por rango de fechas para ver qué cambios ocurrieron durante un mes determinado. Útil para preparar reportes de RRHH o liquidaciones. <span class="pending-inline">PENDIENTE</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 7. DOCUMENTACIÓN ── -->
+    <span class="section-anchor" id="documentacion"></span>
+    <section class="section">
+      <h2><span class="section-icon">🗂️</span> Documentación y Legajos</h2>
+
+      <div class="alert pink">
+        <div class="alert-icon">🔒</div>
+        <div class="alert-content">
+          <div class="alert-title">Permiso especial requerido</div>
+          <div class="alert-text">
+            Esta sección requiere el permiso <code>rrhh.documentacion.view</code> de manera <strong>independiente</strong>
+            del permiso general de RRHH. Un usuario con <code>rrhh.view</code> pero sin
+            <code>rrhh.documentacion.view</code> <strong>no puede ver los legajos</strong>.
+          </div>
+        </div>
+      </div>
+
+      <p>
+        El módulo de Documentación (<code>/rrhh/documentos</code>) contiene los legajos digitales
+        de cada empleado. Un legajo reúne toda la documentación formal de la relación laboral.
+      </p>
+
+      <h3>¿Qué contiene un legajo digital?</h3>
+      <div class="accordion">
+        <div class="accordion-item open">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">📄</span>
+            Documentación de ingreso
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <ul>
+              <li>Copia del DNI</li>
+              <li>CUIL / AFIP</li>
+              <li>Datos de contacto y personales declarados</li>
+              <li>Contrato de trabajo o acuerdo de incorporación</li>
+              <li>Declaración jurada de domicilio</li>
+            </ul>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">📑</span>
+            Recibos de sueldo
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Si los recibos están digitalizados, se almacenan acá ordenados por período (mes y año). El empleado puede acceder a los suyos desde Mi Espacio. <span class="pending-inline">PENDIENTE digitalización</span></p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">🏥</span>
+            Documentos de licencias
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Certificados médicos, partes de enfermedad y cualquier documentación respaldatoria de las licencias otorgadas.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-btn" onclick="toggleAccordion(this)">
+            <span class="accordion-icon">📜</span>
+            Cartas, actas y convenios
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Cartas documento, actas de amonestación, cartas de felicitación, convenios de cambio de cargo u otras comunicaciones formales.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>Cómo subir un documento a un legajo</h3>
+      <ol>
+        <li>Ingresá a <code>/rrhh/documentos</code> o al perfil del empleado → sección Legajo</li>
+        <li>Hacé clic en <strong>"Subir documento"</strong></li>
+        <li>Seleccioná el tipo de documento de la lista</li>
+        <li>Subí el archivo (PDF, JPG o PNG, máximo 10 MB) <span class="pending-inline">PENDIENTE</span></li>
+        <li>Agregá una descripción opcional</li>
+        <li>Confirmá la carga</li>
+      </ol>
+    </section>
+
+    <!-- ── 8. MI ESPACIO ── -->
+    <span class="section-anchor" id="mi-espacio"></span>
+    <section class="section">
+      <h2><span class="section-icon">🏠</span> Mi Espacio (Autoservicio)</h2>
+
+      <div class="tabs">
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchTab(this, 'tab-espacio-que')">¿Qué es?</button>
+          <button class="tab-btn" onclick="switchTab(this, 'tab-espacio-acceso')">Cómo acceder</button>
+          <button class="tab-btn" onclick="switchTab(this, 'tab-espacio-secciones')">Secciones disponibles</button>
+          <button class="tab-btn" onclick="switchTab(this, 'tab-espacio-limites')">Lo que NO podés hacer</button>
+        </div>
+        <div class="tab-panel active" id="tab-espacio-que">
+          <h3>El espacio personal del empleado</h3>
+          <p>
+            <strong>Mi Espacio</strong> (<code>/rrhh/mi-espacio</code>) es la herramienta de autoservicio para cada integrante del equipo.
+            Cualquier persona con el permiso <code>mi_espacio.view</code> puede ver su propia información
+            sin necesidad de pedirle nada al área de RRHH.
+          </p>
+          <p>
+            Es independiente del módulo de RRHH general: un empleado de depósito no tiene acceso a la nómina completa,
+            pero sí puede entrar a su propio espacio y consultar sus datos personales, sus solicitudes y sus vacaciones.
+          </p>
+          <div class="alert green">
+            <div class="alert-icon">🎯</div>
+            <div class="alert-content">
+              <div class="alert-title">Autonomía para el empleado</div>
+              <div class="alert-text">El objetivo es reducir las consultas repetitivas al área de RRHH: "¿cuántos días de vacaciones me quedan?", "¿mi solicitud fue aprobada?", "¿puedo ver mi recibo de sueldo?". Desde Mi Espacio, el empleado puede responderse esas preguntas solo.</div>
+            </div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-espacio-acceso">
+          <h3>Cómo entrar a Mi Espacio</h3>
+          <ol>
+            <li>Iniciá sesión en TOPS Nexus con tu usuario</li>
+            <li>En el menú lateral, buscá la sección <strong>"Mi Espacio"</strong> bajo RRHH</li>
+            <li>Hacé clic para acceder a tu panel personal</li>
+          </ol>
+          <div class="alert amber">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-content">
+              <div class="alert-title">¿No ves Mi Espacio?</div>
+              <div class="alert-text">
+                Si no aparece la opción en el menú, probablemente no tenés el permiso <code>mi_espacio.view</code> asignado.
+                Contactá a Administración para que lo habiliten en tu perfil de usuario.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-espacio-secciones">
+          <h3>Secciones de Mi Espacio</h3>
+          <div class="cards-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="card">
+              <div class="card-icon">👤</div>
+              <div class="card-title">Mis datos</div>
+              <div class="card-desc">Tu nombre, CUIL, cargo, depósito asignado y fecha de ingreso. Solo lectura.</div>
+            </div>
+            <div class="card">
+              <div class="card-icon">📋</div>
+              <div class="card-title">Mis solicitudes</div>
+              <div class="card-desc">Todas las solicitudes que enviaste y su estado actual: pendiente, aprobada o rechazada.</div>
+            </div>
+            <div class="card">
+              <div class="card-icon">🏖️</div>
+              <div class="card-title">Mis vacaciones</div>
+              <div class="card-desc">Días disponibles, días tomados y días pendientes según tu antigüedad. <span class="pending-inline">PENDIENTE</span></div>
+            </div>
+            <div class="card">
+              <div class="card-icon">💰</div>
+              <div class="card-title">Mis recibos</div>
+              <div class="card-desc">Recibos de sueldo digitalizados, ordenados por mes. Disponibles solo si están cargados en el legajo. <span class="pending-inline">PENDIENTE</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-espacio-limites">
+          <h3>Lo que NO podés hacer desde Mi Espacio</h3>
+          <ul>
+            <li>❌ Ver datos de otros empleados</li>
+            <li>❌ Acceder a la nómina general</li>
+            <li>❌ Aprobar o rechazar solicitudes</li>
+            <li>❌ Modificar tus propios datos (nombre, cargo, etc.)</li>
+            <li>❌ Ver legajos de otros</li>
+            <li>❌ Registrar novedades</li>
+          </ul>
+          <div class="alert pink">
+            <div class="alert-icon">🔒</div>
+            <div class="alert-content">
+              <div class="alert-title">Solo tu información</div>
+              <div class="alert-text">Mi Espacio está completamente aislado. El sistema garantiza que solo ves tu propia información, nunca la de otro empleado, incluso si conocés la URL.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider" />
+
+    <!-- ── 9. FLUJO SOLICITUD ── -->
+    <span class="section-anchor" id="flujo-solicitud"></span>
+    <section class="section">
+      <h2><span class="section-icon">🔄</span> Flujo de una Solicitud</h2>
+      <p>
+        Desde que un empleado inicia una solicitud hasta que se resuelve, el proceso sigue estos pasos:
+      </p>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-connector">
+            <div class="flow-num">1</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">El empleado crea la solicitud</div>
+            <div class="flow-desc">Desde <strong>Mi Espacio</strong> → "Nueva solicitud". Selecciona el tipo, completa las fechas y agrega observaciones si corresponde. La solicitud queda en estado <span class="badge badge-amber">Pendiente</span>. <span class="pending-inline">PENDIENTE</span></div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-connector">
+            <div class="flow-num">2</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">RRHH recibe la notificación</div>
+            <div class="flow-desc">La solicitud aparece en el listado de <code>/rrhh/solicitudes</code> con estado pendiente. El responsable de RRHH la ve al entrar al módulo.</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-connector">
+            <div class="flow-num">3</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">RRHH revisa el detalle</div>
+            <div class="flow-desc">Hace clic en la solicitud para ver el detalle: empleado, tipo de pedido, fechas, observaciones y contexto (vacaciones disponibles, licencias anteriores).</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-connector">
+            <div class="flow-num">4</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">Decisión: aprobar o rechazar</div>
+            <div class="flow-desc">
+              <span class="badge badge-green">Aprobada</span>: el sistema actualiza el estado del empleado si corresponde (p.ej. "en licencia") y registra la novedad automáticamente.<br/>
+              <span class="badge badge-red">Rechazada</span>: se debe ingresar el motivo del rechazo antes de confirmar.
+            </div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-connector">
+            <div class="flow-num">5</div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">El empleado ve la respuesta</div>
+            <div class="flow-desc">El estado de su solicitud se actualiza en <strong>Mi Espacio → Mis solicitudes</strong>. Puede ver si fue aprobada o rechazada y el motivo del rechazo si aplica.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 10. CHECKLIST ── -->
+    <span class="section-anchor" id="checklist"></span>
+    <section class="section">
+      <h2><span class="section-icon">✅</span> Checklist de Incorporación</h2>
+      <p>
+        Usá esta lista cada vez que des de alta a un empleado nuevo para asegurarte de no olvidar ningún paso.
+        Podés marcar cada ítem haciendo clic en la casilla.
+      </p>
+
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;">
+        <ul class="checklist" id="checklist-incorporacion">
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Reunir documentación del ingresante: DNI, CUIL, datos personales y domicilio</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Crear el empleado en TOPS Nexus: <code>/rrhh/empleados/nuevo</code> con todos los campos requeridos</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Verificar que el CUIL no esté duplicado en el sistema</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Asignar depósito correcto según la ubicación de trabajo</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Confirmar que la novedad de "Alta" quedó registrada automáticamente en <code>/rrhh/novedades</code></span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Cargar los documentos de ingreso en el legajo digital del empleado</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Crear el usuario en TOPS Nexus con el permiso <code>mi_espacio.view</code> para que acceda a su espacio personal</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Indicarle al empleado cómo acceder a Mi Espacio (compartirle la URL y sus credenciales)</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Registrar el alta en el libro de sueldos / sistema de liquidación externo (fuera de Nexus)</span>
+          </li>
+          <li>
+            <div class="check-box" onclick="toggleCheck(this)"></div>
+            <span>Notificar al responsable del depósito asignado sobre el ingreso del nuevo empleado</span>
+          </li>
+        </ul>
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-dim)">
+          Progreso: <span id="checklist-count">0</span> de 10 pasos completados
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 11. CASOS FRECUENTES ── -->
+    <span class="section-anchor" id="casos"></span>
+    <section class="section">
+      <h2><span class="section-icon">💡</span> Casos Frecuentes</h2>
+
+      <div class="scenario-card">
+        <div class="scenario-header">
+          <div class="scenario-icon">🆕</div>
+          <div class="scenario-title">Caso 1: Nueva incorporación</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:10px">
+          Ingresa una persona nueva al equipo de depósito. Hay que registrarla en el sistema.
+        </p>
+        <ol class="scenario-steps">
+          <li>Reunís el DNI, CUIL, cargo y fecha de ingreso del nuevo empleado</li>
+          <li>Entrás a <code>/rrhh/empleados/nuevo</code> y completás el formulario</li>
+          <li>El sistema genera automáticamente la novedad de "Alta"</li>
+          <li>Subís los documentos al legajo digital</li>
+          <li>Creás el usuario en Nexus con permiso <code>mi_espacio.view</code> y le pasás los datos de acceso</li>
+        </ol>
+      </div>
+
+      <div class="scenario-card">
+        <div class="scenario-header">
+          <div class="scenario-icon">🏖️</div>
+          <div class="scenario-title">Caso 2: Empleado solicita vacaciones</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:10px">
+          Un operario quiere tomarse 10 días de vacaciones el mes que viene.
+        </p>
+        <ol class="scenario-steps">
+          <li>El empleado entra a Mi Espacio y crea una solicitud de tipo "Vacaciones" con las fechas deseadas <span class="pending-inline">PENDIENTE</span></li>
+          <li>La solicitud aparece en <code>/rrhh/solicitudes</code> como pendiente</li>
+          <li>RRHH revisa el detalle, verifica días disponibles y evalúa la operativa del depósito</li>
+          <li>Si se aprueba, el empleado pasa a estado "En licencia" a partir de la fecha de inicio</li>
+          <li>El empleado lo confirma en Mi Espacio</li>
+        </ol>
+      </div>
+
+      <div class="scenario-card">
+        <div class="scenario-header">
+          <div class="scenario-icon">⬆️</div>
+          <div class="scenario-title">Caso 3: Ascenso de empleado</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:10px">
+          Se decide ascender a un empleado de "Operario" a "Líder de Depósito".
+        </p>
+        <ol class="scenario-steps">
+          <li>Entrás al perfil del empleado en <code>/rrhh/empleados/[id]</code></li>
+          <li>Modificás el campo de cargo al nuevo puesto</li>
+          <li>Registrás la novedad de tipo "Ascenso" o "Cambio de cargo" en <code>/rrhh/novedades</code></li>
+          <li>Subís la carta de ascenso o acuerdo al legajo digital</li>
+          <li>El historial del empleado queda actualizado con el cargo anterior y el nuevo</li>
+        </ol>
+      </div>
+
+      <div class="scenario-card">
+        <div class="scenario-header">
+          <div class="scenario-icon">🚪</div>
+          <div class="scenario-title">Caso 4: Baja de un empleado</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:10px">
+          Un empleado renuncia voluntariamente. Hay que registrar su egreso.
+        </p>
+        <ol class="scenario-steps">
+          <li>Entrás al perfil del empleado en <code>/rrhh/empleados/[id]</code></li>
+          <li>Cambiás el estado a "Baja" e indicás la fecha de egreso y el motivo</li>
+          <li>El sistema registra la novedad de "Baja" automáticamente</li>
+          <li>Archivás los documentos finales (telegrama de renuncia, liquidación) en el legajo</li>
+          <li>El empleado deja de aparecer en la nómina activa (sigue en el historial)</li>
+        </ol>
+      </div>
+
+      <div class="scenario-card">
+        <div class="scenario-header">
+          <div class="scenario-icon">🏥</div>
+          <div class="scenario-title">Caso 5: Licencia médica</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted);margin-bottom:10px">
+          Un empleado avisa que está enfermo y no puede asistir por varios días.
+        </p>
+        <ol class="scenario-steps">
+          <li>RRHH recibe el aviso del empleado (por teléfono o mensaje)</li>
+          <li>Creás una solicitud de tipo "Licencia médica" en su nombre desde <code>/rrhh/solicitudes</code></li>
+          <li>La aprobás y el estado del empleado pasa a "En licencia"</li>
+          <li>Cuando el empleado se reintegra, subís el certificado médico al legajo</li>
+          <li>Actualizás el estado a "Activo" y registrás la novedad de reintegro si corresponde</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ── 12. ERRORES COMUNES ── -->
+    <span class="section-anchor" id="errores"></span>
+    <section class="section">
+      <h2><span class="section-icon">⚠️</span> Errores Comunes</h2>
+
+      <div class="error-card">
+        <div class="error-title">❌ El empleado no puede ver Mi Espacio</div>
+        <div class="error-desc">El empleado dice que no ve la opción "Mi Espacio" en el menú de TOPS Nexus.</div>
+        <div class="error-fix">El usuario no tiene el permiso <code>mi_espacio.view</code> asignado. Entrá a la gestión de usuarios, buscá al empleado y habilitá ese permiso.</div>
+      </div>
+
+      <div class="error-card">
+        <div class="error-title">❌ Solicitud enviada que no aparece en RRHH</div>
+        <div class="error-desc">El empleado afirma haber enviado una solicitud pero el equipo de RRHH no la ve en el listado.</div>
+        <div class="error-fix">Verificá que la solicitud fue efectivamente guardada (no solo completada sin confirmar). Revisá los filtros activos en la vista de solicitudes — puede estar oculta por un filtro de estado o fecha.</div>
+      </div>
+
+      <div class="error-card">
+        <div class="error-title">❌ CUIL duplicado al intentar crear un empleado</div>
+        <div class="error-desc">Al guardar el formulario de nuevo empleado, el sistema muestra un error de CUIL duplicado.</div>
+        <div class="error-fix">Buscá el CUIL en el listado de empleados. Puede que el empleado ya esté cargado con estado "Baja" de un ingreso anterior. En ese caso, en lugar de crear uno nuevo, reactivá el perfil existente.</div>
+      </div>
+
+      <div class="error-card">
+        <div class="error-title">❌ No veo el legajo aunque tengo rrhh.view</div>
+        <div class="error-desc">El usuario tiene acceso a RRHH pero la sección de legajos no aparece o está bloqueada.</div>
+        <div class="error-fix">El acceso a legajos requiere el permiso <code>rrhh.documentacion.view</code> por separado. Es un permiso adicional e independiente. Solicitalo a Administración o al Director.</div>
+      </div>
+
+      <div class="error-card">
+        <div class="error-title">❌ Los KPIs del Dashboard no se actualizan</div>
+        <div class="error-desc">Se dio de alta un empleado pero el contador de "Dotación total" sigue siendo el mismo.</div>
+        <div class="error-fix">Los KPIs se calculan al cargar la página. Refrescá el navegador (F5 o Ctrl+R) para ver los valores actualizados. Si persiste el problema, consultá a Sistemas.</div>
+      </div>
+
+      <div class="error-card">
+        <div class="error-title">❌ Solicitud pendiente sin responder hace varios días</div>
+        <div class="error-desc">El empleado pregunta por su solicitud enviada hace una semana y no tiene respuesta.</div>
+        <div class="error-fix">Ingresá a <code>/rrhh/solicitudes</code> y filtrá por "Pendientes". Puede que haya quedado sin asignar. Revisá quién tiene que aprobarla y gestioná la respuesta.</div>
+      </div>
+    </section>
+
+    <!-- ── 13. FAQ ── -->
+    <span class="section-anchor" id="faq"></span>
+    <section class="section">
+      <h2><span class="section-icon">❓</span> Preguntas Frecuentes</h2>
+
+      <div class="faq-item open">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿Puedo tener acceso a los legajos sin tener acceso a toda la nómina?
+        </div>
+        <div class="faq-a">
+          Sí. El permiso <code>rrhh.documentacion.view</code> es totalmente independiente del
+          permiso <code>rrhh.view</code>. Podés tener uno sin el otro. Por ejemplo, un contador
+          externo podría tener acceso solo a los legajos para auditoría, sin ver la nómina completa.
+          Consultá con el Director para que asigne los permisos correctos en tu perfil.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿Los empleados pueden crear solicitudes ellos mismos?
+        </div>
+        <div class="faq-a">
+          Sí, desde <strong>Mi Espacio</strong>, siempre que tengan el permiso <code>mi_espacio.view</code>. La funcionalidad de creación de solicitudes desde Mi Espacio está marcada como <span class="pending-inline">PENDIENTE</span> de implementación. Mientras tanto, el equipo de RRHH puede crearlas en nombre del empleado desde <code>/rrhh/solicitudes</code>.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿Qué pasa con el empleado dado de baja? ¿Se borra del sistema?
+        </div>
+        <div class="faq-a">
+          No. Los empleados dados de baja <strong>no se eliminan</strong> del sistema. Cambian su estado
+          a "Baja" y dejan de aparecer en la nómina activa, pero todo su historial, novedades y legajo
+          permanecen en el sistema para consulta futura y cumplimiento legal.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿Cómo sé cuántos días de vacaciones tiene disponible un empleado?
+        </div>
+        <div class="faq-a">
+          Ingresá al perfil del empleado en <code>/rrhh/empleados/[id]</code> → sección Vacaciones y Licencias.
+          Ahí aparecen los días disponibles según la antigüedad. El cálculo automático está
+          <span class="pending-inline">PENDIENTE</span>: por ahora puede requerir actualización manual.
+          También podés consultarlo desde el dashboard (KPI "Vacaciones pendientes").
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿Puedo exportar la nómina completa?
+        </div>
+        <div class="faq-a">
+          Sí, si tenés el permiso <code>rrhh.export</code>. El botón "Exportar" aparece en la esquina
+          superior derecha del listado de empleados. Podés exportar en formato Excel o CSV.
+          Esta funcionalidad está <span class="pending-inline">PENDIENTE</span> de desarrollo.
+          Los roles con este permiso son: Director y Administración.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿El módulo RRHH se conecta con la liquidación de sueldos?
+        </div>
+        <div class="faq-a">
+          Por ahora, <strong>no</strong>. TOPS Nexus gestiona la información del personal (nómina, solicitudes, legajos),
+          pero la liquidación de sueldos se realiza en un sistema externo. No hay integración automática
+          entre ambos. La conexión con un sistema de liquidación es un desarrollo futuro.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿Cualquier empleado puede ver los datos de sus compañeros en Mi Espacio?
+        </div>
+        <div class="faq-a">
+          No. Mi Espacio es estrictamente personal: cada empleado solo puede ver su <strong>propia</strong>
+          información. El sistema aplica un filtro de seguridad automático que impide acceder a datos
+          de otros empleados, incluso si se manipula la URL.
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q" onclick="toggleFaq(this)">
+          <span>Q</span>
+          ¿Cómo registro un traslado de empleado entre depósitos?
+        </div>
+        <div class="faq-a">
+          Ingresá al perfil del empleado, modificá el campo "Depósito asignado" al nuevo destino
+          y guardá los cambios. Luego registrá una novedad de tipo "Cambio de depósito" en
+          <code>/rrhh/novedades</code> con la fecha efectiva del traslado y observaciones si corresponde.
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 14. GLOSARIO ── -->
+    <span class="section-anchor" id="glosario"></span>
+    <section class="section">
+      <h2><span class="section-icon">📖</span> Glosario Laboral</h2>
+      <p>Definiciones de los términos más usados en el módulo RRHH.</p>
+
+      <div class="glossary">
+        <div class="gloss-item">
+          <div class="gloss-term">CUIL</div>
+          <div class="gloss-def">Código Único de Identificación Laboral. Número único asignado por AFIP a cada trabajador en Argentina. Formato: XX-XXXXXXXX-X.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Legajo</div>
+          <div class="gloss-def">Conjunto de documentos que conforman el expediente laboral de un empleado. Incluye contrato, DNI, recibos de sueldo y toda la documentación de la relación laboral.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Novedad</div>
+          <div class="gloss-def">Registro de un cambio en la situación laboral de un empleado: alta, baja, ascenso, cambio de cargo o traslado.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Mi Espacio</div>
+          <div class="gloss-def">Portal de autoservicio para empleados dentro de TOPS Nexus. Permite al empleado consultar sus propios datos, solicitudes y vacaciones sin depender de RRHH.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Licencia</div>
+          <div class="gloss-def">Autorización formal para ausentarse del trabajo por un período determinado. Puede ser médica (enfermedad), personal (trámites, familia) u otras categorías.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Vacaciones acumuladas</div>
+          <div class="gloss-def">Días de vacaciones a los que tiene derecho el empleado según su antigüedad y que todavía no tomó. Se acumulan anualmente conforme a la Ley de Contrato de Trabajo.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Dotación</div>
+          <div class="gloss-def">Total de empleados que integran la nómina de la empresa en un momento dado. Incluye activos y personas en licencia; excluye a los dados de baja.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Nómina</div>
+          <div class="gloss-def">Lista completa de todos los empleados de la empresa con sus datos laborales: cargo, depósito, fecha de ingreso y estado. Es el registro maestro del personal.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Alta</div>
+          <div class="gloss-def">Incorporación formal de un nuevo empleado a la nómina. Implica el registro en TOPS Nexus y la notificación a AFIP a través del sistema de liquidación externo.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Baja</div>
+          <div class="gloss-def">Egreso de un empleado de la nómina activa. Puede ser por renuncia, despido, jubilación u otra causa. El empleado queda en el sistema con estado "Baja".</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Ascenso</div>
+          <div class="gloss-def">Promoción de un empleado a un cargo de mayor responsabilidad o jerarquía dentro de la organización.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">rrhh.view</div>
+          <div class="gloss-def">Permiso del sistema que otorga acceso de lectura al módulo RRHH: nómina, solicitudes y novedades. No incluye acceso a legajos ni exportación.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">rrhh.documentacion.view</div>
+          <div class="gloss-def">Permiso independiente que otorga acceso a los legajos digitales de los empleados. Se asigna por separado de rrhh.view.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">mi_espacio.view</div>
+          <div class="gloss-def">Permiso de autoservicio para empleados regulares. Permite acceder solo a los propios datos dentro de Mi Espacio, sin ver información de otros empleados.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <div style="margin-top:60px;padding-top:24px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:gap 12px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">TOPS Nexus — Manual de usuario</div>
+        <div style="font-size:12px;color:var(--text-dim)">Módulo Recursos Humanos · Versión en diseño · Junio 2026</div>
+      </div>
+      <a href="index.html" class="topbar-back" style="flex-shrink:0">← Volver al índice</a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ── Accordion ──
+  function toggleAccordion(btn) {
+    const item = btn.closest('.accordion-item');
+    item.classList.toggle('open');
+  }
+
+  // ── Tabs ──
+  function switchTab(btn, panelId) {
+    const tabsEl = btn.closest('.tabs');
+    tabsEl.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    tabsEl.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(panelId).classList.add('active');
+  }
+
+  // ── FAQ ──
+  function toggleFaq(el) {
+    el.closest('.faq-item').classList.toggle('open');
+  }
+
+  // ── Checklist interactivo ──
+  function toggleCheck(box) {
+    box.classList.toggle('checked');
+    if (box.classList.contains('checked')) {
+      box.textContent = '✓';
+      box.closest('li').classList.add('done');
+    } else {
+      box.textContent = '';
+      box.closest('li').classList.remove('done');
+    }
+    const total = document.querySelectorAll('#checklist-incorporacion .check-box.checked').length;
+    document.getElementById('checklist-count').textContent = total;
+  }
+
+  // ── TOC activo ──
+  const sections = document.querySelectorAll('.section-anchor');
+  const tocLinks = document.querySelectorAll('.toc-list a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        tocLinks.forEach(a => {
+          a.classList.toggle('active', a.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-60px 0px -70% 0px', threshold: 0 });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
