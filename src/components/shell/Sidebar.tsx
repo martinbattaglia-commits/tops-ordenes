@@ -107,6 +107,7 @@ const DOMAINS: Domain[] = [
     id: "comercial",
     label: "Comercial · CRM",
     items: [
+      { href: "/comercial/prospeccion", label: "Prospección", icon: "search", badge: "Nexus" },
       { href: "/comercial/contactos", label: "Contactos", icon: "users", badge: "Clientify" },
       { href: "/comercial/pipeline", label: "Pipeline", icon: "trend-up", badge: "Clientify" },
       { href: "/comercial/tablero", label: "Tablero", icon: "dashboard", badge: "Clientify" },
@@ -231,6 +232,7 @@ export default function Sidebar({
       "/pedidos",
       "/organigrama",
       "/workspace",
+      "/comercial/prospeccion",
       "/comercial/contactos",
       "/comercial/pipeline",
       "/comercial/tablero",
