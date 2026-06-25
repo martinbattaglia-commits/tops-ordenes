@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual de Usuario — Cockpit Ejecutivo | TOPS Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       DESIGN SYSTEM — TOPS NEXUS
+    ═══════════════════════════════════════════════════════ */
+    :root {
+      --navy:        #0f172a;
+      --navy-light:  #1e293b;
+      --navy-mid:    #162032;
+      --blue:        #3b82f6;
+      --blue-dark:   #1d4ed8;
+      --blue-soft:   rgba(59,130,246,0.15);
+      --green:       #22c55e;
+      --green-soft:  rgba(34,197,94,0.12);
+      --amber:       #f59e0b;
+      --amber-soft:  rgba(245,158,11,0.12);
+      --red:         #ef4444;
+      --red-soft:    rgba(239,68,68,0.12);
+      --purple:      #a855f7;
+      --purple-soft: rgba(168,85,247,0.12);
+      --text:        #f8fafc;
+      --text-muted:  #94a3b8;
+      --text-soft:   #cbd5e1;
+      --border:      rgba(255,255,255,0.1);
+      --border-soft: rgba(255,255,255,0.06);
+      --card:        rgba(255,255,255,0.05);
+      --card-hover:  rgba(255,255,255,0.08);
+      --sidebar-w:   280px;
+      --topbar-h:    60px;
+      --radius:      12px;
+      --radius-sm:   8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--navy);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ─── TOPBAR ─────────────────────────────────────────── */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--topbar-h);
+      background: rgba(15,23,42,0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+    }
+
+    .topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 700;
+      font-size: 16px;
+      white-space: nowrap;
+    }
+
+    .topbar-logo .logo-badge {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--blue), var(--blue-dark));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      flex: 1;
+    }
+
+    .breadcrumb a {
+      color: var(--blue);
+      text-decoration: none;
+    }
+
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb-sep { color: var(--border); }
+
+    .topbar-version {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    /* ─── LAYOUT ─────────────────────────────────────────── */
+    .layout {
+      display: flex;
+      min-height: calc(100vh - var(--topbar-h));
+    }
+
+    /* ─── SIDEBAR / TOC ──────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      position: sticky;
+      top: var(--topbar-h);
+      height: calc(100vh - var(--topbar-h));
+      overflow-y: auto;
+      padding: 24px 16px;
+      border-right: 1px solid var(--border-soft);
+      background: var(--navy-mid);
+    }
+
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .toc-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      padding: 0 8px;
+    }
+
+    .toc-list { list-style: none; }
+
+    .toc-item a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 8px;
+      border-radius: var(--radius-sm);
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      transition: all .15s;
+      line-height: 1.3;
+    }
+
+    .toc-item a:hover,
+    .toc-item a.active {
+      background: var(--card-hover);
+      color: var(--text);
+    }
+
+    .toc-item a.active { color: var(--blue); }
+
+    .toc-icon { font-size: 14px; flex-shrink: 0; }
+
+    .toc-divider {
+      height: 1px;
+      background: var(--border-soft);
+      margin: 12px 8px;
+    }
+
+    /* ─── MAIN CONTENT ───────────────────────────────────── */
+    .main {
+      flex: 1;
+      max-width: 900px;
+      padding: 40px 48px 80px;
+      min-width: 0;
+    }
+
+    @media (max-width: 1024px) {
+      .main { padding: 28px 24px 60px; }
+    }
+
+    /* ─── SECTIONS ───────────────────────────────────────── */
+    .section {
+      margin-bottom: 56px;
+    }
+
+    .section-anchor {
+      display: block;
+      position: relative;
+      top: -80px;
+      visibility: hidden;
+    }
+
+    /* ─── HEADINGS ───────────────────────────────────────── */
+    h1 { font-size: 2rem; font-weight: 700; line-height: 1.2; margin-bottom: 12px; }
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-soft);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 12px; }
+    h4 { font-size: .9rem; font-weight: 600; margin-bottom: 8px; color: var(--text-soft); }
+
+    p { margin-bottom: 14px; color: var(--text-soft); }
+    p:last-child { margin-bottom: 0; }
+
+    strong { color: var(--text); font-weight: 600; }
+
+    /* ─── MODULE HEADER ──────────────────────────────────── */
+    .module-header {
+      background: linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(168,85,247,0.08) 100%);
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 48px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .module-header::before {
+      content: '';
+      position: absolute;
+      top: -40px; right: -40px;
+      width: 180px; height: 180px;
+      background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%);
+    }
+
+    .module-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .badge-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-blue { background: var(--blue-soft); color: var(--blue); border: 1px solid rgba(59,130,246,0.25); }
+    .badge-green { background: var(--green-soft); color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
+    .badge-amber { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+    .badge-purple { background: var(--purple-soft); color: var(--purple); border: 1px solid rgba(168,85,247,0.25); }
+    .badge-red { background: var(--red-soft); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+
+    /* ─── CARDS ──────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .card-icon-blue { background: var(--blue-soft); }
+    .card-icon-green { background: var(--green-soft); }
+    .card-icon-amber { background: var(--amber-soft); }
+    .card-icon-purple { background: var(--purple-soft); }
+
+    .card-title { font-size: .95rem; font-weight: 600; }
+    .card-subtitle { font-size: .8rem; color: var(--text-muted); }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    /* ─── ALERTS ─────────────────────────────────────────── */
+    .alert {
+      display: flex;
+      gap: 14px;
+      padding: 16px 20px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+      border-left: 3px solid;
+    }
+
+    .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+    .alert-content { flex: 1; }
+    .alert-title { font-weight: 600; font-size: .9rem; margin-bottom: 4px; }
+    .alert-body { font-size: .875rem; color: var(--text-muted); margin: 0; }
+
+    .alert-warning { background: var(--amber-soft); border-color: var(--amber); }
+    .alert-warning .alert-title { color: var(--amber); }
+
+    .alert-tip { background: var(--blue-soft); border-color: var(--blue); }
+    .alert-tip .alert-title { color: var(--blue); }
+
+    .alert-success { background: var(--green-soft); border-color: var(--green); }
+    .alert-success .alert-title { color: var(--green); }
+
+    .alert-danger { background: var(--red-soft); border-color: var(--red); }
+    .alert-danger .alert-title { color: var(--red); }
+
+    /* ─── TABLES ─────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    thead th {
+      background: var(--navy-light);
+      padding: 10px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody td {
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-soft);
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--card-hover); }
+
+    .check-yes { color: var(--green); font-size: 16px; }
+    .check-no { color: var(--red); font-size: 16px; }
+    .check-partial { color: var(--amber); font-size: 16px; }
+
+    /* ─── STEPS ──────────────────────────────────────────── */
+    .steps { list-style: none; position: relative; }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      left: 18px; top: 24px;
+      bottom: 24px;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--blue), transparent);
+    }
+
+    .step {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .step-num {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--blue-dark);
+      border: 2px solid var(--blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 13px;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .step-body { padding-top: 6px; }
+    .step-label { font-weight: 600; font-size: .95rem; margin-bottom: 4px; }
+    .step-desc { font-size: .875rem; color: var(--text-muted); margin: 0; }
+
+    /* ─── ACCORDIONS ─────────────────────────────────────── */
+    .accordion { margin-bottom: 8px; }
+
+    .accordion-trigger {
+      width: 100%;
+      text-align: left;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 18px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--text);
+      transition: background .15s;
+      font-family: inherit;
+    }
+
+    .accordion-trigger:hover { background: var(--card-hover); }
+    .accordion-trigger.open { border-radius: var(--radius-sm) var(--radius-sm) 0 0; border-bottom-color: transparent; }
+
+    .accordion-arrow { transition: transform .2s; font-size: 12px; color: var(--text-muted); }
+    .accordion-trigger.open .accordion-arrow { transform: rotate(180deg); }
+
+    .accordion-body {
+      display: none;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      padding: 20px;
+    }
+
+    .accordion-body.open { display: block; }
+
+    /* ─── TABS ───────────────────────────────────────────── */
+    .tabs { margin-bottom: 0; }
+
+    .tab-list {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 9px 16px;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all .15s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ─── KPI GRID ───────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .kpi-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-muted);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .kpi-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .kpi-desc { font-size: 11px; color: var(--text-muted); }
+
+    .kpi-blue .kpi-value { color: var(--blue); }
+    .kpi-green .kpi-value { color: var(--green); }
+    .kpi-amber .kpi-value { color: var(--amber); }
+    .kpi-purple .kpi-value { color: var(--purple); }
+
+    /* ─── CHECKLIST ──────────────────────────────────────── */
+    .checklist { list-style: none; }
+
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .checklist-item:last-child { border-bottom: none; }
+
+    .checklist-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      cursor: pointer;
+      accent-color: var(--blue);
+    }
+
+    .checklist-item label {
+      cursor: pointer;
+      font-size: .9rem;
+      color: var(--text-soft);
+      line-height: 1.5;
+    }
+
+    .checklist-item input:checked + label {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    /* ─── FLOWCHART ──────────────────────────────────────── */
+    .flowchart {
+      background: var(--navy-light);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
+    .flow-node {
+      padding: 10px 24px;
+      border-radius: var(--radius-sm);
+      text-align: center;
+      font-weight: 500;
+      line-height: 1.3;
+      min-width: 220px;
+    }
+
+    .flow-node-blue { background: var(--blue-soft); border: 1px solid var(--blue); color: var(--blue); }
+    .flow-node-green { background: var(--green-soft); border: 1px solid var(--green); color: var(--green); }
+    .flow-node-amber { background: var(--amber-soft); border: 1px solid var(--amber); color: var(--amber); }
+    .flow-node-purple { background: var(--purple-soft); border: 1px solid var(--purple); color: var(--purple); }
+
+    .flow-arrow {
+      color: var(--text-muted);
+      font-size: 18px;
+      margin: 4px 0;
+    }
+
+    .flow-row {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .flow-row .flow-arrow { margin: 0; }
+
+    /* ─── CODE ───────────────────────────────────────────── */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem;
+      background: var(--navy-light);
+      border: 1px solid var(--border);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: var(--blue);
+    }
+
+    /* ─── URL PATH ───────────────────────────────────────── */
+    .url-path {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--navy-light);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem;
+      color: var(--green);
+      margin-bottom: 4px;
+    }
+
+    /* ─── DEPOT STATUS ───────────────────────────────────── */
+    .depot-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .depot-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 18px;
+    }
+
+    .depot-name { font-weight: 600; margin-bottom: 4px; }
+    .depot-address { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+
+    .depot-stat {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      padding: 4px 0;
+      color: var(--text-soft);
+    }
+
+    .depot-stat strong { color: var(--text); }
+
+    /* ─── PROGRESS BAR ───────────────────────────────────── */
+    .prog-bar {
+      background: var(--navy-light);
+      height: 6px;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .prog-fill { height: 100%; border-radius: 3px; }
+    .prog-blue { background: var(--blue); }
+    .prog-green { background: var(--green); }
+
+    /* ─── SCENARIO CARDS ─────────────────────────────────── */
+    .scenario {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .scenario-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px; height: 28px;
+      background: var(--blue-dark);
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 10px;
+    }
+
+    .scenario-title { font-weight: 600; font-size: 1rem; margin-bottom: 8px; }
+
+    /* ─── GLOSARIO ───────────────────────────────────────── */
+    .glosario dt {
+      font-weight: 600;
+      color: var(--blue);
+      margin-top: 16px;
+    }
+
+    .glosario dd {
+      color: var(--text-soft);
+      font-size: .9rem;
+      margin-left: 0;
+      padding-left: 16px;
+      border-left: 2px solid var(--blue-soft);
+      margin-top: 4px;
+    }
+
+    /* ─── BACK TO TOP ────────────────────────────────────── */
+    .back-top {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      transition: all .15s;
+      margin-bottom: 24px;
+    }
+
+    .back-top:hover { background: var(--card-hover); color: var(--text); }
+
+    /* ─── FOOTER ─────────────────────────────────────────── */
+    footer {
+      background: var(--navy-light);
+      border-top: 1px solid var(--border);
+      padding: 24px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    footer a { color: var(--blue); text-decoration: none; }
+
+    /* ─── RESPONSIVE ─────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 24px 18px 60px; }
+      footer { padding: 20px 18px; }
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 1.5rem; }
+      .card-grid { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: 1fr; }
+      .flow-row { flex-direction: column; }
+      .flow-row .flow-arrow { transform: rotate(90deg); }
+      footer { flex-direction: column; align-items: flex-start; }
+    }
+
+    /* ─── MISC ───────────────────────────────────────────── */
+    ul.bullet { padding-left: 20px; }
+    ul.bullet li { margin-bottom: 6px; color: var(--text-soft); }
+
+    .divider { height: 1px; background: var(--border-soft); margin: 32px 0; }
+
+    .highlight-row { background: rgba(59,130,246,0.06); }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .pill-blue { background: var(--blue-soft); color: var(--blue); }
+    .pill-green { background: var(--green-soft); color: var(--green); }
+    .pill-amber { background: var(--amber-soft); color: var(--amber); }
+    .pill-red { background: var(--red-soft); color: var(--red); }
+    .pill-gray { background: var(--card); color: var(--text-muted); }
+
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     TOPBAR
+═══════════════════════════════════════════════════════ -->
+<header class="topbar">
+  <a class="topbar-logo" href="index.html">
+    <div class="logo-badge">🏢</div>
+    TOPS Nexus
+  </a>
+  <nav class="breadcrumb">
+    <a href="index.html">Inicio</a>
+    <span class="breadcrumb-sep">›</span>
+    <span>Manual de Módulos</span>
+    <span class="breadcrumb-sep">›</span>
+    <strong style="color: var(--text)">Cockpit Ejecutivo</strong>
+  </nav>
+  <span class="topbar-version">v1.0 — Jun 2026</span>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════
+     LAYOUT
+═══════════════════════════════════════════════════════ -->
+<div class="layout">
+
+  <!-- ─── SIDEBAR ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <p class="toc-title">Contenido</p>
+    <ul class="toc-list">
+      <li class="toc-item"><a href="#intro"><span class="toc-icon">📋</span> Introducción</a></li>
+      <li class="toc-item"><a href="#objetivo"><span class="toc-icon">🎯</span> Objetivo del módulo</a></li>
+      <li class="toc-item"><a href="#roles"><span class="toc-icon">👥</span> ¿Quién puede usarlo?</a></li>
+      <li class="toc-item"><a href="#acceso"><span class="toc-icon">🚀</span> Cómo acceder</a></li>
+      <div class="toc-divider"></div>
+      <li class="toc-item"><a href="#pantallas"><span class="toc-icon">🖥️</span> Pantallas principales</a></li>
+      <li class="toc-item"><a href="#kpis"><span class="toc-icon">📊</span> KPIs y métricas</a></li>
+      <li class="toc-item"><a href="#cctv"><span class="toc-icon">📷</span> Centro CCTV</a></li>
+      <li class="toc-item"><a href="#tracking"><span class="toc-icon">📍</span> Tracking de flota</a></li>
+      <div class="toc-divider"></div>
+      <li class="toc-item"><a href="#ejemplos"><span class="toc-icon">💼</span> Ejemplos prácticos</a></li>
+      <li class="toc-item"><a href="#casos"><span class="toc-icon">📅</span> Casos frecuentes</a></li>
+      <li class="toc-item"><a href="#errores"><span class="toc-icon">⚠️</span> Errores comunes</a></li>
+      <li class="toc-item"><a href="#recomendaciones"><span class="toc-icon">✅</span> Recomendaciones</a></li>
+      <div class="toc-divider"></div>
+      <li class="toc-item"><a href="#flujo"><span class="toc-icon">🔄</span> Flujo visual</a></li>
+      <li class="toc-item"><a href="#checklist"><span class="toc-icon">☑️</span> Checklist</a></li>
+      <li class="toc-item"><a href="#faq"><span class="toc-icon">❓</span> FAQ</a></li>
+      <li class="toc-item"><a href="#glosario"><span class="toc-icon">📖</span> Glosario</a></li>
+    </ul>
+  </aside>
+
+  <!-- ─── MAIN ─────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- ═══ MODULE HEADER ═══ -->
+    <div class="module-header">
+      <div class="module-icon">📊</div>
+      <h1>Cockpit Ejecutivo</h1>
+      <p style="color: var(--text-soft); font-size: 1rem; margin-bottom: 0; max-width: 600px;">
+        Panel de control centralizado para monitorear en tiempo real las métricas financieras, operativas y comerciales de TOPS Logística. Incluye dashboards, seguimiento de flota, cámaras de seguridad y herramientas de análisis exportable.
+      </p>
+      <div class="badge-group">
+        <span class="badge badge-blue">🔒 cockpit.view</span>
+        <span class="badge badge-purple">📤 cockpit.export</span>
+        <span class="badge badge-amber">📷 cctv.view</span>
+        <span class="badge badge-green">📍 tracking.view</span>
+        <span class="badge badge-blue">🏢 sistema.view</span>
+      </div>
+    </div>
+
+    <!-- ═══ 1. INTRODUCCIÓN ═══ -->
+    <span class="section-anchor" id="intro"></span>
+    <section class="section">
+      <h2>📋 Introducción</h2>
+      <p>
+        El <strong>Cockpit Ejecutivo</strong> es el módulo de inteligencia operativa de TOPS Nexus. Reúne en un solo lugar toda la información crítica para la toma de decisiones: cuántas órdenes se procesaron en el mes, cómo están los depósitos, dónde están los vehículos de la flota, qué pasa con la facturación proyectada y mucho más.
+      </p>
+      <p>
+        A diferencia de los módulos operativos (Órdenes, RRHH, ERP), el Cockpit está diseñado para <strong>leer y monitorear</strong>, no para cargar datos. Es la "sala de control" desde la que la Dirección y el equipo de Administración pueden tener una vista 360° del negocio sin necesidad de entrar a cada módulo por separado.
+      </p>
+      <div class="alert alert-tip">
+        <span class="alert-icon">💡</span>
+        <div class="alert-content">
+          <p class="alert-title">¿Para qué sirve de un vistazo?</p>
+          <p class="alert-body">Revisión matutina de métricas, detección temprana de problemas operativos, monitoreo de cámaras de seguridad, seguimiento en tiempo real de la flota y generación de reportes ejecutivos exportables.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 2. OBJETIVO ═══ -->
+    <span class="section-anchor" id="objetivo"></span>
+    <section class="section">
+      <h2>🎯 Objetivo del módulo</h2>
+      <p>
+        El Cockpit resuelve un problema concreto: <strong>la dispersión de información</strong>. Antes de este módulo, un director o gerente de administración necesitaba abrir múltiples sistemas, planillas y reportes para saber cómo estaba el negocio. Con el Cockpit, toda esa información converge en una sola pantalla, actualizada en tiempo real.
+      </p>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon card-icon-blue">📈</div>
+            <div>
+              <div class="card-title">Visión financiera</div>
+              <div class="card-subtitle">Facturación y proyecciones</div>
+            </div>
+          </div>
+          <p style="font-size: .875rem; color: var(--text-muted);">Ver cuánto se facturó, cuánto se proyecta facturar y comparar contra períodos anteriores, sin necesidad de abrir el ERP.</p>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon card-icon-green">⚙️</div>
+            <div>
+              <div class="card-title">Control operativo</div>
+              <div class="card-subtitle">Órdenes y horas trabajadas</div>
+            </div>
+          </div>
+          <p style="font-size: .875rem; color: var(--text-muted);">Conocer el volumen de órdenes del mes, las horas operativas totales y el estado de cada depósito, en tiempo real.</p>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon card-icon-purple">🔍</div>
+            <div>
+              <div class="card-title">Monitoreo de seguridad</div>
+              <div class="card-subtitle">Cámaras y accesos</div>
+            </div>
+          </div>
+          <p style="font-size: .875rem; color: var(--text-muted);">Acceder a las cámaras Hikvision de los depósitos sin salir de TOPS Nexus, con snapshots actualizados de cada canal.</p>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-icon card-icon-amber">🚛</div>
+            <div>
+              <div class="card-title">Flota en tiempo real</div>
+              <div class="card-subtitle">Posición GPS de vehículos</div>
+            </div>
+          </div>
+          <p style="font-size: .875rem; color: var(--text-muted);">Ver sobre un mapa Mapbox dónde está cada unidad, en qué estado se encuentra y consultar información detallada de cada vehículo.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 3. ROLES ═══ -->
+    <span class="section-anchor" id="roles"></span>
+    <section class="section">
+      <h2>👥 ¿Quién puede usarlo?</h2>
+      <p>
+        El acceso al Cockpit depende del <strong>rol asignado en TOPS Nexus</strong>. No todos los usuarios ven las mismas subsecciones. A continuación, la tabla de permisos por rol y subsección:
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Subsección</th>
+              <th>Director</th>
+              <th>Administración</th>
+              <th>Operaciones</th>
+              <th>Comercial</th>
+              <th>Auditor</th>
+              <th>Depósito</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Cockpit Ejecutivo</strong> <code>/ejecutivo</code></td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+            </tr>
+            <tr>
+              <td><strong>Analytics Ejecutivo</strong> <code>/analytics</code></td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-partial">⚠️ Solo vista</td>
+              <td class="check-partial">⚠️ Solo vista</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+            </tr>
+            <tr>
+              <td><strong>Vacancia Corporativa</strong></td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+            </tr>
+            <tr>
+              <td><strong>Centro CCTV</strong> <code>/cctv</code></td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-partial">⚠️ Requiere <code>cctv.view</code></td>
+              <td class="check-no">❌</td>
+              <td class="check-partial">⚠️ Requiere <code>cctv.view</code></td>
+              <td class="check-no">❌</td>
+            </tr>
+            <tr>
+              <td><strong>Tracking de flota</strong> <code>/operaciones/tracking</code></td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+            </tr>
+            <tr>
+              <td><strong>Accesos Google</strong> <code>/workspace</code></td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+            </tr>
+            <tr>
+              <td><strong>Organigrama</strong> <code>/organigrama</code></td>
+              <td class="check-yes">✅</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+              <td class="check-no">❌</td>
+              <td class="check-yes">✅</td>
+              <td class="check-no">❌</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-content">
+          <p class="alert-title">Rol Depósito sin acceso al Cockpit</p>
+          <p class="alert-body">Los usuarios con el rol <strong>Depósito</strong> no tienen acceso a ninguna sección del Cockpit Ejecutivo. Si un operario de depósito necesita consultar información específica, debe solicitarla a su supervisor.</p>
+        </div>
+      </div>
+      <div class="alert alert-tip">
+        <span class="alert-icon">💡</span>
+        <div class="alert-content">
+          <p class="alert-title">Permisos adicionales requeridos</p>
+          <p class="alert-body">Las secciones con ⚠️ requieren que el administrador del sistema habilite permisos específicos además del rol base. Contactar a Sistemas para la asignación.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 4. CÓMO ACCEDER ═══ -->
+    <span class="section-anchor" id="acceso"></span>
+    <section class="section">
+      <h2>🚀 Cómo acceder</h2>
+      <p>El Cockpit Ejecutivo está disponible desde el menú principal de TOPS Nexus, bajo la sección <strong>"Ejecutivo"</strong> del menú lateral izquierdo. Seguí estos pasos:</p>
+
+      <ol class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <p class="step-label">Iniciá sesión en TOPS Nexus</p>
+            <p class="step-desc">Ingresá con tu usuario y contraseña corporativa. El sistema te redirige automáticamente a tu pantalla de inicio según tu rol.</p>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <p class="step-label">Buscá el menú "Cockpit" en la barra lateral</p>
+            <p class="step-desc">En el panel izquierdo, encontrás el bloque <strong>"Cockpit"</strong> con el ícono 📊. Si no lo ves, puede ser que tu rol no tenga acceso. Contactá a Sistemas.</p>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <p class="step-label">Hacé clic en la subsección que necesitás</p>
+            <p class="step-desc">El menú Cockpit se despliega mostrando las opciones habilitadas para tu rol: Cockpit Ejecutivo, Analytics, Vacancia, CCTV, Tracking, Workspace, Organigrama.</p>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <p class="step-label">Esperá que carguen los datos</p>
+            <p class="step-desc">El dashboard carga los datos en tiempo real desde la base de datos y los servicios externos. En conexiones lentas, puede tardar entre 3 y 8 segundos.</p>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">5</div>
+          <div class="step-body">
+            <p class="step-label">Acceso directo por URL</p>
+            <p class="step-desc">También podés ir directamente escribiendo en el navegador la ruta correspondiente. Ejemplo: <span class="url-path">🌐 nexus.logisticatops.com/ejecutivo</span></p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="divider"></div>
+
+      <h3>Rutas de acceso directo</h3>
+      <div class="card-grid">
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="url-path">🌐 /ejecutivo</span>
+          <span class="url-path">🌐 /analytics</span>
+          <span class="url-path">🌐 /comercial/dashboard-vacancia</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="url-path">🌐 /cctv</span>
+          <span class="url-path">🌐 /operaciones/tracking</span>
+          <span class="url-path">🌐 /workspace</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <span class="url-path">🌐 /organigrama</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 5. PANTALLAS PRINCIPALES ═══ -->
+    <span class="section-anchor" id="pantallas"></span>
+    <section class="section">
+      <h2>🖥️ Pantallas principales</h2>
+      <p>El Cockpit está dividido en <strong>siete subsecciones</strong>. Cada una cumple una función específica. A continuación se describe cada pantalla en detalle.</p>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <div class="tab-list">
+          <button class="tab-btn active" onclick="switchTab(event, 'tab-ejecutivo')">📊 Cockpit</button>
+          <button class="tab-btn" onclick="switchTab(event, 'tab-analytics')">📈 Analytics</button>
+          <button class="tab-btn" onclick="switchTab(event, 'tab-vacancia')">🏗️ Vacancia</button>
+          <button class="tab-btn" onclick="switchTab(event, 'tab-cctv')">📷 CCTV</button>
+          <button class="tab-btn" onclick="switchTab(event, 'tab-tracking')">🚛 Tracking</button>
+          <button class="tab-btn" onclick="switchTab(event, 'tab-workspace')">🔗 Workspace</button>
+          <button class="tab-btn" onclick="switchTab(event, 'tab-organigrama')">🏢 Organigrama</button>
+        </div>
+
+        <!-- COCKPIT EJECUTIVO -->
+        <div id="tab-ejecutivo" class="tab-panel active">
+          <h3>Cockpit Ejecutivo — Dashboard principal</h3>
+          <p>Es la pantalla de inicio del módulo. Muestra un resumen visual del desempeño del mes en curso: volumen operativo, métricas financieras, estado de depósitos y las últimas órdenes ingresadas.</p>
+
+          <h4>Elementos de la pantalla</h4>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Elemento</th>
+                  <th>Descripción</th>
+                  <th>Acción posible</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Tarjetas KPI superiores</strong></td>
+                  <td>Órdenes del mes, horas operativas, facturación proyectada, tasa de firma digital</td>
+                  <td>Solo lectura — hover para ver detalle</td>
+                </tr>
+                <tr>
+                  <td><strong>Sparkline (mini gráfico)</strong></td>
+                  <td>Línea de tendencia del KPI en las últimas semanas, dentro de cada tarjeta</td>
+                  <td>Solo visual</td>
+                </tr>
+                <tr>
+                  <td><strong>Top Clientes</strong></td>
+                  <td>Lista de los principales clientes del mes con barras de progreso relativo</td>
+                  <td>Solo lectura</td>
+                </tr>
+                <tr>
+                  <td><strong>Estado por depósito</strong></td>
+                  <td>Cards individuales para Magaldi 1765 ANMAT y Luján 3159 BsAs</td>
+                  <td>Solo lectura</td>
+                </tr>
+                <tr>
+                  <td><strong>DepotChart</strong></td>
+                  <td>Gráfico de barras con cantidad de órdenes procesadas por depósito</td>
+                  <td>Solo visual</td>
+                </tr>
+                <tr>
+                  <td><strong>ServiceMixDonut</strong></td>
+                  <td>Gráfico de dona con la distribución porcentual de tipos de servicio</td>
+                  <td>Solo visual</td>
+                </tr>
+                <tr>
+                  <td><strong>Últimas 6 órdenes</strong></td>
+                  <td>Tabla con las 6 órdenes más recientes ingresadas al sistema</td>
+                  <td>Clic en fila para ver detalle (si tenés permiso de Órdenes)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="alert alert-tip">
+            <span class="alert-icon">💡</span>
+            <div class="alert-content">
+              <p class="alert-title">Período del dashboard</p>
+              <p class="alert-body">Todos los datos del Cockpit corresponden al <strong>mes en curso</strong> por defecto. El período no es modificable desde esta pantalla; para analizar períodos anteriores, usá el módulo Analytics.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ANALYTICS -->
+        <div id="tab-analytics" class="tab-panel">
+          <h3>Analytics Ejecutivo — Reportes avanzados</h3>
+          <p>Permite analizar datos históricos y generar reportes exportables. Está orientado a usuarios de Dirección y Administración que necesitan profundidad analítica.</p>
+
+          <h4>Funcionalidades disponibles</h4>
+          <ul class="bullet">
+            <li>Selección de rango de fechas personalizado</li>
+            <li>Filtros por depósito, tipo de servicio y cliente</li>
+            <li>Gráficos de tendencia histórica</li>
+            <li>Comparación entre períodos</li>
+            <li><strong>Exportación a planilla</strong> (requiere permiso <code>cockpit.export</code>)</li>
+          </ul>
+
+          <div class="alert alert-warning">
+            <span class="alert-icon">⚠️</span>
+            <div class="alert-content">
+              <p class="alert-title">Exportación restringida</p>
+              <p class="alert-body">El botón "Exportar" solo es visible si tu usuario tiene el permiso <code>cockpit.export</code>. Si no aparece, solicitá el permiso a Sistemas.</p>
+            </div>
+          </div>
+
+          <h4>Pasos para exportar un reporte</h4>
+          <ol class="steps">
+            <li class="step">
+              <div class="step-num">1</div>
+              <div class="step-body">
+                <p class="step-label">Ingresá a <code>/analytics</code></p>
+                <p class="step-desc">Seleccioná Analytics Ejecutivo desde el menú lateral.</p>
+              </div>
+            </li>
+            <li class="step">
+              <div class="step-num">2</div>
+              <div class="step-body">
+                <p class="step-label">Configurá los filtros</p>
+                <p class="step-desc">Seleccioná el rango de fechas y los filtros deseados (depósito, cliente, tipo de servicio).</p>
+              </div>
+            </li>
+            <li class="step">
+              <div class="step-num">3</div>
+              <div class="step-body">
+                <p class="step-label">Hacé clic en "Exportar"</p>
+                <p class="step-desc">El sistema genera el archivo (usualmente CSV o XLSX) y lo descarga automáticamente.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <!-- VACANCIA -->
+        <div id="tab-vacancia" class="tab-panel">
+          <h3>Vacancia Corporativa — KPIs de disponibilidad</h3>
+          <p>Panel específico para monitorear la <strong>disponibilidad y ocupación de los espacios</strong> en los depósitos de TOPS. Es especialmente relevante para el equipo Comercial y la Dirección.</p>
+
+          <h4>Indicadores clave</h4>
+          <ul class="bullet">
+            <li><strong>Porcentaje de ocupación</strong> por depósito</li>
+            <li><strong>Superficie disponible</strong> (m²) en cada instalación</li>
+            <li><strong>Proyección de vacancia</strong> para los próximos días</li>
+            <li>Comparativa de ocupación entre depósitos</li>
+          </ul>
+
+          <div class="alert alert-tip">
+            <span class="alert-icon">💡</span>
+            <div class="alert-content">
+              <p class="alert-title">Uso típico</p>
+              <p class="alert-body">El equipo Comercial usa este panel para saber si hay capacidad disponible antes de aceptar un nuevo cliente o ampliar el servicio para uno existente.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- CCTV -->
+        <div id="tab-cctv" class="tab-panel">
+          <h3>Centro de Monitoreo CCTV</h3>
+          <p>Integración con el sistema de cámaras IP <strong>Hikvision</strong> instalado en los depósitos. Permite visualizar snapshots de cada cámara directamente desde TOPS Nexus.</p>
+
+          <h4>Elementos de la pantalla</h4>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Elemento</th>
+                  <th>Descripción</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Grid de cámaras</strong></td>
+                  <td>Grilla con snapshot actualizado de cada canal del NVR Hikvision</td>
+                </tr>
+                <tr>
+                  <td><strong>Nombre del canal</strong></td>
+                  <td>Etiqueta de cada cámara (según configuración en el NVR)</td>
+                </tr>
+                <tr>
+                  <td><strong>Indicador de estado</strong></td>
+                  <td>Verde = cámara online / Rojo = sin señal</td>
+                </tr>
+                <tr>
+                  <td><strong>Health check del NVR</strong></td>
+                  <td>Estado general del grabador de red. Informa si hay problemas de conectividad</td>
+                </tr>
+                <tr>
+                  <td><strong>Última actualización</strong></td>
+                  <td>Timestamp del último snapshot obtenido del NVR</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="alert alert-warning">
+            <span class="alert-icon">⚠️</span>
+            <div class="alert-content">
+              <p class="alert-title">Solo snapshots, no video en vivo</p>
+              <p class="alert-body">La integración muestra <strong>imágenes estáticas actualizadas periódicamente</strong>, no un stream de video en tiempo real. Para video en vivo, accedé directamente al software del NVR Hikvision desde la red interna del depósito.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRACKING -->
+        <div id="tab-tracking" class="tab-panel">
+          <h3>Tracking de Flota</h3>
+          <p>Mapa interactivo construido sobre <strong>Mapbox</strong> que muestra la posición en tiempo real de cada vehículo de la flota de TOPS.</p>
+
+          <h4>Estados de los vehículos</h4>
+          <div class="kpi-grid">
+            <div class="kpi-card kpi-blue">
+              <div class="kpi-label">EN RUTA</div>
+              <div class="kpi-value" style="font-size: 1rem; color: var(--blue);">🔵</div>
+              <div class="kpi-desc">Vehículo en movimiento, realizando una entrega o retiro</div>
+            </div>
+            <div class="kpi-card kpi-green">
+              <div class="kpi-label">ENTREGADO</div>
+              <div class="kpi-value" style="font-size: 1rem; color: var(--green);">🟢</div>
+              <div class="kpi-desc">Orden completada, vehículo en destino confirmando entrega</div>
+            </div>
+            <div class="kpi-card kpi-amber">
+              <div class="kpi-label">RETORNANDO</div>
+              <div class="kpi-value" style="font-size: 1rem; color: var(--amber);">🟡</div>
+              <div class="kpi-desc">Regresando al depósito luego de completar el servicio</div>
+            </div>
+            <div class="kpi-card" style="border-color: var(--border);">
+              <div class="kpi-label">INACTIVO</div>
+              <div class="kpi-value" style="font-size: 1rem; color: var(--text-muted);">⚪</div>
+              <div class="kpi-desc">Vehículo sin movimiento, en depósito o fuera de servicio</div>
+            </div>
+          </div>
+
+          <h4>Panel lateral de información</h4>
+          <p>Al hacer clic sobre el ícono de un vehículo en el mapa, se abre un panel lateral con:</p>
+          <ul class="bullet">
+            <li>Identificación del vehículo (patente / número interno)</li>
+            <li>Estado actual</li>
+            <li>Última posición GPS (dirección aproximada)</li>
+            <li>Hora de la última actualización</li>
+            <li>Orden asignada (si corresponde)</li>
+          </ul>
+
+          <div class="alert alert-tip">
+            <span class="alert-icon">💡</span>
+            <div class="alert-content">
+              <p class="alert-title">Actualización automática</p>
+              <p class="alert-body">Las posiciones se actualizan <strong>en tiempo real via WebSocket</strong>. No es necesario refrescar la página manualmente. Si el indicador de conexión en la parte superior muestra rojo, la actualización está interrumpida — recargá la página.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- WORKSPACE -->
+        <div id="tab-workspace" class="tab-panel">
+          <h3>Accesos Google — Workspace Corporativo</h3>
+          <p>Portal de acceso rápido a los recursos de <strong>Google Drive corporativo</strong> de TOPS. Desde aquí podés acceder a las carpetas y documentos compartidos sin necesidad de ir directamente a drive.google.com.</p>
+
+          <h4>¿Qué incluye?</h4>
+          <ul class="bullet">
+            <li>Accesos directos a las carpetas corporativas más usadas</li>
+            <li>Links organizados por área (Operaciones, Comercial, RRHH, etc.)</li>
+            <li>Documentos compartidos frecuentes</li>
+          </ul>
+
+          <div class="alert alert-tip">
+            <span class="alert-icon">💡</span>
+            <div class="alert-content">
+              <p class="alert-title">Requiere cuenta Google corporativa</p>
+              <p class="alert-body">Para acceder a los documentos de Drive, tu navegador debe tener sesión activa con tu cuenta <strong>@logisticatops.com</strong>. Si se abre Google pidiendo iniciar sesión, ingresá con tu cuenta corporativa.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ORGANIGRAMA -->
+        <div id="tab-organigrama" class="tab-panel">
+          <h3>Organigrama Corporativo</h3>
+          <p>Vista interactiva de la <strong>estructura organizacional de TOPS</strong>. Disponible solo para usuarios con permiso <code>sistema.view</code> (Dirección, Administración y Auditores).</p>
+
+          <h4>Contenido del organigrama</h4>
+          <ul class="bullet">
+            <li>Jerarquía de cargos y departamentos</li>
+            <li>Nombre y foto de cada integrante</li>
+            <li>Líneas de reporte y dependencia funcional</li>
+          </ul>
+
+          <div class="alert alert-warning">
+            <span class="alert-icon">⚠️</span>
+            <div class="alert-content">
+              <p class="alert-title">Acceso solo para admins</p>
+              <p class="alert-body">Si intentás acceder a <code>/organigrama</code> sin el permiso correspondiente, el sistema te redirige automáticamente a la pantalla de inicio. No es un error de la aplicación.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- FIN TABS -->
+    </section>
+
+    <!-- ═══ 6. KPIs Y MÉTRICAS ═══ -->
+    <span class="section-anchor" id="kpis"></span>
+    <section class="section">
+      <h2>📊 KPIs y métricas</h2>
+      <p>Las tarjetas de indicadores que aparecen en el Cockpit Ejecutivo muestran datos calculados automáticamente. A continuación se explica qué significa cada número y cómo interpretarlo:</p>
+
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-blue">
+          <div class="kpi-label">Órdenes del mes</div>
+          <div class="kpi-value">1.248</div>
+          <div class="kpi-desc">Total de órdenes ingresadas al sistema desde el 1° del mes hasta hoy</div>
+        </div>
+        <div class="kpi-card kpi-green">
+          <div class="kpi-label">Horas operativas</div>
+          <div class="kpi-value">4.320</div>
+          <div class="kpi-desc">Suma de horas de trabajo registradas en órdenes ejecutadas en el período</div>
+        </div>
+        <div class="kpi-card kpi-amber">
+          <div class="kpi-label">Facturación proyectada</div>
+          <div class="kpi-value">$12.4M</div>
+          <div class="kpi-desc">Estimación de facturación total del mes, basada en el ritmo actual de órdenes</div>
+        </div>
+        <div class="kpi-card kpi-purple">
+          <div class="kpi-label">Tasa de firma digital</div>
+          <div class="kpi-value">87%</div>
+          <div class="kpi-desc">Porcentaje de órdenes que fueron firmadas digitalmente (vs. papel o pendientes)</div>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          📊 ¿Qué es el sparkline en cada KPI?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Cada tarjeta KPI incluye una pequeña línea de tendencia (sparkline) que muestra la evolución del indicador en las últimas semanas del mes. Permite ver de un vistazo si el valor está creciendo, decreciendo o estable. <strong>No es cliqueable</strong> — es solo visual.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          🏆 ¿Cómo se calculan los "Top Clientes"?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>La sección Top Clientes muestra los clientes con mayor volumen de órdenes en el mes en curso. Las barras de progreso representan el porcentaje relativo de cada cliente respecto al cliente con más órdenes del período. <strong>No representa facturación</strong>, sino cantidad de órdenes.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          🏭 Estado operacional por depósito: ¿qué muestra?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <div class="depot-cards">
+            <div class="depot-card">
+              <div class="depot-name">🏭 Magaldi 1765 — ANMAT</div>
+              <div class="depot-address">Depósito habilitado ANMAT para medicamentos y dispositivos médicos</div>
+              <div class="depot-stat"><span>Órdenes del día</span><strong>34</strong></div>
+              <div class="depot-stat"><span>Personal activo</span><strong>12</strong></div>
+              <div class="depot-stat"><span>Estado</span><strong style="color: var(--green);">Operativo</strong></div>
+              <div class="prog-bar" style="margin-top: 12px;"><div class="prog-fill prog-green" style="width: 78%"></div></div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">78% de capacidad operativa</div>
+            </div>
+            <div class="depot-card">
+              <div class="depot-name">🏭 Luján 3159 — BsAs</div>
+              <div class="depot-address">Depósito general para logística y distribución en Provincia de Buenos Aires</div>
+              <div class="depot-stat"><span>Órdenes del día</span><strong>21</strong></div>
+              <div class="depot-stat"><span>Personal activo</span><strong>8</strong></div>
+              <div class="depot-stat"><span>Estado</span><strong style="color: var(--green);">Operativo</strong></div>
+              <div class="prog-bar" style="margin-top: 12px;"><div class="prog-fill prog-blue" style="width: 62%"></div></div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">62% de capacidad operativa</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          🍩 ServiceMixDonut: ¿qué tipos de servicio hay?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>El gráfico de dona muestra la distribución porcentual de los <strong>tipos de servicio</strong> en las órdenes del mes. Cada segmento del gráfico representa un tipo de servicio (por ejemplo: recepción de mercadería, preparación de pedidos, distribución, devoluciones, etc.). Los porcentajes cambian mensualmente según la demanda. <em>Pendiente de validación: los tipos de servicio exactos dependen de la configuración del sistema.</em></p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          📋 Tabla de últimas 6 órdenes: ¿qué columnas hay?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>La tabla muestra las 6 órdenes más recientes con las siguientes columnas:</p>
+          <ul class="bullet">
+            <li><strong>N° de orden</strong> — Identificador único</li>
+            <li><strong>Cliente</strong> — Nombre del cliente asociado</li>
+            <li><strong>Tipo de servicio</strong> — Categoría de la orden</li>
+            <li><strong>Depósito</strong> — Dónde se ejecuta</li>
+            <li><strong>Fecha de ingreso</strong> — Cuándo fue creada</li>
+            <li><strong>Estado</strong> — Estado actual (Pendiente / En proceso / Completada)</li>
+          </ul>
+          <p>Hacé clic en cualquier fila para navegar al detalle de esa orden (requiere permiso de Órdenes).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 7. CCTV - sección dedicada ═══ -->
+    <span class="section-anchor" id="cctv"></span>
+    <section class="section">
+      <h2>📷 Centro de Monitoreo CCTV</h2>
+      <p>El Centro CCTV integra el sistema de videovigilancia <strong>Hikvision NVR</strong> instalado en los depósitos de TOPS. Permite visualizar el estado de cada cámara sin salir de TOPS Nexus.</p>
+
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-content">
+          <p class="alert-title">Permiso requerido: <code>cctv.view</code></p>
+          <p class="alert-body">Solo los usuarios con el permiso explícito <code>cctv.view</code> pueden acceder a esta sección. Aunque tengas el rol Operaciones o Auditor, si no tenés este permiso adicional, no verás el ítem en el menú.</p>
+        </div>
+      </div>
+
+      <h3>Funcionamiento técnico simplificado</h3>
+      <ol class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <p class="step-label">TOPS Nexus se conecta al NVR Hikvision</p>
+            <p class="step-desc">El servidor de TOPS consulta periódicamente al grabador de red (NVR) instalado en el depósito.</p>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <p class="step-label">Se obtiene un snapshot por canal</p>
+            <p class="step-desc">Para cada cámara (canal) configurada en el NVR, se captura una imagen estática actualizada.</p>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <p class="step-label">Se muestra la grilla de cámaras</p>
+            <p class="step-desc">Las imágenes se presentan en una grilla dentro de TOPS Nexus, con el nombre del canal y el estado de conexión.</p>
+          </div>
+        </li>
+      </ol>
+
+      <div class="alert alert-success">
+        <span class="alert-icon">✅</span>
+        <div class="alert-content">
+          <p class="alert-title">Health Check del NVR</p>
+          <p class="alert-body">En la parte superior de la pantalla CCTV hay un indicador de salud del NVR. Si el estado es <strong>OK</strong> (verde), el grabador está accesible. Si aparece <strong>Sin conexión</strong> (rojo), las imágenes pueden estar desactualizadas — reportar a Sistemas.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 8. TRACKING ═══ -->
+    <span class="section-anchor" id="tracking"></span>
+    <section class="section">
+      <h2>📍 Tracking de Flota</h2>
+      <p>El módulo de tracking muestra en tiempo real la ubicación de cada vehículo de la flota sobre un mapa interactivo construido con <strong>Mapbox</strong>.</p>
+
+      <h3>Cómo usar el mapa</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Acción</th>
+              <th>Cómo hacerla</th>
+              <th>Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Ver posición de un vehículo</td>
+              <td>Clic en el ícono del vehículo en el mapa</td>
+              <td>Se abre el panel lateral con información de la unidad</td>
+            </tr>
+            <tr>
+              <td>Zoom en el mapa</td>
+              <td>Rueda del mouse o botones + / -</td>
+              <td>Acercarse o alejarse del mapa</td>
+            </tr>
+            <tr>
+              <td>Mover el mapa</td>
+              <td>Clic sostenido y arrastrar</td>
+              <td>Navegar por el mapa</td>
+            </tr>
+            <tr>
+              <td>Filtrar por estado</td>
+              <td>Botones de filtro en la barra superior</td>
+              <td>Mostrar solo vehículos en el estado seleccionado</td>
+            </tr>
+            <tr>
+              <td>Cerrar panel lateral</td>
+              <td>Clic en la X del panel o fuera del área</td>
+              <td>Vuelve a la vista del mapa completo</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert alert-tip">
+        <span class="alert-icon">💡</span>
+        <div class="alert-content">
+          <p class="alert-title">Interpretación de íconos en el mapa</p>
+          <p class="alert-body">Cada vehículo aparece representado con un ícono de camión de color según su estado: <strong>azul</strong> = en ruta, <strong>verde</strong> = entregado, <strong>amarillo</strong> = retornando, <strong>gris</strong> = inactivo. Si un ícono parpadea, el sistema recibió una actualización reciente de posición.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 9. EJEMPLOS PRÁCTICOS ═══ -->
+    <span class="section-anchor" id="ejemplos"></span>
+    <section class="section">
+      <h2>💼 Ejemplos prácticos</h2>
+      <p>Situaciones reales del día a día donde el Cockpit Ejecutivo aporta valor concreto.</p>
+
+      <div class="scenario">
+        <div class="scenario-num">1</div>
+        <div class="scenario-title">Revisión matutina de la Dirección</div>
+        <p>Todos los días hábiles a las 8:30 hs, el Director de Operaciones abre TOPS Nexus y entra al Cockpit Ejecutivo. En menos de 2 minutos puede ver:</p>
+        <ul class="bullet">
+          <li>Cuántas órdenes se procesaron ayer y cuántas van en el mes</li>
+          <li>Si algún depósito tiene una anomalía (capacidad operativa baja o inactivo)</li>
+          <li>Cuántos vehículos están en ruta en este momento</li>
+          <li>Las últimas órdenes cargadas para verificar que todo esté ingresando correctamente</li>
+        </ul>
+        <div class="alert alert-success" style="margin-top: 12px;">
+          <span class="alert-icon">✅</span>
+          <div class="alert-content">
+            <p class="alert-title">Resultado</p>
+            <p class="alert-body">El Director tiene una foto del estado del negocio sin necesidad de llamar a nadie ni abrir múltiples sistemas.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="scenario">
+        <div class="scenario-num">2</div>
+        <div class="scenario-title">El equipo Comercial consulta vacancia antes de una reunión</div>
+        <p>Un ejecutivo de cuentas tiene una reunión con un prospecto que necesita 500m² de depósito ANMAT. Antes de la reunión, entra a <strong>Vacancia Corporativa</strong> para verificar la disponibilidad real en Magaldi 1765.</p>
+        <ul class="bullet">
+          <li>Confirma la superficie disponible en el depósito ANMAT</li>
+          <li>Ve la proyección de vacancia para los próximos 30 días</li>
+          <li>Sale a la reunión con información actualizada y confiable</li>
+        </ul>
+        <div class="alert alert-success" style="margin-top: 12px;">
+          <span class="alert-icon">✅</span>
+          <div class="alert-content">
+            <p class="alert-title">Resultado</p>
+            <p class="alert-body">El ejecutivo puede comprometerse (o no) con el prospecto basándose en datos reales, no en estimaciones de memoria.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="scenario">
+        <div class="scenario-num">3</div>
+        <div class="scenario-title">Control de una entrega urgente en tiempo real</div>
+        <p>Un cliente llama preguntando dónde está su entrega. El responsable de Operaciones entra al <strong>Tracking de Flota</strong>, localiza el vehículo asignado a ese cliente y puede responder:</p>
+        <ul class="bullet">
+          <li>La ubicación aproximada del vehículo en ese momento</li>
+          <li>El estado actual (EN_RUTA / ENTREGADO)</li>
+          <li>La hora de la última actualización de posición</li>
+        </ul>
+        <div class="alert alert-success" style="margin-top: 12px;">
+          <span class="alert-icon">✅</span>
+          <div class="alert-content">
+            <p class="alert-title">Resultado</p>
+            <p class="alert-body">Respuesta inmediata al cliente con información precisa, sin necesidad de llamar al chofer ni a otro departamento.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 10. CASOS FRECUENTES ═══ -->
+    <span class="section-anchor" id="casos"></span>
+    <section class="section">
+      <h2>📅 Casos frecuentes</h2>
+      <p>Situaciones típicas del uso cotidiano del Cockpit y cómo resolverlas.</p>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          📊 Los KPIs no muestran datos del mes actual
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Esto puede pasar los primeros días de cada mes. Los datos del nuevo período pueden tardar hasta 2 horas en aparecer si el período anterior se cerró recientemente. Si persiste más de un día hábil, reportar a Sistemas.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          🚛 Un vehículo no aparece en el mapa de tracking
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Si un vehículo está operativo pero no aparece en el mapa, puede deberse a:</p>
+          <ul class="bullet">
+            <li>El dispositivo GPS del vehículo está apagado o sin señal</li>
+            <li>El vehículo no fue dado de alta en el sistema de tracking</li>
+            <li>Está en estado INACTIVO y el filtro de estado lo está ocultando</li>
+          </ul>
+          <p>Verificá los filtros activos y, si el problema persiste, contactar a Sistemas con la patente del vehículo.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          📷 Las cámaras CCTV muestran "Sin imagen"
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Los motivos más comunes son:</p>
+          <ul class="bullet">
+            <li><strong>NVR sin conexión:</strong> verificá el health check en la parte superior de la pantalla</li>
+            <li><strong>Cámara física desconectada:</strong> la cámara puede estar apagada o con cable dañado</li>
+            <li><strong>VPN no activa:</strong> si accedés desde fuera de la red corporativa, puede necesitarse VPN para llegar al NVR</li>
+          </ul>
+          <p>Reportar a Sistemas indicando qué canal/cámara está sin imagen.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          📤 No aparece el botón "Exportar" en Analytics
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>El botón de exportación solo es visible para usuarios con el permiso <code>cockpit.export</code>. Si necesitás exportar reportes, solicitá a Sistemas que asigne ese permiso a tu usuario. No es un error de la aplicación.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          🏢 No veo el Organigrama en el menú
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>El Organigrama requiere el permiso <code>sistema.view</code>. Este permiso está disponible solo para roles de Dirección, Administración y Auditores. Si tu rol debería tenerlo y no lo ves, contactar a Sistemas.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          🔄 El mapa de tracking no se actualiza automáticamente
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>El tracking usa WebSocket para las actualizaciones en tiempo real. Si las posiciones no cambian:</p>
+          <ul class="bullet">
+            <li>Verificá el indicador de conexión en la interfaz (suele aparecer en la barra superior del mapa)</li>
+            <li>Recargá la página con F5 o Ctrl+R</li>
+            <li>Si el problema persiste, puede ser una caída del servicio WebSocket — reportar a Sistemas</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 11. ERRORES COMUNES ═══ -->
+    <span class="section-anchor" id="errores"></span>
+    <section class="section">
+      <h2>⚠️ Errores comunes</h2>
+
+      <div class="alert alert-danger">
+        <span class="alert-icon">🚫</span>
+        <div class="alert-content">
+          <p class="alert-title">Error: "No tenés permisos para ver esta sección"</p>
+          <p class="alert-body"><strong>Causa:</strong> Tu rol o permisos no incluyen el acceso a esa subsección.<br><strong>Solución:</strong> Contactar a Sistemas o a tu responsable para solicitar el permiso correspondiente. Especificá a qué sección necesitás acceder.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-danger">
+        <span class="alert-icon">🚫</span>
+        <div class="alert-content">
+          <p class="alert-title">Error: "No se pudieron cargar los datos del dashboard"</p>
+          <p class="alert-body"><strong>Causa:</strong> Problema de conectividad con la base de datos o el servidor.<br><strong>Solución:</strong> Esperá 30 segundos y recargá la página. Si el error persiste más de 5 minutos, reportar a Sistemas con captura de pantalla.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-danger">
+        <span class="alert-icon">🚫</span>
+        <div class="alert-content">
+          <p class="alert-title">Error: El mapa de tracking aparece en blanco o gris</p>
+          <p class="alert-body"><strong>Causa:</strong> Problema con la carga de los tiles de Mapbox, generalmente por conexión lenta o bloqueador de contenido.<br><strong>Solución:</strong> Verificar que el navegador no bloquea recursos de mapbox.com. Intentar en modo incógnito o en otro navegador.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-danger">
+        <span class="alert-icon">🚫</span>
+        <div class="alert-content">
+          <p class="alert-title">Error: La facturación proyectada muestra $0 o un valor claramente incorrecto</p>
+          <p class="alert-body"><strong>Causa:</strong> Puede indicar que no hay órdenes con precio asignado en el mes, o un problema en el cálculo de proyección.<br><strong>Solución:</strong> Verificar en el módulo de Órdenes si las órdenes del mes tienen tarifa asignada. Si todo parece correcto, reportar a Sistemas con fecha y monto esperado.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-content">
+          <p class="alert-title">Datos inconsistentes entre el Cockpit y el módulo de Órdenes</p>
+          <p class="alert-body"><strong>Causa:</strong> Los datos del Cockpit se calculan con cierto tiempo de latencia (pueden estar hasta 15 minutos desactualizados respecto a los datos en tiempo real del módulo de Órdenes).<br><strong>Solución:</strong> Para datos precisos al instante, usar el módulo de Órdenes. El Cockpit es para visión general, no para auditoría en tiempo real.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 12. RECOMENDACIONES OPERATIVAS ═══ -->
+    <span class="section-anchor" id="recomendaciones"></span>
+    <section class="section">
+      <h2>✅ Recomendaciones operativas</h2>
+      <p>Mejores prácticas para sacarle el máximo provecho al Cockpit Ejecutivo.</p>
+
+      <div class="alert alert-success">
+        <span class="alert-icon">✅</span>
+        <div class="alert-content">
+          <p class="alert-title">Revisión diaria sistemática</p>
+          <p class="alert-body">Establecé una rutina de revisión del Cockpit al inicio de cada jornada. 5 minutos en el dashboard son suficientes para detectar anomalías antes de que se conviertan en problemas mayores.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-success">
+        <span class="alert-icon">✅</span>
+        <div class="alert-content">
+          <p class="alert-title">No confundir el Cockpit con el módulo de Órdenes</p>
+          <p class="alert-body">El Cockpit es para <strong>monitoreo y lectura</strong>. Para crear, editar o gestionar órdenes, siempre usá el módulo de Órdenes. No intentes usar el Cockpit como sistema de carga.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-success">
+        <span class="alert-icon">✅</span>
+        <div class="alert-content">
+          <p class="alert-title">Exportar reportes al cierre del mes</p>
+          <p class="alert-body">Si tenés permiso <code>cockpit.export</code>, exportá el reporte de Analytics en los últimos días de cada mes antes de que el período se cierre. Guardá el archivo en la carpeta corporativa correspondiente en Google Drive.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-success">
+        <span class="alert-icon">✅</span>
+        <div class="alert-content">
+          <p class="alert-title">Usar el tracking para coordinación proactiva</p>
+          <p class="alert-body">No esperar a que los clientes llamen para consultar entregas. Revisá el tracking en los horarios de pico de entregas (generalmente 10-13 hs y 14-17 hs) para anticipar posibles demoras y comunicarlas preventivamente.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-tip">
+        <span class="alert-icon">💡</span>
+        <div class="alert-content">
+          <p class="alert-title">Marcá el Cockpit como favorito en tu navegador</p>
+          <p class="alert-body">Guardá la URL <code>nexus.logisticatops.com/ejecutivo</code> como favorito para acceder rápidamente sin necesidad de navegar por el menú cada vez.</p>
+        </div>
+      </div>
+
+      <div class="alert alert-tip">
+        <span class="alert-icon">💡</span>
+        <div class="alert-content">
+          <p class="alert-title">Pantalla completa para reuniones</p>
+          <p class="alert-body">Durante reuniones de equipo, el Cockpit funciona muy bien en modo pantalla completa (F11) proyectado. Los gráficos son legibles a distancia y ofrecen un punto de partida concreto para la discusión de desempeño.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 13. FLUJO VISUAL ═══ -->
+    <span class="section-anchor" id="flujo"></span>
+    <section class="section">
+      <h2>🔄 Flujo visual del módulo</h2>
+      <p>Diagrama simplificado del flujo de trabajo y navegación dentro del Cockpit Ejecutivo:</p>
+
+      <div class="flowchart">
+        <div class="flow-node flow-node-blue">🔐 Login TOPS Nexus</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node flow-node-blue">🏠 Dashboard principal</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node flow-node-purple">📊 Menú "Cockpit" (sidebar)</div>
+        <div class="flow-arrow">↓</div>
+
+        <div class="flow-row">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <div class="flow-node flow-node-blue" style="font-size: 11px; min-width: 130px;">📊 Cockpit<br>Ejecutivo</div>
+          </div>
+          <div class="flow-arrow">·</div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <div class="flow-node flow-node-green" style="font-size: 11px; min-width: 130px;">📈 Analytics<br>Ejecutivo</div>
+          </div>
+          <div class="flow-arrow">·</div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <div class="flow-node flow-node-amber" style="font-size: 11px; min-width: 130px;">🏗️ Vacancia<br>Corporativa</div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">↕</div>
+
+        <div class="flow-row">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <div class="flow-node flow-node-amber" style="font-size: 11px; min-width: 130px;">📷 Centro<br>CCTV</div>
+          </div>
+          <div class="flow-arrow">·</div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <div class="flow-node flow-node-blue" style="font-size: 11px; min-width: 130px;">🚛 Tracking<br>de Flota</div>
+          </div>
+          <div class="flow-arrow">·</div>
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+            <div class="flow-node flow-node-purple" style="font-size: 11px; min-width: 130px;">🏢 Organigrama<br>(solo admin)</div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node flow-node-green">✅ Monitoreo completo del negocio</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h3>Flujo de uso diario recomendado</h3>
+      <div class="flowchart" style="padding: 24px;">
+        <div class="flow-node flow-node-blue" style="min-width: 300px;">☀️ Inicio del día → Cockpit Ejecutivo</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node flow-node-green" style="min-width: 300px;">📊 Revisar KPIs (2 min)</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-node flow-node-amber" style="min-width: 300px;">🔍 ¿Hay anomalías?</div>
+        <div class="flow-arrow">↓</div>
+        <div class="flow-row">
+          <div class="flow-node flow-node-green" style="font-size: 12px; min-width: 160px;">✅ Todo OK<br>→ Continuar trabajo</div>
+          <div class="flow-arrow">|</div>
+          <div class="flow-node flow-node-amber" style="font-size: 12px; min-width: 160px;">⚠️ Anomalía<br>→ Investigar módulo</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 14. CHECKLIST ═══ -->
+    <span class="section-anchor" id="checklist"></span>
+    <section class="section">
+      <h2>☑️ Checklist de uso</h2>
+      <p>Lista de verificación interactiva. Tildá los ítems a medida que los completás.</p>
+
+      <div class="card">
+        <h3 style="margin-bottom: 16px; font-size: .95rem;">🚀 Primera vez usando el Cockpit</h3>
+        <ul class="checklist">
+          <li class="checklist-item">
+            <input type="checkbox" id="c1" />
+            <label for="c1">Verificar que mi rol tiene acceso al Cockpit (ver tabla de roles en este manual)</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c2" />
+            <label for="c2">Ingresar a <code>/ejecutivo</code> y verificar que carguen los datos correctamente</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c3" />
+            <label for="c3">Identificar mis 4 KPIs principales en las tarjetas superiores</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c4" />
+            <label for="c4">Ver el estado de ambos depósitos (Magaldi y Luján)</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c5" />
+            <label for="c5">Guardar la URL del Cockpit como favorito en el navegador</label>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h3 style="margin-bottom: 16px; font-size: .95rem;">📅 Revisión diaria</h3>
+        <ul class="checklist">
+          <li class="checklist-item">
+            <input type="checkbox" id="c6" />
+            <label for="c6">Abrir el Cockpit al inicio de la jornada (antes de las 9:00 hs)</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c7" />
+            <label for="c7">Verificar que el contador de Órdenes del mes sigue creciendo normalmente</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c8" />
+            <label for="c8">Revisar el estado de los depósitos (verde = operativo)</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c9" />
+            <label for="c9">Consultar el tracking de flota en el horario de pico de entregas</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c10" />
+            <label for="c10">Verificar que las últimas 6 órdenes de la tabla están en proceso normal</label>
+          </li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h3 style="margin-bottom: 16px; font-size: .95rem;">📊 Cierre de mes (Analytics)</h3>
+        <ul class="checklist">
+          <li class="checklist-item">
+            <input type="checkbox" id="c11" />
+            <label for="c11">Ingresar a <code>/analytics</code> los últimos 3 días del mes</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c12" />
+            <label for="c12">Seleccionar el rango completo del mes para el reporte final</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c13" />
+            <label for="c13">Exportar el reporte (requiere permiso <code>cockpit.export</code>)</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c14" />
+            <label for="c14">Guardar el archivo exportado en la carpeta corporativa de Google Drive</label>
+          </li>
+          <li class="checklist-item">
+            <input type="checkbox" id="c15" />
+            <label for="c15">Compartir el reporte con los responsables según el proceso interno</label>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ═══ 15. FAQ ═══ -->
+    <span class="section-anchor" id="faq"></span>
+    <section class="section">
+      <h2>❓ Preguntas frecuentes (FAQ)</h2>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Con qué frecuencia se actualizan los datos del Cockpit?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Los KPIs del Cockpit Ejecutivo se actualizan con una frecuencia de <strong>entre 5 y 15 minutos</strong>. No son datos en tiempo real en el sentido estricto. Para datos al instante, utilizá el módulo de Órdenes o el módulo específico de cada área. El tracking de flota, en cambio, usa WebSocket y se actualiza en tiempo real mientras la conexión esté activa.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Puedo acceder al Cockpit desde mi celular?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Sí. TOPS Nexus, incluyendo el Cockpit, tiene diseño responsive y funciona en navegadores móviles (Chrome, Safari). En pantallas pequeñas, el menú lateral se colapsa en un botón de hamburguesa. Algunas vistas como el mapa de tracking pueden ser más incómodas de usar en móvil, pero son funcionales. Para una experiencia óptima, se recomienda usar en computadora de escritorio o laptop.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Qué hago si el valor de facturación proyectada parece incorrecto?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>El dato de facturación proyectada se calcula automáticamente en función del ritmo de órdenes con precio asignado en el mes. Si el valor parece incorrecto:</p>
+          <ul class="bullet">
+            <li>Verificar en Órdenes que las órdenes del mes tengan tarifa cargada</li>
+            <li>Comparar contra el reporte del mes anterior en Analytics</li>
+            <li>Si hay una discrepancia inexplicable, reportar a Administración con el valor esperado y el valor mostrado</li>
+          </ul>
+          <p><em>Recordar que es una proyección, no un dato de facturación real confirmado.</em></p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Puedo cambiar el período de los KPIs para ver otro mes?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>No directamente desde el Cockpit Ejecutivo. Las tarjetas KPI siempre muestran el <strong>mes en curso</strong>. Para analizar períodos anteriores, usá el módulo <strong>Analytics Ejecutivo</strong> donde podés seleccionar cualquier rango de fechas.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Qué pasa si un vehículo en el mapa no se mueve desde hace horas?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Puede significar varias cosas:</p>
+          <ul class="bullet">
+            <li><strong>Vehículo genuinamente detenido:</strong> está esperando, cargando o descargando</li>
+            <li><strong>GPS sin señal:</strong> el dispositivo perdió señal GPS (túneles, garajes, zonas rurales)</li>
+            <li><strong>Dispositivo GPS apagado:</strong> el vehículo apagó el dispositivo</li>
+            <li><strong>Problema técnico:</strong> el dispositivo dejó de enviar datos</li>
+          </ul>
+          <p>Para determinar cuál es el caso, contactar directamente al chofer. Si el problema es recurrente con un vehículo específico, reportar a Sistemas con el identificador del vehículo.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Los datos del Cockpit son los mismos que ve todo el mundo?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Sí. Los KPIs y datos del Cockpit <strong>no se filtran por usuario</strong>; muestran la información global de la empresa (o del alcance de tu rol). Todos los usuarios que tengan acceso al Cockpit ven los mismos números. No hay vistas personalizadas por usuario en esta versión.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Puedo solicitar nuevos indicadores en el Cockpit?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Sí. Si identificás una métrica que sería valiosa para el seguimiento del negocio y no está disponible en el Cockpit actual, podés elevar una solicitud a Sistemas a través del canal habitual de pedidos de mejoras. Se evaluará la viabilidad técnica y la prioridad dentro del roadmap del producto.</p>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          ¿Qué significa "tasa de firma digital"?
+          <span class="accordion-arrow">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>La <strong>tasa de firma digital</strong> es el porcentaje de órdenes del mes que fueron confirmadas o firmadas de forma digital a través del sistema (en contraposición a procesos manuales en papel o pendientes de confirmación). Un valor alto (cercano al 100%) indica que los procesos están siendo registrados correctamente en el sistema. Un valor bajo puede indicar que algunos clientes o depósitos todavía están usando procesos manuales que no se reflejan digitalmente.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 16. GLOSARIO ═══ -->
+    <span class="section-anchor" id="glosario"></span>
+    <section class="section">
+      <h2>📖 Glosario</h2>
+      <p>Términos específicos del módulo Cockpit y del sistema TOPS Nexus.</p>
+
+      <dl class="glosario">
+
+        <dt>Cockpit Ejecutivo</dt>
+        <dd>Panel de control centralizado del sistema TOPS Nexus, diseñado para la visualización en tiempo real de métricas financieras, operativas y comerciales. No permite modificar datos, solo consultarlos.</dd>
+
+        <dt>KPI (Key Performance Indicator)</dt>
+        <dd>Indicador clave de desempeño. Número o porcentaje que mide el rendimiento de un aspecto específico del negocio (órdenes, facturación, horas operativas, etc.).</dd>
+
+        <dt>Sparkline</dt>
+        <dd>Pequeño gráfico de línea minimalista que aparece dentro de cada tarjeta KPI. Muestra la tendencia del indicador en las últimas semanas sin tomar demasiado espacio en la pantalla.</dd>
+
+        <dt>DepotChart</dt>
+        <dd>Nombre interno del componente gráfico que muestra el volumen de órdenes procesadas por depósito. Es un gráfico de barras que permite comparar el desempeño de Magaldi y Luján.</dd>
+
+        <dt>ServiceMixDonut</dt>
+        <dd>Nombre interno del componente gráfico de dona (anillo) que muestra la distribución porcentual de los distintos tipos de servicio en las órdenes del período.</dd>
+
+        <dt>NVR (Network Video Recorder)</dt>
+        <dd>Grabador de video en red. Dispositivo hardware instalado en los depósitos de TOPS que recibe y almacena las señales de las cámaras IP Hikvision. TOPS Nexus se conecta a este dispositivo para obtener los snapshots de las cámaras.</dd>
+
+        <dt>Hikvision</dt>
+        <dd>Marca de cámaras de videovigilancia y grabadores de red (NVR) utilizada en los depósitos de TOPS. Las cámaras están integradas al módulo CCTV de TOPS Nexus.</dd>
+
+        <dt>Snapshot</dt>
+        <dd>Captura de imagen estática de una cámara en un momento determinado. En el módulo CCTV, los snapshots se actualizan periódicamente para mostrar el estado actual de cada cámara.</dd>
+
+        <dt>Mapbox</dt>
+        <dd>Plataforma de mapas interactivos utilizada en el módulo de Tracking de Flota. Provee la cartografía sobre la que se muestran las posiciones de los vehículos.</dd>
+
+        <dt>WebSocket</dt>
+        <dd>Tecnología de comunicación en tiempo real entre el navegador y el servidor. El módulo de Tracking usa WebSocket para recibir actualizaciones de posición de los vehículos sin necesidad de recargar la página.</dd>
+
+        <dt>cockpit.view</dt>
+        <dd>Permiso de sistema requerido para acceder a las subsecciones principales del Cockpit (Cockpit Ejecutivo, Analytics, Vacancia, Tracking). Se asigna junto con el rol o de forma individual.</dd>
+
+        <dt>cockpit.export</dt>
+        <dd>Permiso adicional requerido para usar la funcionalidad de exportación en Analytics Ejecutivo. Permite descargar reportes en formato de planilla.</dd>
+
+        <dt>cctv.view</dt>
+        <dd>Permiso específico requerido para acceder al Centro de Monitoreo CCTV. No se incluye automáticamente en todos los roles con <code>cockpit.view</code>.</dd>
+
+        <dt>sistema.view</dt>
+        <dd>Permiso de sistema requerido para acceder a la sección Organigrama. Disponible solo para roles de Dirección, Administración y Auditores.</dd>
+
+        <dt>Vacancia</dt>
+        <dd>En el contexto logístico de TOPS, se refiere a la disponibilidad (espacio libre) en los depósitos. El módulo de Vacancia Corporativa muestra cuánta capacidad de almacenamiento está disponible en cada instalación.</dd>
+
+        <dt>Estado operacional por depósito</dt>
+        <dd>Sección del Cockpit Ejecutivo que muestra cards individuales para cada depósito (Magaldi 1765 ANMAT y Luján 3159 BsAs), con métricas de actividad y una barra de capacidad operativa.</dd>
+
+        <dt>Facturación proyectada</dt>
+        <dd>Estimación del total a facturar en el mes, calculada automáticamente en función del ritmo de órdenes con precio asignado hasta la fecha. No es un dato confirmado, sino una proyección.</dd>
+
+        <dt>Tasa de firma digital</dt>
+        <dd>Porcentaje de órdenes del mes confirmadas o firmadas a través del sistema digital, respecto al total de órdenes. Mide la adherencia al proceso digital vs. procesos manuales en papel.</dd>
+
+        <dt>EN_RUTA / ENTREGADO / RETORNANDO / INACTIVO</dt>
+        <dd>Los cuatro estados posibles de un vehículo en el módulo de Tracking de Flota. Definen la situación operativa actual de cada unidad y se representan con colores distintos en el mapa (azul, verde, amarillo, gris respectivamente).</dd>
+
+      </dl>
+    </section>
+
+    <!-- ─── BACK TO INDEX ─────────────────────────────── -->
+    <div style="margin-top: 48px; display: flex; justify-content: flex-start;">
+      <a class="back-top" href="index.html">
+        ← Volver al índice de manuales
+      </a>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════ -->
+<footer>
+  <div>
+    <strong style="color: var(--text);">TOPS Nexus</strong> — Manual de Usuario
+    &nbsp;·&nbsp;
+    Módulo: Cockpit Ejecutivo
+    &nbsp;·&nbsp;
+    Versión 1.0 — Junio 2026
+  </div>
+  <div>
+    © 2026 TOPS Logística. Todos los derechos reservados.
+    &nbsp;·&nbsp;
+    <a href="index.html">Índice de manuales</a>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPTS
+═══════════════════════════════════════════════════════ -->
+<script>
+  /* ── Accordions ── */
+  function toggleAccordion(trigger) {
+    const body = trigger.nextElementSibling;
+    const isOpen = trigger.classList.contains('open');
+
+    // Close all accordions in the same group
+    const parent = trigger.closest('section') || document.body;
+    parent.querySelectorAll('.accordion-trigger.open').forEach(t => {
+      t.classList.remove('open');
+      t.nextElementSibling.classList.remove('open');
+    });
+
+    if (!isOpen) {
+      trigger.classList.add('open');
+      body.classList.add('open');
+    }
+  }
+
+  /* ── Tabs ── */
+  function switchTab(event, tabId) {
+    const tabList = event.target.closest('.tab-list');
+    const tabsContainer = tabList.closest('.tabs');
+
+    // Deactivate all tabs
+    tabList.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    tabsContainer.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+
+    // Activate selected
+    event.target.classList.add('active');
+    const panel = document.getElementById(tabId);
+    if (panel) panel.classList.add('active');
+  }
+
+  /* ── Active TOC on scroll ── */
+  const sections = document.querySelectorAll('.section-anchor');
+  const tocLinks = document.querySelectorAll('.toc-item a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        tocLinks.forEach(link => {
+          link.classList.remove('active');
+          if (link.getAttribute('href') === `#${id}`) {
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, {
+    rootMargin: '-60px 0px -80% 0px'
+  });
+
+  sections.forEach(section => observer.observe(section));
+</script>
+
+</body>
+</html>

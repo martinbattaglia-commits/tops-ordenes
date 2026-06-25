@@ -1,0 +1,2007 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comercial y CRM — Manual TOPS Nexus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0f172a;
+    --navy-light: #1e293b;
+    --navy-mid: #162032;
+    --blue: #3b82f6;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --purple: #a855f7;
+    --purple-light: #c084fc;
+    --purple-dim: rgba(168,85,247,0.15);
+    --purple-border: rgba(168,85,247,0.35);
+    --text: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --border: rgba(255,255,255,0.08);
+    --border-soft: rgba(255,255,255,0.05);
+    --card: rgba(255,255,255,0.04);
+    --card-hover: rgba(255,255,255,0.07);
+    --sidebar-w: 260px;
+    --header-h: 58px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--navy);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: var(--header-h);
+    background: rgba(15,23,42,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 16px;
+  }
+  .header-back {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    transition: all .18s;
+    white-space: nowrap;
+  }
+  .header-back:hover { color: var(--text); border-color: var(--purple-border); background: var(--purple-dim); }
+  .header-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+    flex: 1;
+  }
+  .header-breadcrumb span { color: var(--text-dim); }
+  .header-breadcrumb .current { color: var(--purple-light); font-weight: 600; }
+  .header-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--purple-light);
+    background: var(--purple-dim);
+    border: 1px solid var(--purple-border);
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: grid;
+    grid-template-columns: var(--sidebar-w) 1fr;
+    min-height: calc(100vh - var(--header-h));
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: sticky;
+    top: var(--header-h);
+    height: calc(100vh - var(--header-h));
+    overflow-y: auto;
+    padding: 24px 16px;
+    border-right: 1px solid var(--border);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .toc-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--text-dim);
+    padding: 0 8px;
+    margin-bottom: 12px;
+  }
+  .toc-section { margin-bottom: 4px; }
+  .toc-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 7px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 13px;
+    transition: all .15s;
+    line-height: 1.3;
+  }
+  .toc-link:hover { color: var(--text); background: var(--card); }
+  .toc-link.active { color: var(--purple-light); background: var(--purple-dim); font-weight: 500; }
+  .toc-link .toc-icon { font-size: 14px; flex-shrink: 0; }
+  .toc-sub { padding-left: 26px; }
+  .toc-sub .toc-link { font-size: 12px; padding: 4px 8px; }
+  .toc-divider { height: 1px; background: var(--border); margin: 10px 8px; }
+
+  /* ── MAIN CONTENT ── */
+  .main {
+    padding: 40px 48px 80px;
+    max-width: 900px;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    margin-bottom: 48px;
+    padding: 36px 40px;
+    background: linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(59,130,246,0.06) 100%);
+    border: 1px solid var(--purple-border);
+    border-radius: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -60px;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(168,85,247,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--purple-light);
+    background: var(--purple-dim);
+    border: 1px solid var(--purple-border);
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #fff 0%, var(--purple-light) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero p {
+    color: var(--text-muted);
+    font-size: 15px;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+  .hero-meta {
+    display: flex;
+    gap: 24px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .hero-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .hero-meta-item strong { color: var(--text); font-weight: 600; }
+
+  /* ── SECTIONS ── */
+  .section { margin-bottom: 56px; scroll-margin-top: calc(var(--header-h) + 24px); }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-icon {
+    font-size: 22px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--purple-dim);
+    border: 1px solid var(--purple-border);
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .section-title { font-size: 22px; font-weight: 700; }
+  .section-subtitle { color: var(--text-muted); font-size: 13px; margin-top: 2px; }
+
+  h2 { font-size: 20px; font-weight: 700; margin-bottom: 14px; }
+  h3 { font-size: 16px; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+  h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--purple-light); }
+  p { margin-bottom: 14px; color: var(--text-muted); }
+  p:last-child { margin-bottom: 0; }
+  strong { color: var(--text); font-weight: 600; }
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: rgba(168,85,247,0.12);
+    color: var(--purple-light);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--purple-border);
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all .18s;
+  }
+  .card:hover { background: var(--card-hover); border-color: rgba(255,255,255,0.12); }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+  .card-icon { font-size: 24px; margin-bottom: 10px; }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .card-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+  .card-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-top: 8px;
+  }
+  .badge-purple { background: var(--purple-dim); color: var(--purple-light); border: 1px solid var(--purple-border); }
+  .badge-blue { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+  .badge-green { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+  .badge-amber { background: rgba(245,158,11,0.12); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+  .badge-red { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; margin-bottom: 20px; border-radius: 12px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: var(--navy-light); }
+  th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border-soft);
+    color: var(--text-muted);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--card); }
+  td strong { color: var(--text); }
+  .perm-yes { color: var(--green); font-weight: 600; }
+  .perm-no { color: var(--text-dim); }
+  .perm-ro { color: var(--amber); font-weight: 600; }
+
+  /* ── ALERTS ── */
+  .alert {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .alert-body { flex: 1; }
+  .alert-body strong { display: block; margin-bottom: 3px; font-size: 13px; }
+  .alert-info { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.25); color: #93c5fd; }
+  .alert-success { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25); color: #86efac; }
+  .alert-warning { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); color: #fcd34d; }
+  .alert-error { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #fca5a5; }
+  .alert-purple { background: var(--purple-dim); border: 1px solid var(--purple-border); color: var(--purple-light); }
+
+  /* ── ACCORDION ── */
+  .accordion { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+  .accordion-item { border-bottom: 1px solid var(--border); }
+  .accordion-item:last-child { border-bottom: none; }
+  .accordion-trigger {
+    width: 100%;
+    padding: 14px 18px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    font-family: inherit;
+    transition: background .15s;
+  }
+  .accordion-trigger:hover { background: var(--card); }
+  .accordion-trigger.open { background: var(--card); color: var(--purple-light); }
+  .acc-left { display: flex; align-items: center; gap: 10px; }
+  .acc-icon { font-size: 16px; }
+  .acc-arrow { color: var(--text-dim); font-size: 12px; transition: transform .2s; flex-shrink: 0; }
+  .accordion-trigger.open .acc-arrow { transform: rotate(180deg); }
+  .accordion-body { display: none; padding: 16px 18px; background: rgba(0,0,0,0.15); font-size: 13px; color: var(--text-muted); line-height: 1.65; }
+  .accordion-body.open { display: block; }
+  .accordion-body p { margin-bottom: 10px; }
+  .accordion-body p:last-child { margin-bottom: 0; }
+  .accordion-body ul { padding-left: 20px; margin-bottom: 10px; }
+  .accordion-body li { margin-bottom: 5px; }
+
+  /* ── TABS ── */
+  .tabs { margin-bottom: 24px; }
+  .tab-nav {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tab-nav::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    padding: 10px 18px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-family: inherit;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all .15s;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--purple-light); border-bottom-color: var(--purple); }
+  .tab-pane { display: none; padding-top: 20px; }
+  .tab-pane.active { display: block; }
+
+  /* ── FLOW DIAGRAM ── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 24px 0;
+    overflow-x: auto;
+    padding: 4px 0;
+  }
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .flow-bubble {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--navy-light);
+    border: 2px solid var(--purple-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    position: relative;
+    transition: all .2s;
+  }
+  .flow-bubble:hover { border-color: var(--purple); background: var(--purple-dim); transform: scale(1.05); }
+  .flow-num {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--purple-light);
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: var(--navy);
+    padding: 1px 4px;
+    border-radius: 4px;
+  }
+  .flow-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 76px;
+    line-height: 1.3;
+  }
+  .flow-arrow {
+    font-size: 18px;
+    color: var(--purple-border);
+    flex-shrink: 0;
+    margin: 0 4px;
+    padding-bottom: 24px;
+  }
+
+  /* ── CHECKLIST ── */
+  .checklist { list-style: none; margin-bottom: 16px; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background .15s;
+    user-select: none;
+  }
+  .checklist li:hover { background: var(--card); }
+  .checklist li.checked { color: var(--text-dim); text-decoration: line-through; }
+  .checklist li .check-box {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-radius: 5px;
+    flex-shrink: 0;
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    transition: all .15s;
+  }
+  .checklist li.checked .check-box { background: var(--green); border-color: var(--green); color: #fff; }
+
+  /* ── COMPONENT CARDS (tablero) ── */
+  .component-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .component-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    transition: all .15s;
+  }
+  .component-card:hover { border-color: var(--purple-border); background: var(--purple-dim); }
+  .component-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; }
+  .component-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+  /* ── STAGES ── */
+  .stage-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .stage-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .stage-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .stage-name { font-size: 14px; font-weight: 600; flex: 1; }
+  .stage-desc { font-size: 12px; color: var(--text-muted); }
+
+  /* ── SYNC STATUS ── */
+  .sync-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .sync-cell {
+    background: var(--navy);
+    padding: 16px;
+    text-align: center;
+  }
+  .sync-cell-label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; }
+  .sync-cell-value { font-size: 20px; font-weight: 700; }
+
+  /* ── CASE STUDIES ── */
+  .case-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 12px;
+  }
+  .case-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .case-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--purple-dim);
+    border: 1px solid var(--purple-border);
+    color: var(--purple-light);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .case-title { font-size: 14px; font-weight: 600; }
+  .case-body { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+  /* ── GLOSARIO ── */
+  .glossary { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .gloss-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .gloss-term { font-size: 13px; font-weight: 700; color: var(--purple-light); margin-bottom: 5px; }
+  .gloss-def { font-size: 12px; color: var(--text-muted); line-height: 1.55; }
+
+  /* ── INSIGHT BOX ── */
+  .insight-box {
+    background: linear-gradient(135deg, rgba(168,85,247,0.08) 0%, rgba(59,130,246,0.05) 100%);
+    border: 1px solid var(--purple-border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .insight-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .insight-title { font-size: 15px; font-weight: 700; }
+
+  /* ── STEP LIST ── */
+  .step-list { list-style: none; }
+  .step-item {
+    display: flex;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .step-item:last-child { border-bottom: none; }
+  .step-n {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--purple-dim);
+    border: 1px solid var(--purple-border);
+    color: var(--purple-light);
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-content { flex: 1; }
+  .step-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .step-desc { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 24px 20px 60px; }
+    .hero { padding: 24px 20px; }
+    .hero h1 { font-size: 24px; }
+    .card-grid { grid-template-columns: 1fr; }
+    .sync-card { grid-template-columns: 1fr; }
+    .component-grid { grid-template-columns: 1fr; }
+    .glossary { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ HEADER ══════════════ -->
+<header class="site-header">
+  <a href="index.html" class="header-back">← Inicio</a>
+  <nav class="header-breadcrumb">
+    <span>Inicio</span>
+    <span>›</span>
+    <span class="current">Comercial y CRM</span>
+  </nav>
+  <div class="header-badge">🟣 Módulo Comercial</div>
+</header>
+
+<!-- ══════════════ LAYOUT ══════════════ -->
+<div class="layout">
+
+  <!-- ── SIDEBAR TOC ── -->
+  <aside class="sidebar">
+    <div class="toc-title">Contenidos</div>
+
+    <div class="toc-section">
+      <a href="#objetivo" class="toc-link"><span class="toc-icon">🎯</span>Objetivo del módulo</a>
+      <a href="#permisos" class="toc-link"><span class="toc-icon">🔐</span>Quién puede usarlo</a>
+      <a href="#clientify" class="toc-link"><span class="toc-icon">🔗</span>Integración Clientify</a>
+    </div>
+    <div class="toc-divider"></div>
+    <div class="toc-section">
+      <a href="#tablero" class="toc-link"><span class="toc-icon">📊</span>Tablero Comercial</a>
+      <div class="toc-sub">
+        <a href="#resumen-ejecutivo" class="toc-link">Executive Summary</a>
+        <a href="#matriz" class="toc-link">Priority Matrix</a>
+        <a href="#otros-componentes" class="toc-link">Otros componentes</a>
+        <a href="#auto-insights" class="toc-link">Auto-Insights IA</a>
+      </div>
+    </div>
+    <div class="toc-divider"></div>
+    <div class="toc-section">
+      <a href="#pipeline" class="toc-link"><span class="toc-icon">🔀</span>Pipeline</a>
+      <a href="#contactos" class="toc-link"><span class="toc-icon">👥</span>Contactos</a>
+      <a href="#oportunidades" class="toc-link"><span class="toc-icon">💡</span>Oportunidades</a>
+      <a href="#contratos" class="toc-link"><span class="toc-icon">📄</span>Contratos</a>
+      <a href="#mapas" class="toc-link"><span class="toc-icon">🗺️</span>Mapas de cobertura</a>
+      <a href="#herramientas" class="toc-link"><span class="toc-icon">🛠️</span>Herramientas</a>
+    </div>
+    <div class="toc-divider"></div>
+    <div class="toc-section">
+      <a href="#sincronizacion" class="toc-link"><span class="toc-icon">🔄</span>Sincronización</a>
+      <a href="#flujo" class="toc-link"><span class="toc-icon">➡️</span>Flujo comercial</a>
+      <a href="#checklist" class="toc-link"><span class="toc-icon">✅</span>Checklist cierre</a>
+      <a href="#casos" class="toc-link"><span class="toc-icon">📋</span>Casos frecuentes</a>
+      <a href="#errores" class="toc-link"><span class="toc-icon">⚠️</span>Errores comunes</a>
+      <a href="#faq" class="toc-link"><span class="toc-icon">❓</span>Preguntas frecuentes</a>
+      <a href="#glosario" class="toc-link"><span class="toc-icon">📖</span>Glosario</a>
+    </div>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="hero-tag">🟣 Sección Comercial</div>
+      <h1>Comercial y CRM</h1>
+      <p>Gestioná todo el ciclo de venta: desde el primer contacto hasta la firma del contrato. Este módulo centraliza el pipeline, los KPIs comerciales y la relación con clientes potenciales, sincronizado en tiempo real con Clientify.</p>
+      <div class="hero-meta">
+        <div class="hero-meta-item">🔗 <strong>URL:</strong> /comercial</div>
+        <div class="hero-meta-item">🔑 <strong>Permisos:</strong> comercial.view / comercial.edit</div>
+        <div class="hero-meta-item">🔄 <strong>Sync:</strong> Clientify · 21:00 diaria</div>
+        <div class="hero-meta-item">🟣 <strong>Acento:</strong> Violeta / Púrpura</div>
+      </div>
+    </div>
+
+    <!-- ══════════════ OBJETIVO ══════════════ -->
+    <section class="section" id="objetivo">
+      <div class="section-header">
+        <div class="section-icon">🎯</div>
+        <div>
+          <div class="section-title">Objetivo del módulo</div>
+          <div class="section-subtitle">Para qué sirve Comercial en TOPS Nexus</div>
+        </div>
+      </div>
+      <p>El módulo <strong>Comercial y CRM</strong> es el centro de comando para todo el equipo de ventas y dirección de TOPS Logística. Permite ver en un solo lugar el estado del pipeline, analizar oportunidades, generar propuestas y medir el desempeño comercial.</p>
+      <p>Se conecta directamente con <strong>Clientify</strong> (el CRM externo de la empresa) para traer automáticamente los contactos, deals y empresas, sin necesidad de cargar nada manualmente en Nexus.</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <div class="card-title">Visión unificada</div>
+          <div class="card-desc">Todos los KPIs comerciales en un solo tablero: oportunidades, forecast, tasa de cierre y alertas.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔄</div>
+          <div class="card-title">Sincronización automática</div>
+          <div class="card-desc">Los datos de Clientify llegan solos todos los días a las 21:00. También hay webhooks para actualizaciones en tiempo real.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🤖</div>
+          <div class="card-title">Insights de IA</div>
+          <div class="card-desc">El sistema analiza el pipeline y sugiere acciones: qué oportunidad priorizar, qué cliente está en riesgo de perderse.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📄</div>
+          <div class="card-title">Propuestas y contratos</div>
+          <div class="card-desc">Generá propuestas en Google Sheets con un clic y gestioná la cartera de contratos activos.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ PERMISOS ══════════════ -->
+    <section class="section" id="permisos">
+      <div class="section-header">
+        <div class="section-icon">🔐</div>
+        <div>
+          <div class="section-title">¿Quién puede usarlo?</div>
+          <div class="section-subtitle">Tabla de roles y accesos</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rol</th>
+              <th>Ver (view)</th>
+              <th>Editar (edit)</th>
+              <th>Qué puede hacer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Director</strong></td>
+              <td class="perm-yes">✓ Sí</td>
+              <td class="perm-yes">✓ Sí</td>
+              <td>Acceso total. Ve todos los KPIs, puede editar y sincronizar.</td>
+            </tr>
+            <tr>
+              <td><strong>Administración</strong></td>
+              <td class="perm-yes">✓ Sí</td>
+              <td class="perm-yes">✓ Sí</td>
+              <td>Acceso completo al módulo y todas sus subsecciones.</td>
+            </tr>
+            <tr>
+              <td><strong>Comercial</strong></td>
+              <td class="perm-yes">✓ Sí</td>
+              <td class="perm-yes">✓ Sí</td>
+              <td>Su módulo principal. Acceso completo: tablero, pipeline, oportunidades, herramientas.</td>
+            </tr>
+            <tr>
+              <td><strong>Auditor</strong></td>
+              <td class="perm-ro">👁 Solo lectura</td>
+              <td class="perm-no">— No</td>
+              <td>Puede ver todo pero no editar ni disparar sincronizaciones.</td>
+            </tr>
+            <tr>
+              <td><strong>Operaciones</strong></td>
+              <td class="perm-no">— Sin acceso</td>
+              <td class="perm-no">— Sin acceso</td>
+              <td>No tiene acceso al módulo Comercial.</td>
+            </tr>
+            <tr>
+              <td><strong>Depósito</strong></td>
+              <td class="perm-no">— Sin acceso</td>
+              <td class="perm-no">— Sin acceso</td>
+              <td>No tiene acceso al módulo Comercial.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert alert-info">
+        <div class="alert-icon">ℹ️</div>
+        <div class="alert-body">
+          <strong>¿No ves el módulo Comercial en el menú?</strong>
+          Tu usuario no tiene el permiso <code>comercial.view</code>. Contactá a la administración para que actualicen tu rol.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ CLIENTIFY ══════════════ -->
+    <section class="section" id="clientify">
+      <div class="section-header">
+        <div class="section-icon">🔗</div>
+        <div>
+          <div class="section-title">La integración con Clientify</div>
+          <div class="section-subtitle">Cómo fluyen los datos entre Clientify y TOPS Nexus</div>
+        </div>
+      </div>
+
+      <p><strong>Clientify</strong> es el CRM externo donde el equipo comercial registra contactos, empresas y oportunidades de negocio. TOPS Nexus se conecta con Clientify para traer esa información y presentarla con análisis avanzados, mapas, gráficos e insights de IA.</p>
+
+      <div class="alert alert-purple">
+        <div class="alert-icon">🟣</div>
+        <div class="alert-body">
+          <strong>Principio clave</strong>
+          Los datos <strong>no se cargan en Nexus</strong>: se cargan en Clientify y Nexus los trae. Si algo no aparece en Nexus, hay que verificar primero que esté bien cargado en Clientify.
+        </div>
+      </div>
+
+      <h3>Tipos de datos sincronizados</h3>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-icon">👤</div>
+          <div class="card-title">Contacts (Contactos)</div>
+          <div class="card-desc">Personas individuales: nombre, email, teléfono, empresa a la que pertenecen, historial de interacciones.</div>
+          <span class="card-badge badge-blue">Contacts</span>
+        </div>
+        <div class="card">
+          <div class="card-icon">💼</div>
+          <div class="card-title">Deals (Oportunidades)</div>
+          <div class="card-desc">Oportunidades de negocio: valor estimado, etapa del pipeline, fecha de cierre proyectada, probabilidad.</div>
+          <span class="card-badge badge-purple">Deals</span>
+        </div>
+        <div class="card">
+          <div class="card-icon">🏢</div>
+          <div class="card-title">Companies (Empresas)</div>
+          <div class="card-desc">Empresas o cuentas: razón social, industria, facturación estimada, contactos relacionados.</div>
+          <span class="card-badge badge-green">Companies</span>
+        </div>
+      </div>
+
+      <h3>Cuándo se actualiza Nexus</h3>
+      <div class="sync-card">
+        <div class="sync-cell">
+          <div class="sync-cell-label">Sync automática</div>
+          <div class="sync-cell-value" style="color: var(--green);">21:00</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">todos los días</div>
+        </div>
+        <div class="sync-cell">
+          <div class="sync-cell-label">Webhook tiempo real</div>
+          <div class="sync-cell-value" style="color: var(--blue);">⚡</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">si Clientify lo dispara</div>
+        </div>
+        <div class="sync-cell">
+          <div class="sync-cell-label">Sync manual</div>
+          <div class="sync-cell-value" style="color: var(--amber);">🔄</div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:4px;">botón en Tablero</div>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-body">
+          <strong>Los datos del día no aparecen hasta las 21:00</strong>
+          Si cargaste algo en Clientify durante el día, en Nexus va a aparecer recién después de la sincronización nocturna. Para verlo antes, usá la sincronización manual desde el Tablero Comercial.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ TABLERO COMERCIAL ══════════════ -->
+    <section class="section" id="tablero">
+      <div class="section-header">
+        <div class="section-icon">📊</div>
+        <div>
+          <div class="section-title">Tablero Comercial</div>
+          <div class="section-subtitle">/comercial/tablero — Cockpit central con todos los KPIs</div>
+        </div>
+      </div>
+
+      <p>El Tablero es la pantalla principal del módulo. Concentra todos los indicadores comerciales en un solo lugar para que la dirección y el equipo tengan una foto clara del negocio en segundos.</p>
+
+      <div class="tabs" id="tabs-tablero">
+        <div class="tab-nav">
+          <button class="tab-btn active" data-tab="tab-resumen">📈 Executive Summary</button>
+          <button class="tab-btn" data-tab="tab-graficos">📉 Gráficos</button>
+          <button class="tab-btn" data-tab="tab-oport">💡 Oportunidades</button>
+          <button class="tab-btn" data-tab="tab-alertas">🔔 Alertas</button>
+        </div>
+
+        <!-- Tab: Executive Summary -->
+        <div class="tab-pane active" id="tab-resumen">
+          <div id="resumen-ejecutivo">
+            <div class="insight-box">
+              <div class="insight-header">
+                <span style="font-size:24px;">📊</span>
+                <span class="insight-title">ExecutiveSummary</span>
+              </div>
+              <p style="margin-bottom:12px;">El bloque superior del tablero. Muestra los 4 indicadores clave con su variación respecto al mes anterior (delta).</p>
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px;">
+                  <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px;">Oportunidades activas</div>
+                  <div style="font-size:20px; font-weight:700;">N</div>
+                  <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Deals abiertos en el pipeline</div>
+                </div>
+                <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px;">
+                  <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px;">Ingresos proyectados</div>
+                  <div style="font-size:20px; font-weight:700;">$</div>
+                  <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Suma de deals × probabilidad</div>
+                </div>
+                <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px;">
+                  <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px;">Facturación cerrada</div>
+                  <div style="font-size:20px; font-weight:700;">$</div>
+                  <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Deals ganados este mes</div>
+                </div>
+                <div style="background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px;">
+                  <div style="font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.07em; margin-bottom:4px;">Tasa de cierre</div>
+                  <div style="font-size:20px; font-weight:700;">%</div>
+                  <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Ganados ÷ (Ganados + Perdidos)</div>
+                </div>
+              </div>
+              <p style="margin-top:12px; font-size:13px;">El <strong>delta</strong> (▲ verde / ▼ rojo) compara el valor actual con el mes calendario anterior. Un delta positivo indica mejora.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Gráficos -->
+        <div class="tab-pane" id="tab-graficos">
+          <div id="otros-componentes">
+            <div class="component-grid">
+              <div class="component-card">
+                <div class="component-name">BusinessUnitDonut</div>
+                <div class="component-desc">Dona (donut chart) que muestra cómo se distribuyen las oportunidades por Unidad de Negocio (ej: Logística, ANMAT, Custodia). Útil para ver dónde está la mayor parte del pipeline.</div>
+              </div>
+              <div class="component-card">
+                <div class="component-name">StageBars</div>
+                <div class="component-desc">Barras horizontales que muestran cuántas oportunidades hay en cada etapa del pipeline. Permite detectar embotellamientos (demasiados deals estancados en la misma etapa).</div>
+              </div>
+              <div class="component-card">
+                <div class="component-name">ConcretionBars</div>
+                <div class="component-desc">Barras de concreción por oportunidad individual. Muestra el avance de cada deal hacia el cierre, basado en los campos completados y las actividades registradas.</div>
+              </div>
+              <div class="component-card">
+                <div class="component-name">ForecastTrend</div>
+                <div class="component-desc">Gráfico de línea que muestra el histórico de forecast de los últimos meses más la proyección futura. La línea punteada indica proyección; la sólida, datos reales.</div>
+              </div>
+              <div id="matriz" class="component-card">
+                <div class="component-name">PriorityMatrix</div>
+                <div class="component-desc">
+                  Matriz de cuadrantes con 4 zonas:<br>
+                  <strong style="color:var(--green);">Ganar</strong> — alto impacto + alta prob.<br>
+                  <strong style="color:var(--blue);">Desarrollar</strong> — alto impacto + baja prob.<br>
+                  <strong style="color:var(--amber);">Defender</strong> — bajo impacto + alta prob.<br>
+                  <strong style="color:var(--text-dim);">Evaluar</strong> — bajo impacto + baja prob.
+                </div>
+              </div>
+              <div class="component-card">
+                <div class="component-name">TopOpportunities</div>
+                <div class="component-desc">Listado de las 5 oportunidades con mayor valor × probabilidad proyectadas para cerrar este mes. Sirve para enfocar la energía del equipo.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Oportunidades -->
+        <div class="tab-pane" id="tab-oport">
+          <div class="component-grid">
+            <div class="component-card">
+              <div class="component-name">OpportunitiesTable</div>
+              <div class="component-desc">Tabla completa de todas las oportunidades activas con filtros por etapa, unidad de negocio, responsable y fechas. Permite ordenar y buscar.</div>
+            </div>
+            <div class="component-card">
+              <div class="component-name">SyncStatus</div>
+              <div class="component-desc">Indicador de estado de sincronización con Clientify: última sync exitosa, próxima sync programada y estado actual (OK / Error / En proceso).</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab: Alertas e IA -->
+        <div class="tab-pane" id="tab-alertas">
+          <div class="component-grid">
+            <div class="component-card">
+              <div class="component-name">CommercialAlerts</div>
+              <div class="component-desc">
+                Panel de alertas del sistema. Detecta automáticamente:<br>
+                🔴 <strong>Oportunidades en riesgo</strong> — sin actividad en +14 días<br>
+                🟡 <strong>Próximas a vencer</strong> — fecha de cierre en menos de 7 días<br>
+                🔵 <strong>Sin seguimiento</strong> — contacto sin interacción reciente
+              </div>
+            </div>
+            <div id="auto-insights" class="component-card">
+              <div class="component-name">AutoInsights</div>
+              <div class="component-desc">Insights generados por IA analizando los datos del pipeline. Detecta patrones, tendencias y anomalías. Cada insight incluye la observación y el dato que la respalda.</div>
+            </div>
+            <div class="component-card">
+              <div class="component-name">ActionPlan</div>
+              <div class="component-desc">Plan de acción recomendado por IA basado en los insights. Lista las acciones sugeridas con prioridad (Alta / Media / Baja) para maximizar el cierre del mes.</div>
+            </div>
+          </div>
+          <div class="alert alert-info">
+            <div class="alert-icon">🤖</div>
+            <div class="alert-body">
+              <strong>Cómo interpretar los Auto-Insights</strong>
+              Los insights de IA son sugerencias basadas en patrones de datos. No son órdenes. Siempre validá el contexto del cliente antes de actuar sobre una recomendación.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ PIPELINE ══════════════ -->
+    <section class="section" id="pipeline">
+      <div class="section-header">
+        <div class="section-icon">🔀</div>
+        <div>
+          <div class="section-title">Cómo leer el Pipeline</div>
+          <div class="section-subtitle">/comercial/pipeline — Visualización de oportunidades por etapa</div>
+        </div>
+      </div>
+
+      <p>El Pipeline muestra todas las oportunidades activas organizadas en columnas por <strong>etapa de venta</strong>. Cada columna representa un paso del proceso comercial. Las oportunidades se mueven de izquierda a derecha a medida que avanzan.</p>
+
+      <div class="alert alert-purple">
+        <div class="alert-icon">🟣</div>
+        <div class="alert-body">
+          <strong>Los datos vienen de Clientify</strong>
+          Las etapas del pipeline se definen en Clientify. Si necesitás agregar o renombrar una etapa, hay que hacerlo en Clientify; se reflejará en Nexus después de la próxima sincronización.
+        </div>
+      </div>
+
+      <h3>Etapas típicas del pipeline</h3>
+      <div class="stage-list">
+        <div class="stage-item">
+          <div class="stage-dot" style="background:#64748b;"></div>
+          <div>
+            <div class="stage-name">Lead / Prospecto</div>
+            <div class="stage-desc">Contacto inicial identificado. Aún no hubo conversación calificadora.</div>
+          </div>
+        </div>
+        <div class="stage-item">
+          <div class="stage-dot" style="background:#3b82f6;"></div>
+          <div>
+            <div class="stage-name">Contactado</div>
+            <div class="stage-desc">Se estableció el primer contacto. Se conoce la necesidad básica.</div>
+          </div>
+        </div>
+        <div class="stage-item">
+          <div class="stage-dot" style="background:#a855f7;"></div>
+          <div>
+            <div class="stage-name">Calificado</div>
+            <div class="stage-desc">El cliente tiene presupuesto, necesidad y autoridad de decisión confirmados.</div>
+          </div>
+        </div>
+        <div class="stage-item">
+          <div class="stage-dot" style="background:#f59e0b;"></div>
+          <div>
+            <div class="stage-name">Propuesta enviada</div>
+            <div class="stage-desc">Se envió cotización o propuesta formal. Se espera respuesta.</div>
+          </div>
+        </div>
+        <div class="stage-item">
+          <div class="stage-dot" style="background:#22c55e;"></div>
+          <div>
+            <div class="stage-name">Negociación</div>
+            <div class="stage-desc">El cliente respondió y se está ajustando la propuesta.</div>
+          </div>
+        </div>
+        <div class="stage-item">
+          <div class="stage-dot" style="background:#10b981;"></div>
+          <div>
+            <div class="stage-name">Ganada ✓</div>
+            <div class="stage-desc">Deal cerrado exitosamente. Se genera el contrato.</div>
+          </div>
+        </div>
+        <div class="stage-item">
+          <div class="stage-dot" style="background:#ef4444;"></div>
+          <div>
+            <div class="stage-name">Perdida ✗</div>
+            <div class="stage-desc">El cliente no avanzó. Se registra el motivo de pérdida para análisis.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-body">
+          <strong>Las oportunidades "perdidas" no desaparecen</strong>
+          Se mantienen en el historial para calcular la tasa de cierre y analizar patrones. No las borres de Clientify.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ CONTACTOS ══════════════ -->
+    <section class="section" id="contactos">
+      <div class="section-header">
+        <div class="section-icon">👥</div>
+        <div>
+          <div class="section-title">Gestión de Contactos</div>
+          <div class="section-subtitle">/comercial/contactos — Directorio sincronizado desde Clientify</div>
+        </div>
+      </div>
+      <span class="card-badge badge-blue" style="margin-bottom:16px; display:inline-flex;">Clientify</span>
+
+      <p>El directorio de contactos muestra todas las personas registradas en Clientify. Es un <strong>espejo de solo lectura</strong>: podés buscar, filtrar y ver, pero para modificar un contacto hay que hacerlo en Clientify.</p>
+
+      <h3>Datos disponibles por contacto</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Campo</th><th>Descripción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Nombre completo</strong></td><td>Nombre y apellido del contacto</td></tr>
+            <tr><td><strong>Empresa</strong></td><td>Empresa a la que pertenece</td></tr>
+            <tr><td><strong>Email</strong></td><td>Email principal (puede haber más de uno)</td></tr>
+            <tr><td><strong>Teléfono</strong></td><td>Número de contacto</td></tr>
+            <tr><td><strong>Etiquetas</strong></td><td>Tags asignados en Clientify (ej: "Cliente activo", "Prospecto ANMAT")</td></tr>
+            <tr><td><strong>Deals relacionados</strong></td><td>Oportunidades de negocio vinculadas al contacto</td></tr>
+            <tr><td><strong>Fecha de última actividad</strong></td><td>Última interacción registrada en Clientify</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Cómo buscar y filtrar</h3>
+      <ul class="step-list">
+        <li class="step-item">
+          <div class="step-n">1</div>
+          <div class="step-content">
+            <div class="step-title">Buscá por nombre o empresa</div>
+            <div class="step-desc">El campo de búsqueda superior filtra en tiempo real por nombre, apellido o nombre de empresa.</div>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-n">2</div>
+          <div class="step-content">
+            <div class="step-title">Filtrá por etiqueta</div>
+            <div class="step-desc">Usá el selector de etiquetas para ver solo los contactos con un tag específico (ej: "Prospecto 2025").</div>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-n">3</div>
+          <div class="step-content">
+            <div class="step-title">Ver el detalle</div>
+            <div class="step-desc">Hacé clic en cualquier contacto para ver su panel detallado con todos los campos y las oportunidades relacionadas.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ══════════════ OPORTUNIDADES ══════════════ -->
+    <section class="section" id="oportunidades">
+      <div class="section-header">
+        <div class="section-icon">💡</div>
+        <div>
+          <div class="section-title">Oportunidades — Vista 360°</div>
+          <div class="section-subtitle">/comercial/oportunidades — Análisis completo de deals activos</div>
+        </div>
+      </div>
+      <span class="card-badge badge-purple" style="margin-bottom:16px; display:inline-flex;">360°</span>
+
+      <p>La vista de Oportunidades va más allá de la lista de deals: ofrece un análisis completo de cada oportunidad con métricas de avance, historial y contexto del cliente.</p>
+
+      <h3>Cómo analizar una oportunidad</h3>
+      <div class="accordion">
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">📋</span> Información básica del deal</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Cada oportunidad muestra: nombre del deal, empresa cliente, contacto principal, valor estimado, fecha de cierre proyectada, etapa actual y probabilidad de cierre (0-100%).</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">📊</span> Métricas de avance</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>El <strong>grado de concreción</strong> es un indicador calculado automáticamente basado en cuántos campos del deal están completos, cuántas actividades se registraron y si hay propuesta enviada.</p>
+            <p>Un concreción alta no significa que el deal esté ganado — indica que está bien documentado y trabajado.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🏢</span> Contexto de empresa</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Muestra información de la empresa cliente: industria, tamaño, otros deals relacionados con la misma empresa. Útil para detectar si hay una oportunidad de cross-selling.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">📅</span> Vista detallada (/oportunidades/[id])</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Al hacer clic en una oportunidad se abre su página de detalle con toda la información expandida: historial completo de actividades en Clientify, todos los campos del deal, contactos relacionados y acceso directo a la propuesta si existe.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ CONTRATOS ══════════════ -->
+    <section class="section" id="contratos">
+      <div class="section-header">
+        <div class="section-icon">📄</div>
+        <div>
+          <div class="section-title">Cartera de Contratos</div>
+          <div class="section-subtitle">/comercial/contratos — Contratos activos y su gestión</div>
+        </div>
+      </div>
+      <span class="card-badge badge-green" style="margin-bottom:16px; display:inline-flex;">Cartera</span>
+
+      <p>La sección de Contratos muestra la cartera de contratos activos de la empresa. A diferencia de las oportunidades (que son potenciales), los contratos son acuerdos ya firmados con clientes reales.</p>
+
+      <h3>Información por contrato</h3>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-icon">🏢</div>
+          <div class="card-title">Cliente</div>
+          <div class="card-desc">Empresa con la que se firmó el contrato. Puede haber múltiples contratos por empresa.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📅</div>
+          <div class="card-title">Vigencia</div>
+          <div class="card-desc">Fecha de inicio y vencimiento. Los contratos próximos a vencer se marcan con alerta.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">💰</div>
+          <div class="card-title">Valor</div>
+          <div class="card-desc">Monto del contrato (mensual o total según el tipo). Base para el cálculo de facturación real.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📦</div>
+          <div class="card-title">Servicio</div>
+          <div class="card-desc">Tipo de servicio contratado: logística general, custodia digital, distribución ANMAT, etc.</div>
+        </div>
+      </div>
+
+      <h3>Sincronizar contratos</h3>
+      <p>Los contratos tienen su propia sincronización. Cuando se actualiza un contrato en el sistema origen, podés sincronizarlo manualmente:</p>
+      <div class="alert alert-info">
+        <div class="alert-icon">🔄</div>
+        <div class="alert-body">
+          Ir a <code>/comercial/contratos</code> → botón <strong>"Sincronizar contratos"</strong> → el sistema llama a <code>POST /api/comercial/contratos/sync</code> y actualiza los datos en segundos.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ MAPAS ══════════════ -->
+    <section class="section" id="mapas">
+      <div class="section-header">
+        <div class="section-icon">🗺️</div>
+        <div>
+          <div class="section-title">Mapas de Cobertura</div>
+          <div class="section-subtitle">Visualización geográfica de los depósitos — Premium</div>
+        </div>
+      </div>
+      <span class="card-badge badge-purple" style="margin-bottom:16px; display:inline-flex;">Premium</span>
+
+      <div class="alert alert-purple">
+        <div class="alert-icon">⭐</div>
+        <div class="alert-body">
+          <strong>Funcionalidad Premium</strong>
+          Los mapas de cobertura son herramientas de venta diferenciadas. Permiten mostrar a los clientes potenciales el radio de cobertura de cada depósito de forma visual e impactante.
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-icon">📍</div>
+          <div class="card-title">Mapa Luján 3159</div>
+          <div class="card-desc">
+            <strong>URL:</strong> /comercial/mapa-lujan<br><br>
+            Muestra la cobertura geográfica del depósito principal ubicado en Luján 3159, Buenos Aires. Visualiza el radio de distribución, tiempos estimados de entrega y zonas cubiertas.
+          </div>
+          <span class="card-badge badge-blue">Depósito BsAs</span>
+        </div>
+        <div class="card">
+          <div class="card-icon">📍</div>
+          <div class="card-title">Mapa Magaldi 1765</div>
+          <div class="card-desc">
+            <strong>URL:</strong> /comercial/mapa-magaldi<br><br>
+            Muestra la cobertura del depósito ANMAT ubicado en Magaldi 1765, CABA. Orientado a clientes del sector farmacéutico y regulado bajo normativa ANMAT.
+          </div>
+          <span class="card-badge badge-purple">Depósito ANMAT CABA</span>
+        </div>
+      </div>
+
+      <h3>Para qué usar los mapas</h3>
+      <ul class="step-list">
+        <li class="step-item">
+          <div class="step-n">💼</div>
+          <div class="step-content">
+            <div class="step-title">En reuniones de venta</div>
+            <div class="step-desc">Compartí la pantalla y mostrá al cliente potencial si su zona está dentro del radio de cobertura. Es más efectivo que explicarlo verbalmente.</div>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-n">📋</div>
+          <div class="step-content">
+            <div class="step-title">Para calificar prospectos</div>
+            <div class="step-desc">Verificá antes de armar una propuesta si el cliente está en una zona que TOPS puede cubrir eficientemente.</div>
+          </div>
+        </li>
+        <li class="step-item">
+          <div class="step-n">📸</div>
+          <div class="step-content">
+            <div class="step-title">Para materiales comerciales</div>
+            <div class="step-desc">Sacá capturas del mapa para incluirlas en propuestas o presentaciones.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ══════════════ HERRAMIENTAS ══════════════ -->
+    <section class="section" id="herramientas">
+      <div class="section-header">
+        <div class="section-icon">🛠️</div>
+        <div>
+          <div class="section-title">Herramientas Comerciales</div>
+          <div class="section-subtitle">/comercial/herramientas — Suite de utilidades para el equipo de ventas</div>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🧮</span> Cotizador — /comercial/herramientas/cotizador</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>La <strong>calculadora de precios integrada</strong>. Permite generar cotizaciones rápidas sin salir de Nexus.</p>
+            <p><strong>Cómo usarlo:</strong></p>
+            <ul>
+              <li>Completá los datos del servicio: tipo, volumen, zona de cobertura y condiciones especiales.</li>
+              <li>El sistema calcula automáticamente el precio según la tarifa vigente.</li>
+              <li>Podés ajustar variables para hacer análisis de sensibilidad ("¿qué pasa si el volumen sube 20%?").</li>
+              <li>El resultado puede copiarse para incluirlo en la propuesta.</li>
+            </ul>
+            <p>Si los precios base cambian, hay que actualizarlos en el sistema. Contactá a administración.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">📑</span> Propuesta General — /comercial/herramientas/propuesta-general</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Genera una <strong>propuesta comercial estándar</strong> como Google Sheets. Al hacer clic en "Generar propuesta", se abre el template en Google Sheets en una nueva pestaña.</p>
+            <p>El template está alojado en Google Drive corporativo. Cada propuesta generada crea una copia nueva con los datos pre-cargados para ese cliente.</p>
+            <ul>
+              <li>Ingresá el nombre del cliente y los datos principales.</li>
+              <li>Hacé clic en <strong>"Generar"</strong>.</li>
+              <li>Se abre un Google Sheets nuevo en tu navegador, listo para completar.</li>
+              <li>Compartí el link con el cliente o exportalo como PDF.</li>
+            </ul>
+            <div style="margin-top:10px;">
+              <div class="alert alert-warning" style="margin-bottom:0;">
+                <div class="alert-icon">⚠️</div>
+                <div class="alert-body">Necesitás tener sesión activa en Google con tu cuenta corporativa para que el template se abra correctamente.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🏥</span> Propuesta ANMAT — /comercial/herramientas/propuesta-anmat</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Template <strong>específico para clientes del sector ANMAT</strong> (farmacéutico, dispositivos médicos, cosméticos). Incluye secciones adicionales que exige la normativa regulatoria:</p>
+            <ul>
+              <li>Certificaciones y habilitaciones del depósito Magaldi.</li>
+              <li>Condiciones de almacenamiento (temperatura controlada, BPD).</li>
+              <li>Trazabilidad y registro de movimientos.</li>
+              <li>Protocolo de auditorías.</li>
+            </ul>
+            <p>Funciona igual que la Propuesta General: ingresás datos → clic en Generar → se abre un Google Sheets en nueva pestaña.</p>
+          </div>
+        </div>
+      </div>
+
+      <h3>Dashboard de Vacancia Corporativa</h3>
+      <p><strong>URL:</strong> /comercial/dashboard-vacancia</p>
+      <p>Muestra los KPIs de disponibilidad de los depósitos: porcentaje de espacio ocupado vs. disponible, capacidad total, y tendencia de ocupación. Es útil para saber cuánto espacio se puede ofrecer a un nuevo cliente antes de cerrar un deal.</p>
+    </section>
+
+    <!-- ══════════════ AUTO-INSIGHTS ══════════════ -->
+    <section class="section" id="auto-insights-section">
+      <div class="section-header">
+        <div class="section-icon">🤖</div>
+        <div>
+          <div class="section-title">Auto-Insights de IA</div>
+          <div class="section-subtitle">Recomendaciones automáticas basadas en los datos del pipeline</div>
+        </div>
+      </div>
+
+      <div class="insight-box">
+        <div class="insight-header">
+          <span style="font-size:28px;">🤖</span>
+          <span class="insight-title">¿Qué son los Auto-Insights?</span>
+        </div>
+        <p>Son análisis generados automáticamente que el sistema produce cada vez que se sincroniza con Clientify. La IA revisa el estado del pipeline y detecta situaciones que merecen atención.</p>
+      </div>
+
+      <h3>Tipos de insights que podés ver</h3>
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-icon">🔴</div>
+          <div class="card-title">Riesgo de pérdida</div>
+          <div class="card-desc">"El deal <em>Cliente X</em> lleva 18 días sin actividad en etapa Propuesta enviada. Riesgo alto de perder la oportunidad."</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📈</div>
+          <div class="card-title">Concentración de pipeline</div>
+          <div class="card-desc">"El 70% del valor del pipeline está concentrado en 2 deals. Alta dependencia."</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">⏰</div>
+          <div class="card-title">Vencimientos próximos</div>
+          <div class="card-desc">"3 oportunidades tienen fecha de cierre en los próximos 5 días hábiles. Verificá el estado."</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🏆</div>
+          <div class="card-title">Oportunidades de aceleración</div>
+          <div class="card-desc">"El deal <em>Cliente Y</em> tiene alta probabilidad y el cliente respondió ayer. Buen momento para avanzar."</div>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-body">
+          <strong>Los insights son sugerencias, no verdades absolutas</strong>
+          La IA no conoce el contexto completo de cada relación comercial. Usá los insights como punto de partida para revisar, no como mandato. Si un insight no tiene sentido para vos, ignoralo.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ SINCRONIZACIÓN ══════════════ -->
+    <section class="section" id="sincronizacion">
+      <div class="section-header">
+        <div class="section-icon">🔄</div>
+        <div>
+          <div class="section-title">Cómo funciona la sincronización</div>
+          <div class="section-subtitle">Automática, manual y en tiempo real</div>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🕘</span> Sincronización automática diaria (21:00)</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Todos los días a las 21:00 (hora Argentina), el sistema inicia automáticamente la sincronización completa con Clientify. Descarga todos los contactos, deals y empresas actualizados durante el día.</p>
+            <p>No requiere ninguna acción del equipo. Al día siguiente en la mañana, los datos de Nexus están al día.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🖱️</span> Sincronización manual</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Para no esperar hasta las 21:00, podés disparar una sincronización en cualquier momento:</p>
+            <ul>
+              <li>Ir al <strong>Tablero Comercial</strong> (/comercial/tablero)</li>
+              <li>Buscar el componente <strong>SyncStatus</strong></li>
+              <li>Hacer clic en <strong>"Sincronizar ahora"</strong></li>
+            </ul>
+            <p>El proceso tarda entre 10 y 60 segundos según la cantidad de datos. Un indicador muestra el progreso.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">⚡</span> Webhook (tiempo real)</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Clientify puede enviar notificaciones automáticas a Nexus cada vez que se actualiza un deal o contacto. Esto se llama <strong>webhook</strong>.</p>
+            <p>El endpoint de Nexus para recibir estos eventos es <code>/api/clientify/webhook/[token]</code>. Si el webhook está configurado correctamente en Clientify, los cambios llegan en segundos.</p>
+            <p>Si el webhook no está funcionando, los datos igual se actualizan en la sincronización de las 21:00. No es un error crítico, simplemente hay un delay.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">📡</span> Estado de sincronización (SyncStatus)</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>El componente <strong>SyncStatus</strong> del Tablero muestra:</p>
+            <ul>
+              <li><strong>Última sincronización exitosa:</strong> fecha y hora de la última sync que completó sin errores.</li>
+              <li><strong>Próxima sync programada:</strong> cuándo es la siguiente sincronización automática.</li>
+              <li><strong>Estado actual:</strong> OK (verde) / Procesando (azul) / Error (rojo).</li>
+            </ul>
+            <p>Si el estado es <strong>Error</strong> por más de 2 días seguidos, contactá al área de sistemas.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ FLUJO VISUAL ══════════════ -->
+    <section class="section" id="flujo">
+      <div class="section-header">
+        <div class="section-icon">➡️</div>
+        <div>
+          <div class="section-title">Flujo del proceso comercial</div>
+          <div class="section-subtitle">De Lead a Contrato firmado</div>
+        </div>
+      </div>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-bubble">🎯<div class="flow-num">1</div></div>
+          <div class="flow-label">Lead / Prospecto</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-bubble">👤<div class="flow-num">2</div></div>
+          <div class="flow-label">Contacto calificado</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-bubble">💡<div class="flow-num">3</div></div>
+          <div class="flow-label">Oportunidad creada</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-bubble">📑<div class="flow-num">4</div></div>
+          <div class="flow-label">Propuesta enviada</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-bubble">🤝<div class="flow-num">5</div></div>
+          <div class="flow-label">Negociación</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step">
+          <div class="flow-bubble">📄<div class="flow-num">6</div></div>
+          <div class="flow-label">Contrato firmado</div>
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <div class="card">
+          <div class="card-icon">🎯</div>
+          <div class="card-title">1. Lead identificado</div>
+          <div class="card-desc">El equipo identifica un prospecto. Se carga en Clientify como contacto. Nexus lo refleja en la próxima sync.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">👤</div>
+          <div class="card-title">2. Contacto calificado</div>
+          <div class="card-desc">Se confirma que tiene necesidad, presupuesto y autoridad. Se actualiza la etapa en Clientify.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">💡</div>
+          <div class="card-title">3. Oportunidad en pipeline</div>
+          <div class="card-desc">Se crea el deal en Clientify con valor estimado y fecha de cierre. Aparece en el Pipeline de Nexus.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📑</div>
+          <div class="card-title">4. Propuesta generada</div>
+          <div class="card-desc">Se usa la herramienta de Propuesta General o ANMAT en Nexus para generar el documento en Google Sheets.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">🤝</div>
+          <div class="card-title">5. Negociación activa</div>
+          <div class="card-desc">Se registran las actividades de seguimiento en Clientify. Los Auto-Insights alertan si pasa mucho tiempo sin actividad.</div>
+        </div>
+        <div class="card">
+          <div class="card-icon">📄</div>
+          <div class="card-title">6. Contrato y cierre</div>
+          <div class="card-desc">Deal marcado como "Ganado" en Clientify. Se genera el contrato. Aparece en la Cartera de Contratos de Nexus.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ CHECKLIST ══════════════ -->
+    <section class="section" id="checklist">
+      <div class="section-header">
+        <div class="section-icon">✅</div>
+        <div>
+          <div class="section-title">Checklist de cierre de oportunidad</div>
+          <div class="section-subtitle">Hacé clic para marcar cada paso como completado</div>
+        </div>
+      </div>
+
+      <div class="alert alert-info">
+        <div class="alert-icon">ℹ️</div>
+        <div class="alert-body">Este checklist es interactivo. Hacé clic en cada ítem para marcarlo. Los cambios se guardan solo en esta sesión del navegador.</div>
+      </div>
+
+      <ul class="checklist" id="checklist-cierre">
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>El deal en Clientify tiene valor, fecha de cierre y probabilidad actualizados</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>Se registró la última actividad en Clientify (llamada, email o reunión)</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>La empresa cliente tiene todos sus datos completos (razón social, CUIT, dirección)</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>Se generó la propuesta formal desde la herramienta de Nexus (General o ANMAT)</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>Se validó la disponibilidad de espacio en el Dashboard de Vacancia</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>Se verificó en el Mapa de Cobertura que la zona del cliente está cubierta</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>La propuesta fue enviada al cliente y se registró el envío en Clientify</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>Se acordó una fecha de seguimiento para la respuesta del cliente</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>Al cierre exitoso: deal marcado como "Ganado" en Clientify</li>
+        <li onclick="toggleCheck(this)"><span class="check-box"></span>Se inició el proceso de generación de contrato con administración</li>
+      </ul>
+    </section>
+
+    <!-- ══════════════ CASOS FRECUENTES ══════════════ -->
+    <section class="section" id="casos">
+      <div class="section-header">
+        <div class="section-icon">📋</div>
+        <div>
+          <div class="section-title">Casos frecuentes del equipo comercial</div>
+          <div class="section-subtitle">Escenarios del día a día y cómo resolverlos</div>
+        </div>
+      </div>
+
+      <div class="case-card">
+        <div class="case-header">
+          <div class="case-num">1</div>
+          <div class="case-title">Tengo una reunión con un prospecto y quiero mostrarle nuestras instalaciones</div>
+        </div>
+        <div class="case-body">
+          Abrí <strong>/comercial/mapa-lujan</strong> o <strong>/comercial/mapa-magaldi</strong> según corresponda. Compartí la pantalla durante la reunión virtual, o abrilo en un tablet/notebook en la reunión presencial. Mostrá el radio de cobertura y confirmá que la zona del cliente está cubierta. Si hay dudas sobre el espacio disponible, complementá con el Dashboard de Vacancia.
+        </div>
+      </div>
+
+      <div class="case-card">
+        <div class="case-header">
+          <div class="case-num">2</div>
+          <div class="case-title">Necesito enviar una propuesta de precios a un cliente nuevo</div>
+        </div>
+        <div class="case-body">
+          1. Primero usá el <strong>Cotizador</strong> (/comercial/herramientas/cotizador) para calcular el precio según el servicio y volumen.<br>
+          2. Luego generá la propuesta desde <strong>Propuesta General</strong> o <strong>Propuesta ANMAT</strong> según el tipo de cliente.<br>
+          3. El Google Sheets generado podés descargarlo como PDF o compartir el link directamente.<br>
+          4. Registrá el envío en Clientify como actividad del deal correspondiente.
+        </div>
+      </div>
+
+      <div class="case-card">
+        <div class="case-header">
+          <div class="case-num">3</div>
+          <div class="case-title">El Tablero muestra datos de ayer, pero ya cargué cambios en Clientify</div>
+        </div>
+        <div class="case-body">
+          Es normal si los cambios en Clientify se hicieron durante el día: la sync automática es a las 21:00. Para ver los datos actualizados en el momento, ir al <strong>Tablero Comercial</strong>, buscar el bloque <strong>SyncStatus</strong> y hacer clic en <strong>"Sincronizar ahora"</strong>. En menos de un minuto los datos se actualizan.
+        </div>
+      </div>
+
+      <div class="case-card">
+        <div class="case-header">
+          <div class="case-num">4</div>
+          <div class="case-title">Quiero ver cuáles son mis oportunidades de mayor prioridad para esta semana</div>
+        </div>
+        <div class="case-body">
+          Abrí el <strong>Tablero Comercial</strong> y revisá tres bloques:<br>
+          • <strong>TopOpportunities</strong>: las 5 oportunidades con mayor valor proyectado para cerrar este mes.<br>
+          • <strong>PriorityMatrix</strong>: el cuadrante "Ganar" (alto impacto + alta probabilidad) son las que merecen foco inmediato.<br>
+          • <strong>AutoInsights</strong> y <strong>ActionPlan</strong>: la IA puede tener recomendaciones específicas basadas en el estado actual del pipeline.
+        </div>
+      </div>
+
+      <div class="case-card">
+        <div class="case-header">
+          <div class="case-num">5</div>
+          <div class="case-title">Un contrato existente tuvo cambios y no se refleja en la cartera</div>
+        </div>
+        <div class="case-body">
+          Ir a <strong>/comercial/contratos</strong> y usar el botón de sincronización de contratos. Si después de sincronizar el cambio no aparece, verificar que la actualización esté correctamente registrada en el sistema origen (no en Clientify sino en el sistema de gestión de contratos). Si sigue sin aparecer, contactar a sistemas.
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ ERRORES COMUNES ══════════════ -->
+    <section class="section" id="errores">
+      <div class="section-header">
+        <div class="section-icon">⚠️</div>
+        <div>
+          <div class="section-title">Errores comunes y cómo resolverlos</div>
+          <div class="section-subtitle">Problemas frecuentes y sus soluciones</div>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🔴</span> La sincronización falla y el estado muestra "Error"</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p><strong>Síntoma:</strong> El SyncStatus muestra estado rojo y la última sync exitosa fue hace más de 24 horas.</p>
+            <p><strong>Posibles causas:</strong> Problema de conectividad con la API de Clientify, token de API vencido, o incidencia en los servidores de Clientify.</p>
+            <p><strong>Qué hacer:</strong></p>
+            <ul>
+              <li>Intentar sincronización manual una vez.</li>
+              <li>Si sigue fallando, verificar en la plataforma de Clientify si hay incidencias reportadas.</li>
+              <li>Si el problema persiste más de 2 horas, contactar a sistemas con captura de pantalla del error.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🟡</span> Una oportunidad cargada en Clientify no aparece en Nexus</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p><strong>Síntoma:</strong> Creaste un deal en Clientify y no lo ves en el Pipeline o Tablero de Nexus.</p>
+            <p><strong>Verificaciones:</strong></p>
+            <ul>
+              <li>¿Cuándo lo creaste? Si fue hace menos de unas horas, esperá la sync de las 21:00 o hacé sync manual.</li>
+              <li>¿El deal está en estado "Activo" en Clientify? Los deals en estado borrador o archivado no se sincronizan.</li>
+              <li>¿Tiene los campos obligatorios completos (nombre, empresa, etapa)? Los deals incompletos pueden ser ignorados.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🟠</span> El Google Sheets de propuesta no se abre o da error</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p><strong>Síntoma:</strong> Hacés clic en "Generar propuesta" y el tab de Google Sheets no abre o muestra un error de acceso.</p>
+            <p><strong>Causas más comunes:</strong></p>
+            <ul>
+              <li>No tenés sesión activa con tu cuenta Google corporativa (@logisticatops.com). Andá a drive.google.com e iniciá sesión primero.</li>
+              <li>El navegador tiene bloqueada la apertura de nuevas pestañas (popup blocker). Buscá el ícono de bloqueado en la barra de direcciones y permití los popups de Nexus.</li>
+              <li>El template en Google Drive fue movido o eliminado. Contactá a administración.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">⚫</span> Los KPIs del Tablero muestran 0 o están vacíos</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p><strong>Síntoma:</strong> El ExecutiveSummary muestra todos los valores en 0 o en blanco.</p>
+            <p><strong>Verificaciones:</strong></p>
+            <ul>
+              <li>Revisar el SyncStatus: si nunca hubo una sincronización exitosa, no hay datos para mostrar.</li>
+              <li>Hacer una sincronización manual y esperar a que complete.</li>
+              <li>Si después de la sync sigue vacío, puede ser que Clientify no tenga deals activos configurados correctamente. Verificar desde la plataforma de Clientify directamente.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">🔵</span> No puedo acceder al módulo Comercial</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p><strong>Síntoma:</strong> La sección Comercial no aparece en el menú o al intentar acceder a /comercial se redirige a otra página.</p>
+            <p><strong>Causa:</strong> Tu usuario no tiene el permiso <code>comercial.view</code> asignado a su rol.</p>
+            <p><strong>Solución:</strong> Contactá a la administración para que actualicen tu rol en el sistema. No es un error técnico, es un tema de permisos.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ FAQ ══════════════ -->
+    <section class="section" id="faq">
+      <div class="section-header">
+        <div class="section-icon">❓</div>
+        <div>
+          <div class="section-title">Preguntas frecuentes</div>
+          <div class="section-subtitle">Las dudas más comunes del equipo comercial</div>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿Puedo editar contactos u oportunidades directamente en Nexus?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>No. Nexus es un espejo de Clientify: muestra los datos pero no permite editarlos. Para modificar un contacto o deal, hay que hacerlo en Clientify. Los cambios se reflejan en Nexus después de la próxima sincronización (manual o automática).</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿Con qué frecuencia se actualiza el Tablero?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>El Tablero muestra los datos de la última sincronización exitosa con Clientify. Si la última sync fue a las 21:00, el Tablero muestra datos de las 21:00 hasta que vuelva a sincronizarse. Para datos en tiempo real, usá la sincronización manual.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿Qué pasa si marco un deal como "Ganado" en Clientify?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Clientify envía la actualización a Nexus (vía webhook o en la próxima sync). El deal desaparece del Pipeline activo y pasa a contribuir a las métricas de "Facturación cerrada" y "Tasa de cierre" del ExecutiveSummary. Si corresponde generar contrato, ese proceso se gestiona por separado con administración.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿La Propuesta General y la Propuesta ANMAT guardan historial?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Las propuestas generadas son copias de un template en Google Drive. Cada copia generada queda en la cuenta de Google del usuario que la generó, dentro de Google Drive. No existe un historial dentro de Nexus de qué propuestas se generaron. Para llevar registro, recomendamos mover las propuestas generadas a una carpeta compartida del Drive corporativo.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿Los Auto-Insights cambian a lo largo del día?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Los Auto-Insights se regeneran cada vez que hay una sincronización exitosa (automática o manual). Si hacés una sync manual a las 10:00 y otra a las 15:00, los insights de las 15:00 pueden ser diferentes si los datos de Clientify cambiaron.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿Puedo ver el historial de actividades de un cliente?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Sí, desde la vista de detalle de una oportunidad (/comercial/oportunidades/[id]) podés ver el historial de actividades registradas en Clientify para ese deal. Incluye llamadas, emails y reuniones. Para ver el historial completo de un contacto (no del deal), lo más completo es ir directamente a Clientify.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿Qué es el "Forecast" y cómo se calcula?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>El <strong>Forecast</strong> (o Pronóstico de ingresos) es la suma ponderada de todos los deals activos: cada deal contribuye con <code>valor_estimado × probabilidad_de_cierre</code>. Por ejemplo, un deal de $100.000 con 70% de probabilidad contribuye $70.000 al forecast. El componente ForecastTrend muestra cómo evolucionó este número mes a mes y proyecta el tendencia a futuro.</p>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAcc(this)">
+            <span class="acc-left"><span class="acc-icon">❓</span> ¿Quién debe cargar los datos en Clientify?</span>
+            <span class="acc-arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>El <strong>equipo comercial</strong> es responsable de mantener Clientify actualizado: crear contactos, abrir deals, actualizar etapas y registrar actividades. Nexus es la herramienta de análisis que usa esos datos; si los datos en Clientify están desactualizados, los análisis en Nexus serán incorrectos. "Basura entra, basura sale."</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ GLOSARIO ══════════════ -->
+    <section class="section" id="glosario">
+      <div class="section-header">
+        <div class="section-icon">📖</div>
+        <div>
+          <div class="section-title">Glosario de términos CRM</div>
+          <div class="section-subtitle">Definiciones para el equipo comercial</div>
+        </div>
+      </div>
+
+      <div class="glossary">
+        <div class="gloss-item">
+          <div class="gloss-term">CRM</div>
+          <div class="gloss-def">Customer Relationship Management. Sistema para gestionar relaciones con clientes. En TOPS, el CRM es Clientify.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Pipeline</div>
+          <div class="gloss-def">Embudo de ventas. Visualización de todas las oportunidades activas organizadas por etapa del proceso de venta.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Deal</div>
+          <div class="gloss-def">Oportunidad de negocio registrada en Clientify. Cada deal tiene un valor, etapa, probabilidad y fecha de cierre estimada.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Etapa (Stage)</div>
+          <div class="gloss-def">Paso del proceso de venta en el que se encuentra un deal. Ej: Lead → Calificado → Propuesta enviada → Ganado/Perdido.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Forecast</div>
+          <div class="gloss-def">Pronóstico de ingresos. Suma ponderada de todos los deals activos (valor × probabilidad de cierre). Indica cuánto se espera facturar.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Clientify</div>
+          <div class="gloss-def">Plataforma de CRM externa donde el equipo comercial carga contactos, empresas y oportunidades. TOPS Nexus se alimenta de Clientify.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Webhook</div>
+          <div class="gloss-def">Notificación automática que Clientify envía a Nexus cuando algo cambia. Permite actualizar datos en tiempo real sin esperar la sync diaria.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Sync / Sincronización</div>
+          <div class="gloss-def">Proceso por el cual Nexus descarga los datos actualizados de Clientify. Puede ser automática (21:00) o manual.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Lead / Prospecto</div>
+          <div class="gloss-def">Empresa o persona que podría convertirse en cliente. En la primera etapa del pipeline, todavía no se confirmó si tiene necesidad real.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Tasa de cierre</div>
+          <div class="gloss-def">Porcentaje de deals que se ganan sobre el total de deals que terminaron (ganados + perdidos). Indicador de efectividad del equipo.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Delta (Δ)</div>
+          <div class="gloss-def">Variación de un indicador respecto al período anterior. Si el delta es verde (▲), el indicador mejoró. Si es rojo (▼), empeoró.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Auto-Insight</div>
+          <div class="gloss-def">Observación generada automáticamente por la IA de Nexus analizando el pipeline. Señala riesgos, oportunidades o anomalías.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Concreción</div>
+          <div class="gloss-def">Grado de avance de una oportunidad hacia el cierre. Se calcula en base a la completitud de datos y actividades registradas.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">ANMAT</div>
+          <div class="gloss-def">Administración Nacional de Medicamentos, Alimentos y Tecnología Médica. Clientes de este sector requieren propuesta específica y depósito habilitado (Magaldi).</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Unidad de Negocio</div>
+          <div class="gloss-def">División de negocio de TOPS (ej: Logística, Custodia Digital, ANMAT). Los deals se clasifican por unidad para análisis segmentado.</div>
+        </div>
+        <div class="gloss-item">
+          <div class="gloss-term">Vacancia</div>
+          <div class="gloss-def">Espacio disponible en los depósitos. El Dashboard de Vacancia muestra cuánta capacidad libre hay para ofrecer a nuevos clientes.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <div style="margin-top:48px; padding-top:24px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <div style="font-size:12px; color:var(--text-dim);">
+        TOPS Nexus — Manual de Usuario · Módulo Comercial y CRM
+      </div>
+      <a href="index.html" class="header-back" style="font-size:13px;">← Volver al Índice</a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ── ACCORDION ──
+  function toggleAcc(btn) {
+    const body = btn.nextElementSibling;
+    const isOpen = btn.classList.contains('open');
+    // close all
+    document.querySelectorAll('.accordion-trigger.open').forEach(b => {
+      b.classList.remove('open');
+      b.nextElementSibling.classList.remove('open');
+    });
+    if (!isOpen) {
+      btn.classList.add('open');
+      body.classList.add('open');
+    }
+  }
+
+  // ── TABS ──
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.dataset.tab;
+      const tabParent = btn.closest('.tabs');
+      tabParent.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      tabParent.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    });
+  });
+
+  // ── CHECKLIST ──
+  function toggleCheck(li) {
+    li.classList.toggle('checked');
+    const box = li.querySelector('.check-box');
+    box.textContent = li.classList.contains('checked') ? '✓' : '';
+  }
+
+  // ── ACTIVE TOC ──
+  const sections = document.querySelectorAll('.section[id]');
+  const tocLinks = document.querySelectorAll('.toc-link[href^="#"]');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        tocLinks.forEach(l => {
+          l.classList.toggle('active', l.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tesorería y Finanzas — Manual TOPS Nexus</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0f172a;
+  --navy-light: #1e293b;
+  --navy-mid: #162032;
+  --blue: #3b82f6;
+  --green: #22c55e;
+  --green-dim: rgba(34,197,94,0.12);
+  --green-border: rgba(34,197,94,0.3);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245,158,11,0.12);
+  --amber-border: rgba(245,158,11,0.3);
+  --red: #ef4444;
+  --red-dim: rgba(239,68,68,0.12);
+  --red-border: rgba(239,68,68,0.3);
+  --blue-dim: rgba(59,130,246,0.12);
+  --blue-border: rgba(59,130,246,0.3);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --border: rgba(255,255,255,0.08);
+  --border-strong: rgba(255,255,255,0.15);
+  --card: rgba(255,255,255,0.04);
+  --card-hover: rgba(255,255,255,0.07);
+  --sidebar-w: 260px;
+  --header-h: 60px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--navy); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+/* ── TOPBAR ── */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: rgba(15,23,42,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  z-index: 100;
+}
+
+.topbar-logo {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--green);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topbar-sep { color: var(--border-strong); font-size: 18px; user-select: none; }
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.breadcrumb a:hover { color: var(--green); }
+.breadcrumb .current { color: var(--green); font-weight: 500; }
+
+.topbar-badge {
+  margin-left: auto;
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── LAYOUT ── */
+.layout {
+  display: flex;
+  padding-top: var(--header-h);
+  min-height: 100vh;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: var(--sidebar-w);
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  bottom: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--navy-mid);
+  padding: 24px 0 40px;
+  z-index: 50;
+}
+
+.sidebar-section {
+  padding: 0 16px;
+  margin-bottom: 6px;
+}
+
+.sidebar-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 12px 8px 6px;
+  display: block;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: all 0.15s;
+  line-height: 1.3;
+}
+.sidebar-link:hover {
+  background: var(--card-hover);
+  color: var(--text);
+}
+.sidebar-link.active {
+  background: var(--green-dim);
+  color: var(--green);
+  font-weight: 500;
+}
+.sidebar-icon { font-size: 14px; flex-shrink: 0; }
+
+.sidebar-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+  transition: color 0.2s;
+}
+.sidebar-back:hover { color: var(--text-muted); }
+
+/* ── MAIN ── */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  padding: 48px 48px 80px;
+  max-width: 900px;
+}
+
+/* ── HERO ── */
+.hero {
+  margin-bottom: 48px;
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+
+.hero h1 {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.15;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, var(--green) 60%, var(--amber) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-desc {
+  font-size: 17px;
+  color: var(--text-muted);
+  max-width: 640px;
+  line-height: 1.65;
+}
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── SECTION ── */
+.section {
+  margin-bottom: 56px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.icon-green { background: var(--green-dim); border: 1px solid var(--green-border); }
+.icon-amber { background: var(--amber-dim); border: 1px solid var(--amber-border); }
+.icon-blue  { background: var(--blue-dim);  border: 1px solid var(--blue-border); }
+.icon-red   { background: var(--red-dim);   border: 1px solid var(--red-border); }
+
+.section h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.section-num {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* ── CARDS ── */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s;
+}
+.card:hover {
+  background: var(--card-hover);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.card-icon { font-size: 24px; margin-bottom: 12px; }
+.card h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+.card.green { border-color: var(--green-border); }
+.card.amber { border-color: var(--amber-border); }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 24px; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+thead tr { background: var(--navy-light); }
+thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+tbody tr { border-top: 1px solid var(--border); transition: background 0.15s; }
+tbody tr:hover { background: var(--card-hover); }
+tbody td { padding: 12px 16px; color: var(--text-muted); vertical-align: top; }
+tbody td:first-child { color: var(--text); font-weight: 500; }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.badge-green { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+.badge-amber { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber-border); }
+.badge-red   { background: var(--red-dim);   color: var(--red);   border: 1px solid var(--red-border); }
+.badge-blue  { background: var(--blue-dim);  color: var(--blue);  border: 1px solid var(--blue-border); }
+.badge-gray  { background: rgba(100,116,139,0.15); color: var(--text-dim); border: 1px solid rgba(100,116,139,0.25); }
+
+/* ── ALERTS ── */
+.alert {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+.alert-content strong { display: block; font-weight: 600; margin-bottom: 4px; font-size: 13.5px; }
+
+.alert-green  { background: var(--green-dim); border: 1px solid var(--green-border); color: #86efac; }
+.alert-amber  { background: var(--amber-dim); border: 1px solid var(--amber-border); color: #fcd34d; }
+.alert-red    { background: var(--red-dim);   border: 1px solid var(--red-border);   color: #fca5a5; }
+.alert-blue   { background: var(--blue-dim);  border: 1px solid var(--blue-border);  color: #93c5fd; }
+
+/* ── ACCORDION ── */
+.accordion { margin-bottom: 12px; }
+
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.2s;
+}
+.accordion-header:hover { background: var(--card-hover); border-color: var(--border-strong); }
+.accordion-header.open {
+  border-radius: 10px 10px 0 0;
+  border-color: var(--green-border);
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.accordion-left { display: flex; align-items: center; gap: 10px; }
+.accordion-emoji { font-size: 16px; }
+
+.accordion-arrow {
+  font-size: 12px;
+  transition: transform 0.2s;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.accordion-header.open .accordion-arrow { transform: rotate(180deg); color: var(--green); }
+
+.accordion-body {
+  display: none;
+  padding: 20px 24px;
+  background: var(--card);
+  border: 1px solid var(--green-border);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+.accordion-body.open { display: block; }
+
+/* ── TABS ── */
+.tabs { margin-bottom: 28px; }
+.tab-nav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--green); border-bottom-color: var(--green); font-weight: 600; }
+
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── STEPS ── */
+.steps { counter-reset: steps; }
+.step {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--green-dim);
+  border: 1.5px solid var(--green-border);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.step-content { flex: 1; }
+.step-content strong { display: block; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.step-content p { font-size: 13px; color: var(--text-muted); line-height: 1.55; }
+
+/* ── CODE INLINE ── */
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--green);
+}
+
+/* ── FLOW DIAGRAM ── */
+.flow-diagram {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 32px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+.flow-diagram svg { display: block; margin: 0 auto; }
+
+/* ── CHECKLIST ── */
+.checklist { list-style: none; }
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.checklist li:last-child { border-bottom: none; }
+.checklist li:hover { color: var(--text); }
+
+.check-box {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.checklist li.checked .check-box {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.checklist li.checked { color: var(--text-dim); text-decoration: line-through; }
+
+/* ── GLOSARIO ── */
+.glosario dt {
+  font-weight: 600;
+  color: var(--green);
+  font-size: 14px;
+  margin-top: 20px;
+  margin-bottom: 4px;
+}
+.glosario dd {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-left: 16px;
+  border-left: 2px solid var(--green-border);
+  line-height: 1.6;
+}
+
+/* ── SCENARIO CARD ── */
+.scenario {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.scenario-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.scenario-head h4 { font-size: 14px; font-weight: 600; }
+.scenario p { font-size: 13px; color: var(--text-muted); line-height: 1.55; margin-bottom: 8px; }
+.scenario p:last-child { margin-bottom: 0; }
+
+/* ── DIVIDER ── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 40px 0;
+}
+
+/* ── BACK BUTTON ── */
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-bottom: 32px;
+}
+.btn-back:hover {
+  background: var(--card-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; padding: 24px 20px 60px; }
+  .hero h1 { font-size: 28px; }
+  .card-grid { grid-template-columns: 1fr; }
+  .tab-nav { gap: 2px; }
+  .tab-btn { padding: 7px 10px; font-size: 12px; }
+}
+
+/* ── UTILS ── */
+p { margin-bottom: 12px; color: var(--text-muted); font-size: 13.5px; line-height: 1.65; }
+p:last-child { margin-bottom: 0; }
+ul, ol { padding-left: 20px; margin-bottom: 14px; }
+li { font-size: 13.5px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.55; }
+strong { color: var(--text); font-weight: 600; }
+h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; margin-top: 20px; color: var(--text); }
+h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <span class="topbar-logo">TOPS Nexus</span>
+  <span class="topbar-sep">›</span>
+  <nav class="breadcrumb">
+    <a href="index.html">Inicio</a>
+    <span>›</span>
+    <span class="current">💰 Tesorería y Finanzas</span>
+  </nav>
+  <span class="topbar-badge">💰 Tesorería</span>
+</header>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <a href="index.html" class="sidebar-back">← Volver al índice</a>
+
+  <div class="sidebar-section">
+    <span class="sidebar-label">En esta página</span>
+    <a href="#objetivo" class="sidebar-link"><span class="sidebar-icon">🎯</span> Objetivo del módulo</a>
+    <a href="#acceso" class="sidebar-link"><span class="sidebar-icon">🔐</span> ¿Quién puede usarlo?</a>
+    <a href="#dashboard" class="sidebar-link"><span class="sidebar-icon">📊</span> Dashboard de Tesorería</a>
+    <a href="#bancos" class="sidebar-link"><span class="sidebar-icon">🏦</span> Gestión de Bancos</a>
+    <a href="#movimientos" class="sidebar-link"><span class="sidebar-icon">↕️</span> Movimientos</a>
+    <a href="#cobranzas" class="sidebar-link"><span class="sidebar-icon">📥</span> Cobranzas</a>
+    <a href="#pagos" class="sidebar-link"><span class="sidebar-icon">📤</span> Pagos a Proveedores</a>
+    <a href="#flujo" class="sidebar-link"><span class="sidebar-icon">📈</span> Flujo de Fondos</a>
+    <a href="#conciliacion" class="sidebar-link"><span class="sidebar-icon">🔁</span> Conciliación Bancaria</a>
+    <a href="#caja-chica" class="sidebar-link"><span class="sidebar-icon">🗃️</span> Caja Chica</a>
+    <a href="#reportes" class="sidebar-link"><span class="sidebar-icon">📋</span> Reportes y Facturación</a>
+    <a href="#flujo-visual" class="sidebar-link"><span class="sidebar-icon">🗺️</span> Flujo del Proceso</a>
+    <a href="#casos" class="sidebar-link"><span class="sidebar-icon">💡</span> Casos Frecuentes</a>
+    <a href="#errores" class="sidebar-link"><span class="sidebar-icon">⚠️</span> Errores Comunes</a>
+    <a href="#cierre" class="sidebar-link"><span class="sidebar-icon">✅</span> Cierre Mensual</a>
+    <a href="#faq" class="sidebar-link"><span class="sidebar-icon">❓</span> FAQ</a>
+    <a href="#glosario" class="sidebar-link"><span class="sidebar-icon">📖</span> Glosario</a>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <a href="index.html" class="btn-back">← Volver al índice del manual</a>
+
+  <!-- HERO -->
+  <div class="hero" id="top">
+    <div class="hero-tag">📘 Manual de Usuario</div>
+    <h1>Tesorería y Finanzas</h1>
+    <p class="hero-desc">
+      Control financiero centralizado: saldos bancarios en tiempo real, cobranzas, pagos a proveedores, proyección de flujo de fondos, conciliación bancaria y gestión de caja chica — todo integrado en un único panel.
+    </p>
+    <div class="hero-meta">
+      <span class="meta-pill">🔗 /tesoreria</span>
+      <span class="meta-pill">🔐 tesoreria.*</span>
+      <span class="meta-pill">📊 analytics.view</span>
+    </div>
+  </div>
+
+  <!-- OBJETIVO -->
+  <section class="section" id="objetivo">
+    <div class="section-header">
+      <div class="section-icon icon-green">🎯</div>
+      <div>
+        <div class="section-num">01</div>
+        <h2>Objetivo del módulo</h2>
+      </div>
+    </div>
+
+    <p>
+      El módulo <strong>Tesorería y Finanzas</strong> es el centro de control financiero de TOPS Nexus. Reúne en un único lugar toda la información necesaria para tomar decisiones sobre la liquidez de la empresa: cuánto hay en los bancos, cuánto se cobra, cuánto se paga y cuánto habrá disponible en los próximos días.
+    </p>
+
+    <div class="card-grid">
+      <div class="card green">
+        <div class="card-icon">💰</div>
+        <h3>Saldos en tiempo real</h3>
+        <p>Consolidación automática de todas las cuentas bancarias en un solo número.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔁</div>
+        <h3>Conciliación IA</h3>
+        <p>Ingesta de extractos CSV del banco y matching automático con movimientos del sistema.</p>
+      </div>
+      <div class="card amber">
+        <div class="card-icon">📈</div>
+        <h3>Proyección de cash flow</h3>
+        <p>Curva acumulada de entradas y salidas esperadas en los próximos 30–90 días.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🗃️</div>
+        <h3>Caja Chica integrada</h3>
+        <p>Sincronización automática con la hoja de Google Sheets del fondo fijo operativo.</p>
+      </div>
+    </div>
+
+    <div class="alert alert-blue">
+      <span class="alert-icon">ℹ️</span>
+      <div class="alert-content">
+        <strong>Cálculo server-side</strong>
+        Todos los roll-ups (sumas de saldos, totales de cobranzas, proyecciones) se calculan en el servidor. El panel siempre muestra números consistentes, sin importar desde qué dispositivo o navegador se acceda.
+      </div>
+    </div>
+  </section>
+
+  <!-- ACCESO -->
+  <section class="section" id="acceso">
+    <div class="section-header">
+      <div class="section-icon icon-amber">🔐</div>
+      <div>
+        <div class="section-num">02</div>
+        <h2>¿Quién puede usarlo?</h2>
+      </div>
+    </div>
+
+    <p>El acceso a Tesorería está restringido a los roles con permiso <code>tesoreria.*</code>. No aparece en el menú lateral para usuarios de Operaciones, Comercial o Depósito.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Rol</th>
+            <th>Acceso</th>
+            <th>Qué puede hacer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Director</td>
+            <td><span class="badge badge-green">✓ Completo</span></td>
+            <td>Ver todo, editar, sincronizar caja chica, ingestar extractos, ver reportes avanzados</td>
+          </tr>
+          <tr>
+            <td>Administración</td>
+            <td><span class="badge badge-green">✓ Completo</span></td>
+            <td>Mismas capacidades que Director sobre Tesorería</td>
+          </tr>
+          <tr>
+            <td>Auditor</td>
+            <td><span class="badge badge-amber">◐ Lectura</span></td>
+            <td>Ver tablero financiero y reportes (<code>analytics.view</code>), sin edición</td>
+          </tr>
+          <tr>
+            <td>Operaciones</td>
+            <td><span class="badge badge-red">✗ Sin acceso</span></td>
+            <td>No ve el módulo de Tesorería</td>
+          </tr>
+          <tr>
+            <td>Comercial</td>
+            <td><span class="badge badge-red">✗ Sin acceso</span></td>
+            <td>No ve el módulo de Tesorería</td>
+          </tr>
+          <tr>
+            <td>Depósito</td>
+            <td><span class="badge badge-red">✗ Sin acceso</span></td>
+            <td>No ve el módulo de Tesorería</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="alert alert-amber">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>Información sensible</strong>
+        Los saldos bancarios, cobranzas pendientes y flujo de fondos son datos financieros confidenciales. Si necesitás darle acceso a alguien adicional, coordiná con Dirección para asignar el rol correspondiente.
+      </div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section class="section" id="dashboard">
+    <div class="section-header">
+      <div class="section-icon icon-green">📊</div>
+      <div>
+        <div class="section-num">03</div>
+        <h2>Dashboard de Tesorería</h2>
+      </div>
+    </div>
+
+    <p>Al ingresar a <code>/tesoreria</code>, el primer pantallazo que se ve es el <strong>Resumen de Tesorería</strong>: un tablero con los indicadores financieros clave del día.</p>
+
+    <h3>¿Qué muestra el dashboard?</h3>
+
+    <div class="card-grid">
+      <div class="card green">
+        <div class="card-icon">🏦</div>
+        <h3>Saldo total en bancos</h3>
+        <p>Suma de todas las cuentas bancarias activas. Se actualiza cada vez que se carga la página. Fuente: <code>v_bank_balances</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📥</div>
+        <h3>Cobranzas pendientes</h3>
+        <p>Total adeudado por clientes. Incluye facturas vencidas y no vencidas. Fuente: <code>v_customer_current_accounts</code>.</p>
+      </div>
+      <div class="card amber">
+        <div class="card-icon">📤</div>
+        <h3>Pagos pendientes</h3>
+        <p>Total que la empresa le debe a proveedores. Incluye obligaciones vencidas. Fuente: <code>v_supplier_current_accounts</code>.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📈</div>
+        <h3>Flujo proyectado</h3>
+        <p>Curva de acumulado de cash flow futuro (próximos 30/60/90 días). Fuente: <code>v_cashflow_projection</code>.</p>
+      </div>
+    </div>
+
+    <h3>Cómo leer los saldos</h3>
+    <ul>
+      <li><strong>Saldo positivo (verde):</strong> la empresa tiene fondos disponibles en esa cuenta.</li>
+      <li><strong>Saldo negativo (rojo):</strong> la cuenta está sobregirada o tiene saldo deudor. Requiere atención inmediata.</li>
+      <li><strong>Cobranzas pendientes en naranja:</strong> hay facturas vencidas sin cobrar. Revisar la sección Cobranzas.</li>
+      <li><strong>Pagos vencidos en rojo:</strong> hay obligaciones a proveedores atrasadas. Revisar la sección Pagos.</li>
+    </ul>
+
+    <div class="alert alert-red">
+      <span class="alert-icon">🚨</span>
+      <div class="alert-content">
+        <strong>Saldo negativo en banco</strong>
+        Si el dashboard muestra una cuenta con saldo negativo, verificá primero si es un problema de conciliación (movimientos no ingresados) o si realmente existe un sobregiro. Coordiná con Dirección antes de tomar acciones.
+      </div>
+    </div>
+  </section>
+
+  <!-- BANCOS -->
+  <section class="section" id="bancos">
+    <div class="section-header">
+      <div class="section-icon icon-blue">🏦</div>
+      <div>
+        <div class="section-num">04</div>
+        <h2>Gestión de Bancos</h2>
+      </div>
+    </div>
+
+    <p>La sección <strong>Bancos</strong> (<code>/tesoreria/bancos</code>) lista todas las cuentas bancarias de la empresa con sus saldos actuales.</p>
+
+    <div class="tabs">
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab(this,'bancos','lista')">🏦 Lista de cuentas</button>
+        <button class="tab-btn" onclick="switchTab(this,'bancos','detalle')">🔍 Detalle de cuenta</button>
+      </div>
+
+      <div id="tab-bancos-lista" class="tab-pane active">
+        <p>La vista de lista muestra todas las cuentas con:</p>
+        <ul>
+          <li><strong>Nombre del banco</strong> y tipo de cuenta (corriente, caja de ahorro, etc.)</li>
+          <li><strong>Número de cuenta / CBU</strong> (referencia interna)</li>
+          <li><strong>Moneda</strong> (ARS, USD, etc.)</li>
+          <li><strong>Saldo actual</strong> calculado a partir de los movimientos registrados en el sistema</li>
+          <li><strong>Último movimiento</strong>: fecha del último registro ingresado</li>
+        </ul>
+        <div class="alert alert-amber">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-content">
+            <strong>Saldo del sistema vs. saldo bancario real</strong>
+            El saldo que muestra el sistema es el saldo <em>contable</em> (según los movimientos registrados). Para conocer el saldo real, es necesario consultar el extracto bancario y realizar la <a href="#conciliacion" style="color:var(--amber)">conciliación</a>.
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-bancos-detalle" class="tab-pane">
+        <p>Al hacer clic en una cuenta bancaria, se accede a <code>/tesoreria/bancos/[slug]</code> con:</p>
+        <ul>
+          <li><strong>Historial de movimientos</strong> de esa cuenta específica (créditos y débitos)</li>
+          <li><strong>Saldo acumulado</strong> por fecha (curva de evolución del saldo)</li>
+          <li><strong>Movimientos pendientes de conciliación</strong> (si existen)</li>
+          <li><strong>Datos de la cuenta:</strong> banco, tipo, CBU, moneda, estado</li>
+        </ul>
+        <div class="alert alert-blue">
+          <span class="alert-icon">ℹ️</span>
+          <div class="alert-content">
+            <strong>Agregar o modificar cuentas bancarias</strong>
+            La gestión de altas/bajas de cuentas bancarias es una configuración de sistema. Contactá con Dirección o el administrador del sistema si necesitás agregar una nueva cuenta o modificar los datos de una existente.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MOVIMIENTOS -->
+  <section class="section" id="movimientos">
+    <div class="section-header">
+      <div class="section-icon icon-green">↕️</div>
+      <div>
+        <div class="section-num">05</div>
+        <h2>Movimientos Bancarios</h2>
+      </div>
+    </div>
+
+    <p>La sección <strong>Movimientos</strong> (<code>/tesoreria/movimientos</code>) muestra el detalle de todas las transacciones bancarias registradas en el sistema, sin importar a qué cuenta pertenecen.</p>
+
+    <h3>¿Qué información muestra?</h3>
+    <ul>
+      <li><strong>Fecha</strong> del movimiento</li>
+      <li><strong>Descripción</strong> o concepto del movimiento</li>
+      <li><strong>Tipo:</strong> crédito (entrada de dinero) o débito (salida de dinero)</li>
+      <li><strong>Importe</strong> (positivo para créditos, negativo para débitos)</li>
+      <li><strong>Cuenta bancaria</strong> a la que pertenece</li>
+      <li><strong>Estado de conciliación:</strong> conciliado, pendiente, o en revisión</li>
+    </ul>
+
+    <h3>Filtros disponibles</h3>
+    <div class="card-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px,1fr));">
+      <div class="card"><div class="card-icon">📅</div><h3>Por fecha</h3><p>Rango de fechas (desde / hasta)</p></div>
+      <div class="card"><div class="card-icon">🏦</div><h3>Por cuenta</h3><p>Filtrar por una cuenta bancaria específica</p></div>
+      <div class="card"><div class="card-icon">↕️</div><h3>Por tipo</h3><p>Solo créditos, solo débitos, o ambos</p></div>
+      <div class="card"><div class="card-icon">🔁</div><h3>Por estado</h3><p>Conciliados, pendientes, en revisión</p></div>
+    </div>
+
+    <div class="alert alert-blue">
+      <span class="alert-icon">ℹ️</span>
+      <div class="alert-content">
+        <strong>Movimientos automáticos vs. manuales</strong>
+        Algunos movimientos se generan automáticamente al procesar pagos y cobros dentro del sistema. Otros se ingresan manualmente o mediante la importación de extractos CSV en la sección de Conciliación.
+      </div>
+    </div>
+  </section>
+
+  <!-- COBRANZAS -->
+  <section class="section" id="cobranzas">
+    <div class="section-header">
+      <div class="section-icon icon-green">📥</div>
+      <div>
+        <div class="section-num">06</div>
+        <h2>Cobranzas</h2>
+      </div>
+    </div>
+
+    <p>La sección <strong>Cobranzas</strong> (<code>/tesoreria/cobranzas</code>) permite ver y gestionar los cobros pendientes de clientes. Refleja las cuentas corrientes de clientes con saldo deudor.</p>
+
+    <h3>¿Qué muestra la pantalla de Cobranzas?</h3>
+    <ul>
+      <li>Listado de clientes con <strong>saldo pendiente de cobro</strong></li>
+      <li><strong>Monto total adeudado</strong> por cada cliente</li>
+      <li><strong>Facturas vencidas</strong> (resaltadas en rojo) vs. facturas a vencer (en amarillo)</li>
+      <li><strong>Días de antigüedad</strong> del saldo (0–30 días, 31–60, 61–90, más de 90)</li>
+      <li>Posibilidad de ver el detalle de documentos que componen la deuda</li>
+    </ul>
+
+    <h3>Cómo registrar un cobro</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Identificar al cliente</strong>
+          <p>Buscá al cliente en la lista de cobranzas o usá el filtro de nombre/CUIT.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Ver el detalle del saldo</strong>
+          <p>Hacé clic en el cliente para ver las facturas o documentos que componen la deuda.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Registrar el pago recibido</strong>
+          <p>Usá la opción de registrar cobro, indicá el monto, la fecha y la cuenta bancaria donde se recibió el pago.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>Verificar el impacto</strong>
+          <p>El saldo del cliente se actualiza automáticamente y el movimiento aparece en la sección Movimientos de la cuenta bancaria correspondiente.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-red">
+      <span class="alert-icon">🚨</span>
+      <div class="alert-content">
+        <strong>Facturas vencidas sin cobrar</strong>
+        Si una factura aparece con más de 30 días de vencimiento, coordiná con el área Comercial para gestionar la cobranza. El sistema no envía recordatorios automáticos — es una tarea manual del área Administración.
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGOS -->
+  <section class="section" id="pagos">
+    <div class="section-header">
+      <div class="section-icon icon-amber">📤</div>
+      <div>
+        <div class="section-num">07</div>
+        <h2>Pagos a Proveedores</h2>
+      </div>
+    </div>
+
+    <p>La sección <strong>Pagos</strong> (<code>/tesoreria/pagos</code>) muestra las deudas pendientes con proveedores y el estado de los pagos. Refleja las cuentas corrientes de proveedores.</p>
+
+    <h3>¿Qué muestra la pantalla de Pagos?</h3>
+    <ul>
+      <li>Listado de proveedores con <strong>saldo pendiente de pago</strong></li>
+      <li><strong>Facturas o documentos</strong> que componen la deuda</li>
+      <li><strong>Fecha de vencimiento</strong> de cada obligación</li>
+      <li><strong>Estado del pago:</strong> pendiente, programado, pagado</li>
+      <li>Priorización automática de pagos vencidos</li>
+    </ul>
+
+    <h3>Estados de pago</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Estado</th><th>Significado</th><th>Acción sugerida</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-red">Vencido</span></td>
+            <td>La fecha de pago ya pasó y no se registró el pago</td>
+            <td>Pagar con urgencia o acordar una extensión con el proveedor</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-amber">Pendiente</span></td>
+            <td>Deuda activa con fecha de vencimiento futura</td>
+            <td>Incluir en la planificación de pagos de la semana</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-blue">Programado</span></td>
+            <td>Pago registrado en el sistema para una fecha futura</td>
+            <td>Verificar disponibilidad de fondos antes de la fecha</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-green">Pagado</span></td>
+            <td>Pago registrado y conciliado</td>
+            <td>No requiere acción</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- FLUJO DE FONDOS -->
+  <section class="section" id="flujo">
+    <div class="section-header">
+      <div class="section-icon icon-green">📈</div>
+      <div>
+        <div class="section-num">08</div>
+        <h2>Flujo de Fondos</h2>
+      </div>
+    </div>
+
+    <p>La sección <strong>Flujo de Fondos</strong> (<code>/tesoreria/flujo-fondos</code>) muestra la <strong>proyección de cash flow</strong>: una estimación de cuánto dinero habrá disponible en los próximos días, basada en las cobranzas y pagos esperados.</p>
+
+    <h3>¿Qué es el flujo de fondos proyectado?</h3>
+    <p>
+      Es una curva acumulada que muestra cómo evolucionará el saldo de caja a lo largo del tiempo. La proyección toma como punto de partida el saldo actual en bancos y suma las entradas esperadas (cobranzas) y resta las salidas esperadas (pagos a proveedores), día a día.
+    </p>
+
+    <h3>Cómo leer el gráfico</h3>
+    <ul>
+      <li><strong>Eje horizontal (X):</strong> fecha (días futuros)</li>
+      <li><strong>Eje vertical (Y):</strong> saldo acumulado proyectado en pesos</li>
+      <li><strong>Línea verde:</strong> proyección optimista (se cobran todos los pendientes)</li>
+      <li><strong>Línea azul:</strong> proyección base (escenario promedio)</li>
+      <li><strong>Zona roja:</strong> períodos donde el saldo proyectado cae a negativo — señal de alerta de falta de liquidez</li>
+    </ul>
+
+    <div class="alert alert-amber">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>Proyección, no realidad</strong>
+        El flujo de fondos es una <em>estimación</em> basada en los documentos registrados en el sistema. No tiene en cuenta cobros o pagos que aún no fueron cargados. Actualizá regularmente las cobranzas y pagos para que la proyección sea precisa.
+      </div>
+    </div>
+
+    <div class="alert alert-red">
+      <span class="alert-icon">🚨</span>
+      <div class="alert-content">
+        <strong>Zona roja en el gráfico</strong>
+        Si el gráfico muestra una zona roja (saldo proyectado negativo), la empresa podría quedarse sin fondos en ese período. Revisá qué pagos grandes vencen en esa fecha y evaluá si es posible adelantar cobranzas o diferir pagos.
+      </div>
+    </div>
+  </section>
+
+  <!-- CONCILIACION -->
+  <section class="section" id="conciliacion">
+    <div class="section-header">
+      <div class="section-icon icon-blue">🔁</div>
+      <div>
+        <div class="section-num">09</div>
+        <h2>Conciliación Bancaria</h2>
+      </div>
+    </div>
+
+    <p>La sección <strong>Conciliación</strong> (<code>/tesoreria/conciliacion</code>) permite comparar los movimientos registrados en el sistema contra los movimientos reales del extracto bancario, identificando diferencias y asegurando que los saldos sean correctos.</p>
+
+    <h3>¿Qué es conciliar?</h3>
+    <p>
+      Conciliar significa verificar que cada movimiento que aparece en el extracto bancario emitido por el banco tiene su correspondiente registro en el sistema TOPS Nexus, y viceversa. Si hay movimientos en el banco que no están en el sistema (o al revés), se detectan como <strong>diferencias</strong> a resolver.
+    </p>
+
+    <h3>Paso a paso: ingresar un extracto bancario CSV</h3>
+
+    <div class="alert alert-blue">
+      <span class="alert-icon">ℹ️</span>
+      <div class="alert-content">
+        <strong>Compatibilidad de archivos</strong>
+        El sistema está validado para extractos en formato CSV del <strong>Banco Santander</strong>. Si tu banco emite el extracto en otro formato, consultá con el administrador del sistema antes de intentar la importación.
+      </div>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Descargar el extracto del banco</strong>
+          <p>Ingresá al home banking de Santander, accedé a la cuenta correspondiente y descargá el extracto del período a conciliar en formato <strong>CSV</strong>. El archivo debe cubrir el mes completo (o el período a conciliar).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Ingresar al módulo de Conciliación</strong>
+          <p>Navegá a <code>/tesoreria/conciliacion</code> en TOPS Nexus.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Seleccionar la cuenta bancaria</strong>
+          <p>Indicá a qué cuenta bancaria pertenece el extracto que vas a importar.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>Subir el archivo CSV</strong>
+          <p>Usá el botón de carga de archivo y seleccioná el CSV descargado. El sistema procesa automáticamente el archivo mediante el endpoint <code>POST /api/tesoreria/conciliacion/ingest</code>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-content">
+          <strong>Revisar el resultado del matching</strong>
+          <p>El sistema muestra tres columnas:</p>
+          <ul>
+            <li><span class="badge badge-green">Conciliados</span> — movimientos que matchean correctamente</li>
+            <li><span class="badge badge-amber">Solo en banco</span> — aparecen en el extracto pero no en el sistema</li>
+            <li><span class="badge badge-red">Solo en sistema</span> — registrados en TOPS pero no en el extracto bancario</li>
+          </ul>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-content">
+          <strong>Resolver las diferencias</strong>
+          <p>Para cada diferencia, identificá la causa y tomá una de las acciones disponibles: registrar el movimiento faltante, asociar manualmente, o marcar como diferencia temporal.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-content">
+          <strong>Cerrar la conciliación</strong>
+          <p>Una vez resueltas todas las diferencias (o justificadas las partidas abiertas), marcá la conciliación como cerrada para ese período.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAJA CHICA -->
+  <section class="section" id="caja-chica">
+    <div class="section-header">
+      <div class="section-icon icon-amber">🗃️</div>
+      <div>
+        <div class="section-num">10</div>
+        <h2>Caja Chica</h2>
+      </div>
+    </div>
+
+    <p>La sección <strong>Caja Chica</strong> (<code>/tesoreria/caja-chica</code>) gestiona el <strong>fondo fijo operativo</strong>: el dinero en efectivo disponible para gastos menores del día a día.</p>
+
+    <h3>¿Qué es el fondo fijo?</h3>
+    <p>
+      Es un monto de dinero en efectivo que se destina a cubrir gastos pequeños y frecuentes (materiales de oficina, viáticos menores, servicios de emergencia, etc.) sin necesidad de procesar una transferencia bancaria cada vez.
+    </p>
+
+    <h3>Integración con Google Sheets</h3>
+    <p>
+      El registro de movimientos de caja chica se lleva en una <strong>hoja de Google Sheets</strong> que maneja el equipo de Administración. TOPS Nexus puede sincronizar automáticamente ese registro para reflejar el saldo del fondo fijo en el sistema.
+    </p>
+
+    <h3>Cómo sincronizar la caja chica</h3>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <strong>Actualizar la hoja de Google Sheets</strong>
+          <p>Verificá que la planilla de caja chica esté al día con todos los gastos registrados.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <strong>Ir a Caja Chica en TOPS Nexus</strong>
+          <p>Navegá a <code>/tesoreria/caja-chica</code>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <strong>Hacer clic en "Sincronizar"</strong>
+          <p>El botón dispara el endpoint <code>POST /api/tesoreria/caja-chica/sync</code> que lee la planilla de Google Sheets y actualiza el saldo en el sistema.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <strong>Verificar el resultado</strong>
+          <p>El sistema muestra el saldo actualizado del fondo fijo y el detalle de movimientos sincronizados. Si hubo errores de lectura, se muestran los registros problemáticos.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert alert-amber">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>La sincronización no es automática</strong>
+        El sistema <em>no</em> sincroniza la caja chica en forma automática ni periódica. Es necesario hacer clic en "Sincronizar" cada vez que se quiere reflejar el estado actualizado de la planilla en TOPS Nexus.
+      </div>
+    </div>
+  </section>
+
+  <!-- REPORTES -->
+  <section class="section" id="reportes">
+    <div class="section-header">
+      <div class="section-icon icon-blue">📋</div>
+      <div>
+        <div class="section-num">11</div>
+        <h2>Reportes y Facturación</h2>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab(this,'rep','reportes')">📊 Reportes</button>
+        <button class="tab-btn" onclick="switchTab(this,'rep','facturacion')">🧾 Facturación</button>
+      </div>
+
+      <div id="tab-rep-reportes" class="tab-pane active">
+        <p>El módulo <strong>Reportes</strong> (<code>/reports</code>) ofrece una suite de reportes avanzados para el análisis financiero. Requiere el permiso <code>analytics.view</code>.</p>
+        <h3>Reportes disponibles</h3>
+        <ul>
+          <li><strong>Libro de bancos:</strong> historial completo de movimientos por cuenta bancaria</li>
+          <li><strong>Antigüedad de deudores:</strong> distribución de cobranzas por tramo de antigüedad (0–30, 31–60, 61–90, +90 días)</li>
+          <li><strong>Antigüedad de acreedores:</strong> distribución de pagos pendientes por tramo</li>
+          <li><strong>Posición bancaria:</strong> saldo de todas las cuentas al cierre de un período</li>
+          <li><strong>Flujo de fondos histórico:</strong> comparación de proyección vs. realidad</li>
+        </ul>
+        <div class="alert alert-blue">
+          <span class="alert-icon">ℹ️</span>
+          <div class="alert-content">
+            <strong>Pendiente de validación</strong>
+            La disponibilidad exacta de reportes puede variar según la versión del sistema. Los reportes listados representan la funcionalidad planificada.
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-rep-facturacion" class="tab-pane">
+        <p>El módulo <strong>Facturación</strong> (<code>/billing</code>) permite generar facturas a clientes desde el sistema.</p>
+        <h3>Funciones disponibles</h3>
+        <ul>
+          <li>Generación de facturas a partir de órdenes de servicio</li>
+          <li>Historial de facturas emitidas por cliente</li>
+          <li>Estado de cobro de cada factura (pendiente / cobrada / vencida)</li>
+          <li>Descarga en formato PDF</li>
+        </ul>
+        <div class="alert alert-amber">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-content">
+            <strong>Pendiente de validación</strong>
+            La integración ARCA/AFIP para facturación electrónica está en hoja de ruta (ARCA Producción). El módulo de facturación actual opera en modo interno y no emite comprobantes fiscales electrónicos todavía.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLUJO VISUAL -->
+  <section class="section" id="flujo-visual">
+    <div class="section-header">
+      <div class="section-icon icon-green">🗺️</div>
+      <div>
+        <div class="section-num">12</div>
+        <h2>Flujo del Proceso Financiero Mensual</h2>
+      </div>
+    </div>
+
+    <p>El siguiente diagrama muestra cómo se relacionan las diferentes partes del módulo de Tesorería a lo largo del ciclo financiero mensual.</p>
+
+    <div class="flow-diagram">
+      <svg viewBox="0 0 780 340" xmlns="http://www.w3.org/2000/svg" width="100%" style="max-width:780px">
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#64748b"/>
+          </marker>
+          <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/>
+          </marker>
+        </defs>
+
+        <!-- Row 1 -->
+        <!-- Bancos -->
+        <rect x="10" y="20" width="140" height="60" rx="10" fill="rgba(34,197,94,0.12)" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="80" y="44" text-anchor="middle" fill="#22c55e" font-family="Inter,sans-serif" font-size="11" font-weight="600">🏦 BANCOS</text>
+        <text x="80" y="60" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">Saldos actuales</text>
+        <text x="80" y="74" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">por cuenta</text>
+
+        <!-- Arrow Bancos → Movimientos -->
+        <line x1="150" y1="50" x2="200" y2="50" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- Movimientos -->
+        <rect x="200" y="20" width="150" height="60" rx="10" fill="rgba(59,130,246,0.12)" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="275" y="44" text-anchor="middle" fill="#60a5fa" font-family="Inter,sans-serif" font-size="11" font-weight="600">↕️ MOVIMIENTOS</text>
+        <text x="275" y="60" text-anchor="middle" fill="#93c5fd" font-family="Inter,sans-serif" font-size="10">Créditos y débitos</text>
+        <text x="275" y="74" text-anchor="middle" fill="#93c5fd" font-family="Inter,sans-serif" font-size="10">de todas las cuentas</text>
+
+        <!-- Arrow Movimientos → Conciliación -->
+        <line x1="350" y1="50" x2="400" y2="50" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- Conciliación -->
+        <rect x="400" y="20" width="140" height="60" rx="10" fill="rgba(245,158,11,0.12)" stroke="#f59e0b" stroke-width="1.5"/>
+        <text x="470" y="44" text-anchor="middle" fill="#fbbf24" font-family="Inter,sans-serif" font-size="11" font-weight="600">🔁 CONCILIACIÓN</text>
+        <text x="470" y="60" text-anchor="middle" fill="#fcd34d" font-family="Inter,sans-serif" font-size="10">Extracto CSV del banco</text>
+        <text x="470" y="74" text-anchor="middle" fill="#fcd34d" font-family="Inter,sans-serif" font-size="10">vs. sistema</text>
+
+        <!-- Arrow Conciliación → Proyección -->
+        <line x1="540" y1="50" x2="590" y2="50" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- Flujo de Fondos -->
+        <rect x="590" y="20" width="170" height="60" rx="10" fill="rgba(34,197,94,0.12)" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="675" y="40" text-anchor="middle" fill="#22c55e" font-family="Inter,sans-serif" font-size="11" font-weight="600">📈 FLUJO DE FONDOS</text>
+        <text x="675" y="56" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">Proyección acumulada</text>
+        <text x="675" y="70" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">30 / 60 / 90 días</text>
+
+        <!-- Row 2 -->
+        <!-- Cobranzas -->
+        <rect x="10" y="160" width="140" height="60" rx="10" fill="rgba(34,197,94,0.08)" stroke="rgba(34,197,94,0.4)" stroke-width="1.5"/>
+        <text x="80" y="184" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="11" font-weight="600">📥 COBRANZAS</text>
+        <text x="80" y="200" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">Clientes con saldo</text>
+        <text x="80" y="214" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">deudor</text>
+
+        <!-- Pagos -->
+        <rect x="200" y="160" width="150" height="60" rx="10" fill="rgba(245,158,11,0.08)" stroke="rgba(245,158,11,0.4)" stroke-width="1.5"/>
+        <text x="275" y="184" text-anchor="middle" fill="#fcd34d" font-family="Inter,sans-serif" font-size="11" font-weight="600">📤 PAGOS</text>
+        <text x="275" y="200" text-anchor="middle" fill="#fcd34d" font-family="Inter,sans-serif" font-size="10">Deudas a</text>
+        <text x="275" y="214" text-anchor="middle" fill="#fcd34d" font-family="Inter,sans-serif" font-size="10">proveedores</text>
+
+        <!-- Caja Chica -->
+        <rect x="400" y="160" width="140" height="60" rx="10" fill="rgba(59,130,246,0.08)" stroke="rgba(59,130,246,0.4)" stroke-width="1.5"/>
+        <text x="470" y="184" text-anchor="middle" fill="#93c5fd" font-family="Inter,sans-serif" font-size="11" font-weight="600">🗃️ CAJA CHICA</text>
+        <text x="470" y="200" text-anchor="middle" fill="#93c5fd" font-family="Inter,sans-serif" font-size="10">Fondo fijo +</text>
+        <text x="470" y="214" text-anchor="middle" fill="#93c5fd" font-family="Inter,sans-serif" font-size="10">Google Sheets sync</text>
+
+        <!-- Dashboard -->
+        <rect x="590" y="160" width="170" height="60" rx="10" fill="rgba(34,197,94,0.15)" stroke="#22c55e" stroke-width="2"/>
+        <text x="675" y="184" text-anchor="middle" fill="#22c55e" font-family="Inter,sans-serif" font-size="11" font-weight="700">📊 DASHBOARD</text>
+        <text x="675" y="200" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">Vista unificada de</text>
+        <text x="675" y="214" text-anchor="middle" fill="#86efac" font-family="Inter,sans-serif" font-size="10">toda la tesorería</text>
+
+        <!-- Arrows from row 2 to Dashboard -->
+        <line x1="150" y1="190" x2="588" y2="190" stroke="#22c55e" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-green)"/>
+        <line x1="350" y1="190" x2="588" y2="190" stroke="#22c55e" stroke-width="1" stroke-dasharray="4,3"/>
+        <line x1="540" y1="190" x2="588" y2="190" stroke="#22c55e" stroke-width="1" stroke-dasharray="4,3"/>
+
+        <!-- Vertical arrows row1 to row2 context -->
+        <line x1="80" y1="80" x2="80" y2="158" stroke="#64748b" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arrow)"/>
+        <line x1="275" y1="80" x2="275" y2="158" stroke="#64748b" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arrow)"/>
+        <line x1="470" y1="80" x2="470" y2="158" stroke="#64748b" stroke-width="1" stroke-dasharray="3,3" marker-end="url(#arrow)"/>
+
+        <!-- Legend -->
+        <line x1="10" y1="290" x2="40" y2="290" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <text x="48" y="294" fill="#64748b" font-family="Inter,sans-serif" font-size="11">Flujo de datos</text>
+        <line x1="160" y1="290" x2="190" y2="290" stroke="#22c55e" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-green)"/>
+        <text x="198" y="294" fill="#64748b" font-family="Inter,sans-serif" font-size="11">Alimenta el dashboard</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- CASOS FRECUENTES -->
+  <section class="section" id="casos">
+    <div class="section-header">
+      <div class="section-icon icon-blue">💡</div>
+      <div>
+        <div class="section-num">13</div>
+        <h2>Casos Frecuentes</h2>
+      </div>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-head">
+        <span style="font-size:20px">📋</span>
+        <h4>Caso 1: Cierre de mes — reconciliar el banco Santander</h4>
+      </div>
+      <p><strong>Situación:</strong> Es fin de mes y necesitás cerrar la conciliación bancaria del Santander antes de entregar el balance mensual.</p>
+      <p><strong>Pasos:</strong></p>
+      <ol style="margin-bottom:0">
+        <li>Descargá el extracto de Santander en formato CSV para el mes completo</li>
+        <li>Andá a <code>/tesoreria/conciliacion</code> y seleccioná la cuenta Santander</li>
+        <li>Subí el archivo CSV y esperá a que el sistema procese el matching</li>
+        <li>Revisá las diferencias: los movimientos "Solo en banco" son los que hay que registrar en el sistema</li>
+        <li>Registrá los movimientos faltantes o asociá manualmente los que el sistema no reconoció</li>
+        <li>Una vez que todas las diferencias estén resueltas, marcá el período como conciliado</li>
+      </ol>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-head">
+        <span style="font-size:20px">📥</span>
+        <h4>Caso 2: Un cliente pagó pero el saldo en el sistema no se actualizó</h4>
+      </div>
+      <p><strong>Situación:</strong> Recibiste una transferencia de un cliente pero el sistema todavía muestra que ese cliente tiene deuda.</p>
+      <p><strong>Solución:</strong> El pago del cliente llegó a la cuenta bancaria pero todavía no fue registrado en el sistema como cobro. Andá a <code>/tesoreria/cobranzas</code>, buscá al cliente, hacé clic en su saldo y usá la opción de registrar cobro indicando el monto, fecha y cuenta bancaria receptora.</p>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-head">
+        <span style="font-size:20px">📈</span>
+        <h4>Caso 3: El flujo de fondos muestra zona roja en 15 días</h4>
+      </div>
+      <p><strong>Situación:</strong> El gráfico de flujo de fondos proyectado muestra que en 15 días el saldo caería a negativo.</p>
+      <p><strong>Pasos sugeridos:</strong></p>
+      <ol style="margin-bottom:0">
+        <li>Identificá qué pagos grandes vencen en esa ventana (sección Pagos)</li>
+        <li>Verificá qué cobranzas importantes están pendientes que podrían adelantarse (sección Cobranzas)</li>
+        <li>Evaluá si algún pago puede diferirse sin costo o penalidad</li>
+        <li>Presentá el análisis a Dirección para tomar decisión sobre financiamiento si es necesario</li>
+      </ol>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-head">
+        <span style="font-size:20px">🗃️</span>
+        <h4>Caso 4: La caja chica no refleja los gastos de la semana</h4>
+      </div>
+      <p><strong>Situación:</strong> Se registraron gastos en la planilla de Google Sheets pero el sistema todavía muestra el saldo anterior.</p>
+      <p><strong>Solución:</strong> Andá a <code>/tesoreria/caja-chica</code> y hacé clic en "Sincronizar". El sistema va a leer la planilla y actualizar el saldo. Recordá que la sincronización no es automática — hay que dispararla manualmente.</p>
+    </div>
+
+    <div class="scenario">
+      <div class="scenario-head">
+        <span style="font-size:20px">🏦</span>
+        <h4>Caso 5: Hay una diferencia entre el saldo del banco y el del sistema</h4>
+      </div>
+      <p><strong>Situación:</strong> El saldo que muestra el sistema para la cuenta bancaria no coincide con el saldo real en el banco.</p>
+      <p><strong>Solución:</strong> Es una diferencia de conciliación. Andá a <code>/tesoreria/conciliacion</code>, ingresá el extracto bancario del período y revisá qué movimientos están en el banco pero no en el sistema (o viceversa). Las causas más frecuentes son: débitos automáticos no registrados, transferencias en tránsito, o comisiones bancarias no cargadas.</p>
+    </div>
+  </section>
+
+  <!-- ERRORES COMUNES -->
+  <section class="section" id="errores">
+    <div class="section-header">
+      <div class="section-icon icon-red">⚠️</div>
+      <div>
+        <div class="section-num">14</div>
+        <h2>Errores Comunes</h2>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❌</span> La conciliación falla al subir el archivo CSV</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p><strong>Causas frecuentes:</strong></p>
+        <ul>
+          <li>El archivo no es un CSV válido del Banco Santander (podría ser XLS o PDF)</li>
+          <li>El archivo está en blanco o tiene filas de encabezado no estándar</li>
+          <li>El período del extracto se solapa con una conciliación ya cerrada</li>
+          <li>Separador de columnas incorrecto (el sistema espera punto y coma <code>;</code>)</li>
+        </ul>
+        <p><strong>Solución:</strong> Verificá que el archivo es el formato correcto de exportación CSV de Santander. Si el banco cambió el formato de exportación, contactá con el administrador del sistema.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❌</span> El saldo del dashboard no coincide con la suma de las cuentas</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Si el saldo total del dashboard no coincide con la suma manual de los saldos individuales de cada cuenta:</p>
+        <ul>
+          <li>Puede haber cuentas con moneda diferente (USD) que se convierten al tipo de cambio del día</li>
+          <li>Puede haber una cuenta inactiva que no se muestra en la lista pero sí entra en el roll-up</li>
+          <li>Actualizá la página (F5) — puede ser un problema de caché de la vista</li>
+        </ul>
+        <p>Si el problema persiste, reportalo al administrador del sistema indicando la diferencia exacta.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❌</span> La sincronización de caja chica no trae datos actualizados</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Si al sincronizar la caja chica los datos no se actualizan o aparece un error:</p>
+        <ul>
+          <li>Verificá que la planilla de Google Sheets tenga el formato correcto (las columnas deben coincidir con lo esperado por el sistema)</li>
+          <li>La integración con Google Sheets requiere que la cuenta de servicio del sistema tenga acceso a la planilla. Si la planilla fue movida, renombrada o se revocaron permisos, la sincronización falla</li>
+          <li>Verificá que la planilla no esté protegida con contraseña adicional</li>
+        </ul>
+        <p>Si el error persiste, contactá con el administrador del sistema con el mensaje de error exacto.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❌</span> El flujo de fondos proyectado muestra valores incorrectos</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Si la proyección de flujo de fondos no parece razonable:</p>
+        <ul>
+          <li>Verificá que las fechas de vencimiento de cobranzas y pagos estén correctamente cargadas en el sistema</li>
+          <li>Si hay cobranzas o pagos grandes sin fecha de vencimiento, pueden no incluirse en la proyección</li>
+          <li>La proyección usa los datos registrados al momento de la consulta — no proyecta valores que no estén cargados</li>
+        </ul>
+        <p>Actualizá las fechas de vencimiento de los documentos pendientes y refrescá la vista de flujo de fondos.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❌</span> No veo el módulo de Tesorería en el menú</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Si el módulo de Tesorería no aparece en el menú lateral, es porque tu rol de usuario no tiene el permiso <code>tesoreria.*</code>. Solo acceden los roles Director y Administración.</p>
+        <p>Si creés que deberías tener acceso, solicitáselo a Dirección para que el administrador del sistema asigne el rol correspondiente a tu usuario.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CIERRE MENSUAL -->
+  <section class="section" id="cierre">
+    <div class="section-header">
+      <div class="section-icon icon-green">✅</div>
+      <div>
+        <div class="section-num">15</div>
+        <h2>Checklist de Cierre Mensual</h2>
+      </div>
+    </div>
+
+    <p>Usá esta lista de verificación para asegurarte de completar todas las tareas financieras al cierre de cada mes. Hacé clic en cada ítem para marcarlo como completado.</p>
+
+    <ul class="checklist" id="cierre-checklist">
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Descargar extractos bancarios del mes completo de todos los bancos activos (Santander y otros)</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Ingresar cada extracto en la sección Conciliación (<code>/tesoreria/conciliacion</code>) y resolver todas las diferencias</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Verificar que todos los cobros del mes estén registrados en Cobranzas y asociados a la cuenta bancaria correcta</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Verificar que todos los pagos a proveedores del mes estén registrados y marcados como pagados</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Sincronizar la Caja Chica desde Google Sheets y verificar el saldo del fondo fijo</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Revisar el dashboard de Tesorería y verificar que todos los saldos sean coherentes</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Generar el reporte de posición bancaria al cierre del mes desde <code>/reports</code></span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Revisar la antigüedad de deudores: identificar facturas con más de 60 días sin cobrar y coordinar acciones</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Revisar la antigüedad de acreedores: verificar que no haya pagos vencidos a proveedores sin gestionar</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Analizar el flujo de fondos proyectado para el mes siguiente e identificar períodos de tensión de liquidez</span>
+      </li>
+      <li onclick="toggleCheck(this)">
+        <div class="check-box">✓</div>
+        <span>Presentar el resumen financiero mensual a Dirección</span>
+      </li>
+    </ul>
+
+    <div style="margin-top:16px">
+      <button onclick="resetChecklist()" style="background:var(--card);border:1px solid var(--border);color:var(--text-muted);padding:8px 16px;border-radius:7px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;transition:all 0.2s" onmouseover="this.style.background='var(--card-hover)'" onmouseout="this.style.background='var(--card)'">
+        🔄 Reiniciar checklist
+      </button>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section" id="faq">
+    <div class="section-header">
+      <div class="section-icon icon-blue">❓</div>
+      <div>
+        <div class="section-num">16</div>
+        <h2>Preguntas Frecuentes</h2>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿Con qué frecuencia se actualizan los saldos del dashboard?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Los saldos se actualizan cada vez que se carga o recarga la página. No hay actualización en tiempo real automática (sin recargar). Para ver el estado más reciente, presioná F5 o el botón de recarga del navegador.</p>
+        <p>Los cálculos se realizan en el servidor al momento de la consulta, por lo que siempre reflejan los datos más recientes registrados en el sistema.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿El sistema se conecta directamente con el banco?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>No. TOPS Nexus <strong>no</strong> se conecta en forma directa con las APIs bancarias. Los saldos del sistema son los saldos contables basados en los movimientos registrados manualmente o importados mediante CSV. Para conocer el saldo real en el banco, siempre es necesario consultar el extracto bancario y realizar la conciliación.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿Puedo agregar una nueva cuenta bancaria desde el sistema?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Las altas de cuentas bancarias requieren configuración a nivel de sistema y no están disponibles en la interfaz de usuario estándar. Para agregar una nueva cuenta, solicitáselo al administrador del sistema con los datos de la cuenta (banco, tipo, CBU, moneda).</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿Qué pasa si registré un cobro por error?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Si registraste un cobro por error (monto incorrecto, cliente equivocado, cuenta bancaria incorrecta), contactá con el administrador del sistema para anular o corregir el registro. No intentes "contrarrestarlo" con otro movimiento sin consultar, ya que podría generar inconsistencias en la conciliación.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿El flujo de fondos incluye la caja chica?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Depende de la configuración del sistema. En la implementación actual, el flujo de fondos se basa en los movimientos bancarios y los documentos de cobranza y pago registrados. La caja chica se gestiona separadamente. Consultá con Dirección si necesitás incluir el fondo fijo en la proyección de cash flow.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿Puedo exportar los movimientos a Excel o CSV?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>La funcionalidad de exportación está disponible desde la sección de Reportes (<code>/reports</code>). Dependiendo del reporte, podés descargar los datos en formato CSV o Excel. Si necesitás un export específico que no está disponible, comentáselo al administrador del sistema.</p>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿Cómo sé si una diferencia de conciliación es un error o una partida válida?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>Las diferencias de conciliación más comunes tienen causas específicas:</p>
+        <ul>
+          <li><strong>Débito automático no registrado:</strong> el banco cobró un servicio (comisión, seguro) que no se cargó en el sistema → registrarlo como gasto</li>
+          <li><strong>Transferencia en tránsito:</strong> se registró en el sistema antes de que el banco lo procesara → diferencia temporal, se resuelve sola en los días siguientes</li>
+          <li><strong>Error de digitación:</strong> un movimiento fue cargado con importe o fecha incorrecta → corregir el registro</li>
+          <li><strong>Movimiento bancario desconocido:</strong> aparece en el extracto pero no se reconoce → consultar con el banco por el origen</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="accordion">
+      <button class="accordion-header" onclick="toggleAccordion(this)">
+        <div class="accordion-left"><span class="accordion-emoji">❓</span> ¿Qué hago si un proveedor me reclama una deuda que ya fue pagada?</div>
+        <span class="accordion-arrow">▼</span>
+      </button>
+      <div class="accordion-body">
+        <p>En la sección Pagos (<code>/tesoreria/pagos</code>), buscá al proveedor y verificá el estado del pago en el sistema. Si el sistema muestra el pago como realizado, buscá el movimiento bancario correspondiente para corroborar la transferencia. Con la fecha, el monto y el comprobante bancario podés demostrar el pago al proveedor.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- GLOSARIO -->
+  <section class="section" id="glosario">
+    <div class="section-header">
+      <div class="section-icon icon-blue">📖</div>
+      <div>
+        <div class="section-num">17</div>
+        <h2>Glosario Financiero</h2>
+      </div>
+    </div>
+
+    <dl class="glosario">
+      <dt>Tesorería</dt>
+      <dd>Área responsable de gestionar los flujos de dinero de la empresa: entradas (cobranzas), salidas (pagos), saldos bancarios y disponibilidad de fondos. El módulo de TOPS Nexus centraliza toda esta información.</dd>
+
+      <dt>Conciliación bancaria</dt>
+      <dd>Proceso de comparar y verificar que los movimientos registrados en el sistema contable coincidan con los movimientos que el banco reporta en el extracto oficial. Cualquier diferencia debe ser investigada y resuelta.</dd>
+
+      <dt>Extracto bancario</dt>
+      <dd>Documento emitido por el banco que detalla todos los débitos y créditos ocurridos en una cuenta durante un período determinado. En TOPS Nexus se importa en formato CSV para realizar la conciliación.</dd>
+
+      <dt>Cash flow / Flujo de fondos</dt>
+      <dd>Movimiento de dinero que entra y sale de la empresa en un período. El flujo de fondos proyectado estima cuánto dinero habrá disponible en fechas futuras, basándose en cobranzas y pagos esperados.</dd>
+
+      <dt>Caja chica / Fondo fijo</dt>
+      <dd>Monto de dinero en efectivo destinado a cubrir gastos menores y frecuentes sin necesidad de procesar transferencias bancarias. El fondo fijo tiene un monto establecido que se repone periódicamente cuando se agota.</dd>
+
+      <dt>Cuenta corriente de clientes</dt>
+      <dd>Registro del historial de facturación y cobros de un cliente específico. El saldo de la cuenta corriente indica cuánto le debe el cliente a la empresa en un momento dado. Fuente: <code>v_customer_current_accounts</code>.</dd>
+
+      <dt>Cuenta corriente de proveedores</dt>
+      <dd>Registro del historial de compras y pagos a un proveedor específico. El saldo de la cuenta corriente indica cuánto le debe la empresa al proveedor. Fuente: <code>v_supplier_current_accounts</code>.</dd>
+
+      <dt>Roll-up</dt>
+      <dd>Cálculo de consolidación que suma o agrupa valores de múltiples registros en un único total. En TOPS Nexus, el saldo total en bancos es un roll-up de todos los saldos individuales de cada cuenta. Los roll-ups se calculan server-side.</dd>
+
+      <dt>Server-side</dt>
+      <dd>Los cálculos se realizan en el servidor (no en el navegador del usuario). Esto garantiza que los números sean siempre consistentes, independientemente del dispositivo o navegador utilizado.</dd>
+
+      <dt>Antigüedad de deudores</dt>
+      <dd>Clasificación de las cobranzas pendientes según cuántos días llevan sin cobrarse desde la fecha de vencimiento. Se agrupa en tramos: 0–30 días (normal), 31–60 (atención), 61–90 (riesgo), +90 días (cobranza dudosa).</dd>
+
+      <dt>Liquidez</dt>
+      <dd>Capacidad de la empresa de convertir activos en dinero disponible para hacer frente a sus obligaciones en el corto plazo. El dashboard de Tesorería es el principal indicador de la posición de liquidez de la empresa.</dd>
+
+      <dt>Débito / Crédito</dt>
+      <dd>En el contexto bancario: un <strong>crédito</strong> es una entrada de dinero a la cuenta (transferencia recibida, depósito). Un <strong>débito</strong> es una salida de dinero (transferencia enviada, pago de servicio, comisión).</dd>
+
+      <dt>Sobregiro</dt>
+      <dd>Situación en la que el saldo de una cuenta bancaria cae por debajo de cero. El banco puede permitir operar con saldo negativo hasta cierto límite (línea de crédito), pero genera intereses. En TOPS Nexus, una cuenta con saldo negativo se muestra en rojo.</dd>
+
+      <dt>Matching automático</dt>
+      <dd>Proceso mediante el cual el sistema intenta asociar automáticamente los movimientos del extracto bancario con los registros en el sistema, basándose en importes, fechas y conceptos similares. Los movimientos que no matchean quedan como diferencias a resolver manualmente.</dd>
+    </dl>
+  </section>
+
+  <hr class="divider">
+
+  <div style="text-align:center; padding: 20px 0 40px;">
+    <a href="index.html" class="btn-back" style="display:inline-flex">← Volver al índice del manual</a>
+    <p style="color:var(--text-dim); font-size:12px; margin-top:16px">
+      TOPS Nexus — Manual de Usuario · Tesorería y Finanzas · Versión 2026
+    </p>
+  </div>
+
+</main>
+</div>
+
+<script>
+// Accordion
+function toggleAccordion(btn) {
+  const body = btn.nextElementSibling;
+  const isOpen = btn.classList.contains('open');
+  btn.classList.toggle('open', !isOpen);
+  body.classList.toggle('open', !isOpen);
+}
+
+// Tabs
+function switchTab(btn, group, pane) {
+  const nav = btn.closest('.tab-nav');
+  nav.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = nav.closest('.tabs');
+  container.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('tab-' + group + '-' + pane);
+  if (target) target.classList.add('active');
+}
+
+// Checklist
+function toggleCheck(li) {
+  li.classList.toggle('checked');
+}
+
+function resetChecklist() {
+  document.querySelectorAll('#cierre-checklist li').forEach(li => li.classList.remove('checked'));
+}
+
+// Sidebar active link on scroll
+const sections = document.querySelectorAll('section[id]');
+const sidebarLinks = document.querySelectorAll('.sidebar-link');
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      sidebarLinks.forEach(link => {
+        link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id);
+      });
+    }
+  });
+}, { rootMargin: '-60px 0px -60% 0px', threshold: 0 });
+
+sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

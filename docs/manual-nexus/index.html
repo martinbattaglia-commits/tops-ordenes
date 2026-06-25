@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TOPS Nexus – Manual de Usuario</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Design System ────────────────────────────────────────────────────── */
+    :root {
+      --navy:          #0f172a;
+      --navy-light:    #1e293b;
+      --navy-mid:      #162032;
+      --blue:          #3b82f6;
+      --blue-dim:      rgba(59,130,246,0.15);
+      --green:         #22c55e;
+      --amber:         #f59e0b;
+      --red:           #ef4444;
+      --text:          #f8fafc;
+      --text-muted:    #94a3b8;
+      --text-faint:    #475569;
+      --border:        rgba(255,255,255,0.08);
+      --border-bright: rgba(255,255,255,0.15);
+      --card:          rgba(255,255,255,0.04);
+      --card-hover:    rgba(255,255,255,0.07);
+      --shadow:        0 4px 24px rgba(0,0,0,0.4);
+      --shadow-lg:     0 8px 48px rgba(0,0,0,0.6);
+      --radius:        12px;
+      --radius-lg:     16px;
+      --radius-sm:     8px;
+      --transition:    0.2s ease;
+    }
+
+    /* ─── Reset ────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; font-family: inherit; }
+
+    /* ─── Scrollbar ────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--navy); }
+    ::-webkit-scrollbar-thumb { background: var(--navy-light); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--blue); }
+
+    /* ─── Top Progress Bar ─────────────────────────────────────────────────── */
+    #progress-bar {
+      position: fixed; top: 0; left: 0; z-index: 9999;
+      height: 3px; width: 0%;
+      background: linear-gradient(90deg, var(--blue), #8b5cf6);
+      transition: width 0.3s ease;
+    }
+
+    /* ─── Navbar ───────────────────────────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 14px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(15,23,42,0.85);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      transition: box-shadow 0.3s;
+    }
+    nav.scrolled { box-shadow: var(--shadow); }
+    .nav-brand {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 0.95rem; letter-spacing: 0.01em;
+    }
+    .nav-brand .logo-mark {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, var(--blue), #6366f1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 800; color: white;
+      box-shadow: 0 2px 8px rgba(59,130,246,0.4);
+    }
+    .nav-links { display: flex; align-items: center; gap: 24px; }
+    .nav-links a {
+      font-size: 0.85rem; font-weight: 500; color: var(--text-muted);
+      transition: color var(--transition);
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-badge {
+      background: var(--blue-dim); color: var(--blue);
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 0.75rem; font-weight: 600;
+      border: 1px solid rgba(59,130,246,0.3);
+    }
+
+    /* ─── Hero ─────────────────────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      padding: 160px 32px 100px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(59,130,246,0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 40% at 80% 60%, rgba(99,102,241,0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 20% 70%, rgba(34,197,94,0.06) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 16px; border-radius: 20px;
+      background: var(--blue-dim); border: 1px solid rgba(59,130,246,0.25);
+      font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em;
+      color: var(--blue); text-transform: uppercase;
+      margin-bottom: 24px;
+      animation: fadeInDown 0.6s ease both;
+    }
+    .hero-title {
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+      animation: fadeInDown 0.6s 0.1s ease both;
+    }
+    .hero-title .gradient-text {
+      background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 50%, #34d399 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-subtitle {
+      font-size: 1.1rem; color: var(--text-muted); max-width: 600px; margin: 0 auto 40px;
+      font-weight: 400; line-height: 1.7;
+      animation: fadeInDown 0.6s 0.2s ease both;
+    }
+    .hero-stats {
+      display: flex; align-items: center; justify-content: center;
+      gap: 32px; flex-wrap: wrap;
+      margin-bottom: 40px;
+      animation: fadeInDown 0.6s 0.3s ease both;
+    }
+    .hero-stat {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .hero-stat-value {
+      font-size: 1.8rem; font-weight: 800; color: var(--text);
+      line-height: 1;
+    }
+    .hero-stat-label {
+      font-size: 0.75rem; color: var(--text-muted); font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .hero-stat-sep {
+      width: 1px; height: 40px; background: var(--border-bright);
+    }
+    .hero-actions {
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px; flex-wrap: wrap;
+      animation: fadeInDown 0.6s 0.4s ease both;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-radius: var(--radius-sm);
+      font-size: 0.9rem; font-weight: 600;
+      transition: all var(--transition); border: none; outline: none;
+    }
+    .btn-primary {
+      background: var(--blue); color: white;
+      box-shadow: 0 4px 16px rgba(59,130,246,0.4);
+    }
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(59,130,246,0.5);
+    }
+    .btn-ghost {
+      background: var(--card); color: var(--text-muted);
+      border: 1px solid var(--border-bright);
+    }
+    .btn-ghost:hover { background: var(--card-hover); color: var(--text); }
+
+    /* ─── Reading Progress Bar ─────────────────────────────────────────────── */
+    .progress-section {
+      background: var(--navy-light); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px 32px;
+      margin: 0 32px 48px; max-width: 1200px; margin-inline: auto;
+      display: flex; align-items: center; gap: 24px; flex-wrap: wrap;
+    }
+    .progress-info { flex: 1; min-width: 200px; }
+    .progress-info h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+    .progress-info p { font-size: 0.8rem; color: var(--text-muted); }
+    .progress-bar-container { flex: 2; min-width: 200px; }
+    .progress-track {
+      height: 8px; background: var(--card); border-radius: 4px; overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, var(--blue), #8b5cf6);
+      transition: width 0.5s ease;
+    }
+    .progress-meta {
+      display: flex; justify-content: space-between;
+      font-size: 0.75rem; color: var(--text-muted);
+    }
+    #read-count { font-weight: 600; color: var(--blue); }
+    .btn-reset-progress {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-faint); padding: 6px 14px;
+      border-radius: var(--radius-sm); font-size: 0.78rem;
+      transition: all var(--transition);
+    }
+    .btn-reset-progress:hover { border-color: var(--red); color: var(--red); }
+
+    /* ─── Main Content Container ───────────────────────────────────────────── */
+    .container {
+      max-width: 1240px; margin: 0 auto; padding: 0 32px;
+    }
+
+    /* ─── Section Headers ──────────────────────────────────────────────────── */
+    .section-header {
+      margin-bottom: 32px;
+    }
+    .section-label {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--blue); margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .section-desc { font-size: 0.9rem; color: var(--text-muted); }
+
+    /* ─── How-to Section ───────────────────────────────────────────────────── */
+    .howto-section { padding: 64px 0 48px; }
+    .howto-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;
+    }
+    .howto-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 20px;
+      transition: all var(--transition);
+    }
+    .howto-card:hover { background: var(--card-hover); border-color: var(--border-bright); }
+    .howto-num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue-dim); color: var(--blue);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; margin-bottom: 12px;
+      border: 1px solid rgba(59,130,246,0.3);
+    }
+    .howto-card h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; }
+    .howto-card p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+
+    /* ─── Filter + Search Bar ──────────────────────────────────────────────── */
+    .filter-section {
+      background: var(--navy-light); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px 24px;
+      margin-bottom: 32px;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    .search-wrap {
+      flex: 1; min-width: 200px; position: relative;
+    }
+    .search-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-faint); font-size: 0.9rem; pointer-events: none;
+    }
+    #search-input {
+      width: 100%; padding: 10px 12px 10px 36px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); color: var(--text);
+      font-size: 0.88rem; font-family: inherit; outline: none;
+      transition: all var(--transition);
+    }
+    #search-input::placeholder { color: var(--text-faint); }
+    #search-input:focus { border-color: var(--blue); background: rgba(59,130,246,0.06); }
+    .filter-label {
+      font-size: 0.78rem; font-weight: 600; color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .role-filters {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .role-btn {
+      padding: 7px 14px; border-radius: 20px;
+      font-size: 0.78rem; font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--card); color: var(--text-muted);
+      transition: all var(--transition);
+    }
+    .role-btn:hover { border-color: var(--border-bright); color: var(--text); }
+    .role-btn.active {
+      background: var(--blue-dim); color: var(--blue);
+      border-color: rgba(59,130,246,0.4);
+    }
+    .no-results {
+      text-align: center; padding: 60px 20px;
+      color: var(--text-muted); font-size: 0.9rem;
+      display: none;
+    }
+    .no-results .no-results-icon { font-size: 2.5rem; margin-bottom: 12px; }
+
+    /* ─── Module Cards Grid ────────────────────────────────────────────────── */
+    .modules-section { padding: 0 0 64px; }
+    .modules-count {
+      font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px;
+    }
+    #visible-count { font-weight: 600; color: var(--text); }
+    .modules-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    @media (max-width: 1024px) {
+      .modules-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .modules-grid { grid-template-columns: 1fr; }
+      nav { padding: 12px 16px; }
+      .nav-links { display: none; }
+      .hero { padding: 120px 16px 80px; }
+      .container { padding: 0 16px; }
+      .filter-section { gap: 12px; }
+      .progress-section { margin: 0 16px 32px; }
+      .hero-stat-sep { display: none; }
+    }
+
+    .module-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 24px;
+      display: flex; flex-direction: column; gap: 16px;
+      transition: all 0.25s ease;
+      position: relative; overflow: hidden;
+      animation: fadeInUp 0.5s ease both;
+    }
+    .module-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      background: var(--accent-color, var(--blue));
+      opacity: 0; transition: opacity var(--transition);
+    }
+    .module-card:hover {
+      background: var(--card-hover);
+      border-color: var(--border-bright);
+      transform: translateY(-3px);
+      box-shadow: var(--shadow);
+    }
+    .module-card:hover::before { opacity: 1; }
+    .module-card.hidden { display: none; }
+    .module-card.read .card-read-badge { display: flex; }
+
+    .card-top { display: flex; align-items: flex-start; gap: 14px; }
+    .card-icon {
+      width: 52px; height: 52px; border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; flex-shrink: 0;
+      background: var(--accent-dim, rgba(59,130,246,0.12));
+      border: 1px solid var(--accent-border, rgba(59,130,246,0.2));
+    }
+    .card-meta { flex: 1; min-width: 0; }
+    .card-number {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px;
+    }
+    .card-title {
+      font-size: 1rem; font-weight: 700; line-height: 1.2;
+      color: var(--text); margin-bottom: 0;
+    }
+    .card-desc {
+      font-size: 0.83rem; color: var(--text-muted); line-height: 1.55;
+    }
+    .card-roles {
+      display: flex; flex-wrap: wrap; gap: 6px;
+    }
+    .role-badge {
+      padding: 3px 9px; border-radius: 20px;
+      font-size: 0.68rem; font-weight: 600;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .card-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-top: 4px; border-top: 1px solid var(--border);
+    }
+    .card-read-badge {
+      display: none; align-items: center; gap: 6px;
+      font-size: 0.75rem; font-weight: 600; color: var(--green);
+      background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.25);
+      padding: 4px 10px; border-radius: 20px;
+    }
+    .card-cta {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: var(--radius-sm);
+      font-size: 0.8rem; font-weight: 600; color: white;
+      background: var(--accent-color, var(--blue));
+      transition: all var(--transition);
+      border: none; outline: none;
+      box-shadow: 0 2px 8px var(--accent-shadow, rgba(59,130,246,0.3));
+    }
+    .card-cta:hover {
+      opacity: 0.85; transform: translateX(2px);
+    }
+    .card-mark-btn {
+      background: none; border: none;
+      color: var(--text-faint); font-size: 0.78rem;
+      display: flex; align-items: center; gap: 4px;
+      padding: 6px 8px; border-radius: var(--radius-sm);
+      transition: all var(--transition);
+    }
+    .card-mark-btn:hover { color: var(--green); }
+    .module-card.read .card-mark-btn { color: var(--green); }
+
+    /* ─── Roadmap / Timeline Section ───────────────────────────────────────── */
+    .roadmap-section { padding: 64px 0; }
+    .roadmap-tabs {
+      display: flex; gap: 8px; margin-bottom: 32px; flex-wrap: wrap;
+    }
+    .roadmap-tab {
+      padding: 8px 18px; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 600;
+      background: var(--card); border: 1px solid var(--border);
+      color: var(--text-muted); transition: all var(--transition);
+    }
+    .roadmap-tab:hover { color: var(--text); }
+    .roadmap-tab.active {
+      background: var(--blue-dim); color: var(--blue);
+      border-color: rgba(59,130,246,0.35);
+    }
+    .roadmap-content { display: none; }
+    .roadmap-content.active { display: block; }
+    .timeline {
+      display: flex; gap: 0; align-items: stretch;
+      overflow-x: auto; padding-bottom: 8px;
+    }
+    .timeline-item {
+      flex: 1; min-width: 140px; position: relative;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .timeline-item:not(:last-child)::after {
+      content: ''; position: absolute;
+      top: 20px; left: calc(50% + 20px); right: calc(-50% + 20px);
+      height: 2px; background: var(--border-bright); z-index: 0;
+    }
+    .timeline-dot {
+      width: 40px; height: 40px; border-radius: 50%; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; margin-bottom: 12px; flex-shrink: 0;
+      border: 2px solid var(--border-bright);
+      background: var(--navy-light);
+    }
+    .timeline-item-info { text-align: center; }
+    .timeline-step {
+      font-size: 0.68rem; color: var(--blue); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+    }
+    .timeline-name {
+      font-size: 0.78rem; font-weight: 600; color: var(--text);
+      line-height: 1.3;
+    }
+
+    /* ─── Module Map / Diagram ─────────────────────────────────────────────── */
+    .diagram-section { padding: 0 0 64px; }
+    .diagram-wrap {
+      background: var(--navy-light); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 32px; overflow-x: auto;
+    }
+    .diagram-center {
+      display: flex; flex-direction: column; align-items: center; gap: 24px;
+    }
+    .diagram-core {
+      background: linear-gradient(135deg, var(--blue), #6366f1);
+      border-radius: var(--radius-lg); padding: 16px 32px;
+      font-weight: 700; font-size: 1rem;
+      box-shadow: 0 4px 24px rgba(59,130,246,0.35);
+    }
+    .diagram-rows { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    .diagram-row {
+      display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    }
+    .diagram-node {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 10px 14px; border-radius: var(--radius-sm);
+      font-size: 0.75rem; font-weight: 600; text-align: center;
+      min-width: 100px;
+      border: 1px solid;
+      transition: all var(--transition);
+    }
+    .diagram-node:hover { transform: scale(1.04); }
+    .diagram-node .node-icon { font-size: 1.2rem; }
+
+    /* ─── Help / Support Section ───────────────────────────────────────────── */
+    .help-section { padding: 0 0 64px; }
+    .help-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;
+    }
+    .help-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px;
+      transition: all var(--transition);
+    }
+    .help-card:hover { background: var(--card-hover); border-color: var(--border-bright); }
+    .help-card-icon { font-size: 1.8rem; margin-bottom: 12px; }
+    .help-card h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
+    .help-card p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+    .help-link {
+      display: inline-block; margin-top: 12px;
+      font-size: 0.8rem; font-weight: 600; color: var(--blue);
+      transition: opacity var(--transition);
+    }
+    .help-link:hover { opacity: 0.8; }
+
+    /* ─── Footer ───────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+    .footer-brand { display: flex; align-items: center; gap: 10px; }
+    .footer-brand .logo-mark {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: linear-gradient(135deg, var(--blue), #6366f1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 800; color: white;
+    }
+    .footer-brand-name { font-size: 0.85rem; font-weight: 600; }
+    .footer-meta { font-size: 0.78rem; color: var(--text-faint); text-align: right; }
+    .footer-meta span { display: block; }
+    .footer-version {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--card); border: 1px solid var(--border);
+      padding: 2px 8px; border-radius: 4px;
+      font-size: 0.72rem; color: var(--text-muted); display: inline-block; margin-top: 4px;
+    }
+
+    /* ─── Divider ──────────────────────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 0 0 64px; }
+
+    /* ─── Animations ───────────────────────────────────────────────────────── */
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Stagger animation delays for cards */
+    .module-card:nth-child(1)  { animation-delay: 0.05s; }
+    .module-card:nth-child(2)  { animation-delay: 0.10s; }
+    .module-card:nth-child(3)  { animation-delay: 0.15s; }
+    .module-card:nth-child(4)  { animation-delay: 0.20s; }
+    .module-card:nth-child(5)  { animation-delay: 0.25s; }
+    .module-card:nth-child(6)  { animation-delay: 0.30s; }
+    .module-card:nth-child(7)  { animation-delay: 0.35s; }
+    .module-card:nth-child(8)  { animation-delay: 0.40s; }
+    .module-card:nth-child(9)  { animation-delay: 0.45s; }
+    .module-card:nth-child(10) { animation-delay: 0.50s; }
+    .module-card:nth-child(11) { animation-delay: 0.55s; }
+  </style>
+</head>
+<body>
+
+<!-- ─── Scroll Progress Bar ─────────────────────────────────────────────────── -->
+<div id="progress-bar"></div>
+
+<!-- ─── Navbar ──────────────────────────────────────────────────────────────── -->
+<nav id="navbar">
+  <div class="nav-brand">
+    <div class="logo-mark">TN</div>
+    <span>TOPS Nexus</span>
+  </div>
+  <div class="nav-links">
+    <a href="#modules">Módulos</a>
+    <a href="#roadmap">Orden de lectura</a>
+    <a href="#mapa">Mapa del sistema</a>
+    <a href="#ayuda">Ayuda</a>
+    <span class="nav-badge">v2.0 — Jun 2026</span>
+  </div>
+</nav>
+
+<!-- ─── Hero ─────────────────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-eyebrow">
+    📚 Documentación oficial
+  </div>
+  <h1 class="hero-title">
+    <span class="gradient-text">TOPS Nexus</span><br />
+    Manual de Usuario
+  </h1>
+  <p class="hero-subtitle">
+    El sistema operativo interno de TOPS Logística. Guía completa de módulos,
+    roles y flujos de trabajo para todo el equipo.
+  </p>
+  <div class="hero-stats">
+    <div class="hero-stat">
+      <span class="hero-stat-value">11</span>
+      <span class="hero-stat-label">Módulos</span>
+    </div>
+    <div class="hero-stat-sep"></div>
+    <div class="hero-stat">
+      <span class="hero-stat-value">6</span>
+      <span class="hero-stat-label">Roles</span>
+    </div>
+    <div class="hero-stat-sep"></div>
+    <div class="hero-stat">
+      <span class="hero-stat-value">16</span>
+      <span class="hero-stat-label">Categorías de permisos</span>
+    </div>
+    <div class="hero-stat-sep"></div>
+    <div class="hero-stat">
+      <span class="hero-stat-value">Next.js</span>
+      <span class="hero-stat-label">Tecnología</span>
+    </div>
+  </div>
+  <div class="hero-actions">
+    <a href="#modules" class="btn btn-primary">
+      Ver todos los manuales →
+    </a>
+    <a href="#roadmap" class="btn btn-ghost">
+      ¿Por dónde empiezo?
+    </a>
+  </div>
+</section>
+
+<!-- ─── Progress Section ─────────────────────────────────────────────────────── -->
+<div class="container">
+  <div class="progress-section">
+    <div class="progress-info">
+      <h3>Tu progreso de lectura</h3>
+      <p>Los manuales leídos se guardan en tu navegador</p>
+    </div>
+    <div class="progress-bar-container">
+      <div class="progress-track">
+        <div class="progress-fill" id="read-fill" style="width: 0%"></div>
+      </div>
+      <div class="progress-meta">
+        <span><span id="read-count">0</span> de 11 manuales leídos</span>
+        <span id="read-pct">0%</span>
+      </div>
+    </div>
+    <button class="btn-reset-progress" onclick="resetProgress()">Reiniciar</button>
+  </div>
+</div>
+
+<!-- ─── How to use section ────────────────────────────────────────────────────── -->
+<section class="howto-section">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Primeros pasos</div>
+      <h2 class="section-title">¿Cómo usar este manual?</h2>
+      <p class="section-desc">Seguí estos pasos para sacar el máximo provecho de la documentación.</p>
+    </div>
+    <div class="howto-grid">
+      <div class="howto-card">
+        <div class="howto-num">1</div>
+        <h4>Identificá tu rol</h4>
+        <p>Cada módulo muestra qué roles tienen acceso. Filtrá por tu rol usando los botones del buscador para ver solo lo que te corresponde.</p>
+      </div>
+      <div class="howto-card">
+        <div class="howto-num">2</div>
+        <h4>Seguí el orden recomendado</h4>
+        <p>En la sección "Orden de lectura" encontrás la secuencia óptima según tu rol. Los módulos están priorizados para que aprendas lo más relevante primero.</p>
+      </div>
+      <div class="howto-card">
+        <div class="howto-num">3</div>
+        <h4>Leé el manual del módulo</h4>
+        <p>Hacé clic en "Ver manual" en la tarjeta de cada módulo. Cada manual explica en detalle las funcionalidades, campos y flujos de trabajo.</p>
+      </div>
+      <div class="howto-card">
+        <div class="howto-num">4</div>
+        <h4>Marcá como leído</h4>
+        <p>Usá el ícono ✓ en cada tarjeta para marcar el manual como leído. Tu progreso se guarda automáticamente en el navegador.</p>
+      </div>
+      <div class="howto-card">
+        <div class="howto-num">5</div>
+        <h4>Consultá el mapa del sistema</h4>
+        <p>El diagrama visual al final de esta página muestra cómo se conectan los módulos entre sí para entender el flujo global del sistema.</p>
+      </div>
+      <div class="howto-card">
+        <div class="howto-num">6</div>
+        <h4>¿Dudas? Pedí ayuda</h4>
+        <p>En la sección de ayuda encontrás el contacto de soporte interno y el canal para reportar errores o sugerir mejoras a la documentación.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="container"><div class="divider"></div></div>
+
+<!-- ─── Modules Section ───────────────────────────────────────────────────────── -->
+<section class="modules-section" id="modules">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Documentación</div>
+      <h2 class="section-title">Módulos del sistema</h2>
+      <p class="section-desc">Todos los manuales de TOPS Nexus. Filtrá por rol o buscá un módulo.</p>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-section">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Buscar módulo, función o área..." />
+      </div>
+      <span class="filter-label">Rol:</span>
+      <div class="role-filters">
+        <button class="role-btn active" data-role="todos">Todos</button>
+        <button class="role-btn" data-role="director">Director</button>
+        <button class="role-btn" data-role="administracion">Administración</button>
+        <button class="role-btn" data-role="operaciones">Operaciones</button>
+        <button class="role-btn" data-role="comercial">Comercial</button>
+        <button class="role-btn" data-role="deposito">Depósito</button>
+        <button class="role-btn" data-role="auditor">Auditor</button>
+      </div>
+    </div>
+
+    <p class="modules-count">Mostrando <span id="visible-count">11</span> de 11 módulos</p>
+
+    <!-- Cards Grid -->
+    <div class="modules-grid" id="modules-grid">
+
+      <!-- 1. Cockpit Ejecutivo -->
+      <div class="module-card"
+           id="card-cockpit"
+           data-roles="director administracion operaciones comercial auditor"
+           data-keywords="cockpit ejecutivo kpi panel control analitica cctv tracking flota"
+           style="--accent-color:#3b82f6;--accent-dim:rgba(59,130,246,0.1);--accent-border:rgba(59,130,246,0.2);--accent-shadow:rgba(59,130,246,0.3)">
+        <div class="card-top">
+          <div class="card-icon">📊</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 01</div>
+            <div class="card-title">Cockpit Ejecutivo</div>
+          </div>
+        </div>
+        <p class="card-desc">Panel de control ejecutivo con KPIs en tiempo real, analítica de negocio, monitoreo CCTV y tracking de flota integrado.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Operaciones</span>
+          <span class="role-badge">Comercial</span>
+          <span class="role-badge">Auditor</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-cockpit">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('cockpit')" title="Marcar como leído">
+              ✓ Marcar leído
+            </button>
+            <a href="manual-cockpit.html" class="card-cta" onclick="markRead('cockpit')">
+              Ver manual →
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Compras y Proveedores -->
+      <div class="module-card"
+           id="card-compras"
+           data-roles="director administracion operaciones auditor"
+           data-keywords="compras proveedores ordenes factura iva libro"
+           style="--accent-color:#06b6d4;--accent-dim:rgba(6,182,212,0.1);--accent-border:rgba(6,182,212,0.2);--accent-shadow:rgba(6,182,212,0.3)">
+        <div class="card-top">
+          <div class="card-icon">🛒</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 02</div>
+            <div class="card-title">Compras y Proveedores</div>
+          </div>
+        </div>
+        <p class="card-desc">Gestión de órdenes de compra, proveedores, facturas de ingreso y Libro IVA compras. El Director firma digitalmente las OC.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Operaciones</span>
+          <span class="role-badge">Auditor</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-compras">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('compras')">✓ Marcar leído</button>
+            <a href="manual-compras.html" class="card-cta" onclick="markRead('compras')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Operaciones y Servicios -->
+      <div class="module-card"
+           id="card-operaciones"
+           data-roles="director administracion operaciones deposito auditor"
+           data-keywords="operaciones servicios ordenes clientes depositos magaldi lujan os"
+           style="--accent-color:#22c55e;--accent-dim:rgba(34,197,94,0.1);--accent-border:rgba(34,197,94,0.2);--accent-shadow:rgba(34,197,94,0.3)">
+        <div class="card-top">
+          <div class="card-icon">⚙️</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 03</div>
+            <div class="card-title">Operaciones y Servicios</div>
+          </div>
+        </div>
+        <p class="card-desc">Órdenes de Servicio para clientes, gestión de depósitos Magaldi y Luján, seguimiento operativo y trazabilidad de servicios.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Operaciones</span>
+          <span class="role-badge">Depósito</span>
+          <span class="role-badge">Auditor</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-operaciones">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('operaciones')">✓ Marcar leído</button>
+            <a href="manual-operaciones.html" class="card-cta" onclick="markRead('operaciones')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. WMS Depósito -->
+      <div class="module-card"
+           id="card-wms"
+           data-roles="director administracion operaciones deposito auditor"
+           data-keywords="wms deposito inventario recepciones picking packing despacho custodia lotes vencimientos almacen"
+           style="--accent-color:#f97316;--accent-dim:rgba(249,115,22,0.1);--accent-border:rgba(249,115,22,0.2);--accent-shadow:rgba(249,115,22,0.3)">
+        <div class="card-top">
+          <div class="card-icon">📦</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 04</div>
+            <div class="card-title">WMS – Depósito</div>
+          </div>
+        </div>
+        <p class="card-desc">Sistema de gestión de almacén: inventario, recepciones, picking, packing, despachos, custodia de terceros, lotes y vencimientos.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Operaciones</span>
+          <span class="role-badge">Depósito</span>
+          <span class="role-badge">Auditor</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-wms">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('wms')">✓ Marcar leído</button>
+            <a href="manual-wms.html" class="card-cta" onclick="markRead('wms')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Pedidos y Logística -->
+      <div class="module-card"
+           id="card-pedidos"
+           data-roles="director administracion operaciones"
+           data-keywords="pedidos logistica tablero envios entregas seguimiento"
+           style="--accent-color:#6366f1;--accent-dim:rgba(99,102,241,0.1);--accent-border:rgba(99,102,241,0.2);--accent-shadow:rgba(99,102,241,0.3)">
+        <div class="card-top">
+          <div class="card-icon">🚚</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 05</div>
+            <div class="card-title">Pedidos y Logística</div>
+          </div>
+        </div>
+        <p class="card-desc">Tablero unificado de pedidos y logística. Módulo en desarrollo activo con mejoras continuas en el flujo de órdenes de entrega.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Operaciones</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-pedidos">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('pedidos')">✓ Marcar leído</button>
+            <a href="manual-pedidos.html" class="card-cta" onclick="markRead('pedidos')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Comercial y CRM -->
+      <div class="module-card"
+           id="card-comercial"
+           data-roles="director administracion comercial auditor"
+           data-keywords="comercial crm pipeline contactos clientify contratos cotizador propuestas ventas"
+           style="--accent-color:#a855f7;--accent-dim:rgba(168,85,247,0.1);--accent-border:rgba(168,85,247,0.2);--accent-shadow:rgba(168,85,247,0.3)">
+        <div class="card-top">
+          <div class="card-icon">💼</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 06</div>
+            <div class="card-title">Comercial y CRM</div>
+          </div>
+        </div>
+        <p class="card-desc">Pipeline de ventas, contactos y empresas (integrado con Clientify), tablero comercial, contratos, cotizador y propuestas.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Comercial</span>
+          <span class="role-badge">Auditor</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-comercial">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('comercial')">✓ Marcar leído</button>
+            <a href="manual-comercial.html" class="card-cta" onclick="markRead('comercial')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. Compliance -->
+      <div class="module-card"
+           id="card-compliance"
+           data-roles="director administracion operaciones auditor"
+           data-keywords="compliance anmat cockpit regulatorio documentos drive corporativo normativa"
+           style="--accent-color:#14b8a6;--accent-dim:rgba(20,184,166,0.1);--accent-border:rgba(20,184,166,0.2);--accent-shadow:rgba(20,184,166,0.3)">
+        <div class="card-top">
+          <div class="card-icon">⚖️</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 07</div>
+            <div class="card-title">Compliance</div>
+          </div>
+        </div>
+        <p class="card-desc">Cockpit ANMAT sincronizado con Google Drive corporativo. Seguimiento de vencimientos, alertas regulatorias y documentación de compliance.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Operaciones (lectura)</span>
+          <span class="role-badge">Auditor</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-compliance">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('compliance')">✓ Marcar leído</button>
+            <a href="manual-compliance.html" class="card-cta" onclick="markRead('compliance')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. Facturación y Reportes -->
+      <div class="module-card"
+           id="card-facturacion"
+           data-roles="director administracion auditor"
+           data-keywords="facturacion reportes ejecutivos clientes drive plantillas email arca afip"
+           style="--accent-color:#f59e0b;--accent-dim:rgba(245,158,11,0.1);--accent-border:rgba(245,158,11,0.2);--accent-shadow:rgba(245,158,11,0.3)">
+        <div class="card-top">
+          <div class="card-icon">🧾</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 08</div>
+            <div class="card-title">Facturación y Reportes</div>
+          </div>
+        </div>
+        <p class="card-desc">Reportes ejecutivos, facturación electrónica a clientes (ARCA/AFIP), sincronización con Drive y plantillas de email automáticas.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Auditor</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-facturacion">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('facturacion')">✓ Marcar leído</button>
+            <a href="manual-facturacion.html" class="card-cta" onclick="markRead('facturacion')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9. Tesorería y Finanzas -->
+      <div class="module-card"
+           id="card-tesoreria"
+           data-roles="director administracion auditor"
+           data-keywords="tesoreria finanzas bancos movimientos cobranzas pagos flujo fondos conciliacion caja chica"
+           style="--accent-color:#22c55e;--accent-dim:rgba(34,197,94,0.1);--accent-border:rgba(34,197,94,0.2);--accent-shadow:rgba(34,197,94,0.3)">
+        <div class="card-top">
+          <div class="card-icon">💰</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 09</div>
+            <div class="card-title">Tesorería y Finanzas</div>
+          </div>
+        </div>
+        <p class="card-desc">Bancos, movimientos, cobranzas, pagos, flujo de fondos, conciliación bancaria con IA y caja chica. Finanzas operativas completas.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Auditor (lectura)</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-tesoreria">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('tesoreria')">✓ Marcar leído</button>
+            <a href="manual-tesoreria.html" class="card-cta" onclick="markRead('tesoreria')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 10. Recursos Humanos -->
+      <div class="module-card"
+           id="card-rrhh"
+           data-roles="director administracion operaciones deposito"
+           data-keywords="rrhh recursos humanos empleados solicitudes novedades documentacion mi espacio autoservicio"
+           style="--accent-color:#ec4899;--accent-dim:rgba(236,72,153,0.1);--accent-border:rgba(236,72,153,0.2);--accent-shadow:rgba(236,72,153,0.3)">
+        <div class="card-top">
+          <div class="card-icon">👥</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 10</div>
+            <div class="card-title">Recursos Humanos</div>
+          </div>
+        </div>
+        <p class="card-desc">Legajos de empleados, solicitudes de RRHH, novedades salariales, documentación y portal Mi Espacio (autoservicio del empleado).</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración</span>
+          <span class="role-badge">Operaciones (limitado)</span>
+          <span class="role-badge">Depósito (Mi Espacio)</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-rrhh">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('rrhh')">✓ Marcar leído</button>
+            <a href="manual-rrhh.html" class="card-cta" onclick="markRead('rrhh')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 11. Sistema y Administración -->
+      <div class="module-card"
+           id="card-sistema"
+           data-roles="director administracion"
+           data-keywords="sistema administracion roles usuarios centros costo tracking plantillas os comunicados configuracion"
+           style="--accent-color:#64748b;--accent-dim:rgba(100,116,139,0.1);--accent-border:rgba(100,116,139,0.2);--accent-shadow:rgba(100,116,139,0.3)">
+        <div class="card-top">
+          <div class="card-icon">🔧</div>
+          <div class="card-meta">
+            <div class="card-number">Módulo 11</div>
+            <div class="card-title">Sistema y Administración</div>
+          </div>
+        </div>
+        <p class="card-desc">Gestión de roles, usuarios, centros de costo, configuración de tracking GPS, plantillas de Órdenes de Servicio y comunicados internos.</p>
+        <div class="card-roles">
+          <span class="role-badge">Director</span>
+          <span class="role-badge">Administración (limitado)</span>
+        </div>
+        <div class="card-footer">
+          <div>
+            <span class="card-read-badge" id="read-sistema">✓ Leído</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="card-mark-btn" onclick="toggleRead('sistema')">✓ Marcar leído</button>
+            <a href="manual-sistema.html" class="card-cta" onclick="markRead('sistema')">Ver manual →</a>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /modules-grid -->
+
+    <div class="no-results" id="no-results">
+      <div class="no-results-icon">🔍</div>
+      <strong>Sin resultados</strong><br />
+      Probá con otro término o eliminá el filtro de rol.
+    </div>
+
+  </div>
+</section>
+
+<div class="container"><div class="divider"></div></div>
+
+<!-- ─── Reading Roadmap ────────────────────────────────────────────────────────── -->
+<section class="roadmap-section" id="roadmap">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Guía de lectura</div>
+      <h2 class="section-title">Orden recomendado por rol</h2>
+      <p class="section-desc">Seguí esta secuencia para aprender lo más relevante para tu puesto primero.</p>
+    </div>
+
+    <div class="roadmap-tabs">
+      <button class="roadmap-tab active" data-tab="director">Director / Admin</button>
+      <button class="roadmap-tab" data-tab="operaciones">Operaciones</button>
+      <button class="roadmap-tab" data-tab="comercial">Comercial</button>
+      <button class="roadmap-tab" data-tab="deposito">Depósito</button>
+      <button class="roadmap-tab" data-tab="auditor">Auditor</button>
+    </div>
+
+    <!-- Director/Admin -->
+    <div class="roadmap-content active" id="tab-director">
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-dot">📊</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 1</div>
+            <div class="timeline-name">Cockpit Ejecutivo</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🛒</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 2</div>
+            <div class="timeline-name">Compras y Proveedores</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">⚙️</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 3</div>
+            <div class="timeline-name">Operaciones</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">💰</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 4</div>
+            <div class="timeline-name">Tesorería</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">👥</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 5</div>
+            <div class="timeline-name">Recursos Humanos</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🧾</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 6</div>
+            <div class="timeline-name">Facturación</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🔧</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 7</div>
+            <div class="timeline-name">Sistema</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Operaciones -->
+    <div class="roadmap-content" id="tab-operaciones">
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-dot">⚙️</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 1</div>
+            <div class="timeline-name">Operaciones y Servicios</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🛒</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 2</div>
+            <div class="timeline-name">Compras</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">📦</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 3</div>
+            <div class="timeline-name">WMS – Depósito</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">⚖️</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 4</div>
+            <div class="timeline-name">Compliance</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🚚</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 5</div>
+            <div class="timeline-name">Pedidos y Logística</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comercial -->
+    <div class="roadmap-content" id="tab-comercial">
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-dot">💼</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 1</div>
+            <div class="timeline-name">Comercial y CRM</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">📊</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 2</div>
+            <div class="timeline-name">Cockpit Ejecutivo</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🧾</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 3</div>
+            <div class="timeline-name">Facturación (referencia)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Depósito -->
+    <div class="roadmap-content" id="tab-deposito">
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-dot">⚙️</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 1</div>
+            <div class="timeline-name">Operaciones y Servicios</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">📦</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 2</div>
+            <div class="timeline-name">WMS – Depósito</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">👥</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 3</div>
+            <div class="timeline-name">Mi Espacio (RRHH)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auditor -->
+    <div class="roadmap-content" id="tab-auditor">
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-dot">📊</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 1</div>
+            <div class="timeline-name">Cockpit Ejecutivo</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">💰</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 2</div>
+            <div class="timeline-name">Tesorería (lectura)</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🧾</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 3</div>
+            <div class="timeline-name">Facturación</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">🛒</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 4</div>
+            <div class="timeline-name">Compras</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">⚖️</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 5</div>
+            <div class="timeline-name">Compliance</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">💼</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 6</div>
+            <div class="timeline-name">Comercial</div>
+          </div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot">⚙️</div>
+          <div class="timeline-item-info">
+            <div class="timeline-step">Paso 7</div>
+            <div class="timeline-name">Operaciones</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<div class="container"><div class="divider"></div></div>
+
+<!-- ─── System Map ─────────────────────────────────────────────────────────────── -->
+<section class="diagram-section" id="mapa">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Arquitectura</div>
+      <h2 class="section-title">Mapa general del sistema</h2>
+      <p class="section-desc">Cómo se interconectan los módulos de TOPS Nexus.</p>
+    </div>
+    <div class="diagram-wrap">
+      <div class="diagram-center">
+        <div class="diagram-core">🏢 TOPS Nexus — Sistema Operativo Central</div>
+
+        <!-- Row 1: Core business -->
+        <div class="diagram-rows">
+          <div class="diagram-row">
+            <div class="diagram-node"
+                 style="background:rgba(59,130,246,0.12);border-color:rgba(59,130,246,0.35);color:#93c5fd">
+              <span class="node-icon">📊</span>
+              <span>Cockpit<br/>Ejecutivo</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(168,85,247,0.12);border-color:rgba(168,85,247,0.35);color:#c4b5fd">
+              <span class="node-icon">💼</span>
+              <span>Comercial<br/>y CRM</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#86efac">
+              <span class="node-icon">⚙️</span>
+              <span>Operaciones<br/>y Servicios</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(249,115,22,0.12);border-color:rgba(249,115,22,0.35);color:#fdba74">
+              <span class="node-icon">📦</span>
+              <span>WMS<br/>Depósito</span>
+            </div>
+          </div>
+
+          <!-- Row 2: Finance & Admin -->
+          <div class="diagram-row">
+            <div class="diagram-node"
+                 style="background:rgba(6,182,212,0.12);border-color:rgba(6,182,212,0.35);color:#67e8f9">
+              <span class="node-icon">🛒</span>
+              <span>Compras<br/>Proveedores</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#86efac">
+              <span class="node-icon">💰</span>
+              <span>Tesorería<br/>y Finanzas</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(245,158,11,0.12);border-color:rgba(245,158,11,0.35);color:#fcd34d">
+              <span class="node-icon">🧾</span>
+              <span>Facturación<br/>y Reportes</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(99,102,241,0.12);border-color:rgba(99,102,241,0.35);color:#a5b4fc">
+              <span class="node-icon">🚚</span>
+              <span>Pedidos<br/>y Logística</span>
+            </div>
+          </div>
+
+          <!-- Row 3: Support & Compliance -->
+          <div class="diagram-row">
+            <div class="diagram-node"
+                 style="background:rgba(20,184,166,0.12);border-color:rgba(20,184,166,0.35);color:#5eead4">
+              <span class="node-icon">⚖️</span>
+              <span>Compliance<br/>ANMAT</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(236,72,153,0.12);border-color:rgba(236,72,153,0.35);color:#f9a8d4">
+              <span class="node-icon">👥</span>
+              <span>Recursos<br/>Humanos</span>
+            </div>
+            <div class="diagram-node"
+                 style="background:rgba(100,116,139,0.12);border-color:rgba(100,116,139,0.35);color:#cbd5e1">
+              <span class="node-icon">🔧</span>
+              <span>Sistema<br/>y Admin</span>
+            </div>
+          </div>
+
+          <!-- Integrations Row -->
+          <div style="margin-top:8px;padding-top:20px;border-top:1px solid var(--border);width:100%">
+            <div style="text-align:center;font-size:0.7rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px;">
+              Integraciones externas
+            </div>
+            <div class="diagram-row">
+              <div class="diagram-node"
+                   style="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12);color:var(--text-muted);min-width:80px;">
+                <span class="node-icon">📧</span>
+                <span>Resend<br/>Email</span>
+              </div>
+              <div class="diagram-node"
+                   style="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12);color:var(--text-muted);min-width:80px;">
+                <span class="node-icon">☁️</span>
+                <span>Google<br/>Drive</span>
+              </div>
+              <div class="diagram-node"
+                   style="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12);color:var(--text-muted);min-width:80px;">
+                <span class="node-icon">🏦</span>
+                <span>Santander<br/>Banco</span>
+              </div>
+              <div class="diagram-node"
+                   style="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12);color:var(--text-muted);min-width:80px;">
+                <span class="node-icon">📋</span>
+                <span>Clientify<br/>CRM</span>
+              </div>
+              <div class="diagram-node"
+                   style="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12);color:var(--text-muted);min-width:80px;">
+                <span class="node-icon">🏛️</span>
+                <span>ARCA<br/>AFIP</span>
+              </div>
+              <div class="diagram-node"
+                   style="background:rgba(255,255,255,0.04);border-color:rgba(255,255,255,0.12);color:var(--text-muted);min-width:80px;">
+                <span class="node-icon">📍</span>
+                <span>Tracking<br/>GPS</span>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /diagram-rows -->
+      </div><!-- /diagram-center -->
+    </div><!-- /diagram-wrap -->
+  </div>
+</section>
+
+<div class="container"><div class="divider"></div></div>
+
+<!-- ─── Help Section ───────────────────────────────────────────────────────────── -->
+<section class="help-section" id="ayuda">
+  <div class="container">
+    <div class="section-header">
+      <div class="section-label">Soporte</div>
+      <h2 class="section-title">¿Necesitás ayuda?</h2>
+      <p class="section-desc">Recursos y contactos para cuando algo no queda claro.</p>
+    </div>
+    <div class="help-grid">
+      <div class="help-card">
+        <div class="help-card-icon">💬</div>
+        <h4>Soporte interno</h4>
+        <p>Para consultas operativas, problemas de acceso o errores en el sistema, contactá al equipo de Administración o al responsable del área.</p>
+        <a href="mailto:soporte@logisticatops.com" class="help-link">soporte@logisticatops.com →</a>
+      </div>
+      <div class="help-card">
+        <div class="help-card-icon">🐛</div>
+        <h4>Reportar un error</h4>
+        <p>Si encontraste un bug o comportamiento inesperado en el sistema, documentá los pasos para reproducirlo y envialo con capturas de pantalla.</p>
+        <a href="mailto:martin.battaglia@logisticatops.com" class="help-link">Reportar a desarrollo →</a>
+      </div>
+      <div class="help-card">
+        <div class="help-card-icon">📝</div>
+        <h4>Mejoras al manual</h4>
+        <p>¿Falta información, hay algo desactualizado o poco claro? Podés sugerir mejoras a la documentación directamente al equipo técnico.</p>
+        <span class="help-link" style="cursor:default;opacity:0.6">Canal interno →</span>
+      </div>
+      <div class="help-card">
+        <div class="help-card-icon">🔄</div>
+        <h4>Actualizaciones del sistema</h4>
+        <p>TOPS Nexus se actualiza regularmente. Las versiones del manual reflejan la última versión desplegada en producción.</p>
+        <span style="display:inline-block;margin-top:12px;font-size:0.78rem;color:var(--text-muted)">
+          Última actualización: Junio 2026
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ─────────────────────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-brand">
+    <div class="logo-mark">TN</div>
+    <span class="footer-brand-name">TOPS Nexus</span>
+  </div>
+  <div class="footer-meta">
+    <span>© 2026 TOPS Logística. Todos los derechos reservados.</span>
+    <span class="footer-version">Manual v2.0 — Next.js 14 — Supabase</span>
+  </div>
+</footer>
+
+<!-- ─── JavaScript ─────────────────────────────────────────────────────────────── -->
+<script>
+(function () {
+  'use strict';
+
+  // ─── Constants ────────────────────────────────────────────────────────────
+  const STORAGE_KEY = 'nexus_manual_read';
+  const TOTAL_MODULES = 11;
+  const ALL_MODULE_IDS = [
+    'cockpit','compras','operaciones','wms','pedidos',
+    'comercial','compliance','facturacion','tesoreria','rrhh','sistema'
+  ];
+
+  // ─── State ────────────────────────────────────────────────────────────────
+  let readSet = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
+  let activeRole = 'todos';
+  let searchQuery = '';
+
+  // ─── Progress ─────────────────────────────────────────────────────────────
+  function updateProgress() {
+    const count = readSet.size;
+    const pct = Math.round((count / TOTAL_MODULES) * 100);
+    document.getElementById('read-count').textContent = count;
+    document.getElementById('read-pct').textContent = pct + '%';
+    document.getElementById('read-fill').style.width = pct + '%';
+
+    ALL_MODULE_IDS.forEach(id => {
+      const card = document.getElementById('card-' + id);
+      const badge = document.getElementById('read-' + id);
+      if (!card || !badge) return;
+      if (readSet.has(id)) {
+        card.classList.add('read');
+        badge.style.display = 'flex';
+      } else {
+        card.classList.remove('read');
+        badge.style.display = 'none';
+      }
+    });
+  }
+
+  function saveProgress() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...readSet]));
+  }
+
+  window.markRead = function (id) {
+    readSet.add(id);
+    saveProgress();
+    updateProgress();
+  };
+
+  window.toggleRead = function (id) {
+    if (readSet.has(id)) { readSet.delete(id); }
+    else { readSet.add(id); }
+    saveProgress();
+    updateProgress();
+  };
+
+  window.resetProgress = function () {
+    if (!confirm('¿Reiniciar tu progreso de lectura?')) return;
+    readSet.clear();
+    saveProgress();
+    updateProgress();
+  };
+
+  // ─── Filter & Search ──────────────────────────────────────────────────────
+  function applyFilters() {
+    const cards = document.querySelectorAll('.module-card');
+    let visible = 0;
+
+    cards.forEach(card => {
+      const roles = (card.dataset.roles || '').toLowerCase();
+      const keywords = (card.dataset.keywords || '').toLowerCase();
+      const title = (card.querySelector('.card-title')?.textContent || '').toLowerCase();
+      const desc  = (card.querySelector('.card-desc')?.textContent || '').toLowerCase();
+
+      const roleMatch = activeRole === 'todos' || roles.includes(activeRole);
+      const q = searchQuery.trim().toLowerCase();
+      const searchMatch = !q ||
+        keywords.includes(q) || title.includes(q) || desc.includes(q);
+
+      if (roleMatch && searchMatch) {
+        card.classList.remove('hidden');
+        visible++;
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+
+    document.getElementById('visible-count').textContent = visible;
+    document.getElementById('no-results').style.display = visible === 0 ? 'block' : 'none';
+  }
+
+  // Role buttons
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeRole = btn.dataset.role;
+      applyFilters();
+    });
+  });
+
+  // Search input
+  const searchInput = document.getElementById('search-input');
+  let searchTimer;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      searchQuery = searchInput.value;
+      applyFilters();
+    }, 200);
+  });
+
+  // ─── Roadmap Tabs ─────────────────────────────────────────────────────────
+  document.querySelectorAll('.roadmap-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.roadmap-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.roadmap-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      const target = document.getElementById('tab-' + tab.dataset.tab);
+      if (target) target.classList.add('active');
+    });
+  });
+
+  // ─── Navbar scroll effect ─────────────────────────────────────────────────
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 20);
+
+    // Scroll progress
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const scrollPct = docHeight > 0 ? (window.scrollY / docHeight) * 100 : 0;
+    document.getElementById('progress-bar').style.width = scrollPct + '%';
+  }, { passive: true });
+
+  // ─── Init ─────────────────────────────────────────────────────────────────
+  updateProgress();
+
+})();
+</script>
+
+</body>
+</html>

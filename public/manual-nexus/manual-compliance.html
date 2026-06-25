@@ -1,0 +1,2185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Manual Compliance — TOPS Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0f172a;
+      --navy-light: #1e293b;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --teal: #14b8a6;
+      --teal-dim: rgba(20, 184, 166, 0.15);
+      --teal-border: rgba(20, 184, 166, 0.35);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --border: rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.14);
+      --card: rgba(255,255,255,0.04);
+      --card-hover: rgba(255,255,255,0.07);
+      --sidebar-w: 260px;
+      --header-h: 56px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--navy);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--navy); }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+    /* ── HEADER ── */
+    .top-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--header-h);
+      background: rgba(15,23,42,0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+    }
+
+    .header-logo {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--teal);
+      letter-spacing: -0.3px;
+      white-space: nowrap;
+    }
+
+    .header-sep { color: var(--text-dim); }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .breadcrumb a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .breadcrumb a:hover { color: var(--teal); }
+
+    .breadcrumb-current {
+      color: var(--teal);
+      font-weight: 500;
+    }
+
+    .header-badge {
+      margin-left: auto;
+      background: var(--teal-dim);
+      border: 1px solid var(--teal-border);
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .back-link {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .back-link:hover {
+      color: var(--teal);
+      border-color: var(--teal-border);
+      background: var(--teal-dim);
+    }
+
+    /* ── LAYOUT ── */
+    .layout {
+      display: flex;
+      min-height: calc(100vh - var(--header-h));
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      position: sticky;
+      top: var(--header-h);
+      height: calc(100vh - var(--header-h));
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      padding: 24px 0 40px;
+    }
+
+    .toc-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 0 20px 12px;
+    }
+
+    .toc-list { list-style: none; }
+
+    .toc-list li a {
+      display: block;
+      padding: 6px 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .toc-list li a:hover {
+      color: var(--teal);
+      border-left-color: var(--teal);
+      background: var(--teal-dim);
+    }
+
+    .toc-list li a.active {
+      color: var(--teal);
+      border-left-color: var(--teal);
+      background: var(--teal-dim);
+      font-weight: 500;
+    }
+
+    .toc-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 16px 20px 4px;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 48px 60px 80px;
+      max-width: 900px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      margin-bottom: 48px;
+    }
+
+    .module-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--teal-dim);
+      border: 1px solid var(--teal-border);
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 {
+      font-size: 38px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+
+    .hero h1 span { color: var(--teal); }
+
+    .hero-desc {
+      font-size: 16px;
+      color: var(--text-muted);
+      line-height: 1.7;
+      max-width: 680px;
+      margin-bottom: 24px;
+    }
+
+    .hero-meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--card);
+      border: 1px solid var(--border-strong);
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+
+    /* ── ANMAT ALERT BANNER ── */
+    .anmat-banner {
+      background: linear-gradient(135deg, rgba(20,184,166,0.12) 0%, rgba(20,184,166,0.05) 100%);
+      border: 1px solid var(--teal-border);
+      border-left: 4px solid var(--teal);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 40px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .anmat-banner-icon { font-size: 28px; flex-shrink: 0; margin-top: 2px; }
+
+    .anmat-banner-content { flex: 1; }
+
+    .anmat-banner-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--teal);
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .anmat-banner-text {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .anmat-banner-text strong { color: var(--text); }
+
+    /* ── SECTIONS ── */
+    .section {
+      margin-bottom: 56px;
+      scroll-margin-top: calc(var(--header-h) + 24px);
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--teal-dim);
+      border: 1px solid var(--teal-border);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .section-header h2 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+
+    .section-header h2 .accent { color: var(--teal); }
+
+    h3 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      margin-top: 28px;
+      color: var(--text);
+    }
+
+    h3:first-child { margin-top: 0; }
+
+    p {
+      color: var(--text-muted);
+      margin-bottom: 14px;
+      line-height: 1.75;
+    }
+
+    p strong { color: var(--text); }
+
+    ul, ol {
+      padding-left: 20px;
+      margin-bottom: 14px;
+      color: var(--text-muted);
+    }
+
+    li { margin-bottom: 6px; line-height: 1.6; }
+
+    li strong { color: var(--text); }
+
+    /* ── CARDS ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      transition: all 0.2s;
+    }
+
+    .card:hover {
+      background: var(--card-hover);
+      border-color: var(--border-strong);
+    }
+
+    .card-icon { font-size: 26px; margin-bottom: 12px; display: block; }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .card-accent { border-top: 2px solid var(--teal); }
+
+    /* ── TABLE ── */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead {
+      background: var(--navy-light);
+    }
+
+    th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 11px 16px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    tr:last-child td { border-bottom: none; }
+
+    tr:hover td { background: var(--card); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-teal { background: var(--teal-dim); color: var(--teal); }
+    .badge-amber { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+    .badge-gray { background: rgba(100,116,139,0.15); color: var(--text-dim); }
+    .badge-blue { background: rgba(59,130,246,0.15); color: var(--blue); }
+
+    /* ── ACORDEONES ── */
+    .accordion-wrap { margin-bottom: 24px; }
+
+    .accordion-item {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .accordion-item:hover { border-color: var(--border-strong); }
+
+    .accordion-item.open { border-color: var(--teal-border); }
+
+    .accordion-trigger {
+      width: 100%;
+      background: var(--card);
+      border: none;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s;
+    }
+
+    .accordion-trigger:hover { background: var(--card-hover); }
+
+    .accordion-item.open .accordion-trigger { background: var(--teal-dim); }
+
+    .accordion-emoji { font-size: 18px; flex-shrink: 0; }
+
+    .accordion-title {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .accordion-chevron {
+      color: var(--text-dim);
+      font-size: 12px;
+      transition: transform 0.25s;
+      flex-shrink: 0;
+    }
+
+    .accordion-item.open .accordion-chevron { transform: rotate(180deg); color: var(--teal); }
+
+    .accordion-body {
+      display: none;
+      padding: 16px 20px 20px 50px;
+      background: rgba(20,184,166,0.03);
+      border-top: 1px solid var(--border);
+    }
+
+    .accordion-item.open .accordion-body { display: block; }
+
+    .accordion-body p { font-size: 14px; }
+    .accordion-body ul { font-size: 14px; }
+
+    /* ── STEPS ── */
+    .steps { list-style: none; padding: 0; margin-bottom: 24px; }
+
+    .step {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--teal-dim);
+      border: 1px solid var(--teal-border);
+      color: var(--teal);
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .step-content { flex: 1; }
+
+    .step-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .step-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── ALERT BOXES ── */
+    .alert {
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+    .alert-content { flex: 1; }
+
+    .alert-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .alert-text { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
+    .alert-warning {
+      background: rgba(245,158,11,0.1);
+      border: 1px solid rgba(245,158,11,0.3);
+    }
+
+    .alert-warning .alert-title { color: var(--amber); }
+
+    .alert-danger {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3);
+    }
+
+    .alert-danger .alert-title { color: var(--red); }
+
+    .alert-info {
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.25);
+    }
+
+    .alert-info .alert-title { color: var(--blue); }
+
+    .alert-success {
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.25);
+    }
+
+    .alert-success .alert-title { color: var(--green); }
+
+    .alert-teal {
+      background: var(--teal-dim);
+      border: 1px solid var(--teal-border);
+    }
+
+    .alert-teal .alert-title { color: var(--teal); }
+
+    /* ── CODE / ENDPOINT ── */
+    .endpoint {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: var(--navy-light);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      padding: 5px 12px;
+      margin: 4px 4px 4px 0;
+      color: var(--teal);
+    }
+
+    .method {
+      font-weight: 700;
+      color: var(--amber);
+    }
+
+    .method-get { color: var(--green); }
+    .method-post { color: var(--amber); }
+
+    /* ── CHECKLIST ── */
+    .checklist { list-style: none; padding: 0; margin-bottom: 24px; }
+
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .checklist-item:hover { background: var(--card-hover); border-color: var(--border-strong); }
+
+    .checklist-item.checked {
+      background: rgba(34,197,94,0.06);
+      border-color: rgba(34,197,94,0.2);
+    }
+
+    .check-box {
+      width: 18px;
+      height: 18px;
+      border-radius: 5px;
+      border: 2px solid var(--border-strong);
+      flex-shrink: 0;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      font-size: 11px;
+    }
+
+    .checklist-item.checked .check-box {
+      background: var(--green);
+      border-color: var(--green);
+      color: #fff;
+    }
+
+    .check-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      flex: 1;
+    }
+
+    .checklist-item.checked .check-label {
+      color: var(--text-dim);
+      text-decoration: line-through;
+    }
+
+    .check-tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .tag-critico { background: rgba(239,68,68,0.15); color: var(--red); }
+    .tag-mensual { background: var(--teal-dim); color: var(--teal); }
+    .tag-opcional { background: rgba(100,116,139,0.15); color: var(--text-dim); }
+
+    /* ── CHECKLIST PROGRESS ── */
+    .checklist-progress {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .progress-label { font-size: 13px; color: var(--text-muted); }
+    .progress-count { font-size: 20px; font-weight: 700; color: var(--teal); }
+
+    .progress-bar-wrap {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--teal);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    /* ── FLUJO DIAGRAMA ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 24px;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    .flow-spine {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+      width: 48px;
+    }
+
+    .flow-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--teal-dim);
+      border: 2px solid var(--teal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+      z-index: 1;
+    }
+
+    .flow-line {
+      width: 2px;
+      height: 24px;
+      background: var(--teal-border);
+      margin: 0 auto;
+    }
+
+    .flow-step:last-child .flow-line { display: none; }
+
+    .flow-content {
+      padding: 4px 0 24px 16px;
+      flex: 1;
+    }
+
+    .flow-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .flow-desc { font-size: 13px; color: var(--text-muted); line-height: 1.55; }
+
+    /* ── GLOSARIO ── */
+    .glossary-item {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .glossary-item:last-child { border-bottom: none; }
+
+    .glossary-term {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--teal);
+      margin-bottom: 4px;
+    }
+
+    .glossary-def { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── INFO ROW ── */
+    .info-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .info-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      color: var(--text-muted);
+    }
+
+    .info-chip .icon { font-size: 14px; }
+
+    /* ── ERROR CARD ── */
+    .error-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .error-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      border-top: 3px solid var(--red);
+    }
+
+    .error-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--red);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .error-card p { font-size: 13px; margin-bottom: 10px; }
+
+    .error-card .fix-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--green);
+      margin-bottom: 4px;
+    }
+
+    .error-card .fix-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 0;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 40px 0;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 32px 24px 60px; }
+      .hero h1 { font-size: 28px; }
+    }
+
+    @media (max-width: 600px) {
+      .card-grid { grid-template-columns: 1fr; }
+      .error-grid { grid-template-columns: 1fr; }
+      .info-row { flex-direction: column; }
+      .anmat-banner { flex-direction: column; }
+      .hero h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<header class="top-header">
+  <span class="header-logo">TOPS Nexus</span>
+  <span class="header-sep">›</span>
+  <nav class="breadcrumb">
+    <a href="index.html">Inicio</a>
+    <span>›</span>
+    <span class="breadcrumb-current">Compliance</span>
+  </nav>
+  <span class="header-badge">⚖️ Módulo</span>
+  <a href="index.html" class="back-link">← Volver al índice</a>
+</header>
+
+<!-- ═══════════════════════════ LAYOUT ═══════════════════════════ -->
+<div class="layout">
+
+  <!-- ── SIDEBAR TOC ── -->
+  <aside class="sidebar">
+    <p class="toc-title">Contenido</p>
+    <ul class="toc-list" id="toc">
+      <li><a href="#que-es">¿Qué es Compliance?</a></li>
+      <li><a href="#permisos">¿Quién puede usarlo?</a></li>
+      <li><a href="#deposito-anmat">El depósito ANMAT</a></li>
+      <li><a href="#cockpit">Compliance Cockpit</a></li>
+      <li><a href="#detalle">Detalle de un ítem</a></li>
+      <li><a href="#token-publico">Link público de Compliance</a></li>
+      <li><a href="#drive">Drive TOPS</a></li>
+      <li><a href="#sincronizacion">Sincronización con Google Drive</a></li>
+      <li><a href="#ocr">OCR de documentos</a></li>
+      <li><a href="#api">API disponible</a></li>
+      <li><a href="#casos">Casos frecuentes</a></li>
+      <li><a href="#flujo-auditoria">Flujo de auditoría ANMAT</a></li>
+      <li><a href="#checklist">Checklist mensual</a></li>
+      <li><a href="#errores">Errores comunes</a></li>
+      <li><a href="#faq">Preguntas frecuentes</a></li>
+      <li><a href="#glosario">Glosario</a></li>
+    </ul>
+  </aside>
+
+  <!-- ── MAIN ── -->
+  <main class="main">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="module-badge">⚖️ Compliance</div>
+      <h1>Módulo de <span>Compliance</span><br>Regulatorio</h1>
+      <p class="hero-desc">
+        Herramienta central de TOPS Nexus para monitorear el cumplimiento normativo del depósito bajo regulación
+        ANMAT, gestionar la documentación regulatoria y compartir el estado de compliance con auditores externos
+        mediante links seguros y sin contraseña.
+      </p>
+      <div class="hero-meta">
+        <span class="hero-pill"><span>🏛️</span> ANMAT / BPM</span>
+        <span class="hero-pill"><span>📂</span> Drive TOPS</span>
+        <span class="hero-pill"><span>🔗</span> Link público</span>
+        <span class="hero-pill"><span>🔍</span> OCR de documentos</span>
+      </div>
+    </div>
+
+    <!-- BANNER ANMAT -->
+    <div class="anmat-banner">
+      <div class="anmat-banner-icon">🏛️</div>
+      <div class="anmat-banner-content">
+        <div class="anmat-banner-title">Regulación ANMAT activa — Depósito Magaldi 1765, CABA</div>
+        <p class="anmat-banner-text">
+          TOPS opera un depósito habilitado por la <strong>Administración Nacional de Medicamentos, Alimentos y
+          Tecnología Médica (ANMAT)</strong>. Esto implica cumplir con estándares de <strong>Buenas Prácticas de
+          Almacenamiento (BPA)</strong> en forma continua. El incumplimiento puede resultar en sanciones, clausuras
+          o inhabilitación del depósito. Este módulo es la herramienta oficial para mantener, registrar y
+          demostrar el cumplimiento.
+        </p>
+      </div>
+    </div>
+
+    <!-- ═══ 1. QUÉ ES COMPLIANCE ═══ -->
+    <section class="section" id="que-es">
+      <div class="section-header">
+        <div class="section-icon">⚖️</div>
+        <h2>¿Qué es <span class="accent">Compliance</span>?</h2>
+      </div>
+
+      <p>
+        <strong>Compliance</strong> es la capacidad de demostrar, en cualquier momento, que la empresa cumple
+        con las regulaciones vigentes. En el contexto de TOPS, esto significa tener documentados y actualizados
+        todos los controles, registros y procedimientos que ANMAT puede solicitar durante una inspección.
+      </p>
+      <p>
+        El módulo de Compliance de TOPS Nexus reúne dos herramientas clave:
+      </p>
+
+      <div class="card-grid">
+        <div class="card card-accent">
+          <span class="card-icon">📋</span>
+          <div class="card-title">Compliance Cockpit</div>
+          <div class="card-desc">Panel de monitoreo del estado de cumplimiento regulatorio. Muestra qué ítems están al día, cuáles están próximos a vencer y cuáles requieren atención inmediata.</div>
+        </div>
+        <div class="card card-accent">
+          <span class="card-icon">📁</span>
+          <div class="card-title">Drive TOPS</div>
+          <div class="card-desc">Centro documental corporativo integrado con Google Drive. Acceso rápido a todos los documentos regulatorios, procedimientos y certificaciones desde Nexus.</div>
+        </div>
+        <div class="card card-accent">
+          <span class="card-icon">🔗</span>
+          <div class="card-title">Link público</div>
+          <div class="card-desc">Generación de un link temporal sin contraseña para compartir el estado de compliance con auditores e inspectores ANMAT externos.</div>
+        </div>
+        <div class="card card-accent">
+          <span class="card-icon">🔍</span>
+          <div class="card-title">OCR de documentos</div>
+          <div class="card-desc">Extracción automática de texto de documentos escaneados para facilitar búsquedas, archivado y trazabilidad documental.</div>
+        </div>
+      </div>
+
+      <div class="alert alert-teal">
+        <span class="alert-icon">💡</span>
+        <div class="alert-content">
+          <div class="alert-title">Para quienes no son técnicos</div>
+          <p class="alert-text">
+            Pensá en el Compliance Cockpit como un semáforo del depósito: en verde todo está en orden,
+            en amarillo hay algo que atender pronto, y en rojo hay un problema que requiere acción inmediata.
+            El objetivo es que ese semáforo esté siempre en verde antes de una inspección.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 2. PERMISOS ═══ -->
+    <section class="section" id="permisos">
+      <div class="section-header">
+        <div class="section-icon">👥</div>
+        <h2>¿Quién puede <span class="accent">usarlo</span>?</h2>
+      </div>
+
+      <p>
+        El acceso al módulo de Compliance está controlado por permisos de rol. Solo los roles con
+        necesidad operativa o regulatoria acceden a este módulo.
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rol</th>
+              <th>Ver (compliance.view)</th>
+              <th>Editar (compliance.edit)</th>
+              <th>Notas</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Director</strong></td>
+              <td><span class="badge badge-green">✓ Sí</span></td>
+              <td><span class="badge badge-green">✓ Sí</span></td>
+              <td>Acceso total al módulo</td>
+            </tr>
+            <tr>
+              <td><strong>Administración</strong></td>
+              <td><span class="badge badge-green">✓ Sí</span></td>
+              <td><span class="badge badge-green">✓ Sí</span></td>
+              <td>Puede actualizar estados y cargar documentos</td>
+            </tr>
+            <tr>
+              <td><strong>Operaciones</strong></td>
+              <td><span class="badge badge-green">✓ Sí</span></td>
+              <td><span class="badge badge-gray">— No</span></td>
+              <td>Solo lectura; no puede modificar ítems</td>
+            </tr>
+            <tr>
+              <td><strong>Auditor</strong></td>
+              <td><span class="badge badge-green">✓ Sí</span></td>
+              <td><span class="badge badge-gray">— No</span></td>
+              <td>Solo lectura; acceso para revisiones internas</td>
+            </tr>
+            <tr>
+              <td><strong>Comercial</strong></td>
+              <td><span class="badge badge-red">✗ Sin acceso</span></td>
+              <td><span class="badge badge-red">✗ Sin acceso</span></td>
+              <td>No tiene visibilidad del módulo</td>
+            </tr>
+            <tr>
+              <td><strong>Depósito</strong></td>
+              <td><span class="badge badge-red">✗ Sin acceso</span></td>
+              <td><span class="badge badge-red">✗ Sin acceso</span></td>
+              <td>No tiene visibilidad del módulo</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div class="alert-content">
+          <div class="alert-title">Acceso de auditores externos (sin cuenta)</div>
+          <p class="alert-text">
+            Los auditores ANMAT o inspectores externos no necesitan usuario en Nexus. Se les puede compartir
+            un <strong>link público con token</strong> desde el Compliance Cockpit, que muestra el estado de
+            cumplimiento sin requerir autenticación. Ver sección «Link público de Compliance».
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 3. DEPÓSITO ANMAT ═══ -->
+    <section class="section" id="deposito-anmat">
+      <div class="section-header">
+        <div class="section-icon">🏛️</div>
+        <h2>El depósito <span class="accent">ANMAT</span></h2>
+      </div>
+
+      <p>
+        TOPS opera un depósito habilitado por ANMAT ubicado en <strong>Magaldi 1765, Ciudad Autónoma de Buenos
+        Aires</strong>. La habilitación ANMAT implica cumplir en forma continua con las normativas de
+        almacenamiento, trazabilidad y documentación que el organismo establece.
+      </p>
+
+      <h3>¿Qué significa operar bajo regulación ANMAT?</h3>
+      <ul>
+        <li>Mantener registros actualizados de temperatura, humedad y condiciones de almacenamiento.</li>
+        <li>Documentar procedimientos operativos estándar (POEs) y asegurarse de que estén vigentes.</li>
+        <li>Registrar cualquier desvío o no conformidad y documentar las acciones correctivas tomadas.</li>
+        <li>Estar preparados para una inspección en cualquier momento, sin previo aviso.</li>
+        <li>Renovar habilitaciones y certificaciones dentro de los plazos establecidos.</li>
+      </ul>
+
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-content">
+          <div class="alert-title">Normativas específicas — Pendiente de validación</div>
+          <p class="alert-text">
+            Las disposiciones ANMAT aplicables a TOPS deben ser validadas por el Responsable Técnico
+            designado. Este manual no reemplaza la consulta con el área regulatoria de la empresa.
+            Ante cualquier duda normativa, consultá con Dirección o con el asesor regulatorio externo.
+          </p>
+        </div>
+      </div>
+
+      <h3>Consecuencias del incumplimiento</h3>
+      <p>
+        El incumplimiento con los requisitos ANMAT puede derivar en sanciones que van desde actas de infracción
+        hasta la clausura preventiva del depósito. Por eso, el Compliance Cockpit debe mantenerse actualizado
+        y revisarse con regularidad.
+      </p>
+    </section>
+
+    <!-- ═══ 4. COMPLIANCE COCKPIT ═══ -->
+    <section class="section" id="cockpit">
+      <div class="section-header">
+        <div class="section-icon">📋</div>
+        <h2>Compliance <span class="accent">Cockpit</span></h2>
+      </div>
+
+      <div class="info-row">
+        <div class="info-chip"><span class="icon">🔗</span> Ruta: <code>/anmat</code></div>
+        <div class="info-chip"><span class="icon">🔑</span> Permiso: <code>compliance.view</code></div>
+      </div>
+
+      <p>
+        El <strong>Compliance Cockpit</strong> es el panel principal del módulo. Muestra de un vistazo el estado
+        general de cumplimiento regulatorio, organizado por ítems que pueden tener distintos estados.
+      </p>
+
+      <h3>¿Qué muestra el panel?</h3>
+
+      <div class="card-grid">
+        <div class="card">
+          <span class="card-icon">🟢</span>
+          <div class="card-title">Ítems conformes</div>
+          <div class="card-desc">Requisitos cumplidos y documentación en regla. No requieren acción inmediata.</div>
+        </div>
+        <div class="card">
+          <span class="card-icon">🟡</span>
+          <div class="card-title">Próximos a vencer</div>
+          <div class="card-desc">Ítems con vencimiento próximo. Requieren atención en los próximos días o semanas.</div>
+        </div>
+        <div class="card">
+          <span class="card-icon">🔴</span>
+          <div class="card-title">Vencidos / En riesgo</div>
+          <div class="card-desc">Ítems con vencimiento superado o documentación faltante. Acción inmediata requerida.</div>
+        </div>
+        <div class="card">
+          <span class="card-icon">⚪</span>
+          <div class="card-title">Sin dato</div>
+          <div class="card-desc">Ítems sin información cargada. Requieren revisión y actualización.</div>
+        </div>
+      </div>
+
+      <h3>Cómo leer el estado de cumplimiento</h3>
+      <p>
+        Cada ítem del cockpit representa un requisito regulatorio o documental. Al ver el panel, prestá
+        atención a los indicadores de color: el objetivo es que todos estén en verde antes de una
+        inspección ANMAT.
+      </p>
+
+      <div class="alert alert-danger">
+        <span class="alert-icon">🔴</span>
+        <div class="alert-content">
+          <div class="alert-title">Alerta: ítems vencidos o en rojo</div>
+          <p class="alert-text">
+            Si el Cockpit muestra ítems en rojo, deben ser atendidos con prioridad máxima. Documentá la situación,
+            tomá la acción correctiva correspondiente y actualizá el estado en el sistema. En caso de duda,
+            escalá a Dirección inmediatamente.
+          </p>
+        </div>
+      </div>
+
+      <h3>Datos sincronizados desde Google Drive</h3>
+      <p>
+        El Cockpit toma sus datos de un Google Sheet corporativo que funciona como fuente de verdad. El sistema
+        lee la <strong>"solapa del período"</strong> activo del sheet para mostrar el estado de compliance del
+        mes en curso. La sincronización puede hacerse en forma automática o manual. Ver sección
+        «Sincronización con Google Drive».
+      </p>
+    </section>
+
+    <!-- ═══ 5. DETALLE DE UN ÍTEM ═══ -->
+    <section class="section" id="detalle">
+      <div class="section-header">
+        <div class="section-icon">🔍</div>
+        <h2>Detalle de un <span class="accent">ítem</span> de Compliance</h2>
+      </div>
+
+      <div class="info-row">
+        <div class="info-chip"><span class="icon">🔗</span> Ruta: <code>/anmat/[id]</code></div>
+        <div class="info-chip"><span class="icon">🔑</span> Permiso: <code>compliance.view</code></div>
+      </div>
+
+      <p>
+        Al hacer clic sobre cualquier ítem del Compliance Cockpit, se accede a la vista de detalle de ese
+        requisito. Esta pantalla muestra toda la información asociada al ítem y permite actualizarlo
+        (si tenés permiso de edición).
+      </p>
+
+      <h3>Información que contiene un ítem de compliance</h3>
+      <ul>
+        <li><strong>Nombre del requisito:</strong> descripción del control o documento requerido.</li>
+        <li><strong>Estado actual:</strong> conforme, próximo a vencer, vencido o sin dato.</li>
+        <li><strong>Fecha de vencimiento:</strong> cuándo vence el requisito o la documentación asociada.</li>
+        <li><strong>Última actualización:</strong> cuándo fue actualizado por última vez y por quién.</li>
+        <li><strong>Documentos adjuntos:</strong> archivos vinculados desde el Drive TOPS.</li>
+        <li><strong>Observaciones:</strong> notas internas o aclaraciones del equipo regulatorio.</li>
+        <li><strong>Historial de cambios:</strong> registro de actualizaciones previas del ítem.</li>
+      </ul>
+
+      <h3>Cómo actualizar el estado de un ítem</h3>
+      <p>Necesitás el permiso <code>compliance.edit</code> (Administración o Director).</p>
+
+      <ul class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Accedé al Compliance Cockpit</div>
+            <div class="step-desc">Menú lateral → Compliance → Cockpit (<code>/anmat</code>).</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Hacé clic en el ítem a actualizar</div>
+            <div class="step-desc">Se abre la vista de detalle del ítem en <code>/anmat/[id]</code>.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Editá el estado y agregá observaciones</div>
+            <div class="step-desc">Seleccioná el nuevo estado, cargá la fecha de vencimiento actualizada y agregá notas si corresponde.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Vinculá documentación si es necesario</div>
+            <div class="step-desc">Podés adjuntar archivos del Drive TOPS al ítem para sostener el estado declarado.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <div class="step-title">Guardá los cambios</div>
+            <div class="step-desc">El sistema registra la actualización con tu usuario y la fecha/hora. El historial queda auditado.</div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ═══ 6. TOKEN PÚBLICO ═══ -->
+    <section class="section" id="token-publico">
+      <div class="section-header">
+        <div class="section-icon">🔗</div>
+        <h2>Link público de <span class="accent">Compliance</span></h2>
+      </div>
+
+      <div class="info-row">
+        <div class="info-chip"><span class="icon">🔗</span> Ruta pública: <code>/c/[token]</code></div>
+        <div class="info-chip"><span class="icon">🔓</span> Sin autenticación</div>
+        <div class="info-chip"><span class="icon">🔑</span> Genera: <code>compliance.edit</code></div>
+      </div>
+
+      <p>
+        El <strong>link público de compliance</strong> es una URL temporal que permite a personas externas
+        (auditores ANMAT, inspectores, consultores regulatorios) ver el estado de cumplimiento de TOPS
+        sin necesidad de tener usuario en el sistema.
+      </p>
+
+      <h3>¿Para qué sirve?</h3>
+      <ul>
+        <li>Compartir el estado de compliance con un <strong>inspector ANMAT durante una visita</strong>.</li>
+        <li>Enviar el panel a un <strong>auditor externo</strong> que necesita revisar la situación regulatoria.</li>
+        <li>Presentar el estado ante organismos de control sin exponer credenciales internas.</li>
+        <li>Facilitar auditorías de terceros (ej. clientes que requieren demostración de compliance).</li>
+      </ul>
+
+      <h3>Cómo generar el link público</h3>
+      <p>Solo usuarios con permiso <code>compliance.edit</code> pueden generar tokens públicos.</p>
+
+      <ul class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Accedé al Compliance Cockpit</div>
+            <div class="step-desc">Menú lateral → Compliance → Cockpit.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Buscá la opción "Generar link público"</div>
+            <div class="step-desc">Generalmente disponible en el encabezado del panel o en el menú de acciones.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Confirmá la generación del token</div>
+            <div class="step-desc">El sistema crea un token único y genera la URL pública con formato <code>/c/[token]</code>.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Copiá y compartí el link</div>
+            <div class="step-desc">Enviá el link por email, WhatsApp o mostralo directamente al inspector. El destinatario accede sin contraseña.</div>
+          </div>
+        </li>
+      </ul>
+
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-content">
+          <div class="alert-title">Seguridad del token público</div>
+          <p class="alert-text">
+            El link público expone información regulatoria de la empresa. Compartilo solo con personas
+            que necesiten verlo (auditores, inspectores, autoridades). No lo publiques en redes sociales
+            ni en canales abiertos. Si el token se comprometió, regenerá uno nuevo desde el Cockpit.
+          </p>
+        </div>
+      </div>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div class="alert-content">
+          <div class="alert-title">Vigencia del token — Pendiente de validación</div>
+          <p class="alert-text">
+            La vigencia exacta de los tokens públicos (si tienen expiración automática o son indefinidos)
+            debe confirmarse con el equipo técnico. Consultá antes de compartir un link con fecha comprometida.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 7. DRIVE TOPS ═══ -->
+    <section class="section" id="drive">
+      <div class="section-header">
+        <div class="section-icon">📁</div>
+        <h2>Drive <span class="accent">TOPS</span></h2>
+      </div>
+
+      <div class="info-row">
+        <div class="info-chip"><span class="icon">🔗</span> Ruta: <code>/drive</code></div>
+        <div class="info-chip"><span class="icon">🔑</span> Permiso: <code>compliance.view</code></div>
+      </div>
+
+      <p>
+        El <strong>Drive TOPS</strong> es el centro documental corporativo integrado con Google Drive.
+        Permite acceder, buscar y visualizar los documentos regulatorios de la empresa directamente desde
+        TOPS Nexus, sin necesidad de abrir Google Drive por separado.
+      </p>
+
+      <h3>¿Qué documentos hay en el Drive TOPS?</h3>
+      <ul>
+        <li>Procedimientos Operativos Estándar (POEs) del depósito.</li>
+        <li>Certificados de habilitación ANMAT.</li>
+        <li>Registros de temperatura y condiciones ambientales.</li>
+        <li>Informes de auditorías internas y externas.</li>
+        <li>Actas de inspección y respuestas a observaciones.</li>
+        <li>Documentación de proveedores y materiales regulados.</li>
+        <li>Cualquier otro documento relevante para el cumplimiento BPA/BPM.</li>
+      </ul>
+
+      <h3>Cómo acceder al Drive TOPS</h3>
+      <ul class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Menú lateral → Compliance → Drive TOPS</div>
+            <div class="step-desc">Se carga el listado de archivos sincronizados desde Google Drive.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Buscá el documento que necesitás</div>
+            <div class="step-desc">Podés filtrar por nombre, tipo de archivo o fecha de modificación.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Abrí o descargá el archivo</div>
+            <div class="step-desc">Los documentos se abren desde el Drive corporativo. Si necesitás extraer texto, usá la función OCR.</div>
+          </div>
+        </li>
+      </ul>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div class="alert-content">
+          <div class="alert-title">Sincronización automática</div>
+          <p class="alert-text">
+            El listado del Drive TOPS se actualiza automáticamente desde Google Drive. Si subiste un
+            documento nuevo a Drive y no aparece en Nexus, esperá unos minutos o forzá la sincronización
+            manual. Ver sección «Sincronización con Google Drive».
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 8. SINCRONIZACIÓN ═══ -->
+    <section class="section" id="sincronizacion">
+      <div class="section-header">
+        <div class="section-icon">🔄</div>
+        <h2>Sincronización con <span class="accent">Google Drive</span></h2>
+      </div>
+
+      <p>
+        El sistema obtiene los datos de compliance desde un <strong>Google Sheet corporativo</strong>
+        que el equipo de calidad mantiene actualizado. Nexus lee la "solapa del período" activo
+        del sheet para mostrar el estado de compliance del mes en curso.
+      </p>
+
+      <h3>¿Cuándo se sincroniza?</h3>
+      <ul>
+        <li>La sincronización puede ejecutarse en forma <strong>automática</strong> (configurada por el equipo técnico) o ser disparada <strong>manualmente</strong> desde el sistema.</li>
+        <li>Los datos que se sincronizan incluyen: estados de ítems, fechas de vencimiento, observaciones y documentos referenciados.</li>
+        <li>Si el Google Sheet fue actualizado pero Nexus no refleja los cambios, es necesario forzar la sincronización.</li>
+      </ul>
+
+      <h3>Cómo forzar la sincronización manual</h3>
+      <p>Necesitás el permiso <code>compliance.edit</code>.</p>
+
+      <ul class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Accedé al Compliance Cockpit</div>
+            <div class="step-desc">Menú lateral → Compliance → Cockpit (<code>/anmat</code>).</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Buscá el botón "Sincronizar"</div>
+            <div class="step-desc">Generalmente en el encabezado del panel o en las opciones del período activo.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Confirmá la sincronización</div>
+            <div class="step-desc">El sistema llama al endpoint <code>POST /api/compliance/sync</code> y extrae la solapa del período desde el Google Sheet.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Verificá que los datos se actualizaron</div>
+            <div class="step-desc">El Cockpit debe reflejar los últimos datos del sheet. Si no, consultá la sección «Errores comunes».</div>
+          </div>
+        </li>
+      </ul>
+
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-content">
+          <div class="alert-title">La fuente de verdad es el Google Sheet</div>
+          <p class="alert-text">
+            Nexus no reemplaza al Google Sheet. El sheet corporativo es la fuente de verdad de los datos
+            de compliance. Nexus solo lee esos datos y los presenta. Si los datos en Nexus son incorrectos,
+            primero revisá y corregí el sheet, luego sincronizá.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 9. OCR ═══ -->
+    <section class="section" id="ocr">
+      <div class="section-header">
+        <div class="section-icon">🔍</div>
+        <h2>OCR de <span class="accent">documentos</span></h2>
+      </div>
+
+      <p>
+        El <strong>OCR (Reconocimiento Óptico de Caracteres)</strong> es la tecnología que permite extraer
+        texto de documentos escaneados o imágenes. En TOPS Nexus, el OCR está disponible para digitalizar
+        y hacer buscables los documentos regulatorios que lleguen en formato papel o como imagen.
+      </p>
+
+      <h3>¿Cuándo usar el OCR?</h3>
+      <ul>
+        <li>Cuando recibís un acta de inspección en papel y necesitás guardarla digitalmente con texto buscable.</li>
+        <li>Cuando tenés un certificado escaneado y necesitás extraer fechas o datos para cargarlos en el sistema.</li>
+        <li>Cuando querés indexar documentos históricos para poder buscarlos dentro de Nexus.</li>
+        <li>Cuando necesitás verificar el contenido de un PDF escaneado sin leerlo manualmente.</li>
+      </ul>
+
+      <h3>Cómo usar el OCR desde Nexus</h3>
+      <ul class="steps">
+        <li class="step">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <div class="step-title">Accedé al Drive TOPS o al detalle de un ítem</div>
+            <div class="step-desc">El OCR está disponible desde la vista de documentos del Drive o desde el detalle de un ítem de compliance.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <div class="step-title">Seleccioná el documento a procesar</div>
+            <div class="step-desc">Elegí el archivo (PDF, JPG, PNG) que necesitás analizar.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <div class="step-title">Iniciá el proceso OCR</div>
+            <div class="step-desc">El sistema envía el documento al endpoint <code>POST /api/documental/ocr</code> y procesa la extracción de texto.</div>
+          </div>
+        </li>
+        <li class="step">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <div class="step-title">Revisá el texto extraído</div>
+            <div class="step-desc">El OCR puede cometer errores en caracteres difusos o manuscritos. Siempre revisá el resultado antes de usarlo.</div>
+          </div>
+        </li>
+      </ul>
+
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-content">
+          <div class="alert-title">Calidad del OCR depende de la calidad del documento</div>
+          <p class="alert-text">
+            Un documento escaneado con baja resolución, texto manuscrito o sellos superpuestos puede generar
+            un OCR de menor calidad. Para mejores resultados, escaneá a mínimo 300 DPI y en blanco y negro
+            cuando sea posible. El texto extraído siempre debe ser revisado por una persona.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 10. API ═══ -->
+    <section class="section" id="api">
+      <div class="section-header">
+        <div class="section-icon">⚙️</div>
+        <h2>API <span class="accent">disponible</span></h2>
+      </div>
+
+      <p>
+        Para usuarios técnicos o integraciones automatizadas, el módulo expone los siguientes endpoints:
+      </p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Función</th>
+              <th>Acceso</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="endpoint"><span class="method method-post">POST</span>/api/compliance/sync</span></td>
+              <td>Sincroniza datos ANMAT desde el Google Sheet (extrae solapa del período activo)</td>
+              <td><span class="badge badge-teal">compliance.edit</span></td>
+            </tr>
+            <tr>
+              <td><span class="endpoint"><span class="method method-get">GET</span>/api/drive/ping</span></td>
+              <td>Health check de la conexión con Google Drive</td>
+              <td><span class="badge badge-blue">compliance.view</span></td>
+            </tr>
+            <tr>
+              <td><span class="endpoint"><span class="method method-get">GET</span>/api/drive/list</span></td>
+              <td>Lista los archivos del Drive corporativo</td>
+              <td><span class="badge badge-blue">compliance.view</span></td>
+            </tr>
+            <tr>
+              <td><span class="endpoint"><span class="method method-post">POST</span>/api/documental/ocr</span></td>
+              <td>Extrae texto de un documento mediante OCR</td>
+              <td><span class="badge badge-teal">compliance.edit</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div class="alert-content">
+          <div class="alert-title">Nota para usuarios no técnicos</div>
+          <p class="alert-text">
+            No necesitás conocer estos endpoints para usar el módulo. Las acciones disponibles en la interfaz
+            de Nexus llaman a estos servicios automáticamente en el fondo. Esta sección es referencia para
+            el equipo de IT o para integraciones futuras.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 11. CASOS FRECUENTES ═══ -->
+    <section class="section" id="casos">
+      <div class="section-header">
+        <div class="section-icon">📌</div>
+        <h2>Casos <span class="accent">frecuentes</span></h2>
+      </div>
+
+      <div class="accordion-wrap">
+
+        <div class="accordion-item" id="acc-1">
+          <button class="accordion-trigger" onclick="toggleAccordion('acc-1')">
+            <span class="accordion-emoji">🏛️</span>
+            <span class="accordion-title">Inspección ANMAT — Cómo prepararse el día anterior</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Cuando se avisa (o se anticipa) una inspección ANMAT, seguí estos pasos:</p>
+            <ul>
+              <li>Entrá al <strong>Compliance Cockpit</strong> y revisá que no haya ítems en rojo o amarillo.</li>
+              <li>Para cada ítem en rojo, documentá la situación y armá un plan de acción inmediato.</li>
+              <li>Asegurate de que todos los documentos relevantes estén en el <strong>Drive TOPS</strong> y accesibles.</li>
+              <li>Generá el <strong>link público de compliance</strong> para poder mostrarlo rápidamente durante la inspección.</li>
+              <li>Tené a mano los certificados de habilitación vigentes y los POEs actualizados.</li>
+              <li>Notificá al Responsable Técnico y a Dirección sobre el estado actual.</li>
+            </ul>
+            <div class="alert alert-teal" style="margin-top:12px">
+              <span class="alert-icon">✅</span>
+              <div class="alert-content">
+                <div class="alert-title">Objetivo: Cockpit en verde</div>
+                <p class="alert-text">El objetivo antes de cualquier inspección es que el 100% de los ítems del Cockpit estén en estado conforme (verde). Usá el checklist mensual regularmente para llegar a las inspecciones sin sorpresas.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="acc-2">
+          <button class="accordion-trigger" onclick="toggleAccordion('acc-2')">
+            <span class="accordion-emoji">📊</span>
+            <span class="accordion-title">Auditoría interna mensual — Proceso paso a paso</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>La auditoría interna mensual es el proceso de revisar y actualizar el estado de todos los ítems de compliance:</p>
+            <ul>
+              <li>Actualizá el <strong>Google Sheet</strong> corporativo con los datos del mes (condiciones de almacenamiento, registros de temperatura, etc.).</li>
+              <li>Una vez actualizado el sheet, <strong>sincronizá Nexus</strong> para que refleje los datos nuevos.</li>
+              <li>Recorré cada ítem del Cockpit y verificá que el estado sea correcto.</li>
+              <li>Para los ítems próximos a vencer, iniciá el proceso de renovación con anticipación.</li>
+              <li>Completá el <strong>checklist mensual</strong> de este manual y guardá evidencia de cada punto.</li>
+              <li>Generá el resumen del período y archivalo en el Drive TOPS.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="acc-3">
+          <button class="accordion-trigger" onclick="toggleAccordion('acc-3')">
+            <span class="accordion-emoji">📄</span>
+            <span class="accordion-title">Carga de documentación nueva al sistema</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Cuando recibís un documento nuevo (certificado, acta, POE revisado, etc.):</p>
+            <ul>
+              <li><strong>Si llegó en papel:</strong> escaneálo a mínimo 300 DPI y guardalo como PDF. Luego subílo al Google Drive corporativo en la carpeta que corresponda.</li>
+              <li><strong>Si llegó en formato digital:</strong> subílo directamente al Google Drive corporativo.</li>
+              <li>Si el documento tiene texto escaneado (no digital nativo), usá el <strong>OCR de Nexus</strong> para extraer el texto y hacerlo buscable.</li>
+              <li>Vinculá el documento al ítem de compliance correspondiente en el Cockpit.</li>
+              <li>Actualizá el estado del ítem si el nuevo documento resuelve un vencimiento o no conformidad.</li>
+              <li>Sincronizá Nexus si los cambios se hicieron en el Google Sheet.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="acc-4">
+          <button class="accordion-trigger" onclick="toggleAccordion('acc-4')">
+            <span class="accordion-emoji">📬</span>
+            <span class="accordion-title">Compartir el estado de compliance con un auditor externo</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Cuando un auditor externo, inspector ANMAT o cliente solicita ver el estado de compliance de TOPS:</p>
+            <ul>
+              <li>No des acceso a Nexus con un usuario interno. Usá el <strong>link público de compliance</strong>.</li>
+              <li>Generá un token público desde el Compliance Cockpit (requiere <code>compliance.edit</code>).</li>
+              <li>Compartí el link <code>/c/[token]</code> al auditor por el canal que corresponda.</li>
+              <li>El auditor accede sin contraseña y ve el estado del panel en tiempo real.</li>
+              <li>Si querés restringir el acceso luego de la auditoría, regenerá el token para invalidar el anterior.</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ═══ 12. FLUJO DE AUDITORÍA ═══ -->
+    <section class="section" id="flujo-auditoria">
+      <div class="section-header">
+        <div class="section-icon">🗺️</div>
+        <h2>Flujo de <span class="accent">auditoría ANMAT</span></h2>
+      </div>
+
+      <p>
+        Este diagrama describe el proceso recomendado para preparar y atravesar una inspección ANMAT
+        utilizando las herramientas del módulo de Compliance.
+      </p>
+
+      <div class="flow">
+        <div class="flow-step">
+          <div class="flow-spine">
+            <div class="flow-dot">📅</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">1. Prevención continua (mensual)</div>
+            <div class="flow-desc">Actualizá el Google Sheet de compliance, sincronizá Nexus, completá el checklist mensual y resolvé los ítems próximos a vencer.</div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-spine">
+            <div class="flow-dot">🔔</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">2. Alerta de inspección</div>
+            <div class="flow-desc">Al recibir notificación de inspección (o anticiparla), accedé al Cockpit y revisá el estado global. Identificá ítems en rojo o amarillo.</div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-spine">
+            <div class="flow-dot">🔧</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">3. Remediación inmediata</div>
+            <div class="flow-desc">Para cada ítem en riesgo: tomá la acción correctiva, actualizá el estado en Nexus, cargá la documentación de soporte en el Drive TOPS.</div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-spine">
+            <div class="flow-dot">🔗</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">4. Preparación del link público</div>
+            <div class="flow-desc">Generá el token público de compliance para poder mostrarlo al inspector sin exponer credenciales. Verificá que el panel muestre los datos correctos.</div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-spine">
+            <div class="flow-dot">🏛️</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">5. Durante la inspección</div>
+            <div class="flow-desc">Mostrá el Compliance Cockpit al inspector (vía link público o con usuario interno). Tenés acceso rápido a documentos desde el Drive TOPS. Respondé las consultas con datos del sistema.</div>
+          </div>
+        </div>
+
+        <div class="flow-step">
+          <div class="flow-spine">
+            <div class="flow-dot">📝</div>
+            <div class="flow-line"></div>
+          </div>
+          <div class="flow-content">
+            <div class="flow-title">6. Post-inspección</div>
+            <div class="flow-desc">Cargá el acta de inspección en el Drive TOPS. Si hay observaciones, usá OCR para digitalizarlas. Creá ítems de acción para resolver las no conformidades detectadas. Actualizá el Google Sheet y sincronizá Nexus.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ 13. CHECKLIST MENSUAL ═══ -->
+    <section class="section" id="checklist">
+      <div class="section-header">
+        <div class="section-icon">✅</div>
+        <h2>Checklist mensual de <span class="accent">Compliance</span></h2>
+      </div>
+
+      <p>
+        Realizá este checklist al inicio de cada mes para mantener el depósito ANMAT en estado de
+        cumplimiento continuo. Hacé clic en cada ítem para marcarlo como completado.
+      </p>
+
+      <div class="checklist-progress" id="progress-box">
+        <div>
+          <div class="progress-count" id="progress-num">0/12</div>
+          <div class="progress-label">completados</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+        </div>
+        <div style="font-size:13px; color: var(--text-dim)">Hacé clic para marcar</div>
+      </div>
+
+      <ul class="checklist" id="checklist-items">
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Actualizar el Google Sheet de compliance con los datos del período (temperaturas, registros, etc.)</div>
+          <span class="check-tag tag-critico">Crítico</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Sincronizar Nexus con el Google Sheet (POST /api/compliance/sync)</div>
+          <span class="check-tag tag-critico">Crítico</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Revisar el Compliance Cockpit: verificar que no hay ítems en rojo</div>
+          <span class="check-tag tag-critico">Crítico</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Revisar ítems en amarillo y planificar la renovación o actualización correspondiente</div>
+          <span class="check-tag tag-critico">Crítico</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Verificar que todos los certificados de habilitación vigentes están en el Drive TOPS</div>
+          <span class="check-tag tag-mensual">Mensual</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Revisar POEs vigentes: verificar que ninguno esté vencido o desactualizado</div>
+          <span class="check-tag tag-mensual">Mensual</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Cargar al Drive TOPS cualquier documento nuevo recibido en el período (actas, certificados, informes)</div>
+          <span class="check-tag tag-mensual">Mensual</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Aplicar OCR a documentos escaneados nuevos para hacerlos buscables en el sistema</div>
+          <span class="check-tag tag-opcional">Opcional</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Verificar la conexión con Google Drive (GET /api/drive/ping) — reportar si falla</div>
+          <span class="check-tag tag-mensual">Mensual</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Generar (o regenerar) el token público de compliance para tenerlo listo ante inspecciones</div>
+          <span class="check-tag tag-opcional">Opcional</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Notificar a Dirección sobre el estado de compliance del período mediante resumen ejecutivo</div>
+          <span class="check-tag tag-mensual">Mensual</span>
+        </li>
+        <li class="checklist-item" onclick="toggleCheck(this)">
+          <div class="check-box"></div>
+          <div class="check-label">Archivar el resumen del período cerrado en el Drive TOPS para referencia futura</div>
+          <span class="check-tag tag-mensual">Mensual</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ═══ 14. ERRORES COMUNES ═══ -->
+    <section class="section" id="errores">
+      <div class="section-header">
+        <div class="section-icon">🚨</div>
+        <h2>Errores <span class="accent">comunes</span></h2>
+      </div>
+
+      <div class="error-grid">
+
+        <div class="error-card">
+          <div class="error-card-title">⚠️ Sincronización fallida</div>
+          <p>El botón de sincronización no actualiza los datos del Cockpit. Nexus muestra datos desactualizados o muestra un error al sincronizar.</p>
+          <div class="fix-label">Causas posibles</div>
+          <p class="fix-text">Problema de conexión con Google Drive, permisos revocados, o el Google Sheet cambió de estructura.</p>
+          <div class="fix-label" style="margin-top:8px">Qué hacer</div>
+          <p class="fix-text">Verificá la conexión con <code>GET /api/drive/ping</code>. Si falla, notificá al equipo de IT. Si la conexión está bien, revisá que el sheet mantenga la estructura esperada (columnas, solapas).</p>
+        </div>
+
+        <div class="error-card">
+          <div class="error-card-title">⚠️ Documento sin OCR procesado</div>
+          <p>Se subió un documento PDF escaneado pero el OCR no extrajo texto correctamente o devolvió caracteres ilegibles.</p>
+          <div class="fix-label">Causas posibles</div>
+          <p class="fix-text">Baja resolución del escaneo, texto manuscrito complejo, o imagen con baja calidad de contraste.</p>
+          <div class="fix-label" style="margin-top:8px">Qué hacer</div>
+          <p class="fix-text">Re-escaneá el documento a mayor resolución (mínimo 300 DPI). Si el problema persiste, transcribí el texto manualmente en el campo de observaciones del ítem correspondiente.</p>
+        </div>
+
+        <div class="error-card">
+          <div class="error-card-title">⚠️ Token expirado o inválido</div>
+          <p>El link público de compliance que se compartió con un auditor ya no funciona o muestra un error de acceso.</p>
+          <div class="fix-label">Causas posibles</div>
+          <p class="fix-text">El token fue revocado, expiró (si tiene tiempo de vida limitado) o la URL fue copiada incorrectamente.</p>
+          <div class="fix-label" style="margin-top:8px">Qué hacer</div>
+          <p class="fix-text">Generá un nuevo token público desde el Compliance Cockpit y compartí la nueva URL al auditor. No intentes reutilizar tokens viejos.</p>
+        </div>
+
+        <div class="error-card">
+          <div class="error-card-title">⚠️ Drive TOPS no carga archivos</div>
+          <p>El listado del Drive TOPS aparece vacío o no se pueden abrir los documentos desde Nexus.</p>
+          <div class="fix-label">Causas posibles</div>
+          <p class="fix-text">Conexión con Google Drive interrumpida, token de autorización vencido, o problema de permisos en la carpeta del Drive.</p>
+          <div class="fix-label" style="margin-top:8px">Qué hacer</div>
+          <p class="fix-text">Verificá el health check con <code>GET /api/drive/ping</code>. Si responde con error, notificá al equipo de IT para revisar las credenciales de la integración con Google Drive.</p>
+        </div>
+
+        <div class="error-card">
+          <div class="error-card-title">⚠️ Ítem de compliance en rojo sin motivo claro</div>
+          <p>Un ítem aparece en rojo en el Cockpit pero el equipo está seguro de que está al día.</p>
+          <div class="fix-label">Causas posibles</div>
+          <p class="fix-text">El dato en el Google Sheet no fue actualizado, la fecha de vencimiento está mal cargada en el sheet, o la última sincronización falló.</p>
+          <div class="fix-label" style="margin-top:8px">Qué hacer</div>
+          <p class="fix-text">Revisá el Google Sheet y corregí el dato erróneo. Luego forzá una nueva sincronización desde el Compliance Cockpit.</p>
+        </div>
+
+        <div class="error-card">
+          <div class="error-card-title">⚠️ Sin permiso para sincronizar</div>
+          <p>El botón de sincronización no aparece o al intentar sincronizar aparece un error de permiso.</p>
+          <div class="fix-label">Causa</div>
+          <p class="fix-text">El usuario no tiene el permiso <code>compliance.edit</code> asignado.</p>
+          <div class="fix-label" style="margin-top:8px">Qué hacer</div>
+          <p class="fix-text">Contactá a Dirección o al administrador del sistema para que asigne el permiso correspondiente a tu usuario.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ═══ 15. FAQ ═══ -->
+    <section class="section" id="faq">
+      <div class="section-header">
+        <div class="section-icon">❓</div>
+        <h2>Preguntas <span class="accent">frecuentes</span></h2>
+      </div>
+
+      <div class="accordion-wrap">
+
+        <div class="accordion-item" id="faq-1">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-1')">
+            <span class="accordion-emoji">🏛️</span>
+            <span class="accordion-title">¿Qué es ANMAT y por qué regulamos bajo esa norma?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>ANMAT (Administración Nacional de Medicamentos, Alimentos y Tecnología Médica) es el organismo del Estado argentino que controla y fiscaliza productos y actividades que pueden repercutir en la salud humana. TOPS opera bajo regulación ANMAT porque su depósito en Magaldi 1765, CABA, almacena productos que caen bajo la jurisdicción de ese organismo. Cumplir con ANMAT no es opcional: es un requisito legal para poder operar.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="faq-2">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-2')">
+            <span class="accordion-emoji">📋</span>
+            <span class="accordion-title">¿Qué son las BPA / BPM y cómo se reflejan en el sistema?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p><strong>BPA (Buenas Prácticas de Almacenamiento)</strong> y <strong>BPM (Buenas Prácticas de Manufactura)</strong> son marcos normativos que definen los estándares mínimos para almacenar, manipular y distribuir productos regulados por ANMAT. En Nexus, cada ítem del Compliance Cockpit representa uno o más de estos requisitos. El estado (verde/amarillo/rojo) indica si ese requisito está siendo cumplido.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="faq-3">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-3')">
+            <span class="accordion-emoji">🔄</span>
+            <span class="accordion-title">¿Con qué frecuencia debo sincronizar Nexus?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>La sincronización debe hacerse siempre que el Google Sheet de compliance sea actualizado. Como mínimo, se recomienda sincronizar una vez por mes (al inicio del período). Si actualizás el sheet y necesitás que Nexus refleje los cambios de inmediato (por ejemplo, antes de una inspección), forzá la sincronización manualmente desde el Compliance Cockpit.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="faq-4">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-4')">
+            <span class="accordion-emoji">🔗</span>
+            <span class="accordion-title">¿El link público de compliance puede ver datos privados o sensibles?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>El link público solo muestra el estado de cumplimiento regulatorio (qué ítems están conformes, cuáles vencen y cuándo). No expone datos personales de empleados, información financiera ni documentos internos confidenciales. Sin embargo, sí expone información regulatoria de la empresa. Compartilo solo con personas que necesiten esa información (inspectores, auditores, organismos de control).</p>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="faq-5">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-5')">
+            <span class="accordion-emoji">📁</span>
+            <span class="accordion-title">¿Puedo subir documentos directamente desde Nexus o debo hacerlo desde Google Drive?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Los documentos se gestionan principalmente desde Google Drive corporativo. Nexus lee y muestra los archivos que están en Drive, pero la subida principal se hace desde Drive. Una vez subido el archivo al Drive, aparece en el Drive TOPS de Nexus (puede requerir sincronización). El OCR de documentos se aplica desde Nexus sobre archivos ya disponibles en el sistema.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="faq-6">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-6')">
+            <span class="accordion-emoji">⏱️</span>
+            <span class="accordion-title">¿Cuánto tarda el OCR en procesar un documento?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>El tiempo de procesamiento del OCR depende del tamaño y la complejidad del documento. Para documentos de pocas páginas, el proceso es rápido (segundos a pocos minutos). Para documentos muy extensos o con imágenes de alta resolución, puede tardar más. El sistema notifica cuando el proceso terminó. Si el OCR no se completa después de varios minutos, actualizá la página o contactá al equipo técnico.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="faq-7">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-7')">
+            <span class="accordion-emoji">👤</span>
+            <span class="accordion-title">¿Puedo dar acceso temporal a un consultor regulatorio sin darle usuario de Nexus?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Sí. Para eso existe el <strong>link público de compliance</strong>. Generá un token desde el Cockpit y compartí la URL <code>/c/[token]</code> al consultor. Podrá ver el estado de compliance sin necesitar usuario, contraseña ni acceso a Nexus. Cuando ya no necesites que esa persona tenga acceso, regenerá el token para invalidar el link anterior.</p>
+          </div>
+        </div>
+
+        <div class="accordion-item" id="faq-8">
+          <button class="accordion-trigger" onclick="toggleAccordion('faq-8')">
+            <span class="accordion-emoji">🔐</span>
+            <span class="accordion-title">¿Qué hago si no tengo permisos para editar o sincronizar?</span>
+            <span class="accordion-chevron">▼</span>
+          </button>
+          <div class="accordion-body">
+            <p>Los permisos de edición (<code>compliance.edit</code>) son asignados por el administrador del sistema a los roles de Director y Administración. Si necesitás editar y no podés, comunicarte con Dirección o con quien administre los roles en Nexus para que amplíen tu acceso. No es posible auto-asignarse permisos.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ═══ 16. GLOSARIO ═══ -->
+    <section class="section" id="glosario">
+      <div class="section-header">
+        <div class="section-icon">📚</div>
+        <h2><span class="accent">Glosario</span> regulatorio</h2>
+      </div>
+
+      <p>Términos clave del módulo y del contexto regulatorio ANMAT.</p>
+
+      <div>
+        <div class="glossary-item">
+          <div class="glossary-term">ANMAT</div>
+          <div class="glossary-def">Administración Nacional de Medicamentos, Alimentos y Tecnología Médica. Organismo del Estado argentino que regula y fiscaliza productos y actividades con impacto en la salud humana. TOPS opera bajo su jurisdicción por el tipo de productos que almacena.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">BPA — Buenas Prácticas de Almacenamiento</div>
+          <div class="glossary-def">Marco normativo que establece los requisitos mínimos para el almacenamiento seguro de productos regulados. Incluye control de temperatura, humedad, segregación de productos, trazabilidad y documentación.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">BPM — Buenas Prácticas de Manufactura</div>
+          <div class="glossary-def">Conjunto de normas y procedimientos para asegurar la calidad e inocuidad de los productos durante su fabricación o procesamiento. En contexto de depósito, puede referirse a los estándares operativos del manejo de productos.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Compliance</div>
+          <div class="glossary-def">Estado de cumplimiento con las regulaciones y normativas aplicables. En TOPS, se refiere específicamente al cumplimiento de los requisitos ANMAT/BPA para operar el depósito habilitado.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Compliance Cockpit</div>
+          <div class="glossary-def">Panel principal del módulo de Compliance en TOPS Nexus. Muestra el estado de todos los ítems regulatorios en tiempo real, con indicadores de semáforo (verde/amarillo/rojo).</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Drive TOPS</div>
+          <div class="glossary-def">Centro documental corporativo integrado en Nexus que conecta con el Google Drive de la empresa. Permite acceder a documentos regulatorios, POEs y certificados directamente desde el sistema.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Google Drive Sync</div>
+          <div class="glossary-def">Proceso de sincronización que trae los datos del Google Sheet corporativo de compliance hacia TOPS Nexus. Se puede ejecutar en forma automática o manualmente desde el Cockpit.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">No conformidad</div>
+          <div class="glossary-def">Incumplimiento detectado respecto a un requisito regulatorio o estándar BPA/BPM. Debe documentarse, analizarse y resolverse con una acción correctiva. Las no conformidades quedan registradas en el sistema de compliance.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">OCR — Reconocimiento Óptico de Caracteres</div>
+          <div class="glossary-def">Tecnología que convierte imágenes de texto (documentos escaneados, fotos de documentos) en texto digital buscable y editable. En Nexus, se accede vía el endpoint <code>POST /api/documental/ocr</code>.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">POE — Procedimiento Operativo Estándar</div>
+          <div class="glossary-def">Documento que describe paso a paso cómo realizar una tarea operativa específica del depósito. ANMAT requiere que los POEs estén documentados, vigentes y conocidos por el personal.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Solapa del período</div>
+          <div class="glossary-def">Pestaña o hoja del Google Sheet corporativo que contiene los datos de compliance del mes activo. El sistema de sincronización extrae específicamente esta solapa para actualizar el Cockpit de Nexus.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Token público</div>
+          <div class="glossary-def">Identificador único y temporal generado por Nexus que permite acceder al panel de compliance sin autenticación. Se usa para compartir el estado de compliance con auditores externos, inspectores ANMAT u otros interesados sin cuenta en el sistema. Accesible en la URL <code>/c/[token]</code>.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Responsable Técnico ANMAT</div>
+          <div class="glossary-def">Profesional habilitado designado por la empresa ante ANMAT como responsable del cumplimiento regulatorio del depósito. Es el interlocutor oficial con el organismo y quien avala las declaraciones de cumplimiento.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIVIDER FINAL -->
+    <div class="divider"></div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap: 16px;">
+      <a href="index.html" class="back-link" style="font-size:14px; padding: 8px 16px;">← Volver al índice del manual</a>
+      <div style="font-size:12px; color: var(--text-dim);">
+        TOPS Nexus · Módulo Compliance · Última actualización: Junio 2026
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  // ── ACORDEONES ──
+  function toggleAccordion(id) {
+    const item = document.getElementById(id);
+    if (!item) return;
+    const wasOpen = item.classList.contains('open');
+    // No cerramos otros para permitir múltiples abiertos
+    item.classList.toggle('open', !wasOpen);
+  }
+
+  // ── CHECKLIST ──
+  const TOTAL = 12;
+
+  function toggleCheck(el) {
+    el.classList.toggle('checked');
+    const box = el.querySelector('.check-box');
+    if (el.classList.contains('checked')) {
+      box.textContent = '✓';
+    } else {
+      box.textContent = '';
+    }
+    updateProgress();
+  }
+
+  function updateProgress() {
+    const checked = document.querySelectorAll('.checklist-item.checked').length;
+    document.getElementById('progress-num').textContent = checked + '/' + TOTAL;
+    document.getElementById('progress-bar').style.width = Math.round((checked / TOTAL) * 100) + '%';
+  }
+
+  // ── TOC HIGHLIGHT ──
+  const sections = document.querySelectorAll('.section');
+  const tocLinks = document.querySelectorAll('#toc a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        tocLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + entry.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-60px 0px -60% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

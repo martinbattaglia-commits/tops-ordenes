@@ -1,0 +1,1948 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual de Usuario — Compras y Proveedores | TOPS Nexus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0f172a;
+  --navy-light: #1e293b;
+  --navy-mid: #162032;
+  --blue: #3b82f6;
+  --blue-dark: #1d4ed8;
+  --blue-light: #60a5fa;
+  --cyan: #06b6d4;
+  --cyan-light: #22d3ee;
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --purple: #a855f7;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --border: rgba(255,255,255,0.08);
+  --border-accent: rgba(6,182,212,0.3);
+  --card: rgba(255,255,255,0.04);
+  --card-hover: rgba(255,255,255,0.07);
+  --accent: #06b6d4;
+  --accent-glow: rgba(6,182,212,0.15);
+  --sidebar-w: 260px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; font-size: 16px; }
+
+body {
+  background: var(--navy);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(15,23,42,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+  text-decoration: none;
+}
+.topbar-brand .logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--cyan), var(--blue));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+}
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.breadcrumb a { color: var(--cyan); text-decoration: none; }
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb span { color: var(--text-dim); }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.badge-module {
+  background: linear-gradient(135deg, rgba(6,182,212,0.2), rgba(59,130,246,0.2));
+  border: 1px solid var(--border-accent);
+  color: var(--cyan-light);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── LAYOUT ── */
+.layout {
+  display: flex;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 56px);
+}
+
+/* ── SIDEBAR TOC ── */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  padding: 1.5rem 1rem 2rem;
+  border-right: 1px solid var(--border);
+  background: var(--navy-mid);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 0.75rem;
+  padding-left: 0.5rem;
+}
+.toc-list { list-style: none; }
+.toc-list li { margin-bottom: 0.1rem; }
+.toc-list a {
+  display: block;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 6px;
+  transition: all 0.15s;
+  border-left: 2px solid transparent;
+}
+.toc-list a:hover {
+  color: var(--cyan-light);
+  background: var(--accent-glow);
+  border-left-color: var(--cyan);
+}
+.toc-list a.active {
+  color: var(--cyan-light);
+  background: var(--accent-glow);
+  border-left-color: var(--cyan);
+  font-weight: 500;
+}
+.toc-list .toc-sub a {
+  padding-left: 1.25rem;
+  font-size: 0.78rem;
+}
+.toc-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.75rem 0.5rem;
+}
+
+/* ── MAIN CONTENT ── */
+.main {
+  flex: 1;
+  min-width: 0;
+  padding: 2.5rem 2.5rem 4rem;
+}
+
+/* ── SECTIONS ── */
+.section {
+  margin-bottom: 3.5rem;
+  scroll-margin-top: 80px;
+}
+
+/* ── HERO HEADER ── */
+.module-hero {
+  background: linear-gradient(135deg, rgba(6,182,212,0.12) 0%, rgba(59,130,246,0.08) 50%, rgba(15,23,42,0) 100%);
+  border: 1px solid var(--border-accent);
+  border-radius: 16px;
+  padding: 2.5rem;
+  margin-bottom: 3rem;
+  position: relative;
+  overflow: hidden;
+}
+.module-hero::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(6,182,212,0.12), transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.hero-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+.hero-tag {
+  background: var(--accent-glow);
+  border: 1px solid var(--border-accent);
+  color: var(--cyan);
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+}
+.hero-title {
+  font-size: 2.2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--text) 60%, var(--cyan-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+  margin-bottom: 0.75rem;
+}
+.hero-desc {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  max-width: 680px;
+  line-height: 1.6;
+}
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.hero-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.hero-meta-item .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+}
+
+/* ── SECTION HEADINGS ── */
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+.section-heading .icon {
+  font-size: 1.4rem;
+}
+.section-heading::after {
+  content: '';
+  display: block;
+  height: 2px;
+  width: 40px;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+}
+.subsection-heading {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--cyan-light);
+  margin: 1.5rem 0 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: background 0.15s;
+}
+.card:hover { background: var(--card-hover); }
+.card-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+.card-icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+.card-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 0.4rem; }
+.card-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; }
+.card-url {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--cyan);
+  background: rgba(6,182,212,0.1);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+/* ── ALERTS ── */
+.alert {
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.alert-icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 0.05rem; }
+.alert-content { flex: 1; }
+.alert-content strong { display: block; margin-bottom: 0.2rem; }
+.alert-warning {
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.3);
+  color: #fde68a;
+}
+.alert-tip {
+  background: rgba(6,182,212,0.08);
+  border: 1px solid rgba(6,182,212,0.25);
+  color: #a5f3fc;
+}
+.alert-success {
+  background: rgba(34,197,94,0.08);
+  border: 1px solid rgba(34,197,94,0.25);
+  color: #bbf7d0;
+}
+.alert-danger {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.25);
+  color: #fecaca;
+}
+.alert-perm {
+  background: rgba(168,85,247,0.08);
+  border: 1px solid rgba(168,85,247,0.25);
+  color: #e9d5ff;
+}
+
+/* ── PERMISSIONS TABLE ── */
+.perm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 1rem 0;
+}
+.perm-table th {
+  background: rgba(6,182,212,0.1);
+  color: var(--cyan-light);
+  font-weight: 600;
+  padding: 0.6rem 0.9rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-accent);
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.perm-table td {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.perm-table tr:last-child td { border-bottom: none; }
+.perm-table tr:hover td { background: var(--card-hover); }
+.perm-table td:first-child { font-weight: 500; color: var(--text); }
+.perm-ok { color: var(--green); font-size: 1rem; }
+.perm-no { color: var(--text-dim); font-size: 1rem; }
+.perm-key { color: var(--purple); font-size: 1rem; }
+
+/* ── STEPS ── */
+.steps { list-style: none; counter-reset: steps; }
+.steps li {
+  counter-increment: steps;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  position: relative;
+}
+.steps li::before {
+  content: counter(steps);
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--cyan), var(--blue));
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--navy);
+  margin-top: 0.1rem;
+}
+.steps li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 34px;
+  bottom: -10px;
+  width: 2px;
+  background: var(--border);
+}
+.step-content { flex: 1; }
+.step-content strong { display: block; color: var(--text); font-size: 0.95rem; }
+.step-content p { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.2rem; }
+.step-content code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  background: rgba(255,255,255,0.06);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--cyan-light);
+}
+
+/* ── FLOW DIAGRAM ── */
+.flow-diagram {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+.flow-node {
+  background: var(--navy-light);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  min-width: 110px;
+  flex-shrink: 0;
+  transition: border-color 0.2s;
+}
+.flow-node:hover { border-color: var(--cyan); }
+.flow-node-icon { font-size: 1.4rem; display: block; margin-bottom: 0.25rem; }
+.flow-node-label { font-size: 0.78rem; font-weight: 600; color: var(--text); display: block; }
+.flow-node-sub { font-size: 0.68rem; color: var(--text-muted); display: block; margin-top: 0.1rem; }
+.flow-node.active { border-color: var(--cyan); background: rgba(6,182,212,0.1); }
+.flow-node.success { border-color: var(--green); background: rgba(34,197,94,0.08); }
+.flow-node.warning { border-color: var(--amber); background: rgba(245,158,11,0.08); }
+.flow-node.locked { border-color: var(--purple); background: rgba(168,85,247,0.08); }
+.flow-arrow {
+  color: var(--text-dim);
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  padding: 0 0.4rem;
+  display: flex;
+  align-items: center;
+}
+
+/* ── ACCORDION ── */
+.accordion { margin: 0.5rem 0; }
+.accordion-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.accordion-item:hover { border-color: rgba(6,182,212,0.2); }
+.accordion-trigger {
+  width: 100%;
+  padding: 1rem 1.25rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 500;
+  font-family: inherit;
+  text-align: left;
+  transition: color 0.15s;
+}
+.accordion-trigger:hover { color: var(--cyan-light); }
+.accordion-trigger-left { display: flex; align-items: center; gap: 0.6rem; }
+.accordion-icon { font-size: 1.1rem; flex-shrink: 0; }
+.accordion-chevron {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.accordion-item.open .accordion-chevron { transform: rotate(180deg); }
+.accordion-item.open .accordion-trigger { color: var(--cyan-light); }
+.accordion-body {
+  display: none;
+  padding: 0 1.25rem 1.25rem;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.accordion-item.open .accordion-body { display: block; }
+.accordion-body ul { padding-left: 1.2rem; margin: 0.5rem 0; }
+.accordion-body ul li { margin-bottom: 0.25rem; }
+.accordion-body p { margin-bottom: 0.5rem; }
+.accordion-body strong { color: var(--text); }
+
+/* ── TABS ── */
+.tabs { margin: 1rem 0; }
+.tab-list {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab-list::-webkit-scrollbar { display: none; }
+.tab-btn {
+  padding: 0.6rem 1.1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active {
+  color: var(--cyan-light);
+  border-bottom-color: var(--cyan);
+}
+.tab-panel {
+  display: none;
+  padding: 1.25rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+.tab-panel.active { display: block; }
+.tab-panel ul { padding-left: 1.2rem; margin: 0.5rem 0; }
+.tab-panel ul li { margin-bottom: 0.3rem; }
+.tab-panel strong { color: var(--text); }
+
+/* ── CHECKLIST ── */
+.checklist { list-style: none; margin: 0.75rem 0; }
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+.checklist li:last-child { border-bottom: none; }
+.checklist li:hover { color: var(--text); }
+.checklist input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+  margin-top: 2px;
+}
+.checklist li.checked { color: var(--text-dim); text-decoration: line-through; }
+.checklist-group-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 1rem 0 0.25rem;
+}
+
+/* ── INLINE CODE / FIELDS ── */
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82em;
+  background: rgba(255,255,255,0.06);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  color: var(--cyan-light);
+}
+.field-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  margin: 1rem 0;
+}
+.field-table th {
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.77rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.field-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.field-table tr:last-child td { border-bottom: none; }
+.field-required {
+  color: var(--red);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.field-optional {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+/* ── KPI CARDS ── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+.kpi-card:hover { border-color: var(--border-accent); }
+.kpi-icon { font-size: 1.4rem; display: block; margin-bottom: 0.3rem; }
+.kpi-label { font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.2rem; }
+.kpi-value { font-size: 1.3rem; font-weight: 700; color: var(--cyan-light); display: block; }
+
+/* ── GLOSSARY ── */
+.glossary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.glossary-item {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+.glossary-term {
+  font-weight: 700;
+  color: var(--cyan-light);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  margin-bottom: 0.35rem;
+}
+.glossary-def {
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+/* ── API ENDPOINTS ── */
+.api-list { list-style: none; margin: 0.75rem 0; }
+.api-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+  font-size: 0.84rem;
+}
+.api-method {
+  flex-shrink: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--navy);
+  background: var(--cyan);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  min-width: 40px;
+  text-align: center;
+  margin-top: 1px;
+}
+.api-path {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  color: var(--cyan-light);
+  font-weight: 500;
+}
+.api-desc { font-size: 0.8rem; color: var(--text-muted); }
+
+/* ── INLINE LISTS ── */
+.info-list { list-style: none; margin: 0.5rem 0; }
+.info-list li {
+  padding: 0.3rem 0;
+  padding-left: 1.2rem;
+  position: relative;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.info-list li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+/* ── BACK TO TOP ── */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 500;
+  transition: all 0.15s;
+  margin-bottom: 1.5rem;
+}
+.back-btn:hover {
+  background: var(--card-hover);
+  color: var(--cyan-light);
+  border-color: var(--border-accent);
+}
+
+/* ── FOOTER ── */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  background: var(--navy-mid);
+}
+.footer strong { color: var(--text-muted); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .layout { display: block; }
+  .main { padding: 1.5rem 1rem 3rem; }
+  .hero-title { font-size: 1.6rem; }
+  .card-grid { grid-template-columns: 1fr; }
+  .flow-diagram { flex-direction: column; align-items: flex-start; }
+  .flow-arrow { transform: rotate(90deg); align-self: flex-start; padding-left: 52px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .topbar { padding: 0 1rem; }
+  .topbar-right { display: none; }
+  .perm-table { font-size: 0.75rem; }
+  .perm-table th, .perm-table td { padding: 0.4rem 0.5rem; }
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .glossary-grid { grid-template-columns: 1fr; }
+}
+
+/* ── PRINT ── */
+@media print {
+  .sidebar { display: none; }
+  .topbar { position: static; }
+  .layout { display: block; }
+  .accordion-body { display: block !important; }
+  .tab-panel { display: block !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <a class="topbar-brand" href="index.html">
+    <div class="logo-icon">🏢</div>
+    TOPS Nexus
+  </a>
+  <nav class="breadcrumb">
+    <a href="index.html">Inicio</a>
+    <span>›</span>
+    <span>Manuales</span>
+    <span>›</span>
+    <span style="color:var(--cyan-light)">Compras y Proveedores</span>
+  </nav>
+  <div class="topbar-right">
+    <span class="badge-module">🛒 Compras</span>
+  </div>
+</header>
+
+<div class="layout">
+
+<!-- SIDEBAR TOC -->
+<aside class="sidebar" id="sidebar">
+  <div class="toc-title">Contenido</div>
+  <ul class="toc-list">
+    <li><a href="#objetivo">1. Objetivo del módulo</a></li>
+    <li><a href="#acceso">2. ¿Quién puede acceder?</a></li>
+    <li><a href="#como-acceder">3. Cómo acceder</a></li>
+    <li><a href="#dashboard">4. Dashboard de Compras</a></li>
+    <li><a href="#ordenes">5. Órdenes de Compra</a></li>
+    <ul class="toc-sub">
+      <li><a href="#ordenes-listado">Listado y búsqueda</a></li>
+      <li><a href="#ordenes-nueva">Crear una OC</a></li>
+      <li><a href="#ordenes-detalle">Ver detalle</a></li>
+    </ul>
+    <li><a href="#firma">6. Firma Digital</a></li>
+    <li><a href="#proveedores">7. Gestión de Proveedores</a></li>
+    <li><a href="#facturas">8. Facturas de Proveedor</a></li>
+    <li><a href="#libro-iva">9. Libro IVA Compras</a></li>
+    <li><a href="#exportaciones">10. Exportaciones</a></li>
+    <li><a href="#flujo">11. Flujo del proceso</a></li>
+    <div class="toc-divider"></div>
+    <li><a href="#checklist">✅ Checklists</a></li>
+    <li><a href="#casos">🔧 Casos frecuentes</a></li>
+    <li><a href="#errores">⚠️ Errores comunes</a></li>
+    <li><a href="#faq">❓ FAQ</a></li>
+    <li><a href="#glosario">📖 Glosario</a></li>
+  </ul>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <a class="back-btn" href="index.html">← Volver al índice</a>
+
+  <!-- HERO -->
+  <div class="module-hero">
+    <div class="hero-eyebrow">
+      <div class="hero-icon">🛒</div>
+      <span class="hero-tag">/compras</span>
+      <span class="hero-tag" style="color:var(--blue-light);border-color:rgba(59,130,246,0.3);background:rgba(59,130,246,0.1)">ERP</span>
+    </div>
+    <h1 class="hero-title">Compras y Proveedores</h1>
+    <p class="hero-desc">Módulo para la gestión completa de órdenes de compra, proveedores, facturas de ingreso y el libro IVA Compras. Incluye firma digital exclusiva del Director y validación pública de documentos.</p>
+    <div class="hero-meta">
+      <span class="hero-meta-item"><span class="dot"></span> Módulo ERP operativo</span>
+      <span class="hero-meta-item"><span class="dot"></span> Firma digital habilitada</span>
+      <span class="hero-meta-item"><span class="dot"></span> 64 órdenes en sistema</span>
+      <span class="hero-meta-item"><span class="dot" style="background:var(--amber)"></span> Requiere permiso <code>compras.view</code></span>
+    </div>
+  </div>
+
+  <!-- 1. OBJETIVO -->
+  <section class="section" id="objetivo">
+    <h2 class="section-heading"><span class="icon">🎯</span> 1. Objetivo del módulo</h2>
+    <p style="color:var(--text-muted);font-size:0.92rem;margin-bottom:1rem;">
+      El módulo de Compras y Proveedores centraliza todo el ciclo de compra de la empresa: desde la creación de una orden de compra hasta su firma digital, el ingreso de la factura del proveedor y el registro en el Libro IVA. Permite controlar qué se compra, a quién, en qué condiciones y con qué respaldo documental.
+    </p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">📋</div>
+        <div class="card-title">Órdenes de Compra</div>
+        <div class="card-desc">Creación, edición, firma y seguimiento de órdenes de compra. Exportación en PDF para enviar a proveedores.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🏭</div>
+        <div class="card-title">Catálogo de Proveedores</div>
+        <div class="card-desc">Ficha completa por proveedor: datos de contacto, historial de operaciones y scoring.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">🧾</div>
+        <div class="card-title">Facturas de Proveedor</div>
+        <div class="card-desc">Ingreso de facturas recibidas y mapeo contra órdenes de compra para completar el ciclo FV → OC.</div>
+      </div>
+      <div class="card">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Libro IVA Compras</div>
+        <div class="card-desc">Reporte de IVA compras por período, exportable para uso contable y preparación de declaraciones.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. QUIÉN PUEDE -->
+  <section class="section" id="acceso">
+    <h2 class="section-heading"><span class="icon">👥</span> 2. ¿Quién puede acceder?</h2>
+
+    <div class="alert alert-perm">
+      <span class="alert-icon">🔒</span>
+      <div class="alert-content">
+        <strong>Permiso base requerido</strong>
+        Cualquier usuario que deba operar en este módulo necesita al menos el permiso <code>compras.view</code>. Sin él, el módulo no aparece en el menú lateral.
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+    <table class="perm-table">
+      <thead>
+        <tr>
+          <th>Rol</th>
+          <th>Ver</th>
+          <th>Crear OC</th>
+          <th>Editar OC</th>
+          <th>Firmar OC</th>
+          <th>Exportar</th>
+          <th>Eliminar</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🔵 Director</td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-key">🔒 Exclusivo</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+        </tr>
+        <tr>
+          <td>🟢 Administración</td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+        </tr>
+        <tr>
+          <td>🟡 Operaciones</td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-no">❌</span></td>
+        </tr>
+        <tr>
+          <td>🔍 Auditor</td>
+          <td><span class="perm-ok">✅</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+        </tr>
+        <tr>
+          <td>💼 Comercial</td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+        </tr>
+        <tr>
+          <td>📦 Depósito</td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+          <td><span class="perm-no">❌</span></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>La firma digital es exclusiva del Director</strong>
+        Solo el rol Director puede firmar digitalmente una OC (<code>compras.sign</code>). Ningún otro rol, ni siquiera Administración, puede firmar. Una OC sin firma puede enviarse al proveedor, pero no tiene validez como compromiso contractual formal dentro del sistema.
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. CÓMO ACCEDER -->
+  <section class="section" id="como-acceder">
+    <h2 class="section-heading"><span class="icon">🗺️</span> 3. Cómo acceder</h2>
+    <ol class="steps">
+      <li>
+        <div class="step-content">
+          <strong>Iniciá sesión en TOPS Nexus</strong>
+          <p>Ingresá con tu usuario y contraseña. Si no tenés acceso, contactá al administrador del sistema.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Buscá "Compras · Proveedores" en el menú lateral</strong>
+          <p>En la barra izquierda de navegación aparece la sección <strong>Compras · Proveedores</strong> con el ícono 🛒. Si no lo ves, tu usuario no tiene el permiso <code>compras.view</code>.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Seleccioná la subsección que necesitás</strong>
+          <p>El menú despliega: <strong>Dashboard</strong>, <strong>Órdenes</strong>, <strong>Proveedores</strong>, <strong>Facturas</strong> y <strong>Libro IVA</strong>.</p>
+        </div>
+      </li>
+    </ol>
+    <div class="alert alert-tip">
+      <span class="alert-icon">💡</span>
+      <div class="alert-content">
+        También podés acceder directamente escribiendo <code>/compras</code> en la URL del navegador si ya estás logueado.
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. DASHBOARD -->
+  <section class="section" id="dashboard">
+    <h2 class="section-heading"><span class="icon">📊</span> 4. Dashboard de Compras</h2>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      La pantalla principal (<code>/compras</code>) muestra un resumen ejecutivo del área de compras. Es la primera pantalla que ves al ingresar al módulo.
+    </p>
+
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-icon">📋</span>
+        <span class="kpi-label">Total OC en sistema</span>
+        <span class="kpi-value">64</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-icon">✅</span>
+        <span class="kpi-label">OC firmadas</span>
+        <span class="kpi-value" style="color:var(--green)">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-icon">⏳</span>
+        <span class="kpi-label">OC pendientes de firma</span>
+        <span class="kpi-value" style="color:var(--amber)">—</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-icon">🏭</span>
+        <span class="kpi-label">Proveedores activos</span>
+        <span class="kpi-value">—</span>
+      </div>
+    </div>
+
+    <div class="alert alert-tip">
+      <span class="alert-icon">💡</span>
+      <div class="alert-content">
+        Los valores exactos de los KPIs dependen del período seleccionado y del estado actual de las órdenes. Los datos se actualizan en tiempo real.
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. ÓRDENES -->
+  <section class="section" id="ordenes">
+    <h2 class="section-heading"><span class="icon">📋</span> 5. Órdenes de Compra</h2>
+
+    <h3 class="subsection-heading" id="ordenes-listado">5.1 Listado y búsqueda</h3>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      En <code>/compras/ordenes</code> encontrás el listado completo de órdenes de compra. Actualmente el sistema registra <strong>64 órdenes</strong>.
+    </p>
+
+    <div class="tabs" id="tabs-listado">
+      <div class="tab-list">
+        <button class="tab-btn active" onclick="switchTab('tabs-listado','columnas')">Columnas de la tabla</button>
+        <button class="tab-btn" onclick="switchTab('tabs-listado','busqueda')">Búsqueda y filtros</button>
+        <button class="tab-btn" onclick="switchTab('tabs-listado','batch')">Acciones en lote</button>
+      </div>
+      <div class="tab-panel active" data-tab="columnas">
+        <strong>La tabla muestra las siguientes columnas:</strong>
+        <ul>
+          <li><strong>N° de OC</strong> — número identificador único (también llamado <em>publicId</em>)</li>
+          <li><strong>Proveedor</strong> — nombre del proveedor asociado a la OC</li>
+          <li><strong>Fecha</strong> — fecha de emisión de la orden</li>
+          <li><strong>Estado</strong> — borrador / emitida / firmada / pagada / anulada</li>
+          <li><strong>Total</strong> — importe total de la OC (neto + IVA)</li>
+          <li><strong>Acciones</strong> — botones rápidos: ver detalle, exportar PDF, eliminar</li>
+        </ul>
+      </div>
+      <div class="tab-panel" data-tab="busqueda">
+        <strong>Búsqueda full-text:</strong>
+        <p>El campo de búsqueda en la parte superior permite buscar simultáneamente por:</p>
+        <ul>
+          <li>Número de OC (ej.: <code>OC-0042</code>)</li>
+          <li>Nombre del proveedor</li>
+          <li>Nombre del cliente asociado (si aplica)</li>
+        </ul>
+        <br>
+        <strong>Filtros disponibles:</strong>
+        <ul>
+          <li>Por <strong>estado</strong>: Todas / Borradores / Firmadas / Pagadas / Anuladas</li>
+          <li>Por <strong>período</strong>: Fecha desde — Fecha hasta</li>
+          <li>Por <strong>proveedor</strong>: selector del catálogo</li>
+        </ul>
+        <p>Los filtros son combinables. Para limpiarlos, hacé clic en "Limpiar filtros".</p>
+      </div>
+      <div class="tab-panel" data-tab="batch">
+        <strong>Acciones en lote (batch actions):</strong>
+        <p>Seleccionando varias OC con los checkboxes de la tabla podés:</p>
+        <ul>
+          <li>📄 <strong>Exportar selección</strong> — descarga un listado en formato Excel o CSV</li>
+          <li>🗑️ <strong>Eliminar seleccionadas</strong> — solo disponible para roles con <code>compras.delete</code></li>
+        </ul>
+        <div class="alert alert-warning" style="margin-top:0.75rem;">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-content">La eliminación de OC es irreversible. Las OC firmadas no pueden eliminarse.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="subsection-heading" id="ordenes-nueva">5.2 Crear una Nueva OC</h3>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      Requiere el permiso <code>compras.create</code>. El formulario se accede desde el botón <strong>"+ Nueva OC"</strong> en el listado, o directamente en <code>/compras/nueva</code>.
+    </p>
+
+    <ol class="steps">
+      <li>
+        <div class="step-content">
+          <strong>Seleccioná el proveedor</strong>
+          <p>Elegí del desplegable de proveedores registrados. Si el proveedor no existe, debés crearlo primero en <code>/compras/proveedores</code>.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Completá los datos de la orden</strong>
+          <p>Fecha de emisión, condiciones de pago, lugar de entrega y observaciones generales.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Agregá los ítems de la OC</strong>
+          <p>Para cada línea: descripción del bien o servicio, cantidad, precio unitario y alícuota de IVA. El total se calcula automáticamente.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Guardá como borrador o emitir</strong>
+          <p>Podés guardar la OC como borrador para continuar más tarde, o emitirla directamente. Una OC emitida está lista para enviar al proveedor.</p>
+        </div>
+      </li>
+    </ol>
+
+    <h4 style="font-size:0.9rem;font-weight:600;color:var(--text-muted);margin:1rem 0 0.5rem;">Campos del formulario</h4>
+    <div style="overflow-x:auto;">
+    <table class="field-table">
+      <thead>
+        <tr>
+          <th>Campo</th>
+          <th>Tipo</th>
+          <th>Requerido</th>
+          <th>Descripción</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>proveedor</code></td>
+          <td>Selector</td>
+          <td><span class="field-required">Sí</span></td>
+          <td>Proveedor al que se emite la OC</td>
+        </tr>
+        <tr>
+          <td><code>fecha_emision</code></td>
+          <td>Fecha</td>
+          <td><span class="field-required">Sí</span></td>
+          <td>Fecha de creación de la orden</td>
+        </tr>
+        <tr>
+          <td><code>condicion_pago</code></td>
+          <td>Texto / Selector</td>
+          <td><span class="field-required">Sí</span></td>
+          <td>Ej.: contado, 30 días, 60 días</td>
+        </tr>
+        <tr>
+          <td><code>lugar_entrega</code></td>
+          <td>Texto</td>
+          <td><span class="field-optional">Opcional</span></td>
+          <td>Dirección o depósito de entrega</td>
+        </tr>
+        <tr>
+          <td><code>items[]</code></td>
+          <td>Tabla dinámica</td>
+          <td><span class="field-required">Sí (mín. 1)</span></td>
+          <td>Líneas de la OC: descripción, cant., precio, IVA</td>
+        </tr>
+        <tr>
+          <td><code>observaciones</code></td>
+          <td>Texto largo</td>
+          <td><span class="field-optional">Opcional</span></td>
+          <td>Notas internas o instrucciones al proveedor</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3 class="subsection-heading" id="ordenes-detalle">5.3 Detalle de una OC</h3>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      Accedés desde el listado haciendo clic en el número de OC, o directamente en <code>/compras/ordenes/[publicId]</code>. Esta es la pantalla más completa del módulo.
+    </p>
+
+    <div class="accordion">
+      <div class="accordion-item open">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">📄</span> ¿Qué información muestra el detalle?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <ul>
+            <li><strong>Cabecera:</strong> número de OC, fecha, estado, proveedor, condición de pago</li>
+            <li><strong>Tabla de ítems:</strong> descripción, cantidad, precio unitario, subtotal, IVA por línea</li>
+            <li><strong>Totales:</strong> neto gravado, IVA discriminado, total general</li>
+            <li><strong>Historial:</strong> fecha de creación, quién la creó, fecha de firma (si existe), quién firmó</li>
+            <li><strong>Estado de pago:</strong> si se registró pago asociado</li>
+            <li><strong>Factura asociada:</strong> link a la/s factura/s del proveedor que mapean esta OC</li>
+          </ul>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">⚙️</span> ¿Qué acciones puedo hacer desde el detalle?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <ul>
+            <li><strong>Editar OC</strong> — disponible si la OC aún está en borrador o emitida (no si ya fue firmada)</li>
+            <li><strong>Firmar OC</strong> — solo disponible para el Director</li>
+            <li><strong>Exportar PDF</strong> — genera el PDF de la OC para enviar al proveedor</li>
+            <li><strong>Copiar link de validación</strong> — genera la URL pública para que el proveedor valide la OC sin iniciar sesión</li>
+            <li><strong>Registrar pago</strong> — marca la OC como pagada (Pendiente de validación: requiere integración con tesorería)</li>
+            <li><strong>Anular OC</strong> — cambia el estado a "Anulada". Las OC anuladas no se pueden reactivar.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">🔗</span> Validación pública para proveedores</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Cada OC tiene una URL de validación pública: <code>/compras/validar/[publicId]</code></p>
+          <p>Esta URL puede compartirse con el proveedor <strong>sin que necesite tener usuario en el sistema</strong>. Desde esa página, el proveedor puede verificar:</p>
+          <ul>
+            <li>Que la OC existe y es auténtica</li>
+            <li>Los datos de la orden (ítems, montos, estado de firma)</li>
+            <li>La firma digital del Director (si fue firmada)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. FIRMA DIGITAL -->
+  <section class="section" id="firma">
+    <h2 class="section-heading"><span class="icon">✍️</span> 6. Firma Digital</h2>
+
+    <div class="alert alert-perm">
+      <span class="alert-icon">🔒</span>
+      <div class="alert-content">
+        <strong>Acceso exclusivo: Director</strong>
+        Solo el usuario con rol Director puede firmar digitalmente una OC. Este permiso (<code>compras.sign</code>) no puede delegarse ni habilitarse para otros roles desde la interfaz del sistema.
+      </div>
+    </div>
+
+    <h3 class="subsection-heading">¿Qué significa firmar una OC?</h3>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      La firma digital es el respaldo formal del Director sobre la orden de compra. Una OC firmada indica que fue revisada y autorizada por la máxima autoridad del área. El sistema registra automáticamente la fecha, hora y usuario que firmó.
+    </p>
+
+    <h3 class="subsection-heading">Pasos para firmar una OC</h3>
+    <ol class="steps">
+      <li>
+        <div class="step-content">
+          <strong>Ingresá al detalle de la OC</strong>
+          <p>Desde <code>/compras/ordenes</code>, hacé clic en el número de la OC que querés firmar.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Revisá el contenido de la OC</strong>
+          <p>Verificá proveedor, ítems, montos y condiciones antes de firmar. Una vez firmada, la OC no puede editarse.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Hacé clic en "Firmar OC"</strong>
+          <p>El botón solo aparece si tu usuario tiene rol Director. El sistema pedirá confirmación.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Confirmá la firma</strong>
+          <p>Aparece un diálogo de confirmación. Al aceptar, el sistema registra la firma con timestamp y cambia el estado a "Firmada".</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>La firma es irreversible</strong>
+        Una OC firmada no puede editarse ni desmarcarse. Si detectás un error en una OC ya firmada, debés anularla y crear una nueva.
+      </div>
+    </div>
+
+    <div class="alert alert-success">
+      <span class="alert-icon">✅</span>
+      <div class="alert-content">
+        <strong>Verificación por el proveedor</strong>
+        Una vez firmada, el proveedor puede verificar la autenticidad de la OC usando el link de validación pública (<code>/compras/validar/[publicId]</code>), sin necesidad de acceder al sistema.
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. PROVEEDORES -->
+  <section class="section" id="proveedores">
+    <h2 class="section-heading"><span class="icon">🏭</span> 7. Gestión de Proveedores</h2>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      El catálogo de proveedores (<code>/compras/proveedores</code>) centraliza toda la información de los proveedores de la empresa.
+    </p>
+
+    <div class="tabs" id="tabs-prov">
+      <div class="tab-list">
+        <button class="tab-btn active" onclick="switchTab('tabs-prov','prov-catalogo')">Catálogo</button>
+        <button class="tab-btn" onclick="switchTab('tabs-prov','prov-ficha')">Ficha del proveedor</button>
+        <button class="tab-btn" onclick="switchTab('tabs-prov','prov-scoring')">Scoring</button>
+      </div>
+      <div class="tab-panel active" data-tab="prov-catalogo">
+        <strong>¿Qué muestra el catálogo?</strong>
+        <ul>
+          <li>Listado de todos los proveedores con nombre, CUIT y estado (activo/inactivo)</li>
+          <li>Buscador por nombre o CUIT</li>
+          <li>Filtro por rubro o categoría de proveedor</li>
+          <li>Acceso rápido a la ficha individual</li>
+        </ul>
+        <p>Para agregar un nuevo proveedor, usá el botón <strong>"+ Nuevo Proveedor"</strong>.</p>
+      </div>
+      <div class="tab-panel" data-tab="prov-ficha">
+        <strong>Datos disponibles en la ficha del proveedor:</strong>
+        <ul>
+          <li>Razón social y nombre comercial</li>
+          <li>CUIT / Número de identificación fiscal</li>
+          <li>Condición ante el IVA (Responsable Inscripto, Monotributista, etc.)</li>
+          <li>Datos de contacto: dirección, teléfono, email, contacto principal</li>
+          <li>Condición de pago habitual</li>
+          <li>Historial de OC emitidas a este proveedor</li>
+          <li>Facturas recibidas asociadas</li>
+          <li>Documentación adjunta (Pendiente de validación)</li>
+        </ul>
+      </div>
+      <div class="tab-panel" data-tab="prov-scoring">
+        <strong>Scoring de proveedores:</strong>
+        <p>El sistema calcula un score por proveedor basado en:</p>
+        <ul>
+          <li>Cumplimiento de plazos de entrega</li>
+          <li>Calidad de la documentación enviada</li>
+          <li>Historial de operaciones</li>
+        </ul>
+        <div class="alert alert-tip" style="margin-top:0.75rem;">
+          <span class="alert-icon">💡</span>
+          <div class="alert-content">El scoring es orientativo y no bloquea ninguna operación. Sirve como referencia para decisiones de compra.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. FACTURAS -->
+  <section class="section" id="facturas">
+    <h2 class="section-heading"><span class="icon">🧾</span> 8. Facturas de Proveedor</h2>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      En <code>/compras/facturas</code> se registran las facturas recibidas de proveedores y se las relaciona con las órdenes de compra correspondientes. Esto completa el ciclo <strong>FV → OC</strong>.
+    </p>
+
+    <h3 class="subsection-heading">Ingresar una nueva factura</h3>
+    <ol class="steps">
+      <li>
+        <div class="step-content">
+          <strong>Hacé clic en "+ Nueva Factura"</strong>
+          <p>O accedé directamente a <code>/compras/facturas/nueva</code>. Requiere <code>compras.create</code>.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Completá los datos de la factura recibida</strong>
+          <p>Tipo de comprobante (A, B, C, M), número de factura, fecha, proveedor emisor, CUIT del proveedor, importe neto, IVA y total.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Mapeá la factura a una OC</strong>
+          <p>Seleccioná la OC correspondiente del desplegable. Una factura puede relacionarse con una o más OC. Este mapeo es lo que completa el ciclo de compra en el sistema.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Guardá la factura</strong>
+          <p>El sistema registra la factura y actualiza el estado de la OC vinculada. La factura queda disponible en el listado y en el Libro IVA Compras.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="alert alert-tip">
+      <span class="alert-icon">💡</span>
+      <div class="alert-content">
+        <strong>Sin OC previa</strong>
+        Si recibís una factura que no tiene una OC asociada en el sistema, podés registrarla igualmente dejando el campo de OC en blanco. Luego podés vincularla cuando se cree la OC o aclarar la situación en observaciones.
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. LIBRO IVA -->
+  <section class="section" id="libro-iva">
+    <h2 class="section-heading"><span class="icon">📚</span> 9. Libro IVA Compras</h2>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">
+      El Libro IVA Compras (<code>/compras/libro-iva</code>) es un reporte contable que consolida todas las facturas de proveedores ingresadas, discriminando la base imponible y el IVA por período. Es el insumo principal para preparar la declaración de IVA ante ARCA.
+    </p>
+
+    <h3 class="subsection-heading">Cómo generar el reporte</h3>
+    <ol class="steps">
+      <li>
+        <div class="step-content">
+          <strong>Accedé a <code>/compras/libro-iva</code></strong>
+          <p>Desde el menú lateral: Compras · Proveedores → Libro IVA.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Seleccioná el período</strong>
+          <p>Elegí el mes y año del período que querés ver. Por defecto muestra el mes en curso.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Revisá el detalle</strong>
+          <p>El sistema muestra todas las facturas del período con: tipo, número, proveedor, fecha, neto, IVA (21%, 10,5%, exento) y total.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-content">
+          <strong>Exportá el Libro IVA</strong>
+          <p>Usá el botón "Exportar" para descargar el reporte en formato Excel. Endpoint: <code>GET /api/compras/libro-iva/export</code>.</p>
+        </div>
+      </li>
+    </ol>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>Solo incluye facturas ingresadas en el sistema</strong>
+        El Libro IVA Compras refleja únicamente las facturas que fueron registradas en el módulo. Si una factura no fue cargada, no aparecerá en el libro. Es responsabilidad del área administrativa mantener el ingreso al día.
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. EXPORTACIONES -->
+  <section class="section" id="exportaciones">
+    <h2 class="section-heading"><span class="icon">📤</span> 10. Exportaciones</h2>
+
+    <ul class="api-list">
+      <li class="api-item">
+        <span class="api-method">GET</span>
+        <div>
+          <div class="api-path">/api/compras/[publicId]/pdf</div>
+          <div class="api-desc">Genera y descarga el PDF de una OC específica. El PDF incluye todos los datos de la OC y la firma digital si fue firmada.</div>
+        </div>
+      </li>
+      <li class="api-item">
+        <span class="api-method">GET</span>
+        <div>
+          <div class="api-path">/api/compras/export</div>
+          <div class="api-desc">Exporta el listado de OC en formato Excel con filtros aplicados (período, estado, proveedor).</div>
+        </div>
+      </li>
+      <li class="api-item">
+        <span class="api-method">GET</span>
+        <div>
+          <div class="api-path">/api/compras/libro-iva/export</div>
+          <div class="api-desc">Exporta el Libro IVA Compras del período seleccionado en formato Excel.</div>
+        </div>
+      </li>
+      <li class="api-item">
+        <span class="api-method">GET</span>
+        <div>
+          <div class="api-path">/api/compras/[publicId]</div>
+          <div class="api-desc">Detalle completo de una OC en formato JSON (uso interno y para integraciones).</div>
+        </div>
+      </li>
+    </ul>
+
+    <div class="alert alert-tip">
+      <span class="alert-icon">💡</span>
+      <div class="alert-content">
+        Los PDF de OC son el documento que se envía al proveedor. Incluyen los datos de la empresa, el detalle de la orden y (si corresponde) la leyenda de firma digital.
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. FLUJO VISUAL -->
+  <section class="section" id="flujo">
+    <h2 class="section-heading"><span class="icon">🔄</span> 11. Flujo del proceso de compra</h2>
+    <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:1rem;">El ciclo completo de una compra en TOPS Nexus:</p>
+
+    <div class="flow-diagram">
+      <div class="flow-node active">
+        <span class="flow-node-icon">📝</span>
+        <span class="flow-node-label">Nueva OC</span>
+        <span class="flow-node-sub">Operaciones / Admin</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <span class="flow-node-icon">✏️</span>
+        <span class="flow-node-label">Borrador</span>
+        <span class="flow-node-sub">Edición libre</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <span class="flow-node-icon">📤</span>
+        <span class="flow-node-label">Emitida</span>
+        <span class="flow-node-sub">Lista para firmar</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node locked">
+        <span class="flow-node-icon">✍️</span>
+        <span class="flow-node-label">Firma Digital</span>
+        <span class="flow-node-sub">Solo Director</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node success">
+        <span class="flow-node-icon">✅</span>
+        <span class="flow-node-label">Firmada</span>
+        <span class="flow-node-sub">OC válida</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <span class="flow-node-icon">🧾</span>
+        <span class="flow-node-label">Factura FV</span>
+        <span class="flow-node-sub">Ingreso en sistema</span>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node success">
+        <span class="flow-node-icon">💰</span>
+        <span class="flow-node-label">Pagada</span>
+        <span class="flow-node-sub">Ciclo completo</span>
+      </div>
+    </div>
+
+    <div class="alert alert-tip">
+      <span class="alert-icon">💡</span>
+      <div class="alert-content">
+        <strong>Ruta alternativa:</strong> Una OC puede ser anulada en cualquier punto antes del pago. Las OC anuladas quedan registradas en el sistema pero no generan obligaciones.
+      </div>
+    </div>
+  </section>
+
+  <!-- CHECKLIST -->
+  <section class="section" id="checklist">
+    <h2 class="section-heading"><span class="icon">✅</span> Checklists</h2>
+
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-title" style="margin-bottom:0.75rem;">📋 Antes de crear una OC</div>
+      <div class="checklist-group-title">Verificaciones previas</div>
+      <ul class="checklist" id="cl-preoc">
+        <li><input type="checkbox" onchange="toggleCheck(this)"> El proveedor ya está cargado en el catálogo de proveedores</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> Tenés el detalle de los bienes o servicios a comprar (descripción, cantidad, precio)</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> Conocés la condición de pago acordada con el proveedor</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> Tenés autorización para emitir la OC (verificá con el Director si supera el monto límite)</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> El proveedor tiene CUIT registrado en el sistema</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:0.75rem;">✍️ Checklist para firma digital (Director)</div>
+      <ul class="checklist" id="cl-firma">
+        <li><input type="checkbox" onchange="toggleCheck(this)"> Revisé el proveedor seleccionado en la OC</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> Verifiqué los ítems, cantidades y precios</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> Confirmé la condición de pago</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> El total de la OC es correcto</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> La OC está en estado "Emitida" (no en borrador)</li>
+        <li><input type="checkbox" onchange="toggleCheck(this)"> Entiendo que la firma es irreversible</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CASOS FRECUENTES -->
+  <section class="section" id="casos">
+    <h2 class="section-heading"><span class="icon">🔧</span> Casos frecuentes</h2>
+
+    <div class="accordion">
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">📦</span> Necesito crear una OC para un proveedor nuevo</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Primero debés dar de alta al proveedor en el catálogo:</p>
+          <ol style="padding-left:1.2rem;margin:0.5rem 0;">
+            <li>Andá a Compras · Proveedores → Proveedores</li>
+            <li>Hacé clic en "+ Nuevo Proveedor"</li>
+            <li>Completá CUIT, razón social, condición ante el IVA y datos de contacto</li>
+            <li>Guardá el proveedor</li>
+            <li>Volvé a Órdenes y creá la OC seleccionando el nuevo proveedor</li>
+          </ol>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">✍️</span> El Director no puede firmar la OC</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Verificá los siguientes puntos:</p>
+          <ul>
+            <li>¿El usuario logueado tiene rol Director? Verificar en la configuración de usuario</li>
+            <li>¿La OC está en estado "Emitida"? Las OC en borrador no pueden firmarse</li>
+            <li>¿La OC ya fue firmada previamente? Una OC firmada no puede firmarse nuevamente</li>
+            <li>¿La OC está anulada? Las OC anuladas no pueden firmarse</li>
+          </ul>
+          <p>Si el problema persiste, contactá al administrador del sistema.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">🔍</span> No encuentro una OC en el listado</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <ul>
+            <li>Limpiá todos los filtros activos haciendo clic en "Limpiar filtros"</li>
+            <li>Buscá por el número exacto de OC en el campo de búsqueda</li>
+            <li>Verificá que los filtros de estado no estén excluyendo la OC que buscás</li>
+            <li>Es posible que la OC haya sido eliminada por alguien con permiso <code>compras.delete</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">🧾</span> Recibí una factura pero no hay OC asociada</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Podés igualmente registrar la factura en el sistema:</p>
+          <ol style="padding-left:1.2rem;margin:0.5rem 0;">
+            <li>Andá a Compras · Proveedores → Facturas → Nueva Factura</li>
+            <li>Completá todos los datos de la factura recibida</li>
+            <li>Dejá el campo "OC vinculada" en blanco</li>
+            <li>En observaciones, aclará el motivo (ej.: "Compra sin OC previa, autorizada por Director")</li>
+          </ol>
+          <p>La factura quedará registrada en el Libro IVA Compras pero sin vinculación a una OC.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">📊</span> Necesito el Libro IVA para presentar a contabilidad</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <ol style="padding-left:1.2rem;margin:0.5rem 0;">
+            <li>Andá a Compras · Proveedores → Libro IVA</li>
+            <li>Seleccioná el mes y año del período</li>
+            <li>Revisá que todas las facturas estén ingresadas</li>
+            <li>Hacé clic en "Exportar" para descargar el Excel</li>
+            <li>El archivo está listo para entregar al contador</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ERRORES COMUNES -->
+  <section class="section" id="errores">
+    <h2 class="section-heading"><span class="icon">⚠️</span> Errores comunes</h2>
+
+    <div class="alert alert-danger">
+      <span class="alert-icon">🚫</span>
+      <div class="alert-content">
+        <strong>"No tenés permiso para realizar esta acción"</strong>
+        Tu usuario no tiene el permiso necesario para esa operación. Revisá la tabla de roles en la Sección 2. Si necesitás más permisos, contactá al administrador del sistema.
+      </div>
+    </div>
+
+    <div class="alert alert-danger">
+      <span class="alert-icon">🚫</span>
+      <div class="alert-content">
+        <strong>"No se puede editar una OC firmada"</strong>
+        Una vez que una OC fue firmada digitalmente por el Director, el contenido queda bloqueado. Si hay un error, anulá la OC y creá una nueva con los datos correctos.
+      </div>
+    </div>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>El proveedor no aparece en el selector</strong>
+        El proveedor no está cargado en el catálogo, o está marcado como inactivo. Creá el proveedor primero o activalo si fue deshabilitado.
+      </div>
+    </div>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>El PDF de la OC se genera sin firma</strong>
+        La OC aún no fue firmada por el Director. El PDF se genera igualmente pero sin el bloque de firma digital. Para incluir la firma, el Director debe firmar primero desde el detalle de la OC.
+      </div>
+    </div>
+
+    <div class="alert alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-content">
+        <strong>La factura no aparece en el Libro IVA</strong>
+        Verificá que la factura fue ingresada con la fecha correcta correspondiente al período que estás consultando. También revisá que el período seleccionado en el Libro IVA coincida con la fecha de la factura.
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section" id="faq">
+    <h2 class="section-heading"><span class="icon">❓</span> Preguntas frecuentes</h2>
+
+    <div class="accordion">
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿Puedo enviar una OC al proveedor sin que esté firmada?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Sí. Podés exportar el PDF de una OC emitida (sin firma) y enviárselo al proveedor. Sin embargo, la OC no tendrá el respaldo formal de la firma digital del Director. Se recomienda firmar la OC antes de enviarla para darle validez institucional.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿Qué diferencia hay entre "Emitida" y "Firmada"?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <ul>
+            <li><strong>Emitida:</strong> la OC fue creada y está lista, pero aún no tiene la firma digital del Director. Puede editarse.</li>
+            <li><strong>Firmada:</strong> el Director aplicó su firma digital. El contenido está bloqueado y la OC es un compromiso formal. El proveedor puede verificarla online.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿Puedo tener una factura de proveedor sin OC vinculada?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Sí. El sistema permite ingresar facturas sin vincularlas a una OC. Esto es útil para compras menores o de urgencia que no tuvieron una OC previa. La factura igual se incluye en el Libro IVA Compras.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿Cómo sabe el proveedor que la OC es auténtica?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>Cada OC tiene un identificador único (<em>publicId</em>) y una URL de validación pública (<code>/compras/validar/[publicId]</code>). El proveedor puede ingresar a esa URL desde cualquier navegador, sin login, y verificar los datos de la OC y su estado de firma.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿Puedo delegar la firma a alguien más cuando el Director está ausente?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>No. El permiso <code>compras.sign</code> está vinculado al rol Director y no puede delegarse a otro usuario a través de la interfaz del sistema. Si el Director está ausente, la alternativa es que el Director firme las OC pendientes antes de ausentarse, o que se espere a su regreso.</p>
+          <p>Si la necesidad es frecuente, consultá con el administrador del sistema sobre la posibilidad de asignar el rol Director a un segundo usuario autorizado.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿El Libro IVA Compras sirve directamente para presentar ante ARCA?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>El reporte exportado del sistema es un insumo para el contador. Deberá ser procesado y cargado en los sistemas de ARCA (SiAp, DDJ Jurada, etc.) por el área contable o impositiva. El sistema no realiza la presentación directa ante ARCA.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿Puedo buscar una OC por monto?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>La búsqueda full-text está disponible por número de OC, nombre de proveedor y nombre de cliente. La búsqueda por monto no está disponible actualmente. Podés exportar el listado y ordenarlo/filtrar por monto en Excel.</p>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <button class="accordion-trigger" onclick="toggleAccordion(this)">
+          <span class="accordion-trigger-left"><span class="accordion-icon">❓</span> ¿Qué pasa si elimino una OC?</span>
+          <span class="accordion-chevron">▼</span>
+        </button>
+        <div class="accordion-body">
+          <p>La eliminación es permanente e irreversible. Las OC firmadas no pueden eliminarse (solo anularse). Antes de eliminar una OC, asegurate de que no tiene facturas vinculadas ni compromisos pendientes con el proveedor. La eliminación requiere el permiso <code>compras.delete</code>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GLOSARIO -->
+  <section class="section" id="glosario">
+    <h2 class="section-heading"><span class="icon">📖</span> Glosario</h2>
+
+    <div class="glossary-grid">
+      <div class="glossary-item">
+        <div class="glossary-term">OC — Orden de Compra</div>
+        <div class="glossary-def">Documento formal que emite la empresa para solicitar bienes o servicios a un proveedor. Detalla qué se compra, en qué cantidad, precio y condiciones.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">FV — Factura de Venta</div>
+        <div class="glossary-def">Comprobante que emite el proveedor a la empresa por los bienes o servicios entregados. En el módulo se llama "Factura de Proveedor" porque es la factura que el proveedor nos emite a nosotros.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">publicId</div>
+        <div class="glossary-def">Identificador único y público de una OC. Se usa en la URL de validación pública y permite identificar la OC sin exponer datos internos del sistema.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">Firma Digital</div>
+        <div class="glossary-def">Sello electrónico que aplica el Director para validar y autorizar formalmente una OC. Registra la identidad del firmante, fecha y hora. Es irreversible.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">IVA — Impuesto al Valor Agregado</div>
+        <div class="glossary-def">Impuesto que grava la compra de bienes y servicios en Argentina. Las alícuotas más comunes son 21% (general), 10,5% (bienes específicos) y 0% (exento).</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">Libro IVA Compras</div>
+        <div class="glossary-def">Registro contable obligatorio de todas las facturas de proveedores. Muestra la base imponible y el IVA desglosado por período. Es el insumo para la declaración de IVA.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">ARCA</div>
+        <div class="glossary-def">Administración de Recaudación y Control Aduanero. Organismo nacional argentino que reemplazó a AFIP. Gestiona los impuestos nacionales incluyendo IVA y Ganancias.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">CUIT</div>
+        <div class="glossary-def">Clave Única de Identificación Tributaria. Número fiscal único asignado por ARCA a cada empresa o persona que realiza actividades económicas en Argentina.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">Scoring de Proveedor</div>
+        <div class="glossary-def">Puntaje que el sistema asigna a cada proveedor basado en su historial de operaciones, cumplimiento y calidad de documentación. Es orientativo.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">Batch Action</div>
+        <div class="glossary-def">Acción que se aplica a múltiples registros seleccionados al mismo tiempo. En el módulo de Compras, permite exportar o eliminar varias OC de una vez.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">compras.sign</div>
+        <div class="glossary-def">Permiso del sistema que habilita la firma digital de OC. Solo lo tiene el rol Director.</div>
+      </div>
+      <div class="glossary-item">
+        <div class="glossary-term">FV → OC (mapeo)</div>
+        <div class="glossary-def">Proceso de vincular una factura recibida de un proveedor (FV) con la orden de compra que la originó (OC). Completa el ciclo de la compra en el sistema.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BACK TO TOP -->
+  <div style="text-align:center;margin-top:2rem;">
+    <a class="back-btn" href="#" style="display:inline-flex;">↑ Volver al inicio</a>
+    <a class="back-btn" href="index.html" style="display:inline-flex;margin-left:0.5rem;">← Volver al índice</a>
+  </div>
+
+</main>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div>
+    <strong>TOPS Nexus</strong> — Manual de Usuario del Sistema ERP
+  </div>
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+    <span>Módulo: Compras y Proveedores</span>
+    <span>·</span>
+    <span>Versión 1.0</span>
+    <span>·</span>
+    <span>© 2026 Logística TOPS. Todos los derechos reservados.</span>
+  </div>
+</footer>
+
+<script>
+// Accordion toggle
+function toggleAccordion(btn) {
+  const item = btn.closest('.accordion-item');
+  const isOpen = item.classList.contains('open');
+  item.classList.toggle('open', !isOpen);
+}
+
+// Tab switching
+function switchTab(containerId, tabKey) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  container.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const clicked = Array.from(container.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick').includes("'" + tabKey + "'"));
+  if (clicked) clicked.classList.add('active');
+  const panel = container.querySelector('[data-tab="' + tabKey + '"]');
+  if (panel) panel.classList.add('active');
+}
+
+// Checklist
+function toggleCheck(input) {
+  const li = input.closest('li');
+  li.classList.toggle('checked', input.checked);
+}
+
+// TOC active state on scroll
+const sections = document.querySelectorAll('.section[id]');
+const tocLinks = document.querySelectorAll('.toc-list a');
+
+function updateTOC() {
+  const scrollY = window.scrollY + 100;
+  let current = '';
+  sections.forEach(section => {
+    if (section.offsetTop <= scrollY) {
+      current = section.getAttribute('id');
+    }
+  });
+  tocLinks.forEach(link => {
+    link.classList.toggle('active', link.getAttribute('href') === '#' + current);
+  });
+}
+
+window.addEventListener('scroll', updateTOC, { passive: true });
+updateTOC();
+</script>
+
+</body>
+</html>

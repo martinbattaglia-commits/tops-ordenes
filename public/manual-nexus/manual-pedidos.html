@@ -1,0 +1,2020 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pedidos y Logística · Manual TOPS Nexus</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --navy: #0f172a;
+      --navy-light: #1e293b;
+      --navy-mid: #162032;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --indigo: #6366f1;
+      --indigo-light: #818cf8;
+      --indigo-dim: rgba(99,102,241,0.12);
+      --indigo-dim2: rgba(99,102,241,0.06);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-soft: #cbd5e1;
+      --border: rgba(255,255,255,0.08);
+      --border-soft: rgba(255,255,255,0.05);
+      --card: rgba(255,255,255,0.04);
+      --card-hover: rgba(255,255,255,0.07);
+      --amber-dim: rgba(245,158,11,0.12);
+      --red-dim: rgba(239,68,68,0.10);
+      --green-dim: rgba(34,197,94,0.10);
+      --blue-dim: rgba(59,130,246,0.10);
+      --sidebar-w: 260px;
+      --header-h: 60px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--navy);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      min-height: 100vh;
+    }
+
+    /* ── TOP NAV ── */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--header-h);
+      background: rgba(15,23,42,0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      gap: 16px;
+    }
+
+    .nav-brand {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+    }
+
+    .nav-sep { color: var(--border); font-size: 16px; }
+
+    .nav-crumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .nav-crumb a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color .15s;
+    }
+    .nav-crumb a:hover { color: var(--text); }
+
+    .nav-crumb-sep { color: var(--text-muted); opacity: .4; }
+
+    .nav-crumb-current {
+      color: var(--indigo-light);
+      font-weight: 600;
+    }
+
+    .nav-back {
+      margin-left: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all .15s;
+    }
+    .nav-back:hover {
+      color: var(--text);
+      border-color: var(--indigo);
+      background: var(--indigo-dim);
+    }
+
+    /* ── LAYOUT ── */
+    .layout {
+      display: flex;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 0 80px;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      position: sticky;
+      top: var(--header-h);
+      height: calc(100vh - var(--header-h));
+      overflow-y: auto;
+      padding: 28px 0 28px 24px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .sidebar-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .toc { list-style: none; }
+
+    .toc li + li { margin-top: 2px; }
+
+    .toc a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      transition: all .12s;
+      border-left: 2px solid transparent;
+    }
+    .toc a:hover {
+      color: var(--text);
+      background: var(--card);
+      border-left-color: var(--indigo);
+    }
+    .toc a.active {
+      color: var(--indigo-light);
+      background: var(--indigo-dim);
+      border-left-color: var(--indigo);
+      font-weight: 600;
+    }
+
+    .toc-icon { font-size: 13px; flex-shrink: 0; }
+
+    .toc-section {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      opacity: .5;
+      padding: 14px 10px 4px;
+    }
+
+    /* ── MAIN CONTENT ── */
+    .content {
+      flex: 1;
+      min-width: 0;
+      padding: 40px 32px 40px 40px;
+    }
+
+    /* ── HEADER SECTION ── */
+    .page-header {
+      margin-bottom: 40px;
+    }
+
+    .header-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--indigo-light);
+      margin-bottom: 12px;
+    }
+
+    .header-eyebrow::before {
+      content: '';
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--indigo);
+      border-radius: 1px;
+    }
+
+    .page-title {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .page-title-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: var(--amber-dim);
+      color: var(--amber);
+      border: 1px solid rgba(245,158,11,0.25);
+      padding: 3px 10px;
+      border-radius: 20px;
+      vertical-align: middle;
+      margin-left: 12px;
+      position: relative;
+      top: -4px;
+    }
+
+    .page-desc {
+      font-size: 16px;
+      color: var(--text-soft);
+      max-width: 680px;
+      line-height: 1.7;
+    }
+
+    /* ── BANNER EN DESARROLLO ── */
+    .dev-banner {
+      background: linear-gradient(135deg, rgba(245,158,11,0.08) 0%, rgba(99,102,241,0.08) 100%);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 12px;
+      padding: 20px 24px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 40px;
+    }
+
+    .dev-banner-icon { font-size: 28px; flex-shrink: 0; margin-top: 2px; }
+
+    .dev-banner-content h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--amber);
+      margin-bottom: 4px;
+    }
+
+    .dev-banner-content p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .dev-banner-content strong { color: var(--text-soft); }
+
+    /* ── SECTION ── */
+    .section {
+      margin-bottom: 48px;
+      scroll-margin-top: calc(var(--header-h) + 24px);
+    }
+
+    .section-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title-icon { font-size: 20px; }
+
+    .section-subtitle {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      margin: 24px 0 10px;
+    }
+
+    p { color: var(--text-soft); margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      transition: background .15s;
+    }
+
+    .card:hover { background: var(--card-hover); }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-desc {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin: 0;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+
+    .card-icon { font-size: 18px; }
+
+    /* ── CARDS CON ACENTO ÍNDIGO ── */
+    .card-indigo {
+      background: var(--indigo-dim2);
+      border-color: rgba(99,102,241,0.15);
+    }
+
+    /* ── ALERT / NOTICE ── */
+    .alert {
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 13.5px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin: 16px 0;
+    }
+
+    .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+    .alert-body { flex: 1; }
+
+    .alert-title {
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.03em;
+      margin-bottom: 3px;
+    }
+
+    .alert p { font-size: 13.5px; margin: 0; line-height: 1.55; }
+
+    .alert-warning {
+      background: var(--amber-dim);
+      border: 1px solid rgba(245,158,11,0.2);
+      color: var(--amber);
+    }
+    .alert-warning p { color: rgba(245,158,11,0.8); }
+
+    .alert-info {
+      background: var(--indigo-dim);
+      border: 1px solid rgba(99,102,241,0.2);
+      color: var(--indigo-light);
+    }
+    .alert-info p { color: rgba(129,140,248,0.85); }
+
+    .alert-pending {
+      background: rgba(239,68,68,0.07);
+      border: 1px solid rgba(239,68,68,0.18);
+      color: #f87171;
+    }
+    .alert-pending p { color: rgba(248,113,113,0.8); }
+
+    .alert-ok {
+      background: var(--green-dim);
+      border: 1px solid rgba(34,197,94,0.2);
+      color: var(--green);
+    }
+    .alert-ok p { color: rgba(34,197,94,0.85); }
+
+    /* ── BADGE ── */
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 20px;
+    }
+
+    .badge-indigo { background: var(--indigo-dim); color: var(--indigo-light); border: 1px solid rgba(99,102,241,0.2); }
+    .badge-amber { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+    .badge-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
+    .badge-red { background: var(--red-dim); color: #f87171; border: 1px solid rgba(239,68,68,0.2); }
+    .badge-gray { background: rgba(100,116,139,0.15); color: var(--text-muted); border: 1px solid rgba(100,116,139,0.2); }
+
+    /* ── ACORDEÓN ── */
+    details {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    details[open] { border-color: rgba(99,102,241,0.2); background: var(--indigo-dim2); }
+
+    summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      cursor: pointer;
+      list-style: none;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      user-select: none;
+      transition: background .12s;
+    }
+    summary:hover { background: var(--card-hover); }
+
+    summary::after {
+      content: '›';
+      margin-left: auto;
+      font-size: 18px;
+      color: var(--text-muted);
+      transition: transform .2s;
+      font-weight: 300;
+    }
+
+    details[open] summary::after { transform: rotate(90deg); }
+    summary::-webkit-details-marker { display: none; }
+
+    .accordion-body {
+      padding: 4px 18px 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .accordion-body p { font-size: 13.5px; color: var(--text-muted); margin: 10px 0 0; }
+
+    /* ── TABS ── */
+    .tabs-wrapper { margin: 16px 0; }
+
+    .tabs-bar {
+      display: flex;
+      gap: 2px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px 10px 0 0;
+      padding: 6px 6px 0;
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      border-radius: 7px 7px 0 0;
+      cursor: pointer;
+      transition: all .12s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .tab-btn.active { color: var(--indigo-light); background: var(--indigo-dim); }
+
+    .tab-panels {
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      background: var(--card);
+    }
+
+    .tab-panel {
+      display: none;
+      padding: 20px 20px;
+    }
+    .tab-panel.active { display: block; }
+
+    .tab-panel p { font-size: 13.5px; color: var(--text-muted); margin-bottom: 8px; }
+
+    /* ── TABLA ── */
+    .tbl-wrap { overflow-x: auto; margin: 16px 0; border-radius: 10px; border: 1px solid var(--border); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead tr { background: rgba(255,255,255,0.04); }
+
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 14px;
+      color: var(--text-soft);
+      border-top: 1px solid var(--border-soft);
+      vertical-align: top;
+    }
+
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    td.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); }
+
+    /* ── FLOW DIAGRAM ── */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      overflow-x: auto;
+      padding: 24px 0;
+      flex-wrap: nowrap;
+    }
+
+    .flow-step {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-align: center;
+    }
+
+    .flow-bubble {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      border: 2px solid;
+    }
+
+    .flow-bubble.indigo { background: var(--indigo-dim); border-color: var(--indigo); }
+    .flow-bubble.blue { background: var(--blue-dim); border-color: var(--blue); }
+    .flow-bubble.amber { background: var(--amber-dim); border-color: var(--amber); }
+    .flow-bubble.green { background: var(--green-dim); border-color: var(--green); }
+    .flow-bubble.gray { background: rgba(100,116,139,0.1); border-color: rgba(100,116,139,0.3); }
+
+    .flow-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-soft);
+      max-width: 80px;
+      line-height: 1.3;
+    }
+
+    .flow-sublabel {
+      font-size: 10px;
+      color: var(--text-muted);
+      max-width: 80px;
+    }
+
+    .flow-arrow {
+      font-size: 20px;
+      color: var(--text-muted);
+      padding: 0 8px;
+      flex-shrink: 0;
+      margin-bottom: 28px;
+    }
+
+    /* ── STATUS TABLE ── */
+    .status-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .status-row:last-child { border-bottom: none; }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+
+    .status-name {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      flex-shrink: 0;
+      width: 140px;
+    }
+
+    .status-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      flex: 1;
+    }
+
+    /* ── CHECKLIST ── */
+    .checklist { list-style: none; }
+
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 14px;
+      color: var(--text-soft);
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .checklist li:last-child { border-bottom: none; }
+
+    .check-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+    .check-available { color: var(--green); }
+    .check-pending { color: var(--text-muted); }
+
+    /* ── FIELD GRID ── */
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .field-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .field-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+
+    .field-name {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+
+    .field-req {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .field-req.req { color: #f87171; }
+    .field-req.opt { color: var(--text-muted); }
+
+    /* ── GLOSARIO ── */
+    .glossary-item {
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border-soft);
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 16px;
+    }
+    .glossary-item:last-child { border-bottom: none; }
+
+    .glossary-term {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--indigo-light);
+    }
+
+    .glossary-def {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 32px 0;
+    }
+
+    /* ── HIGHLIGHT BOX ── */
+    .highlight-box {
+      background: var(--navy-light);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--indigo);
+      border-radius: 0 10px 10px 0;
+      padding: 16px 20px;
+      margin: 16px 0;
+    }
+
+    .highlight-box p {
+      font-size: 13.5px;
+      color: var(--text-soft);
+      margin: 0;
+    }
+
+    /* ── ROUTE BADGE ── */
+    .route {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      background: rgba(30,41,59,0.8);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      color: var(--indigo-light);
+      margin-bottom: 12px;
+    }
+
+    .route-method {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: var(--indigo-dim);
+      border-radius: 3px;
+      padding: 1px 5px;
+      color: var(--indigo-light);
+    }
+
+    /* ── FAQ ── */
+    .faq-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .faq-q {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 15px 18px;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      transition: background .12s;
+    }
+    .faq-q:hover { background: var(--card-hover); }
+
+    .faq-q::after {
+      content: '+';
+      margin-left: auto;
+      font-size: 20px;
+      color: var(--indigo-light);
+      font-weight: 300;
+      transition: transform .2s;
+    }
+    details.faq-item[open] .faq-q::after { content: '−'; }
+    .faq-q::-webkit-details-marker { display: none; }
+
+    .faq-a {
+      padding: 4px 18px 16px 46px;
+      border-top: 1px solid var(--border);
+    }
+    .faq-a p { font-size: 13.5px; color: var(--text-muted); margin: 10px 0 0; }
+
+    .faq-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background: var(--indigo-dim);
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--indigo-light);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── TWO-COLUMN COMPARISON ── */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 16px 0;
+    }
+
+    @media (max-width: 700px) {
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+
+    .compare-card {
+      border-radius: 10px;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+    }
+
+    .compare-card.indigo {
+      background: var(--indigo-dim2);
+      border-color: rgba(99,102,241,0.2);
+    }
+    .compare-card.blue {
+      background: var(--blue-dim);
+      border-color: rgba(59,130,246,0.2);
+    }
+
+    .compare-title {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .compare-title.indigo-text { color: var(--indigo-light); }
+    .compare-title.blue-text { color: #60a5fa; }
+
+    .compare-card ul { list-style: none; }
+    .compare-card li {
+      font-size: 13px;
+      color: var(--text-muted);
+      padding: 4px 0;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .compare-card li::before {
+      content: '·';
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .content { padding: 24px 20px; }
+    }
+
+    @media (max-width: 600px) {
+      .page-title { font-size: 26px; }
+      .flow { gap: 0; }
+      .flow-arrow { padding: 0 4px; font-size: 16px; }
+      .flow-bubble { width: 52px; height: 52px; font-size: 20px; }
+    }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+    /* ── INLINE CODE ── */
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 6px;
+      color: var(--indigo-light);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP NAV -->
+  <nav class="top-nav">
+    <span class="nav-brand">TOPS Nexus</span>
+    <span class="nav-sep">|</span>
+    <div class="nav-crumb">
+      <a href="index.html">Inicio</a>
+      <span class="nav-crumb-sep">›</span>
+      <span class="nav-crumb-current">📦 Pedidos y Logística</span>
+    </div>
+    <a href="index.html" class="nav-back">← Volver al índice</a>
+  </nav>
+
+  <!-- LAYOUT -->
+  <div class="layout">
+
+    <!-- SIDEBAR / TOC -->
+    <aside class="sidebar">
+      <div class="sidebar-title">Contenido</div>
+      <ul class="toc">
+        <li><a href="#que-es" class="toc-link"><span class="toc-icon">📦</span> ¿Qué es?</a></li>
+        <li><a href="#estado-actual" class="toc-link"><span class="toc-icon">🚧</span> Estado actual</a></li>
+        <li><a href="#quien-puede-usarlo" class="toc-link"><span class="toc-icon">👥</span> ¿Quién puede usarlo?</a></li>
+        <li class="toc-section">Funcionalidades</li>
+        <li><a href="#tablero" class="toc-link"><span class="toc-icon">📋</span> Tablero de pedidos</a></li>
+        <li><a href="#nuevo-pedido" class="toc-link"><span class="toc-icon">➕</span> Crear un pedido</a></li>
+        <li><a href="#detalle" class="toc-link"><span class="toc-icon">🔍</span> Detalle del pedido</a></li>
+        <li><a href="#estados" class="toc-link"><span class="toc-icon">🔄</span> Estados y flujo</a></li>
+        <li class="toc-section">Contexto</li>
+        <li><a href="#integraciones" class="toc-link"><span class="toc-icon">🔗</span> Relación con otros módulos</a></li>
+        <li><a href="#casos-uso" class="toc-link"><span class="toc-icon">💼</span> Casos de uso</a></li>
+        <li><a href="#pendientes" class="toc-link"><span class="toc-icon">🔴</span> Funcionalidades pendientes</a></li>
+        <li><a href="#checklist" class="toc-link"><span class="toc-icon">✅</span> Checklist</a></li>
+        <li class="toc-section">Referencia</li>
+        <li><a href="#faq" class="toc-link"><span class="toc-icon">❓</span> FAQ</a></li>
+        <li><a href="#glosario" class="toc-link"><span class="toc-icon">📖</span> Glosario</a></li>
+      </ul>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="content">
+
+      <!-- PAGE HEADER -->
+      <div class="page-header">
+        <div class="header-eyebrow">Módulo · Logística</div>
+        <h1 class="page-title">
+          Pedidos y Logística
+          <span class="page-title-badge">🚧 En desarrollo</span>
+        </h1>
+        <p class="page-desc">
+          Gestión de pedidos de clientes en TOPS: desde el ingreso de la solicitud hasta el despacho.
+          El módulo cubre la operación 3PL (logística tercerizada) con reserva FEFO de stock.
+        </p>
+      </div>
+
+      <!-- BANNER EN DESARROLLO -->
+      <div class="dev-banner">
+        <div class="dev-banner-icon">🚧</div>
+        <div class="dev-banner-content">
+          <h3>Módulo en desarrollo activo</h3>
+          <p>
+            La arquitectura base del módulo ya está implementada: podés crear pedidos, agregarles líneas
+            y reservar stock. Sin embargo, <strong>varias funcionalidades avanzadas están en construcción</strong>
+            y pueden no estar disponibles todavía. Este manual describe tanto lo que ya funciona como
+            lo que está pendiente, para que sepas qué esperar.
+          </p>
+        </div>
+      </div>
+
+
+      <!-- SECCIÓN: ¿QUÉ ES? -->
+      <section class="section" id="que-es">
+        <h2 class="section-title"><span class="section-title-icon">📦</span> ¿Qué es el módulo Pedidos?</h2>
+
+        <p>
+          El módulo <strong>Pedidos y Logística</strong> administra los pedidos que los clientes de TOPS
+          hacen como depositantes: qué productos necesitan, en qué cantidad y para cuándo.
+          Es el punto de entrada del ciclo logístico.
+        </p>
+
+        <p>
+          TOPS opera como un <strong>3PL (logístico tercerizado)</strong>: los clientes (depositantes)
+          guardan su mercadería en el depósito de TOPS, y cuando la necesitan despachar, generan un pedido.
+          Este módulo gestiona exactamente eso.
+        </p>
+
+        <h3 class="section-subtitle">¿En qué se diferencia de Órdenes de Servicio?</h3>
+
+        <div class="compare-grid">
+          <div class="compare-card indigo">
+            <div class="compare-title indigo-text">📦 Pedidos (este módulo)</div>
+            <ul>
+              <li>Registro del pedido del <strong>cliente</strong></li>
+              <li>Vista del depositante: qué pidió, cuándo</li>
+              <li>Estado del pedido de principio a fin</li>
+              <li>Vincula con el stock para reservar unidades</li>
+              <li>Ruta: <code>/pedidos</code></li>
+            </ul>
+          </div>
+          <div class="compare-card blue">
+            <div class="compare-title blue-text">🛠️ Órdenes de Servicio (Operaciones)</div>
+            <ul>
+              <li>Gestión <strong>interna</strong> de la operación de TOPS</li>
+              <li>Vista del operador: qué hay que preparar</li>
+              <li>Asignación de personal y recursos</li>
+              <li>Puede surgir de un pedido o de otras necesidades</li>
+              <li>Ruta: <code>/operaciones</code></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="alert alert-info">
+          <span class="alert-icon">💡</span>
+          <div class="alert-body">
+            <div class="alert-title">Relación entre módulos</div>
+            <p>Un pedido de cliente puede generar una o más Órdenes de Servicio internas. La vinculación
+            automática entre ambos módulos está <strong>pendiente de implementación</strong>.</p>
+          </div>
+        </div>
+
+        <h3 class="section-subtitle">¿Para qué tipo de operación?</h3>
+
+        <div class="card-grid">
+          <div class="card card-indigo">
+            <div class="card-title"><span class="card-icon">💊</span> Farmacéutico / ANMAT</div>
+            <p class="card-desc">Gestión de pedidos con trazabilidad de lotes y fechas de vencimiento (FEFO).</p>
+          </div>
+          <div class="card card-indigo">
+            <div class="card-title"><span class="card-icon">🏭</span> General</div>
+            <p class="card-desc">Cualquier cliente B2B que deposite mercadería en TOPS y necesite gestionar salidas.</p>
+          </div>
+          <div class="card card-indigo">
+            <div class="card-title"><span class="card-icon">🔢</span> SKU múltiples</div>
+            <p class="card-desc">Un pedido puede contener múltiples líneas con distintos SKUs y cantidades.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: ESTADO ACTUAL -->
+      <section class="section" id="estado-actual">
+        <h2 class="section-title"><span class="section-title-icon">🚧</span> Estado actual del módulo</h2>
+
+        <p>
+          El módulo tiene la <strong>arquitectura base completa</strong>: tablas en base de datos,
+          lógica de reserva de stock (RPC transaccional) y vistas de pantalla. Lo que sigue es un
+          resumen de qué está disponible y qué no.
+        </p>
+
+        <h3 class="section-subtitle">Lo que sí está disponible</h3>
+
+        <details open>
+          <summary>✅ Tablero de pedidos (<code>/pedidos</code>)</summary>
+          <div class="accordion-body">
+            <p>La pantalla principal existe y muestra todos los pedidos con filtros por cliente y estado. Incluye KPIs de resumen (total, pendientes, en preparación, preparados, cancelados).</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>✅ Crear un nuevo pedido (<code>/pedidos/nuevo</code>)</summary>
+          <div class="accordion-body">
+            <p>Se puede crear un pedido con cabecera (cliente, referencia, fecha, prioridad, notas) y agregar líneas (SKU, descripción, cantidad, lote). El pedido se crea en estado "Borrador".</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>✅ Detalle del pedido con reservas de stock</summary>
+          <div class="accordion-body">
+            <p>La pantalla de detalle muestra toda la información del pedido, las líneas con su cobertura de reserva, la trazabilidad completa de reservas (lote, cantidad, estado) y la cola FEFO del stock disponible por SKU.</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>✅ Reserva automática FEFO</summary>
+          <div class="accordion-body">
+            <p>Al presionar "Reservar", el sistema aplica automáticamente la política FEFO (First Expired First Out): reserva stock del lote con vencimiento más próximo. Soporta reserva parcial.</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>✅ Edición de pedido en borrador</summary>
+          <div class="accordion-body">
+            <p>Mientras el pedido está en estado "Borrador", es posible editar la cabecera, agregar, modificar y eliminar líneas. Una vez confirmado, no se puede editar.</p>
+          </div>
+        </details>
+
+        <h3 class="section-subtitle" style="margin-top: 24px;">Lo que está pendiente</h3>
+
+        <details>
+          <summary>🔴 Permisos y roles granulares</summary>
+          <div class="accordion-body">
+            <p>El sistema de permisos para este módulo (<code>pedidos.*</code>) está pendiente de definición granular. Por ahora el acceso no está restringido por rol dentro del módulo.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>🔴 Vinculación automática con Órdenes de Servicio</summary>
+          <div class="accordion-body">
+            <p>Un pedido aprobado debería generar automáticamente una Orden de Servicio en el módulo de Operaciones. Esta integración aún no está implementada.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>🔴 Notificaciones y alertas</summary>
+          <div class="accordion-body">
+            <p>No hay notificaciones automáticas cuando un pedido cambia de estado, ni alertas por stock insuficiente para completar la reserva.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>🔴 Historial de cambios y auditoría</summary>
+          <div class="accordion-body">
+            <p>No hay registro de quién realizó cada acción ni cuándo se efectuaron los cambios de estado.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>🔴 Impresión / exportación</summary>
+          <div class="accordion-body">
+            <p>No hay funcionalidad para imprimir el detalle de un pedido, generar remito o exportar a PDF/Excel.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>🔴 Módulo Comercial: visibilidad de pedidos por cliente</summary>
+          <div class="accordion-body">
+            <p>Está previsto que el área Comercial pueda ver los pedidos de sus clientes asignados, pero esto depende de la definición final de permisos granulares.</p>
+          </div>
+        </details>
+      </section>
+
+
+      <!-- SECCIÓN: QUIÉN PUEDE USARLO -->
+      <section class="section" id="quien-puede-usarlo">
+        <h2 class="section-title"><span class="section-title-icon">👥</span> ¿Quién puede usar este módulo?</h2>
+
+        <div class="alert alert-warning">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-body">
+            <div class="alert-title">Pendiente de validación</div>
+            <p>Los permisos granulares del módulo no están definidos todavía. La información de esta sección describe las expectativas, no la configuración actual.</p>
+          </div>
+        </div>
+
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-title"><span class="card-icon">👤</span> Director <span class="badge badge-green" style="margin-left: 4px;">Esperado</span></div>
+            <p class="card-desc">Acceso total: ver, crear y gestionar todos los pedidos de todos los clientes.</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">💼</span> Administración <span class="badge badge-green" style="margin-left: 4px;">Esperado</span></div>
+            <p class="card-desc">Acceso total para gestionar el ciclo completo de pedidos.</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">🏭</span> Operaciones <span class="badge badge-green" style="margin-left: 4px;">Esperado</span></div>
+            <p class="card-desc">Ver y operar pedidos: reservar stock, preparar y despachar.</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">📊</span> Comercial <span class="badge badge-amber" style="margin-left: 4px;">A definir</span></div>
+            <p class="card-desc">Podría ver solo los pedidos de sus clientes asignados. Pendiente de implementación.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: TABLERO -->
+      <section class="section" id="tablero">
+        <h2 class="section-title"><span class="section-title-icon">📋</span> Tablero de Pedidos</h2>
+
+        <div class="route"><span class="route-method">GET</span>/pedidos</div>
+
+        <p>
+          La pantalla principal del módulo. Muestra todos los pedidos registrados con sus datos
+          principales. Desde acá podés filtrar, navegar al detalle de cada pedido o crear uno nuevo.
+        </p>
+
+        <h3 class="section-subtitle">KPIs de resumen</h3>
+        <p>En la parte superior hay 5 indicadores sobre el total de pedidos:</p>
+
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-title"><span class="card-icon">📊</span> Total</div>
+            <p class="card-desc">Cantidad total de pedidos registrados (todos los estados).</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">⏳</span> Pendientes</div>
+            <p class="card-desc">Pedidos confirmados esperando reserva de stock.</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">⚙️</span> En preparación</div>
+            <p class="card-desc">Pedidos con stock parcialmente reservado, en proceso.</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">✅</span> Preparados</div>
+            <p class="card-desc">Pedidos listos para despachar.</p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">❌</span> Cancelados</div>
+            <p class="card-desc">Pedidos anulados.</p>
+          </div>
+        </div>
+
+        <h3 class="section-subtitle">Vistas del tablero</h3>
+
+        <div class="tabs-wrapper">
+          <div class="tabs-bar">
+            <button class="tab-btn active" onclick="switchTab(event, 'tab-tabla')">📋 Tabla de pedidos</button>
+            <button class="tab-btn" onclick="switchTab(event, 'tab-filtros')">🔍 Filtros disponibles</button>
+            <button class="tab-btn" onclick="switchTab(event, 'tab-acciones')">⚡ Acciones rápidas</button>
+          </div>
+          <div class="tab-panels">
+            <div class="tab-panel active" id="tab-tabla">
+              <p>La tabla muestra los pedidos con las siguientes columnas:</p>
+              <div class="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Columna</th>
+                      <th>Descripción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="mono">N°</td>
+                      <td>Número de pedido (<code>PED-2026-0001</code>). Hacé clic para ir al detalle.</td>
+                    </tr>
+                    <tr>
+                      <td class="mono">Cliente</td>
+                      <td>Nombre del depositante que realizó el pedido.</td>
+                    </tr>
+                    <tr>
+                      <td class="mono">Estado</td>
+                      <td>Estado actual del pedido (badge de color).</td>
+                    </tr>
+                    <tr>
+                      <td class="mono">Reservadas</td>
+                      <td>Líneas reservadas / total de líneas. Ej: <code>1 / 3</code>.</td>
+                    </tr>
+                    <tr>
+                      <td class="mono">Fecha</td>
+                      <td>Fecha de creación del pedido.</td>
+                    </tr>
+                    <tr>
+                      <td class="mono">Acciones</td>
+                      <td>Botones según el estado: Ver · Confirmar · Reservar · Cancelar.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="tab-panel" id="tab-filtros">
+              <p>Podés filtrar los pedidos desde la barra de filtros sin recargar la página:</p>
+              <br/>
+              <div class="field-grid">
+                <div class="field-card">
+                  <div class="field-label">Filtro</div>
+                  <div class="field-name">cliente</div>
+                  <div class="field-req opt">Búsqueda parcial por nombre de cliente</div>
+                </div>
+                <div class="field-card">
+                  <div class="field-label">Filtro</div>
+                  <div class="field-name">estado</div>
+                  <div class="field-req opt">Selección de estado específico</div>
+                </div>
+              </div>
+              <p>Los filtros se aplican del lado del servidor (GET). Podés limpiarlos con el botón "Limpiar".</p>
+            </div>
+            <div class="tab-panel" id="tab-acciones">
+              <p>Cada fila del tablero muestra acciones rápidas según el estado del pedido:</p>
+              <br/>
+              <div class="status-row">
+                <div class="status-dot" style="background:#3b82f6"></div>
+                <div class="status-name">Ver</div>
+                <div class="status-desc">Disponible en todos los estados. Navega al detalle completo del pedido.</div>
+              </div>
+              <div class="status-row">
+                <div class="status-dot" style="background:#6366f1"></div>
+                <div class="status-name">Confirmar</div>
+                <div class="status-desc">Solo en estado <code>borrador</code>. Pasa el pedido a "Pendiente" y lo habilita para reservar stock.</div>
+              </div>
+              <div class="status-row">
+                <div class="status-dot" style="background:#22c55e"></div>
+                <div class="status-name">Reservar</div>
+                <div class="status-desc">Disponible en <code>pendiente</code> y <code>en_preparacion</code>. Ejecuta la reserva FEFO automática.</div>
+              </div>
+              <div class="status-row">
+                <div class="status-dot" style="background:#ef4444"></div>
+                <div class="status-name">Cancelar</div>
+                <div class="status-desc">Disponible hasta <code>preparado</code>. Cancela el pedido y libera todas las reservas.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: NUEVO PEDIDO -->
+      <section class="section" id="nuevo-pedido">
+        <h2 class="section-title"><span class="section-title-icon">➕</span> Crear un Nuevo Pedido</h2>
+
+        <div class="route"><span class="route-method">GET</span>/pedidos/nuevo</div>
+
+        <p>
+          El formulario de creación tiene dos partes: la <strong>cabecera</strong> con los datos
+          generales del pedido, y las <strong>líneas</strong> con los artículos solicitados.
+        </p>
+
+        <h3 class="section-subtitle">Cabecera del pedido</h3>
+
+        <div class="field-grid">
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Cliente</div>
+            <div class="field-req req">● Obligatorio</div>
+          </div>
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Ref. cliente</div>
+            <div class="field-req opt">○ Opcional — N° de pedido del cliente</div>
+          </div>
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Fecha solicitada</div>
+            <div class="field-req opt">○ Opcional — fecha de entrega requerida</div>
+          </div>
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Prioridad</div>
+            <div class="field-req opt">○ Opcional — número (0 = normal)</div>
+          </div>
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Notas</div>
+            <div class="field-req opt">○ Opcional — observaciones libres</div>
+          </div>
+        </div>
+
+        <h3 class="section-subtitle">Líneas del pedido</h3>
+        <p>Cada pedido debe tener al menos una línea. Podés agregar la cantidad que necesites.</p>
+
+        <div class="field-grid">
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">SKU</div>
+            <div class="field-req req">● Obligatorio — código del producto</div>
+          </div>
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Descripción</div>
+            <div class="field-req req">● Obligatorio — nombre del artículo</div>
+          </div>
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Cantidad</div>
+            <div class="field-req req">● Obligatorio — debe ser mayor a 0</div>
+          </div>
+          <div class="field-card">
+            <div class="field-label">Campo</div>
+            <div class="field-name">Lote (opcional)</div>
+            <div class="field-req opt">○ Forzar un lote específico (si aplica)</div>
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <p><strong>Al crear el pedido</strong>, queda en estado <strong>Borrador</strong>. Podés seguir editando (agregar, modificar o eliminar líneas) hasta confirmarlo. Una vez confirmado, pasa a "Pendiente" y no se puede modificar.</p>
+        </div>
+
+        <div class="alert alert-warning">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-body">
+            <div class="alert-title">Pendiente de validación</div>
+            <p>La validación de que el SKU existe en el sistema (WMS) no está implementada aún. Se puede ingresar cualquier SKU aunque no tenga stock.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: DETALLE -->
+      <section class="section" id="detalle">
+        <h2 class="section-title"><span class="section-title-icon">🔍</span> Detalle de un Pedido</h2>
+
+        <div class="route"><span class="route-method">GET</span>/pedidos/[id]</div>
+
+        <p>
+          La pantalla de detalle muestra toda la información de un pedido específico, incluyendo
+          sus líneas, el estado de las reservas y el stock disponible.
+        </p>
+
+        <h3 class="section-subtitle">Secciones del detalle</h3>
+
+        <details open>
+          <summary>📋 Cabecera e información general</summary>
+          <div class="accordion-body">
+            <p>Muestra el número de pedido, estado actual, cliente, referencia del cliente, prioridad, fecha solicitada, fecha de creación y notas.</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>📊 Resumen de cobertura</summary>
+          <div class="accordion-body">
+            <p>Cinco KPIs que muestran: líneas totales, líneas reservadas, unidades solicitadas, unidades reservadas y porcentaje de cobertura total (en verde si es 100%, naranja si es parcial, gris si es 0%).</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>📝 Líneas del pedido</summary>
+          <div class="accordion-body">
+            <p>Tabla con cada artículo: SKU, descripción, cantidad solicitada, cantidad reservada, porcentaje de cobertura, estado de la línea y lote exigido (si se especificó).</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>🔗 Reservas / Trazabilidad</summary>
+          <div class="accordion-body">
+            <p>Detalle de cada reserva de stock: SKU, número de lote, cantidad reservada, estado de la reserva, fecha de reserva y fecha de liberación. También permite liberar una reserva puntual.</p>
+          </div>
+        </details>
+
+        <details open>
+          <summary>📦 Cola FEFO (stock disponible)</summary>
+          <div class="accordion-body">
+            <p>Para cada SKU del pedido, se muestra la cola de lotes disponibles ordenados por vencimiento (FEFO): número de lote, fecha de vencimiento, cantidad disponible y ubicación en depósito.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>✏️ Edición (solo en Borrador)</summary>
+          <div class="accordion-body">
+            <p>Si el pedido está en estado "Borrador", aparece un formulario de edición que permite modificar la cabecera y las líneas. Una vez confirmado el pedido, esta sección desaparece.</p>
+          </div>
+        </details>
+
+        <div class="alert alert-info">
+          <span class="alert-icon">💡</span>
+          <div class="alert-body">
+            <div class="alert-title">Sobre la cola FEFO</div>
+            <p>La cola FEFO muestra el stock del cliente filtrado por SKU. Solo se muestra el stock del cliente dueño del pedido, no el de otros clientes.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: ESTADOS Y FLUJO -->
+      <section class="section" id="estados">
+        <h2 class="section-title"><span class="section-title-icon">🔄</span> Estados del Pedido</h2>
+
+        <p>
+          Un pedido pasa por los siguientes estados a lo largo de su ciclo de vida:
+        </p>
+
+        <!-- FLOW DIAGRAM -->
+        <div class="flow">
+          <div class="flow-step">
+            <div class="flow-bubble gray">📝</div>
+            <div class="flow-label">Borrador</div>
+            <div class="flow-sublabel">Editable</div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble amber">⏳</div>
+            <div class="flow-label">Pendiente</div>
+            <div class="flow-sublabel">Confirmado</div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble indigo">⚙️</div>
+            <div class="flow-label">En preparación</div>
+            <div class="flow-sublabel">Reserva parcial</div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble blue">✅</div>
+            <div class="flow-label">Preparado</div>
+            <div class="flow-sublabel">Listo</div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble indigo">🚚</div>
+            <div class="flow-label">Despachado</div>
+            <div class="flow-sublabel">En camino</div>
+          </div>
+          <div class="flow-arrow">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble green">🎉</div>
+            <div class="flow-label">Entregado</div>
+            <div class="flow-sublabel">Final</div>
+          </div>
+        </div>
+
+        <div class="alert alert-warning" style="margin-top: 8px;">
+          <span class="alert-icon">⚠️</span>
+          <div class="alert-body">
+            <div class="alert-title">Pendiente de validación</div>
+            <p>Las transiciones a <strong>Despachado</strong> y <strong>Entregado</strong> no tienen aún un flujo implementado en la interfaz. El pedido puede quedar en "Preparado" sin completar el ciclo.</p>
+          </div>
+        </div>
+
+        <h3 class="section-subtitle" style="margin-top: 28px;">Detalle de cada estado</h3>
+
+        <div class="status-row">
+          <div class="status-dot" style="background:#6b7280"></div>
+          <div class="status-name">borrador</div>
+          <div class="status-desc">Pedido recién creado. Completamente editable. Se puede agregar y modificar líneas. No está disponible para reservar stock hasta confirmarlo.</div>
+        </div>
+        <div class="status-row">
+          <div class="status-dot" style="background:#d97706"></div>
+          <div class="status-name">pendiente</div>
+          <div class="status-desc">Pedido confirmado, esperando la reserva de stock. Disponible para acción "Reservar".</div>
+        </div>
+        <div class="status-row">
+          <div class="status-dot" style="background:#2563eb"></div>
+          <div class="status-name">en_preparacion</div>
+          <div class="status-desc">Al menos una línea tiene stock reservado (reserva parcial). Se puede seguir reservando hasta completar todas las líneas.</div>
+        </div>
+        <div class="status-row">
+          <div class="status-dot" style="background:#0d9488"></div>
+          <div class="status-name">preparado</div>
+          <div class="status-desc">Todas las líneas tienen stock reservado. El pedido está listo para despachar.</div>
+        </div>
+        <div class="status-row">
+          <div class="status-dot" style="background:#7c3aed"></div>
+          <div class="status-name">despachado</div>
+          <div class="status-desc">El pedido fue entregado al transportista. Estado final intermedio.</div>
+        </div>
+        <div class="status-row">
+          <div class="status-dot" style="background:#16a34a"></div>
+          <div class="status-name">entregado</div>
+          <div class="status-desc">El cliente recibió la mercadería. Estado final del ciclo.</div>
+        </div>
+        <div class="status-row">
+          <div class="status-dot" style="background:#dc2626"></div>
+          <div class="status-name">cancelado</div>
+          <div class="status-desc">Pedido anulado. Se liberan automáticamente todas las reservas de stock asociadas.</div>
+        </div>
+
+        <h3 class="section-subtitle" style="margin-top: 28px;">Estados de las líneas del pedido</h3>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Estado de línea</th>
+                <th>Significado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge badge-amber">pendiente</span></td>
+                <td>Sin stock reservado para esta línea.</td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-green">reservado</span></td>
+                <td>Toda la cantidad de la línea está reservada en stock.</td>
+              </tr>
+              <tr>
+                <td><span class="badge" style="background:rgba(234,88,12,.1);color:#fb923c;border:1px solid rgba(234,88,12,.2)">reservado parcial</span></td>
+                <td>Solo parte de la cantidad está reservada. Stock insuficiente.</td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-indigo">pickeado</span></td>
+                <td>La mercadería fue retirada físicamente del depósito.</td>
+              </tr>
+              <tr>
+                <td><span class="badge" style="background:rgba(13,148,136,.1);color:#2dd4bf;border:1px solid rgba(13,148,136,.2)">empacado</span></td>
+                <td>La mercadería fue embalada para despacho.</td>
+              </tr>
+              <tr>
+                <td><span class="badge" style="background:rgba(124,58,237,.1);color:#a78bfa;border:1px solid rgba(124,58,237,.2)">despachado</span></td>
+                <td>La línea fue enviada al cliente.</td>
+              </tr>
+              <tr>
+                <td><span class="badge badge-red">cancelado</span></td>
+                <td>Línea cancelada individualmente.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: INTEGRACIONES -->
+      <section class="section" id="integraciones">
+        <h2 class="section-title"><span class="section-title-icon">🔗</span> Relación con Otros Módulos</h2>
+
+        <p>
+          El módulo de Pedidos no opera de forma aislada. Se conecta con otros módulos de TOPS Nexus:
+        </p>
+
+        <div class="card-grid">
+          <div class="card">
+            <div class="card-title"><span class="card-icon">🏭</span> WMS · Inventario</div>
+            <p class="card-desc">
+              <strong>Integración activa.</strong> Al reservar stock, el módulo de Pedidos
+              actualiza directamente el inventario del WMS (stock disponible → stock reservado).
+              La cola FEFO del detalle lee el inventario en tiempo real.
+            </p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">🛠️</span> Operaciones · Órdenes de Servicio</div>
+            <p class="card-desc">
+              <strong>Pendiente.</strong> Un pedido aprobado debería generar automáticamente
+              una Orden de Servicio interna. Esta vinculación no está implementada.
+            </p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">🚚</span> Despacho / Remitos</div>
+            <p class="card-desc">
+              <strong>Pendiente.</strong> La generación de remitos y el seguimiento
+              del transporte no están disponibles todavía.
+            </p>
+          </div>
+          <div class="card">
+            <div class="card-title"><span class="card-icon">👥</span> CRM · Clientes</div>
+            <p class="card-desc">
+              <strong>Pendiente.</strong> El cliente se ingresa como texto libre.
+              En el futuro debería vincularse al registro del cliente en el CRM.
+            </p>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <h3 class="section-subtitle">Flujo esperado (conceptual)</h3>
+        <p>Así es como se espera que funcione el ciclo completo una vez que todas las integraciones estén implementadas:</p>
+
+        <div class="flow" style="gap: 0; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; padding: 20px 0;">
+          <div class="flow-step">
+            <div class="flow-bubble indigo" style="font-size:20px">📦</div>
+            <div class="flow-label">Pedido del cliente</div>
+            <div class="flow-sublabel">Módulo Pedidos</div>
+          </div>
+          <div class="flow-arrow" style="font-size:16px; margin-bottom:28px">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble amber" style="font-size:20px">🏭</div>
+            <div class="flow-label">Reserva WMS</div>
+            <div class="flow-sublabel">Stock FEFO</div>
+          </div>
+          <div class="flow-arrow" style="font-size:16px; margin-bottom:28px">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble blue" style="font-size:20px">🛠️</div>
+            <div class="flow-label">Orden de Servicio</div>
+            <div class="flow-sublabel">Operaciones</div>
+          </div>
+          <div class="flow-arrow" style="font-size:16px; margin-bottom:28px">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble green" style="font-size:20px">🚚</div>
+            <div class="flow-label">Despacho</div>
+            <div class="flow-sublabel">Remito + envío</div>
+          </div>
+          <div class="flow-arrow" style="font-size:16px; margin-bottom:28px">›</div>
+          <div class="flow-step">
+            <div class="flow-bubble green" style="font-size:20px">✅</div>
+            <div class="flow-label">Entrega confirmada</div>
+            <div class="flow-sublabel">Cierre</div>
+          </div>
+        </div>
+
+        <div class="alert alert-info" style="margin-top: 12px;">
+          <span class="alert-icon">ℹ️</span>
+          <div class="alert-body">
+            <div class="alert-title">Estado actual del flujo</div>
+            <p>Hoy, los pasos "Pedido → Reserva WMS" funcionan. "Orden de Servicio → Despacho → Entrega" son pasos manuales fuera del sistema hasta que se implementen las integraciones.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: CASOS DE USO -->
+      <section class="section" id="casos-uso">
+        <h2 class="section-title"><span class="section-title-icon">💼</span> Casos de Uso Esperados</h2>
+
+        <p>Estos son los escenarios típicos para los que está pensado el módulo:</p>
+
+        <details>
+          <summary>📦 Pedido estándar de un depositante</summary>
+          <div class="accordion-body">
+            <p>Un cliente como "Lab. Andrómaco" necesita despachar 100 unidades de Amoxicilina 500mg. Se crea el pedido con el SKU correspondiente, se confirma y se reserva el stock disponible bajo política FEFO. Si hay stock suficiente, el pedido queda listo para preparar.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>🔢 Pedido con múltiples SKUs</summary>
+          <div class="accordion-body">
+            <p>Un cliente puede pedir varios productos en el mismo pedido. Cada SKU es una línea independiente con su propia cobertura de stock. El pedido pasa a "Preparado" cuando <strong>todas</strong> las líneas están reservadas.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>⚡ Reserva parcial por stock insuficiente</summary>
+          <div class="accordion-body">
+            <p>Si el stock no alcanza para cubrir toda la cantidad solicitada, el sistema hace una reserva parcial y el pedido queda en "En preparación". Las líneas con stock insuficiente quedan en estado "reservado_parcial". El operador puede decidir esperar a que ingrese más stock o gestionar el faltante por otro canal.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>🧪 Pedido con exigencia de lote</summary>
+          <div class="accordion-body">
+            <p>Algunos clientes farmacéuticos pueden requerir que cierta cantidad provenga de un lote específico (por trazabilidad ANMAT). Se puede indicar el lote en el campo "Lote (opcional)" de cada línea. El sistema intentará reservar solo de ese lote.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>❌ Cancelación de pedido con liberación de stock</summary>
+          <div class="accordion-body">
+            <p>Si un pedido debe anularse, la acción "Cancelar" libera automáticamente todas las reservas de stock asociadas, devolviendo las unidades al stock disponible. No se puede cancelar un pedido ya despachado.</p>
+          </div>
+        </details>
+      </section>
+
+
+      <!-- SECCIÓN: PENDIENTES Y ERRORES -->
+      <section class="section" id="pendientes">
+        <h2 class="section-title"><span class="section-title-icon">🔴</span> Funcionalidades Pendientes y Limitaciones</h2>
+
+        <div class="alert alert-pending">
+          <span class="alert-icon">🔴</span>
+          <div class="alert-body">
+            <div class="alert-title">En construcción activa</div>
+            <p>Las siguientes funcionalidades no están implementadas todavía. No son errores: son features planificadas que aún no se desarrollaron.</p>
+          </div>
+        </div>
+
+        <div class="card-grid" style="margin-top: 16px;">
+          <div class="card">
+            <div class="card-title">🔴 <span>Transición a Despachado/Entregado</span></div>
+            <p class="card-desc">No hay botón ni flujo para marcar un pedido como despachado o entregado desde la UI.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🔴 <span>Generación de remito</span></div>
+            <p class="card-desc">No se puede generar un documento de remito desde el pedido.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🔴 <span>Vinculación con Órdenes de Servicio</span></div>
+            <p class="card-desc">Un pedido no genera automáticamente una OS en el módulo de Operaciones.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🔴 <span>Validación de SKU</span></div>
+            <p class="card-desc">No se valida si el SKU ingresado existe en el catálogo del cliente en el WMS.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🔴 <span>Historial de auditoría</span></div>
+            <p class="card-desc">No hay registro de quién hizo qué acción ni cuándo.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🔴 <span>Notificaciones</span></div>
+            <p class="card-desc">No hay alertas por email ni push cuando un pedido cambia de estado.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🔴 <span>Exportación</span></div>
+            <p class="card-desc">No se puede exportar la lista de pedidos ni el detalle a PDF o Excel.</p>
+          </div>
+          <div class="card">
+            <div class="card-title">🔴 <span>Permisos granulares</span></div>
+            <p class="card-desc">El control de acceso por rol para este módulo no está implementado.</p>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- SECCIÓN: CHECKLIST -->
+      <section class="section" id="checklist">
+        <h2 class="section-title"><span class="section-title-icon">✅</span> Checklist: Qué Podés Hacer Hoy</h2>
+
+        <ul class="checklist">
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Ver el tablero de pedidos con KPIs y tabla filtrable
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Crear un nuevo pedido con cabecera y múltiples líneas
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Editar un pedido en estado "Borrador" (cabecera y líneas)
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Confirmar un pedido (Borrador → Pendiente)
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Reservar stock FEFO automáticamente para un pedido
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Ver el detalle completo: líneas, reservas y trazabilidad de lotes
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Ver la cola FEFO de stock disponible por SKU del pedido
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Liberar una reserva puntual de un lote específico
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Cancelar un pedido y liberar todas sus reservas automáticamente
+          </li>
+          <li>
+            <span class="check-icon check-available">✅</span>
+            Filtrar pedidos por cliente y/o estado
+          </li>
+          <li>
+            <span class="check-icon check-pending">⬜</span>
+            <span style="color: var(--text-muted);">Marcar pedido como despachado / entregado <span class="badge badge-amber">Pendiente</span></span>
+          </li>
+          <li>
+            <span class="check-icon check-pending">⬜</span>
+            <span style="color: var(--text-muted);">Generar remito desde el pedido <span class="badge badge-amber">Pendiente</span></span>
+          </li>
+          <li>
+            <span class="check-icon check-pending">⬜</span>
+            <span style="color: var(--text-muted);">Exportar pedidos a PDF/Excel <span class="badge badge-amber">Pendiente</span></span>
+          </li>
+        </ul>
+      </section>
+
+
+      <!-- SECCIÓN: FAQ -->
+      <section class="section" id="faq">
+        <h2 class="section-title"><span class="section-title-icon">❓</span> Preguntas Frecuentes</h2>
+
+        <details class="faq-item">
+          <summary class="faq-q">
+            <span class="faq-num">1</span>
+            ¿Cuál es la diferencia entre un Pedido y una Orden de Servicio?
+          </summary>
+          <div class="faq-a">
+            <p>Un <strong>Pedido</strong> registra lo que el cliente externo (depositante) solicita: qué artículos quiere y cuándo los necesita. Una <strong>Orden de Servicio</strong> es la tarea interna que TOPS ejecuta para cumplir ese pedido. El pedido es la vista del cliente; la OS es la vista de la operación.</p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-q">
+            <span class="faq-num">2</span>
+            ¿Puedo modificar un pedido después de confirmarlo?
+          </summary>
+          <div class="faq-a">
+            <p>No. Una vez que el pedido pasa de "Borrador" a "Pendiente" (confirmado), ya no se puede modificar la cabecera ni las líneas. Si necesitás hacer un cambio, la única opción actual es cancelar el pedido y crear uno nuevo.</p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-q">
+            <span class="faq-num">3</span>
+            ¿Qué pasa si no hay suficiente stock para completar el pedido?
+          </summary>
+          <div class="faq-a">
+            <p>El sistema hace una <strong>reserva parcial</strong>: reserva lo que hay disponible y deja las líneas en estado "reservado_parcial". El pedido queda en "En preparación". Podés volver a ejecutar "Reservar" cuando ingrese más stock, o gestionar el faltante por fuera del sistema.</p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-q">
+            <span class="faq-num">4</span>
+            ¿Qué significa FEFO?
+          </summary>
+          <div class="faq-a">
+            <p><strong>FEFO: First Expired First Out</strong> (primero en vencer, primero en salir). Es la política de reserva que aplica el sistema automáticamente: cuando hay varios lotes de un mismo producto, reserva primero el que tiene la fecha de vencimiento más próxima. Esto es obligatorio en operaciones farmacéuticas (ANMAT).</p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-q">
+            <span class="faq-num">5</span>
+            ¿Cómo cancelo un pedido y qué pasa con el stock reservado?
+          </summary>
+          <div class="faq-a">
+            <p>Desde el tablero o desde el detalle del pedido, hacé clic en "Cancelar". El sistema pedirá confirmación. Al confirmar, el pedido pasa a "Cancelado" y <strong>todas las reservas de stock asociadas se liberan automáticamente</strong>, volviendo el stock al inventario disponible. No podés cancelar un pedido que ya fue despachado o entregado.</p>
+          </div>
+        </details>
+
+        <details class="faq-item">
+          <summary class="faq-q">
+            <span class="faq-num">6</span>
+            ¿El módulo está disponible en modo demo?
+          </summary>
+          <div class="faq-a">
+            <p>Sí. Cuando el sistema está en modo demo (sin conexión real a Supabase), el módulo muestra datos de ejemplo: pedidos de "Lab. Andrómaco" y "Farma Sur". Podés navegar y ver la interfaz, pero las acciones no persisten.</p>
+          </div>
+        </details>
+      </section>
+
+
+      <!-- SECCIÓN: GLOSARIO -->
+      <section class="section" id="glosario">
+        <h2 class="section-title"><span class="section-title-icon">📖</span> Glosario</h2>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Pedido</div>
+          <div class="glossary-def">Solicitud de despacho realizada por un cliente (depositante) a TOPS. Incluye los artículos solicitados, las cantidades y la fecha de entrega requerida.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">OS · Orden de Servicio</div>
+          <div class="glossary-def">Tarea operativa interna que TOPS genera para ejecutar un pedido. Gestionada en el módulo de Operaciones.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Borrador</div>
+          <div class="glossary-def">Estado inicial de un pedido recién creado. Completamente editable hasta que se confirma.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Reserva</div>
+          <div class="glossary-def">Asignación de unidades de stock a un pedido. El stock reservado no puede usarse para otros pedidos. Se ejecuta vía la función RPC <code>allocate_order</code>.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">FEFO</div>
+          <div class="glossary-def">First Expired First Out. Política que prioriza la salida de los lotes con fecha de vencimiento más próxima. Obligatoria en operaciones farmacéuticas.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Línea</div>
+          <div class="glossary-def">Renglón de un pedido. Cada línea representa un SKU con su cantidad solicitada y reservada. Un pedido puede tener múltiples líneas.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">SKU</div>
+          <div class="glossary-def">Stock Keeping Unit. Código único que identifica un producto o artículo en el inventario.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Lote</div>
+          <div class="glossary-def">Conjunto de unidades de un producto fabricadas o ingresadas juntas, identificadas con un número de lote y fecha de vencimiento. Fundamental para la trazabilidad ANMAT.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Depositante</div>
+          <div class="glossary-def">Cliente de TOPS que almacena su mercadería en el depósito. Es el dueño del stock y quien genera los pedidos.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">3PL</div>
+          <div class="glossary-def">Third-Party Logistics. Modelo en el que TOPS presta servicios logísticos (almacenaje, preparación, despacho) a empresas que tercerizan su logística.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Remito</div>
+          <div class="glossary-def">Documento que acompaña la mercadería en el momento del despacho. Indica qué se envió, en qué cantidad y a quién. La generación de remitos desde el sistema está pendiente.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Despacho</div>
+          <div class="glossary-def">Momento en que la mercadería preparada sale físicamente del depósito hacia el cliente. Marca la transición al estado "Despachado".</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">WMS</div>
+          <div class="glossary-def">Warehouse Management System. Módulo de TOPS Nexus que gestiona el inventario físico del depósito: ubicaciones, lotes, stock disponible y reservado.</div>
+        </div>
+
+        <div class="glossary-item">
+          <div class="glossary-term">Cobertura</div>
+          <div class="glossary-def">Porcentaje de la cantidad solicitada en un pedido (o línea) que ya tiene stock reservado. 100% = completamente cubierto. Menor a 100% = reserva parcial.</div>
+        </div>
+      </section>
+
+
+      <!-- FOOTER -->
+      <div class="divider"></div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 0;">
+        <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+          TOPS Nexus · Manual de Usuario · Módulo Pedidos y Logística · Junio 2026
+        </p>
+        <a href="index.html" class="nav-back" style="margin-left: 0;">← Volver al índice</a>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // ── TABS ──
+    function switchTab(e, panelId) {
+      const wrapper = e.target.closest('.tabs-wrapper');
+      wrapper.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      wrapper.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      e.target.classList.add('active');
+      document.getElementById(panelId).classList.add('active');
+    }
+
+    // ── TOC HIGHLIGHT ──
+    const tocLinks = document.querySelectorAll('.toc-link');
+    const sections = document.querySelectorAll('.section');
+
+    function updateToc() {
+      let current = '';
+      sections.forEach(sec => {
+        const top = sec.getBoundingClientRect().top;
+        if (top <= 100) current = sec.id;
+      });
+      tocLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + current) {
+          link.classList.add('active');
+        }
+      });
+    }
+
+    window.addEventListener('scroll', updateToc, { passive: true });
+    updateToc();
+  </script>
+
+</body>
+</html>

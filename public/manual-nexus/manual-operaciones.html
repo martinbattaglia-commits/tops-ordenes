@@ -1,0 +1,2042 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manual – Operaciones y Servicios | TOPS Nexus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #0f172a;
+  --navy-light: #1e293b;
+  --navy-mid: #162032;
+  --blue: #3b82f6;
+  --green: #22c55e;
+  --green-dark: #16a34a;
+  --green-dim: rgba(34,197,94,0.12);
+  --green-border: rgba(34,197,94,0.3);
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --purple: #a855f7;
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  --border: rgba(255,255,255,0.08);
+  --border-soft: rgba(255,255,255,0.05);
+  --card: rgba(255,255,255,0.04);
+  --card-hover: rgba(255,255,255,0.07);
+  --sidebar-w: 260px;
+  --header-h: 56px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; font-size: 15px; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--navy);
+  color: var(--text);
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: var(--header-h);
+  background: rgba(15,23,42,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+}
+.top-bar .back-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 13px;
+  transition: color 0.2s;
+}
+.top-bar .back-btn:hover { color: var(--green); }
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  flex: 1;
+}
+.breadcrumb span { color: var(--text-dim); }
+.breadcrumb .current { color: var(--green); font-weight: 600; }
+.top-bar .module-badge {
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── LAYOUT ── */
+.layout {
+  display: flex;
+  min-height: calc(100vh - var(--header-h));
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  padding: 24px 0;
+  border-right: 1px solid var(--border);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.sidebar-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 20px 12px;
+}
+.toc-item {
+  display: block;
+  padding: 7px 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 0.15s;
+  line-height: 1.4;
+}
+.toc-item:hover { color: var(--green); border-left-color: var(--green); background: var(--green-dim); }
+.toc-item.active { color: var(--green); border-left-color: var(--green); font-weight: 500; }
+.toc-item.sub { padding-left: 36px; font-size: 12px; }
+.toc-divider { height: 1px; background: var(--border); margin: 8px 20px; }
+
+/* ── MAIN CONTENT ── */
+.content {
+  flex: 1;
+  max-width: 900px;
+  padding: 48px 40px 80px;
+  min-width: 0;
+}
+
+/* ── HERO ── */
+.hero {
+  margin-bottom: 48px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--border);
+}
+.hero-icon {
+  width: 64px;
+  height: 64px;
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  margin-bottom: 20px;
+}
+.hero h1 {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #f8fafc 0%, var(--green) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero .subtitle {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  max-width: 600px;
+}
+.hero-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.meta-tag {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-family: 'JetBrains Mono', monospace;
+}
+.meta-tag.route { background: rgba(59,130,246,0.12); color: var(--blue); border: 1px solid rgba(59,130,246,0.25); }
+.meta-tag.perm  { background: var(--green-dim); color: var(--green); border: 1px solid var(--green-border); }
+
+/* ── SECTIONS ── */
+.section { margin-bottom: 56px; }
+.section-anchor { display: block; position: relative; top: calc(-1 * var(--header-h) - 16px); visibility: hidden; }
+
+h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+h2 .sec-icon { font-size: 20px; }
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 24px 0 12px;
+}
+h4 { font-size: 14px; font-weight: 600; color: var(--green); margin: 16px 0 8px; }
+
+p { color: var(--text-muted); margin-bottom: 12px; }
+p:last-child { margin-bottom: 0; }
+
+strong { color: var(--text); }
+
+/* ── CARDS ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 12px;
+  transition: background 0.2s;
+}
+.card:hover { background: var(--card-hover); }
+.card-grid {
+  display: grid;
+  gap: 12px;
+}
+.card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+.card-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+.card-icon { font-size: 22px; margin-bottom: 10px; }
+.card h4 { margin: 0 0 6px; }
+.card p { font-size: 13px; margin: 0; }
+
+/* ── INFO BOXES ── */
+.alert {
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 16px 0;
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.alert-icon { flex-shrink: 0; font-size: 16px; margin-top: 2px; }
+.alert.info { background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2); color: #93c5fd; }
+.alert.success { background: var(--green-dim); border: 1px solid var(--green-border); color: #86efac; }
+.alert.warning { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); color: #fcd34d; }
+.alert.danger { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #fca5a5; }
+.alert strong { color: inherit; }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 10px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+thead th {
+  background: rgba(255,255,255,0.04);
+  padding: 11px 16px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+tbody td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--card); }
+.check { color: var(--green); font-weight: 700; }
+.cross { color: var(--red); font-weight: 700; }
+.partial { color: var(--amber); font-weight: 700; }
+
+/* ── LIFECYCLE FLOW ── */
+.flow-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  align-items: flex-start;
+  margin: 24px 0;
+}
+.flow-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+.flow-step:not(:last-child)::after {
+  content: '→';
+  position: absolute;
+  right: -14px;
+  top: 20px;
+  color: var(--text-dim);
+  font-size: 16px;
+  z-index: 1;
+}
+.flow-node {
+  width: 90px;
+  text-align: center;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: 1.5px solid;
+  margin: 0 16px;
+  transition: transform 0.15s;
+  cursor: default;
+}
+.flow-node:hover { transform: translateY(-2px); }
+.flow-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.flow-desc {
+  font-size: 10px;
+  line-height: 1.3;
+  opacity: 0.75;
+}
+.flow-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 6px;
+}
+
+.state-creada    { border-color: #64748b; background: rgba(100,116,139,0.1); color: #94a3b8; }
+.state-pendiente { border-color: #f59e0b; background: rgba(245,158,11,0.08); color: #fcd34d; }
+.state-confirmada{ border-color: #3b82f6; background: rgba(59,130,246,0.08); color: #93c5fd; }
+.state-firmada   { border-color: #a855f7; background: rgba(168,85,247,0.08); color: #d8b4fe; }
+.state-ejecucion { border-color: #f97316; background: rgba(249,115,22,0.08); color: #fed7aa; }
+.state-entregada { border-color: #22c55e; background: rgba(34,197,94,0.08); color: #86efac; }
+.state-facturada { border-color: #06b6d4; background: rgba(6,182,212,0.08); color: #67e8f9; }
+.state-cancelada { border-color: #ef4444; background: rgba(239,68,68,0.08); color: #fca5a5; }
+
+.state-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+
+/* ── ACCORDION ── */
+.accordion { margin: 12px 0; }
+.accordion-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.accordion-trigger {
+  width: 100%;
+  background: var(--card);
+  border: none;
+  padding: 14px 18px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.accordion-trigger:hover { background: var(--card-hover); }
+.accordion-trigger .arrow { transition: transform 0.25s; color: var(--text-dim); font-size: 12px; }
+.accordion-trigger.open .arrow { transform: rotate(180deg); }
+.accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  background: rgba(255,255,255,0.02);
+}
+.accordion-body.open { max-height: 800px; }
+.accordion-content { padding: 16px 18px; font-size: 13.5px; color: var(--text-muted); line-height: 1.7; }
+.accordion-content p { margin-bottom: 8px; }
+.accordion-content ul { padding-left: 20px; }
+.accordion-content li { margin-bottom: 6px; }
+
+/* ── TABS ── */
+.tabs { margin: 20px 0; }
+.tab-buttons {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: -1px;
+  flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 9px 18px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--green); border-bottom-color: var(--green); }
+.tab-panel { display: none; padding: 20px 0 0; }
+.tab-panel.active { display: block; }
+
+/* ── CHECKLIST ── */
+.checklist { list-style: none; padding: 0; }
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.checklist li:last-child { border-bottom: none; }
+.cl-box {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--green);
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: transparent;
+}
+.cl-box.checked { background: var(--green); color: white; }
+.cl-text.done { text-decoration: line-through; color: var(--text-dim); }
+
+/* ── KPI CARDS ── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.kpi-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+.kpi-card .kpi-icon { font-size: 18px; margin-bottom: 8px; }
+.kpi-card .kpi-name { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
+.kpi-card .kpi-value { font-size: 22px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.kpi-card .kpi-desc { font-size: 12px; color: var(--text-muted); }
+
+/* ── DEPOT CARDS ── */
+.depot-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+.depot-card {
+  border-radius: 12px;
+  padding: 22px;
+  border: 1px solid;
+}
+.depot-card.magaldi {
+  background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(6,182,212,0.04) 100%);
+  border-color: var(--green-border);
+}
+.depot-card.lujan {
+  background: linear-gradient(135deg, rgba(59,130,246,0.06) 0%, rgba(168,85,247,0.04) 100%);
+  border-color: rgba(59,130,246,0.3);
+}
+.depot-name { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.depot-address { font-size: 12px; color: var(--text-dim); margin-bottom: 14px; font-family: 'JetBrains Mono', monospace; }
+.depot-feature {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+.depot-feature span { font-size: 14px; }
+
+/* ── STEP LIST ── */
+.steps { counter-reset: step; list-style: none; padding: 0; }
+.steps li {
+  counter-increment: step;
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-soft);
+  position: relative;
+}
+.steps li:last-child { border-bottom: none; }
+.step-num {
+  width: 28px;
+  height: 28px;
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  color: var(--green);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.step-body { flex: 1; }
+.step-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.step-desc { font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+
+/* ── CODE ── */
+code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  background: rgba(255,255,255,0.07);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--green);
+}
+pre {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+pre code { background: none; padding: 0; font-size: 13px; color: #e2e8f0; }
+
+/* ── ROLE PILLS ── */
+.role-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.role-director { background: rgba(168,85,247,0.15); color: #d8b4fe; }
+.role-admin { background: rgba(59,130,246,0.15); color: #93c5fd; }
+.role-ops { background: rgba(34,197,94,0.15); color: #86efac; }
+.role-deposito { background: rgba(245,158,11,0.15); color: #fcd34d; }
+.role-auditor { background: rgba(100,116,139,0.15); color: #94a3b8; }
+.role-comercial { background: rgba(239,68,68,0.12); color: #fca5a5; }
+
+/* ── GLOSSARY ── */
+.glossary { list-style: none; padding: 0; }
+.glossary li {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  gap: 16px;
+}
+.glossary li:last-child { border-bottom: none; }
+.glos-term { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--green); font-weight: 600; min-width: 120px; flex-shrink: 0; margin-top: 2px; }
+.glos-def { font-size: 13.5px; color: var(--text-muted); }
+
+/* ── CASE SCENARIO ── */
+.scenario {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 14px;
+}
+.scenario-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.scenario-num {
+  width: 24px;
+  height: 24px;
+  background: var(--green-dim);
+  border: 1px solid var(--green-border);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.scenario-title { font-size: 15px; font-weight: 600; color: var(--text); }
+
+/* ── MISC ── */
+.divider { height: 1px; background: var(--border); margin: 32px 0; }
+.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.green { color: var(--green); }
+.amber { color: var(--amber); }
+.red { color: var(--red); }
+.blue { color: var(--blue); }
+ul.styled { padding-left: 20px; color: var(--text-muted); font-size: 14px; }
+ul.styled li { margin-bottom: 6px; }
+ul.styled li strong { color: var(--text); }
+
+.back-top {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 42px;
+  height: 42px;
+  background: var(--green);
+  color: #000;
+  border: none;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(34,197,94,0.4);
+  transition: transform 0.2s, opacity 0.2s;
+  z-index: 50;
+  opacity: 0;
+  text-decoration: none;
+}
+.back-top.visible { opacity: 1; }
+.back-top:hover { transform: translateY(-3px); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .content { padding: 32px 20px 60px; }
+  .card-grid.cols-2 { grid-template-columns: 1fr; }
+  .card-grid.cols-3 { grid-template-columns: 1fr 1fr; }
+  .depot-grid { grid-template-columns: 1fr; }
+  .flow-container { gap: 8px; justify-content: center; }
+  .flow-step:not(:last-child)::after { display: none; }
+}
+@media (max-width: 600px) {
+  .hero h1 { font-size: 24px; }
+  .card-grid.cols-3 { grid-template-columns: 1fr; }
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .tab-btn { padding: 8px 12px; font-size: 12px; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header class="top-bar">
+  <a href="index.html" class="back-btn">← Inicio</a>
+  <nav class="breadcrumb">
+    <a href="index.html" style="color:var(--text-muted);text-decoration:none">Inicio</a>
+    <span>/</span>
+    <span class="current">Operaciones y Servicios</span>
+  </nav>
+  <span class="module-badge">🟢 Operaciones</span>
+</header>
+
+<!-- ── LAYOUT ── -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <p class="sidebar-title">Contenido</p>
+
+    <a href="#objetivo" class="toc-item">🎯 Objetivo del módulo</a>
+    <a href="#roles" class="toc-item">👥 Roles y permisos</a>
+    <a href="#depositos" class="toc-item">🏭 Los dos depósitos</a>
+    <div class="toc-divider"></div>
+    <a href="#dashboard" class="toc-item">📊 Dashboard de Servicio</a>
+    <a href="#kpis" class="toc-item sub">→ KPIs principales</a>
+    <a href="#graficos" class="toc-item sub">→ Gráficos e indicadores</a>
+    <div class="toc-divider"></div>
+    <a href="#ordenes" class="toc-item">📋 Órdenes de Servicio</a>
+    <a href="#tabla-os" class="toc-item sub">→ Listado y filtros</a>
+    <a href="#ciclo" class="toc-item sub">→ Ciclo de vida</a>
+    <a href="#nueva-os" class="toc-item sub">→ Crear nueva OS</a>
+    <a href="#detalle-os" class="toc-item sub">→ Detalle de OS</a>
+    <div class="toc-divider"></div>
+    <a href="#firma" class="toc-item">✍️ Firma digital</a>
+    <a href="#clientes" class="toc-item">🤝 Gestión de clientes</a>
+    <a href="#exportaciones" class="toc-item">📤 Exportaciones</a>
+    <div class="toc-divider"></div>
+    <a href="#casos" class="toc-item">💡 Casos frecuentes</a>
+    <a href="#errores" class="toc-item">⚠️ Errores comunes</a>
+    <a href="#checklist" class="toc-item">✅ Checklist</a>
+    <a href="#faq" class="toc-item">❓ Preguntas frecuentes</a>
+    <a href="#glosario" class="toc-item">📖 Glosario</a>
+  </aside>
+
+  <!-- CONTENT -->
+  <main class="content">
+
+    <!-- ── HERO ── -->
+    <div class="hero">
+      <div class="hero-icon">📦</div>
+      <h1>Operaciones y Servicios</h1>
+      <p class="subtitle">Guía completa para gestionar órdenes de servicio logístico, depósitos y clientes en TOPS Nexus. Desde la creación de una OS hasta la firma digital y facturación.</p>
+      <div class="hero-meta">
+        <span class="meta-tag route">/dashboard</span>
+        <span class="meta-tag route">/orders</span>
+        <span class="meta-tag route">/clients</span>
+        <span class="meta-tag perm">servicios.view</span>
+        <span class="meta-tag perm">servicios.create</span>
+        <span class="meta-tag perm">servicios.sign</span>
+      </div>
+    </div>
+
+    <!-- ── OBJETIVO ── -->
+    <section class="section" id="objetivo-section">
+      <a class="section-anchor" id="objetivo"></a>
+      <h2><span class="sec-icon">🎯</span> Objetivo del módulo</h2>
+
+      <p>El módulo de <strong>Operaciones y Servicios</strong> centraliza todo lo relacionado con la gestión de servicios logísticos que TOPS presta a sus clientes. Permite registrar, hacer seguimiento y cerrar <strong>Órdenes de Servicio (OS)</strong> para los dos depósitos operativos: <strong>Magaldi</strong> (CABA) y <strong>Luján</strong> (Buenos Aires).</p>
+
+      <div class="card-grid cols-3" style="margin-top:20px">
+        <div class="card">
+          <div class="card-icon">📋</div>
+          <h4>Crear y gestionar OS</h4>
+          <p>Registrá cada orden de servicio con su cliente, depósito, tipo de servicio, horas y operador asignado.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔄</div>
+          <h4>Seguimiento en tiempo real</h4>
+          <p>Conocé el estado de cada orden en cualquier momento: desde CREADA hasta FACTURADA.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">✍️</div>
+          <h4>Firma digital</h4>
+          <p>Conformidad digital del cliente sobre el servicio prestado, trazable y auditada.</p>
+        </div>
+      </div>
+
+      <div class="alert info" style="margin-top:20px">
+        <span class="alert-icon">ℹ️</span>
+        <div>Este módulo es <strong>operativo</strong>: está diseñado para ser usado en el día a día por operadores de depósito, administración y dirección. El lenguaje del sistema y de este manual está pensado para personas sin formación técnica.</div>
+      </div>
+    </section>
+
+    <!-- ── ROLES ── -->
+    <section class="section" id="roles-section">
+      <a class="section-anchor" id="roles"></a>
+      <h2><span class="sec-icon">👥</span> ¿Quién puede usar qué?</h2>
+
+      <p>El acceso al módulo está controlado por el <strong>rol</strong> asignado a cada usuario. La siguiente tabla muestra qué puede hacer cada rol:</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rol</th>
+              <th>Ver OS</th>
+              <th>Crear OS</th>
+              <th>Firmar OS</th>
+              <th>Ver dashboard</th>
+              <th>Ver clientes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="role-pill role-director">Director</span></td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+            </tr>
+            <tr>
+              <td><span class="role-pill role-admin">Administración</span></td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+            </tr>
+            <tr>
+              <td><span class="role-pill role-ops">Operaciones</span></td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+            </tr>
+            <tr>
+              <td><span class="role-pill role-deposito">Depósito</span></td>
+              <td class="check">✅</td>
+              <td class="cross">❌</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+            </tr>
+            <tr>
+              <td><span class="role-pill role-auditor">Auditor</span></td>
+              <td class="check">✅</td>
+              <td class="cross">❌</td>
+              <td class="cross">❌</td>
+              <td class="check">✅</td>
+              <td class="check">✅</td>
+            </tr>
+            <tr>
+              <td><span class="role-pill role-comercial">Comercial</span></td>
+              <td class="cross">❌</td>
+              <td class="cross">❌</td>
+              <td class="cross">❌</td>
+              <td class="cross">❌</td>
+              <td class="cross">❌</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="alert warning">
+        <span class="alert-icon">⚠️</span>
+        <div><strong>Rol Depósito:</strong> Puede <strong>firmar</strong> una OS pero <strong>no puede crearla</strong>. Si necesitás crear órdenes y tu rol es Depósito, contactá con Administración u Operaciones para que ajusten tu acceso o creen la OS por vos.</div>
+      </div>
+
+      <div class="alert danger">
+        <span class="alert-icon">🚫</span>
+        <div><strong>Rol Comercial:</strong> No tiene acceso a ninguna parte del módulo de Operaciones y Servicios. Si ves un mensaje de "Sin permiso", verificá tu rol con el administrador del sistema.</div>
+      </div>
+    </section>
+
+    <!-- ── DEPÓSITOS ── -->
+    <section class="section" id="depositos-section">
+      <a class="section-anchor" id="depositos"></a>
+      <h2><span class="sec-icon">🏭</span> Los dos depósitos</h2>
+
+      <p>TOPS opera desde <strong>dos depósitos</strong>. Al crear o consultar una OS, siempre verás indicado a cuál pertenece:</p>
+
+      <div class="depot-grid">
+        <div class="depot-card magaldi">
+          <div class="depot-name">🏢 MAGALDI</div>
+          <div class="depot-address">Magaldi 1765, CABA</div>
+          <div class="depot-feature"><span>🏛️</span> Depósito ANMAT habilitado</div>
+          <div class="depot-feature"><span>🌆</span> Ciudad Autónoma de Buenos Aires</div>
+          <div class="depot-feature"><span>💊</span> Especializado en productos regulados</div>
+          <div class="depot-feature"><span>🌡️</span> Control de temperatura y cadena de frío</div>
+          <div class="depot-feature"><span>🔒</span> Acceso controlado, cámaras 24hs</div>
+        </div>
+        <div class="depot-card lujan">
+          <div class="depot-name">🏗️ LUJÁN</div>
+          <div class="depot-address">Luján 3159, Buenos Aires</div>
+          <div class="depot-feature"><span>📦</span> Almacenamiento general y logística</div>
+          <div class="depot-feature"><span>🌾</span> Provincia de Buenos Aires</div>
+          <div class="depot-feature"><span>🚛</span> Gran capacidad de carga</div>
+          <div class="depot-feature"><span>🔧</span> Servicios de picking y preparación</div>
+          <div class="depot-feature"><span>📐</span> Mayor superficie operativa</div>
+        </div>
+      </div>
+
+      <h3>Diferencias operativas clave</h3>
+      <p>Algunos tipos de servicio están disponibles en uno u otro depósito, y esto se refleja en el formulario de nueva OS. <strong>MAGALDI</strong> requiere documentación ANMAT adicional para ciertos productos, mientras que <strong>LUJÁN</strong> tiene mayor flexibilidad para carga general.</p>
+
+      <div class="alert info">
+        <span class="alert-icon">ℹ️</span>
+        <div>Al crear una OS para MAGALDI con productos ANMAT regulados, el sistema puede requerir campos adicionales de documentación. Consultá con el responsable de depósito si tenés dudas sobre la habilitación del producto.</div>
+      </div>
+    </section>
+
+    <!-- ── DASHBOARD ── -->
+    <section class="section" id="dashboard-section">
+      <a class="section-anchor" id="dashboard"></a>
+      <h2><span class="sec-icon">📊</span> Dashboard de Servicio</h2>
+
+      <p>El dashboard (<code>/dashboard</code>) es la <strong>pantalla principal</strong> del módulo. Muestra un resumen del estado operativo del área en tiempo real. Lo ven todos los roles con acceso al módulo.</p>
+
+      <a class="section-anchor" id="kpis"></a>
+      <h3>KPIs principales</h3>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-icon">📋</div>
+          <div class="kpi-name">Órdenes del mes</div>
+          <div class="kpi-value" style="color:var(--green)">48</div>
+          <div class="kpi-desc">Total de OS creadas en el mes calendario actual. Incluye un sparkline animado con la tendencia de los últimos 30 días.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">⏱️</div>
+          <div class="kpi-name">Horas operativas</div>
+          <div class="kpi-value" style="color:var(--blue)">—</div>
+          <div class="kpi-desc">Suma de las duraciones de todas las OS del período. Cuantifica el esfuerzo total de los equipos.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">💰</div>
+          <div class="kpi-name">Facturación proyectada</div>
+          <div class="kpi-value" style="color:var(--amber)">—</div>
+          <div class="kpi-desc">Estimación de ingresos basada en las OS confirmadas y en ejecución del período.</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon">✍️</div>
+          <div class="kpi-name">Tasa de firmas</div>
+          <div class="kpi-value" style="color:var(--purple)">—</div>
+          <div class="kpi-desc">Porcentaje de OS que ya tienen firma digital del cliente sobre el total entregadas. Meta: 100%.</div>
+        </div>
+      </div>
+
+      <a class="section-anchor" id="graficos"></a>
+      <h3>Gráficos e indicadores adicionales</h3>
+
+      <div class="accordion">
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            🏭 OperationalStatus — estado por depósito
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Muestra si cada depósito está <strong>online</strong> (operativo) u <strong>offline</strong> (sin actividad). También indica la cantidad de <strong>operadores activos</strong> en ese momento.</p>
+              <ul>
+                <li><strong>Online (verde):</strong> el depósito tiene OS activas y operadores trabajando.</li>
+                <li><strong>Offline (gris):</strong> sin actividad en el turno actual.</li>
+              </ul>
+              <p>Este indicador es visual y no genera ninguna acción automática. Es útil para que Dirección vea de un vistazo dónde hay movimiento.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            📊 DepotChart — órdenes por depósito
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Gráfico de barras que compara la cantidad de OS de <strong>Magaldi vs. Luján</strong> en el período seleccionado. Permite ver qué depósito tiene más actividad y si hay una distribución desequilibrada.</p>
+              <p>Si un depósito muestra un volumen muy bajo comparado con el otro, puede indicar una oportunidad de optimización o un problema operativo puntual.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            🍩 ServiceMixDonut — distribución de tipos de servicio
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Gráfico de torta (donut) que muestra la proporción de cada <strong>tipo de servicio</strong> sobre el total del mes. Útil para entender qué servicios tienen más demanda.</p>
+              <p>Pasando el mouse sobre cada segmento verás el nombre del servicio y el porcentaje exacto.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            🏆 Top clientes del período
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Lista de los clientes con más OS en el mes, con una barra de progreso que muestra su participación relativa. Permite identificar rápidamente los clientes más activos y priorizarlos.</p>
+              <p>Haciendo clic en el nombre del cliente vas directamente a su ficha en el catálogo de clientes.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            🕐 Tabla de últimas 6 órdenes
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>La sección inferior del dashboard muestra las <strong>6 OS más recientes</strong> con sus datos clave:</p>
+              <ul>
+                <li><strong>ID / publicId:</strong> identificador único de la OS (ej: OS-2024-0048).</li>
+                <li><strong>Estado:</strong> el estado actual de la orden con su color correspondiente.</li>
+                <li><strong>Cliente:</strong> empresa o persona contratante del servicio.</li>
+                <li><strong>Depósito:</strong> Magaldi o Luján.</li>
+                <li><strong>Servicio:</strong> tipo de servicio prestado.</li>
+                <li><strong>Operador:</strong> nombre del operador asignado.</li>
+              </ul>
+              <p>Para ver más órdenes, hacé clic en "Ver todas" o navegá a <code>/orders</code>.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── ÓRDENES ── -->
+    <section class="section" id="ordenes-section">
+      <a class="section-anchor" id="ordenes"></a>
+      <h2><span class="sec-icon">📋</span> Órdenes de Servicio</h2>
+
+      <p>Las <strong>Órdenes de Servicio (OS)</strong> son el núcleo del módulo. Cada OS representa un trabajo logístico concreto que TOPS presta a un cliente en uno de sus depósitos.</p>
+
+      <a class="section-anchor" id="tabla-os"></a>
+      <h3>Listado de OS (<code>/orders</code>)</h3>
+
+      <p>Al entrar a <code>/orders</code> ves el listado completo de órdenes. El sistema tiene <strong>48 órdenes en el entorno demo</strong>. Las columnas de la tabla son:</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Columna</th>
+              <th>Descripción</th>
+              <th>Ejemplo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>ID</strong></td>
+              <td>Identificador público único (publicId) de la OS</td>
+              <td><code class="mono">OS-2024-0048</code></td>
+            </tr>
+            <tr>
+              <td><strong>Cliente</strong></td>
+              <td>Empresa o persona que contrató el servicio</td>
+              <td>Laboratorios Bagó S.A.</td>
+            </tr>
+            <tr>
+              <td><strong>Depósito</strong></td>
+              <td>Magaldi o Luján</td>
+              <td>MAGALDI</td>
+            </tr>
+            <tr>
+              <td><strong>Servicio</strong></td>
+              <td>Tipo de servicio prestado</td>
+              <td>Almacenamiento regulado</td>
+            </tr>
+            <tr>
+              <td><strong>Operador</strong></td>
+              <td>Persona responsable de ejecutar la OS</td>
+              <td>Carlos Martínez</td>
+            </tr>
+            <tr>
+              <td><strong>Estado</strong></td>
+              <td>Estado actual de la orden (ver ciclo de vida)</td>
+              <td><span class="state-badge state-confirmada">CONFIRMADA</span></td>
+            </tr>
+            <tr>
+              <td><strong>Fecha</strong></td>
+              <td>Fecha de creación o de ejecución de la OS</td>
+              <td>24/06/2026</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Búsqueda y filtros</h4>
+      <p>Arriba del listado encontrás controles para filtrar órdenes:</p>
+      <ul class="styled">
+        <li><strong>Búsqueda de texto:</strong> buscá por ID, nombre de cliente u operador.</li>
+        <li><strong>Filtro por depósito:</strong> Magaldi, Luján o todos.</li>
+        <li><strong>Filtro por estado:</strong> filtrá por uno o varios estados del ciclo de vida.</li>
+        <li><strong>Filtro por fecha:</strong> rango de fechas de creación.</li>
+      </ul>
+
+      <div class="alert info">
+        <span class="alert-icon">ℹ️</span>
+        <div>Hacé clic en cualquier fila de la tabla para abrir el <strong>detalle completo de la OS</strong> en <code>/orders/[publicId]</code>.</div>
+      </div>
+    </section>
+
+    <!-- ── CICLO DE VIDA ── -->
+    <section class="section" id="ciclo-section">
+      <a class="section-anchor" id="ciclo"></a>
+      <h2><span class="sec-icon">🔄</span> Ciclo de vida de una OS</h2>
+
+      <p>Cada Orden de Servicio pasa por <strong>8 estados posibles</strong>. Entender este ciclo es fundamental para saber en qué punto está cada trabajo y qué acción corresponde tomar.</p>
+
+      <!-- Flujo visual -->
+      <div class="flow-container">
+        <div class="flow-step">
+          <div class="flow-node state-creada">
+            <div class="flow-num" style="background:rgba(100,116,139,0.2);color:#94a3b8">1</div>
+            <div class="flow-label">CREADA</div>
+            <div class="flow-desc">Registrada en el sistema</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-node state-pendiente">
+            <div class="flow-num" style="background:rgba(245,158,11,0.2);color:#fcd34d">2</div>
+            <div class="flow-label">PENDIENTE</div>
+            <div class="flow-desc">Esperando confirmación</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-node state-confirmada">
+            <div class="flow-num" style="background:rgba(59,130,246,0.2);color:#93c5fd">3</div>
+            <div class="flow-label">CONFIRMADA</div>
+            <div class="flow-desc">Aprobada para ejecutar</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-node state-firmada">
+            <div class="flow-num" style="background:rgba(168,85,247,0.2);color:#d8b4fe">4</div>
+            <div class="flow-label">FIRMADA</div>
+            <div class="flow-desc">Firma digital obtenida</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-node state-ejecucion">
+            <div class="flow-num" style="background:rgba(249,115,22,0.2);color:#fed7aa">5</div>
+            <div class="flow-label">EN EJECUCIÓN</div>
+            <div class="flow-desc">Trabajo en curso</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-node state-entregada">
+            <div class="flow-num" style="background:rgba(34,197,94,0.2);color:#86efac">6</div>
+            <div class="flow-label">ENTREGADA</div>
+            <div class="flow-desc">Servicio completado</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-node state-facturada">
+            <div class="flow-num" style="background:rgba(6,182,212,0.2);color:#67e8f9">7</div>
+            <div class="flow-label">FACTURADA</div>
+            <div class="flow-desc">Cobro emitido</div>
+          </div>
+        </div>
+        <div class="flow-step">
+          <div class="flow-node state-cancelada">
+            <div class="flow-num" style="background:rgba(239,68,68,0.2);color:#fca5a5">⊗</div>
+            <div class="flow-label">CANCELADA</div>
+            <div class="flow-desc">OS anulada</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="alert warning" style="margin-bottom:20px">
+        <span class="alert-icon">⚠️</span>
+        <div>El estado <strong>CANCELADA</strong> puede aplicarse desde cualquier estado anterior a FACTURADA. Una OS cancelada no se puede reactivar; hay que crear una nueva.</div>
+      </div>
+
+      <h3>Descripción detallada de cada estado</h3>
+
+      <div class="accordion">
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-creada" style="margin-right:8px">CREADA</span> — La OS existe en el sistema
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>La OS fue registrada por alguien con permiso <code>servicios.create</code>. En este punto el servicio <strong>no está comprometido</strong>: falta confirmación. El cliente todavía no sabe que existe.</p>
+              <p><strong>¿Qué hacer?</strong> Revisar que los datos sean correctos (cliente, depósito, servicio, fechas). Si hay algún error, es el mejor momento para corregirlo.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-pendiente" style="margin-right:8px">PENDIENTE</span> — Esperando confirmación
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>La OS fue enviada al flujo de aprobación. Puede estar pendiente de aprobación interna (Operaciones o Dirección) o de confirmación por parte del cliente.</p>
+              <p><strong>¿Qué hacer?</strong> El responsable de área debe revisar los detalles y confirmar la OS para que pase al siguiente estado.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-confirmada" style="margin-right:8px">CONFIRMADA</span> — Lista para ejecutar
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>La OS fue aprobada. El servicio está comprometido con el cliente y se puede comenzar a planificar la ejecución. Aparece en el dashboard como orden activa.</p>
+              <p><strong>¿Qué hacer?</strong> Asignar el operador y coordinar la fecha y hora de ejecución en el depósito correspondiente.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-firmada" style="margin-right:8px">FIRMADA</span> — Con firma digital del cliente
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>El cliente (o un representante autorizado) firmó digitalmente la OS. Esto es la conformidad formal de que el trabajo fue acordado. La firma es trazable: queda registrado quién firmó y cuándo.</p>
+              <p><strong>¿Qué hacer?</strong> Proceder con la ejecución. La firma previa a la ejecución es la práctica recomendada para respaldar el trabajo que se va a realizar.</p>
+              <p><strong>¿Quién puede firmar?</strong> Usuarios con permiso <code>servicios.sign</code>: Director, Administración, Operaciones y Depósito.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-ejecucion" style="margin-right:8px">EN EJECUCIÓN</span> — Trabajo en curso
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>El servicio está siendo ejecutado en el depósito. El operador asignado está realizando el trabajo. Las horas operativas del dashboard se calculan incluyendo las OS en este estado.</p>
+              <p><strong>¿Qué hacer?</strong> El operador debe registrar las novedades si las hubiera. Al terminar, pasar la OS a ENTREGADA.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-entregada" style="margin-right:8px">ENTREGADA</span> — Servicio completado
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>El servicio fue finalizado y entregado al cliente. Si la OS no tenía firma digital previa, es el momento de obtenerla (aunque lo ideal es firmar antes de ejecutar).</p>
+              <p><strong>¿Qué hacer?</strong> Verificar que la firma digital esté obtenida. Luego Administración procede con la emisión de la factura.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-facturada" style="margin-right:8px">FACTURADA</span> — Cobro emitido
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>La factura fue emitida para el cliente. La OS está cerrada desde el punto de vista operativo. Los importes pasan al módulo de finanzas para el seguimiento del cobro.</p>
+              <p><strong>¿Qué hacer?</strong> El seguimiento del pago es tarea del área de Administración en el módulo de finanzas, no en Operaciones.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            <span class="state-badge state-cancelada" style="margin-right:8px">CANCELADA</span> — OS anulada
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>La OS fue cancelada. Puede ocurrir por solicitud del cliente, por imposibilidad operativa o por error en la carga. La OS queda en el historial pero no genera ninguna acción futura.</p>
+              <p><strong>Importante:</strong> Una OS cancelada <strong>no se puede reactivar</strong>. Si el servicio se va a realizar de todas formas, hay que crear una OS nueva.</p>
+              <p><strong>¿Qué hacer?</strong> Al cancelar, el sistema pide un motivo. Completalo con la mayor claridad posible para el registro histórico.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── NUEVA OS ── -->
+    <section class="section" id="nueva-os-section">
+      <a class="section-anchor" id="nueva-os"></a>
+      <h2><span class="sec-icon">➕</span> Crear una nueva OS</h2>
+
+      <p>El formulario de nueva OS está disponible en <code>/orders/new</code> para los roles con permiso <code>servicios.create</code>. Es un formulario <strong>multi-paso</strong>: hay que completar cada sección antes de avanzar.</p>
+
+      <div class="tabs">
+        <div class="tab-buttons">
+          <button class="tab-btn active" onclick="switchTab(this,'paso1')">Paso 1: Datos básicos</button>
+          <button class="tab-btn" onclick="switchTab(this,'paso2')">Paso 2: Servicio</button>
+          <button class="tab-btn" onclick="switchTab(this,'paso3')">Paso 3: Programación</button>
+          <button class="tab-btn" onclick="switchTab(this,'paso4')">Paso 4: Revisión</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-paso1">
+          <div class="card">
+            <h4>Datos básicos del cliente y depósito</h4>
+            <ul class="styled">
+              <li><strong>Cliente *:</strong> seleccioná de la lista de clientes registrados. Si el cliente no aparece, primero hay que cargarlo en <code>/clients</code>.</li>
+              <li><strong>Depósito *:</strong> elegí entre MAGALDI o LUJÁN según dónde se realizará el servicio.</li>
+              <li><strong>Referencia interna:</strong> número de orden, pedido o referencia del cliente (opcional pero útil para el rastreo).</li>
+              <li><strong>Observaciones:</strong> información adicional que el equipo de depósito deba conocer.</li>
+            </ul>
+          </div>
+          <div class="alert warning">
+            <span class="alert-icon">⚠️</span>
+            <div>Los campos con <strong>*</strong> son obligatorios. El sistema no permite avanzar sin completarlos.</div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-paso2">
+          <div class="card">
+            <h4>Tipo de servicio y detalles</h4>
+            <ul class="styled">
+              <li><strong>Tipo de servicio *:</strong> seleccioná de la lista de servicios disponibles para el depósito elegido.</li>
+              <li><strong>Descripción del trabajo *:</strong> detallá qué se va a hacer, qué materiales o productos están involucrados, y cualquier condición especial.</li>
+              <li><strong>Unidades / pallets / bultos:</strong> cantidad de unidades logísticas que involucra el servicio (ej: 3 pallets, 120 bultos).</li>
+              <li><strong>Horas estimadas *:</strong> duración prevista del trabajo. Se usa para calcular la facturación proyectada y las horas operativas del dashboard.</li>
+              <li><strong>Operador asignado:</strong> podés dejar vacío si aún no se definió quién realizará el trabajo.</li>
+            </ul>
+          </div>
+          <div class="alert info">
+            <span class="alert-icon">ℹ️</span>
+            <div>Para depósito <strong>MAGALDI</strong> con productos ANMAT, el sistema puede mostrar campos adicionales de documentación regulatoria según el tipo de servicio seleccionado.</div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-paso3">
+          <div class="card">
+            <h4>Programación del servicio</h4>
+            <ul class="styled">
+              <li><strong>Fecha de ejecución *:</strong> cuándo se realizará el trabajo.</li>
+              <li><strong>Hora de inicio *:</strong> horario de comienzo en el depósito.</li>
+              <li><strong>Hora de fin estimada:</strong> se calcula automáticamente sumando las horas estimadas a la hora de inicio. Podés ajustarla manualmente.</li>
+              <li><strong>Requiere firma previa:</strong> marcá si el cliente debe firmar antes de que el operador comience el trabajo.</li>
+            </ul>
+          </div>
+          <div class="alert success">
+            <span class="alert-icon">✅</span>
+            <div>Recomendación: siempre marcá <strong>"Requiere firma previa"</strong> para que quede registrada la conformidad del cliente antes de comenzar. Esto protege a TOPS en caso de disputas posteriores.</div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-paso4">
+          <div class="card">
+            <h4>Revisión y confirmación</h4>
+            <p style="font-size:13px;color:var(--text-muted)">El último paso muestra un resumen completo de la OS para revisión final antes de guardar. Podés volver a cualquier paso anterior usando los botones de navegación.</p>
+            <ul class="styled">
+              <li>Verificar cliente, depósito y tipo de servicio.</li>
+              <li>Confirmar fechas y horarios.</li>
+              <li>Revisar la descripción del trabajo.</li>
+              <li>Al hacer clic en <strong>"Crear OS"</strong>, el sistema genera la orden con estado <span class="state-badge state-creada">CREADA</span> y redirige al detalle.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <h3>Validaciones del formulario</h3>
+      <ul class="styled">
+        <li>No se puede crear una OS sin cliente seleccionado (debe existir en el catálogo).</li>
+        <li>La fecha de ejecución no puede ser anterior al día de hoy.</li>
+        <li>Las horas estimadas deben ser un número mayor a 0.</li>
+        <li>El tipo de servicio disponible varía según el depósito seleccionado.</li>
+      </ul>
+    </section>
+
+    <!-- ── DETALLE OS ── -->
+    <section class="section" id="detalle-os-section">
+      <a class="section-anchor" id="detalle-os"></a>
+      <h2><span class="sec-icon">🔍</span> Detalle de una OS</h2>
+
+      <p>Al hacer clic en una OS del listado, el sistema te lleva a <code>/orders/[publicId]</code>. Esta pantalla muestra <strong>toda la información</strong> de la orden y permite realizar acciones sobre ella.</p>
+
+      <h3>Secciones del detalle</h3>
+
+      <div class="card-grid cols-2">
+        <div class="card">
+          <div class="card-icon">📄</div>
+          <h4>Datos generales</h4>
+          <p>publicId, cliente, depósito, tipo de servicio, operador asignado, estado actual y fechas clave.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">⏳</div>
+          <h4>Timeline de la OS</h4>
+          <p>Historial cronológico de todos los cambios de estado: quién hizo cada cambio y cuándo. Trazabilidad completa.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🔧</div>
+          <h4>Servicios incluidos</h4>
+          <p>Lista detallada de los servicios y sub-servicios incluidos en la OS, con sus respectivas horas y descripciones.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📑</div>
+          <h4>Documentación</h4>
+          <p>Archivos adjuntos, documentos ANMAT (si aplica), y el PDF de la OS generado automáticamente.</p>
+        </div>
+      </div>
+
+      <h3>Acciones disponibles</h3>
+      <p>Los botones de acción que aparecen dependen del <strong>estado actual de la OS</strong> y del <strong>rol del usuario</strong>:</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Estado actual</th><th>Acciones posibles</th><th>¿Quién puede?</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="state-badge state-creada">CREADA</span></td>
+              <td>Enviar a pendiente, Editar, Cancelar</td>
+              <td>Director, Admin, Operaciones</td>
+            </tr>
+            <tr>
+              <td><span class="state-badge state-pendiente">PENDIENTE</span></td>
+              <td>Confirmar, Rechazar, Cancelar</td>
+              <td>Director, Admin, Operaciones</td>
+            </tr>
+            <tr>
+              <td><span class="state-badge state-confirmada">CONFIRMADA</span></td>
+              <td>Firmar, Iniciar ejecución, Cancelar</td>
+              <td>Ver sección de Firma digital</td>
+            </tr>
+            <tr>
+              <td><span class="state-badge state-firmada">FIRMADA</span></td>
+              <td>Iniciar ejecución, Cancelar</td>
+              <td>Director, Admin, Operaciones, Depósito</td>
+            </tr>
+            <tr>
+              <td><span class="state-badge state-ejecucion">EN EJECUCIÓN</span></td>
+              <td>Marcar como Entregada, Cancelar</td>
+              <td>Director, Admin, Operaciones, Depósito</td>
+            </tr>
+            <tr>
+              <td><span class="state-badge state-entregada">ENTREGADA</span></td>
+              <td>Firmar (si no se hizo antes), Facturar</td>
+              <td>Admin para Facturar; todos con sign para Firmar</td>
+            </tr>
+            <tr>
+              <td><span class="state-badge state-facturada">FACTURADA</span></td>
+              <td>Solo lectura, Descargar PDF</td>
+              <td>Todos con view</td>
+            </tr>
+            <tr>
+              <td><span class="state-badge state-cancelada">CANCELADA</span></td>
+              <td>Solo lectura, ver motivo de cancelación</td>
+              <td>Todos con view</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── FIRMA DIGITAL ── -->
+    <section class="section" id="firma-section">
+      <a class="section-anchor" id="firma"></a>
+      <h2><span class="sec-icon">✍️</span> Firma digital de OS</h2>
+
+      <p>La firma digital es la conformidad formal del cliente sobre el servicio. No es una firma física escaneada: es un registro digital <strong>trazable e inalterable</strong> que queda vinculado a la OS.</p>
+
+      <h3>¿Quién puede firmar?</h3>
+      <p>Usuarios con el permiso <code>servicios.sign</code>:</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+        <span class="role-pill role-director">Director ✅</span>
+        <span class="role-pill role-admin">Administración ✅</span>
+        <span class="role-pill role-ops">Operaciones ✅</span>
+        <span class="role-pill role-deposito">Depósito ✅</span>
+        <span class="role-pill role-auditor">Auditor ❌</span>
+        <span class="role-pill role-comercial">Comercial ❌</span>
+      </div>
+
+      <h3>¿Cuándo firmar?</h3>
+
+      <div class="card-grid cols-2" style="margin:16px 0">
+        <div class="card" style="border-color:var(--green-border)">
+          <div class="card-icon">✅</div>
+          <h4 style="color:var(--green)">Práctica recomendada</h4>
+          <p>Firmar <strong>antes de iniciar la ejecución</strong>. El cliente (o representante) firma en la pantalla del sistema confirmando que encargó el servicio y está de acuerdo con los términos.</p>
+        </div>
+        <div class="card" style="border-color:rgba(245,158,11,0.3)">
+          <div class="card-icon">⚠️</div>
+          <h4 style="color:var(--amber)">También aceptable</h4>
+          <p>Firmar <strong>después de la entrega</strong> (estado ENTREGADA). El cliente confirma que el trabajo fue realizado correctamente.</p>
+        </div>
+      </div>
+
+      <h3>Cómo firmar una OS</h3>
+      <ol class="steps">
+        <li>
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Abrir el detalle de la OS</div>
+            <div class="step-desc">Navegá a <code>/orders/[publicId]</code> y verificá que la OS está en estado CONFIRMADA o ENTREGADA.</div>
+          </div>
+        </li>
+        <li>
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Hacer clic en "Firmar OS"</div>
+            <div class="step-desc">El botón aparece en la sección de acciones del detalle. Si no lo ves, verificá tu rol y el estado actual de la OS.</div>
+          </div>
+        </li>
+        <li>
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Completar los datos del firmante</div>
+            <div class="step-desc">El sistema registra automáticamente tu usuario. Podés agregar el nombre del representante del cliente si es diferente.</div>
+          </div>
+        </li>
+        <li>
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Confirmar la firma</div>
+            <div class="step-desc">Al confirmar, el sistema cambia el estado a FIRMADA y registra fecha, hora y usuario en el timeline de la OS.</div>
+          </div>
+        </li>
+      </ol>
+
+      <div class="alert danger">
+        <span class="alert-icon">🚫</span>
+        <div><strong>La firma no se puede deshacer.</strong> Una vez firmada la OS, ese registro es permanente. Si la OS fue firmada por error, contactá con Administración para evaluar la situación.</div>
+      </div>
+
+      <h3>Tasa de firmas digitales</h3>
+      <p>El dashboard muestra la <strong>tasa de firmas</strong>: porcentaje de OS entregadas que tienen firma digital. El objetivo es llegar al 100% para asegurar la trazabilidad completa de todos los servicios prestados.</p>
+    </section>
+
+    <!-- ── CLIENTES ── -->
+    <section class="section" id="clientes-section">
+      <a class="section-anchor" id="clientes"></a>
+      <h2><span class="sec-icon">🤝</span> Gestión de clientes</h2>
+
+      <p>El catálogo de clientes (<code>/clients</code>) contiene todos los clientes que contratan servicios logísticos con TOPS. Es independiente del CRM Comercial: son los clientes <strong>operativos</strong> de los depósitos.</p>
+
+      <h3>¿Para qué sirve?</h3>
+      <ul class="styled">
+        <li>Al crear una OS, el cliente debe existir en este catálogo.</li>
+        <li>Permite ver el historial de OS por cliente.</li>
+        <li>Los datos de contacto del cliente están accesibles desde el detalle de cualquier OS.</li>
+      </ul>
+
+      <h3>Datos de un cliente</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Campo</th><th>Descripción</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Razón social</strong></td><td>Nombre legal de la empresa contratante</td></tr>
+            <tr><td><strong>CUIT</strong></td><td>Identificación tributaria</td></tr>
+            <tr><td><strong>Contacto operativo</strong></td><td>Nombre y cargo de la persona de contacto en el depósito</td></tr>
+            <tr><td><strong>Teléfono</strong></td><td>Para coordinación de entregas y novedades</td></tr>
+            <tr><td><strong>Email</strong></td><td>Para envío de documentación y OS en PDF</td></tr>
+            <tr><td><strong>Dirección</strong></td><td>Domicilio legal o de entrega</td></tr>
+            <tr><td><strong>Depósito habitual</strong></td><td>Magaldi o Luján (o ambos)</td></tr>
+            <tr><td><strong>Observaciones</strong></td><td>Notas internas del equipo sobre el cliente</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Buscar un cliente</h3>
+      <p>En el listado de <code>/clients</code> podés buscar por razón social, CUIT o nombre de contacto. El buscador filtra en tiempo real al escribir.</p>
+
+      <div class="alert info">
+        <span class="alert-icon">ℹ️</span>
+        <div>Si un cliente nuevo contrata un servicio y no existe en el catálogo, primero hay que darlo de alta en <code>/clients</code> antes de crear la OS.</div>
+      </div>
+    </section>
+
+    <!-- ── EXPORTACIONES ── -->
+    <section class="section" id="exportaciones-section">
+      <a class="section-anchor" id="exportaciones"></a>
+      <h2><span class="sec-icon">📤</span> Exportaciones</h2>
+
+      <div class="card-grid cols-2">
+        <div class="card">
+          <div class="card-icon">📄</div>
+          <h4>PDF de una OS</h4>
+          <p>Desde el detalle de cualquier OS, el botón <strong>"Descargar PDF"</strong> genera el documento formal con todos los datos de la orden. Usa el endpoint <code>GET /api/orders/[publicId]/pdf</code>.</p>
+          <p style="margin-top:8px;font-size:12px;color:var(--text-dim)">El PDF incluye: datos del cliente, descripción del servicio, fechas, operador, estado y firma digital (si existe).</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📊</div>
+          <h4>Exportar listado</h4>
+          <p>Desde <code>/orders</code>, el botón <strong>"Exportar"</strong> descarga el listado filtrado en formato Excel/CSV. Usa el endpoint <code>GET /api/orders/export</code>.</p>
+          <p style="margin-top:8px;font-size:12px;color:var(--text-dim)">Se exportan las OS que coincidan con los filtros activos en ese momento (depósito, estado, fechas).</p>
+        </div>
+      </div>
+
+      <div class="alert info">
+        <span class="alert-icon">ℹ️</span>
+        <div>La exportación respeta los filtros aplicados en el listado. Si querés exportar solo las OS del mes de Magaldi, aplicá esos filtros primero y luego hacé clic en Exportar.</div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ── CASOS FRECUENTES ── -->
+    <section class="section" id="casos-section">
+      <a class="section-anchor" id="casos"></a>
+      <h2><span class="sec-icon">💡</span> Casos frecuentes</h2>
+
+      <p>Situaciones típicas del día a día en los depósitos y cómo manejarlas en el sistema.</p>
+
+      <div class="scenario">
+        <div class="scenario-header">
+          <div class="scenario-num">1</div>
+          <div class="scenario-title">OS de 3 pallets de producto ANMAT en Magaldi</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted)">Una farmacéutica pide almacenamiento de 3 pallets de medicamentos en Magaldi.</p>
+        <ol class="steps" style="margin-top:12px">
+          <li>
+            <div class="step-num">1</div>
+            <div class="step-body"><div class="step-title">Crear OS en /orders/new</div><div class="step-desc">Seleccionar el cliente farmacéutico y el depósito MAGALDI. Elegir tipo de servicio "Almacenamiento regulado ANMAT".</div></div>
+          </li>
+          <li>
+            <div class="step-num">2</div>
+            <div class="step-body"><div class="step-title">Completar documentación ANMAT</div><div class="step-desc">El sistema puede pedir número de habilitación del producto y número de lote. Completar según el remito del cliente.</div></div>
+          </li>
+          <li>
+            <div class="step-num">3</div>
+            <div class="step-body"><div class="step-title">Confirmar y obtener firma</div><div class="step-desc">Confirmar la OS y obtener firma digital del representante del cliente antes de recibir la mercadería.</div></div>
+          </li>
+          <li>
+            <div class="step-num">4</div>
+            <div class="step-body"><div class="step-title">Ejecutar y entregar</div><div class="step-desc">Iniciar ejecución, recibir los 3 pallets, ubicarlos en la celda correspondiente. Marcar como ENTREGADA.</div></div>
+          </li>
+        </ol>
+      </div>
+
+      <div class="scenario">
+        <div class="scenario-header">
+          <div class="scenario-num">2</div>
+          <div class="scenario-title">Cambio de depósito en una OS ya creada</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted)">Se creó la OS en Luján pero el servicio debe realizarse en Magaldi.</p>
+        <div style="margin-top:12px">
+          <div class="alert warning"><span class="alert-icon">⚠️</span><div>Solo se puede editar el depósito si la OS está en estado <strong>CREADA</strong> o <strong>PENDIENTE</strong>. Si ya está CONFIRMADA, hay que cancelarla y crear una nueva.</div></div>
+          <p style="font-size:13.5px;color:var(--text-muted);margin-top:8px"><strong>Procedimiento:</strong> Ir al detalle de la OS, hacer clic en "Editar", cambiar el depósito y guardar. Si la OS ya fue confirmada, usar el botón "Cancelar" con el motivo "Error en depósito asignado" y crear una OS nueva en el depósito correcto.</p>
+        </div>
+      </div>
+
+      <div class="scenario">
+        <div class="scenario-header">
+          <div class="scenario-num">3</div>
+          <div class="scenario-title">El cliente no está disponible para firmar antes de la ejecución</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted)">Es urgente comenzar el trabajo pero el cliente no tiene representante en el depósito para firmar.</p>
+        <div style="margin-top:12px">
+          <p style="font-size:13.5px;color:var(--text-muted)"><strong>Opción A (recomendada):</strong> Pedir al cliente que envíe por email una confirmación escrita. Luego, cuando el representante esté disponible, firmar la OS en estado ENTREGADA.</p>
+          <p style="font-size:13.5px;color:var(--text-muted);margin-top:6px"><strong>Opción B:</strong> Iniciar ejecución sin firma y obtenerla al finalizar. Registrar en el campo "Observaciones" el motivo por el que se inició sin firma.</p>
+          <div class="alert danger" style="margin-top:8px"><span class="alert-icon">🚫</span><div>Nunca completar la OS como ENTREGADA sin firma digital. Esto reduce la tasa de firmas y quita respaldo legal a TOPS.</div></div>
+        </div>
+      </div>
+
+      <div class="scenario">
+        <div class="scenario-header">
+          <div class="scenario-num">4</div>
+          <div class="scenario-title">Exportar todas las OS del mes para enviar a administración</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted)">Fin de mes: hay que enviar el detalle de todas las OS del período para facturación.</p>
+        <ol class="steps" style="margin-top:12px">
+          <li><div class="step-num">1</div><div class="step-body"><div class="step-title">Ir a /orders</div><div class="step-desc">Filtrar por el período del mes que termina usando el filtro de fechas.</div></div></li>
+          <li><div class="step-num">2</div><div class="step-body"><div class="step-title">Verificar el filtro</div><div class="step-desc">Asegurarse de que el listado muestra solo las OS del mes, en todos los estados.</div></div></li>
+          <li><div class="step-num">3</div><div class="step-body"><div class="step-title">Hacer clic en "Exportar"</div><div class="step-desc">El archivo Excel/CSV se descarga con todas las OS del filtro activo.</div></div></li>
+          <li><div class="step-num">4</div><div class="step-body"><div class="step-title">Enviar el archivo</div><div class="step-desc">El archivo exportado puede enviarse por email a Administración o compartirse por el canal correspondiente.</div></div></li>
+        </ol>
+      </div>
+
+      <div class="scenario">
+        <div class="scenario-header">
+          <div class="scenario-num">5</div>
+          <div class="scenario-title">Un cliente nuevo llama para contratar un servicio</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--text-muted)">El cliente no está en el sistema y hay que crear la OS de manera urgente.</p>
+        <ol class="steps" style="margin-top:12px">
+          <li><div class="step-num">1</div><div class="step-body"><div class="step-title">Dar de alta el cliente</div><div class="step-desc">Ir a /clients y crear el nuevo cliente con sus datos básicos: razón social, CUIT y contacto.</div></div></li>
+          <li><div class="step-num">2</div><div class="step-body"><div class="step-title">Crear la OS</div><div class="step-desc">Con el cliente ya registrado, crear la OS normalmente desde /orders/new seleccionando el nuevo cliente.</div></div></li>
+          <li><div class="step-num">3</div><div class="step-body"><div class="step-title">Completar datos del cliente después</div><div class="step-desc">Con más calma, completar el resto de los datos del cliente en /clients (dirección, email, etc.).</div></div></li>
+        </ol>
+      </div>
+
+    </section>
+
+    <!-- ── ERRORES COMUNES ── -->
+    <section class="section" id="errores-section">
+      <a class="section-anchor" id="errores"></a>
+      <h2><span class="sec-icon">⚠️</span> Errores comunes y cómo resolverlos</h2>
+
+      <div class="accordion">
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ❌ "No tenés permiso para crear órdenes de servicio"
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p><strong>Causa:</strong> Tu rol no tiene el permiso <code>servicios.create</code>. Esto ocurre con el rol <strong>Depósito</strong>, <strong>Auditor</strong> o <strong>Comercial</strong>.</p>
+              <p><strong>Solución:</strong> Contactá con el administrador del sistema para que ajuste tu rol, o pedí a alguien con rol Operaciones, Admin o Director que cree la OS.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ❌ "El cliente seleccionado no existe" al crear OS
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p><strong>Causa:</strong> El cliente no fue cargado en el catálogo de <code>/clients</code>.</p>
+              <p><strong>Solución:</strong> Primero ir a <code>/clients</code> y dar de alta al cliente con al menos razón social y CUIT. Luego volver al formulario de nueva OS.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ❌ El botón "Firmar" no aparece en el detalle de la OS
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p><strong>Causa posible 1:</strong> Tu rol no tiene el permiso <code>servicios.sign</code> (Auditor o Comercial).</p>
+              <p><strong>Causa posible 2:</strong> La OS no está en un estado que permita firma (solo se puede firmar en CONFIRMADA o ENTREGADA).</p>
+              <p><strong>Causa posible 3:</strong> La OS ya fue firmada. Verificá el timeline del detalle.</p>
+              <p><strong>Solución:</strong> Verificar el rol y el estado actual de la OS. Si el estado es correcto y el rol tiene permiso, contactar soporte.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ❌ "La fecha de ejecución no puede ser anterior a hoy"
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p><strong>Causa:</strong> Se seleccionó una fecha pasada en el campo de fecha de ejecución.</p>
+              <p><strong>Solución:</strong> Seleccionar la fecha correcta (hoy o posterior). Si necesitás registrar un servicio que ya ocurrió con fecha pasada, contactá con Administración para registrarlo con una fecha retroactiva justificada.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ❌ El PDF de la OS se descarga vacío o con error
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p><strong>Causa:</strong> Puede ser un problema temporal del servidor o la OS tiene datos incompletos.</p>
+              <p><strong>Solución:</strong> Intentar nuevamente en unos minutos. Si el problema persiste, reportar indicando el publicId de la OS y el error que aparece en pantalla.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ❌ No puedo cancelar una OS que ya está FACTURADA
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p><strong>Causa:</strong> Las OS en estado FACTURADA son un registro contable y no se pueden cancelar desde el módulo operativo.</p>
+              <p><strong>Solución:</strong> Contactar con Administración para evaluar la situación. La reversión de una OS facturada requiere intervención manual y posiblemente una nota de crédito en el módulo de finanzas.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── CHECKLIST ── -->
+    <section class="section" id="checklist-section">
+      <a class="section-anchor" id="checklist"></a>
+      <h2><span class="sec-icon">✅</span> Checklist</h2>
+
+      <div class="tabs">
+        <div class="tab-buttons">
+          <button class="tab-btn active" onclick="switchTab(this,'cl1')">Antes de crear una OS</button>
+          <button class="tab-btn" onclick="switchTab(this,'cl2')">Después de ejecutar</button>
+          <button class="tab-btn" onclick="switchTab(this,'cl3')">Cierre de mes</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-cl1">
+          <ul class="checklist" id="cl-antes">
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">El cliente existe en el catálogo <code>/clients</code></span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Tengo claro en qué depósito se realizará el servicio (Magaldi o Luján)</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Conozco el tipo de servicio a prestar y las horas estimadas</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Tengo la fecha y hora de ejecución acordada con el cliente</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Si es un servicio ANMAT en Magaldi, tengo la documentación del producto</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Sé quién es el operador que realizará el trabajo (o lo asignaré después)</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Acordé con el cliente quién firmará digitalmente la OS</span></li>
+          </ul>
+        </div>
+
+        <div class="tab-panel" id="tab-cl2">
+          <ul class="checklist" id="cl-despues">
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">La OS fue marcada como EN EJECUCIÓN antes de comenzar el trabajo</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">El operador registró las novedades o incidencias durante la ejecución</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">El servicio fue completado correctamente</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">La OS fue pasada al estado ENTREGADA</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">La firma digital del cliente fue obtenida</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">El PDF de la OS fue descargado y enviado al cliente si corresponde</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Administración fue notificada para proceder con la facturación</span></li>
+          </ul>
+        </div>
+
+        <div class="tab-panel" id="tab-cl3">
+          <ul class="checklist" id="cl-mes">
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Todas las OS del mes están en estado ENTREGADA o FACTURADA (ninguna en ejecución sin cerrar)</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">La tasa de firmas digitales está en 100% o cercana</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">El listado exportado del mes fue entregado a Administración</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Las OS canceladas tienen un motivo registrado</span></li>
+            <li><div class="cl-box" onclick="toggleCheck(this)"></div><span class="cl-text">Los datos del dashboard coinciden con los registros del mes</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── FAQ ── -->
+    <section class="section" id="faq-section">
+      <a class="section-anchor" id="faq"></a>
+      <h2><span class="sec-icon">❓</span> Preguntas frecuentes</h2>
+
+      <div class="accordion">
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿Puedo editar una OS después de haberla creado?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Sí, pero <strong>solo si la OS está en estado CREADA o PENDIENTE</strong>. Una vez confirmada, los datos principales no se pueden modificar. Si hay un error en una OS ya confirmada, la opción es cancelarla y crear una nueva.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿Qué pasa si el operador cambia durante la ejecución?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>El campo "Operador asignado" se puede actualizar desde el detalle de la OS mientras esté en estado CONFIRMADA o EN EJECUCIÓN. El timeline registrará el cambio con fecha y usuario que lo realizó.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿Se puede asignar una OS a los dos depósitos al mismo tiempo?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>No. Cada OS corresponde a <strong>un único depósito</strong>. Si el servicio involucra a los dos depósitos (por ejemplo, un traslado de Magaldi a Luján), se crean <strong>dos OS separadas</strong>: una por depósito de origen y otra por el de destino.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿Cuánto tiempo queda guardada una OS en el sistema?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Las OS se guardan de forma <strong>indefinida</strong> en el sistema. No hay borrado automático. El historial completo de órdenes, incluyendo las canceladas, está siempre disponible para consulta y auditoría.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿Qué significa el publicId de una OS? ¿Es el mismo que el ID interno?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>El <strong>publicId</strong> es el identificador legible que verás en pantalla (ej: <code>OS-2024-0048</code>). Es el que debés usar para comunicarte con el equipo o con clientes sobre una OS específica. El ID interno es un número técnico que el sistema usa internamente y que no necesitás conocer.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿Se puede imprimir la OS para que el cliente la firme en papel?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Sí, podés descargar el PDF de la OS e imprimirlo. Sin embargo, la firma en papel <strong>no reemplaza la firma digital</strong> en el sistema. La firma digital es el mecanismo oficial de TOPS para la conformidad del cliente. La firma en papel puede usarse como respaldo temporal, pero siempre hay que completar la firma digital en el sistema.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿Puedo ver las OS de otro depósito si trabajo en uno específico?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p>Sí. El listado de <code>/orders</code> muestra todas las OS de ambos depósitos. No hay restricción por depósito de trabajo: podés filtrar por depósito para ver solo las que te interesan, pero el acceso es global para todos los roles que tienen <code>servicios.view</code>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <button class="accordion-trigger" onclick="toggleAccordion(this)">
+            ¿El Rol Comercial puede ver alguna información de las OS?
+            <span class="arrow">▼</span>
+          </button>
+          <div class="accordion-body">
+            <div class="accordion-content">
+              <p><strong>No.</strong> El rol Comercial no tiene ningún permiso en el módulo de Operaciones y Servicios. Si alguien de Comercial necesita información de una OS específica para un cliente, debe pedirla a alguien de Administración u Operaciones.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── GLOSARIO ── -->
+    <section class="section" id="glosario-section">
+      <a class="section-anchor" id="glosario"></a>
+      <h2><span class="sec-icon">📖</span> Glosario</h2>
+
+      <ul class="glossary">
+        <li>
+          <span class="glos-term">OS</span>
+          <span class="glos-def"><strong>Orden de Servicio.</strong> Documento que registra un servicio logístico concreto prestado por TOPS a un cliente en uno de sus depósitos. Es la unidad de trabajo del módulo.</span>
+        </li>
+        <li>
+          <span class="glos-term">publicId</span>
+          <span class="glos-def">Identificador público y legible de una OS (ej: OS-2024-0048). Es el que se usa para comunicarse sobre una orden específica. Distinto del ID interno técnico del sistema.</span>
+        </li>
+        <li>
+          <span class="glos-term">ANMAT</span>
+          <span class="glos-def">Administración Nacional de Medicamentos, Alimentos y Tecnología Médica. Organismo regulador argentino que habilita depósitos para almacenamiento de productos farmacéuticos y similares. El depósito Magaldi tiene habilitación ANMAT.</span>
+        </li>
+        <li>
+          <span class="glos-term">Firma digital</span>
+          <span class="glos-def">Conformidad electrónica del cliente registrada en el sistema TOPS Nexus. Es trazable (guarda quién firmó y cuándo) e inalterable. No es una firma escaneada sino un registro en la base de datos.</span>
+        </li>
+        <li>
+          <span class="glos-term">Depósito</span>
+          <span class="glos-def">Instalación física donde TOPS presta los servicios logísticos. TOPS tiene dos: <strong>Magaldi</strong> (Magaldi 1765, CABA) y <strong>Luján</strong> (Luján 3159, Bs. As.).</span>
+        </li>
+        <li>
+          <span class="glos-term">Ciclo de vida</span>
+          <span class="glos-def">La secuencia de estados por los que pasa una OS desde que se crea hasta que se factura: CREADA → PENDIENTE → CONFIRMADA → FIRMADA → EN EJECUCIÓN → ENTREGADA → FACTURADA.</span>
+        </li>
+        <li>
+          <span class="glos-term">KPI</span>
+          <span class="glos-def">Key Performance Indicator (Indicador Clave de Rendimiento). Métricas numéricas que muestran el desempeño del área. En el dashboard de Operaciones los KPIs principales son órdenes del mes, horas operativas, facturación proyectada y tasa de firmas.</span>
+        </li>
+        <li>
+          <span class="glos-term">servicios.view</span>
+          <span class="glos-def">Permiso básico del módulo. Permite ver el listado de OS, el dashboard y el detalle de cada orden. Sin este permiso, el usuario no puede acceder al módulo.</span>
+        </li>
+        <li>
+          <span class="glos-term">servicios.create</span>
+          <span class="glos-def">Permiso para crear nuevas Órdenes de Servicio. Lo tienen Director, Administración y Operaciones. El rol Depósito no lo tiene.</span>
+        </li>
+        <li>
+          <span class="glos-term">servicios.sign</span>
+          <span class="glos-def">Permiso para firmar digitalmente una OS. Lo tienen Director, Administración, Operaciones y Depósito. No lo tienen Auditor ni Comercial.</span>
+        </li>
+        <li>
+          <span class="glos-term">Tasa de firmas</span>
+          <span class="glos-def">Porcentaje de OS entregadas que cuentan con firma digital del cliente. Se muestra en el dashboard como KPI. El objetivo es 100%.</span>
+        </li>
+        <li>
+          <span class="glos-term">Timeline</span>
+          <span class="glos-def">Historial cronológico de eventos de una OS. Muestra todos los cambios de estado, quién los realizó y cuándo. Es la trazabilidad completa de la orden.</span>
+        </li>
+        <li>
+          <span class="glos-term">Sparkline</span>
+          <span class="glos-def">Gráfico pequeño animado que muestra la tendencia de un KPI en el tiempo (ej: evolución de órdenes por día en el mes). Aparece junto a los KPIs del dashboard.</span>
+        </li>
+        <li>
+          <span class="glos-term">publicId / OS-XXXX</span>
+          <span class="glos-def">Formato del identificador público de una OS. El número va incrementando. Al crear una OS nueva, el sistema asigna el siguiente número disponible automáticamente.</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ── FOOTER ── -->
+    <div class="divider"></div>
+    <div style="text-align:center;padding:20px 0 40px">
+      <p style="font-size:13px;color:var(--text-dim)">Manual de usuario · TOPS Nexus · Módulo Operaciones y Servicios</p>
+      <p style="font-size:12px;color:var(--text-dim);margin-top:4px">Versión para operadores y administración · Actualizado junio 2026</p>
+      <a href="index.html" style="display:inline-block;margin-top:16px;padding:8px 20px;background:var(--green-dim);border:1px solid var(--green-border);color:var(--green);border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">← Volver al índice del manual</a>
+    </div>
+
+  </main>
+</div>
+
+<!-- Back to top -->
+<a href="#" class="back-top" id="backTop" title="Volver arriba">↑</a>
+
+<script>
+// ── ACCORDION ──
+function toggleAccordion(btn) {
+  btn.classList.toggle('open');
+  const body = btn.nextElementSibling;
+  body.classList.toggle('open');
+}
+
+// ── TABS ──
+function switchTab(btn, panelId) {
+  const container = btn.closest('.tabs');
+  container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  container.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const panel = document.getElementById('tab-' + panelId);
+  if (panel) panel.classList.add('active');
+}
+
+// ── CHECKLIST ──
+function toggleCheck(box) {
+  box.classList.toggle('checked');
+  box.textContent = box.classList.contains('checked') ? '✓' : '';
+  const text = box.nextElementSibling;
+  if (text) text.classList.toggle('done', box.classList.contains('checked'));
+}
+
+// ── BACK TO TOP ──
+const backTop = document.getElementById('backTop');
+window.addEventListener('scroll', () => {
+  backTop.classList.toggle('visible', window.scrollY > 400);
+});
+
+// ── TOC ACTIVE STATE ──
+const tocLinks = document.querySelectorAll('.toc-item[href^="#"]');
+const sections = [];
+tocLinks.forEach(link => {
+  const id = link.getAttribute('href').substring(1);
+  const el = document.getElementById(id);
+  if (el) sections.push({ el, link });
+});
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      tocLinks.forEach(l => l.classList.remove('active'));
+      const match = sections.find(s => s.el === entry.target);
+      if (match) match.link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-60px 0px -70% 0px' });
+
+sections.forEach(s => observer.observe(s.el));
+</script>
+</body>
+</html>
