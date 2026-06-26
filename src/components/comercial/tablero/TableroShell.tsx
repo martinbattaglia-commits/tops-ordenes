@@ -19,6 +19,8 @@ import { AutoInsights } from "./AutoInsights";
 import { ActionPlan } from "./ActionPlan";
 import { OpportunitiesTable } from "./OpportunitiesTable";
 import { SyncStatus } from "./SyncStatus";
+import { VistaDireccion } from "./VistaDireccion";
+import { LossAnalysis } from "./LossAnalysis";
 import {
   calculateCommercialScore,
   normalizeScore,
@@ -157,6 +159,7 @@ function TableroShellInner({ data }: { data: TableroData }) {
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-6 p-4 md:p-8 nx-page-fade">
+      {/* 1 · Header */}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-eyebrow-sm uppercase text-fg-muted">Comercial · CRM</div>
@@ -168,7 +171,16 @@ function TableroShellInner({ data }: { data: TableroData }) {
         </div>
       </header>
 
-      {/* 1 · Resumen ejecutivo */}
+      {/* 2 · Vista Dirección — executive summary at the top */}
+      <VistaDireccion
+        kpis={data.kpis}
+        deals={data.deals}
+        forecastPeriods={data.forecastPeriods}
+        actions={data.actions}
+        dataQuality={data.dataQuality}
+      />
+
+      {/* 3 · Resumen ejecutivo KPI cards */}
       <ExecutiveSummary
         kpis={data.kpis}
         deals={data.deals}
@@ -177,50 +189,55 @@ function TableroShellInner({ data }: { data: TableroData }) {
         syncStatus={data.syncStatus}
       />
 
-      {/* 1b · Forecast por período */}
+      {/* 4 · Forecast por período */}
       <ForecastBlocks periods={data.forecastPeriods} />
 
-      {/* 2 · Top oportunidades a cerrar */}
+      {/* 5 · Alertas comerciales — moved up */}
+      <CommercialAlerts groups={data.alertGroups} />
+
+      {/* 6 · Top oportunidades a cerrar */}
       <TopOpportunities deals={data.deals} />
 
-      {/* 2b · Embudo comercial */}
+      {/* 7 · Embudo comercial */}
       <FunnelAnalysis stages={data.funnelStages} />
 
-      {/* 2c · Rendimiento por canal / fuente */}
-      <SourcePerformance stats={data.sourceStats} />
-
-      {/* 2d · Oportunidades estancadas */}
-      <StagnantOpportunities deals={data.deals} />
-
-      {/* 2e · Calidad de datos CRM */}
-      <DataQuality quality={data.dataQuality} />
-
-      {/* 3 · Matriz de prioridad */}
+      {/* 8 · Matriz de prioridad */}
       <PriorityMatrix quadrants={data.quadrants} />
 
-      {/* 4 · Distribución */}
+      {/* 9 · Distribución (Pipeline + Stages) */}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <BusinessUnitDonut units={data.units} />
         <StageBars stages={data.stages} />
       </section>
 
-      {/* 5 · Convertibilidad + tendencia */}
+      {/* 10 · Convertibilidad + tendencia */}
       <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ConcretionBars bands={data.kpis.bands} />
         <ForecastTrend series={data.trendSeries} deltas={data.deltas} />
       </section>
 
-      {/* 6 · Inteligencia comercial */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <CommercialAlerts groups={data.alertGroups} />
+      {/* 11 · Rendimiento por canal / fuente */}
+      <SourcePerformance stats={data.sourceStats} />
+
+      {/* 12 · Oportunidades estancadas */}
+      <StagnantOpportunities deals={data.deals} />
+
+      {/* 13 · Análisis de pérdidas — conditional (LossAnalysis returns null when lostCount=0) */}
+      <LossAnalysis deals={data.deals} kpis={data.kpis} />
+
+      {/* 14 · Calidad de datos CRM */}
+      <DataQuality quality={data.dataQuality} />
+
+      {/* 15 · Auto Insights + Plan de acción (2-col — CommercialAlerts moved up) */}
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <AutoInsights insights={data.insights} />
         <ActionPlan actions={data.actions} />
       </section>
 
-      {/* 7 · Detalle operativo — URL-filtered */}
+      {/* 16 · Detalle operativo — URL-filtered */}
       <OpportunitiesTable deals={sortedDeals} allDeals={data.deals} />
 
-      {/* 8 · Transparencia de datos */}
+      {/* 17 · Transparencia de datos */}
       <SyncStatus
         syncStatus={data.syncStatus}
         lastSync={data.lastSync}
