@@ -1,4 +1,5 @@
-import type { EnrichedDeal, Kpis } from "./dashboard-kpis";
+import type { EnrichedDeal, Kpis, ForecastPeriod, SourceStats, FunnelStage, DataQualityReport, DataQualityField } from "./dashboard-kpis";
+import { isLive } from "./dashboard-kpis";
 import {
   isLiveOpportunity, isExpiredOpportunity, calculateWeightedForecast,
   calculateCommercialScore, getOpportunityPriority, getOpportunityAlert,
@@ -168,4 +169,134 @@ export function generateSuggestedActions(deals: EnrichedDeal[], today: Date, n =
   return items
     .sort((a, b) => SEV_RANK[a.priority] - SEV_RANK[b.priority] || b.impacto - a.impacto)
     .slice(0, n);
+}
+
+const sumArr = (xs: EnrichedDeal[], f: (d: EnrichedDeal) => number): number =>
+  xs.reduce((a, d) => a + f(d), 0);
+
+const wf = (d: EnrichedDeal): number => (d.amount * d.effective_probability) / 100;
+
+const daysToDate = (s: string, today: Date): number =>
+  (new Date(s + "T12:00:00").getTime() - today.getTime()) / 86_400_000;
+
+export function getForecastByPeriod(deals: EnrichedDeal[], today: Date): ForecastPeriod[] {
+  const ls = deals.filter(isLive);
+  const periods: Array<{ label: ForecastPeriod["label"]; days: number }> = [
+    { label: "30d", days: 30 },
+    { label: "60d", days: 60 },
+    { label: "90d", days: 90 },
+  ];
+  return periods.map(({ label, days }) => {
+    const bucket = ls.filter((d) => {
+      if (!d.expected_close) return false;
+      const dt = daysToDate(d.expected_close, today);
+      return dt >= 0 && dt <= days;
+    });
+    const totalAmount = sumArr(bucket, (d) => d.amount);
+    const weightedAmount = sumArr(bucket, wf);
+    return {
+      label,
+      days,
+      count: bucket.length,
+      hotCount: bucket.filter((d) => d.effective_probability >= 60).length,
+      totalAmount,
+      weightedAmount,
+      avgProbability: bucket.length
+        ? Math.round(sumArr(bucket, (d) => d.effective_probability) / bucket.length)
+        : 0,
+    };
+  });
+}
+
+export function getFunnelData(deals: EnrichedDeal[]): FunnelStage[] {
+  const ls = deals.filter(isLive);
+  const byStage = new Map<string, EnrichedDeal[]>();
+  for (const d of ls) {
+    const s = d.stage ?? "—";
+    byStage.set(s, [...(byStage.get(s) ?? []), d]);
+  }
+  const stages = [...byStage.entries()]
+    .map(([stage, ds]) => ({
+      stage,
+      count: ds.length,
+      totalAmount: sumArr(ds, (d) => d.amount),
+      weightedAmount: sumArr(ds, wf),
+      avgProb: ds.length ? sumArr(ds, (d) => d.effective_probability) / ds.length : 0,
+    }))
+    .sort((a, b) => a.avgProb - b.avgProb);
+
+  return stages.map((s, i) => {
+    const next = stages[i + 1];
+    return {
+      stage: s.stage,
+      count: s.count,
+      totalAmount: s.totalAmount,
+      weightedAmount: s.weightedAmount,
+      conversionRate: next ? (next.count / s.count) * 100 : null,
+      dropRate: null,
+      avgDaysInStage: null,
+    };
+  });
+}
+
+export function groupBySource(deals: EnrichedDeal[]): SourceStats[] {
+  const bySource = new Map<string, EnrichedDeal[]>();
+  for (const d of deals) {
+    const key = d.deal_source ?? "Sin fuente";
+    bySource.set(key, [...(bySource.get(key) ?? []), d]);
+  }
+  return [...bySource.entries()]
+    .map(([source, ds]) => {
+      const ls = ds.filter(isLive);
+      const totalAmount = sumArr(ls, (d) => d.amount);
+      const weightedAmount = sumArr(ls, wf);
+      return {
+        source,
+        count: ls.length,
+        totalAmount,
+        weightedAmount,
+        wonCount: ds.filter((d) => d.status === "won").length,
+        lostCount: ds.filter((d) => d.status === "lost").length,
+        avgProbability: ls.length
+          ? Math.round(sumArr(ls, (d) => d.effective_probability) / ls.length)
+          : 0,
+        ticketAvg: ls.length ? Math.round(totalAmount / ls.length) : 0,
+      };
+    })
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+}
+
+const QUALITY_FIELDS: Array<{ field: string; label: string; check: (d: EnrichedDeal) => boolean }> = [
+  { field: "amount", label: "Importe", check: (d) => d.amount > 1 },
+  { field: "effective_probability", label: "Probabilidad", check: (d) => d.effective_probability > 0 },
+  { field: "expected_close", label: "Cierre estimado", check: (d) => Boolean(d.expected_close) },
+  { field: "owner_name", label: "Responsable", check: (d) => Boolean(d.owner_name) },
+  { field: "deal_source", label: "Fuente", check: (d) => Boolean(d.deal_source) },
+  { field: "overlay_horizonte", label: "Horizonte", check: (d) => Boolean(d.overlay_horizonte) && d.overlay_horizonte !== "A definir" },
+];
+
+export function getDataQuality(deals: EnrichedDeal[]): DataQualityReport {
+  const ls = deals.filter(isLive);
+  const total = ls.length;
+  const completeness: DataQualityField[] = QUALITY_FIELDS.map(({ field, label, check }) => {
+    const filled = ls.filter(check).length;
+    return { field, label, filled, pct: total ? Math.round((filled / total) * 100) : 0 };
+  });
+  const incomplete = ls
+    .map((d) => ({
+      deal_id: d.deal_id,
+      title: d.title,
+      missing: QUALITY_FIELDS.filter(({ check }) => !check(d)).map(({ label }) => label),
+    }))
+    .filter((d) => d.missing.length > 0)
+    .sort((a, b) => b.missing.length - a.missing.length)
+    .slice(0, 20);
+  return { total, completeness, incomplete };
+}
+
+export function getStagnantDeals(deals: EnrichedDeal[], today: Date, days = 14): EnrichedDeal[] {
+  return deals.filter(isLive).filter((d) => {
+    if (!d.modified_src) return false;
+    return (today.getTime() - new Date(d.modified_src).getTime()) / 86_400_000 >= days;
+  });
 }
