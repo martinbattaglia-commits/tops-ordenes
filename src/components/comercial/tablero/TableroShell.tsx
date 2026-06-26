@@ -5,6 +5,7 @@ import { useTableroFilters, scrollToSection } from "@/hooks/useTableroFilters";
 import { ActiveFilterChips } from "./ActiveFilterChips";
 import { ExecutiveSummary } from "./ExecutiveSummary";
 import { TopOpportunities } from "./TopOpportunities";
+import { FunnelAnalysis } from "./FunnelAnalysis";
 import { PriorityMatrix } from "./PriorityMatrix";
 import { BusinessUnitDonut } from "./BusinessUnitDonut";
 import { StageBars } from "./StageBars";
@@ -176,7 +177,10 @@ function TableroShellInner({ data }: { data: TableroData }) {
       <ForecastBlocks periods={data.forecastPeriods} />
 
       {/* 2 · Top oportunidades a cerrar */}
-      <TopOpportunities deals={data.topOpps} />
+      <TopOpportunities deals={data.deals} />
+
+      {/* 2b · Embudo comercial */}
+      <FunnelAnalysis stages={data.funnelStages} />
 
       {/* 3 · Matriz de prioridad */}
       <PriorityMatrix quadrants={data.quadrants} />
