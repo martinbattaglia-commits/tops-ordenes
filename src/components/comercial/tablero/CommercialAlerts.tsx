@@ -1,3 +1,6 @@
+"use client";
+
+import { useTableroFilters, scrollToSection } from "@/hooks/useTableroFilters";
 import type { AlertGroup } from "@/lib/comercial/dashboard-insights";
 import { Icon } from "@/components/Icon";
 
@@ -40,12 +43,50 @@ const SEVERITY_META: Record<
   },
 };
 
-export function CommercialAlerts({ groups }: { groups: AlertGroup[] }) {
+// ─── Determine filter to apply for a given alert label ───────────────────────
+
+function resolveFilter(label: string): Partial<Record<string, unknown>> {
+  const l = label.toLowerCase();
+  if (l.includes("sin movimiento") || l.includes("sin acción") || l.includes("sin próxima")) {
+    return { no_action: true };
+  }
+  if (l.includes("vencid") || l.includes("reactivar")) {
+    return { overdue: true };
+  }
+  if (l.includes("alto valor") || l.includes("alta probabilidad")) {
+    return { score: "hot" };
+  }
+  // default: stagnant
+  return { stagnant: true };
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface CommercialAlertsProps {
+  groups: AlertGroup[];
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export function CommercialAlerts({ groups }: CommercialAlertsProps) {
+  const { applyFilter } = useTableroFilters();
+
+  const handleClearAndScroll = () => {
+    applyFilter({});
+    scrollToSection("opportunities-table");
+  };
+
   if (groups.length === 0) {
     return (
       <div className="card card-pad">
         <div className="mb-3 text-sm font-semibold text-fg-primary">Alertas comerciales</div>
         <p className="text-sm text-fg-muted">Sin alertas comerciales — todo en orden.</p>
+        <button
+          onClick={handleClearAndScroll}
+          className="mt-3 text-xs text-fg-brand hover:underline cursor-pointer"
+        >
+          Ver todas las oportunidades →
+        </button>
       </div>
     );
   }
@@ -55,9 +96,23 @@ export function CommercialAlerts({ groups }: { groups: AlertGroup[] }) {
     return g && g.items.length > 0 ? [g] : [];
   });
 
+  const handleItemClick = (label: string) => {
+    const partial = resolveFilter(label);
+    applyFilter(partial as Parameters<typeof applyFilter>[0]);
+    scrollToSection("opportunities-table");
+  };
+
   return (
     <div className="card card-pad flex flex-col gap-4">
-      <div className="text-sm font-semibold text-fg-primary">Alertas comerciales</div>
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-semibold text-fg-primary">Alertas comerciales</div>
+        <button
+          onClick={handleClearAndScroll}
+          className="text-xs text-fg-brand hover:underline cursor-pointer"
+        >
+          Ver en tabla →
+        </button>
+      </div>
 
       {ordered.map((group) => {
         const meta = SEVERITY_META[group.severity];
@@ -79,23 +134,40 @@ export function CommercialAlerts({ groups }: { groups: AlertGroup[] }) {
               {group.items.map((it, i) => (
                 <li
                   key={`${it.href}-${i}`}
-                  className="flex items-start justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-bg-surface-alt"
+                  className="flex items-start justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-bg-surface-alt cursor-pointer group"
                   style={{ animationDelay: `${i * 40}ms` }}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleItemClick(it.label)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleItemClick(it.label);
+                    }
+                  }}
+                  title="Haz clic para filtrar en la tabla"
                 >
                   <div className="min-w-0 flex-1">
-                    <a
-                      href={it.href}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate font-medium text-fg-primary hover:underline"
-                    >
+                    <span className="block truncate font-medium text-fg-primary group-hover:text-fg-brand transition-colors">
                       {it.cliente}
-                    </a>
+                    </span>
                     <span className="text-xs text-fg-muted">{it.label}</span>
                   </div>
-                  <span className="shrink-0 text-sm font-semibold tabular-nums text-fg-secondary">
-                    {fmt(it.amount)}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-sm font-semibold tabular-nums text-fg-secondary">
+                      {fmt(it.amount)}
+                    </span>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-3.5 w-3.5 text-fg-muted group-hover:text-fg-brand transition-colors"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
                 </li>
               ))}
             </ul>

@@ -11,6 +11,7 @@ import { StageBars } from "./StageBars";
 import { ConcretionBars } from "./ConcretionBars";
 import { ForecastTrend } from "./ForecastTrend";
 import { CommercialAlerts } from "./CommercialAlerts";
+import { ForecastBlocks } from "./ForecastBlocks";
 import { AutoInsights } from "./AutoInsights";
 import { ActionPlan } from "./ActionPlan";
 import { OpportunitiesTable } from "./OpportunitiesTable";
@@ -165,10 +166,14 @@ function TableroShellInner({ data }: { data: TableroData }) {
       {/* 1 · Resumen ejecutivo */}
       <ExecutiveSummary
         kpis={data.kpis}
+        deals={data.deals}
         deltas={data.deltas}
         lastSync={data.lastSync}
         syncStatus={data.syncStatus}
       />
+
+      {/* 1b · Forecast por período */}
+      <ForecastBlocks periods={data.forecastPeriods} />
 
       {/* 2 · Top oportunidades a cerrar */}
       <TopOpportunities deals={data.topOpps} />
