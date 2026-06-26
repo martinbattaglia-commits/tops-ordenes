@@ -24,6 +24,7 @@ const SORT_LABELS: Record<SortKey, string> = {
   forecast: "Forecast",
   probability: "Probabilidad",
   modified: "Última mod.",
+  days_stagnant: "Días estancado",
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────

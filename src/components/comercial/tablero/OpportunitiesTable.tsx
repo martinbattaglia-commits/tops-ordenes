@@ -120,13 +120,14 @@ export function OpportunitiesTable({ deals, allDeals }: OpportunitiesTableProps)
     return Array.from(set).sort();
   }, [allDeals]);
 
-  // ── Score computation for pre-filtered deals ──
-  const rawScores = useMemo(() => deals.map((d) => calculateCommercialScore(d, today)), [deals, today]);
+  // ── Score computation — normalize against full dataset so percentiles are stable ──
+  const allRawScores = useMemo(() => allDeals.map((d) => calculateCommercialScore(d, today)), [allDeals, today]);
 
   const scoredDeals = useMemo<ScoredDeal[]>(
     () =>
-      deals.map((d, i) => {
-        const normalizedScore = normalizeScore(rawScores, rawScores[i]);
+      deals.map((d) => {
+        const rawScore = calculateCommercialScore(d, today);
+        const normalizedScore = normalizeScore(allRawScores, rawScore);
         const semaforoColor = getSemaforoColor(normalizedScore);
         const staleDays = stalenessDays(d, today);
         return {
@@ -138,7 +139,7 @@ export function OpportunitiesTable({ deals, allDeals }: OpportunitiesTableProps)
           _weightedForecast: calculateWeightedForecast(d),
         };
       }),
-    [deals, rawScores, today]
+    [deals, allRawScores, today]
   );
 
   // ── Client-side search filter (title/company) ──
@@ -231,6 +232,7 @@ export function OpportunitiesTable({ deals, allDeals }: OpportunitiesTableProps)
             <option value="forecast">Ordenar: Forecast</option>
             <option value="probability">Ordenar: Probabilidad</option>
             <option value="modified">Ordenar: Última act.</option>
+            <option value="days_stagnant">Ordenar: Días estancado</option>
           </select>
         </div>
 

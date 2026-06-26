@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { upsertDealOverlay } from "@/lib/comercial/overlay-actions";
 import {
   getOpportunityAlert,
@@ -111,8 +111,11 @@ const staleColor = (days: number | undefined) => {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
 export function DealDetailPanel({ deal, onClose }: Props) {
   const today = new Date();
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Overlay form state
   const [horizonte, setHorizonte] = useState(deal?.overlay_horizonte ?? "");
@@ -129,14 +132,31 @@ export function DealDetailPanel({ deal, onClose }: Props) {
     setError(null);
   }, [deal]);
 
-  // ESC key to close
+  // Focus first focusable element when panel opens
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    if (deal) {
-      document.addEventListener("keydown", handler);
+    if (deal && panelRef.current) {
+      const first = panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)[0];
+      first?.focus();
     }
+  }, [deal]);
+
+  // ESC key to close + focus trap
+  useEffect(() => {
+    if (!deal) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const focusable = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [deal, onClose]);
 
@@ -192,6 +212,7 @@ export function DealDetailPanel({ deal, onClose }: Props) {
 
       {/* Slide-in panel — always in DOM for animation */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={deal ? `Detalle: ${deal.title}` : "Detalle de oportunidad"}

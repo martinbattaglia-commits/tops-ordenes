@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type SortKey = "score" | "amount" | "forecast" | "probability" | "modified";
+export type SortKey = "score" | "amount" | "forecast" | "probability" | "modified" | "days_stagnant";
 
 export interface TableroFilters {
   pipeline: string;
@@ -66,7 +66,8 @@ export function useTableroFilters(): {
       sortRaw === "amount" ||
       sortRaw === "forecast" ||
       sortRaw === "probability" ||
-      sortRaw === "modified"
+      sortRaw === "modified" ||
+      sortRaw === "days_stagnant"
         ? sortRaw
         : "score";
 

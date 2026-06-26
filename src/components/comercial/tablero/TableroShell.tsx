@@ -146,6 +146,8 @@ function TableroShellInner({ data }: { data: TableroData }) {
           const tb = b.modified_src ? new Date(b.modified_src).getTime() : 0;
           return tb - ta;
         }
+        case "days_stagnant":
+          return stalenessDays(b, today) - stalenessDays(a, today);
         case "score":
         default:
           return calculateCommercialScore(b, today) - calculateCommercialScore(a, today);
