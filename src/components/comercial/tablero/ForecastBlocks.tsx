@@ -65,7 +65,10 @@ function PeriodCard({ period, isClickable, onClick, animDelay = 0 }: PeriodCardP
           {/* Main: weighted amount (the number to bet on) */}
           <div className="flex flex-col gap-0.5">
             <span className="text-xs text-fg-muted">Valor ponderado</span>
-            <span className="kpi-value text-status-success">
+            <span
+              className="kpi-value text-status-success"
+              title={`Valor esperado = Σ(importe × probabilidad) para deals con cierre en los próximos ${period.label}`}
+            >
               {fmt(period.weightedAmount)}
             </span>
           </div>

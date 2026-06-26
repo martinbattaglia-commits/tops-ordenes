@@ -188,7 +188,10 @@ export function StagnantOpportunities({ deals }: Props) {
                     </td>
 
                     {/* Días sin actividad */}
-                    <td className="py-2.5 px-2 text-right tabular-nums text-status-danger font-semibold">
+                    <td
+                      className="py-2.5 px-2 text-right tabular-nums text-status-danger font-semibold"
+                      title="Días sin modificación en Clientify"
+                    >
                       {staleDaysDisplay}
                     </td>
 

@@ -132,7 +132,8 @@ export function TopOpportunities({ deals }: { deals: EnrichedDeal[] }) {
           <tbody>
             {top10.map(({ d, normalized, color, weightedForecast, staleDays }, i) => {
               const reason = semaforoReason(d, normalized, today);
-              const scoreTip = `Score: ${normalized}/100 | Valor esp.: ${fmt(weightedForecast)} | ${staleDays === Infinity ? "sin actividad registrada" : `${staleDays}d sin actividad`}`;
+              const colorLabel = color === "green" ? "prioritaria" : color === "yellow" ? "en seguimiento" : "en riesgo";
+              const scoreTip = `Score ${normalized}/100 — ${colorLabel} | Valor esp.: ${fmt(weightedForecast)} | ${staleDays === Infinity ? "sin actividad registrada" : `${staleDays}d sin actividad`}`;
 
               return (
                 <tr
@@ -193,7 +194,10 @@ export function TopOpportunities({ deals }: { deals: EnrichedDeal[] }) {
                   </td>
 
                   {/* Días sin actividad */}
-                  <td className={`py-2.5 px-2 text-right hidden md:table-cell ${staleClass(staleDays)}`}>
+                  <td
+                    className={`py-2.5 px-2 text-right hidden md:table-cell ${staleClass(staleDays)}`}
+                    title="Días sin actividad en Clientify"
+                  >
                     {staleDays === Infinity ? "—" : `${staleDays}d`}
                   </td>
 
