@@ -120,7 +120,7 @@ export function mapDeal(d: ClientifyDeal): UiDeal {
     stageId: extractIdFromUrl(d.pipeline_stage),
     pipeline: d.pipeline_desc,
     pipelineId: extractIdFromUrl(d.pipeline),
-    probability: d.probability,
+    probability: d.probability * 10, // Clientify uses 0-10 scale; multiply to get 0-100
     probabilityLabel: d.probability_desc,
     status: STATUS_MAP[d.status] ?? "other",
     statusLabel: d.status_desc,
