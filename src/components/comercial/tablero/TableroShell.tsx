@@ -6,6 +6,9 @@ import { ActiveFilterChips } from "./ActiveFilterChips";
 import { ExecutiveSummary } from "./ExecutiveSummary";
 import { TopOpportunities } from "./TopOpportunities";
 import { FunnelAnalysis } from "./FunnelAnalysis";
+import { SourcePerformance } from "./SourcePerformance";
+import { StagnantOpportunities } from "./StagnantOpportunities";
+import { DataQuality } from "./DataQuality";
 import { PriorityMatrix } from "./PriorityMatrix";
 import { BusinessUnitDonut } from "./BusinessUnitDonut";
 import { StageBars } from "./StageBars";
@@ -181,6 +184,15 @@ function TableroShellInner({ data }: { data: TableroData }) {
 
       {/* 2b · Embudo comercial */}
       <FunnelAnalysis stages={data.funnelStages} />
+
+      {/* 2c · Rendimiento por canal / fuente */}
+      <SourcePerformance stats={data.sourceStats} />
+
+      {/* 2d · Oportunidades estancadas */}
+      <StagnantOpportunities deals={data.deals} />
+
+      {/* 2e · Calidad de datos CRM */}
+      <DataQuality quality={data.dataQuality} />
 
       {/* 3 · Matriz de prioridad */}
       <PriorityMatrix quadrants={data.quadrants} />
