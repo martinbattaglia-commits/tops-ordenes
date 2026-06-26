@@ -380,7 +380,11 @@ export function OpportunitiesTable({ deals, allDeals }: OpportunitiesTableProps)
                 <tr
                   key={d.deal_id}
                   onClick={() => setSelectedDeal(d)}
-                  className="hover:bg-fg-primary/[0.03] cursor-pointer transition-colors nx-stagger"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedDeal(d); } }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Ver detalle: ${d.company_name ?? d.title}`}
+                  className="hover:bg-fg-primary/[0.03] cursor-pointer transition-colors nx-stagger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-600 focus-visible:ring-inset"
                 >
                   {/* Semáforo */}
                   <td className="px-3 py-2.5">

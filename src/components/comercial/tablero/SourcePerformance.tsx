@@ -98,10 +98,14 @@ export function SourcePerformance({ stats }: Props) {
                   className={`border-b border-stroke-soft last:border-0 transition-colors ${
                     isSinFuente
                       ? "opacity-60"
-                      : "hover:bg-fg-primary/5 cursor-pointer"
+                      : "hover:bg-fg-primary/5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-600 focus-visible:ring-inset"
                   }`}
                   title={isSinFuente ? undefined : "Click para filtrar por esta fuente"}
                   onClick={isSinFuente ? undefined : () => handleRowClick(stat.source)}
+                  onKeyDown={isSinFuente ? undefined : (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleRowClick(stat.source); } }}
+                  role={isSinFuente ? undefined : "button"}
+                  tabIndex={isSinFuente ? undefined : 0}
+                  aria-label={isSinFuente ? undefined : `Filtrar por fuente: ${stat.source}`}
                 >
                   {/* Fuente */}
                   <td className="py-2.5 px-2 font-medium text-fg-primary">
