@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
-import { computeKpis, type EnrichedDeal, type Kpis } from "./dashboard-kpis";
+import { computeKpis, type EnrichedDeal, type Kpis, type ForecastPeriod, type FunnelStage, type SourceStats, type DataQualityReport } from "./dashboard-kpis";
 import {
   groupByBusinessUnit, groupByStage, groupByPriorityQuadrant, topOpportunities,
   generateCommercialInsights, generateSuggestedActions, buildAlertGroups,
+  getForecastByPeriod, getFunnelData, groupBySource, getDataQuality,
   type BusinessUnit, type StageRow, type QuadrantGroup, type Insight, type ActionItem, type AlertGroup,
 } from "./dashboard-insights";
 
@@ -29,12 +30,20 @@ export interface TableroData {
   alertGroups: AlertGroup[];
   syncStatus: SyncStatus | null;
   deltas: Deltas | null;
+  forecastPeriods: ForecastPeriod[];
+  funnelStages: FunnelStage[];
+  sourceStats: SourceStats[];
+  dataQuality: DataQualityReport;
 }
+
+const EMPTY_DATA_QUALITY: DataQualityReport = { total: 0, completeness: [], incomplete: [] };
 
 const EMPTY_KPIS: Kpis = {
   count: 0, liveCount: 0, totalPipeline: 0, activePipeline: 0, forecast: 0, wonAmount: 0, avgProbability: 0,
   weightedConcretion: 0, highProbPipeline: 0, nextCloseValue: 0, overdueCount: 0, overdueAmount: 0,
-  noActionCount: 0, bands: [], byPipeline: [],
+  noActionCount: 0, stagnantCount: 0, lostCount: 0, lostAmount: 0, wonCount: 0,
+  forecastByPeriod: [], sourceBreakdown: [], funnelData: [], dataQuality: EMPTY_DATA_QUALITY,
+  bands: [], byPipeline: [],
 };
 
 function emptyCockpit(configured: boolean): TableroData {
@@ -42,6 +51,7 @@ function emptyCockpit(configured: boolean): TableroData {
     configured, deals: [], kpis: EMPTY_KPIS, trends: {}, trendSeries: [], lastSync: null,
     units: [], stages: [], quadrants: [], topOpps: [], insights: [], actions: [], alertGroups: [],
     syncStatus: null, deltas: null,
+    forecastPeriods: [], funnelStages: [], sourceStats: [], dataQuality: EMPTY_DATA_QUALITY,
   };
 }
 
@@ -53,11 +63,11 @@ export async function getTableroData(): Promise<TableroData> {
   const { data: rows } = await supabase
     .from("v_clientify_deals_enriched")
     .select(
-      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones"
+      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones,deal_source"
     )
     .order("amount", { ascending: false });
 
-  const deals = (rows ?? []) as EnrichedDeal[];
+  const deals = (rows ?? []).map((r) => ({ ...r, deal_source: (r as { deal_source?: string | null }).deal_source ?? null })) as EnrichedDeal[];
 
   const { data: snaps } = await supabase
     .from("clientify_dashboard_snapshots")
@@ -120,5 +130,9 @@ export async function getTableroData(): Promise<TableroData> {
     alertGroups: buildAlertGroups(deals, today),
     syncStatus,
     deltas,
+    forecastPeriods: getForecastByPeriod(deals, today),
+    funnelStages: getFunnelData(deals),
+    sourceStats: groupBySource(deals),
+    dataQuality: getDataQuality(deals),
   };
 }
