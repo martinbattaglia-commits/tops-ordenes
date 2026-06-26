@@ -27,7 +27,7 @@ export function SourcePerformance({ stats }: Props) {
   const total = stats.reduce((a, s) => a + s.count, 0);
   const sinFuente = stats.find((s) => s.source === "Sin fuente");
   const sinFuenteCount = sinFuente?.count ?? 0;
-  const sinFuentePct = total > 0 ? Math.round((sinFuente?.count ?? 0 / total) * 100) : 0;
+  const sinFuentePct = total > 0 ? Math.round(((sinFuente?.count ?? 0) / total) * 100) : 0;
   const mostlyEmpty = total > 0 && sinFuenteCount / total > 0.6;
 
   // Sort: "Sin fuente" always last, rest by totalAmount desc (already sorted from groupBySource)
