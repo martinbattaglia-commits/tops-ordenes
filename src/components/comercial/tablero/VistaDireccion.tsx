@@ -225,7 +225,7 @@ function ColRiesgo({
             Acciones prioritarias
           </div>
           {top3Actions.map((item, i) => (
-            <div key={i} className="flex items-start gap-2">
+            <a key={i} href={item.href} target="_blank" rel="noopener noreferrer" className="flex items-start gap-2 hover:opacity-80">
               <SeverityDot priority={item.priority} />
               <div className="min-w-0">
                 <span className="text-xs text-fg-secondary leading-snug">{item.accion}</span>
@@ -233,7 +233,7 @@ function ColRiesgo({
                   <span className="text-xs text-fg-muted ml-1">· {item.cliente}</span>
                 )}
               </div>
-            </div>
+            </a>
           ))}
         </div>
       )}
@@ -389,6 +389,35 @@ export function VistaDireccion({
         />
         <ColCalidadPipeline kpis={kpis} dataQuality={dataQuality} />
       </div>
+
+      {/* Acciones recomendadas de esta semana */}
+      {actions.length > 0 && (
+        <div className="card card-pad space-y-3">
+          <div className="text-sm font-semibold text-fg-primary">Acciones recomendadas de esta semana</div>
+          <div className="flex flex-col gap-2">
+            {actions.slice(0, 5).map((item, i) => (
+              <div key={i} className="flex items-start gap-3 py-1 border-b border-stroke-soft last:border-0">
+                <SeverityDot priority={item.priority} />
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm text-fg-primary">{item.accion}</span>
+                  {item.cliente && (
+                    <span className="text-sm text-fg-muted ml-1">· {item.cliente}</span>
+                  )}
+                </div>
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-xs text-tops-blue-600 hover:underline whitespace-nowrap"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Ir a la oportunidad →
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
