@@ -8,7 +8,7 @@ function deal(p: Partial<UiDeal>): UiDeal {
     companyName: null, amount: 0, currency: "ARS", stage: "s", stageId: 1,
     pipeline: "ANMAT", pipelineId: 10, probability: 0, probabilityLabel: "",
     status: "open", statusLabel: "", ownerName: null, expectedClose: null,
-    actualClose: null, createdAt: "", modifiedAt: "", tags: [], source: null, href: "",
+    actualClose: null, createdAt: "", modifiedAt: "", tags: [], source: null, deal_source: null, href: "",
     ...p,
   };
 }

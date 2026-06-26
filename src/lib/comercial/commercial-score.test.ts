@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   hasSuspiciousAmount, calculateCommercialScore, getOpportunityPriority,
   getOpportunityAlert, getSuggestedAction, isLiveOpportunity,
+  normalizeScore, getSemaforoColor, getSemaforoLabel,
 } from "./commercial-score";
 import type { EnrichedDeal } from "./dashboard-kpis";
 
@@ -10,7 +11,7 @@ function ed(p: Partial<EnrichedDeal>): EnrichedDeal {
     deal_id: 1, title: "t", company_name: null, contact_name: null, amount: 0,
     currency: "ARS", pipeline: "ANMAT", pipeline_id: 10, stage: "Propuesta enviada", status: "open",
     owner_name: null, expected_close: null, modified_src: "2026-06-20T00:00:00Z", href: "",
-    effective_probability: 0, overlay_horizonte: null, overlay_observaciones: null, ...p,
+    effective_probability: 0, overlay_horizonte: null, overlay_observaciones: null, deal_source: null, ...p,
   };
 }
 const today = new Date("2026-06-24T12:00:00");
@@ -46,5 +47,38 @@ describe("commercial-score", () => {
     expect(getOpportunityAlert(ed({ amount: 5_000_000, effective_probability: 30, expected_close: "2026-01-01" }), today)?.severity).toBe("critica");
     expect(getSuggestedAction(ed({ amount: 1 }), today)).toMatch(/importe/i);
     expect(getSuggestedAction(ed({ amount: 5_000_000, effective_probability: 60, overlay_horizonte: null }), today)).toMatch(/horizonte/i);
+  });
+});
+
+describe("normalizeScore", () => {
+  it("maps percentile rank to 0-100 range", () => {
+    const scores = [0, 50, 100];
+    expect(normalizeScore(scores, 0)).toBeGreaterThanOrEqual(0);
+    expect(normalizeScore(scores, 100)).toBeLessThanOrEqual(100);
+    expect(normalizeScore(scores, 50)).toBeGreaterThan(0);
+    expect(normalizeScore(scores, 50)).toBeLessThan(100);
+  });
+
+  it("returns 0 for empty scores array", () => {
+    expect(normalizeScore([], 50)).toBe(0);
+  });
+
+  it("returns 100 when all scores are the same", () => {
+    expect(normalizeScore([42, 42, 42], 42)).toBe(100);
+  });
+});
+
+describe("getSemaforoColor", () => {
+  it("boundary tests", () => {
+    expect(getSemaforoColor(34)).toBe("red");
+    expect(getSemaforoColor(35)).toBe("yellow");
+    expect(getSemaforoColor(64)).toBe("yellow");
+    expect(getSemaforoColor(65)).toBe("green");
+  });
+
+  it("getSemaforoLabel returns correct labels", () => {
+    expect(getSemaforoLabel("green")).toBe("Prioritaria");
+    expect(getSemaforoLabel("yellow")).toBe("En seguimiento");
+    expect(getSemaforoLabel("red")).toBe("En riesgo");
   });
 });
