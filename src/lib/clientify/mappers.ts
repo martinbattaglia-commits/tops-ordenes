@@ -47,6 +47,7 @@ export interface UiDeal {
   modifiedAt: string;
   tags: string[];
   source: string | null;
+  deal_source: string | null;
   href: string; // deeplink a la ficha de oportunidad en Clientify
 }
 
@@ -130,6 +131,7 @@ export function mapDeal(d: ClientifyDeal): UiDeal {
     modifiedAt: d.modified,
     tags: d.tags ?? [],
     source: d.deal_source,
+    deal_source: d.deal_source ?? null,
     href: `https://new.clientify.com/sales/deals/details/${d.id}`,
   };
 }

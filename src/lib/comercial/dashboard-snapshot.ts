@@ -20,6 +20,7 @@ export interface CacheRow {
   created_src: string | null;
   modified_src: string | null;
   href: string | null;
+  deal_source: string | null;
 }
 
 export interface SnapshotRow {
@@ -62,6 +63,7 @@ export function buildCacheRows(deals: UiDeal[]): CacheRow[] {
     created_src: d.createdAt || null,
     modified_src: d.modifiedAt || null,
     href: d.href,
+    deal_source: d.deal_source ?? null,
   }));
 }
 

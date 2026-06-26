@@ -1,189 +1,140 @@
+"use client";
+
+import { useMemo } from "react";
+import { useTableroFilters, scrollToSection } from "@/hooks/useTableroFilters";
 import { Icon } from "@/components/Icon";
 import { CountUp } from "@/components/CountUp";
-import type { Kpis } from "@/lib/comercial/dashboard-kpis";
-import type { Deltas, SyncStatus } from "@/lib/comercial/dashboard-data";
+import type { Kpis, EnrichedDeal } from "@/lib/comercial/dashboard-kpis";
+import type { Deltas } from "@/lib/comercial/dashboard-data";
+import { calculateCommercialScore, normalizeScore, getSemaforoColor } from "@/lib/comercial/commercial-score";
+
+// ─── Formatting ───────────────────────────────────────────────────────────────
 
 const fmt = (n: number) =>
-  Math.abs(n) >= 1e6
-    ? "$ " + (n / 1e6).toLocaleString("es-AR", { maximumFractionDigits: 1 }) + "M"
+  Math.abs(n) >= 1_000_000
+    ? "$ " + (n / 1_000_000).toLocaleString("es-AR", { maximumFractionDigits: 1 }) + "M"
     : "$ " + Math.round(n || 0).toLocaleString("es-AR");
 
-function DeltaChip({ value, label }: { value: number; label: string }) {
+// ─── Delta chip ───────────────────────────────────────────────────────────────
+
+function DeltaChip({ value }: { value: number }) {
   if (value === 0) return null;
   const positive = value > 0;
   return (
     <span
-      className={`text-xs font-medium tabular-nums ${positive ? "text-status-success" : "text-status-danger"}`}
+      className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${
+        positive ? "text-status-success" : "text-status-danger"
+      }`}
     >
-      {positive ? "▲" : "▼"} {fmt(Math.abs(value))} {label}
+      {positive ? "▲" : "▼"} {fmt(Math.abs(value))}
     </span>
   );
 }
 
-function SyncBadge({ syncStatus }: { syncStatus: SyncStatus | null }) {
-  if (!syncStatus) {
-    return (
-      <span className="badge badge-muted">
-        <span className="dot" />
-        Sin datos
-      </span>
-    );
-  }
-  if (syncStatus.errors > 0 || syncStatus.status === "error") {
-    return (
-      <span className="badge badge-danger">
-        <span className="dot" />
-        Error
-      </span>
-    );
-  }
-  if (syncStatus.status === "partial") {
-    return (
-      <span className="badge badge-warning">
-        <span className="dot" />
-        Parcial
-      </span>
-    );
-  }
-  if (syncStatus.status === "completed") {
-    return (
-      <span className="badge badge-success">
-        <span className="dot" />
-        OK
-      </span>
-    );
-  }
-  return (
-    <span className="badge badge-info">
-      <span className="dot" />
-      {syncStatus.status}
-    </span>
-  );
-}
+// ─── Single KPI card ─────────────────────────────────────────────────────────
 
-interface Card {
-  icon: string;
+interface KpiCardProps {
   label: string;
-  desc: string;
-  colorClass: string;
-  content: React.ReactNode;
-  extra?: React.ReactNode;
+  subtitle?: string;
+  value: React.ReactNode;
+  valueClass?: string;
+  delta?: number;
+  onClick?: () => void;
+  tooltip?: string;
+  animDelay?: number;
 }
 
-export function ExecutiveSummary({
-  kpis,
-  deltas,
-  lastSync,
-  syncStatus,
-}: {
-  kpis: Kpis;
-  deltas: Deltas | null;
-  lastSync: string | null;
-  syncStatus: SyncStatus | null;
-}) {
-  const lastSyncLabel = lastSync
-    ? new Date(lastSync).toLocaleString("es-AR")
-    : "—";
+function KpiCard({
+  label,
+  subtitle,
+  value,
+  valueClass = "text-fg-primary",
+  delta,
+  onClick,
+  tooltip,
+  animDelay = 0,
+}: KpiCardProps) {
+  const clickable = Boolean(onClick);
 
-  const cards: Card[] = [
-    {
-      icon: "trend-up",
-      label: "Forecast ponderado activo",
-      desc: "prob × monto, solo vivos",
-      colorClass: "text-status-success",
-      content: (
-        <div className="kpi-value text-status-success">
-          <CountUp to={kpis.forecast} format="currency" />
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (onClick && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
+  return (
+    <div
+      className={`card card-pad flex flex-col gap-2 nx-lift ${
+        clickable
+          ? "cursor-pointer hover:border-fg-brand/40 transition-colors focus-visible:ring-2 focus-visible:ring-fg-brand/60 outline-none"
+          : ""
+      }`}
+      style={{ animationDelay: `${animDelay}ms` }}
+      onClick={onClick}
+      onKeyDown={handleKey}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      title={tooltip}
+    >
+      <span className="kpi-label">{label}</span>
+
+      <div className={`kpi-value ${valueClass}`}>{value}</div>
+
+      {delta !== undefined && delta !== 0 && (
+        <div className="mt-0.5">
+          <DeltaChip value={delta} />
         </div>
-      ),
-      extra: deltas ? (
-        <DeltaChip value={deltas.forecast} label="vs corte anterior" />
-      ) : undefined,
-    },
-    {
-      icon: "trend-up",
-      label: "Probabilidad de concreción",
-      desc: "ponderada por monto · foto de hoy",
-      colorClass: "text-status-info",
-      content: (
-        <div className="kpi-value text-status-info">
-          {kpis.weightedConcretion.toLocaleString("es-AR", {
-            maximumFractionDigits: 1,
-          })}
-          %
-        </div>
-      ),
-    },
-    {
-      icon: "wallet",
-      label: "Pipeline vivo",
-      desc: `${kpis.liveCount} oportunidades activas`,
-      colorClass: "text-fg-brand",
-      content: (
-        <div className="kpi-value text-fg-brand">
-          <CountUp to={kpis.activePipeline} format="currency" />
-        </div>
-      ),
-      extra: deltas ? (
-        <DeltaChip value={deltas.active} label="vs corte anterior" />
-      ) : undefined,
-    },
-    {
-      icon: "trend-up",
-      label: "Pipeline alta probabilidad",
-      desc: "deals con prob ≥ 70%",
-      colorClass: "text-status-info",
-      content: (
-        <div className="kpi-value text-status-info">
-          <CountUp to={kpis.highProbPipeline} format="currency" />
-        </div>
-      ),
-    },
-    {
-      icon: "clock",
-      label: "Próximas a cierre",
-      desc: "cierre estimado ≤ 30 días",
-      colorClass: "text-status-warning",
-      content: (
-        <div className="kpi-value text-status-warning">
-          <CountUp to={kpis.nextCloseValue} format="currency" />
-        </div>
-      ),
-    },
-    {
-      icon: "bell",
-      label: "Oportunidades vencidas",
-      desc: `${fmt(kpis.overdueAmount)} a reactivar`,
-      colorClass: "text-status-danger",
-      content: (
-        <div className="kpi-value text-status-danger">
-          <CountUp to={kpis.overdueCount} format="int" />
-        </div>
-      ),
-    },
-    {
-      icon: "clients",
-      label: "Sin próxima acción",
-      desc: "sin movimiento ≥ 21 días",
-      colorClass: "text-status-warning",
-      content: (
-        <div className="kpi-value text-status-warning">
-          <CountUp to={kpis.noActionCount} format="int" />
-        </div>
-      ),
-    },
-    {
-      icon: "refresh",
-      label: "Última sincronización",
-      desc: lastSyncLabel,
-      colorClass: "text-fg-muted",
-      content: (
-        <div className="flex flex-col gap-1 mt-1">
-          <SyncBadge syncStatus={syncStatus} />
-        </div>
-      ),
-    },
-  ];
+      )}
+
+      {subtitle && (
+        <p className="text-fg-muted text-xs leading-snug">{subtitle}</p>
+      )}
+    </div>
+  );
+}
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+export interface ExecutiveSummaryProps {
+  kpis: Kpis;
+  deals: EnrichedDeal[];
+  deltas?: Deltas | null;
+  lastSync?: string | null;
+  syncStatus?: { status: string; errors: number } | null;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
+export function ExecutiveSummary({ kpis, deals, deltas }: ExecutiveSummaryProps) {
+  const { applyFilter } = useTableroFilters();
+
+  // Count "hot" deals: normalizeScore >= 65 means getSemaforoColor === 'green'
+  const hotCount = useMemo(() => {
+    const today = new Date();
+    const rawScores = deals.map((d) => calculateCommercialScore(d, today));
+    return deals.filter((_, idx) => {
+      const norm = normalizeScore(rawScores, rawScores[idx]);
+      return getSemaforoColor(norm) === "green";
+    }).length;
+  }, [deals]);
+
+  // Data quality %
+  const dataQualityPct = useMemo(() => {
+    if (!kpis.dataQuality || kpis.dataQuality.total === 0) return 0;
+    const fields = kpis.dataQuality.completeness;
+    if (!fields.length) return 0;
+    return Math.round(fields.reduce((a, f) => a + f.pct, 0) / fields.length);
+  }, [kpis.dataQuality]);
+
+  // Ticket promedio
+  const ticketAvg = kpis.liveCount > 0 ? kpis.activePipeline / kpis.liveCount : 0;
+
+  // Navigation helpers
+  const goToOpps = (partial: Partial<Parameters<typeof applyFilter>[0]>) => {
+    applyFilter(partial);
+    scrollToSection("opportunities-table");
+  };
 
   return (
     <section className="flex flex-col gap-3 md:gap-4">
@@ -191,25 +142,147 @@ export function ExecutiveSummary({
         Resumen ejecutivo comercial
       </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 nx-stagger">
-        {cards.map((card, i) => (
-          <div
-            key={card.label}
-            className="card card-pad nx-lift flex flex-col gap-2"
-            style={{ animationDelay: `${i * 40}ms` }}
-          >
-            <div className="flex items-center gap-2">
-              <Icon name={card.icon as Parameters<typeof Icon>[0]["name"]} size={16} />
-              <span className="kpi-label">{card.label}</span>
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 nx-stagger">
 
-            <div className="kpi">{card.content}</div>
+        {/* ── Row 1: Pipeline Health ── */}
+        <KpiCard
+          label="Pipeline activo"
+          subtitle="valor bruto de oportunidades vivas"
+          value={<CountUp to={kpis.activePipeline} format="currency" />}
+          delta={deltas?.active}
+          animDelay={0}
+          tooltip="Suma de importes de todas las oportunidades vivas en Clientify"
+        />
 
-            {card.extra && <div className="mt-0.5">{card.extra}</div>}
+        <KpiCard
+          label="Forecast ponderado"
+          subtitle="valor esperado (monto × probabilidad)"
+          value={<CountUp to={kpis.forecast} format="currency" />}
+          valueClass="text-status-success"
+          delta={deltas?.forecast}
+          animDelay={40}
+          tooltip="Σ (importe × probabilidad de cierre) de todas las oportunidades vivas"
+        />
 
-            <p className="text-xs text-fg-muted leading-snug">{card.desc}</p>
-          </div>
-        ))}
+        <KpiCard
+          label="Concreción esperada"
+          subtitle="% de probabilidad de cierre ponderado por monto"
+          value={
+            <span>
+              {kpis.weightedConcretion.toLocaleString("es-AR", { maximumFractionDigits: 1 })}%
+            </span>
+          }
+          valueClass="text-status-info"
+          animDelay={80}
+          tooltip="Forecast ÷ Pipeline activo — refleja la probabilidad media ponderada por importe"
+        />
+
+        {/* ── Row 2: Opportunities ── */}
+        <KpiCard
+          label="Oportunidades vivas"
+          subtitle={`${kpis.liveCount} en cartera activa`}
+          value={<CountUp to={kpis.liveCount} format="int" />}
+          valueClass="text-fg-brand"
+          onClick={() => goToOpps({ status: "active" })}
+          animDelay={120}
+          tooltip="Haz clic para filtrar las oportunidades activas en la tabla"
+        />
+
+        <KpiCard
+          label="Oportunidades calientes"
+          subtitle="score en tercio superior de la cartera"
+          value={<CountUp to={hotCount} format="int" />}
+          valueClass="text-status-success"
+          onClick={() => goToOpps({ score: "hot" })}
+          animDelay={160}
+          tooltip="Deals con score comercial en el tercio superior (semáforo verde)"
+        />
+
+        <KpiCard
+          label="Ganado este mes"
+          subtitle="monto total ganado"
+          value={<CountUp to={kpis.wonAmount} format="currency" />}
+          valueClass="text-status-success"
+          animDelay={200}
+          tooltip="Suma de oportunidades marcadas como ganadas en Clientify"
+        />
+
+        {/* ── Row 3: Alerts ── */}
+        <KpiCard
+          label="Sin próxima acción"
+          subtitle="sin movimiento ≥ 21 días"
+          value={<CountUp to={kpis.noActionCount} format="int" />}
+          valueClass={kpis.noActionCount > 0 ? "text-status-danger" : "text-fg-muted"}
+          onClick={kpis.noActionCount > 0 ? () => goToOpps({ no_action: true }) : undefined}
+          animDelay={240}
+          tooltip={
+            kpis.noActionCount > 0
+              ? "Haz clic para ver las oportunidades sin actividad en los últimos 21 días"
+              : "Todas las oportunidades tienen actividad reciente"
+          }
+        />
+
+        <KpiCard
+          label="Seguimiento vencido"
+          subtitle="cierre estimado ya pasó"
+          value={<CountUp to={kpis.overdueCount} format="int" />}
+          valueClass={kpis.overdueCount > 0 ? "text-status-danger" : "text-fg-muted"}
+          onClick={kpis.overdueCount > 0 ? () => goToOpps({ overdue: true }) : undefined}
+          animDelay={280}
+          tooltip={
+            kpis.overdueCount > 0
+              ? "Haz clic para ver las oportunidades con fecha de cierre vencida"
+              : "Sin oportunidades con seguimiento vencido"
+          }
+        />
+
+        <KpiCard
+          label="Oportunidades estancadas"
+          subtitle="sin actividad ≥ 14 días"
+          value={<CountUp to={kpis.stagnantCount} format="int" />}
+          valueClass={kpis.stagnantCount > 0 ? "text-status-warning" : "text-fg-muted"}
+          onClick={kpis.stagnantCount > 0 ? () => goToOpps({ stagnant: true }) : undefined}
+          animDelay={320}
+          tooltip={
+            kpis.stagnantCount > 0
+              ? "Haz clic para ver las oportunidades estancadas (≥14 días sin actividad)"
+              : "No hay oportunidades estancadas"
+          }
+        />
+
+        {/* ── Row 4: Quality ── */}
+        <KpiCard
+          label="Ticket promedio"
+          subtitle="promedio por oportunidad viva"
+          value={<CountUp to={ticketAvg} format="currency" />}
+          animDelay={360}
+          tooltip="Pipeline activo dividido por la cantidad de oportunidades vivas"
+        />
+
+        <KpiCard
+          label="Prob. promedio"
+          subtitle="media simple de la cartera viva"
+          value={<span>{kpis.avgProbability}%</span>}
+          valueClass="text-status-info"
+          animDelay={400}
+          tooltip="Promedio simple de la probabilidad de cierre de todas las oportunidades vivas"
+        />
+
+        <KpiCard
+          label="Calidad de datos"
+          subtitle="completitud de campos clave"
+          value={<span>{dataQualityPct}%</span>}
+          valueClass={
+            dataQualityPct >= 80
+              ? "text-status-success"
+              : dataQualityPct >= 50
+              ? "text-status-warning"
+              : "text-status-danger"
+          }
+          onClick={() => scrollToSection("data-quality-block")}
+          animDelay={440}
+          tooltip="Haz clic para ver el detalle de completitud de datos"
+        />
       </div>
     </section>
   );

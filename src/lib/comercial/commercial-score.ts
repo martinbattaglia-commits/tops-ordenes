@@ -112,6 +112,27 @@ export function getOpportunityAlert(d: EnrichedDeal, today: Date): ScoredAlert |
   return null;
 }
 
+export function normalizeScore(rawScores: number[], rawScore: number): number {
+  if (!rawScores.length) return 0;
+  const sorted = [...rawScores].sort((a, b) => a - b);
+  const rank = sorted.filter((s) => s <= rawScore).length;
+  return Math.round((rank / sorted.length) * 100);
+}
+
+export type SemaforoColor = "green" | "yellow" | "red";
+
+export function getSemaforoColor(normalizedScore: number): SemaforoColor {
+  if (normalizedScore >= 65) return "green";
+  if (normalizedScore >= 35) return "yellow";
+  return "red";
+}
+
+export function getSemaforoLabel(color: SemaforoColor): string {
+  if (color === "green") return "Prioritaria";
+  if (color === "yellow") return "En seguimiento";
+  return "En riesgo";
+}
+
 /** Recomendación accionable por oportunidad (basada en reglas, no IA). */
 export function getSuggestedAction(d: EnrichedDeal, today: Date): string {
   if (hasSuspiciousAmount(d)) return "Corregir importe en Clientify";
