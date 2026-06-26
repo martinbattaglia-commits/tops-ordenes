@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, Suspense } from "react";
-import { useTableroFilters, scrollToSection } from "@/hooks/useTableroFilters";
-import { ActiveFilterChips } from "./ActiveFilterChips";
+import { useTableroFilters } from "@/hooks/useTableroFilters";
 import { ExecutiveSummary } from "./ExecutiveSummary";
 import { TopOpportunities } from "./TopOpportunities";
 import { FunnelAnalysis } from "./FunnelAnalysis";
@@ -123,7 +122,7 @@ function filterDeals(deals: EnrichedDeal[], filters: ReturnType<typeof useTabler
 // ─── Inner shell (uses hook — must be inside Suspense) ───────────────────────
 
 function TableroShellInner({ data }: { data: TableroData }) {
-  const { filters, setFilter, clearAll, applyFilter, activeCount } = useTableroFilters();
+  const { filters } = useTableroFilters();
 
   // Filter deals for the table; other sections use unfiltered data
   const filteredDeals = useMemo(
@@ -217,20 +216,7 @@ function TableroShellInner({ data }: { data: TableroData }) {
       </section>
 
       {/* 7 · Detalle operativo — URL-filtered */}
-      <section id="opportunities-table">
-        {/* Active filter chips */}
-        {activeCount > 0 && (
-          <div className="mb-3">
-            <ActiveFilterChips
-              filters={filters}
-              setFilter={setFilter}
-              clearAll={clearAll}
-              activeCount={activeCount}
-            />
-          </div>
-        )}
-        <OpportunitiesTable deals={sortedDeals} />
-      </section>
+      <OpportunitiesTable deals={sortedDeals} allDeals={data.deals} />
 
       {/* 8 · Transparencia de datos */}
       <SyncStatus
