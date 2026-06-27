@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { EnrichedDeal, Kpis } from "@/lib/comercial/dashboard-kpis";
+import { type CanonicalReason, CANONICAL_REASONS } from "@/lib/clientify/loss-reason-normalizer";
 
 const fmt = (n: number): string => {
   const v = Math.round(n || 0);
@@ -10,28 +11,22 @@ const fmt = (n: number): string => {
   return "$ " + v.toLocaleString("es-AR");
 };
 
-// Mapa de interpretaciones ejecutivas por motivo de pérdida
-const REASON_INSIGHTS: Record<string, string> = {
-  "Precio":          "Señal de competitividad de precio. Revisar estrategia de pricing y el valor percibido en la propuesta.",
-  "Condiciones":     "Restricciones operativas o comerciales. Analizar si las condiciones son flexibilizables o si requieren nuevo enfoque.",
-  "No contesta N/A": "Falla en el seguimiento. Estos deals necesitan un protocolo de reactivación antes de considerarse perdidos.",
-  "Other":           "Motivos varios. Revisar el detalle individual para identificar patrones no categorizados.",
+// Interpretaciones ejecutivas por categoría canónica
+const REASON_INSIGHTS: Record<CanonicalReason, string> = {
+  "Precio":             "Señal de competitividad. Revisar estrategia de pricing y valor percibido en la propuesta.",
+  "Condiciones":        "Restricciones operativas o comerciales. Analizar si las condiciones son flexibilizables o si requieren nuevo enfoque.",
+  "No contesta / N/A":  "Falla en seguimiento. Estos deals necesitan un protocolo de reactivación antes de darse por perdidos.",
+  "Otros":              "Motivos varios capturados. Revisar el detalle individual para identificar patrones no categorizados.",
+  "Sin clasificar":     "Deals perdidos sin motivo registrado en Clientify. Completar el campo para mejorar el análisis.",
 };
 
-function getReasonInsight(reason: string): string {
-  return REASON_INSIGHTS[reason] ?? "Revisar los deals individuales para determinar el patrón.";
-}
-
-const REASON_COLOR: Record<string, string> = {
-  "Precio":          "bg-orange-500/80",
-  "Condiciones":     "bg-yellow-500/80",
-  "No contesta N/A": "bg-blue-500/80",
-  "Other":           "bg-gray-400/80",
+const REASON_COLOR: Record<CanonicalReason, string> = {
+  "Precio":             "bg-orange-500/80",
+  "Condiciones":        "bg-yellow-500/80",
+  "No contesta / N/A":  "bg-blue-500/80",
+  "Otros":              "bg-gray-400/80",
+  "Sin clasificar":     "bg-fg-muted/40",
 };
-
-function reasonColor(reason: string): string {
-  return REASON_COLOR[reason] ?? "bg-fg-muted/50";
-}
 
 interface LossAnalysisProps {
   deals: EnrichedDeal[];
@@ -46,25 +41,31 @@ export function LossAnalysis({ deals, kpis }: LossAnalysisProps) {
 function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
   const lostDeals = useMemo(() => deals.filter((d) => d.status === "lost"), [deals]);
 
-  // Distribución por motivo de pérdida (campo nativo Clientify)
+  // Distribución por motivo de pérdida usando categorías canónicas.
+  // "Sin clasificar" agrupa los deals perdidos con loss_reason null (aún no enriquecidos).
   const byReason = useMemo(() => {
-    const map = new Map<string, { count: number; amount: number; deals: EnrichedDeal[] }>();
-    let noReason = 0;
+    // Inicializar todas las categorías canónicas en orden
+    const map = new Map<CanonicalReason, { count: number; amount: number }>(
+      CANONICAL_REASONS.map((r) => [r, { count: 0, amount: 0 }])
+    );
     for (const d of lostDeals) {
-      const reason = d.loss_reason ?? null;
-      if (!reason) { noReason++; continue; }
-      const cur = map.get(reason) ?? { count: 0, amount: 0, deals: [] };
-      map.set(reason, { count: cur.count + 1, amount: cur.amount + d.amount, deals: [...cur.deals, d] });
+      // loss_reason ya viene normalizado desde el sync; null → "Sin clasificar"
+      const reason: CanonicalReason = (d.loss_reason as CanonicalReason) ?? "Sin clasificar";
+      const cur = map.get(reason)!;
+      map.set(reason, { count: cur.count + 1, amount: cur.amount + d.amount });
     }
-    const rows = [...map.entries()]
-      .map(([reason, v]) => ({
-        reason,
-        ...v,
-        pct: Math.round((v.count / kpis.lostCount) * 100),
-        ticketAvg: v.count > 0 ? v.amount / v.count : 0,
-      }))
-      .sort((a, b) => b.count - a.count);
-    return { rows, noReason };
+    return CANONICAL_REASONS
+      .map((reason) => {
+        const { count, amount } = map.get(reason)!;
+        return {
+          reason,
+          count,
+          amount,
+          pct: kpis.lostCount > 0 ? Math.round((count / kpis.lostCount) * 100) : 0,
+          ticketAvg: count > 0 ? amount / count : 0,
+        };
+      })
+      .filter((r) => r.count > 0); // solo mostrar categorías con datos
   }, [lostDeals, kpis.lostCount]);
 
   // Tendencia mensual por motivo
@@ -130,8 +131,8 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
   const lostPct = total > 0 ? Math.round((kpis.lostAmount / total) * 100) : 0;
   const ticketAvg = kpis.lostCount > 0 ? kpis.lostAmount / kpis.lostCount : 0;
 
-  const hasReasonData = byReason.rows.length > 0;
-  const maxReasonCount = Math.max(...byReason.rows.map((r) => r.count), 1);
+  const hasReasonData = byReason.length > 0;
+  const maxReasonCount = Math.max(...byReason.map((r) => r.count), 1);
 
   return (
     <section id="loss-analysis" className="space-y-3">
@@ -186,20 +187,13 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
         {/* ── MOTIVOS DE PÉRDIDA (campo nativo Clientify) ── */}
         {hasReasonData ? (
           <div className="space-y-4">
-            <div>
-              <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide mb-0.5">
-                Motivos de pérdida
-              </div>
-              {byReason.noReason > 0 && (
-                <p className="text-xs text-fg-muted">
-                  {byReason.noReason} deal{byReason.noReason !== 1 ? "s" : ""} sin motivo completado en Clientify.
-                </p>
-              )}
+            <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
+              Motivos de pérdida
             </div>
 
-            {/* Barras horizontales por razón */}
+            {/* Barras horizontales por razón — en orden canónico */}
             <div className="flex flex-col gap-3">
-              {byReason.rows.map(({ reason, count, amount, pct, ticketAvg: ta }) => (
+              {byReason.map(({ reason, count, amount, pct, ticketAvg: ta }) => (
                 <div key={reason} className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-fg-primary">{reason}</span>
@@ -209,12 +203,12 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
                   </div>
                   <div className="relative h-3 rounded-full bg-fg-primary/8 overflow-hidden">
                     <div
-                      className={`absolute left-0 top-0 h-full rounded-full ${reasonColor(reason)}`}
+                      className={`absolute left-0 top-0 h-full rounded-full ${REASON_COLOR[reason as CanonicalReason] ?? "bg-fg-muted/50"}`}
                       style={{ width: `${Math.round((count / maxReasonCount) * 100)}%` }}
                       title={`${count} (${pct}%)`}
                     />
                   </div>
-                  <p className="text-xs text-fg-muted leading-snug">{getReasonInsight(reason)}</p>
+                  <p className="text-xs text-fg-muted leading-snug">{REASON_INSIGHTS[reason as CanonicalReason]}</p>
                 </div>
               ))}
             </div>
@@ -240,7 +234,7 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {byReason.rows.map(({ reason }) => (
+                      {byReason.map(({ reason }) => (
                         <tr key={reason} className="border-b border-stroke-soft last:border-0 hover:bg-fg-primary/5">
                           <td className="py-1.5 px-2 font-medium text-fg-primary">{reason}</td>
                           {months.map((m) => {
@@ -276,7 +270,7 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
                   </thead>
                   <tbody>
                     {lostDeals
-                      .filter((d) => d.loss_reason)
+                      .filter((d) => d.loss_reason !== undefined)
                       .sort((a, b) => b.amount - a.amount)
                       .slice(0, 15)
                       .map((d) => (
@@ -296,7 +290,7 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
                             </a>
                           </td>
                           <td className="py-2 px-2">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-white text-xs font-medium ${reasonColor(d.loss_reason ?? "")}`}>
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-white text-xs font-medium ${REASON_COLOR[(d.loss_reason ?? "Sin clasificar") as CanonicalReason] ?? "bg-fg-muted/50"}`}>
                               {d.loss_reason}
                             </span>
                           </td>

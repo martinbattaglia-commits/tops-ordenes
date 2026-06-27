@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { listDeals, listPipelines, getDeal, ClientifyError } from "@/lib/clientify/client";
 import { mapDeal } from "@/lib/clientify/mappers";
+import { normalizeLossReason } from "@/lib/clientify/loss-reason-normalizer";
 import { isVisibleCommercialPipeline } from "@/lib/comercial/pipeline-filter";
 import { persistDealsSync } from "@/lib/comercial/dashboard-sync-db";
 import { createAdminClient } from "@/lib/supabase/server";
@@ -56,24 +57,49 @@ async function handle(req: Request): Promise<Response> {
 
     // Enriquecer deals perdidos con lost_reason (campo nativo de Clientify disponible
     // SOLO en GET /deals/{id}/, no en el endpoint de lista).
-    // Rate limit: 300 req/min → lotes de 10 con pequeña pausa entre lotes.
+    //
+    // Optimización: solo se hace fetch individual para deals que:
+    //   1. Son nuevos en estado "lost" (no están en caché con lost_reason ya almacenado), O
+    //   2. Ya están en caché como "lost" pero lost_reason es null (nunca se enriqueció).
+    // Deals perdidos con lost_reason ya almacenado NO se re-consultan.
     const lostDeals = deals.filter((d) => d.status === "lost");
+    let enrichedCount = 0;
+    let skippedCount = 0;
     if (lostDeals.length > 0) {
+      // Leer del admin qué deal_ids ya tienen lost_reason almacenado en la caché.
+      // Se usa createAdminClient() directamente (lectura, segura en dry-run también).
+      const adminForRead = createAdminClient();
+      const alreadyEnriched = new Set<number>();
+      if (adminForRead) {
+        const { data } = await adminForRead
+          .from("clientify_deals_cache")
+          .select("deal_id")
+          .eq("status", "lost")
+          .not("lost_reason", "is", null);
+        for (const r of data ?? []) alreadyEnriched.add(r.deal_id as number);
+      }
+
+      const toEnrich = lostDeals.filter((d) => !alreadyEnriched.has(d.id));
+      skippedCount = lostDeals.length - toEnrich.length;
+
+      // Fetch individual solo para los que necesitan enriquecimiento.
+      // Rate limit Clientify: 300 req/min → lotes de 10 con pausa de 300ms entre lotes.
       const BATCH = 10;
-      for (let i = 0; i < lostDeals.length; i += BATCH) {
-        const batch = lostDeals.slice(i, i + BATCH);
+      for (let i = 0; i < toEnrich.length; i += BATCH) {
+        const batch = toEnrich.slice(i, i + BATCH);
         await Promise.all(
           batch.map(async (d) => {
             try {
               const full = await getDeal(d.id);
-              d.lossReason = full.lost_reason ?? null;
+              // Normaliza antes de persistir: unifica variantes libres → categorías canónicas.
+              d.lossReason = normalizeLossReason(full.lost_reason);
+              enrichedCount++;
             } catch {
-              // Best-effort: si falla un deal individual, no interrumpe el sync
+              // Best-effort: si falla un deal individual, no interrumpe el sync.
             }
           })
         );
-        // Pausa entre lotes para respetar rate limit
-        if (i + BATCH < lostDeals.length) {
+        if (i + BATCH < toEnrich.length) {
           await new Promise((r) => setTimeout(r, 300));
         }
       }
@@ -92,7 +118,7 @@ async function handle(req: Request): Promise<Response> {
         pipelines: pipelines.length,
         deals_synced: deals.length,
         errors: 0,
-        message: `OK ${deals.length} deals / ${persisted.snapshots} snapshots`,
+        message: `OK ${deals.length} deals / ${persisted.snapshots} snapshots / lost_reason: ${enrichedCount} enriquecidos, ${skippedCount} omitidos (ya almacenados)`,
       });
     }
 
@@ -106,6 +132,7 @@ async function handle(req: Request): Promise<Response> {
       totalDeals: deals.length,
       cached: persisted.cached,
       snapshots: persisted.snapshots,
+      lostReason: { enriched: enrichedCount, skipped: skippedCount },
     });
   } catch (e) {
     const status = e instanceof ClientifyError && e.status >= 400 && e.status < 600 ? e.status : 502;
