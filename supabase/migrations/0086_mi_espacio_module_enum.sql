@@ -1,0 +1,12 @@
+-- 0086 — Agrega el valor 'mi_espacio' al enum permission_module_t.
+--
+-- CONTEXTO: en prod el enum permission_module_t NO incluía 'mi_espacio'. Por eso la
+-- migración 0061 (que inserta el permiso mi_espacio.view con module='mi_espacio')
+-- nunca pudo aplicarse → el permiso jamás existió en prod → el guard de /workspace
+-- ("Accesos Google / Mi Espacio") bloqueaba a todo usuario bajo enforcement RBAC
+-- (enforcement per-user: solo se aplica a quien tiene rol asignado).
+--
+-- IMPORTANTE: este ALTER va en su propia migración/transacción. Postgres no permite
+-- USAR un valor de enum recién agregado dentro de la misma transacción → la creación
+-- del permiso y los grants viven en 0087.
+alter type public.permission_module_t add value if not exists 'mi_espacio';

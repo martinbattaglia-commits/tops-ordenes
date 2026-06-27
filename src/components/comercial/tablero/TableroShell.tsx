@@ -103,28 +103,44 @@ function filterDeals(deals: EnrichedDeal[], filters: ReturnType<typeof useTabler
   });
 }
 
-// ─── KPI card compacta (5 KPIs ejecutivos) ────────────────────────────────────
+// ─── KPI card ejecutiva con deep link y hover animation ──────────────────────
 
 interface ExecKpiProps {
   label: string;
   value: React.ReactNode;
   sub?: string;
   accent?: "default" | "success" | "danger" | "info";
+  href?: string;
 }
 
-function ExecKpi({ label, value, sub, accent = "default" }: ExecKpiProps) {
+function ExecKpi({ label, value, sub, accent = "default", href }: ExecKpiProps) {
   const valueColor =
     accent === "success" ? "text-status-success" :
     accent === "danger"  ? "text-status-danger"  :
     accent === "info"    ? "text-status-info"     :
     "text-fg-primary";
-  return (
-    <div className="card card-pad flex flex-col gap-1.5">
+
+  const inner = (
+    <>
       <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{label}</span>
-      <div className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</div>
+      <div className={`text-2xl font-bold tabular-nums ${valueColor} transition-transform duration-200 group-hover:scale-[1.03] origin-left`}>{value}</div>
       {sub && <span className="text-xs text-fg-muted">{sub}</span>}
-    </div>
+      {href && (
+        <span className="text-[10px] text-fg-brand opacity-0 group-hover:opacity-100 transition-opacity mt-auto pt-1">
+          Ver detalle →
+        </span>
+      )}
+    </>
   );
+
+  const cls = `card card-pad flex flex-col gap-1.5 group transition-all duration-200 ${
+    href ? "cursor-pointer hover:border-fg-brand/30 hover:shadow-md hover:-translate-y-0.5" : ""
+  }`;
+
+  if (href) {
+    return <a href={href} className={cls}>{inner}</a>;
+  }
+  return <div className={cls}>{inner}</div>;
 }
 
 // ─── Collapsible secondary panel ─────────────────────────────────────────────
@@ -225,30 +241,35 @@ function TableroShellInner({ data }: { data: TableroData }) {
             label="Pipeline activo"
             value={<CountUp to={data.kpis.activePipeline} format="currency" />}
             sub={`${data.kpis.liveCount} oportunidades`}
+            href="/comercial/pipeline"
           />
           <ExecKpi
             label="Forecast ponderado"
             value={<CountUp to={data.kpis.forecast} format="currency" />}
             sub={`${data.kpis.weightedConcretion.toFixed(1)}% concreción`}
             accent={data.kpis.weightedConcretion >= 60 ? "success" : data.kpis.weightedConcretion >= 40 ? "info" : "danger"}
+            href="/comercial/pipeline"
           />
           <ExecKpi
             label="Ganado"
             value={<CountUp to={data.kpis.wonAmount} format="currency" />}
             sub={`${data.kpis.wonCount} deals`}
             accent="success"
+            href="/comercial/oportunidades?status=won"
           />
           <ExecKpi
             label="Perdido"
             value={<CountUp to={data.kpis.lostAmount} format="currency" />}
             sub={`${data.kpis.lostCount} deals`}
             accent="danger"
+            href="/comercial/oportunidades?status=lost"
           />
           <ExecKpi
             label="Calidad CRM"
             value={<span>{dataQualityPct}%</span>}
             sub={data.dataQuality.scoreLabel}
             accent={dataQualityPct >= 80 ? "success" : dataQualityPct >= 50 ? "info" : "danger"}
+            href="#data-quality-block"
           />
         </div>
       </section>

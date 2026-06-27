@@ -47,7 +47,7 @@ export default async function ReconDetailPage({
             Usá el parámetro <code>?invoice=&lt;supplier_invoice_id&gt;</code> para iniciar automáticamente, o seleccioná desde la lista de Facturas.
           </p>
           <Link href="/compras/facturas" className="btn btn-primary btn-sm">
-            <Icon name="file-text" size={14} /> Ver facturas
+            <Icon name="file-pdf" size={14} /> Ver facturas
           </Link>
         </div>
       </div>
