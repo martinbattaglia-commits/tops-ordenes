@@ -145,8 +145,8 @@ function ExecKpi({ label, value, sub, accent = "default", href }: ExecKpiProps) 
 
 // ─── Collapsible secondary panel ─────────────────────────────────────────────
 
-function SecondaryPanel({ children, label }: { children: React.ReactNode; label: string }) {
-  const [open, setOpen] = useState(false);
+function SecondaryPanel({ children, label, defaultOpen = false }: { children: React.ReactNode; label: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="border border-stroke-soft rounded-xl overflow-hidden">
       <button
@@ -312,8 +312,8 @@ function TableroShellInner({ data }: { data: TableroData }) {
         <OpportunitiesTable deals={sortedDeals} allDeals={data.deals} />
       </SecondaryPanel>
 
-      {/* ── Análisis extendido (colapsado por defecto) ── */}
-      <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución">
+      {/* ── Análisis extendido (abierto por defecto) ── */}
+      <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución" defaultOpen>
         <VistaDireccion
           kpis={data.kpis}
           deals={data.deals}
@@ -322,7 +322,6 @@ function TableroShellInner({ data }: { data: TableroData }) {
           dataQuality={data.dataQuality}
         />
         <ForecastBlocks periods={data.forecastPeriods} />
-        <CommercialAlerts groups={data.alertGroups} />
         <TopOpportunities deals={data.deals} />
         <FunnelAnalysis stages={data.funnelStages} />
         <PriorityMatrix quadrants={data.quadrants} />
