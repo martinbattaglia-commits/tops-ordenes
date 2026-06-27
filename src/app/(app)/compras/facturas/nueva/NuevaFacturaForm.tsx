@@ -16,7 +16,6 @@ import {
 import type { ExtractedDocument } from "@/lib/ocr/types";
 import { createSupplierInvoiceAction } from "./actions";
 import { attachSupplierInvoiceFileAction } from "./ocr-actions";
-import { RetenciongananciasPanel } from "@/components/compras/RetenciongananciasPanel";
 
 interface VendorOpt {
   id: string;
@@ -767,18 +766,6 @@ export function NuevaFacturaForm({
           <label className="field-label block mb-1.5">Observaciones</label>
           <textarea className="input min-h-[72px]" value={observ} onChange={(e) => setObserv(e.target.value)} placeholder="Detalle, referencia de OC, etc." />
         </div>
-
-        {/* ---------- Retención de Ganancias ---------- */}
-        {vendorId && netoGravado > 0 && (
-          <RetenciongananciasPanel
-            tipoComprobante={tipo}
-            netoGravado={netoGravado}
-            totalFactura={total}
-            vendorId={vendorId}
-            fechaEmision={fechaEmision}
-            supplierInvoiceId={createdInvoiceId}
-          />
-        )}
 
         {/* Total + submit */}
         <div className="flex items-center justify-between pt-3 border-t border-stroke-soft">
