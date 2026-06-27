@@ -9,6 +9,49 @@ import type {
 } from "./types";
 import { computeRecon } from "./diff-engine";
 
+// ──────────────────────────────────────────────────────────
+// assertReconOwnership: lanza error si reconId no pertenece a la OC (poPublicId)
+// Previene IDOR — llámalo al inicio de cada route handler de mutación.
+// ──────────────────────────────────────────────────────────
+export async function assertReconOwnership(
+  reconId: string,
+  poPublicId: string,
+): Promise<void> {
+  const supabase = createClient();
+  if (!supabase) throw new Error("Supabase client unavailable");
+
+  const { data, error } = await supabase
+    .from("po_reconciliations")
+    .select("id, purchase_orders!inner(public_id)")
+    .eq("id", reconId)
+    .eq("purchase_orders.public_id", poPublicId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw Object.assign(new Error("Conciliación no encontrada para esta OC"), { status: 403 });
+}
+
+// ──────────────────────────────────────────────────────────
+// assertDiffOwnership: lanza error si diffId no pertenece a la OC (poPublicId)
+// ──────────────────────────────────────────────────────────
+export async function assertDiffOwnership(
+  diffId: string,
+  poPublicId: string,
+): Promise<void> {
+  const supabase = createClient();
+  if (!supabase) throw new Error("Supabase client unavailable");
+
+  const { data, error } = await supabase
+    .from("po_reconciliation_diffs")
+    .select("id, po_reconciliations!inner(purchase_orders!inner(public_id))")
+    .eq("id", diffId)
+    .eq("po_reconciliations.purchase_orders.public_id", poPublicId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw Object.assign(new Error("Diferencia no encontrada para esta OC"), { status: 403 });
+}
+
 function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
 }

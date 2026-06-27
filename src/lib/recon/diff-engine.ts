@@ -14,17 +14,29 @@ const TOLERANCE_ARS = 0.02; // diferencias ≤ 2 centavos se ignoran (AFIP redon
 
 function numDiff(
   field: ReconDiff["field"],
-  oc: number,
-  inv: number,
+  oc: number | null | undefined,
+  inv: number | null | undefined,
   severity: ReconDiffSeverity = "warning",
 ): ReconDiff | null {
-  const delta = Math.abs(oc - inv);
+  const ocVal = oc ?? 0;
+  const invVal = inv ?? 0;
+  // Guard contra NaN/Infinity que pueden persistirse en la DB
+  if (!Number.isFinite(ocVal) || !Number.isFinite(invVal)) {
+    return {
+      field,
+      val_oc: String(oc),
+      val_factura: String(inv),
+      delta_num: 0,
+      severity: "error",
+    };
+  }
+  const delta = Math.abs(ocVal - invVal);
   if (delta <= TOLERANCE_ARS) return null;
   return {
     field,
-    val_oc: String(oc),
-    val_factura: String(inv),
-    delta_num: inv - oc,
+    val_oc: String(ocVal),
+    val_factura: String(invVal),
+    delta_num: invVal - ocVal,
     severity,
   };
 }
@@ -90,13 +102,20 @@ export function computeRecon(po: POForRecon, invoice: InvoiceForRecon): ReconRes
 
   // invoice no tiene items detallados en este modelo; si el total de neto difiere ya está capturado
 
-  // Tipo de comprobante: la OC espera FACTURA_A (ej) — info si es diferente tipo
+  // Tipo de comprobante: debe ser FACTURA_A o FACTURA_B.
+  // NOTA_DEBITO y NOTA_CREDITO son error contable grave (no cancelan la deuda).
+  // Tipos desconocidos son warning.
   if (!invoice.tipo_comprobante.startsWith("FACTURA")) {
+    const isDebitOrCredit =
+      invoice.tipo_comprobante.startsWith("NOTA_DEBITO") ||
+      invoice.tipo_comprobante.startsWith("NOTA_CREDITO") ||
+      invoice.tipo_comprobante.startsWith("NOTA DE DEBITO") ||
+      invoice.tipo_comprobante.startsWith("NOTA DE CREDITO");
     diffs.push({
       field: "tipo_comprobante",
       val_oc: "FACTURA_A / FACTURA_B",
       val_factura: invoice.tipo_comprobante,
-      severity: "warning",
+      severity: isDebitOrCredit ? "error" : "warning",
     });
   }
 
@@ -111,8 +130,9 @@ export function computeRecon(po: POForRecon, invoice: InvoiceForRecon): ReconRes
   }
 
   // Calcular score: se descuenta peso por cada diff
+  // El `|| 0` convierte NaN a 0 si algún SEVERITY_WEIGHT fuera inválido
   const totalWeight = diffs.reduce((acc, d) => acc + SEVERITY_WEIGHT[d.severity], 0);
-  const score = Math.max(0, Math.round(100 - totalWeight));
+  const score = Math.max(0, Math.round(100 - totalWeight)) || 0;
 
   return { score, diffs };
 }
