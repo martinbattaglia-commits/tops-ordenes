@@ -152,6 +152,7 @@ function SecondaryPanel({ children, label }: { children: React.ReactNode; label:
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
+        aria-expanded={open}
         className="w-full flex items-center justify-between px-4 py-3 bg-bg-surface text-left hover:bg-fg-primary/5 transition-colors"
       >
         <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{label}</span>
@@ -161,17 +162,30 @@ function SecondaryPanel({ children, label }: { children: React.ReactNode; label:
           viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2"
           strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform 200ms" }}
+          style={{
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 250ms ease",
+            flexShrink: 0,
+          }}
           aria-hidden="true"
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </button>
-      {open && (
-        <div className="border-t border-stroke-soft p-4 space-y-6 bg-bg-surface/50">
-          {children}
+      {/* CSS grid expansion — suave y sin salto de layout */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateRows: open ? "1fr" : "0fr",
+          transition: "grid-template-rows 280ms ease",
+        }}
+      >
+        <div style={{ overflow: "hidden" }}>
+          <div className="border-t border-stroke-soft p-4 space-y-6 bg-bg-surface/50">
+            {children}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -286,8 +300,12 @@ function TableroShellInner({ data }: { data: TableroData }) {
       {/* ── 7 · Acciones recomendadas (qué decidir hoy) ── */}
       <ExecutiveActions kpis={data.kpis} deals={data.deals} />
 
-      {/* ── 8 · Calidad del CRM ── */}
-      <DataQuality quality={data.dataQuality} />
+      {/* ── 8 · Calidad del CRM (colapsado por defecto) ── */}
+      <SecondaryPanel
+        label={`Oportunidades con datos incompletos (${data.dataQuality.incomplete.length})`}
+      >
+        <DataQuality quality={data.dataQuality} />
+      </SecondaryPanel>
 
       {/* ── Detalle operativo (colapsado por defecto) ── */}
       <SecondaryPanel label="Ver oportunidades — tabla detallada">
