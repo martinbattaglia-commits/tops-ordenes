@@ -40,13 +40,13 @@ interface SemaforoInfo {
   titulo:   string;
   bgBorder: string;
   textColor: string;
-  iconName: "check-circle" | "bolt" | "alert-circle";
+  iconName: "check-circle" | "bolt" | "shield";
 }
 
 const SEMAFORO: Record<SemaforoColor, SemaforoInfo> = {
   verde:   { emoji: "🟢", titulo: "No corresponde retener",  bgBorder: "bg-status-success/10 border-status-success/30", textColor: "text-status-success", iconName: "check-circle" },
   naranja: { emoji: "🟠", titulo: "Corresponde retener",     bgBorder: "bg-status-warning/10 border-status-warning/30", textColor: "text-status-warning", iconName: "bolt"         },
-  rojo:    { emoji: "🔴", titulo: "Revisar manualmente",     bgBorder: "bg-status-danger/10  border-status-danger/30",  textColor: "text-status-danger",  iconName: "alert-circle" },
+  rojo:    { emoji: "🔴", titulo: "Revisar manualmente",     bgBorder: "bg-status-danger/10  border-status-danger/30",  textColor: "text-status-danger",  iconName: "shield"       },
 };
 
 function computeSemaforo(
@@ -535,7 +535,7 @@ export function RetenciongananciasPanel({
             className="flex items-center gap-1.5 text-[11px] text-fg-muted hover:text-fg-secondary transition-colors"
             onClick={() => setShowNormativa(true)}
           >
-            <Icon name="document" size={11} />
+            <Icon name="file-pdf" size={11} />
             Ver normativa aplicada · vigente desde {ctx.normativaVersion || "—"}
           </button>
 
