@@ -6,42 +6,12 @@ interface Props {
   quality: DataQualityReport;
 }
 
-// ─── SVG Ring Gauge ───────────────────────────────────────────────────────────
-
-function RingGauge({ score, label, color }: { score: number; label: string; color: string }) {
-  const r = 48, cx = 60, cy = 60;
-  const circ = 2 * Math.PI * r;
-  const filled = (score / 100) * circ;
-  return (
-    <div className="flex-shrink-0 self-center">
-      <svg width="120" height="120" viewBox="0 0 120 120">
-        <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth={13}
-          stroke="currentColor" className="text-fg-primary/8" />
-        <circle cx={cx} cy={cy} r={r} fill="none" strokeWidth={13}
-          stroke={color}
-          strokeDasharray={`${filled} ${circ - filled}`}
-          strokeDashoffset={circ * 0.25}
-          strokeLinecap="round"
-          style={{ transition: "stroke-dasharray 0.8s ease" }}
-        />
-        <text x={cx} y={cy - 4} textAnchor="middle"
-          style={{ fontSize: 22, fontWeight: 800, fill: "var(--fg-primary)" }}>
-          {score}
-        </text>
-        <text x={cx} y={cy + 12} textAnchor="middle"
-          style={{ fontSize: 9, fill: "var(--fg-muted)" }}>
-          / 100
-        </text>
-        <text x={cx} y={cy + 26} textAnchor="middle"
-          style={{ fontSize: 9, fontWeight: 600, fill: color }}>
-          {label.toUpperCase()}
-        </text>
-      </svg>
-    </div>
-  );
-}
-
-// ─── External link icon ───────────────────────────────────────────────────────
+const SCORE_CONFIG = {
+  excelente: { label: "Excelente", icon: "🟢", color: "text-status-success", bg: "bg-status-success/10 border-status-success/30" },
+  bueno:     { label: "Bueno",     icon: "🟡", color: "text-status-warning", bg: "bg-status-warning/10 border-status-warning/30" },
+  regular:   { label: "Regular",   icon: "🟠", color: "text-status-warning",  bg: "bg-status-warning/10 border-status-warning/30" },
+  critico:   { label: "Crítico",   icon: "🔴", color: "text-status-danger",  bg: "bg-status-danger/10 border-status-danger/30" },
+} as const;
 
 function ExternalLinkIcon() {
   return (
@@ -55,14 +25,13 @@ function ExternalLinkIcon() {
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
 export function DataQuality({ quality }: Props) {
   if (quality.total === 0) {
     return (
       <section id="data-quality-block" className="space-y-4">
         <header>
           <h2 className="text-xl font-bold text-fg-primary">Calidad de datos CRM</h2>
+          <p className="text-sm text-fg-muted">Completitud de campos clave en oportunidades vivas</p>
         </header>
         <div className="card card-pad">
           <p className="text-sm text-fg-muted">No hay oportunidades activas en el CRM.</p>
@@ -71,20 +40,9 @@ export function DataQuality({ quality }: Props) {
     );
   }
 
-  const score = Math.round(quality.score);
+  const cfg = SCORE_CONFIG[quality.scoreLabel];
   const incompleteCount = quality.incomplete.length;
   const completeCount = quality.total - incompleteCount;
-
-  const gaugeColor =
-    score >= 80 ? "var(--status-success)" :
-    score >= 50 ? "var(--status-warning)" :
-    "var(--status-danger)";
-
-  const labelText =
-    score >= 80 ? "Excelente" :
-    score >= 65 ? "Bueno" :
-    score >= 50 ? "Regular" :
-    "Crítico";
 
   return (
     <section id="data-quality-block" className="space-y-4">
@@ -95,72 +53,81 @@ export function DataQuality({ quality }: Props) {
         </p>
       </header>
 
-      {/* Ring + completeness bars */}
-      <div className="card card-pad">
-        <div className="flex flex-col lg:flex-row gap-6 items-start">
-
-          {/* Ring gauge */}
-          <div className="flex flex-col items-center gap-1 self-center">
-            <RingGauge score={score} label={labelText} color={gaugeColor} />
-            <p className="text-xs text-fg-muted text-center max-w-[120px] leading-snug">
-              {score >= 80
-                ? "Forecast de alta confiabilidad."
-                : score >= 50
-                ? "Completar datos mejorará el análisis."
-                : "Datos críticos faltantes."}
-            </p>
-            {incompleteCount > 0 && (
-              <a
-                href="#data-quality-incomplete"
-                className="text-xs text-fg-brand hover:underline mt-1"
-              >
-                Ver {incompleteCount} incompletas →
-              </a>
-            )}
+      {/* Score card */}
+      <div className={`card card-pad border ${cfg.bg} flex items-center gap-4`}>
+        <div className="shrink-0 text-center">
+          <div className={`text-4xl font-black tabular-nums ${cfg.color}`}>{quality.score}</div>
+          <div className="text-xs text-fg-muted mt-0.5">/ 100</div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`text-sm font-semibold ${cfg.color}`}>
+            {cfg.icon} {cfg.label} — Puntuación de calidad del CRM
           </div>
-
-          {/* Field completeness */}
-          <div className="flex-1 min-w-0 space-y-3">
-            <p className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
-              Completitud por campo — haga clic para ver las oportunidades afectadas
+          {quality.score < 85 ? (
+            <p className="text-xs text-fg-muted mt-0.5">
+              Ausencia de información crítica en{" "}
+              <strong className="text-fg-secondary">{incompleteCount} oportunidades</strong> activas.{" "}
+              Completar los campos marcados en Clientify mejora la precisión de todas las proyecciones.
             </p>
-            <div className="space-y-2.5">
-              {quality.completeness.map((f) => {
-                const missing = quality.total - f.filled;
-                return (
-                  <div key={f.field} className="flex items-center gap-3">
-                    <span className="text-sm text-fg-secondary w-36 shrink-0 truncate">{f.label}</span>
-                    <div className="flex-1 h-2 bg-fg-primary/10 rounded-full overflow-hidden">
-                      <div
-                        className={`h-2 rounded-full transition-all duration-500 ${
-                          f.pct >= 80 ? "bg-status-success" : f.pct >= 50 ? "bg-status-warning" : "bg-status-danger"
-                        }`}
-                        style={{ width: `${f.pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-fg-muted w-14 text-right tabular-nums shrink-0">
-                      {f.filled}/{quality.total}
-                    </span>
-                    <span
-                      className={`text-sm font-semibold w-10 text-right tabular-nums shrink-0 ${
-                        f.pct >= 80 ? "text-status-success" : f.pct >= 50 ? "text-status-warning" : "text-status-danger"
-                      }`}
-                    >
-                      {Math.round(f.pct)}%
-                    </span>
-                    {missing > 0 && (
-                      <a
-                        href="#data-quality-incomplete"
-                        className="shrink-0 text-xs text-fg-brand hover:underline tabular-nums w-20 text-right"
-                      >
-                        {missing} sin dato →
-                      </a>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          ) : (
+            <p className="text-xs text-fg-muted mt-0.5">
+              {completeCount} de {quality.total} oportunidades tienen todos los campos completos.
+              El Forecast puede considerarse de alta confiabilidad.
+            </p>
+          )}
+        </div>
+        {incompleteCount > 0 && (
+          <a
+            href="#data-quality-incomplete"
+            className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold bg-fg-brand/10 text-fg-brand hover:bg-fg-brand/20 transition-colors"
+          >
+            Ver {incompleteCount} incompletas ↓
+          </a>
+        )}
+      </div>
+
+      {/* Field completeness */}
+      <div className="card card-pad space-y-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
+          Completitud por campo — haga clic para ver las oportunidades afectadas
+        </p>
+
+        <div className="space-y-3">
+          {quality.completeness.map((f) => {
+            const missing = quality.total - f.filled;
+            return (
+              <div key={f.field} className="flex items-center gap-3">
+                <span className="text-sm text-fg-secondary w-36 shrink-0 truncate">{f.label}</span>
+                <div className="flex-1 h-2 bg-fg-primary/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      f.pct >= 80 ? "bg-status-success" : f.pct >= 50 ? "bg-status-warning" : "bg-status-danger"
+                    }`}
+                    style={{ width: `${f.pct}%` }}
+                  />
+                </div>
+                <span className="text-xs text-fg-muted w-14 text-right tabular-nums shrink-0">
+                  {f.filled}/{quality.total}
+                </span>
+                <span
+                  className={`text-sm font-semibold w-10 text-right tabular-nums shrink-0 ${
+                    f.pct >= 80 ? "text-status-success" : f.pct >= 50 ? "text-status-warning" : "text-status-danger"
+                  }`}
+                >
+                  {Math.round(f.pct)}%
+                </span>
+                {missing > 0 && (
+                  <a
+                    href="#data-quality-incomplete"
+                    className="shrink-0 text-xs text-fg-brand hover:underline tabular-nums w-20 text-right"
+                    title={`Ver las ${missing} oportunidades sin "${f.label}"`}
+                  >
+                    {missing} sin dato →
+                  </a>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -170,6 +137,7 @@ export function DataQuality({ quality }: Props) {
           <p className="text-xs font-semibold uppercase tracking-wide text-fg-muted">
             Oportunidades con datos incompletos ({quality.incomplete.length})
           </p>
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
@@ -181,20 +149,33 @@ export function DataQuality({ quality }: Props) {
               </thead>
               <tbody>
                 {quality.incomplete.map((item) => (
-                  <tr key={item.deal_id} className="border-b border-stroke-soft last:border-0 hover:bg-fg-primary/5 transition-colors">
-                    <td className="py-2.5 px-2 font-medium text-fg-primary truncate max-w-[200px]">{item.title}</td>
+                  <tr
+                    key={item.deal_id}
+                    className="border-b border-stroke-soft last:border-0 hover:bg-fg-primary/5 transition-colors"
+                  >
+                    <td className="py-2.5 px-2 font-medium text-fg-primary truncate max-w-[200px]">
+                      {item.title}
+                    </td>
                     <td className="py-2.5 px-2">
                       <div className="flex flex-wrap gap-1">
                         {item.missing.map((m) => (
-                          <span key={m} className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium bg-status-danger/10 text-status-danger">
+                          <span
+                            key={m}
+                            className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium bg-status-danger/10 text-status-danger"
+                          >
                             {m}
                           </span>
                         ))}
                       </div>
                     </td>
                     <td className="py-2.5 px-2 text-center">
-                      <a href={item.href} target="_blank" rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-fg-brand hover:underline font-medium">
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-fg-brand hover:underline font-medium"
+                        title="Completar en Clientify"
+                      >
                         <ExternalLinkIcon />
                         <span className="hidden sm:inline">Editar</span>
                       </a>

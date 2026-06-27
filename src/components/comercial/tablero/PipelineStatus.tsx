@@ -34,8 +34,8 @@ function MiniCard({ label, value, highlight = "none", onClick }: MiniCardProps) 
   return (
     <div
       className={[
-        "rounded-lg border border-border p-3 flex flex-col gap-1 transition-all duration-200",
-        onClick ? "cursor-pointer hover:border-fg-brand/40 hover:bg-fg-primary/5 hover:-translate-y-0.5 hover:shadow-sm" : "",
+        "rounded-lg border border-border p-3 flex flex-col gap-1 transition-colors",
+        onClick ? "cursor-pointer hover:border-fg-brand/40" : "",
       ]
         .join(" ")
         .trim()}
