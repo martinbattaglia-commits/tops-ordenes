@@ -118,14 +118,15 @@ BEGIN
     RAISE EXCEPTION 'Sólo se puede aprobar desde pendiente o en_revision';
   END IF;
 
-  -- FOR UPDATE en diffs para prevenir race condition con recon_accept_diff
-  SELECT EXISTS (
-    SELECT 1 FROM po_reconciliation_diffs
+  -- FOR UPDATE sobre los diffs para prevenir race condition con recon_accept_diff.
+  -- Nota: FOR UPDATE dentro de EXISTS es sintaxis inválida en PostgreSQL;
+  -- usamos PERFORM + FOUND para obtener el lock y el resultado en una sola pasada.
+  PERFORM 1 FROM po_reconciliation_diffs
     WHERE reconciliation_id = p_recon_id
       AND severity IN ('warning','error')
       AND NOT accepted
-    FOR UPDATE
-  ) INTO v_has_diffs;
+    FOR UPDATE;
+  v_has_diffs := FOUND;
 
   IF v_has_diffs THEN
     RAISE EXCEPTION 'Existen diferencias sin aceptar. Aceptar o rechazar antes de aprobar.';
@@ -291,3 +292,7 @@ GRANT EXECUTE ON FUNCTION recon_reject TO authenticated;
 GRANT EXECUTE ON FUNCTION recon_accept_diff TO authenticated;
 GRANT EXECUTE ON FUNCTION recon_add_note TO authenticated;
 GRANT EXECUTE ON FUNCTION recon_send_to_review TO authenticated;
+
+-- Revocar acceso público a funciones internas (encapsulamiento)
+REVOKE EXECUTE ON FUNCTION _recon_assert_role() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION _recon_execute_approval(uuid, text, uuid) FROM PUBLIC;

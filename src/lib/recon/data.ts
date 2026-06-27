@@ -33,6 +33,7 @@ export async function assertReconOwnership(
 
 // ──────────────────────────────────────────────────────────
 // assertDiffOwnership: lanza error si diffId no pertenece a la OC (poPublicId)
+// Usa query en 2 pasos (evita join anidado 2 niveles no garantizado por SDK JS).
 // ──────────────────────────────────────────────────────────
 export async function assertDiffOwnership(
   diffId: string,
@@ -41,15 +42,26 @@ export async function assertDiffOwnership(
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase client unavailable");
 
-  const { data, error } = await supabase
+  // Paso 1: obtener el reconciliation_id del diff
+  const { data: diff, error: diffErr } = await supabase
     .from("po_reconciliation_diffs")
-    .select("id, po_reconciliations!inner(purchase_orders!inner(public_id))")
+    .select("reconciliation_id")
     .eq("id", diffId)
-    .eq("po_reconciliations.purchase_orders.public_id", poPublicId)
     .maybeSingle();
 
-  if (error) throw error;
-  if (!data) throw Object.assign(new Error("Diferencia no encontrada para esta OC"), { status: 403 });
+  if (diffErr) throw diffErr;
+  if (!diff) throw Object.assign(new Error("Diferencia no encontrada para esta OC"), { status: 403 });
+
+  // Paso 2: verificar que esa conciliación pertenece a la OC de la URL
+  const { data: recon, error: reconErr } = await supabase
+    .from("po_reconciliations")
+    .select("id, purchase_orders!inner(public_id)")
+    .eq("id", diff.reconciliation_id)
+    .eq("purchase_orders.public_id", poPublicId)
+    .maybeSingle();
+
+  if (reconErr) throw reconErr;
+  if (!recon) throw Object.assign(new Error("Diferencia no encontrada para esta OC"), { status: 403 });
 }
 
 function isMock(): boolean {

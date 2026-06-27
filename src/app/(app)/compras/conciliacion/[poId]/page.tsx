@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getRecon, startRecon } from "@/lib/recon/data";
 import { getPurchaseOrder } from "@/lib/compras/data";
 import { getSupplierInvoice } from "@/lib/erp/data";
+import { getBootContext } from "@/lib/rbac/boot-permissions";
 import { ReconDetail } from "./ReconDetail";
 import { Icon } from "@/components/Icon";
 
@@ -19,6 +20,9 @@ export default async function ReconDetailPage({
   params: { poId: string };
   searchParams?: { invoice?: string };
 }) {
+  const { profileRole } = await getBootContext();
+  const canApprove = profileRole === "supervisor" || profileRole === "admin";
+
   const po = await getPurchaseOrder(params.poId);
   if (!po) notFound();
 
@@ -90,7 +94,7 @@ export default async function ReconDetailPage({
         </div>
       </div>
 
-      <ReconDetail po={po} invoice={invoice} recon={recon} poId={po.id} />
+      <ReconDetail po={po} invoice={invoice} recon={recon} poId={po.id} canApprove={canApprove} />
     </div>
   );
 }

@@ -4,71 +4,92 @@ import { useRouter } from "next/navigation";
 import type { ReconRecord } from "@/lib/recon/types";
 import { Icon } from "@/components/Icon";
 
-export function ReconActions({ recon, poId }: { recon: ReconRecord; poId: string }) {
+interface Props {
+  recon: ReconRecord;
+  poId: string;
+  canApprove?: boolean; // solo supervisor o admin pueden aprobar
+}
+
+export function ReconActions({ recon, poId, canApprove = false }: Props) {
   const router  = useRouter();
-  const [loading, setLoading] = useState<string | null>(null);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [noteText, setNoteText] = useState("");
+  const [loading, setLoading]     = useState<string | null>(null);
+  const [error, setError]         = useState<string | null>(null);
+  const [noteOpen, setNoteOpen]   = useState(false);
+  const [noteText, setNoteText]   = useState("");
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectText, setRejectText] = useState("");
 
-  const call = async (path: string, body: object) => {
-    const r = await fetch(`/api/compras/conciliar/${poId}/${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!r.ok) {
-      const { error } = await r.json();
-      alert(error ?? "Error al procesar");
-    } else {
-      router.refresh();
+  const call = async (path: string, body: object, label: string) => {
+    setLoading(label);
+    setError(null);
+    try {
+      const r = await fetch(`/api/compras/conciliar/${poId}/${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await r.json();
+      if (!r.ok) {
+        setError(json.error ?? "Error al procesar la operación");
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setError("Error de red. Verificá tu conexión e intentá nuevamente.");
+    } finally {
+      setLoading(null);
     }
   };
 
-  const canApprove   = recon.status === "pendiente" || recon.status === "en_revision";
-  const canReject    = recon.status === "pendiente" || recon.status === "en_revision";
-  const canReview    = recon.status === "pendiente";
+  const canAct      = recon.status === "pendiente" || recon.status === "en_revision";
+  const canReview   = recon.status === "pendiente";
   const hasPendDiffs = recon.diffs.some(d => d.severity !== "info" && !d.accepted);
 
   return (
     <div className="nx-surface rounded-xl p-4 space-y-3">
       <h3 className="text-sm font-semibold text-fg-primary">Acciones</h3>
 
+      {error && (
+        <div className="rounded-lg bg-[var(--status-danger)]/10 border border-[var(--status-danger)]/30 p-3 text-xs text-[var(--status-danger)] flex gap-2">
+          <Icon name="x" size={14} className="shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {canReview && (
         <button
           disabled={!!loading}
-          onClick={async () => {
-            setLoading("review");
-            await call("review", { reconId: recon.id });
-            setLoading(null);
-          }}
+          onClick={() => call("review", { reconId: recon.id }, "review")}
           className="btn btn-ghost btn-sm w-full justify-start gap-2"
         >
           <Icon name="send" size={14} />
-          Enviar a revisión
+          {loading === "review" ? "Enviando…" : "Enviar a revisión"}
         </button>
       )}
 
-      {canApprove && (
+      {canAct && canApprove && (
         <button
           disabled={!!loading || hasPendDiffs}
           title={hasPendDiffs ? "Primero aceptá todas las diferencias marcadas" : undefined}
-          onClick={async () => {
-            setLoading("approve");
-            await call("approve", { reconId: recon.id });
-            setLoading(null);
-          }}
+          onClick={() => call("approve", { reconId: recon.id }, "approve")}
           className="btn btn-primary btn-sm w-full justify-start gap-2 disabled:opacity-50"
         >
           <Icon name="check-circle" size={14} />
-          Aprobar conciliación
+          {loading === "approve" ? "Aprobando…" : "Aprobar conciliación"}
         </button>
       )}
 
-      {canReject && (
+      {canAct && !canApprove && (
+        <div className="rounded-lg bg-[var(--surface-dim)]/50 border border-[var(--stroke-soft)] p-3 text-xs text-fg-muted">
+          <Icon name="lock" size={12} className="inline mr-1.5" />
+          La aprobación requiere rol <strong>Supervisor</strong> o <strong>Admin</strong>.
+        </div>
+      )}
+
+      {canAct && (
         <>
           <button
+            disabled={!!loading}
             onClick={() => setRejectOpen(v => !v)}
             className="btn btn-danger btn-sm w-full justify-start gap-2"
           >
@@ -79,22 +100,21 @@ export function ReconActions({ recon, poId }: { recon: ReconRecord; poId: string
             <div className="space-y-2">
               <textarea
                 rows={3}
-                placeholder="Motivo del rechazo (obligatorio)…"
+                placeholder="Motivo del rechazo (obligatorio, mínimo 5 caracteres)…"
                 value={rejectText}
                 onChange={e => setRejectText(e.target.value)}
                 className="w-full input text-sm"
               />
               <button
-                disabled={rejectText.trim().length < 5}
+                disabled={!!loading || rejectText.trim().length < 5}
                 onClick={async () => {
-                  setLoading("reject");
-                  await call("reject", { reconId: recon.id, note: rejectText });
-                  setLoading(null);
+                  await call("reject", { reconId: recon.id, note: rejectText }, "reject");
                   setRejectOpen(false);
+                  setRejectText("");
                 }}
                 className="btn btn-danger btn-sm w-full disabled:opacity-50"
               >
-                Confirmar rechazo
+                {loading === "reject" ? "Rechazando…" : "Confirmar rechazo"}
               </button>
             </div>
           )}
@@ -104,6 +124,7 @@ export function ReconActions({ recon, poId }: { recon: ReconRecord; poId: string
       <hr className="border-[var(--stroke-soft)]" />
 
       <button
+        disabled={!!loading}
         onClick={() => setNoteOpen(v => !v)}
         className="btn btn-ghost btn-sm w-full justify-start gap-2 text-fg-secondary"
       >
@@ -120,17 +141,15 @@ export function ReconActions({ recon, poId }: { recon: ReconRecord; poId: string
             className="w-full input text-sm"
           />
           <button
-            disabled={!noteText.trim()}
+            disabled={!!loading || !noteText.trim()}
             onClick={async () => {
-              setLoading("note");
-              await call("note", { reconId: recon.id, note: noteText });
+              await call("note", { reconId: recon.id, note: noteText }, "note");
               setNoteText("");
               setNoteOpen(false);
-              setLoading(null);
             }}
             className="btn btn-primary btn-sm w-full disabled:opacity-50"
           >
-            Guardar nota
+            {loading === "note" ? "Guardando…" : "Guardar nota"}
           </button>
         </div>
       )}
