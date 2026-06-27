@@ -72,7 +72,7 @@ export function ReconActions({ recon, poId }: { recon: ReconRecord; poId: string
             onClick={() => setRejectOpen(v => !v)}
             className="btn btn-danger btn-sm w-full justify-start gap-2"
           >
-            <Icon name="x-circle" size={14} />
+            <Icon name="x" size={14} />
             Rechazar
           </button>
           {rejectOpen && (
@@ -107,7 +107,7 @@ export function ReconActions({ recon, poId }: { recon: ReconRecord; poId: string
         onClick={() => setNoteOpen(v => !v)}
         className="btn btn-ghost btn-sm w-full justify-start gap-2 text-fg-secondary"
       >
-        <Icon name="message-square" size={14} />
+        <Icon name="mail" size={14} />
         Agregar nota
       </button>
       {noteOpen && (
@@ -144,7 +144,7 @@ export function ReconActions({ recon, poId }: { recon: ReconRecord; poId: string
 
       {recon.status === "rechazada" && (
         <div className="rounded-lg bg-[var(--status-danger)]/10 border border-[var(--status-danger)]/30 p-3 text-xs text-[var(--status-danger)] flex gap-2">
-          <Icon name="alert-triangle" size={14} className="shrink-0 mt-0.5" />
+          <Icon name="x" size={14} className="shrink-0 mt-0.5" />
           <span>Factura BLOQUEADA para pago. Se requiere nota de crédito o nueva factura.</span>
         </div>
       )}

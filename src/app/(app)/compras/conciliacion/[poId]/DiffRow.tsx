@@ -19,7 +19,7 @@ const SEVERITY_CLS: Record<string, string> = {
 };
 
 const SEVERITY_ICON: Record<string, string> = {
-  info: "info", warning: "alert-triangle", error: "x-circle",
+  info: "bell", warning: "bell", error: "x",
 };
 
 export function DiffRow({ diff, onAccept, canEdit }: Props) {
