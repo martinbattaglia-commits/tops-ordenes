@@ -36,7 +36,7 @@ export interface TableroData {
   dataQuality: DataQualityReport;
 }
 
-const EMPTY_DATA_QUALITY: DataQualityReport = { total: 0, completeness: [], incomplete: [] };
+const EMPTY_DATA_QUALITY: DataQualityReport = { total: 0, completeness: [], incomplete: [], score: 0, scoreLabel: "critico" };
 
 const EMPTY_KPIS: Kpis = {
   count: 0, liveCount: 0, totalPipeline: 0, activePipeline: 0, forecast: 0, wonAmount: 0, avgProbability: 0,
@@ -63,7 +63,7 @@ export async function getTableroData(): Promise<TableroData> {
   const { data: rows } = await supabase
     .from("v_clientify_deals_enriched")
     .select(
-      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones,deal_source"
+      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,actual_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones,deal_source"
     )
     .order("amount", { ascending: false });
 

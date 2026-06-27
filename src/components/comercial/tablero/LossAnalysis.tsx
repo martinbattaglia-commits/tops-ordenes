@@ -3,8 +3,6 @@
 import { useMemo } from "react";
 import type { EnrichedDeal, Kpis } from "@/lib/comercial/dashboard-kpis";
 
-// ─── Formatters ──────────────────────────────────────────────────────────────
-
 const fmt = (n: number): string => {
   const v = Math.round(n || 0);
   if (Math.abs(v) >= 1_000_000)
@@ -12,43 +10,54 @@ const fmt = (n: number): string => {
   return "$ " + v.toLocaleString("es-AR");
 };
 
-// ─── Props ────────────────────────────────────────────────────────────────────
-
 interface LossAnalysisProps {
   deals: EnrichedDeal[];
   kpis: Kpis;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export function LossAnalysis({ deals, kpis }: LossAnalysisProps) {
-  // Only render if there are lost deals
   if (kpis.lostCount === 0) return null;
-
   return <LossAnalysisInner deals={deals} kpis={kpis} />;
 }
 
-// ─── Inner (avoids hook call when returning null) ─────────────────────────────
-
 function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
-  const lostDeals = useMemo(
-    () => deals.filter((d) => d.status === "lost"),
-    [deals]
-  );
+  const lostDeals = useMemo(() => deals.filter((d) => d.status === "lost"), [deals]);
 
-  // Stage distribution of lost deals
+  // Stage distribution
   const byStage = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { count: number; amount: number }>();
     for (const d of lostDeals) {
       const s = d.stage ?? "Sin etapa";
-      map.set(s, (map.get(s) ?? 0) + 1);
+      const cur = map.get(s) ?? { count: 0, amount: 0 };
+      map.set(s, { count: cur.count + 1, amount: cur.amount + d.amount });
     }
     return [...map.entries()]
-      .map(([stage, count]) => ({ stage, count, pct: Math.round((count / kpis.lostCount) * 100) }))
+      .map(([stage, v]) => ({ stage, ...v, pct: Math.round((v.count / kpis.lostCount) * 100) }))
       .sort((a, b) => b.count - a.count);
   }, [lostDeals, kpis.lostCount]);
 
-  // Pipeline distribution of lost deals
+  // Monthly trend using actual_close
+  const monthlyTrend = useMemo(() => {
+    const map = new Map<string, { count: number; amount: number }>();
+    for (const d of lostDeals) {
+      const dateStr = d.actual_close ?? d.modified_src;
+      if (!dateStr) continue;
+      const month = dateStr.slice(0, 7); // YYYY-MM
+      const cur = map.get(month) ?? { count: 0, amount: 0 };
+      map.set(month, { count: cur.count + 1, amount: cur.amount + d.amount });
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-6) // últimos 6 meses
+      .map(([month, v]) => ({
+        month: new Date(month + "-01").toLocaleDateString("es-AR", { month: "short", year: "2-digit" }),
+        ...v,
+      }));
+  }, [lostDeals]);
+
+  const maxMonthCount = Math.max(...monthlyTrend.map((m) => m.count), 1);
+
+  // Pipeline distribution
   const byPipeline = useMemo(() => {
     const map = new Map<string, { count: number; amount: number }>();
     for (const d of lostDeals) {
@@ -61,32 +70,22 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
       .sort((a, b) => b.amount - a.amount);
   }, [lostDeals]);
 
-  // Won vs lost bar proportions
   const total = kpis.wonAmount + kpis.lostAmount;
   const wonPct = total > 0 ? Math.round((kpis.wonAmount / total) * 100) : 0;
   const lostPct = total > 0 ? Math.round((kpis.lostAmount / total) * 100) : 0;
+  const ticketAvg = kpis.lostCount > 0 ? kpis.lostAmount / kpis.lostCount : 0;
 
   return (
     <section id="loss-analysis" className="space-y-3">
       <header>
         <h2 className="text-xl font-bold text-fg-primary">Análisis de pérdidas</h2>
-        <p className="text-sm text-fg-muted">Oportunidades con estado perdido en el CRM</p>
+        <p className="text-sm text-fg-muted">
+          {kpis.lostCount} oportunidades perdidas · {fmt(kpis.lostAmount)} en importe total ·
+          ticket promedio {fmt(ticketAvg)}
+        </p>
       </header>
 
       <div className="card card-pad space-y-6">
-        {/* Summary row */}
-        <div className="flex flex-wrap items-center gap-4">
-          <div>
-            <span className="text-3xl font-bold text-status-danger tabular-nums">
-              {kpis.lostCount}
-            </span>
-            <span className="text-sm text-fg-muted ml-2">
-              oportunidades perdidas por{" "}
-              <span className="font-semibold text-fg-secondary">{fmt(kpis.lostAmount)}</span>
-            </span>
-          </div>
-        </div>
-
         {/* Ganado vs perdido bar */}
         {total > 0 && (
           <div className="space-y-2">
@@ -126,33 +125,48 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
           </div>
         )}
 
-        {/* Motivos block */}
-        <div className="rounded-lg border border-stroke-soft bg-bg-surface-alt px-4 py-3 text-sm text-fg-muted">
-          <span className="font-semibold text-fg-secondary">Motivos de pérdida:</span>{" "}
-          Los motivos de pérdida no están disponibles en Clientify. Para activar este análisis, agrega un campo personalizado{" "}
-          <em>&quot;Motivo de pérdida&quot;</em> en los deals perdidos.
-        </div>
+        {/* Monthly trend */}
+        {monthlyTrend.length > 1 && (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
+              Evolución mensual de pérdidas (últimos 6 meses)
+            </div>
+            <div className="flex items-end gap-2 h-20">
+              {monthlyTrend.map(({ month, count, amount }) => (
+                <div key={month} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[10px] text-fg-muted tabular-nums">{count}</span>
+                  <div
+                    className="w-full bg-status-danger/50 rounded-t-sm"
+                    style={{ height: `${Math.round((count / maxMonthCount) * 56)}px` }}
+                    title={`${count} perdidas · ${fmt(amount)}`}
+                  />
+                  <span className="text-[10px] text-fg-muted">{month}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Stage distribution */}
         {byStage.length > 0 && (
           <div className="space-y-2">
             <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
-              Distribución por etapa
+              Etapa en que se pierden
             </div>
             <div className="flex flex-col gap-1.5">
-              {byStage.map(({ stage, count, pct }) => (
+              {byStage.map(({ stage, count, amount, pct }) => (
                 <div key={stage} className="flex items-center gap-3">
-                  <div className="w-32 shrink-0 truncate text-sm text-fg-secondary" title={stage}>
+                  <div className="w-40 shrink-0 truncate text-sm text-fg-secondary" title={stage}>
                     {stage}
                   </div>
                   <div className="flex-1 relative h-2 rounded-full bg-fg-primary/10 overflow-hidden">
                     <div
-                      className="absolute left-0 top-0 h-full rounded-full bg-status-danger/50"
+                      className="absolute left-0 top-0 h-full rounded-full bg-status-danger/60"
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <div className="text-xs tabular-nums text-fg-muted w-16 text-right">
-                    {count} ({pct}%)
+                  <div className="text-xs tabular-nums text-fg-muted w-28 text-right shrink-0">
+                    {count} ({pct}%) · {fmt(amount)}
                   </div>
                 </div>
               ))}
@@ -193,6 +207,20 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
             </div>
           </div>
         )}
+
+        {/* Panel informativo: habilitar motivos */}
+        <div className="rounded-lg border border-stroke-soft bg-bg-surface-alt px-4 py-3 space-y-1">
+          <p className="text-sm font-semibold text-fg-secondary">
+            Análisis de motivos de pérdida — pendiente configuración
+          </p>
+          <p className="text-xs text-fg-muted">
+            Clientify no registra motivos de pérdida de forma nativa. Para activar este análisis, pedirle
+            al administrador del CRM que cree un campo personalizado de tipo <em>Dropdown</em> llamado{" "}
+            <strong>&quot;Motivo de pérdida&quot;</strong> en los Deals, con opciones como: Precio,
+            Competencia, No responde, Producto no aplica, Timing, etc. Una vez creado y completado en los
+            deals perdidos, el análisis se activará automáticamente en el próximo sync.
+          </p>
+        </div>
       </div>
     </section>
   );

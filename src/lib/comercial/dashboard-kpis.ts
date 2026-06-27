@@ -11,14 +11,15 @@ export interface EnrichedDeal {
   status: "open" | "expired" | "won" | "lost" | "other";
   owner_name: string | null;
   expected_close: string | null;
+  actual_close: string | null;
   modified_src: string | null;
   href: string;
-  effective_probability: number;        // probabilidad de Clientify (foto del último corte) — NO editable en Nexus
+  effective_probability: number;
   overlay_horizonte: string | null;
   overlay_observaciones: string | null;
   deal_source: string | null;
-  stale_days?: number;          // precomputed days without activity
-  is_overdue?: boolean;         // precomputed overdue flag
+  stale_days?: number;
+  is_overdue?: boolean;
 }
 
 export interface ProbBand {
@@ -63,7 +64,9 @@ export interface FunnelStage {
 export interface DataQualityReport {
   total: number;
   completeness: DataQualityField[];
-  incomplete: { deal_id: number; title: string; missing: string[] }[];
+  incomplete: { deal_id: number; title: string; missing: string[]; href: string }[];
+  score: number;      // 0-100
+  scoreLabel: "excelente" | "bueno" | "regular" | "critico";
 }
 
 export interface DataQualityField {
@@ -207,14 +210,25 @@ function computeGroupBySource(deals: EnrichedDeal[]): SourceStats[] {
     .sort((a, b) => b.totalAmount - a.totalAmount);
 }
 
+// Campos de calidad: solo campos que vienen de Clientify (no overlays internos de Nexus).
+// overlay_horizonte fue removido: es un campo interno de Nexus, su ausencia no indica
+// dato faltante en el CRM y distorsiona el score.
 const QUALITY_FIELDS: Array<{ field: keyof EnrichedDeal; label: string; check: (d: EnrichedDeal) => boolean }> = [
-  { field: "amount", label: "Importe", check: (d) => d.amount > 1 },
-  { field: "effective_probability", label: "Probabilidad", check: (d) => d.effective_probability > 0 },
-  { field: "expected_close", label: "Cierre estimado", check: (d) => Boolean(d.expected_close) },
-  { field: "owner_name", label: "Responsable", check: (d) => Boolean(d.owner_name) },
-  { field: "deal_source", label: "Fuente", check: (d) => Boolean(d.deal_source) },
-  { field: "overlay_horizonte", label: "Horizonte", check: (d) => Boolean(d.overlay_horizonte) && d.overlay_horizonte !== "A definir" },
+  { field: "amount",               label: "Importe",          check: (d) => d.amount > 1 },
+  { field: "effective_probability", label: "Probabilidad",    check: (d) => d.effective_probability > 0 },
+  { field: "expected_close",       label: "Fecha de cierre",  check: (d) => Boolean(d.expected_close) },
+  { field: "owner_name",           label: "Responsable",      check: (d) => Boolean(d.owner_name) },
+  { field: "company_name",         label: "Empresa",          check: (d) => Boolean(d.company_name) },
+  { field: "contact_name",         label: "Contacto",         check: (d) => Boolean(d.contact_name) },
+  { field: "deal_source",          label: "Fuente / Origen",  check: (d) => Boolean(d.deal_source) },
 ];
+
+function scoreLabel(score: number): DataQualityReport["scoreLabel"] {
+  if (score >= 85) return "excelente";
+  if (score >= 65) return "bueno";
+  if (score >= 40) return "regular";
+  return "critico";
+}
 
 function computeDataQuality(deals: EnrichedDeal[]): DataQualityReport {
   const live = deals.filter(isLive);
@@ -223,16 +237,24 @@ function computeDataQuality(deals: EnrichedDeal[]): DataQualityReport {
     const filled = live.filter(check).length;
     return { field: field as string, label, filled, pct: total ? Math.round((filled / total) * 100) : 0 };
   });
+  // Score = media de completitud por oportunidad (no por campo)
+  const score = total === 0 ? 0 : Math.round(
+    live.reduce((sum, d) => {
+      const filled = QUALITY_FIELDS.filter(({ check }) => check(d)).length;
+      return sum + (filled / QUALITY_FIELDS.length) * 100;
+    }, 0) / total
+  );
   const incomplete = live
     .map((d) => ({
       deal_id: d.deal_id,
       title: d.title,
+      href: d.href,
       missing: QUALITY_FIELDS.filter(({ check }) => !check(d)).map(({ label }) => label),
     }))
     .filter((d) => d.missing.length > 0)
     .sort((a, b) => b.missing.length - a.missing.length)
     .slice(0, 20);
-  return { total, completeness, incomplete };
+  return { total, completeness, incomplete, score, scoreLabel: scoreLabel(score) };
 }
 
 export function computeKpis(deals: EnrichedDeal[], today: Date): Kpis {
