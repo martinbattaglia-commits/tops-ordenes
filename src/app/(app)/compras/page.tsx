@@ -63,7 +63,7 @@ export default async function ComprasDashboardPage() {
           delta={k.reconciledDelta}
           spark={[60, 64, 68, 72, 78, 81, 84]}
           index={2}
-          href="/compras/ordenes?status=conciliada"
+          href="/compras/conciliacion"
         />
         <Kpi
           label="% firmadas en el día"
