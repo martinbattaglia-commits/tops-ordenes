@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { PdfPreview } from "@/components/compras/PdfPreview";
 import type { PurchaseOrder } from "@/lib/types-po";
 import { fmtCurrency, fmtDate } from "@/lib/compras/format";
 import { ORG } from "@/lib/org";
 
-type Tab = "pdf" | "email" | "whatsapp";
+type Tab = "pdf" | "email" | "whatsapp" | "recon";
 
 export function OrderDetailTabs({ po }: { po: PurchaseOrder }) {
   const [tab, setTab] = useState<Tab>("pdf");
@@ -20,7 +21,7 @@ export function OrderDetailTabs({ po }: { po: PurchaseOrder }) {
           <div className="text-sm font-bold text-fg-primary">Comprobante firmado</div>
         </div>
         <div className="flex items-center gap-1 p-1 rounded-md bg-neutral-100">
-          {(["pdf", "email", "whatsapp"] as Tab[]).map((t) => (
+          {(["pdf", "email", "whatsapp", "recon"] as Tab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -30,7 +31,8 @@ export function OrderDetailTabs({ po }: { po: PurchaseOrder }) {
               {t === "pdf" && <Icon name="file-pdf" size={12} />}
               {t === "email" && <Icon name="mail" size={12} />}
               {t === "whatsapp" && <Icon name="whatsapp" size={12} />}
-              {t}
+              {t === "recon" && <Icon name="check-circle" size={12} />}
+              {t === "recon" ? "Conciliación" : t}
             </button>
           ))}
         </div>
@@ -39,6 +41,30 @@ export function OrderDetailTabs({ po }: { po: PurchaseOrder }) {
         {tab === "pdf" && <PdfPreview po={po} className="max-w-[640px] mx-auto" />}
         {tab === "email" && <EmailMockup po={po} />}
         {tab === "whatsapp" && <WhatsappMockup po={po} />}
+        {tab === "recon" && (
+          <div className="max-w-[560px] mx-auto bg-white rounded-md shadow-md p-6 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-status-success/10 text-status-success grid place-items-center">
+                <Icon name="check-circle" size={20} />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-fg-primary">Conciliación de OC</div>
+                <div className="text-[11px] text-fg-muted font-mono">{po.public_id}</div>
+              </div>
+            </div>
+            <p className="text-sm text-fg-secondary leading-relaxed">
+              Abrí el módulo de conciliación para cotejar esta orden contra la factura del proveedor,
+              registrar diferencias y cerrar el ciclo de compra.
+            </p>
+            <Link
+              href={`/compras/conciliacion/${po.public_id}`}
+              className="btn btn-primary btn-sm self-start"
+            >
+              <Icon name="check-circle" size={14} />
+              Abrir módulo de conciliación
+            </Link>
+          </div>
+        )}
       </div>
     </>
   );

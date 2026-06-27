@@ -85,6 +85,7 @@ export default async function SupplierInvoicesPage() {
                 <th>Vencimiento</th>
                 <th>Estado</th>
                 <th className="text-right">Total</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -119,12 +120,22 @@ export default async function SupplierInvoicesPage() {
                     <td className="text-right tabular font-bold text-fg-brand">
                       {fmtCurrency(inv.total)}
                     </td>
+                    <td>
+                      {inv.purchase_order_id && (
+                        <Link
+                          href={`/compras/conciliacion?invoice=${inv.id}`}
+                          className="btn btn-ghost btn-sm text-xs"
+                        >
+                          Conciliar
+                        </Link>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-fg-muted py-8 text-sm">
+                  <td colSpan={9} className="text-center text-fg-muted py-8 text-sm">
                     Aún no se registraron facturas de proveedores.
                   </td>
                 </tr>
