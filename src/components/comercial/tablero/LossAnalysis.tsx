@@ -126,9 +126,6 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
     return [...map.entries()].map(([pipeline, v]) => ({ pipeline, ...v })).sort((a, b) => b.amount - a.amount);
   }, [lostDeals]);
 
-  const total = kpis.wonAmount + kpis.lostAmount;
-  const wonPct = total > 0 ? Math.round((kpis.wonAmount / total) * 100) : 0;
-  const lostPct = total > 0 ? Math.round((kpis.lostAmount / total) * 100) : 0;
   const ticketAvg = kpis.lostCount > 0 ? kpis.lostAmount / kpis.lostCount : 0;
 
   const hasReasonData = byReason.length > 0;
@@ -145,45 +142,6 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
       </header>
 
       <div className="card card-pad space-y-6">
-        {/* Ganado vs perdido bar */}
-        {total > 0 && (
-          <div className="space-y-2">
-            <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
-              Ganado vs. Perdido (por importe)
-            </div>
-            <div className="flex rounded-full overflow-hidden h-5 text-xs font-semibold">
-              {wonPct > 0 && (
-                <div
-                  className="flex items-center justify-center bg-status-success text-white"
-                  style={{ width: `${wonPct}%` }}
-                  title={`Ganado: ${fmt(kpis.wonAmount)}`}
-                >
-                  {wonPct >= 12 ? `${wonPct}%` : ""}
-                </div>
-              )}
-              {lostPct > 0 && (
-                <div
-                  className="flex items-center justify-center bg-status-danger text-white"
-                  style={{ width: `${lostPct}%` }}
-                  title={`Perdido: ${fmt(kpis.lostAmount)}`}
-                >
-                  {lostPct >= 12 ? `${lostPct}%` : ""}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-4 text-xs text-fg-muted">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-status-success" />
-                Ganado: {fmt(kpis.wonAmount)} ({kpis.wonCount} deals)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-status-danger" />
-                Perdido: {fmt(kpis.lostAmount)} ({kpis.lostCount} deals)
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* ── MOTIVOS DE PÉRDIDA (campo nativo Clientify) ── */}
         {hasReasonData ? (
           <div className="space-y-4">

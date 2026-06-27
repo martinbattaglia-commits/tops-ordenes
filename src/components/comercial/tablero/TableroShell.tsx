@@ -189,11 +189,7 @@ function TableroShellInner({ data }: { data: TableroData }) {
     });
   }, [filteredDeals, filters.sort]);
 
-  const dataQualityPct = useMemo(() => {
-    const fields = data.dataQuality?.completeness ?? [];
-    if (!fields.length) return 0;
-    return Math.round(fields.reduce((a, f) => a + f.pct, 0) / fields.length);
-  }, [data.dataQuality]);
+  const dataQualityPct = Math.round(data.kpis.dataQuality.score);
 
   return (
     <div className="mx-auto max-w-[1500px] space-y-5 p-4 md:p-8 nx-page-fade">
@@ -217,7 +213,6 @@ function TableroShellInner({ data }: { data: TableroData }) {
       <ExecutiveNarrative
         kpis={data.kpis}
         deals={data.deals}
-        lastSync={data.lastSync}
       />
 
       {/* ── 3 · 5 KPIs Ejecutivos ── */}
@@ -225,7 +220,7 @@ function TableroShellInner({ data }: { data: TableroData }) {
         <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-3">
           KPIs ejecutivos
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-5 gap-3">
           <ExecKpi
             label="Pipeline activo"
             value={<CountUp to={data.kpis.activePipeline} format="currency" />}
@@ -235,7 +230,7 @@ function TableroShellInner({ data }: { data: TableroData }) {
             label="Forecast ponderado"
             value={<CountUp to={data.kpis.forecast} format="currency" />}
             sub={`${data.kpis.weightedConcretion.toFixed(1)}% concreción`}
-            accent="success"
+            accent={data.kpis.weightedConcretion >= 60 ? "success" : data.kpis.weightedConcretion >= 40 ? "info" : "danger"}
           />
           <ExecKpi
             label="Ganado"
@@ -318,7 +313,6 @@ function TableroShellInner({ data }: { data: TableroData }) {
         <SyncDiagnostics
           syncStatus={data.syncStatus}
           syncHistory={data.syncHistory}
-          lastSync={data.lastSync}
         />
       </SecondaryPanel>
 
@@ -347,8 +341,8 @@ export function TableroShell({ data, initialParams: _initialParams }: Props) {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-[1500px] p-4 md:p-8">
-          <div className="animate-pulse space-y-4">
+        <div className="mx-auto max-w-[1500px] space-y-5 p-4 md:p-8">
+          <div className="animate-pulse space-y-5">
             <div className="h-8 w-64 rounded-lg bg-bg-surface-alt" />
             <div className="h-24 rounded-xl bg-bg-surface-alt" />
             <div className="h-32 rounded-xl bg-bg-surface-alt" />

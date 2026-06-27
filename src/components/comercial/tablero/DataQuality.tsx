@@ -9,7 +9,7 @@ interface Props {
 const SCORE_CONFIG = {
   excelente: { label: "Excelente", icon: "🟢", color: "text-status-success", bg: "bg-status-success/10 border-status-success/30" },
   bueno:     { label: "Bueno",     icon: "🟡", color: "text-status-warning", bg: "bg-status-warning/10 border-status-warning/30" },
-  regular:   { label: "Regular",   icon: "🟠", color: "text-orange-500",     bg: "bg-orange-500/10 border-orange-500/30" },
+  regular:   { label: "Regular",   icon: "🟠", color: "text-status-warning",  bg: "bg-status-warning/10 border-status-warning/30" },
   critico:   { label: "Crítico",   icon: "🔴", color: "text-status-danger",  bg: "bg-status-danger/10 border-status-danger/30" },
 } as const;
 
@@ -61,12 +61,11 @@ export function DataQuality({ quality }: Props) {
         </div>
         <div className="flex-1 min-w-0">
           <div className={`text-sm font-semibold ${cfg.color}`}>
-            {cfg.icon} {cfg.label} — CRM Data Quality Score
+            {cfg.icon} {cfg.label} — Puntuación de calidad del CRM
           </div>
           {quality.score < 85 ? (
             <p className="text-xs text-fg-muted mt-0.5">
-              El Forecast Comercial presenta una confiabilidad del <strong>{quality.score}%</strong> debido a
-              la ausencia de información crítica en{" "}
+              Ausencia de información crítica en{" "}
               <strong className="text-fg-secondary">{incompleteCount} oportunidades</strong> activas.{" "}
               Completar los campos marcados en Clientify mejora la precisión de todas las proyecciones.
             </p>

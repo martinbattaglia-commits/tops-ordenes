@@ -1,6 +1,7 @@
 "use client";
 
 import { Kpis, EnrichedDeal } from "@/lib/comercial/dashboard-kpis";
+import { stalenessDays, isLiveOpportunity } from "@/lib/comercial/commercial-score";
 
 interface Props {
   kpis: Kpis;
@@ -23,7 +24,7 @@ const fmt = (n: number): string =>
 const PRIORITY_DOT: Record<Priority, string> = {
   critical: "bg-status-danger",
   high: "bg-status-warning",
-  medium: "bg-yellow-400",
+  medium: "bg-status-info",
   low: "bg-status-success",
 };
 
@@ -62,11 +63,10 @@ function buildRecommendations(kpis: Kpis, deals: EnrichedDeal[]): Recommendation
 
   // Regla 1: Sin seguimiento comercial
   if (kpis.noActionCount >= 5) {
-    // Calcular importe de deals sin acción
+    // Calcular importe de deals sin acción usando stalenessDays (real-time, coherente con el resto del dashboard)
+    const today = new Date();
     const noActionDeals = deals.filter(
-      (d) =>
-        (d.status === "open" || d.status === "other") &&
-        (d.stale_days ?? 0) >= 21
+      (d) => isLiveOpportunity(d) && stalenessDays(d, today) >= 21
     );
     const noActionAmount = noActionDeals.reduce((a, d) => a + d.amount, 0);
     recs.push({

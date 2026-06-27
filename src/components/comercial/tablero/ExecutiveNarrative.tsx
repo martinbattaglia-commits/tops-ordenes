@@ -5,7 +5,6 @@ import { Kpis, EnrichedDeal } from "@/lib/comercial/dashboard-kpis";
 interface Props {
   kpis: Kpis;
   deals: EnrichedDeal[];
-  lastSync: string | null;
 }
 
 const fmt = (n: number): string =>
@@ -13,7 +12,7 @@ const fmt = (n: number): string =>
     ? "$ " + (n / 1_000_000).toLocaleString("es-AR", { maximumFractionDigits: 1 }) + "M"
     : "$ " + Math.round(n || 0).toLocaleString("es-AR");
 
-export function ExecutiveNarrative({ kpis, deals, lastSync }: Props) {
+export function ExecutiveNarrative({ kpis, deals }: Props) {
   // Calculate top 2 loss reasons from deals
   const lostDeals = deals.filter((d) => d.status === "lost");
   const reasonCounts: Record<string, number> = {};
@@ -69,7 +68,7 @@ export function ExecutiveNarrative({ kpis, deals, lastSync }: Props) {
           </>
         ) : (
           <>
-            <span>no registraron pérdidas en el período. </span>
+            <strong className="text-status-success">no se registraron pérdidas en el período. </strong>
           </>
         )}
         La calidad del CRM es{" "}
@@ -85,11 +84,6 @@ export function ExecutiveNarrative({ kpis, deals, lastSync }: Props) {
           <span className="text-status-success">No hay oportunidades críticas pendientes.</span>
         )}
       </p>
-      {lastSync && (
-        <p className="mt-2 text-xs text-fg-muted">
-          Última sincronización: {lastSync}
-        </p>
-      )}
     </div>
   );
 }

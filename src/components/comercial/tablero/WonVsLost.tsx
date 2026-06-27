@@ -22,8 +22,6 @@ export function WonVsLost({ kpis }: Props) {
   const wonAvg = kpis.wonCount > 0 ? kpis.wonAmount / kpis.wonCount : 0;
   const lostAvg = kpis.lostCount > 0 ? kpis.lostAmount / kpis.lostCount : 0;
 
-  const wonBarPct = total > 0 ? (kpis.wonCount / total) * 100 : 0;
-
   return (
     <div className="card card-pad">
       <h2 className="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-4">
@@ -44,18 +42,18 @@ export function WonVsLost({ kpis }: Props) {
           </span>
           <div className="flex flex-col gap-1 text-sm text-fg-secondary">
             <div className="flex justify-between">
-              <span className="text-fg-muted">Deals</span>
+              <span className="text-fg-muted uppercase tracking-wide text-xs">Deals</span>
               <span className="font-medium text-fg-primary">{kpis.wonCount}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-fg-muted">Ticket prom.</span>
+              <span className="text-fg-muted uppercase tracking-wide text-xs">Ticket prom.</span>
               <span className="font-medium text-fg-primary">
                 {kpis.wonCount > 0 ? fmt(wonAvg) : "—"}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-fg-muted">Tasa de cierre</span>
-              <span className="font-medium text-status-success">
+              <span className="text-fg-muted uppercase tracking-wide text-xs">Tasa de cierre</span>
+              <span className="font-semibold text-base text-status-success">
                 {fmtPct(wonRate)}
               </span>
             </div>
@@ -75,43 +73,24 @@ export function WonVsLost({ kpis }: Props) {
           </span>
           <div className="flex flex-col gap-1 text-sm text-fg-secondary">
             <div className="flex justify-between">
-              <span className="text-fg-muted">Deals</span>
+              <span className="text-fg-muted uppercase tracking-wide text-xs">Deals</span>
               <span className="font-medium text-fg-primary">{kpis.lostCount}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-fg-muted">Ticket prom.</span>
+              <span className="text-fg-muted uppercase tracking-wide text-xs">Ticket prom.</span>
               <span className="font-medium text-fg-primary">
                 {kpis.lostCount > 0 ? fmt(lostAvg) : "—"}
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-fg-muted">Tasa de pérdida</span>
-              <span className="font-medium text-status-danger">
+              <span className="text-fg-muted uppercase tracking-wide text-xs">Tasa de pérdida</span>
+              <span className="font-semibold text-base text-status-danger">
                 {fmtPct(lostRate)}
               </span>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Barra proporcional */}
-      {total > 0 && (
-        <div className="mt-4">
-          <div className="flex rounded-full overflow-hidden h-2">
-            <div
-              className="bg-status-success transition-all"
-              style={{ width: `${wonBarPct}%` }}
-            />
-            <div
-              className="bg-status-danger flex-1 transition-all"
-            />
-          </div>
-          <div className="flex justify-between mt-1 text-xs text-fg-muted">
-            <span>{kpis.wonCount} ganados</span>
-            <span>{kpis.lostCount} perdidos</span>
-          </div>
-        </div>
-      )}
 
       {total === 0 && (
         <p className="mt-4 text-sm text-fg-muted text-center">

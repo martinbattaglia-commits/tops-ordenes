@@ -62,7 +62,7 @@ export function PipelineStatus({ kpis }: Props) {
       <h2 className="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-3">
         Estado del Pipeline
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <MiniCard
           label="Oportunidades abiertas"
           value={kpis.liveCount}
