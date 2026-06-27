@@ -62,9 +62,6 @@ export function computeRecon(po: POForRecon, invoice: InvoiceForRecon): ReconRes
   // Moneda
   push(strDiff("moneda", po.moneda ?? "ARS", invoice.moneda ?? "ARS", "error"));
 
-  // Condición de pago (info: puede diferir por negociación)
-  push(strDiff("cond_pago", po.cond_pago, null, "info")); // invoice no tiene cond_pago
-
   // Importes
   push(numDiff("neto",   po.neto,  invoice.neto,  "warning"));
   push(numDiff("iva",    po.iva,   invoice.iva,   "warning"));
@@ -81,8 +78,16 @@ export function computeRecon(po: POForRecon, invoice: InvoiceForRecon): ReconRes
     });
   }
 
-  // Cantidad de ítems
-  const nItems = po.items.length;
+  if ((invoice.tributos ?? 0) > 0) {
+    diffs.push({
+      field: "tributos",
+      val_oc: "0",
+      val_factura: String(invoice.tributos),
+      delta_num: -(invoice.tributos ?? 0),
+      severity: "warning",
+    });
+  }
+
   // invoice no tiene items detallados en este modelo; si el total de neto difiere ya está capturado
 
   // Tipo de comprobante: la OC espera FACTURA_A (ej) — info si es diferente tipo
