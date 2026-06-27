@@ -48,7 +48,8 @@ export interface UiDeal {
   tags: string[];
   source: string | null;
   deal_source: string | null;
-  href: string; // deeplink a la ficha de oportunidad en Clientify
+  lossReason: string | null; // campo nativo de Clientify, solo en GET /deals/{id}/
+  href: string;
 }
 
 export interface UiStage {
@@ -132,6 +133,7 @@ export function mapDeal(d: ClientifyDeal): UiDeal {
     tags: d.tags ?? [],
     source: d.deal_source,
     deal_source: d.deal_source ?? null,
+    lossReason: d.lost_reason ?? null,
     href: `https://new.clientify.com/sales/deals/details/${d.id}`,
   };
 }

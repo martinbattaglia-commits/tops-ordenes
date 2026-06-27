@@ -12,6 +12,7 @@ export default defineConfig({
       "src/app/api/tesoreria/caja-chica/**/*.test.ts",
       "src/lib/comercial/**/*.test.ts",
       "src/lib/prospeccion/**/*.test.ts",
+      "src/lib/clientify/**/*.test.ts",
     ],
     environment: "node",
   },

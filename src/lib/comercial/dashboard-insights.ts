@@ -267,13 +267,21 @@ export function groupBySource(deals: EnrichedDeal[]): SourceStats[] {
 }
 
 const QUALITY_FIELDS: Array<{ field: string; label: string; check: (d: EnrichedDeal) => boolean }> = [
-  { field: "amount", label: "Importe", check: (d) => d.amount > 1 },
-  { field: "effective_probability", label: "Probabilidad", check: (d) => d.effective_probability > 0 },
-  { field: "expected_close", label: "Cierre estimado", check: (d) => Boolean(d.expected_close) },
-  { field: "owner_name", label: "Responsable", check: (d) => Boolean(d.owner_name) },
-  { field: "deal_source", label: "Fuente", check: (d) => Boolean(d.deal_source) },
-  { field: "overlay_horizonte", label: "Horizonte", check: (d) => Boolean(d.overlay_horizonte) && d.overlay_horizonte !== "A definir" },
+  { field: "amount",               label: "Importe",         check: (d) => d.amount > 1 },
+  { field: "effective_probability", label: "Probabilidad",   check: (d) => d.effective_probability > 0 },
+  { field: "expected_close",       label: "Fecha de cierre", check: (d) => Boolean(d.expected_close) },
+  { field: "owner_name",           label: "Responsable",     check: (d) => Boolean(d.owner_name) },
+  { field: "company_name",         label: "Empresa",         check: (d) => Boolean(d.company_name) },
+  { field: "contact_name",         label: "Contacto",        check: (d) => Boolean(d.contact_name) },
+  { field: "deal_source",          label: "Fuente / Origen", check: (d) => Boolean(d.deal_source) },
 ];
+
+function scoreLabel(score: number): DataQualityReport["scoreLabel"] {
+  if (score >= 85) return "excelente";
+  if (score >= 65) return "bueno";
+  if (score >= 40) return "regular";
+  return "critico";
+}
 
 export function getDataQuality(deals: EnrichedDeal[]): DataQualityReport {
   const ls = deals.filter(isLive);
@@ -282,16 +290,23 @@ export function getDataQuality(deals: EnrichedDeal[]): DataQualityReport {
     const filled = ls.filter(check).length;
     return { field, label, filled, pct: total ? Math.round((filled / total) * 100) : 0 };
   });
+  const score = total === 0 ? 0 : Math.round(
+    ls.reduce((sum, d) => {
+      const filled = QUALITY_FIELDS.filter(({ check }) => check(d)).length;
+      return sum + (filled / QUALITY_FIELDS.length) * 100;
+    }, 0) / total
+  );
   const incomplete = ls
     .map((d) => ({
       deal_id: d.deal_id,
       title: d.title,
+      href: d.href,
       missing: QUALITY_FIELDS.filter(({ check }) => !check(d)).map(({ label }) => label),
     }))
     .filter((d) => d.missing.length > 0)
     .sort((a, b) => b.missing.length - a.missing.length)
     .slice(0, 20);
-  return { total, completeness, incomplete };
+  return { total, completeness, incomplete, score, scoreLabel: scoreLabel(score) };
 }
 
 export function getStagnantDeals(deals: EnrichedDeal[], today: Date, days = 14): EnrichedDeal[] {

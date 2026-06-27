@@ -141,6 +141,9 @@ export interface ClientifyDeal {
   expected_closed_date: string | null;
   actual_closed_date: string | null;
   deal_source: string | null;
+  // Solo disponible en GET /deals/{id}/ (endpoint individual, NO en la lista).
+  // Nexus lo enriquece haciendo un fetch adicional para cada deal perdido en el sync.
+  lost_reason?: string | null;
 }
 
 // ------------------------------------------------------------------
