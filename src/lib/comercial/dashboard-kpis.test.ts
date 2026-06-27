@@ -6,7 +6,7 @@ function ed(p: Partial<EnrichedDeal>): EnrichedDeal {
     deal_id: 1, title: "t", company_name: null, contact_name: null, amount: 0,
     currency: "ARS", pipeline: "ANMAT", pipeline_id: 10, stage: "s", status: "open",
     owner_name: null, expected_close: null, actual_close: null, modified_src: null, href: "",
-    effective_probability: 0, overlay_horizonte: null, overlay_observaciones: null, deal_source: null, ...p,
+    effective_probability: 0, overlay_horizonte: null, overlay_observaciones: null, deal_source: null, loss_reason: null, ...p,
   };
 }
 

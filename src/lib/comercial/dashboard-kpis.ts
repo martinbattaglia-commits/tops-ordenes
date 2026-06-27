@@ -18,6 +18,7 @@ export interface EnrichedDeal {
   overlay_horizonte: string | null;
   overlay_observaciones: string | null;
   deal_source: string | null;
+  loss_reason: string | null;
   stale_days?: number;
   is_overdue?: boolean;
 }

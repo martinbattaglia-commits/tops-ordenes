@@ -10,6 +10,29 @@ const fmt = (n: number): string => {
   return "$ " + v.toLocaleString("es-AR");
 };
 
+// Mapa de interpretaciones ejecutivas por motivo de pérdida
+const REASON_INSIGHTS: Record<string, string> = {
+  "Precio":          "Señal de competitividad de precio. Revisar estrategia de pricing y el valor percibido en la propuesta.",
+  "Condiciones":     "Restricciones operativas o comerciales. Analizar si las condiciones son flexibilizables o si requieren nuevo enfoque.",
+  "No contesta N/A": "Falla en el seguimiento. Estos deals necesitan un protocolo de reactivación antes de considerarse perdidos.",
+  "Other":           "Motivos varios. Revisar el detalle individual para identificar patrones no categorizados.",
+};
+
+function getReasonInsight(reason: string): string {
+  return REASON_INSIGHTS[reason] ?? "Revisar los deals individuales para determinar el patrón.";
+}
+
+const REASON_COLOR: Record<string, string> = {
+  "Precio":          "bg-orange-500/80",
+  "Condiciones":     "bg-yellow-500/80",
+  "No contesta N/A": "bg-blue-500/80",
+  "Other":           "bg-gray-400/80",
+};
+
+function reasonColor(reason: string): string {
+  return REASON_COLOR[reason] ?? "bg-fg-muted/50";
+}
+
 interface LossAnalysisProps {
   deals: EnrichedDeal[];
   kpis: Kpis;
@@ -22,6 +45,61 @@ export function LossAnalysis({ deals, kpis }: LossAnalysisProps) {
 
 function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
   const lostDeals = useMemo(() => deals.filter((d) => d.status === "lost"), [deals]);
+
+  // Distribución por motivo de pérdida (campo nativo Clientify)
+  const byReason = useMemo(() => {
+    const map = new Map<string, { count: number; amount: number; deals: EnrichedDeal[] }>();
+    let noReason = 0;
+    for (const d of lostDeals) {
+      const reason = d.loss_reason ?? null;
+      if (!reason) { noReason++; continue; }
+      const cur = map.get(reason) ?? { count: 0, amount: 0, deals: [] };
+      map.set(reason, { count: cur.count + 1, amount: cur.amount + d.amount, deals: [...cur.deals, d] });
+    }
+    const rows = [...map.entries()]
+      .map(([reason, v]) => ({
+        reason,
+        ...v,
+        pct: Math.round((v.count / kpis.lostCount) * 100),
+        ticketAvg: v.count > 0 ? v.amount / v.count : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+    return { rows, noReason };
+  }, [lostDeals, kpis.lostCount]);
+
+  // Tendencia mensual por motivo
+  const monthlyByReason = useMemo(() => {
+    const map = new Map<string, Map<string, number>>();
+    for (const d of lostDeals) {
+      const reason = d.loss_reason;
+      if (!reason) continue;
+      const dateStr = d.actual_close ?? d.modified_src;
+      if (!dateStr) continue;
+      const month = dateStr.slice(0, 7);
+      if (!map.has(reason)) map.set(reason, new Map());
+      const inner = map.get(reason)!;
+      inner.set(month, (inner.get(month) ?? 0) + 1);
+    }
+    return map;
+  }, [lostDeals]);
+
+  // Serie de meses para la tendencia
+  const months = useMemo(() => {
+    const all = new Set<string>();
+    for (const d of lostDeals) {
+      const dateStr = d.actual_close ?? d.modified_src;
+      if (dateStr) all.add(dateStr.slice(0, 7));
+    }
+    return [...all].sort().slice(-6);
+  }, [lostDeals]);
+
+  const monthLabels = useMemo(
+    () =>
+      months.map((m) =>
+        new Date(m + "-15").toLocaleDateString("es-AR", { month: "short", year: "2-digit" })
+      ),
+    [months]
+  );
 
   // Stage distribution
   const byStage = useMemo(() => {
@@ -36,27 +114,6 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
       .sort((a, b) => b.count - a.count);
   }, [lostDeals, kpis.lostCount]);
 
-  // Monthly trend using actual_close
-  const monthlyTrend = useMemo(() => {
-    const map = new Map<string, { count: number; amount: number }>();
-    for (const d of lostDeals) {
-      const dateStr = d.actual_close ?? d.modified_src;
-      if (!dateStr) continue;
-      const month = dateStr.slice(0, 7); // YYYY-MM
-      const cur = map.get(month) ?? { count: 0, amount: 0 };
-      map.set(month, { count: cur.count + 1, amount: cur.amount + d.amount });
-    }
-    return [...map.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-6) // últimos 6 meses
-      .map(([month, v]) => ({
-        month: new Date(month + "-01").toLocaleDateString("es-AR", { month: "short", year: "2-digit" }),
-        ...v,
-      }));
-  }, [lostDeals]);
-
-  const maxMonthCount = Math.max(...monthlyTrend.map((m) => m.count), 1);
-
   // Pipeline distribution
   const byPipeline = useMemo(() => {
     const map = new Map<string, { count: number; amount: number }>();
@@ -65,15 +122,16 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
       const cur = map.get(p) ?? { count: 0, amount: 0 };
       map.set(p, { count: cur.count + 1, amount: cur.amount + d.amount });
     }
-    return [...map.entries()]
-      .map(([pipeline, v]) => ({ pipeline, ...v }))
-      .sort((a, b) => b.amount - a.amount);
+    return [...map.entries()].map(([pipeline, v]) => ({ pipeline, ...v })).sort((a, b) => b.amount - a.amount);
   }, [lostDeals]);
 
   const total = kpis.wonAmount + kpis.lostAmount;
   const wonPct = total > 0 ? Math.round((kpis.wonAmount / total) * 100) : 0;
   const lostPct = total > 0 ? Math.round((kpis.lostAmount / total) * 100) : 0;
   const ticketAvg = kpis.lostCount > 0 ? kpis.lostAmount / kpis.lostCount : 0;
+
+  const hasReasonData = byReason.rows.length > 0;
+  const maxReasonCount = Math.max(...byReason.rows.map((r) => r.count), 1);
 
   return (
     <section id="loss-analysis" className="space-y-3">
@@ -125,29 +183,151 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
           </div>
         )}
 
-        {/* Monthly trend */}
-        {monthlyTrend.length > 1 && (
-          <div className="space-y-2">
-            <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
-              Evolución mensual de pérdidas (últimos 6 meses)
+        {/* ── MOTIVOS DE PÉRDIDA (campo nativo Clientify) ── */}
+        {hasReasonData ? (
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide mb-0.5">
+                Motivos de pérdida
+              </div>
+              {byReason.noReason > 0 && (
+                <p className="text-xs text-fg-muted">
+                  {byReason.noReason} deal{byReason.noReason !== 1 ? "s" : ""} sin motivo completado en Clientify.
+                </p>
+              )}
             </div>
-            <div className="flex items-end gap-2 h-20">
-              {monthlyTrend.map(({ month, count, amount }) => (
-                <div key={month} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-fg-muted tabular-nums">{count}</span>
-                  <div
-                    className="w-full bg-status-danger/50 rounded-t-sm"
-                    style={{ height: `${Math.round((count / maxMonthCount) * 56)}px` }}
-                    title={`${count} perdidas · ${fmt(amount)}`}
-                  />
-                  <span className="text-[10px] text-fg-muted">{month}</span>
+
+            {/* Barras horizontales por razón */}
+            <div className="flex flex-col gap-3">
+              {byReason.rows.map(({ reason, count, amount, pct, ticketAvg: ta }) => (
+                <div key={reason} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-fg-primary">{reason}</span>
+                    <span className="text-xs tabular-nums text-fg-muted">
+                      {count} deals · {fmt(amount)} · ticket {fmt(ta)}
+                    </span>
+                  </div>
+                  <div className="relative h-3 rounded-full bg-fg-primary/8 overflow-hidden">
+                    <div
+                      className={`absolute left-0 top-0 h-full rounded-full ${reasonColor(reason)}`}
+                      style={{ width: `${Math.round((count / maxReasonCount) * 100)}%` }}
+                      title={`${count} (${pct}%)`}
+                    />
+                  </div>
+                  <p className="text-xs text-fg-muted leading-snug">{getReasonInsight(reason)}</p>
                 </div>
               ))}
             </div>
+
+            {/* Tendencia mensual por motivo */}
+            {months.length > 1 && (
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
+                  Evolución mensual por motivo (últimos 6 meses)
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-stroke-soft">
+                        <th className="py-1.5 px-2 text-left font-semibold text-fg-muted uppercase tracking-wide w-36">
+                          Motivo
+                        </th>
+                        {monthLabels.map((m, i) => (
+                          <th key={i} className="py-1.5 px-2 text-right font-semibold text-fg-muted uppercase tracking-wide">
+                            {m}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {byReason.rows.map(({ reason }) => (
+                        <tr key={reason} className="border-b border-stroke-soft last:border-0 hover:bg-fg-primary/5">
+                          <td className="py-1.5 px-2 font-medium text-fg-primary">{reason}</td>
+                          {months.map((m) => {
+                            const v = monthlyByReason.get(reason)?.get(m) ?? 0;
+                            return (
+                              <td key={m} className="py-1.5 px-2 text-right tabular-nums text-fg-secondary">
+                                {v > 0 ? v : <span className="text-fg-muted/40">—</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Top deals perdidos con enlace directo */}
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
+                Deals perdidos — enlace directo a Clientify
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-stroke-soft text-xs text-fg-muted uppercase tracking-wide">
+                      <th className="py-1.5 px-2 text-left">Cliente</th>
+                      <th className="py-1.5 px-2 text-left">Motivo</th>
+                      <th className="py-1.5 px-2 text-right">Importe</th>
+                      <th className="py-1.5 px-2 text-left">Responsable</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lostDeals
+                      .filter((d) => d.loss_reason)
+                      .sort((a, b) => b.amount - a.amount)
+                      .slice(0, 15)
+                      .map((d) => (
+                        <tr
+                          key={d.deal_id}
+                          className="border-b border-stroke-soft last:border-0 hover:bg-fg-primary/5 transition-colors"
+                        >
+                          <td className="py-2 px-2">
+                            <a
+                              href={d.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-fg-primary hover:text-brand underline-offset-2 hover:underline truncate block max-w-[200px]"
+                              title={d.title}
+                            >
+                              {d.title}
+                            </a>
+                          </td>
+                          <td className="py-2 px-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-white text-xs font-medium ${reasonColor(d.loss_reason ?? "")}`}>
+                              {d.loss_reason}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums text-status-danger font-medium">
+                            {fmt(d.amount)}
+                          </td>
+                          <td className="py-2 px-2 text-fg-muted text-xs">
+                            {d.owner_name ?? "—"}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Sin datos de motivo todavía — el campo existe pero está vacío o el sync aún no corrió */
+          <div className="rounded-lg border border-stroke-soft bg-bg-surface-alt px-4 py-3 space-y-1">
+            <p className="text-sm font-semibold text-fg-secondary">
+              Motivos de pérdida — sincronización pendiente
+            </p>
+            <p className="text-xs text-fg-muted">
+              El campo <strong>Motivo de pérdida</strong> existe de forma nativa en Clientify y está
+              configurado con las categorías: Precio, Condiciones, No contesta / N/A, Otros. El próximo
+              sync diario (21:00 ART) cargará los datos y activará este análisis automáticamente.
+            </p>
           </div>
         )}
 
-        {/* Stage distribution */}
+        {/* Etapa en que se pierden */}
         {byStage.length > 0 && (
           <div className="space-y-2">
             <div className="text-xs font-semibold text-fg-muted uppercase tracking-wide">
@@ -207,20 +387,6 @@ function LossAnalysisInner({ deals, kpis }: LossAnalysisProps) {
             </div>
           </div>
         )}
-
-        {/* Panel informativo: habilitar motivos */}
-        <div className="rounded-lg border border-stroke-soft bg-bg-surface-alt px-4 py-3 space-y-1">
-          <p className="text-sm font-semibold text-fg-secondary">
-            Análisis de motivos de pérdida — pendiente configuración
-          </p>
-          <p className="text-xs text-fg-muted">
-            Clientify no registra motivos de pérdida de forma nativa. Para activar este análisis, pedirle
-            al administrador del CRM que cree un campo personalizado de tipo <em>Dropdown</em> llamado{" "}
-            <strong>&quot;Motivo de pérdida&quot;</strong> en los Deals, con opciones como: Precio,
-            Competencia, No responde, Producto no aplica, Timing, etc. Una vez creado y completado en los
-            deals perdidos, el análisis se activará automáticamente en el próximo sync.
-          </p>
-        </div>
       </div>
     </section>
   );

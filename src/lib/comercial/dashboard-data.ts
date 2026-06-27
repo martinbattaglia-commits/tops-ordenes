@@ -63,11 +63,15 @@ export async function getTableroData(): Promise<TableroData> {
   const { data: rows } = await supabase
     .from("v_clientify_deals_enriched")
     .select(
-      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,actual_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones,deal_source"
+      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,actual_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones,deal_source,lost_reason"
     )
     .order("amount", { ascending: false });
 
-  const deals = (rows ?? []).map((r) => ({ ...r, deal_source: (r as { deal_source?: string | null }).deal_source ?? null })) as EnrichedDeal[];
+  const deals = (rows ?? []).map((r) => ({
+    ...r,
+    deal_source: (r as { deal_source?: string | null }).deal_source ?? null,
+    loss_reason: (r as { lost_reason?: string | null }).lost_reason ?? null,
+  })) as EnrichedDeal[];
 
   const { data: snaps } = await supabase
     .from("clientify_dashboard_snapshots")

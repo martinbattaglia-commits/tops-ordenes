@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { listDeals, listPipelines, ClientifyError } from "@/lib/clientify/client";
+import { listDeals, listPipelines, getDeal, ClientifyError } from "@/lib/clientify/client";
 import { mapDeal } from "@/lib/clientify/mappers";
 import { isVisibleCommercialPipeline } from "@/lib/comercial/pipeline-filter";
 import { persistDealsSync } from "@/lib/comercial/dashboard-sync-db";
@@ -53,6 +53,31 @@ async function handle(req: Request): Promise<Response> {
       })
     );
     const deals = dealsByPipeline.flat();
+
+    // Enriquecer deals perdidos con lost_reason (campo nativo de Clientify disponible
+    // SOLO en GET /deals/{id}/, no en el endpoint de lista).
+    // Rate limit: 300 req/min → lotes de 10 con pequeña pausa entre lotes.
+    const lostDeals = deals.filter((d) => d.status === "lost");
+    if (lostDeals.length > 0) {
+      const BATCH = 10;
+      for (let i = 0; i < lostDeals.length; i += BATCH) {
+        const batch = lostDeals.slice(i, i + BATCH);
+        await Promise.all(
+          batch.map(async (d) => {
+            try {
+              const full = await getDeal(d.id);
+              d.lossReason = full.lost_reason ?? null;
+            } catch {
+              // Best-effort: si falla un deal individual, no interrumpe el sync
+            }
+          })
+        );
+        // Pausa entre lotes para respetar rate limit
+        if (i + BATCH < lostDeals.length) {
+          await new Promise((r) => setTimeout(r, 300));
+        }
+      }
+    }
 
     let persisted = { cached: 0, snapshots: 0 };
     if (!dryRun) {
