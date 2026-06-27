@@ -30,7 +30,7 @@ export function ScoreBadge({ score, size = "md" }: Props) {
           className="transition-all duration-500"
         />
       </svg>
-      <span className={`text-sm font-bold tabular ${color}`}>{score}%</span>
+      <span className={`text-sm font-bold tabular-nums ${color}`}>{score}%</span>
     </div>
   );
 }

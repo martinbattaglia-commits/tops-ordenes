@@ -29,9 +29,12 @@ export function DiffRow({ diff, onAccept, canEdit }: Props) {
 
   const handleAccept = async () => {
     setLoading(true);
-    await onAccept(diff.id, note || undefined);
-    setLoading(false);
-    setShowNote(false);
+    try {
+      await onAccept(diff.id, note || undefined);
+      setShowNote(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const label = RECON_DIFF_FIELD_LABEL[diff.field] ?? diff.field;
