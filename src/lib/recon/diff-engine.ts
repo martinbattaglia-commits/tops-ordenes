@@ -105,16 +105,17 @@ export function computeRecon(po: POForRecon, invoice: InvoiceForRecon): ReconRes
   // Tipo de comprobante: debe ser FACTURA_A o FACTURA_B.
   // NOTA_DEBITO y NOTA_CREDITO son error contable grave (no cancelan la deuda).
   // Tipos desconocidos son warning.
-  if (!invoice.tipo_comprobante.startsWith("FACTURA")) {
+  const tipoComp = invoice.tipo_comprobante ?? "";
+  if (!tipoComp.startsWith("FACTURA")) {
     const isDebitOrCredit =
-      invoice.tipo_comprobante.startsWith("NOTA_DEBITO") ||
-      invoice.tipo_comprobante.startsWith("NOTA_CREDITO") ||
-      invoice.tipo_comprobante.startsWith("NOTA DE DEBITO") ||
-      invoice.tipo_comprobante.startsWith("NOTA DE CREDITO");
+      tipoComp.startsWith("NOTA_DEBITO") ||
+      tipoComp.startsWith("NOTA_CREDITO") ||
+      tipoComp.startsWith("NOTA DE DEBITO") ||
+      tipoComp.startsWith("NOTA DE CREDITO");
     diffs.push({
       field: "tipo_comprobante",
       val_oc: "FACTURA_A / FACTURA_B",
-      val_factura: invoice.tipo_comprobante,
+      val_factura: tipoComp,
       severity: isDebitOrCredit ? "error" : "warning",
     });
   }
