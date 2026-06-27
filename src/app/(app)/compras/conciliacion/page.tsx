@@ -6,7 +6,6 @@ import { listRecons } from "@/lib/recon/data";
 import { ReconStatusBadge } from "@/components/compras/ReconStatusBadge";
 import { fmtDate } from "@/lib/utils";
 import type { ReconStatus } from "@/lib/recon/types";
-import { RECON_STATUS_META } from "@/lib/recon/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 
 export const metadata = { title: "Conciliación de Órdenes de Compra" };
