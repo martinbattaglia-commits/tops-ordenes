@@ -19,6 +19,7 @@ import { AutoInsights } from "./AutoInsights";
 import { ActionPlan } from "./ActionPlan";
 import { OpportunitiesTable } from "./OpportunitiesTable";
 import { SyncStatus } from "./SyncStatus";
+import { SyncDiagnostics } from "./SyncDiagnostics";
 import { VistaDireccion } from "./VistaDireccion";
 import { LossAnalysis } from "./LossAnalysis";
 import {
@@ -242,6 +243,13 @@ function TableroShellInner({ data }: { data: TableroData }) {
         syncStatus={data.syncStatus}
         lastSync={data.lastSync}
         kpis={data.kpis}
+      />
+
+      {/* 18 · Diagnóstico técnico del sincronizador (admin) */}
+      <SyncDiagnostics
+        syncStatus={data.syncStatus}
+        syncHistory={data.syncHistory}
+        lastSync={data.lastSync}
       />
     </div>
   );

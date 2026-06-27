@@ -12,6 +12,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** Versión del sincronizador — incrementar ante cambios de contrato o lógica de enriquecimiento. */
+const SYNC_VERSION = "2.1.0";
+
 /**
  * GET|POST /api/clientify/sync-deals
  * Snapshot diario de deals de Clientify → Supabase (caché + snapshots).
@@ -118,6 +121,9 @@ async function handle(req: Request): Promise<Response> {
         pipelines: pipelines.length,
         deals_synced: deals.length,
         errors: 0,
+        lost_reason_enriched: enrichedCount,
+        lost_reason_skipped: skippedCount,
+        sync_version: SYNC_VERSION,
         message: `OK ${deals.length} deals / ${persisted.snapshots} snapshots / lost_reason: ${enrichedCount} enriquecidos, ${skippedCount} omitidos (ya almacenados)`,
       });
     }
@@ -126,6 +132,7 @@ async function handle(req: Request): Promise<Response> {
       ok: true,
       runId,
       dryRun,
+      syncVersion: SYNC_VERSION,
       syncedAt: new Date().toISOString(),
       elapsedMs: Date.now() - started,
       pipelines: pipelines.length,
