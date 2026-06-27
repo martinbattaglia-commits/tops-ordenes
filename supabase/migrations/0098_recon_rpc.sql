@@ -5,7 +5,7 @@
 
 -- Función auxiliar: obtener rol del JWT
 CREATE OR REPLACE FUNCTION _recon_assert_role()
-RETURNS void LANGUAGE plpgsql AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   IF auth.jwt() ->> 'role' NOT IN ('admin','operaciones','supervisor') THEN
     RAISE EXCEPTION 'Sin permisos para operar conciliaciones';
@@ -34,7 +34,7 @@ BEGIN
   -- Si ya existe, eliminar diffs viejos y actualizar header
   SELECT id INTO v_recon_id
     FROM po_reconciliations
-   WHERE purchase_order_id = p_po_id;
+   WHERE purchase_order_id = p_po_id FOR UPDATE;
 
   IF v_recon_id IS NOT NULL THEN
     -- Sólo se puede re-iniciar si estaba rechazada o pendiente
@@ -244,6 +244,7 @@ DECLARE v_old recon_status_t; BEGIN
 END;
 $$;
 
+GRANT EXECUTE ON FUNCTION _recon_assert_role TO authenticated;
 GRANT EXECUTE ON FUNCTION recon_start TO authenticated;
 GRANT EXECUTE ON FUNCTION recon_approve TO authenticated;
 GRANT EXECUTE ON FUNCTION recon_reject TO authenticated;
