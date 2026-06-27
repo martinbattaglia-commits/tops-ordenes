@@ -11,6 +11,12 @@ import {
 export interface TrendPoint { date: string; forecast: number; active: number; }
 export interface SyncStatus {
   status: string; finishedAt: string | null; dealsSynced: number; pipelines: number; errors: number; message: string | null;
+  lostReasonEnriched: number; lostReasonSkipped: number; syncVersion: string | null; durationMs: number | null;
+}
+export interface SyncRun {
+  runId: string; status: string; finishedAt: string | null; durationMs: number | null;
+  dealsSynced: number; errors: number; lostReasonEnriched: number; lostReasonSkipped: number;
+  syncVersion: string | null; message: string | null;
 }
 export interface Deltas { forecast: number; active: number; }
 
@@ -29,6 +35,7 @@ export interface TableroData {
   actions: ActionItem[];
   alertGroups: AlertGroup[];
   syncStatus: SyncStatus | null;
+  syncHistory: SyncRun[];
   deltas: Deltas | null;
   forecastPeriods: ForecastPeriod[];
   funnelStages: FunnelStage[];
@@ -36,7 +43,7 @@ export interface TableroData {
   dataQuality: DataQualityReport;
 }
 
-const EMPTY_DATA_QUALITY: DataQualityReport = { total: 0, completeness: [], incomplete: [] };
+const EMPTY_DATA_QUALITY: DataQualityReport = { total: 0, completeness: [], incomplete: [], score: 0, scoreLabel: "critico" };
 
 const EMPTY_KPIS: Kpis = {
   count: 0, liveCount: 0, totalPipeline: 0, activePipeline: 0, forecast: 0, wonAmount: 0, avgProbability: 0,
@@ -50,7 +57,7 @@ function emptyCockpit(configured: boolean): TableroData {
   return {
     configured, deals: [], kpis: EMPTY_KPIS, trends: {}, trendSeries: [], lastSync: null,
     units: [], stages: [], quadrants: [], topOpps: [], insights: [], actions: [], alertGroups: [],
-    syncStatus: null, deltas: null,
+    syncStatus: null, syncHistory: [], deltas: null,
     forecastPeriods: [], funnelStages: [], sourceStats: [], dataQuality: EMPTY_DATA_QUALITY,
   };
 }
@@ -63,11 +70,15 @@ export async function getTableroData(): Promise<TableroData> {
   const { data: rows } = await supabase
     .from("v_clientify_deals_enriched")
     .select(
-      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones,deal_source"
+      "deal_id,title,company_name,contact_name,amount,currency,pipeline,pipeline_id,stage,status,owner_name,expected_close,actual_close,modified_src,href,effective_probability,overlay_horizonte,overlay_observaciones,deal_source,lost_reason"
     )
     .order("amount", { ascending: false });
 
-  const deals = (rows ?? []).map((r) => ({ ...r, deal_source: (r as { deal_source?: string | null }).deal_source ?? null })) as EnrichedDeal[];
+  const deals = (rows ?? []).map((r) => ({
+    ...r,
+    deal_source: (r as { deal_source?: string | null }).deal_source ?? null,
+    loss_reason: (r as { lost_reason?: string | null }).lost_reason ?? null,
+  })) as EnrichedDeal[];
 
   const { data: snaps } = await supabase
     .from("clientify_dashboard_snapshots")
@@ -98,17 +109,40 @@ export async function getTableroData(): Promise<TableroData> {
 
   const { data: lastLog } = await supabase
     .from("clientify_dashboard_sync_log")
-    .select("status,finished_at,deals_synced,pipelines,errors,message")
-    .order("started_at", { ascending: false })
-    .limit(1);
+    .select("run_id,status,finished_at,duration_ms,deals_synced,pipelines,errors,message,lost_reason_enriched,lost_reason_skipped,sync_version")
+    .order("finished_at", { ascending: false })
+    .limit(10);
   const l = lastLog?.[0];
   const syncStatus: SyncStatus | null = l
-    ? { status: l.status, finishedAt: l.finished_at, dealsSynced: l.deals_synced ?? 0, pipelines: l.pipelines ?? 0, errors: l.errors ?? 0, message: l.message ?? null }
+    ? {
+        status: l.status,
+        finishedAt: l.finished_at,
+        dealsSynced: l.deals_synced ?? 0,
+        pipelines: l.pipelines ?? 0,
+        errors: l.errors ?? 0,
+        message: l.message ?? null,
+        lostReasonEnriched: l.lost_reason_enriched ?? 0,
+        lostReasonSkipped: l.lost_reason_skipped ?? 0,
+        syncVersion: l.sync_version ?? null,
+        durationMs: l.duration_ms ?? null,
+      }
     : null;
-  const lastSync = l?.status === "completed" ? l.finished_at ?? null : null;
+  const syncHistory: SyncRun[] = (lastLog ?? []).map((r) => ({
+    runId: r.run_id as string,
+    status: r.status as string,
+    finishedAt: r.finished_at as string | null,
+    durationMs: r.duration_ms as number | null,
+    dealsSynced: (r.deals_synced as number | null) ?? 0,
+    errors: (r.errors as number | null) ?? 0,
+    lostReasonEnriched: (r.lost_reason_enriched as number | null) ?? 0,
+    lostReasonSkipped: (r.lost_reason_skipped as number | null) ?? 0,
+    syncVersion: r.sync_version as string | null,
+    message: r.message as string | null,
+  }));
+  const lastSync = l?.status === "completed" ? (l.finished_at as string | null) ?? null : null;
 
   if (!deals.length) {
-    return { ...emptyCockpit(env.clientify.configured), trends, trendSeries, deltas, syncStatus, lastSync };
+    return { ...emptyCockpit(env.clientify.configured), trends, trendSeries, deltas, syncStatus, syncHistory, lastSync };
   }
 
   const today = new Date();
@@ -129,6 +163,7 @@ export async function getTableroData(): Promise<TableroData> {
     actions: generateSuggestedActions(deals, today, 5),
     alertGroups: buildAlertGroups(deals, today),
     syncStatus,
+    syncHistory,
     deltas,
     forecastPeriods: getForecastByPeriod(deals, today),
     funnelStages: getFunnelData(deals),

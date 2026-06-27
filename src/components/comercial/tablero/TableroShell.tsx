@@ -1,26 +1,32 @@
 "use client";
 
-import { useMemo, Suspense } from "react";
+import { useMemo, Suspense, useState } from "react";
 import { useTableroFilters } from "@/hooks/useTableroFilters";
-import { ExecutiveSummary } from "./ExecutiveSummary";
-import { TopOpportunities } from "./TopOpportunities";
+import { ExecutiveNarrative } from "./ExecutiveNarrative";
+import { PipelineStatus } from "./PipelineStatus";
+import { WonVsLost } from "./WonVsLost";
+import { ExecutiveActions } from "./ExecutiveActions";
+import { LossAnalysis } from "./LossAnalysis";
+import { DataQuality } from "./DataQuality";
+import { OpportunitiesTable } from "./OpportunitiesTable";
+import { SyncDiagnostics } from "./SyncDiagnostics";
+// Secondary (moved behind collapsible)
+import { VistaDireccion } from "./VistaDireccion";
 import { FunnelAnalysis } from "./FunnelAnalysis";
 import { SourcePerformance } from "./SourcePerformance";
 import { StagnantOpportunities } from "./StagnantOpportunities";
-import { DataQuality } from "./DataQuality";
 import { PriorityMatrix } from "./PriorityMatrix";
 import { BusinessUnitDonut } from "./BusinessUnitDonut";
 import { StageBars } from "./StageBars";
 import { ConcretionBars } from "./ConcretionBars";
 import { ForecastTrend } from "./ForecastTrend";
-import { CommercialAlerts } from "./CommercialAlerts";
-import { ForecastBlocks } from "./ForecastBlocks";
 import { AutoInsights } from "./AutoInsights";
 import { ActionPlan } from "./ActionPlan";
-import { OpportunitiesTable } from "./OpportunitiesTable";
+import { ForecastBlocks } from "./ForecastBlocks";
+import { CommercialAlerts } from "./CommercialAlerts";
+import { TopOpportunities } from "./TopOpportunities";
 import { SyncStatus } from "./SyncStatus";
-import { VistaDireccion } from "./VistaDireccion";
-import { LossAnalysis } from "./LossAnalysis";
+import { CountUp } from "@/components/CountUp";
 import {
   calculateCommercialScore,
   normalizeScore,
@@ -42,28 +48,26 @@ interface Props {
   initialParams?: Record<string, string | string[]>;
 }
 
+// ─── Formatters ───────────────────────────────────────────────────────────────
+
+const fmt = (n: number) =>
+  Math.abs(n) >= 1_000_000
+    ? "$ " + (n / 1_000_000).toLocaleString("es-AR", { maximumFractionDigits: 1 }) + "M"
+    : "$ " + Math.round(n || 0).toLocaleString("es-AR");
+
 // ─── Deal filtering ───────────────────────────────────────────────────────────
 
 function filterDeals(deals: EnrichedDeal[], filters: ReturnType<typeof useTableroFilters>["filters"]): EnrichedDeal[] {
   const today = new Date();
-
-  // Pre-compute raw scores for semáforo normalization
   const rawScores = deals.map((d) => calculateCommercialScore(d, today));
 
   return deals.filter((d, idx) => {
-    // ── pipeline ──
     if (filters.pipeline && d.pipeline !== filters.pipeline) return false;
-
-    // ── stage ──
     if (filters.stage && d.stage !== filters.stage) return false;
-
-    // ── source ──
     if (filters.source) {
       const src = d.deal_source ?? "Sin fuente";
       if (src !== filters.source) return false;
     }
-
-    // ── score (semáforo) ──
     if (filters.score !== "all") {
       const normalizedScore = normalizeScore(rawScores, rawScores[idx]);
       const color = getSemaforoColor(normalizedScore);
@@ -71,183 +75,252 @@ function filterDeals(deals: EnrichedDeal[], filters: ReturnType<typeof useTabler
       if (filters.score === "warm" && color !== "yellow") return false;
       if (filters.score === "cold" && color !== "red") return false;
     }
-
-    // ── status ──
     switch (filters.status) {
-      case "active":
-        if (!isLiveOpportunity(d)) return false;
-        break;
-      case "expired":
-        if (!isExpiredOpportunity(d)) return false;
-        break;
-      case "won":
-        if (!isWonOpportunity(d)) return false;
-        break;
-      case "lost":
-        if (!isLostOpportunity(d)) return false;
-        break;
-      case "all":
-        // No filter
-        break;
+      case "active":    if (!isLiveOpportunity(d)) return false; break;
+      case "expired":   if (!isExpiredOpportunity(d)) return false; break;
+      case "won":       if (!isWonOpportunity(d)) return false; break;
+      case "lost":      if (!isLostOpportunity(d)) return false; break;
     }
-
-    // ── no_action: stale >= 21 days ──
     if (filters.no_action) {
       if (!isLiveOpportunity(d)) return false;
       if (stalenessDays(d, today) < 21) return false;
     }
-
-    // ── stagnant: stale >= 14 days ──
     if (filters.stagnant) {
       if (!isLiveOpportunity(d)) return false;
       if (stalenessDays(d, today) < 14) return false;
     }
-
-    // ── overdue ──
     if (filters.overdue) {
       if (!isLiveOpportunity(d)) return false;
       if (!isOverdue(d, today)) return false;
     }
-
-    // ── closing_30: expected_close within 30 days ──
     if (filters.closing_30) {
       if (!isLiveOpportunity(d)) return false;
       if (!d.expected_close) return false;
       const daysTo = (new Date(d.expected_close + "T12:00:00").getTime() - today.getTime()) / 86_400_000;
       if (daysTo < 0 || daysTo > 30) return false;
     }
-
     return true;
   });
 }
 
-// ─── Inner shell (uses hook — must be inside Suspense) ───────────────────────
+// ─── KPI card compacta (5 KPIs ejecutivos) ────────────────────────────────────
+
+interface ExecKpiProps {
+  label: string;
+  value: React.ReactNode;
+  sub?: string;
+  accent?: "default" | "success" | "danger" | "info";
+}
+
+function ExecKpi({ label, value, sub, accent = "default" }: ExecKpiProps) {
+  const valueColor =
+    accent === "success" ? "text-status-success" :
+    accent === "danger"  ? "text-status-danger"  :
+    accent === "info"    ? "text-status-info"     :
+    "text-fg-primary";
+  return (
+    <div className="card card-pad flex flex-col gap-1.5">
+      <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{label}</span>
+      <div className={`text-2xl font-bold tabular-nums ${valueColor}`}>{value}</div>
+      {sub && <span className="text-xs text-fg-muted">{sub}</span>}
+    </div>
+  );
+}
+
+// ─── Collapsible secondary panel ─────────────────────────────────────────────
+
+function SecondaryPanel({ children, label }: { children: React.ReactNode; label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border border-stroke-soft rounded-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-bg-surface text-left hover:bg-fg-primary/5 transition-colors"
+      >
+        <span className="text-xs font-semibold uppercase tracking-wider text-fg-muted">{label}</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14" height="14"
+          viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2"
+          strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform 200ms" }}
+          aria-hidden="true"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
+        <div className="border-t border-stroke-soft p-4 space-y-6 bg-bg-surface/50">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Inner shell ─────────────────────────────────────────────────────────────
 
 function TableroShellInner({ data }: { data: TableroData }) {
   const { filters } = useTableroFilters();
 
-  // Filter deals for the table; other sections use unfiltered data
   const filteredDeals = useMemo(
     () => filterDeals(data.deals, filters),
     [data.deals, filters]
   );
 
-  // Sort filtered deals per URL sort param
   const sortedDeals = useMemo(() => {
     const today = new Date();
     return [...filteredDeals].sort((a, b) => {
       switch (filters.sort) {
-        case "amount":
-          return b.amount - a.amount;
-        case "forecast":
-          return (b.amount * b.effective_probability) / 100 - (a.amount * a.effective_probability) / 100;
-        case "probability":
-          return b.effective_probability - a.effective_probability;
+        case "amount":      return b.amount - a.amount;
+        case "forecast":    return (b.amount * b.effective_probability) / 100 - (a.amount * a.effective_probability) / 100;
+        case "probability": return b.effective_probability - a.effective_probability;
         case "modified": {
           const ta = a.modified_src ? new Date(a.modified_src).getTime() : 0;
           const tb = b.modified_src ? new Date(b.modified_src).getTime() : 0;
           return tb - ta;
         }
-        case "days_stagnant":
-          return stalenessDays(b, today) - stalenessDays(a, today);
+        case "days_stagnant": return stalenessDays(b, new Date()) - stalenessDays(a, new Date());
         case "score":
-        default:
-          return calculateCommercialScore(b, today) - calculateCommercialScore(a, today);
+        default: return calculateCommercialScore(b, today) - calculateCommercialScore(a, today);
       }
     });
   }, [filteredDeals, filters.sort]);
 
+  const dataQualityPct = Math.round(data.kpis.dataQuality.score);
+
   return (
-    <div className="mx-auto max-w-[1500px] space-y-6 p-4 md:p-8 nx-page-fade">
-      {/* 1 · Header */}
+    <div className="mx-auto max-w-[1500px] space-y-5 p-4 md:p-8 nx-page-fade">
+
+      {/* ── 1 · Header ejecutivo ── */}
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-eyebrow-sm uppercase text-fg-muted">Comercial · CRM</div>
-          <h1 className="text-2xl font-bold text-fg-primary">Cockpit comercial</h1>
+          <h1 className="text-2xl font-bold text-fg-primary">Centro de Comando Comercial</h1>
         </div>
-        <div className="text-xs text-fg-muted">
-          Foto de Clientify · última sync{" "}
-          {data.lastSync ? new Date(data.lastSync).toLocaleString("es-AR") : "—"}
+        <div className="text-xs text-fg-muted text-right">
+          <div>Datos de Clientify</div>
+          <div>
+            Última sync{" "}
+            {data.lastSync ? new Date(data.lastSync).toLocaleString("es-AR") : "—"}
+          </div>
         </div>
       </header>
 
-      {/* 2 · Vista Dirección — executive summary at the top */}
-      <VistaDireccion
+      {/* ── 2 · Resumen Ejecutivo (narrativa auto-generada) ── */}
+      <ExecutiveNarrative
         kpis={data.kpis}
         deals={data.deals}
-        forecastPeriods={data.forecastPeriods}
-        actions={data.actions}
-        dataQuality={data.dataQuality}
       />
 
-      {/* 3 · Resumen ejecutivo KPI cards */}
-      <ExecutiveSummary
-        kpis={data.kpis}
-        deals={data.deals}
-        deltas={data.deltas}
-        lastSync={data.lastSync}
-        syncStatus={data.syncStatus}
-      />
-
-      {/* 4 · Forecast por período */}
-      <ForecastBlocks periods={data.forecastPeriods} />
-
-      {/* 5 · Alertas comerciales — moved up */}
-      <CommercialAlerts groups={data.alertGroups} />
-
-      {/* 6 · Top oportunidades a cerrar */}
-      <TopOpportunities deals={data.deals} />
-
-      {/* 7 · Embudo comercial */}
-      <FunnelAnalysis stages={data.funnelStages} />
-
-      {/* 8 · Matriz de prioridad */}
-      <PriorityMatrix quadrants={data.quadrants} />
-
-      {/* 9 · Distribución (Pipeline + Stages) */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <BusinessUnitDonut units={data.units} />
-        <StageBars stages={data.stages} />
+      {/* ── 3 · 5 KPIs Ejecutivos ── */}
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-3">
+          KPIs ejecutivos
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-5 gap-3">
+          <ExecKpi
+            label="Pipeline activo"
+            value={<CountUp to={data.kpis.activePipeline} format="currency" />}
+            sub={`${data.kpis.liveCount} oportunidades`}
+          />
+          <ExecKpi
+            label="Forecast ponderado"
+            value={<CountUp to={data.kpis.forecast} format="currency" />}
+            sub={`${data.kpis.weightedConcretion.toFixed(1)}% concreción`}
+            accent={data.kpis.weightedConcretion >= 60 ? "success" : data.kpis.weightedConcretion >= 40 ? "info" : "danger"}
+          />
+          <ExecKpi
+            label="Ganado"
+            value={<CountUp to={data.kpis.wonAmount} format="currency" />}
+            sub={`${data.kpis.wonCount} deals`}
+            accent="success"
+          />
+          <ExecKpi
+            label="Perdido"
+            value={<CountUp to={data.kpis.lostAmount} format="currency" />}
+            sub={`${data.kpis.lostCount} deals`}
+            accent="danger"
+          />
+          <ExecKpi
+            label="Calidad CRM"
+            value={<span>{dataQualityPct}%</span>}
+            sub={data.dataQuality.scoreLabel}
+            accent={dataQualityPct >= 80 ? "success" : dataQualityPct >= 50 ? "info" : "danger"}
+          />
+        </div>
       </section>
 
-      {/* 10 · Convertibilidad + tendencia */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ConcretionBars bands={data.kpis.bands} />
-        <ForecastTrend series={data.trendSeries} deltas={data.deltas} />
-      </section>
+      {/* ── 4 · Pipeline Comercial (6 métricas operativas) ── */}
+      <PipelineStatus kpis={data.kpis} />
 
-      {/* 11 · Rendimiento por canal / fuente */}
-      <SourcePerformance stats={data.sourceStats} />
+      {/* ── 5 · Ganado vs Perdido ── */}
+      <WonVsLost kpis={data.kpis} deals={data.deals} />
 
-      {/* 12 · Oportunidades estancadas */}
-      <StagnantOpportunities deals={data.deals} />
-
-      {/* 13 · Análisis de pérdidas — conditional (LossAnalysis returns null when lostCount=0) */}
+      {/* ── 6 · Motivos de pérdida ── */}
       <LossAnalysis deals={data.deals} kpis={data.kpis} />
 
-      {/* 14 · Calidad de datos CRM */}
+      {/* ── 7 · Acciones recomendadas (qué decidir hoy) ── */}
+      <ExecutiveActions kpis={data.kpis} deals={data.deals} />
+
+      {/* ── 8 · Calidad del CRM ── */}
       <DataQuality quality={data.dataQuality} />
 
-      {/* 15 · Auto Insights + Plan de acción (2-col — CommercialAlerts moved up) */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <AutoInsights insights={data.insights} />
-        <ActionPlan actions={data.actions} />
-      </section>
+      {/* ── Detalle operativo (colapsado por defecto) ── */}
+      <SecondaryPanel label="Ver oportunidades — tabla detallada">
+        <OpportunitiesTable deals={sortedDeals} allDeals={data.deals} />
+      </SecondaryPanel>
 
-      {/* 16 · Detalle operativo — URL-filtered */}
-      <OpportunitiesTable deals={sortedDeals} allDeals={data.deals} />
+      {/* ── Análisis extendido (colapsado por defecto) ── */}
+      <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución">
+        <VistaDireccion
+          kpis={data.kpis}
+          deals={data.deals}
+          forecastPeriods={data.forecastPeriods}
+          actions={data.actions}
+          dataQuality={data.dataQuality}
+        />
+        <ForecastBlocks periods={data.forecastPeriods} />
+        <CommercialAlerts groups={data.alertGroups} />
+        <TopOpportunities deals={data.deals} />
+        <FunnelAnalysis stages={data.funnelStages} />
+        <PriorityMatrix quadrants={data.quadrants} />
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <BusinessUnitDonut units={data.units} />
+          <StageBars stages={data.stages} />
+        </section>
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ConcretionBars bands={data.kpis.bands} />
+          <ForecastTrend series={data.trendSeries} deltas={data.deltas} />
+        </section>
+        <SourcePerformance stats={data.sourceStats} />
+        <StagnantOpportunities deals={data.deals} />
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <AutoInsights insights={data.insights} />
+          <ActionPlan actions={data.actions} />
+        </section>
+      </SecondaryPanel>
 
-      {/* 17 · Transparencia de datos */}
-      <SyncStatus
-        syncStatus={data.syncStatus}
-        lastSync={data.lastSync}
-        kpis={data.kpis}
-      />
+      {/* ── Panel técnico / admin (colapsado por defecto) ── */}
+      <SecondaryPanel label="Panel técnico — sincronización y diagnóstico">
+        <SyncStatus
+          syncStatus={data.syncStatus}
+          lastSync={data.lastSync}
+          kpis={data.kpis}
+        />
+        <SyncDiagnostics
+          syncStatus={data.syncStatus}
+          syncHistory={data.syncHistory}
+        />
+      </SecondaryPanel>
+
     </div>
   );
 }
 
-// ─── Public export (wraps inner shell in Suspense for useSearchParams) ────────
+// ─── Public export ────────────────────────────────────────────────────────────
 
 export function TableroShell({ data, initialParams: _initialParams }: Props) {
   if (!data.configured) {
@@ -255,7 +328,7 @@ export function TableroShell({ data, initialParams: _initialParams }: Props) {
       <div className="space-y-6 p-4 md:p-8 nx-page-fade">
         <header>
           <div className="text-eyebrow-sm uppercase text-fg-muted">Comercial · CRM</div>
-          <h1 className="text-2xl font-bold text-fg-primary">Cockpit comercial</h1>
+          <h1 className="text-2xl font-bold text-fg-primary">Centro de Comando Comercial</h1>
         </header>
         <div className="card card-pad border-status-warning/40 text-sm text-fg-secondary">
           Clientify no está configurado (<code>CLIENTIFY_API_KEY</code>). El cockpit se activa
@@ -268,11 +341,11 @@ export function TableroShell({ data, initialParams: _initialParams }: Props) {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-[1500px] p-4 md:p-8">
-          <div className="animate-pulse space-y-4">
+        <div className="mx-auto max-w-[1500px] space-y-5 p-4 md:p-8">
+          <div className="animate-pulse space-y-5">
             <div className="h-8 w-64 rounded-lg bg-bg-surface-alt" />
-            <div className="h-48 rounded-xl bg-bg-surface-alt" />
-            <div className="h-96 rounded-xl bg-bg-surface-alt" />
+            <div className="h-24 rounded-xl bg-bg-surface-alt" />
+            <div className="h-32 rounded-xl bg-bg-surface-alt" />
           </div>
         </div>
       }
