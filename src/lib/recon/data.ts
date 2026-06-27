@@ -88,8 +88,12 @@ export async function listRecons(opts: {
 
   if (status && status !== "todas") q = q.eq("recon_status", status);
 
-  const { data, count, error } = await q;
+  const [{ data, count, error }, { data: countRows, error: countErr }] = await Promise.all([
+    q,
+    supabase.from("v_recon_status").select("recon_status"),
+  ]);
   if (error) throw error;
+  if (countErr) throw countErr;
 
   const rows = (data ?? []).map((r: Record<string, unknown>) => ({
     id:                  r.recon_id as string,
@@ -103,12 +107,13 @@ export async function listRecons(opts: {
     initiated_at:        r.initiated_at as string,
   }));
 
-  const counts = rows.reduce((acc, r) => {
-    acc[r.status] = (acc[r.status] ?? 0) + 1;
-    return acc;
-  }, {} as Record<ReconStatus, number>);
+  const counts: Record<string, number> = {};
+  for (const row of countRows ?? []) {
+    const s = (row as Record<string, unknown>).recon_status as string;
+    counts[s] = (counts[s] ?? 0) + 1;
+  }
 
-  return { rows, counts, total: count ?? 0 };
+  return { rows, counts: counts as Record<ReconStatus, number>, total: count ?? 0 };
 }
 
 // ──────────────────────────────────────────────────────────

@@ -22,16 +22,18 @@ export default async function ReconDetailPage({
   const po = await getPurchaseOrder(params.poId);
   if (!po) notFound();
 
-  let recon = await getRecon(po.id);
-
-  // Si se pasó ?invoice=<id> y no hay conciliación, iniciarla server-side
-  if (!recon && searchParams?.invoice) {
-    await startRecon(po.id, searchParams.invoice);
-    recon = await getRecon(po.id);
-  }
+  const recon = await getRecon(po.id);
 
   if (!recon) {
-    // No hay conciliación: mostrar selector de factura
+    // No hay conciliación: si viene ?invoice=<id> mostrar confirmación (sin efecto GET),
+    // de lo contrario mostrar selector de factura.
+    const invoiceId = searchParams?.invoice;
+    let invoiceLabel: string | null = null;
+    if (invoiceId) {
+      const inv = await getSupplierInvoice(invoiceId);
+      invoiceLabel = inv?.public_id ?? invoiceId;
+    }
+
     return (
       <div className="p-8 nx-page-fade max-w-xl mx-auto">
         <Link href="/compras/conciliacion" className="btn btn-ghost btn-sm mb-6">
@@ -40,15 +42,31 @@ export default async function ReconDetailPage({
         <div className="nx-surface rounded-xl p-8 text-center space-y-4">
           <div className="text-4xl">🔗</div>
           <h2 className="text-lg font-semibold">Iniciar conciliación</h2>
-          <p className="text-sm text-fg-muted">
-            OC <strong>{po.public_id}</strong> — seleccioná la factura del proveedor para cotejar.
-          </p>
-          <p className="text-xs text-fg-muted">
-            Usá el parámetro <code>?invoice=&lt;supplier_invoice_id&gt;</code> para iniciar automáticamente, o seleccioná desde la lista de Facturas.
-          </p>
-          <Link href="/compras/facturas" className="btn btn-primary btn-sm">
-            <Icon name="file-pdf" size={14} /> Ver facturas
-          </Link>
+          {invoiceId ? (
+            <>
+              <p className="text-sm text-fg-muted">
+                OC <strong>{po.public_id}</strong> ↔ Factura <strong>{invoiceLabel}</strong>
+              </p>
+              <p className="text-sm text-fg-muted">
+                ¿Confirmar inicio de conciliación contra esta factura?
+              </p>
+              <form method="POST" action={`/api/compras/conciliar/${po.id}`}>
+                <input type="hidden" name="invoiceId" value={invoiceId} />
+                <button type="submit" className="btn btn-primary btn-sm">
+                  <Icon name="check" size={14} /> Iniciar conciliación
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-fg-muted">
+                OC <strong>{po.public_id}</strong> — seleccioná la factura del proveedor para cotejar.
+              </p>
+              <Link href="/compras/facturas" className="btn btn-primary btn-sm">
+                <Icon name="file-pdf" size={14} /> Ver facturas
+              </Link>
+            </>
+          )}
         </div>
       </div>
     );
