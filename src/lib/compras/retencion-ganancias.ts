@@ -100,6 +100,16 @@ export interface RetenciónParams {
 
 // ─── Resultado ────────────────────────────────────────────────
 
+/**
+ * estado semáforo:
+ *  "ok"       → 🟢 no corresponde retención (condición clara)
+ *  "warn"     → 🟠 corresponde retención (calculada)
+ *  "revision" → 🔴 requiere validación manual (condición ambigua o excepcional)
+ *
+ * confianza:
+ *  "automatico" → todos los datos completos, sin ambigüedad
+ *  "validar"    → alguna condición requiere validación contable
+ */
 export interface RetenciónResult {
   tipoComprobante:  string;
   concepto:         Concepto;
@@ -120,8 +130,10 @@ export interface RetenciónResult {
   retencion:        number;
   netoPagar:        number;
   corresponde:      boolean;
-  estado:           "ok" | "warn";
+  estado:           "ok" | "warn" | "revision";
+  confianza:        "automatico" | "validar";
   motivo:           string;
+  resumenEjecutivo: string;   // lenguaje simple para administrativos
   normativaVersion: string;
 }
 
@@ -182,6 +194,39 @@ function alicuotaFor(c: Exclude<ConceptoGravado, "honorarios">, cfg: RetenciónC
   }
 }
 
+// ─── Resumen ejecutivo (lenguaje simple para administrativos) ─
+
+function buildResumenEjecutivo(
+  corresponde: boolean,
+  motivo_key:
+    | "exento"
+    | "no_factura_a"
+    | "factura_c"
+    | "concepto_excluido"
+    | "bajo_minimo"
+    | "honorarios"
+    | "lineal",
+  concepto?: ConceptoGravado,
+  tipoComprobante?: string,
+): string {
+  switch (motivo_key) {
+    case "exento":
+      return "No corresponde retención: el proveedor está exento por resolución individual de AFIP.";
+    case "no_factura_a":
+      return `No corresponde retención: solo se practica sobre Factura A. Este comprobante es ${(tipoComprobante ?? "").replace("_", " ")}.`;
+    case "factura_c":
+      return "No corresponde retención: el proveedor es Monotributista (Factura C). La retención de Ganancias no aplica a este régimen.";
+    case "concepto_excluido":
+      return "No corresponde retención: el servicio facturado está excluido de retención de Ganancias (servicios públicos, seguros u otros).";
+    case "bajo_minimo":
+      return "No corresponde retención: el total acumulado pagado al proveedor este mes no superó el mínimo establecido por normativa.";
+    case "honorarios":
+      return `Corresponde practicar retención: el acumulado mensual supera el mínimo no sujeto. Se aplica la escala progresiva para ${CONCEPTO_LABEL[concepto ?? "honorarios"]}.`;
+    case "lineal":
+      return `Corresponde practicar retención: el acumulado mensual supera el mínimo no sujeto. Se aplica alícuota fija para ${CONCEPTO_LABEL[concepto ?? "servicios"]}.`;
+  }
+}
+
 // ─── Motor principal ──────────────────────────────────────────
 
 export function calculateIncomeTaxRetention(p: RetenciónParams): RetenciónResult {
@@ -210,81 +255,103 @@ export function calculateIncomeTaxRetention(p: RetenciónParams): RetenciónResu
     netoPagar:        basePago,
     corresponde:      false,
     estado:           "ok",
+    confianza:        "automatico",
     motivo:           "",
+    resumenEjecutivo: "",
     normativaVersion: p.normativaVersion,
   };
 
   // Regla 1: proveedor exento individualmente
   if (p.exentoProveedor) {
-    return { ...base, motivo: "Proveedor exento de retención de Ganancias (resolución individual)." };
+    return {
+      ...base,
+      confianza:        "validar",
+      motivo:           "Proveedor exento de retención de Ganancias (resolución individual).",
+      resumenEjecutivo: buildResumenEjecutivo(false, "exento"),
+    };
   }
 
   // Regla 2: Factura distinta de A → no retiene
   if (!esFacturaA(p.tipoComprobante)) {
-    const label = p.tipoComprobante.replace("_", " ");
-    return { ...base, motivo: `${label}. No corresponde practicar retención de Ganancias.` };
+    const esC     = p.tipoComprobante === "FACTURA_C";
+    const key     = esC ? "factura_c" : "no_factura_a";
+    const label   = p.tipoComprobante.replace("_", " ");
+    return {
+      ...base,
+      motivo:           `${label}. No corresponde practicar retención de Ganancias.`,
+      resumenEjecutivo: buildResumenEjecutivo(false, key, undefined, p.tipoComprobante),
+    };
   }
 
   // Regla 3: concepto excluido
   if (esConceptoExcluido(p.concepto)) {
-    return { ...base, motivo: "Concepto excluido de retención de Ganancias." };
+    return {
+      ...base,
+      motivo:           "Concepto excluido de retención de Ganancias.",
+      resumenEjecutivo: buildResumenEjecutivo(false, "concepto_excluido"),
+    };
   }
 
   // Factura A + concepto gravado
-  const concepto     = p.concepto as ConceptoGravado;
-  const minimo       = minimoFor(concepto, p.config);
+  const concepto      = p.concepto as ConceptoGravado;
+  const minimo        = minimoFor(concepto, p.config);
   const baseImponible = round2(acumuladoTotal - minimo);
 
   if (baseImponible <= 0) {
     return {
       ...base,
-      metodo:        concepto === "honorarios" ? "escala" : "lineal",
+      metodo:           concepto === "honorarios" ? "escala" : "lineal",
       minimo,
-      baseImponible: 0,
-      motivo: `Acumulado mensual (${pesos(acumuladoTotal)}) no supera el mínimo no sujeto (${pesos(minimo)}). No corresponde retención.`,
+      baseImponible:    0,
+      motivo:           `Acumulado mensual (${pesos(acumuladoTotal)}) no supera el mínimo no sujeto (${pesos(minimo)}). No corresponde retención.`,
+      resumenEjecutivo: buildResumenEjecutivo(false, "bajo_minimo"),
     };
   }
 
   // ─ Honorarios: escala progresiva ─
   if (concepto === "honorarios") {
-    const t        = buscarTramo(baseImponible, p.escala);
+    const t         = buscarTramo(baseImponible, p.escala);
     const excedente = round2(baseImponible - t.desde);
     const pctMonto  = round2(excedente * t.pct / 100);
     const retencion = round2(t.fijo + pctMonto);
     return {
       ...base,
-      metodo:        "escala",
+      metodo:           "escala",
       minimo,
       baseImponible,
       excedente,
-      alicuota:      t.pct,
-      fijo:          t.fijo,
+      alicuota:         t.pct,
+      fijo:             t.fijo,
       pctMonto,
-      tramoTxt:      tramoLabel(t),
+      tramoTxt:         tramoLabel(t),
       retencion,
-      netoPagar:     round2(basePago - retencion),
-      corresponde:   true,
-      estado:        "warn",
-      motivo: `Base imponible ${pesos(baseImponible)} — tramo «${tramoLabel(t)}»: fijo ${pesos(t.fijo)} + ${t.pct}% sobre excedente de ${pesos(excedente)}.`,
+      netoPagar:        round2(basePago - retencion),
+      corresponde:      true,
+      estado:           "warn",
+      confianza:        "automatico",
+      motivo:           `Base imponible ${pesos(baseImponible)} — tramo «${tramoLabel(t)}»: fijo ${pesos(t.fijo)} + ${t.pct}% sobre excedente de ${pesos(excedente)}.`,
+      resumenEjecutivo: buildResumenEjecutivo(true, "honorarios", concepto),
     };
   }
 
   // ─ Lineal: mercaderías / servicios / alquileres ─
   const alicuota  = alicuotaFor(concepto, p.config);
-  const excedente  = baseImponible;
-  const retencion  = round2(excedente * alicuota / 100);
+  const excedente = baseImponible;
+  const retencion = round2(excedente * alicuota / 100);
   return {
     ...base,
-    metodo:       "lineal",
+    metodo:           "lineal",
     minimo,
     baseImponible,
     excedente,
     alicuota,
     retencion,
-    netoPagar:    round2(basePago - retencion),
-    corresponde:  true,
-    estado:       "warn",
-    motivo: `Acumulado (${pesos(acumuladoTotal)}) supera el mínimo (${pesos(minimo)}). Retención: ${alicuota}% sobre excedente de ${pesos(excedente)}.`,
+    netoPagar:        round2(basePago - retencion),
+    corresponde:      true,
+    estado:           "warn",
+    confianza:        "automatico",
+    motivo:           `Acumulado (${pesos(acumuladoTotal)}) supera el mínimo (${pesos(minimo)}). Retención: ${alicuota}% sobre excedente de ${pesos(excedente)}.`,
+    resumenEjecutivo: buildResumenEjecutivo(true, "lineal", concepto),
   };
 }
 
