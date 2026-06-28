@@ -4,7 +4,7 @@ export type DetectedFormat = string & { readonly __brand: "DetectedFormat" };
 export const asDetectedFormat = (s: string): DetectedFormat => s as DetectedFormat;
 
 export interface FieldDiagnostic { level: "error" | "warn"; code: string; field?: string; message: string }
-export type RowStatus = "novo" | "posible" | "exacto"; // 🟢 / 🟡 / 🔴
+export type RowStatus = "nuevo" | "posible" | "exacto"; // 🟢 / 🟡 / 🔴
 
 export interface RowOutcome { valid: boolean; diagnostics: FieldDiagnostic[] }
 export interface PreviewRow<TRow> {
