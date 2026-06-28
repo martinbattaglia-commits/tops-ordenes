@@ -99,7 +99,12 @@ CREATE INDEX idx_recon_status ON po_reconciliations (status);
 CREATE INDEX idx_recon_diffs  ON po_reconciliation_diffs (reconciliation_id);
 CREATE INDEX idx_recon_events ON recon_events (reconciliation_id, ts DESC);
 
--- 8. RLS
+-- 8. Agregar supplier_invoice_id a purchase_orders para FK tipada
+-- (el campo original factura_id es text libre para el número ARCA; este es el UUID FK)
+ALTER TABLE purchase_orders
+  ADD COLUMN IF NOT EXISTS supplier_invoice_id uuid REFERENCES supplier_invoices(id);
+
+-- 9. RLS
 ALTER TABLE po_reconciliations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE po_reconciliation_diffs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recon_events ENABLE ROW LEVEL SECURITY;

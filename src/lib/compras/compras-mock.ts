@@ -290,6 +290,7 @@ function makeMockOrders(): PurchaseOrder[] {
         status === "conciliada"
           ? "A-0003-" + String(80012 + i).padStart(8, "0")
           : null,
+      supplier_invoice_id: null,
       recibido_por: status === "conciliada" ? "Carlos Méndez · Magaldi" : null,
       recibido_at:
         status === "conciliada"

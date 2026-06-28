@@ -281,6 +281,9 @@ function TableroShellInner({ data }: { data: TableroData }) {
         </div>
       </section>
 
+      {/* ── Estado del Pipeline (arriba de todo, junto a KPIs) ── */}
+      <PipelineStatus kpis={data.kpis} />
+
       {/* ── Análisis extendido (abierto por defecto) ── */}
       <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución" defaultOpen>
         <VistaDireccion
@@ -315,9 +318,6 @@ function TableroShellInner({ data }: { data: TableroData }) {
         kpis={data.kpis}
         deals={data.deals}
       />
-
-      {/* ── 4 · Pipeline Comercial (6 métricas operativas) ── */}
-      <PipelineStatus kpis={data.kpis} />
 
       {/* ── 5 · Ganado vs Perdido ── */}
       <WonVsLost kpis={data.kpis} deals={data.deals} />

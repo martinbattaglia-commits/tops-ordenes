@@ -1,8 +1,11 @@
 // src/app/(app)/compras/conciliacion/page.tsx
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { CountUp } from "@/components/CountUp";
 import { listRecons } from "@/lib/recon/data";
+import { getSupplierInvoice } from "@/lib/erp/data";
+import { getPurchaseOrder } from "@/lib/compras/data";
 import { ReconStatusBadge } from "@/components/compras/ReconStatusBadge";
 import { fmtDate } from "@/lib/utils";
 import type { ReconStatus } from "@/lib/recon/types";
@@ -11,7 +14,7 @@ import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 export const metadata = { title: "Conciliación de Órdenes de Compra" };
 export const dynamic = "force-dynamic";
 
-type PageProps = { searchParams?: Promise<{ status?: string }> };
+type PageProps = { searchParams?: Promise<{ status?: string; invoice?: string }> };
 
 const TABS: Array<{ key: ReconStatus | "todas"; label: string }> = [
   { key: "todas",          label: "Todas" },
@@ -24,6 +27,21 @@ const TABS: Array<{ key: ReconStatus | "todas"; label: string }> = [
 
 export default async function ConciliacionPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+
+  // On-ramp: si llega ?invoice=<id> (botón "Conciliar" de la lista de Facturas),
+  // resolvemos la OC asociada a esa factura y redirigimos al detalle OC↔Factura,
+  // que es donde se inicia el cotejo. El dashboard no concilia por sí mismo.
+  if (sp?.invoice) {
+    const inv = await getSupplierInvoice(sp.invoice);
+    if (inv?.purchase_order_id) {
+      const po = await getPurchaseOrder(inv.purchase_order_id);
+      if (po?.public_id) {
+        redirect(`/compras/conciliacion/${po.public_id}?invoice=${sp.invoice}`);
+      }
+    }
+    // Sin OC asociada → no se puede conciliar; seguimos al dashboard normal.
+  }
+
   const status = (sp?.status as ReconStatus | "todas") ?? "todas";
 
   let result: Awaited<ReturnType<typeof listRecons>>;

@@ -15,6 +15,7 @@ interface Props {
   invoice: SupplierInvoice;
   recon: ReconRecord;
   poId: string;
+  canApprove?: boolean;
 }
 
 function Field({ label, oc, inv }: {
@@ -38,7 +39,7 @@ function Field({ label, oc, inv }: {
   );
 }
 
-export function ReconDetail({ po, invoice, recon, poId }: Props) {
+export function ReconDetail({ po, invoice, recon, poId, canApprove = false }: Props) {
   const router = useRouter();
 
   const handleAccept = async (diffId: string, note?: string) => {
@@ -163,7 +164,7 @@ export function ReconDetail({ po, invoice, recon, poId }: Props) {
 
       {/* Sidebar */}
       <div className="space-y-4">
-        <ReconActions recon={recon} poId={poId} />
+        <ReconActions recon={recon} poId={poId} canApprove={canApprove} />
 
         <div className="nx-surface rounded-xl p-4 space-y-2 text-xs text-fg-muted">
           <div className="font-semibold text-fg-secondary text-sm">Resumen</div>

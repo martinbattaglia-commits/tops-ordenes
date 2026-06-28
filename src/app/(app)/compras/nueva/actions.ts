@@ -208,6 +208,7 @@ export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput)
       drive_folder: null,
       drive_file_id: null,
       factura_id: null,
+      supplier_invoice_id: null,
       recibido_por: null,
       recibido_at: null,
       created_at: now,

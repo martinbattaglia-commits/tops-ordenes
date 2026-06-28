@@ -9,6 +9,66 @@ import type {
 } from "./types";
 import { computeRecon } from "./diff-engine";
 
+// ──────────────────────────────────────────────────────────
+// assertReconOwnership: lanza error si reconId no pertenece a la OC (poPublicId)
+// Previene IDOR — llámalo al inicio de cada route handler de mutación.
+// ──────────────────────────────────────────────────────────
+export async function assertReconOwnership(
+  reconId: string,
+  poId: string,
+): Promise<void> {
+  const supabase = createClient();
+  if (!supabase) throw new Error("Supabase client unavailable");
+
+  // poId es el UUID de la OC (purchase_orders.id) — el mismo valor que envía el
+  // cliente en la URL /api/compras/conciliar/{poId}. Se coteja contra
+  // po_reconciliations.purchase_order_id (NO contra public_id).
+  const { data, error } = await supabase
+    .from("po_reconciliations")
+    .select("id")
+    .eq("id", reconId)
+    .eq("purchase_order_id", poId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw Object.assign(new Error("Conciliación no encontrada para esta OC"), { status: 403 });
+}
+
+// ──────────────────────────────────────────────────────────
+// assertDiffOwnership: lanza error si diffId no pertenece a la OC (poPublicId)
+// Usa query en 2 pasos (evita join anidado 2 niveles no garantizado por SDK JS).
+// ──────────────────────────────────────────────────────────
+export async function assertDiffOwnership(
+  diffId: string,
+  poId: string,
+): Promise<void> {
+  const supabase = createClient();
+  if (!supabase) throw new Error("Supabase client unavailable");
+
+  // Paso 1: obtener el reconciliation_id del diff
+  const { data: diff, error: diffErr } = await supabase
+    .from("po_reconciliation_diffs")
+    .select("reconciliation_id")
+    .eq("id", diffId)
+    .maybeSingle();
+
+  if (diffErr) throw diffErr;
+  if (!diff) throw Object.assign(new Error("Diferencia no encontrada para esta OC"), { status: 403 });
+
+  // Paso 2: verificar que esa conciliación pertenece a la OC de la URL.
+  // poId es el UUID de la OC (purchase_orders.id) — se coteja contra
+  // po_reconciliations.purchase_order_id (NO contra public_id).
+  const { data: recon, error: reconErr } = await supabase
+    .from("po_reconciliations")
+    .select("id")
+    .eq("id", diff.reconciliation_id)
+    .eq("purchase_order_id", poId)
+    .maybeSingle();
+
+  if (reconErr) throw reconErr;
+  if (!recon) throw Object.assign(new Error("Diferencia no encontrada para esta OC"), { status: 403 });
+}
+
 function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
 }
@@ -26,9 +86,10 @@ export async function getRecon(poId: string): Promise<ReconRecord | null> {
     .select(`
       *,
       diffs:po_reconciliation_diffs(*),
-      events:recon_events(* ORDER BY ts ASC)
+      events:recon_events(*)
     `)
     .eq("purchase_order_id", poId)
+    .order("ts", { foreignTable: "recon_events", ascending: true })
     .maybeSingle();
 
   if (error) throw error;
@@ -44,8 +105,9 @@ export async function getReconById(reconId: string): Promise<ReconRecord | null>
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("po_reconciliations")
-    .select(`*, diffs:po_reconciliation_diffs(*), events:recon_events(* ORDER BY ts ASC)`)
+    .select(`*, diffs:po_reconciliation_diffs(*), events:recon_events(*)`)
     .eq("id", reconId)
+    .order("ts", { foreignTable: "recon_events", ascending: true })
     .maybeSingle();
   if (error) throw error;
   return data as ReconRecord | null;

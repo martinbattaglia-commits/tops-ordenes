@@ -7,33 +7,50 @@ export function fmtCurrency(n: number | null | undefined): string {
   return "$ " + Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
+// Zona horaria fija de la operación (Argentina). Formateamos SIEMPRE en esta TZ
+// para que el render del servidor (Netlify = UTC) y del cliente (navegador local)
+// produzcan EXACTAMENTE el mismo string y no se rompa la hidratación de React
+// (errores #418/#423/#425). Antes se usaba getHours()/getDate() (hora local del
+// runtime), que difería entre servidor UTC y cliente AR → hydration mismatch.
+const AR_TZ = "America/Argentina/Buenos_Aires";
+
+function arParts(date: Date): Record<string, string> {
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    timeZone: AR_TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const out: Record<string, string> = {};
+  for (const p of parts) out[p.type] = p.value;
+  return out;
+}
+
 export function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d) : d;
   if (Number.isNaN(date.getTime())) return "";
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${date.getFullYear()}`;
+  const p = arParts(date);
+  return `${p.day}/${p.month}/${p.year}`;
 }
 
 export function fmtDateTime(d: Date | string | null | undefined): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d) : d;
   if (Number.isNaN(date.getTime())) return "";
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mi = String(date.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${date.getFullYear()} · ${hh}:${mi}`;
+  const p = arParts(date);
+  return `${p.day}/${p.month}/${p.year} · ${p.hour}:${p.minute}`;
 }
 
 export function fmtTime(d: Date | string | null | undefined): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d) : d;
   if (Number.isNaN(date.getTime())) return "";
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mi = String(date.getMinutes()).padStart(2, "0");
-  return `${hh}:${mi}`;
+  const p = arParts(date);
+  return `${p.hour}:${p.minute}`;
 }
 
 export function relTime(d: Date | string, now = new Date()): string {
