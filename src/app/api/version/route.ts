@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
-import { getVersion } from "@/lib/version";
+import { getPublicVersion } from "@/lib/version";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/version
+ * GET /api/version  (PÚBLICO)
  *
- * Trazabilidad de despliegue: identifica EXACTAMENTE qué build está publicado.
- * Solo expone metadata de build (commit, branch, fecha, buildId, entorno) — sin
- * datos sensibles ni secretos —, por eso es público (útil para verificar deploys
- * y monitoreo externo). La misma info se muestra en Administración (RBAC).
+ * Diagnóstico mínimo de despliegue: { version (SHA corto), builtAt, environment }.
+ * NO expone el SHA completo, la branch ni el contexto interno de infraestructura
+ * — esa metadata completa queda solo en Administración → Versión y trazabilidad
+ * (autenticado, RBAC). Ver docs/runbooks/RELEASE.md.
  */
 export async function GET() {
   return NextResponse.json({
-    ...getVersion(),
+    ...getPublicVersion(),
     servedAt: new Date().toISOString(),
   });
 }

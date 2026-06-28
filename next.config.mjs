@@ -9,12 +9,15 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // Inyección automática de versión en cada build (local, Netlify CLI o git).
+  // SERVER-ONLY (sin prefijo NEXT_PUBLIC_): no viaja al bundle de cliente. La
+  // versión solo se resuelve en /api/version y en Administración (server). Ver
+  // src/lib/version.ts y docs/runbooks/RELEASE.md.
   env: {
-    NEXT_PUBLIC_COMMIT_SHA: BUILD.commitSha,
-    NEXT_PUBLIC_BRANCH: BUILD.branch,
-    NEXT_PUBLIC_BUILD_DATE: BUILD.buildDate,
-    NEXT_PUBLIC_BUILD_ID: BUILD.buildId,
-    NEXT_PUBLIC_DEPLOY_CONTEXT: BUILD.environment,
+    BUILD_COMMIT_SHA: BUILD.commitSha,
+    BUILD_BRANCH: BUILD.branch,
+    BUILD_DATE: BUILD.buildDate,
+    BUILD_ID: BUILD.buildId,
+    BUILD_CONTEXT: BUILD.environment,
   },
   // buildId determinístico = SHA corto → el buildId servido en /_next/static/
   // queda atado al commit (trazable también desde el artefacto publicado).

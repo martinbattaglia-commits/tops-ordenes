@@ -33,30 +33,30 @@ function git(cmd) {
 
 export function getBuildVersion() {
   const commitSha =
-    fromEnv(["NEXT_PUBLIC_COMMIT_SHA", "COMMIT_REF"]) ||
+    fromEnv(["BUILD_COMMIT_SHA", "COMMIT_REF"]) ||
     git("git rev-parse HEAD") ||
     "unknown";
 
   let branch =
-    fromEnv(["NEXT_PUBLIC_BRANCH", "BRANCH"]) ||
+    fromEnv(["BUILD_BRANCH", "BRANCH"]) ||
     git("git rev-parse --abbrev-ref HEAD") ||
     "unknown";
   // En CI/detached HEAD `--abbrev-ref` devuelve "HEAD"; Netlify expone HEAD=branch.
   if (branch === "HEAD") branch = fromEnv(["HEAD"]) || "detached";
 
-  const buildDate = fromEnv(["NEXT_PUBLIC_BUILD_DATE"]) || new Date().toISOString();
+  const buildDate = fromEnv(["BUILD_DATE"]) || new Date().toISOString();
 
   const shortSha = commitSha === "unknown" ? "unknown" : commitSha.slice(0, 7);
 
   const buildId =
-    fromEnv(["NEXT_PUBLIC_BUILD_ID"]) ||
+    fromEnv(["BUILD_ID"]) ||
     (commitSha === "unknown" ? `local-${Date.now()}` : shortSha);
 
   // Solo significativo cuando hay git local; en builds por env queda false.
   const dirty = git("git rev-parse HEAD") ? git("git status --porcelain") !== "" : false;
 
   const environment =
-    fromEnv(["NEXT_PUBLIC_DEPLOY_CONTEXT", "CONTEXT"]) ||
+    fromEnv(["BUILD_CONTEXT", "CONTEXT"]) ||
     process.env.NODE_ENV ||
     "development";
 

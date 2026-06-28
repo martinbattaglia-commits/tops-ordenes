@@ -1,19 +1,15 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import { getVersion } from "./version";
+import { getVersion, getPublicVersion } from "./version";
 
 /**
- * version.ts lee NEXT_PUBLIC_* inyectadas en build. En test las simulamos por
- * process.env. Verifica derivación de shortSha y fallbacks robustos.
+ * version.ts lee BUILD_* (server-only) inyectadas en build. En test las
+ * simulamos por process.env. Verifica:
+ *  - getVersion(): completo (admin) incl. SHA completo + branch.
+ *  - getPublicVersion(): mínimo, SIN SHA completo ni branch (no filtra infra).
  */
-const KEYS = [
-  "NEXT_PUBLIC_COMMIT_SHA",
-  "NEXT_PUBLIC_BRANCH",
-  "NEXT_PUBLIC_BUILD_DATE",
-  "NEXT_PUBLIC_BUILD_ID",
-  "NEXT_PUBLIC_DEPLOY_CONTEXT",
-];
+const KEYS = ["BUILD_COMMIT_SHA", "BUILD_BRANCH", "BUILD_DATE", "BUILD_ID", "BUILD_CONTEXT"];
 
-describe("getVersion (trazabilidad de build)", () => {
+describe("versión / trazabilidad de build", () => {
   let saved: Record<string, string | undefined>;
   beforeEach(() => {
     saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
@@ -26,20 +22,39 @@ describe("getVersion (trazabilidad de build)", () => {
     }
   });
 
-  it("expone todos los campos a partir de las NEXT_PUBLIC_*", () => {
-    process.env.NEXT_PUBLIC_COMMIT_SHA = "a1dcb6acd701f8f4842f89285e06f55e518e9e4e";
-    process.env.NEXT_PUBLIC_BRANCH = "feat/conciliacion-oc";
-    process.env.NEXT_PUBLIC_BUILD_DATE = "2026-06-28T08:24:09Z";
-    process.env.NEXT_PUBLIC_BUILD_ID = "a1dcb6a";
-    process.env.NEXT_PUBLIC_DEPLOY_CONTEXT = "production";
+  it("getVersion() expone TODO (admin): SHA completo, shortSha y branch", () => {
+    process.env.BUILD_COMMIT_SHA = "a1dcb6acd701f8f4842f89285e06f55e518e9e4e";
+    process.env.BUILD_BRANCH = "feat/conciliacion-oc";
+    process.env.BUILD_DATE = "2026-06-28T08:24:09Z";
+    process.env.BUILD_ID = "a1dcb6a";
+    process.env.BUILD_CONTEXT = "production";
 
     const v = getVersion();
     expect(v.commitSha).toBe("a1dcb6acd701f8f4842f89285e06f55e518e9e4e");
-    expect(v.shortSha).toBe("a1dcb6a"); // derivado de los primeros 7
+    expect(v.shortSha).toBe("a1dcb6a");
     expect(v.branch).toBe("feat/conciliacion-oc");
     expect(v.buildDate).toBe("2026-06-28T08:24:09Z");
     expect(v.buildId).toBe("a1dcb6a");
     expect(v.environment).toBe("production");
+  });
+
+  it("getPublicVersion() expone SOLO el mínimo y NO filtra SHA completo ni branch", () => {
+    process.env.BUILD_COMMIT_SHA = "a1dcb6acd701f8f4842f89285e06f55e518e9e4e";
+    process.env.BUILD_BRANCH = "feat/conciliacion-oc";
+    process.env.BUILD_DATE = "2026-06-28T08:24:09Z";
+    process.env.BUILD_CONTEXT = "production";
+
+    const pub = getPublicVersion();
+    expect(pub).toEqual({
+      version: "a1dcb6a", // SHA corto, no el completo
+      builtAt: "2026-06-28T08:24:09Z",
+      environment: "production",
+    });
+    // Garantía de no-fuga: ni el SHA completo ni la branch están en el payload.
+    const serialized = JSON.stringify(pub);
+    expect(serialized).not.toContain("a1dcb6acd701f8f4842f89285e06f55e518e9e4e");
+    expect(serialized).not.toContain("feat/conciliacion-oc");
+    expect(Object.keys(pub)).toEqual(["version", "builtAt", "environment"]);
   });
 
   it("cae a 'unknown' sin romper cuando faltan las variables", () => {
@@ -47,8 +62,6 @@ describe("getVersion (trazabilidad de build)", () => {
     expect(v.commitSha).toBe("unknown");
     expect(v.shortSha).toBe("unknown");
     expect(v.branch).toBe("unknown");
-    expect(v.buildId).toBe("unknown");
-    // environment cae a NODE_ENV (vitest lo setea en "test")
-    expect(v.environment).toBeTruthy();
+    expect(getPublicVersion().version).toBe("unknown");
   });
 });
