@@ -238,42 +238,7 @@ function TableroShellInner({ data }: { data: TableroData }) {
         </div>
       </header>
 
-      {/* ── Análisis extendido (primera sección — abierto por defecto) ── */}
-      <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución" defaultOpen>
-        <VistaDireccion
-          kpis={data.kpis}
-          deals={data.deals}
-          forecastPeriods={data.forecastPeriods}
-          actions={data.actions}
-          dataQuality={data.dataQuality}
-        />
-        <ForecastBlocks periods={data.forecastPeriods} />
-        <TopOpportunities deals={data.deals} />
-        <FunnelAnalysis stages={data.funnelStages} />
-        <PriorityMatrix quadrants={data.quadrants} />
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <BusinessUnitDonut units={data.units} />
-          <StageBars stages={data.stages} />
-        </section>
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ConcretionBars bands={data.kpis.bands} />
-          <ForecastTrend series={data.trendSeries} deltas={data.deltas} />
-        </section>
-        <SourcePerformance stats={data.sourceStats} />
-        <StagnantOpportunities deals={data.deals} />
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <AutoInsights insights={data.insights} />
-          <ActionPlan actions={data.actions} />
-        </section>
-      </SecondaryPanel>
-
-      {/* ── 2 · Resumen Ejecutivo (narrativa auto-generada) ── */}
-      <ExecutiveNarrative
-        kpis={data.kpis}
-        deals={data.deals}
-      />
-
-      {/* ── 3 · 5 KPIs Ejecutivos ── */}
+      {/* ── KPIs Ejecutivos (arriba de todo) ── */}
       <section>
         <p className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-3">
           KPIs ejecutivos
@@ -315,6 +280,41 @@ function TableroShellInner({ data }: { data: TableroData }) {
           />
         </div>
       </section>
+
+      {/* ── Análisis extendido (abierto por defecto) ── */}
+      <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución" defaultOpen>
+        <VistaDireccion
+          kpis={data.kpis}
+          deals={data.deals}
+          forecastPeriods={data.forecastPeriods}
+          actions={data.actions}
+          dataQuality={data.dataQuality}
+        />
+        <ForecastBlocks periods={data.forecastPeriods} />
+        <TopOpportunities deals={data.deals} />
+        <FunnelAnalysis stages={data.funnelStages} />
+        <PriorityMatrix quadrants={data.quadrants} />
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <BusinessUnitDonut units={data.units} />
+          <StageBars stages={data.stages} />
+        </section>
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ConcretionBars bands={data.kpis.bands} />
+          <ForecastTrend series={data.trendSeries} deltas={data.deltas} />
+        </section>
+        <SourcePerformance stats={data.sourceStats} />
+        <StagnantOpportunities deals={data.deals} />
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <AutoInsights insights={data.insights} />
+          <ActionPlan actions={data.actions} />
+        </section>
+      </SecondaryPanel>
+
+      {/* ── 2 · Resumen Ejecutivo (narrativa auto-generada) ── */}
+      <ExecutiveNarrative
+        kpis={data.kpis}
+        deals={data.deals}
+      />
 
       {/* ── 4 · Pipeline Comercial (6 métricas operativas) ── */}
       <PipelineStatus kpis={data.kpis} />
