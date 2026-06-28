@@ -291,8 +291,15 @@ function detectAmounts(doc: ExtractedDocument): AmountTriple {
   // Reconstrucción cruzada: si falta neto pero hay total e iva → neto = total - iva - percep
   let crossOk = false;
   if (neto === null && total !== null && iva !== null) {
-    neto = total - iva - (percep ?? 0);
-    crossOk = true;
+    const reconstructed = total - iva - (percep ?? 0);
+    // Si la reconstrucción da negativo, los importes leídos por el OCR son
+    // inconsistentes (p.ej. total < IVA + percepciones). No prefijamos un neto
+    // negativo: rompería la validación min(0) con un mensaje confuso. Lo dejamos
+    // vacío (confianza "vacio") para que el usuario lo cargue/revise.
+    if (reconstructed >= 0) {
+      neto = reconstructed;
+      crossOk = true;
+    }
   }
   // Consistencia: ¿neto + iva + percep ≈ total?
   let consistent = false;

@@ -38,6 +38,28 @@ export async function createSupplierInvoiceAction(
 ): Promise<CreateSupplierInvoiceResult> {
   const parsed = CreateSupplierInvoiceSchema.safeParse(input);
   if (!parsed.success) {
+    // Observabilidad: registramos el path exacto de cada issue + los valores
+    // numéricos recibidos, para diagnosticar qué campo incumple la validación.
+    console.error(
+      "[ap_create_supplier_invoice] validación falló:",
+      JSON.stringify({
+        issues: parsed.error.issues.map((i) => ({ path: i.path, code: i.code, message: i.message })),
+        numericos: {
+          punto_venta: input.punto_venta,
+          importe_no_gravado: input.importe_no_gravado,
+          importe_exento: input.importe_exento,
+          vat_lines: input.vat_lines,
+          other_taxes: input.other_taxes,
+          items: input.items?.map((it) => ({
+            cantidad: it.cantidad,
+            precio_unitario: it.precio_unitario,
+            importe_neto: it.importe_neto,
+            importe_iva: it.importe_iva,
+            importe_total: it.importe_total,
+          })),
+        },
+      }),
+    );
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
   const d = parsed.data;
