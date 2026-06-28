@@ -1,8 +1,11 @@
 import { Icon } from "@/components/Icon";
 import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
+import { ivaEstimate } from "@/lib/pricing/calculator";
 import type { Order } from "@/lib/types";
 
 export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
+  const ivaMonto = ivaEstimate(order.total);
+  const totalConIva = order.total + ivaMonto;
   return (
     <div
       className="pdf-paper card bg-white shadow-md mx-auto"
@@ -91,14 +94,30 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
               </tr>
             ))}
             <tr>
-              <td colSpan={2} className="px-2.5 py-2 text-[9px] text-fg-muted">
+              <td colSpan={2} rowSpan={3} className="px-2.5 py-2 text-[9px] text-fg-muted align-top">
                 Pallets: {order.pallets} · Unidades: {order.units} · Km: {order.km}
               </td>
-              <td colSpan={2} className="px-2.5 py-2 text-right font-bold text-fg-brand">
-                Total estimado
+              <td colSpan={2} className="px-2.5 pt-2 text-right text-fg-muted">
+                Subtotal neto
               </td>
-              <td className="px-2.5 py-2 text-right font-bold text-fg-brand tabular text-xs">
+              <td className="px-2.5 pt-2 text-right tabular text-xs">
                 {fmtCurrency(order.total)}
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={2} className="px-2.5 py-0.5 text-right text-fg-muted">
+                IVA (21%)
+              </td>
+              <td className="px-2.5 py-0.5 text-right tabular text-xs">
+                {fmtCurrency(ivaMonto)}
+              </td>
+            </tr>
+            <tr>
+              <td colSpan={2} className="px-2.5 pb-2 text-right font-bold text-fg-brand">
+                Total
+              </td>
+              <td className="px-2.5 pb-2 text-right font-bold text-fg-brand tabular text-xs">
+                {fmtCurrency(totalConIva)}
               </td>
             </tr>
           </tbody>

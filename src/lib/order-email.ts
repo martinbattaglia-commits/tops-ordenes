@@ -144,6 +144,24 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Filas de totales discriminados (Subtotal neto / IVA 21% / Total). order.total
+ * es NETO; el IVA se estima al 21% (misma fórmula que ivaEstimate). La
+ * facturación fiscal real corre por el módulo de Facturación/ARCA.
+ */
+function totalsRows(order: Order): string {
+  const iva = Math.round(order.total * 0.21);
+  const total = order.total + iva;
+  return (
+    `<tr><td style="padding:8px 0;border-top:2px solid #050555;color:#5a6577;">Subtotal neto</td>` +
+    `<td style="padding:8px 0;text-align:right;border-top:2px solid #050555;">${fmtMoney(order.total)}</td></tr>` +
+    `<tr><td style="padding:4px 0;color:#5a6577;">IVA (21%)</td>` +
+    `<td style="padding:4px 0;text-align:right;">${fmtMoney(iva)}</td></tr>` +
+    `<tr><td style="padding:6px 0;font-weight:700;border-top:1px solid #eef1f6;">Total</td>` +
+    `<td style="padding:6px 0;text-align:right;font-weight:700;color:#050555;">${fmtMoney(total)}</td></tr>`
+  );
+}
+
 /** Texto-objetivo por rol (encabeza el cuerpo del email). */
 const ROLE_INTRO: Record<OrderEmailRole, { eyebrow: string; objetivo: string }> = {
   deposito: {
@@ -203,7 +221,7 @@ export function renderRoleHtml(
       </table>
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8a94a6;margin-top:8px;">Servicios contratados</div>
       <table style="width:100%;border-collapse:collapse;margin:6px 0 0;font-size:14px;">${servicesRows(order)}
-        <tr><td style="padding:8px 0;border-top:2px solid #050555;font-weight:700;">Total estimado</td><td style="padding:8px 0;text-align:right;border-top:2px solid #050555;font-weight:700;color:#050555;">${fmtMoney(order.total)} + IVA</td></tr>
+        ${totalsRows(order)}
       </table>`;
   } else if (role === "facturacion") {
     middle = `
@@ -213,7 +231,7 @@ export function renderRoleHtml(
       </table>
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8a94a6;margin-top:8px;">Servicios</div>
       <table style="width:100%;border-collapse:collapse;margin:6px 0 0;font-size:14px;">${servicesRows(order)}
-        <tr><td style="padding:8px 0;border-top:2px solid #050555;font-weight:700;">Importe estimado</td><td style="padding:8px 0;text-align:right;border-top:2px solid #050555;font-weight:700;color:#050555;">${fmtMoney(order.total)} + IVA</td></tr>
+        ${totalsRows(order)}
       </table>`;
   } else {
     // cliente
@@ -221,7 +239,7 @@ export function renderRoleHtml(
       <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
         <tr><td style="padding:8px 0;color:#5a6577;">Fecha</td><td style="padding:8px 0;text-align:right;font-weight:600;">${fmtDate(order.date)}</td></tr>
         <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Depósito</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${DEPOT_LABEL[order.depot]}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Total estimado</td><td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eef1f6;color:#050555;font-size:16px;">${fmtMoney(order.total)} + IVA</td></tr>
+        ${totalsRows(order)}
       </table>`;
   }
 

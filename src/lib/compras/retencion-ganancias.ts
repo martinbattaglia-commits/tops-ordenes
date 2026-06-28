@@ -13,7 +13,15 @@
  *  - Factura C:    exenta (monotributista u otro régimen simplificado)
  *  - Excluidos:    luz, gas, telefonía, internet, seguros
  *  - Exento:       proveedor con exención individual
+ *
+ * La DECISIÓN de exclusión (exento / Factura C / no-A / concepto excluido) se
+ * delega al servicio único `src/lib/fiscal/exclusion-retenciones.ts` (reqs. 5 y 6).
  */
+
+import {
+  evaluarExclusionRetencion,
+  CONCEPTOS_EXCLUIDOS,
+} from "@/lib/fiscal/exclusion-retenciones";
 
 // ─── Tipos ────────────────────────────────────────────────────
 
@@ -45,9 +53,10 @@ export const CONCEPTOS_GRAVADOS: ConceptoGravado[] = [
   "honorarios", "mercaderias", "servicios", "alquileres",
 ];
 
+// Lista canónica en el servicio compartido (evita duplicación — req. 6).
 export const CONCEPTOS_EXCLUIDOS_AUTOMATICO: ConceptoExcluido[] = [
-  "luz", "gas", "telefonia", "internet", "seguros",
-];
+  ...CONCEPTOS_EXCLUIDOS,
+] as ConceptoExcluido[];
 
 // ─── Configuración (viene de DB, never hardcodeada en producción) ─
 
@@ -155,14 +164,6 @@ function pesos0(n: number): string {
   }).format(n);
 }
 
-function esFacturaA(tipo: string): boolean {
-  return tipo === "FACTURA_A";
-}
-
-function esConceptoExcluido(c: Concepto): boolean {
-  return (CONCEPTOS_EXCLUIDOS_AUTOMATICO as string[]).includes(c) || c === "excluido";
-}
-
 function buscarTramo(base: number, escala: EscalaTramo[]): EscalaTramo {
   for (const t of escala) {
     const hasta = t.hasta ?? Infinity;
@@ -261,35 +262,38 @@ export function calculateIncomeTaxRetention(p: RetenciónParams): RetenciónResu
     normativaVersion: p.normativaVersion,
   };
 
-  // Regla 1: proveedor exento individualmente
-  if (p.exentoProveedor) {
-    return {
-      ...base,
-      confianza:        "validar",
-      motivo:           "Proveedor exento de retención de Ganancias (resolución individual).",
-      resumenEjecutivo: buildResumenEjecutivo(false, "exento"),
-    };
-  }
-
-  // Regla 2: Factura distinta de A → no retiene
-  if (!esFacturaA(p.tipoComprobante)) {
-    const esC     = p.tipoComprobante === "FACTURA_C";
-    const key     = esC ? "factura_c" : "no_factura_a";
-    const label   = p.tipoComprobante.replace("_", " ");
-    return {
-      ...base,
-      motivo:           `${label}. No corresponde practicar retención de Ganancias.`,
-      resumenEjecutivo: buildResumenEjecutivo(false, key, undefined, p.tipoComprobante),
-    };
-  }
-
-  // Regla 3: concepto excluido
-  if (esConceptoExcluido(p.concepto)) {
-    return {
-      ...base,
-      motivo:           "Concepto excluido de retención de Ganancias.",
-      resumenEjecutivo: buildResumenEjecutivo(false, "concepto_excluido"),
-    };
+  // Reglas 1-3 de exclusión → servicio único reutilizable (reqs. 5 y 6).
+  const exclusion = evaluarExclusionRetencion({
+    tipoComprobante: p.tipoComprobante,
+    concepto:        p.concepto,
+    exentoProveedor: p.exentoProveedor,
+  });
+  if (exclusion.excluido) {
+    switch (exclusion.categoria) {
+      case "exento_proveedor":
+        return {
+          ...base,
+          confianza:        "validar",
+          motivo:           "Proveedor exento de retención de Ganancias (resolución individual).",
+          resumenEjecutivo: buildResumenEjecutivo(false, "exento"),
+        };
+      case "factura_C":
+      case "factura_no_A": {
+        const key   = exclusion.categoria === "factura_C" ? "factura_c" : "no_factura_a";
+        const label = p.tipoComprobante.replace("_", " ");
+        return {
+          ...base,
+          motivo:           `${label}. No corresponde practicar retención de Ganancias.`,
+          resumenEjecutivo: buildResumenEjecutivo(false, key, undefined, p.tipoComprobante),
+        };
+      }
+      default: // concepto_excluido
+        return {
+          ...base,
+          motivo:           "Concepto excluido de retención de Ganancias.",
+          resumenEjecutivo: buildResumenEjecutivo(false, "concepto_excluido"),
+        };
+    }
   }
 
   // Factura A + concepto gravado

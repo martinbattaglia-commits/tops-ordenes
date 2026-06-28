@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
+import { ivaEstimate } from "@/lib/pricing/calculator";
 import type { Order } from "@/lib/types";
 
 /**
@@ -121,6 +122,10 @@ interface Props {
 
 export function OrderPdfDocument({ order, qrDataUrl }: Props) {
   const depotLabel = order.depot === "MAGALDI" ? "Magaldi · CABA" : "Luján · BsAs";
+  // order.total es NETO (sin IVA). Discriminamos IVA 21% (estimación; la
+  // facturación fiscal real corre por el módulo de Facturación/ARCA).
+  const ivaMonto = ivaEstimate(order.total);
+  const totalConIva = order.total + ivaMonto;
 
   return (
     <Document
@@ -223,12 +228,33 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
               </Text>
             </View>
           ))}
+          {/* Subtotal neto */}
           <View style={styles.totalRow}>
             <Text style={{ flex: 4, fontSize: 8, color: "#5A6577" }}>
               Pallets: {order.pallets} · Unidades: {order.units} · Km: {order.km}
             </Text>
+            <Text style={{ flex: 2, textAlign: "right", color: "#5A6577" }}>
+              Subtotal neto
+            </Text>
+            <Text style={{ flex: 1.5, textAlign: "right", color: "#0B1220" }}>
+              {fmtCurrency(order.total)}
+            </Text>
+          </View>
+          {/* IVA discriminado */}
+          <View style={[styles.totalRow, { borderTopWidth: 0, paddingTop: 0 }]}>
+            <Text style={{ flex: 4 }}> </Text>
+            <Text style={{ flex: 2, textAlign: "right", color: "#5A6577" }}>
+              IVA (21%)
+            </Text>
+            <Text style={{ flex: 1.5, textAlign: "right", color: "#0B1220" }}>
+              {fmtCurrency(ivaMonto)}
+            </Text>
+          </View>
+          {/* Total con IVA */}
+          <View style={[styles.totalRow, { borderTopWidth: 0, paddingTop: 0 }]}>
+            <Text style={{ flex: 4 }}> </Text>
             <Text style={{ flex: 2, textAlign: "right", fontWeight: 700, color: "#050555" }}>
-              Total estimado
+              Total
             </Text>
             <Text
               style={{
@@ -239,7 +265,7 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
                 fontSize: 11,
               }}
             >
-              {fmtCurrency(order.total)}
+              {fmtCurrency(totalConIva)}
             </Text>
           </View>
         </View>
