@@ -1,7 +1,24 @@
+import { getBuildVersion } from "./scripts/version-info.mjs";
+
+// Trazabilidad de despliegue: se computa una sola vez al cargar la config y se
+// inyecta en el bundle como NEXT_PUBLIC_*. Ver scripts/version-info.mjs.
+const BUILD = getBuildVersion();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Inyección automática de versión en cada build (local, Netlify CLI o git).
+  env: {
+    NEXT_PUBLIC_COMMIT_SHA: BUILD.commitSha,
+    NEXT_PUBLIC_BRANCH: BUILD.branch,
+    NEXT_PUBLIC_BUILD_DATE: BUILD.buildDate,
+    NEXT_PUBLIC_BUILD_ID: BUILD.buildId,
+    NEXT_PUBLIC_DEPLOY_CONTEXT: BUILD.environment,
+  },
+  // buildId determinístico = SHA corto → el buildId servido en /_next/static/
+  // queda atado al commit (trazable también desde el artefacto publicado).
+  generateBuildId: () => BUILD.buildId,
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
