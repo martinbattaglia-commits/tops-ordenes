@@ -8,13 +8,13 @@
  *   3. Panel de Diferencias (línea banco ↔ Nexus sugerido · score · motivo)
  *   4. Tabla de Conciliación (detalle completo)
  *
- * No calcula nada: sólo formatea. Montos en centavos → pesos vía fmtCurrency.
+ * No calcula nada: sólo formatea. Montos en centavos → pesos vía fmtMoney (exacto).
  */
-import { fmtCurrency, fmtDate } from "@/lib/utils";
+import { fmtMoney, fmtDate } from "@/lib/utils";
 import type { DashboardConciliacion } from "@/lib/tesoreria/conciliacion/dashboard";
 import type { EstadoLinea, MatchLinea, MovimientoNexus } from "@/lib/tesoreria/conciliacion/matching";
 
-const pesos = (cents: number) => fmtCurrency(cents / 100);
+const pesos = (cents: number) => fmtMoney(cents / 100);
 
 const ESTADO_PILL: Record<EstadoLinea, { cls: string; label: string }> = {
   conciliado: { cls: "bg-status-success text-white", label: "Conciliado" },

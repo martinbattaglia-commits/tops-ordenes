@@ -9,7 +9,7 @@
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { registerReceiptAction } from "@/lib/tesoreria/actions";
 import { RECEIPT_METHOD_VALUES, type BankAccount, type CustomerOpenItem } from "@/lib/tesoreria/types";
-import { fmtCurrency } from "@/lib/utils";
+import { fmtMoney } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -103,7 +103,7 @@ export function CobranzaForm({
           {items.length === 0 && <p className="text-sm text-fg-muted">Sin facturas abiertas para este cliente.</p>}
           {items.map((it) => (
             <div key={it.invoice_id} className="flex items-center justify-between gap-3 py-1 text-sm">
-              <span className="tabular">#{it.numero_comprobante ?? it.invoice_id.slice(0, 8)} · saldo {fmtCurrency(it.saldo)}</span>
+              <span className="tabular">#{it.numero_comprobante ?? it.invoice_id.slice(0, 8)} · saldo {fmtMoney(it.saldo)}</span>
               <input
                 className="input w-32"
                 inputMode="decimal"
@@ -117,7 +117,7 @@ export function CobranzaForm({
       )}
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-fg-muted">Bruto imputado: <strong className="tabular">{fmtCurrency(gross)}</strong></span>
+        <span className="text-sm text-fg-muted">Bruto imputado: <strong className="tabular">{fmtMoney(gross)}</strong></span>
         <input type="date" className="input w-44" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
       {msg && <p className={msg.ok ? "text-green-600 text-sm" : "text-red-600 text-sm"}>{msg.text}</p>}

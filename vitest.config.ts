@@ -8,11 +8,14 @@ export default defineConfig({
   },
   test: {
     include: [
+      "src/lib/*.test.ts",
+      "src/lib/tesoreria/**/*.test.ts",
       "src/lib/tesoreria/caja-chica/**/*.test.ts",
       "src/app/api/tesoreria/caja-chica/**/*.test.ts",
       "src/lib/comercial/**/*.test.ts",
       "src/lib/prospeccion/**/*.test.ts",
       "src/lib/clientify/**/*.test.ts",
+      "src/lib/erp/**/*.test.ts",
     ],
     environment: "node",
   },

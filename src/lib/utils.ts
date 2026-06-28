@@ -7,6 +7,26 @@ export function fmtCurrency(n: number | null | undefined): string {
   return "$ " + Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
+/**
+ * Formato moneda ARS con CENTAVOS EXACTOS (2 decimales fijos). Para superficies
+ * TRANSACCIONALES de Tesorería (cuenta corriente, pagos, cobranzas, conciliación)
+ * donde el monto exhibido es el que se imputa/valida: lo que se ve === lo que se
+ * valida. A diferencia de fmtCurrency, NO redondea a pesos enteros — ocultar
+ * centavos hacía que un saldo de $0,50 se mostrara como "$ 1" y el usuario
+ * sobre-imputara (la RPC rechazaba con razón).
+ *
+ * Redondeo a 2 decimales antes de formatear para evitar drift de punto flotante
+ * (0,1 + 0,2 → "0,30", no "0,30000000000000004").
+ */
+export function fmtMoney(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "$ 0,00";
+  const fixed = Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  return (
+    "$ " +
+    fixed.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  );
+}
+
 // Zona horaria fija de la operación (Argentina). Formateamos SIEMPRE en esta TZ
 // para que el render del servidor (Netlify = UTC) y del cliente (navegador local)
 // produzcan EXACTAMENTE el mismo string y no se rompa la hidratación de React
