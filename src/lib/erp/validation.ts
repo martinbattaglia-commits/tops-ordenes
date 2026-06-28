@@ -101,6 +101,54 @@ export const CreateCostCenterSchema = z.object({
 });
 export type CreateCostCenterInput = z.infer<typeof CreateCostCenterSchema>;
 
+// Etiquetas humanas por campo, para mensajes de validación entendibles por un
+// usuario administrativo (en lugar del texto técnico crudo de Zod).
+const FIELD_LABELS: Record<string, string> = {
+  vendor_id: "Proveedor",
+  cost_center_id: "Centro de costo",
+  purchase_order_id: "Orden de compra",
+  tipo_comprobante: "Tipo de comprobante",
+  punto_venta: "Punto de venta",
+  numero: "Número de comprobante",
+  cae: "CAE",
+  fecha_emision: "Fecha de emisión",
+  fecha_vencimiento: "Fecha de vencimiento",
+  importe_no_gravado: "Importe no gravado",
+  importe_exento: "Importe exento",
+  observ: "Observaciones",
+  vat_lines: "Renglón de IVA",
+  base_neto: "Neto gravado (renglón de IVA)",
+  importe_iva: "IVA (renglón)",
+  alicuota_iva: "Alícuota de IVA",
+  alic_iva_id: "Alícuota de IVA",
+  other_taxes: "Percepción / tributo",
+  importe: "Importe (percepción/tributo)",
+  base: "Base imponible (percepción/tributo)",
+  alicuota: "Alícuota (percepción/tributo)",
+  tax_kind: "Tipo de percepción/tributo",
+  jurisdiction: "Jurisdicción",
+  items: "Renglón de detalle",
+  cantidad: "Cantidad (renglón)",
+  precio_unitario: "Precio unitario (renglón)",
+  descripcion: "Descripción (renglón)",
+};
+
+function humanizeIssue(i: z.ZodIssue): string {
+  const lastKey = [...i.path].reverse().find((p) => typeof p === "string") as string | undefined;
+  const rowIdx = i.path.find((p) => typeof p === "number");
+  const label = (lastKey && FIELD_LABELS[lastKey]) || lastKey || "Dato de la factura";
+  const fila = typeof rowIdx === "number" ? ` (fila ${rowIdx + 1})` : "";
+  // Caso más común: un importe numérico llegó negativo y rompió .min(0).
+  if (
+    i.code === "too_small" &&
+    (i as { type?: string }).type === "number" &&
+    Number((i as { minimum?: number }).minimum) === 0
+  ) {
+    return `${label}${fila}: el valor no puede ser negativo. Revisá el importe.`;
+  }
+  return `${label}${fila}: ${i.message}`;
+}
+
 export function formatZodIssues(err: z.ZodError): string {
-  return err.issues.map((i) => i.message).join(" · ");
+  return err.issues.map(humanizeIssue).join(" · ");
 }

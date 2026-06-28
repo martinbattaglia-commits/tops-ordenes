@@ -4,7 +4,7 @@
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { registerPaymentAction } from "@/lib/tesoreria/actions";
 import { PAYMENT_METHOD_VALUES, type BankAccount, type SupplierOpenItem } from "@/lib/tesoreria/types";
-import { fmtCurrency } from "@/lib/utils";
+import { fmtMoney } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -95,7 +95,7 @@ export function PagoForm({
           {items.length === 0 && <p className="text-sm text-fg-muted">Sin facturas abiertas para este proveedor.</p>}
           {items.map((it) => (
             <div key={it.invoice_id} className="flex items-center justify-between gap-3 py-1 text-sm">
-              <span className="tabular">{it.public_id} · saldo {fmtCurrency(it.saldo)}</span>
+              <span className="tabular">{it.public_id} · saldo {fmtMoney(it.saldo)}</span>
               <input
                 className="input w-32"
                 inputMode="decimal"
@@ -109,7 +109,7 @@ export function PagoForm({
       )}
 
       <div className="flex items-center justify-between">
-        <span className="text-sm text-fg-muted">Total a pagar: <strong className="tabular">{fmtCurrency(amount)}</strong></span>
+        <span className="text-sm text-fg-muted">Total a pagar: <strong className="tabular">{fmtMoney(amount)}</strong></span>
         <input type="date" className="input w-44" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
       {msg && <p className={msg.ok ? "text-green-600 text-sm" : "text-red-600 text-sm"}>{msg.text}</p>}

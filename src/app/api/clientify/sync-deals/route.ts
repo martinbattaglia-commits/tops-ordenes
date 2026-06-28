@@ -5,6 +5,7 @@ import { mapDeal } from "@/lib/clientify/mappers";
 import { normalizeLossReason } from "@/lib/clientify/loss-reason-normalizer";
 import { isVisibleCommercialPipeline } from "@/lib/comercial/pipeline-filter";
 import { persistDealsSync } from "@/lib/comercial/dashboard-sync-db";
+import { reinjectedStoredReasons, buildStoredReasonsMap, checkLostReasonIntegrity } from "@/lib/comercial/sync-lost-reason";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 
@@ -68,22 +69,33 @@ async function handle(req: Request): Promise<Response> {
     const lostDeals = deals.filter((d) => d.status === "lost");
     let enrichedCount = 0;
     let skippedCount = 0;
+    let previousEnrichedCount = 0; // para el health check
     if (lostDeals.length > 0) {
-      // Leer del admin qué deal_ids ya tienen lost_reason almacenado en la caché.
-      // Se usa createAdminClient() directamente (lectura, segura en dry-run también).
+      // Leer del admin qué deal_ids ya tienen lost_reason almacenado en la caché,
+      // y recuperar su valor actual para reinyectarlo después del REPLACE completo.
+      // Sin esto, la RPC (DELETE+INSERT) borra lost_reason en cada sync posterior al primero.
       const adminForRead = createAdminClient();
       const alreadyEnriched = new Set<number>();
+      let storedReasonsMap = new Map<number, string>();
       if (adminForRead) {
         const { data } = await adminForRead
           .from("clientify_deals_cache")
-          .select("deal_id")
+          .select("deal_id, lost_reason")
           .eq("status", "lost")
           .not("lost_reason", "is", null);
-        for (const r of data ?? []) alreadyEnriched.add(r.deal_id as number);
+        storedReasonsMap = buildStoredReasonsMap(
+          (data ?? []).map((r) => ({ deal_id: r.deal_id as number, lost_reason: r.lost_reason as string | null }))
+        );
+        for (const id of storedReasonsMap.keys()) alreadyEnriched.add(id);
+        previousEnrichedCount = alreadyEnriched.size;
       }
 
       const toEnrich = lostDeals.filter((d) => !alreadyEnriched.has(d.id));
       skippedCount = lostDeals.length - toEnrich.length;
+
+      // Reinyectar valores ya almacenados antes del REPLACE completo de la RPC.
+      // Sin esto, el DELETE+INSERT borraría lost_reason de los deals omitidos.
+      reinjectedStoredReasons(deals, storedReasonsMap);
 
       // Fetch individual solo para los que necesitan enriquecimiento.
       // Rate limit Clientify: 300 req/min → lotes de 10 con pausa de 300ms entre lotes.
@@ -111,11 +123,18 @@ async function handle(req: Request): Promise<Response> {
     let persisted = { cached: 0, snapshots: 0 };
     if (!dryRun) {
       persisted = await persistDealsSync(deals, runId);
+
+      // Health check: verifica que no se hayan perdido lost_reason entre syncs.
+      const health = checkLostReasonIntegrity(previousEnrichedCount, deals);
+
       const elapsed = Date.now() - started;
+      const baseMessage = `OK ${deals.length} deals / ${persisted.snapshots} snapshots / lost_reason: ${enrichedCount} enriquecidos, ${skippedCount} omitidos (ya almacenados)`;
+      const message = health.warning ? `${baseMessage} | ${health.warning}` : baseMessage;
+
       await admin?.from("clientify_dashboard_sync_log").insert({
         run_id: runId,
         trigger: "cron",
-        status: "completed",
+        status: health.ok ? "completed" : "completed_with_warnings",
         finished_at: new Date().toISOString(),
         duration_ms: elapsed,
         pipelines: pipelines.length,
@@ -124,7 +143,7 @@ async function handle(req: Request): Promise<Response> {
         lost_reason_enriched: enrichedCount,
         lost_reason_skipped: skippedCount,
         sync_version: SYNC_VERSION,
-        message: `OK ${deals.length} deals / ${persisted.snapshots} snapshots / lost_reason: ${enrichedCount} enriquecidos, ${skippedCount} omitidos (ya almacenados)`,
+        message,
       });
     }
 

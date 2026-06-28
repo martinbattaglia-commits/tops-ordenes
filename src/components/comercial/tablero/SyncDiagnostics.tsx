@@ -7,7 +7,6 @@ import type { SyncStatus, SyncRun } from "@/lib/comercial/dashboard-data";
 interface Props {
   syncStatus: SyncStatus | null;
   syncHistory: SyncRun[];
-  lastSync: string | null;
 }
 
 function formatDuration(ms: number | null): string {
@@ -26,10 +25,10 @@ function formatDate(iso: string | null): string {
 
 function StatusBadge({ status }: { status: string }) {
   const cls = status === "completed"
-    ? "bg-green-500/10 text-green-400"
+    ? "bg-status-success/10 text-status-success"
     : status === "error"
-    ? "bg-red-500/10 text-red-400"
-    : "bg-yellow-500/10 text-yellow-400";
+    ? "bg-status-danger/10 text-status-danger"
+    : "bg-status-warning/10 text-status-warning";
   return (
     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${cls}`}>
       {status}
@@ -37,7 +36,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function SyncDiagnostics({ syncStatus, syncHistory, lastSync }: Props) {
+export function SyncDiagnostics({ syncStatus, syncHistory }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -53,7 +52,7 @@ export function SyncDiagnostics({ syncStatus, syncHistory, lastSync }: Props) {
             Diagnóstico del Sincronizador
           </span>
           {syncStatus?.syncVersion && (
-            <span className="text-xs text-fg-muted font-mono bg-surface-secondary px-1.5 py-0.5 rounded">
+            <span className="text-xs text-fg-muted font-mono bg-bg-surface-alt px-1.5 py-0.5 rounded">
               v{syncStatus.syncVersion}
             </span>
           )}
@@ -102,15 +101,15 @@ export function SyncDiagnostics({ syncStatus, syncHistory, lastSync }: Props) {
                   </thead>
                   <tbody>
                     {syncHistory.map((run) => (
-                      <tr key={run.runId} className="border-t border-fg-muted/5 hover:bg-surface-secondary/30">
+                      <tr key={run.runId} className="border-t border-fg-muted/5 hover:bg-bg-surface-alt/30">
                         <td className="py-1 pr-3 text-fg-muted whitespace-nowrap">{formatDate(run.finishedAt)}</td>
                         <td className="py-1 pr-3"><StatusBadge status={run.status} /></td>
                         <td className="py-1 pr-3 tabular-nums text-fg-primary">{run.dealsSynced}</td>
                         <td className="py-1 pr-3 tabular-nums text-fg-muted">{formatDuration(run.durationMs)}</td>
-                        <td className="py-1 pr-3 tabular-nums text-green-400">{run.lostReasonEnriched || "—"}</td>
+                        <td className="py-1 pr-3 tabular-nums text-status-success">{run.lostReasonEnriched || "—"}</td>
                         <td className="py-1 pr-3 tabular-nums text-fg-muted">{run.lostReasonSkipped || "—"}</td>
                         <td className="py-1 pr-3 font-mono text-fg-muted">{run.syncVersion ?? "—"}</td>
-                        <td className={`py-1 tabular-nums ${run.errors > 0 ? "text-red-400" : "text-fg-muted"}`}>
+                        <td className={`py-1 tabular-nums ${run.errors > 0 ? "text-status-danger" : "text-fg-muted"}`}>
                           {run.errors}
                         </td>
                       </tr>
@@ -125,18 +124,18 @@ export function SyncDiagnostics({ syncStatus, syncHistory, lastSync }: Props) {
           <div className="text-xs text-fg-muted leading-relaxed border-t border-fg-muted/10 pt-2 flex flex-col gap-1">
             <p>
               <span className="font-medium text-fg-secondary">Enriquecidos:</span> deals perdidos para los que se
-              ejecutó <code className="font-mono bg-surface-secondary px-1 rounded">GET /deals/&#123;id&#125;/</code> en
-              este run (nuevos o sin <code className="font-mono bg-surface-secondary px-1 rounded">lost_reason</code>).
+              ejecutó <code className="font-mono bg-bg-surface-alt px-1 rounded">GET /deals/&#123;id&#125;/</code> en
+              este run (nuevos o sin <code className="font-mono bg-bg-surface-alt px-1 rounded">lost_reason</code>).
             </p>
             <p>
               <span className="font-medium text-fg-secondary">Omitidos:</span> deals perdidos que ya tenían{" "}
-              <code className="font-mono bg-surface-secondary px-1 rounded">lost_reason</code> en caché — no se
+              <code className="font-mono bg-bg-surface-alt px-1 rounded">lost_reason</code> en caché — no se
               re-consultan (optimización incremental).
             </p>
             <p>
               <span className="font-medium text-fg-secondary">Cron:</span> GitHub Actions dispara el sync
               diariamente a las 21:00 ART. También ejecutable manualmente vía{" "}
-              <code className="font-mono bg-surface-secondary px-1 rounded">POST /api/clientify/sync-deals</code>.
+              <code className="font-mono bg-bg-surface-alt px-1 rounded">POST /api/clientify/sync-deals</code>.
             </p>
           </div>
         </div>
@@ -159,7 +158,7 @@ function Stat({
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-xs text-fg-muted">{label}</span>
-      <span className={`text-sm font-medium tabular-nums ${highlight === "error" ? "text-red-400" : "text-fg-primary"}`}>
+      <span className={`text-sm font-medium tabular-nums ${highlight === "error" ? "text-status-danger" : "text-fg-primary"}`}>
         {value}
       </span>
       {note && <span className="text-xs text-fg-muted/70">{note}</span>}

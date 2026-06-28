@@ -13,7 +13,7 @@
  */
 import { Fragment } from "react";
 import Link from "next/link";
-import { fmtCurrency, fmtDate } from "@/lib/utils";
+import { fmtMoney, fmtDate } from "@/lib/utils";
 import { StatusPill } from "@/components/tesoreria/ui";
 import { toPesos, type CuentaCorriente, type CuentaSeccion } from "@/lib/tesoreria/cuentaCorriente";
 
@@ -73,7 +73,7 @@ export function CuentaCorrienteSecciones({ cc, kind }: { cc: CuentaCorriente; ki
         <div className="sm:text-right sm:order-2 sm:ml-auto">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">{cfg.netoLabel}</div>
           <div className={`text-4xl md:text-5xl font-black tabular leading-none mt-1 ${cfg.netoColor}`}>
-            {fmtCurrency(toPesos(resumen.saldoNetoCents))}
+            {fmtMoney(toPesos(resumen.saldoNetoCents))}
           </div>
           <div className="text-xs text-fg-secondary mt-2">
             {pendientes.grupos.length} {pendientes.grupos.length === 1 ? `${cfg.entidad} con saldo` : `${cfg.entidad}s con saldo`} ·{" "}
@@ -180,7 +180,7 @@ function SeccionTabla({
         </div>
         <span className="text-sm text-fg-muted">
           {totalLabel}:{" "}
-          <strong className="text-fg-brand tabular">{fmtCurrency(toPesos(seccion.totalCents))}</strong>
+          <strong className="text-fg-brand tabular">{fmtMoney(toPesos(seccion.totalCents))}</strong>
         </span>
       </div>
       <table className="w-full text-sm">
@@ -211,7 +211,7 @@ function SeccionTabla({
                     <td className="py-2">
                       <ToneBadge tone={tone} estado={it.estado} vencimiento={it.vencimiento} />
                     </td>
-                    <td className="py-2 text-right tabular text-fg-primary">{fmtCurrency(it.saldo)}</td>
+                    <td className="py-2 text-right tabular text-fg-primary">{fmtMoney(it.saldo)}</td>
                   </tr>
                 ))}
                 <tr className="border-t border-stroke-soft bg-tops-blue-900/[0.06]">
@@ -219,7 +219,7 @@ function SeccionTabla({
                     Subtotal · {grupo.partyName ?? cfg.sinParty}
                   </td>
                   <td className="py-2.5 pr-1 text-right tabular text-base md:text-lg font-extrabold text-fg-brand">
-                    {fmtCurrency(toPesos(grupo.subtotalCents))}
+                    {fmtMoney(toPesos(grupo.subtotalCents))}
                   </td>
                 </tr>
               </Fragment>
@@ -232,7 +232,7 @@ function SeccionTabla({
               {totalLabel}
             </td>
             <td className="py-3 pr-1 text-right tabular text-xl md:text-2xl font-black text-fg-brand">
-              {fmtCurrency(toPesos(seccion.totalCents))}
+              {fmtMoney(toPesos(seccion.totalCents))}
             </td>
           </tr>
         </tfoot>
@@ -250,7 +250,7 @@ function ResumenReconciliacion({ cc, cfg }: { cc: CuentaCorriente; cfg: Cfg }) {
         {label}
       </span>
       <span className={`tabular ${strong ? `text-xl md:text-2xl font-black ${cfg.netoColor}` : "font-semibold text-fg-primary"}`}>
-        {fmtCurrency(toPesos(cents))}
+        {fmtMoney(toPesos(cents))}
       </span>
     </div>
   );

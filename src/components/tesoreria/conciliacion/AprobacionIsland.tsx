@@ -8,7 +8,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { aceptarMatchAction, rechazarMatchAction } from "@/lib/tesoreria/conciliacion/actions";
-import { fmtCurrency } from "@/lib/utils";
+import { fmtMoney } from "@/lib/utils";
 import type { PendingMatch } from "@/lib/tesoreria/conciliacion/data";
 
 export function AprobacionIsland({ pendientes }: { pendientes: PendingMatch[] }) {
@@ -42,7 +42,7 @@ export function AprobacionIsland({ pendientes }: { pendientes: PendingMatch[] })
             return (
               <tr key={p.matchId} className="border-t border-stroke-soft">
                 <td className="py-2 pr-3">
-                  <div className="tabular text-fg-primary">{fmtCurrency(p.importe)}</div>
+                  <div className="tabular text-fg-primary">{fmtMoney(p.importe)}</div>
                   <div className="text-[11px] text-fg-secondary">{p.descripcion.slice(0, 50)}</div>
                 </td>
                 <td className="py-2 text-center"><span className="tabular font-bold">{p.score}%</span><div className="text-[9px] uppercase text-fg-muted">{p.metodo}</div></td>

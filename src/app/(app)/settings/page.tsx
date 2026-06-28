@@ -2,6 +2,7 @@ import { env } from "@/lib/env";
 import { Icon } from "@/components/Icon";
 import { canAccess } from "@/lib/rbac/guard";
 import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { getVersion } from "@/lib/version";
 
 export const metadata = { title: "Configuración" };
 export const dynamic = "force-dynamic";
@@ -52,7 +53,25 @@ export default async function SettingsPage() {
         <Row label="Domicilio" value="Agustín Magaldi 1765, CABA" />
         <Row label="Depósitos" value="Magaldi (CABA) · Luján (BsAs)" />
       </Section>
+
+      <VersionSection />
     </div>
+  );
+}
+
+/** Trazabilidad del despliegue publicado (ver /api/version y docs/runbooks/RELEASE.md). */
+function VersionSection() {
+  const v = getVersion();
+  const known = v.commitSha !== "unknown";
+  return (
+    <Section title="Versión y trazabilidad">
+      <Row label="Commit" value={known ? `${v.shortSha} (${v.commitSha})` : "unknown"} ok={known} />
+      <Row label="Branch" value={v.branch} />
+      <Row label="Fecha de build" value={v.buildDate} />
+      <Row label="Build ID" value={v.buildId} />
+      <Row label="Entorno" value={v.environment} />
+      <Row label="Endpoint" value="/api/version" />
+    </Section>
   );
 }
 

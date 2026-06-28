@@ -124,7 +124,8 @@ export interface PurchaseOrder {
   pdf_url: string | null;
   drive_folder: string | null;
   drive_file_id: string | null;
-  factura_id: string | null;
+  factura_id: string | null;           // número de comprobante ARCA (texto libre)
+  supplier_invoice_id: string | null;  // FK uuid a supplier_invoices (post-conciliación)
   recibido_por: string | null;
   recibido_at: string | null;
   created_at: string;

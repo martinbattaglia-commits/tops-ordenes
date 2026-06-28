@@ -86,6 +86,10 @@ export async function updateSession(request: NextRequest) {
     // del handler. Sólo la ruta exacta — no /api/clientify/* (ping sigue privado).
     pathname === "/api/clientify/sync-deals" ||
     pathname.startsWith("/compras/validar") ||
+    // Trazabilidad de despliegue: sólo metadata de build (commit/branch/fecha/buildId/entorno),
+    // sin datos sensibles. Pública para verificar deploys y monitoreo externo. La misma info
+    // también se ve en Administración (RBAC). Ver docs/runbooks/RELEASE.md.
+    pathname === "/api/version" ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/icons") ||
     pathname.startsWith("/fonts") ||

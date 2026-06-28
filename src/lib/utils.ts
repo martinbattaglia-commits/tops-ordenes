@@ -7,33 +7,70 @@ export function fmtCurrency(n: number | null | undefined): string {
   return "$ " + Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }
 
+/**
+ * Formato moneda ARS con CENTAVOS EXACTOS (2 decimales fijos). Para superficies
+ * TRANSACCIONALES de Tesorería (cuenta corriente, pagos, cobranzas, conciliación)
+ * donde el monto exhibido es el que se imputa/valida: lo que se ve === lo que se
+ * valida. A diferencia de fmtCurrency, NO redondea a pesos enteros — ocultar
+ * centavos hacía que un saldo de $0,50 se mostrara como "$ 1" y el usuario
+ * sobre-imputara (la RPC rechazaba con razón).
+ *
+ * Redondeo a 2 decimales antes de formatear para evitar drift de punto flotante
+ * (0,1 + 0,2 → "0,30", no "0,30000000000000004").
+ */
+export function fmtMoney(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "$ 0,00";
+  const fixed = Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  return (
+    "$ " +
+    fixed.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  );
+}
+
+// Zona horaria fija de la operación (Argentina). Formateamos SIEMPRE en esta TZ
+// para que el render del servidor (Netlify = UTC) y del cliente (navegador local)
+// produzcan EXACTAMENTE el mismo string y no se rompa la hidratación de React
+// (errores #418/#423/#425). Antes se usaba getHours()/getDate() (hora local del
+// runtime), que difería entre servidor UTC y cliente AR → hydration mismatch.
+const AR_TZ = "America/Argentina/Buenos_Aires";
+
+function arParts(date: Date): Record<string, string> {
+  const parts = new Intl.DateTimeFormat("es-AR", {
+    timeZone: AR_TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const out: Record<string, string> = {};
+  for (const p of parts) out[p.type] = p.value;
+  return out;
+}
+
 export function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d) : d;
   if (Number.isNaN(date.getTime())) return "";
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${date.getFullYear()}`;
+  const p = arParts(date);
+  return `${p.day}/${p.month}/${p.year}`;
 }
 
 export function fmtDateTime(d: Date | string | null | undefined): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d) : d;
   if (Number.isNaN(date.getTime())) return "";
-  const dd = String(date.getDate()).padStart(2, "0");
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mi = String(date.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${date.getFullYear()} · ${hh}:${mi}`;
+  const p = arParts(date);
+  return `${p.day}/${p.month}/${p.year} · ${p.hour}:${p.minute}`;
 }
 
 export function fmtTime(d: Date | string | null | undefined): string {
   if (!d) return "";
   const date = typeof d === "string" ? new Date(d) : d;
   if (Number.isNaN(date.getTime())) return "";
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mi = String(date.getMinutes()).padStart(2, "0");
-  return `${hh}:${mi}`;
+  const p = arParts(date);
+  return `${p.hour}:${p.minute}`;
 }
 
 export function relTime(d: Date | string, now = new Date()): string {
