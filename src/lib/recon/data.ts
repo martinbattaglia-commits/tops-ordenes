@@ -81,9 +81,10 @@ export async function getRecon(poId: string): Promise<ReconRecord | null> {
     .select(`
       *,
       diffs:po_reconciliation_diffs(*),
-      events:recon_events(* ORDER BY ts ASC)
+      events:recon_events(*)
     `)
     .eq("purchase_order_id", poId)
+    .order("ts", { foreignTable: "recon_events", ascending: true })
     .maybeSingle();
 
   if (error) throw error;
@@ -99,8 +100,9 @@ export async function getReconById(reconId: string): Promise<ReconRecord | null>
   if (!supabase) return null;
   const { data, error } = await supabase
     .from("po_reconciliations")
-    .select(`*, diffs:po_reconciliation_diffs(*), events:recon_events(* ORDER BY ts ASC)`)
+    .select(`*, diffs:po_reconciliation_diffs(*), events:recon_events(*)`)
     .eq("id", reconId)
+    .order("ts", { foreignTable: "recon_events", ascending: true })
     .maybeSingle();
   if (error) throw error;
   return data as ReconRecord | null;
