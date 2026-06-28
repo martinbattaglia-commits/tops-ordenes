@@ -24,7 +24,9 @@ export type PermissionModule =
   // acceso exclusivo a su propio legajo/datos/solicitudes/vacaciones/documentación.
   | "mi_espacio"
   // F0 (2026-06-25) — Prospección Inteligente: capa comercial aguas arriba del CRM.
-  | "prospeccion";
+  | "prospeccion"
+  // F0.5 (2026-06-28) — Knowledge Layer: capa cross-cutting de conocimiento corporativo.
+  | "knowledge";
 
 export type PermissionAction = "view" | "create" | "edit" | "delete" | "sign" | "export" | "admin";
 
@@ -93,6 +95,7 @@ export const MODULE_LABELS: Record<PermissionModule, string> = {
   rrhh: "Recursos Humanos",
   mi_espacio: "Mi Espacio (autoservicio)",
   prospeccion: "Comercial · Prospección Inteligente",
+  knowledge: "Conocimiento · Memoria corporativa",
 };
 
 /**
