@@ -11,6 +11,14 @@
       "rules": {
         "jsx-a11y/alt-text": "off"
       }
+    },
+    {
+      "files": ["src/lib/udie/**/*.ts", "src/lib/udie/**/*.tsx"],
+      "rules": {
+        "no-restricted-imports": ["error", {
+          "patterns": ["@/lib/prospeccion/*", "@/lib/clientify/*", "@/lib/recon/*", "@/lib/comercial/*", "**/domain/*"]
+        }]
+      }
     }
   ]
 }
