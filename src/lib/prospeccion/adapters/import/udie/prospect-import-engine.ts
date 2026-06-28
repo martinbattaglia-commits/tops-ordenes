@@ -9,19 +9,22 @@ import { csvReader } from "@/lib/udie/readers/csv-reader";
 import { xlsxReader } from "@/lib/udie/readers/xlsx-reader";
 import type { ProspectImportInput } from "../../../domain/prospect";
 import { HEADER_ALIASES } from "../header-aliases";
+import { MAX_BATCH } from "../../../application/import-prospects.use-case";
 import { prospectValidator } from "./prospect-validator";
 import { prospectDedupKeys } from "./prospect-dedup-keys";
 import { prospectPreviewBuilder, prospectProjector } from "./prospect-preview";
 import { prospectCommitPack } from "./prospect-commit";
-import { makeProspectMapperFor, prospectDetectors, profileFor } from "./profiles";
+import { makeProspectMapper, prospectDetectors, profileFor } from "./profiles";
 import type { ImportProspectsActionResult } from "../../driving/import-actions";
+
+export { MAX_BATCH };
 
 function buildPack(): DomainPack<ProspectImportInput, ImportProspectsActionResult> {
   return {
     contextId: "prospeccion",
     mapping: {
       aliases: HEADER_ALIASES,
-      mapperFor: (fmt: DetectedFormat) => makeProspectMapperFor(fmt),
+      mapperFor: (fmt: DetectedFormat) => makeProspectMapper(fmt),
       normalizer: defaultNormalizer,
       validator: prospectValidator,
       dedup: prospectDedupKeys,
@@ -37,7 +40,7 @@ function buildOrchestrator() {
   readers.register(xlsxReader);
   const detectors = createDetectorRegistry();
   prospectDetectors.forEach((d) => detectors.register(d));
-  return createOrchestrator({ readers, detectors, defaultNormalizer, pack: buildPack(), maxBatch: 500, projector: prospectProjector, formatToSlug: (fmt) => slugForDetectedFormat(fmt) });
+  return createOrchestrator({ readers, detectors, defaultNormalizer, pack: buildPack(), maxBatch: MAX_BATCH, projector: prospectProjector, formatToSlug: (fmt) => slugForDetectedFormat(fmt) });
 }
 
 export function runProspectImportPreview(file: Blob, override?: { format?: DetectedFormat }): Promise<Result<PreviewModel<ProspectImportInput>>> {

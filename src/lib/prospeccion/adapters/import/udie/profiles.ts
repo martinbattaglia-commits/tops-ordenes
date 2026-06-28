@@ -1,4 +1,4 @@
-import type { FormatDetectorPort, MapperPort } from "@/lib/udie/kernel/ports";
+import type { FormatDetectorPort } from "@/lib/udie/kernel/ports";
 import { asDetectedFormat, type DetectedFormat, type RawTable } from "@/lib/udie/kernel/types";
 import type { SourceSlugValue } from "../../../domain/vo/source-slug";
 import type { ProspectImportInput } from "../../../domain/prospect";
@@ -51,6 +51,3 @@ export const prospectDetectors: FormatDetectorPort[] = PROSPECT_PROFILES.map((p)
   },
 }));
 
-export function makeProspectMapperFor(fmt: DetectedFormat): MapperPort<ProspectImportInput> {
-  return makeProspectMapper(fmt);
-}

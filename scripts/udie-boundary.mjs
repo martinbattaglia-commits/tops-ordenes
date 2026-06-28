@@ -4,7 +4,11 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = "src/lib/udie";
-const FORBIDDEN = /(from|import)\s+["'](@\/lib\/(prospeccion|clientify|recon|comercial|compliance)|\.\.\/\.\.\/(prospeccion|clientify))/;
+// Contexts forbidden inside src/lib/udie/**:
+//   • @/lib/<ctx>/* where ctx ∈ {prospeccion, clientify, recon, comercial, compliance}
+//   • relative imports that leave udie and enter those contexts
+//   • any **/domain/* path
+const FORBIDDEN = /(from|import)\s+["'](@\/lib\/(prospeccion|clientify|recon|comercial|compliance)|\.\.\/\.\.\/(prospeccion|clientify|recon|comercial|compliance)|[^"']*\/domain\/)/;
 
 function walk(dir) {
   const out = [];

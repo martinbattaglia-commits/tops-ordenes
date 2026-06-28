@@ -45,4 +45,13 @@ describe("prospect import engine (integration, real fixtures)", () => {
     const r = await runProspectImportPreview(fx("linkedin.csv"));
     if (r.ok) expect(r.value.rows.some((row) => row.valid && !row.row.email)).toBe(true);
   });
+
+  it("linkedin: unmappedHeaders does NOT contain first name or last name (Fix #2)", async () => {
+    const r = await runProspectImportPreview(fx("linkedin.csv"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const unmapped = r.value.stats.unmappedHeaders.map((h: string) => h.toLowerCase());
+    expect(unmapped).not.toContain("first name");
+    expect(unmapped).not.toContain("last name");
+  });
 });

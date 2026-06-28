@@ -6,6 +6,7 @@ import {
   runProspectImportPreview,
   slugForDetectedFormat,
   confirmProspectImport,
+  MAX_BATCH,
 } from "@/lib/prospeccion/adapters/import/udie/prospect-import-engine";
 import type { PreviewModel } from "@/lib/udie/kernel/types";
 import type { ProspectImportInput } from "@/lib/prospeccion/domain/prospect";
@@ -30,7 +31,7 @@ export function ImportWizard() {
 
   function onConfirm() {
     if (!preview) return;
-    const rows = preview.rows.filter((r) => r.valid).map((r) => r.row);
+    const rows = preview.rows.filter((r) => r.valid).map((r) => r.row).slice(0, MAX_BATCH);
     const slug = slugForDetectedFormat(preview.stats.detectedFormat);
     start(async () => {
       const r = await confirmProspectImport(rows, slug);
