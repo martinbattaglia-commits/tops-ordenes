@@ -74,7 +74,7 @@ export function ImportWizard() {
           {s.unmappedHeaders.length > 0 && <p className="text-xs text-fg-muted">Columnas no reconocidas: {s.unmappedHeaders.join(", ")}</p>}
           {s.excedeMaxBatch && <p className="text-xs text-tops-red">Se importarán solo las primeras 500 filas (límite por lote).</p>}
 
-          <div className="max-h-64 overflow-auto rounded border border-stroke">
+          <div className="max-h-64 overflow-auto rounded border border-stroke-soft">
             <table className="min-w-full text-xs">
               <thead className="bg-fg-primary/5 text-left">
                 <tr><th className="px-2 py-1">#</th><th className="px-2 py-1">Estado</th><th className="px-2 py-1">Empresa</th><th className="px-2 py-1">Contacto</th><th className="px-2 py-1">Email</th><th className="px-2 py-1">Motivo</th></tr>
@@ -95,7 +95,7 @@ export function ImportWizard() {
           </div>
 
           <button onClick={onConfirm} disabled={pending || s.pctValidos === 0}
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+            className="btn btn-primary btn-sm disabled:opacity-50">
             {pending ? "Importando…" : `Confirmar importación (${preview!.rows.filter((r) => r.valid).length})`}
           </button>
         </div>
