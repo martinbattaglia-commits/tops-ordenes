@@ -27,6 +27,13 @@ interface CcOpt {
   code: string;
   name: string;
 }
+interface PoOpt {
+  id: string;
+  public_id: string;
+  status: string;
+  total: number;
+  vendor_id: string;
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -100,9 +107,11 @@ function round2(n: number): number {
 export function NuevaFacturaForm({
   vendors,
   costCenters,
+  purchaseOrders,
 }: {
   vendors: VendorOpt[];
   costCenters: CcOpt[];
+  purchaseOrders: PoOpt[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -110,6 +119,17 @@ export function NuevaFacturaForm({
 
   const [vendorId, setVendorId] = useState("");
   const [costCenterId, setCostCenterId] = useState("");
+  const [poId, setPoId] = useState("");
+
+  // OCs cotejables del proveedor elegido (la factura y la OC deben ser del mismo proveedor).
+  const poForVendor = useMemo(
+    () => purchaseOrders.filter((po) => !vendorId || po.vendor_id === vendorId),
+    [purchaseOrders, vendorId],
+  );
+  // Si cambia el proveedor y la OC elegida ya no corresponde, la limpiamos.
+  useEffect(() => {
+    if (poId && !poForVendor.some((po) => po.id === poId)) setPoId("");
+  }, [poForVendor, poId]);
   const [tipo, setTipo] = useState<string>("FACTURA_A");
   const [puntoVenta, setPuntoVenta] = useState("1");
   const [numero, setNumero] = useState("");
@@ -370,7 +390,7 @@ export function NuevaFacturaForm({
       const res = await createSupplierInvoiceAction({
         vendor_id: vendorId,
         cost_center_id: costCenterId || null,
-        purchase_order_id: null,
+        purchase_order_id: poId || null,
         tipo_comprobante: tipo,
         punto_venta: Number(puntoVenta) || 0,
         numero,
@@ -581,6 +601,27 @@ export function NuevaFacturaForm({
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Orden de compra — habilita la conciliación OC↔Factura */}
+        <div>
+          <label className="field-label block mb-1.5">Orden de compra (para conciliación)</label>
+          <select
+            className="input appearance-none pr-8"
+            value={poId}
+            onChange={(e) => setPoId(e.target.value)}
+            disabled={!vendorId}
+          >
+            <option value="">{vendorId ? "Sin OC asociada" : "Elegí primero el proveedor…"}</option>
+            {poForVendor.map((po) => (
+              <option key={po.id} value={po.id}>
+                {po.public_id} · {fmtCurrency(po.total)} · {po.status}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-fg-muted mt-1">
+            Asociá la OC para poder conciliar la factura contra ella. Sólo se listan OCs del proveedor elegido aún no conciliadas.
+          </p>
         </div>
 
         {/* Comprobante */}

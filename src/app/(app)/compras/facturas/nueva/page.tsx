@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
-import { listVendors } from "@/lib/compras/data";
+import { listVendors, listPurchaseOrders } from "@/lib/compras/data";
 import { listCostCenters } from "@/lib/erp/data";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { NuevaFacturaForm } from "./NuevaFacturaForm";
@@ -11,8 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function NuevaFacturaPage() {
   let vendors: Awaited<ReturnType<typeof listVendors>>;
   let costCenters: Awaited<ReturnType<typeof listCostCenters>>;
+  let poResult: Awaited<ReturnType<typeof listPurchaseOrders>>;
   try {
-    [vendors, costCenters] = await Promise.all([listVendors(), listCostCenters()]);
+    [vendors, costCenters, poResult] = await Promise.all([
+      listVendors(),
+      listCostCenters(),
+      listPurchaseOrders({ pageSize: 500 }),
+    ]);
   } catch (e) {
     return (
       <ModuleUnavailable
@@ -25,6 +30,16 @@ export default async function NuevaFacturaPage() {
 
   const vendorOptions = vendors.map((v) => ({ id: v.id, razon: v.razon, cuit: v.cuit }));
   const ccOptions = costCenters.map((c) => ({ id: c.id, code: c.code, name: c.name }));
+  // Sólo OCs aún no conciliadas (sin factura asociada) — son las cotejables.
+  const poOptions = poResult.rows
+    .filter((po) => !po.supplier_invoice_id)
+    .map((po) => ({
+      id: po.id,
+      public_id: po.public_id,
+      status: po.status,
+      total: po.total,
+      vendor_id: po.vendor_id,
+    }));
 
   return (
     <div className="p-4 lg:p-8 max-w-3xl">
@@ -41,7 +56,7 @@ export default async function NuevaFacturaPage() {
         </Link>
       </div>
 
-      <NuevaFacturaForm vendors={vendorOptions} costCenters={ccOptions} />
+      <NuevaFacturaForm vendors={vendorOptions} costCenters={ccOptions} purchaseOrders={poOptions} />
     </div>
   );
 }
