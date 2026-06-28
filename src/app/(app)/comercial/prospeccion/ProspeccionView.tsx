@@ -1,14 +1,9 @@
 "use client";
 
-// Vista de la bandeja de Prospección (F0): tabla READ-ONLY + panel de import (CSV/manual).
-// Componente de borde: sin reglas de negocio; invoca la server action `importProspectsAction`.
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import {
-  importProspectsAction,
-  type ImportProspectsActionResult,
-} from "@/lib/prospeccion/adapters/driving/import-actions";
+// Vista de la bandeja de Prospección (F0): tabla READ-ONLY + wizard de import drag&drop.
+// Componente de borde: sin reglas de negocio; orquesta UI + llama al engine + server action vía ImportWizard.
 import type { ProspectListItem, ProspectsSource } from "@/lib/prospeccion/read/prospects-data";
+import { ImportWizard } from "./ImportWizard";
 
 const STATUS_LABEL: Record<string, string> = {
   raw: "Capturado", imported: "Importado", enriquecido: "Enriquecido", scoreado: "Calificado",
@@ -43,7 +38,7 @@ export function ProspeccionView({
         </span>
       </header>
 
-      {canCreate && <ImportPanel />}
+      {canCreate && <ImportWizard />}
 
       <section className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
@@ -87,65 +82,3 @@ export function ProspeccionView({
   );
 }
 
-function ImportPanel() {
-  const [source, setSource] = useState("csv");
-  const [csvText, setCsvText] = useState("");
-  const [msg, setMsg] = useState<ImportProspectsActionResult | null>(null);
-  const [pending, startTransition] = useTransition();
-  const router = useRouter();
-
-  const onImport = () => {
-    setMsg(null);
-    startTransition(async () => {
-      const res = await importProspectsAction({ source, csvText });
-      setMsg(res);
-      if (res.ok) {
-        setCsvText("");
-        // CR-HIGH #5: revalidatePath del servidor no repinta este client component (recibió items
-        // por props); router.refresh() vuelve a ejecutar el server component y trae la bandeja fresca.
-        router.refresh();
-      }
-    });
-  };
-
-  return (
-    <section className="rounded-lg border border-gray-200 p-4">
-      <h2 className="mb-2 text-sm font-semibold">Importar prospectos (CSV / pegado)</h2>
-      <p className="mb-2 text-xs text-gray-500">
-        Encabezado + filas. Columnas reconocidas: empresa, cuit, website, nombre, cargo, email, telefono, linkedin.
-      </p>
-      <div className="mb-2 flex items-center gap-2">
-        <label className="text-xs text-gray-600">Origen</label>
-        <select
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-          className="rounded border border-gray-300 px-2 py-1 text-sm"
-        >
-          <option value="csv">CSV</option>
-          <option value="manual">Manual</option>
-          <option value="paste">Pegado</option>
-          <option value="linkedin_sales_navigator">LinkedIn Sales Navigator (export)</option>
-        </select>
-      </div>
-      <textarea
-        value={csvText}
-        onChange={(e) => setCsvText(e.target.value)}
-        rows={5}
-        placeholder={"empresa,cuit,email,nombre,cargo\nACME,30701112234,laura@acme.test,Laura Gómez,Operaciones"}
-        className="mb-2 w-full rounded border border-gray-300 p-2 font-mono text-xs"
-      />
-      <div className="flex items-center gap-3">
-        <button
-          onClick={onImport}
-          disabled={pending || csvText.trim() === ""}
-          className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {pending ? "Importando…" : "Importar"}
-        </button>
-        {msg && (
-          <span className={`text-sm ${msg.ok ? "text-green-700" : "text-red-600"}`}>{msg.message}</span>
-        )}
-      </div>
-    </section>
-  );
-}
