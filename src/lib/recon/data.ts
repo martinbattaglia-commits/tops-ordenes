@@ -15,16 +15,19 @@ import { computeRecon } from "./diff-engine";
 // ──────────────────────────────────────────────────────────
 export async function assertReconOwnership(
   reconId: string,
-  poPublicId: string,
+  poId: string,
 ): Promise<void> {
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase client unavailable");
 
+  // poId es el UUID de la OC (purchase_orders.id) — el mismo valor que envía el
+  // cliente en la URL /api/compras/conciliar/{poId}. Se coteja contra
+  // po_reconciliations.purchase_order_id (NO contra public_id).
   const { data, error } = await supabase
     .from("po_reconciliations")
-    .select("id, purchase_orders!inner(public_id)")
+    .select("id")
     .eq("id", reconId)
-    .eq("purchase_orders.public_id", poPublicId)
+    .eq("purchase_order_id", poId)
     .maybeSingle();
 
   if (error) throw error;
@@ -37,7 +40,7 @@ export async function assertReconOwnership(
 // ──────────────────────────────────────────────────────────
 export async function assertDiffOwnership(
   diffId: string,
-  poPublicId: string,
+  poId: string,
 ): Promise<void> {
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase client unavailable");
@@ -52,12 +55,14 @@ export async function assertDiffOwnership(
   if (diffErr) throw diffErr;
   if (!diff) throw Object.assign(new Error("Diferencia no encontrada para esta OC"), { status: 403 });
 
-  // Paso 2: verificar que esa conciliación pertenece a la OC de la URL
+  // Paso 2: verificar que esa conciliación pertenece a la OC de la URL.
+  // poId es el UUID de la OC (purchase_orders.id) — se coteja contra
+  // po_reconciliations.purchase_order_id (NO contra public_id).
   const { data: recon, error: reconErr } = await supabase
     .from("po_reconciliations")
-    .select("id, purchase_orders!inner(public_id)")
+    .select("id")
     .eq("id", diff.reconciliation_id)
-    .eq("purchase_orders.public_id", poPublicId)
+    .eq("purchase_order_id", poId)
     .maybeSingle();
 
   if (reconErr) throw reconErr;
