@@ -23,7 +23,6 @@ import { ForecastTrend } from "./ForecastTrend";
 import { AutoInsights } from "./AutoInsights";
 import { ActionPlan } from "./ActionPlan";
 import { ForecastBlocks } from "./ForecastBlocks";
-import { CommercialAlerts } from "./CommercialAlerts";
 import { TopOpportunities } from "./TopOpportunities";
 import { SyncStatus } from "./SyncStatus";
 import { CountUp } from "@/components/CountUp";
@@ -239,6 +238,35 @@ function TableroShellInner({ data }: { data: TableroData }) {
         </div>
       </header>
 
+      {/* ── Análisis extendido (primera sección — abierto por defecto) ── */}
+      <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución" defaultOpen>
+        <VistaDireccion
+          kpis={data.kpis}
+          deals={data.deals}
+          forecastPeriods={data.forecastPeriods}
+          actions={data.actions}
+          dataQuality={data.dataQuality}
+        />
+        <ForecastBlocks periods={data.forecastPeriods} />
+        <TopOpportunities deals={data.deals} />
+        <FunnelAnalysis stages={data.funnelStages} />
+        <PriorityMatrix quadrants={data.quadrants} />
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <BusinessUnitDonut units={data.units} />
+          <StageBars stages={data.stages} />
+        </section>
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ConcretionBars bands={data.kpis.bands} />
+          <ForecastTrend series={data.trendSeries} deltas={data.deltas} />
+        </section>
+        <SourcePerformance stats={data.sourceStats} />
+        <StagnantOpportunities deals={data.deals} />
+        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <AutoInsights insights={data.insights} />
+          <ActionPlan actions={data.actions} />
+        </section>
+      </SecondaryPanel>
+
       {/* ── 2 · Resumen Ejecutivo (narrativa auto-generada) ── */}
       <ExecutiveNarrative
         kpis={data.kpis}
@@ -310,35 +338,6 @@ function TableroShellInner({ data }: { data: TableroData }) {
       {/* ── Detalle operativo (colapsado por defecto) ── */}
       <SecondaryPanel label="Ver oportunidades — tabla detallada">
         <OpportunitiesTable deals={sortedDeals} allDeals={data.deals} />
-      </SecondaryPanel>
-
-      {/* ── Análisis extendido (abierto por defecto) ── */}
-      <SecondaryPanel label="Análisis extendido — embudo, fuentes, distribución" defaultOpen>
-        <VistaDireccion
-          kpis={data.kpis}
-          deals={data.deals}
-          forecastPeriods={data.forecastPeriods}
-          actions={data.actions}
-          dataQuality={data.dataQuality}
-        />
-        <ForecastBlocks periods={data.forecastPeriods} />
-        <TopOpportunities deals={data.deals} />
-        <FunnelAnalysis stages={data.funnelStages} />
-        <PriorityMatrix quadrants={data.quadrants} />
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <BusinessUnitDonut units={data.units} />
-          <StageBars stages={data.stages} />
-        </section>
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ConcretionBars bands={data.kpis.bands} />
-          <ForecastTrend series={data.trendSeries} deltas={data.deltas} />
-        </section>
-        <SourcePerformance stats={data.sourceStats} />
-        <StagnantOpportunities deals={data.deals} />
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <AutoInsights insights={data.insights} />
-          <ActionPlan actions={data.actions} />
-        </section>
       </SecondaryPanel>
 
       {/* ── Panel técnico / admin (colapsado por defecto) ── */}
