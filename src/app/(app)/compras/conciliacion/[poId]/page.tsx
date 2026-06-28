@@ -5,6 +5,7 @@ import { getPurchaseOrder } from "@/lib/compras/data";
 import { getSupplierInvoice } from "@/lib/erp/data";
 import { getBootContext } from "@/lib/rbac/boot-permissions";
 import { ReconDetail } from "./ReconDetail";
+import { IniciarReconButton } from "./IniciarReconButton";
 import { Icon } from "@/components/Icon";
 
 export const dynamic = "force-dynamic";
@@ -54,12 +55,9 @@ export default async function ReconDetailPage({
               <p className="text-sm text-fg-muted">
                 ¿Confirmar inicio de conciliación contra esta factura?
               </p>
-              <form method="POST" action={`/api/compras/conciliar/${po.id}`}>
-                <input type="hidden" name="invoiceId" value={invoiceId} />
-                <button type="submit" className="btn btn-primary btn-sm">
-                  <Icon name="check" size={14} /> Iniciar conciliación
-                </button>
-              </form>
+              <div className="flex justify-center">
+                <IniciarReconButton poId={po.id} invoiceId={invoiceId} />
+              </div>
             </>
           ) : (
             <>
