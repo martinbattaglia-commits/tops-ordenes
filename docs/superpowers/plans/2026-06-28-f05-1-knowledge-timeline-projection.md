@@ -96,8 +96,8 @@
 | `docs/superpowers/adr/ADR-KNW-ADAPTER-knowledge-projection-adapter.md` | Crear | ADR aprobado: contrato del adaptador, **desviación R-A (emisor load-bearing)**, alternativa descartada, consecuencia OCP, criterio de extensibilidad (R-B) |
 | `docs/superpowers/adr/ADR-KNW-REGISTRY-source-registry.md` | Crear | ADR hermano aprobado: contrato del Source Registry (`knowledge_sources`), gate `enabled`, sin condicionales por fuente, prohibición de reflexión/dispatch dinámico |
 | `docs/superpowers/adr/ADR-KNW-CONTRACT-knowledge-event-canonical.md` | Crear | **ADR aprobado: contrato canónico `KnowledgeEventCanonical` (composite type SQL)** — responsabilidades adaptador/registry/pipeline; el emisor acepta SOLO el contrato; límite (sin validaciones complejas/serialización/reflexión/carga dinámica) |
-| `supabase/migrations/0108_knowledge_rpc.sql` | Crear | **Pipeline:** **composite type `knowledge_event_canonical` (contrato, §13)** + `knowledge_emit_event(p_event knowledge_event_canonical)` (valida contrato + default GUC correlation_id) + `knowledge_visibility_for` + `knowledge_backfill_audit_log` (construye el contrato por fila + llama al emisor) + comentario-contrato |
-| `supabase/migrations/0109_knowledge_projection_triggers.sql` | Crear | **AuditLogAdapter:** `project_audit_log()` (vía emisor, gate enabled, defensivo) + `tg_project_audit_log` (guard) + INSERT fila `'audit_log'` en `knowledge_sources` |
+| `supabase/migrations/0108_knowledge_rpc.sql` | Crear | **Pipeline AGNÓSTICO (cero conocimiento de fuentes — Opción A):** composite type `knowledge_event_canonical` (contrato, §13) + `knowledge_emit_event(p_event knowledge_event_canonical)` (valida contrato + defaults + GUC correlation_id + observabilidad EOL; ÚNICO punto de escritura) + `knowledge_visibility_for` (helper transversal) + comentario-contrato |
+| `supabase/migrations/0109_knowledge_projection_triggers.sql` | Crear | **AuditLogAdapter (TODA la lógica de la fuente — Opción A):** mapeo único `knowledge_audit_log_to_canonical(...)` (audit_log→`KnowledgeEventCanonical`) + `project_audit_log()` trigger (vía emisor, gate enabled, defensivo) + `tg_project_audit_log` (guard `to_regclass`) + `knowledge_backfill_audit_log` (vía emisor, idempotente) + INSERT fila `'audit_log'` en `knowledge_sources` |
 | `supabase/migrations/0111_knowledge_views.sql` | Crear | **Vistas:** `v_knowledge_timeline` + `v_knowledge_entity_360` (security_invoker) + realtime + reload |
 | `src/lib/knowledge/types.ts` | Modificar | Extender `KnowledgeEvent` con `ingestedAt`, `actorId`, `payload`, `sourceTable`, `correlationId` (cubren las columnas reales de `v_knowledge_timeline`) — R-F |
 | `src/lib/knowledge/data.ts` | Modificar | `listTimeline()` real contra `v_knowledge_timeline` (keyset `seq desc`, filtro por entidad), mapeo snake→camel |
@@ -384,8 +384,8 @@ Cada Checkpoint = **pausa obligatoria**: el reviewer (máxima capacidad) valida 
 |---|---|---|---|
 | **CP0** | 0 | Numeración libre (`ls`), base F0.5.0 presente (R-D: `knowledge_sources`/`knowledge_annotations`/`knowledge_entities`/`correlation_id`), HEAD limpio | No avanzar si `0108/0109/0111` ocupados o si falta una tabla base |
 | **CP1** | 1 | ADR-ADAPTER captura contrato + **desviación R-A (APROBADA por Dirección 2026-06-28)** + alternativa + consecuencia + criterio OCP falsable (R-B); ADR-REGISTRY captura gate `enabled` + prohibición de condicionales/reflexión | ADRs aprobables; desviación R-A explícitamente marcada |
-| **CP2** | 2 | 0108: emisor agnóstico (grep OCP R-B pasa), **default GUC correlation_id (R-C)**, **backfill vía emisor sin insert directo (R-A)**, idempotencia, `SECURITY DEFINER`+`search_path`, grants `service_role`, comentario-contrato, **nada de searchable** | Adapter load-bearing + G10 |
-| **CP3** | 3 | 0109: guard `to_regclass`, **adaptador vía emisor (R-A)**, **gate `enabled`**, **manejo defensivo `exception when others`** (G11), **INSERT fila `'audit_log'` idempotente**, **nada de recon/po/orders/searchable** | Trigger jamás aborta tx; fuente registrada |
+| **CP2** | 2 | 0108: emisor agnóstico (grep OCP R-B pasa; **cero mención de audit_log/recon/po/orders/searchable** — Opción A), **default GUC correlation_id (R-C)**, composite type contrato, `SECURITY DEFINER`+`search_path`, grants `service_role`, observabilidad EOL, comentario-contrato | Pipeline agnóstico + G10 |
+| **CP3** | 3 | 0109: mapeo único `knowledge_audit_log_to_canonical` (DRY — trigger y backfill lo comparten), guard `to_regclass`, **trigger y backfill vía emisor (R-A), sin INSERT directo**, **gate `enabled`**, **defensivo `exception when others`** (G11), backfill idempotente, **INSERT fila `'audit_log'`**, **nada de recon/po/orders/searchable** | Trigger jamás aborta tx; fuente registrada; DRY |
 | **CP4** | 4 | 0111: `security_invoker` en ambas vistas, sub-timeline por entidad, **`v_knowledge_search` excluida (R-E)**, sin condicionales por fuente (R-B), realtime idempotente | RLS por vista + OCP |
 | **CP5** | 5 | tipos extendidos (R-F shape completo), `listTimeline()` real, tests verdes, typecheck+build verdes, capa **solo lectura** (sin escritura TS) | D12 + CI verde |
 | **CP6** | 6 | EOL: canal separado, campos mínimos, `version` no es columna funcional, **helper GUC correlation_id (R-C)** | D20 conformidad |
@@ -440,8 +440,8 @@ Cada Checkpoint = **pausa obligatoria**: el reviewer (máxima capacidad) valida 
 Estilo F0.5.0 (`feat(knowledge):` / `docs(knowledge):`, sufijo "entregada, no aplicada" en migraciones):
 
 1. `docs(knowledge): ADR-KNW-ADAPTER + ADR-KNW-REGISTRY — contrato del adaptador y Source Registry (APROBADO por Dirección; incl. desviación R-A)` *(tras CP1)*
-2. `feat(knowledge): mig 0108 — Pipeline (knowledge_emit_event vía GUC correlation_id + visibility_for + backfill_audit_log vía emisor), entregada no aplicada` *(tras CP2)*
-3. `feat(knowledge): mig 0109 — AuditLogAdapter (project_audit_log vía emisor + gate enabled + trigger defensivo + registro fuente audit_log), entregada no aplicada` *(tras CP3)*
+2. `feat(knowledge): mig 0108 — Pipeline AGNÓSTICO (composite type knowledge_event_canonical + knowledge_emit_event + knowledge_visibility_for), entregada no aplicada` *(tras CP2)*
+3. `feat(knowledge): mig 0109 — AuditLogAdapter (mapeo único + project_audit_log + backfill, todo vía emisor + gate enabled + trigger defensivo + registro fuente), entregada no aplicada` *(tras CP3)*
 4. `feat(knowledge): mig 0111 — vistas v_knowledge_timeline + entity_360 (security_invoker) + realtime, entregada no aplicada` *(tras CP4)*
 5. `feat(knowledge): read-model listTimeline() real + tipos extendidos + EOL (canal técnico/structured log/métricas/correlation GUC) + checklist + readiness` *(tras CP5/CP6/CP7)*
 
@@ -567,7 +567,7 @@ end $$;
 
 ### 13.4 Impacto en las tareas (modifica el plan)
 - **Task 1:** agrega **ADR-KNW-CONTRACT** (3er ADR) documentando `KnowledgeEventCanonical`, las responsabilidades y el límite.
-- **Task 2 (0108):** crear el composite type (13.1) ANTES del emisor; `knowledge_emit_event` toma `p_event public.knowledge_event_canonical` (NO 13 params sueltos); `knowledge_backfill_audit_log` construye el composite por fila y llama al emisor.
-- **Task 3 (0109):** `project_audit_log` construye `row(...)::public.knowledge_event_canonical` y lo pasa al emisor; gate `enabled`; defensivo `exception when others`.
+- **Task 2 (0108) — pipeline AGNÓSTICO (Opción A, Dirección 2026-06-28):** composite type (13.1) + `knowledge_emit_event(p_event public.knowledge_event_canonical)` + `knowledge_visibility_for` (helper transversal). **Sin ninguna lógica ni mención de `audit_log`.**
+- **Task 3 (0109) — AuditLogAdapter:** mapeo **único** `knowledge_audit_log_to_canonical(...)` (la SOLA definición del mapeo audit_log→canónico) usado por el trigger `project_audit_log` Y por `knowledge_backfill_audit_log`; ambos construyen `KnowledgeEventCanonical` y lo pasan al emisor; gate `enabled`; defensivo `exception when others`; registro de la fila `'audit_log'`.
 - **Aceptación (OCP):** sumar `ReconAdapter` = construir el MISMO `KnowledgeEventCanonical` + fila en `knowledge_sources`; el tipo, el emisor, las vistas y la tabla **no cambian**.
 - **Límite (Dirección):** NO validaciones complejas (solo NOT NULL de obligatorios + defaults), NO serialización adicional, NO reflexión, NO carga dinámica.
