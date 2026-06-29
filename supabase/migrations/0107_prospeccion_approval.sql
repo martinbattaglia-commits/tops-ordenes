@@ -195,11 +195,13 @@ GRANT EXECUTE ON FUNCTION public.prospeccion_reject_prospect(uuid, uuid, text)
 -- =========================================================================
 
 -- Permiso: aprobación humana
+-- NOTA: 'approve' no existe en permission_action_t; se usa 'sign' como equivalente
+-- El control real es por slug ('prospeccion.approve'), no por action.
 INSERT INTO public.permissions (slug, module, action, label, description)
 VALUES (
   'prospeccion.approve',
   'prospeccion',
-  'approve',
+  'sign',
   'Aprobar / rechazar prospectos',
   'Gate humano antes de exportar a Clientify'
 )
