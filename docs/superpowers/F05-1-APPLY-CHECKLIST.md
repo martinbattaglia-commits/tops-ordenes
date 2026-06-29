@@ -198,6 +198,14 @@ Si no aparece ninguna fila nueva, verificar que `knowledge_sources.enabled = tru
 
 ### 4.2 Backfill idempotente
 
+> **Nota M-5 — Volumen del backfill**
+>
+> `knowledge_backfill_audit_log(p_limit)` con `p_limit = NULL` (llamada sin argumento)
+> procesa TODO `audit_log` en una sola pasada. La primera corrida puede ser de gran volumen
+> según el tamaño histórico de `audit_log`. Considerar correr por lotes con `p_limit`
+> (p.ej. `select knowledge_backfill_audit_log(5000);` repetido) si el volumen es alto;
+> la idempotencia (`on conflict do nothing`) hace seguro repetir.
+
 ```sql
 -- Primera corrida: proyecta hasta 100 filas existentes en audit_log.
 SELECT public.knowledge_backfill_audit_log(100);
