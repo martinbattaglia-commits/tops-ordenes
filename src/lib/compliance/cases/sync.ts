@@ -111,7 +111,7 @@ export function planCaseChanges(
 
 // AdminDb laxo para no acoplar al tipo de Supabase en este módulo.
 type DbLike = {
-  from: (t: string) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
+  from: (t: string) => any;
 };
 
 export interface SyncCasesDeps {
