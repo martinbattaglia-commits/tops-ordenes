@@ -43,7 +43,7 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-const HEADERS: Record<string, keyof SheetCaseRow | "estado_raw" | "etapa_raw" | "riesgo_raw"> = {
+const HEADERS: Record<string, keyof SheetCaseRow | "estado_raw" | "riesgo_raw"> = {
   "item id": "item_id",
   "sede": "sede",
   "tipo de certificado": "tipo_certificado",

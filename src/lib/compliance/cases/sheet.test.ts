@@ -42,4 +42,9 @@ describe("parseEstadoSheet", () => {
     expect(rows).toHaveLength(0);
     expect(errors[0]).toMatch(/MAG-99/);
   });
+  it("faltan columnas obligatorias → sin filas + error", () => {
+    const { rows, errors } = parseEstadoSheet("Sede,Organismo\nMAGALDI,Org");
+    expect(rows).toHaveLength(0);
+    expect(errors[0]).toMatch(/obligatorias/i);
+  });
 });
