@@ -3818,6 +3818,8 @@ create policy <tabla>_select on public.<tabla>
 
 ## 5. MIGRACIONES SQL COMPLETAS (0106–0111)
 
+> ⚠️ **AVISO DE RECONCILIACIÓN (2026-06-28) — LEER ANTES DE USAR ESTE SQL.** Las funciones `knowledge_emit_event`, `knowledge_backfill_audit_log` y `project_audit_log` que aparecen en §5.3 y §5.4 reflejan la **Alternativa A (RECHAZADA)**: emisor de 13 parámetros sueltos + `INSERT` directo a `knowledge_events`. Esa forma quedó **SUPERADA** por **ADR-KNW-ADAPTER / ADR-KNW-REGISTRY / ADR-KNW-CONTRACT** (aprobados por Dirección). La implementación **CANÓNICA y ENTREGADA** es la de las migraciones del worktree `0108_knowledge_rpc.sql` / `0109_knowledge_projection_triggers.sql` / `0111_knowledge_views.sql`, donde: (a) existe el composite type **`knowledge_event_canonical`** y el emisor toma **un único parámetro** de ese tipo; (b) **toda** escritura a `knowledge_events` pasa SOLO por `knowledge_emit_event` (ningún `INSERT` directo — Adapter Pattern *load-bearing*); (c) el AuditLogAdapter (mapeo único `knowledge_audit_log_to_canonical` + trigger defensivo + backfill) vive en `0109` y enruta por el emisor; (d) `knowledge_backfill_audit_log` vive en `0109` (no en 0108) para mantener el pipeline 100% agnóstico. **Para implementar usá las migraciones entregadas + los ADR + §13 del plan `docs/superpowers/plans/2026-06-28-f05-1-knowledge-timeline-projection.md`, NO el SQL literal de §5.3/§5.4** (conservado solo por trazabilidad del diseño previo). Reconciliación registrada en `docs/superpowers/F05-DOC-RECONCILIATION-CHECKLIST.md`.
+
 ### 5.1 `0106_knowledge_module_enum.sql`
 
 ```sql
