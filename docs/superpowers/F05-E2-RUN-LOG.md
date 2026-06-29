@@ -36,7 +36,36 @@
 ---
 
 ## E2.1 — Worker + Cola + Estados + Automatización
-*(NO iniciar hasta cerrar E2.0 — pendiente)*
+
+**Plan detallado (G7 aprobado):** `docs/superpowers/plans/2026-06-29-f05-2-1-worker.md`. Decisiones G7: estado terminal `processed` · procesador no-op · lease 5 min (sin columnas nuevas) · `batchSize=50`/`maxBatches=20`/`maxDuration=50s` · **+ métricas internas** (tabla `knowledge_worker_runs`).
+
+**Migración `0133_knowledge_dispatch`** — aplicada vía MCP y validada:
+- 5 RPCs SECDEF hardened: `knowledge_claim_batch` (FOR UPDATE SKIP LOCKED + lease), `knowledge_mark_processed`, `knowledge_mark_failed` (backoff), `knowledge_recover_stuck`, `knowledge_record_worker_run`.
+- Tabla `knowledge_worker_runs` (telemetría G7) + RLS (`has_permission('knowledge.view')`) + índice.
+
+**Smokes SQL (tx+rollback, sin residuo):**
+| Smoke | Resultado |
+|---|---|
+| A — ciclo feliz | pending→processing→processed ✅ |
+| B — retry/backoff/dead | fail1=+1m, fail2=+2m, fail3=+4m, fail4=dead ✅ |
+| C — recover_stuck | processing+lease vencido → failed (recovered=1) ✅ |
+| D — telemetría | `record_worker_run` registra contadores ✅ |
+| Idempotencia | re-mark = no-op, `mark_failed` sobre processed = NULL ✅ |
+| Re-claim | processed no se reclama (=0) ✅ |
+| Anti-leak | `knowledge_events`=152, 0 residuo, `worker_runs`=0 ✅ |
+
+**Código TS/CI:**
+- `src/lib/knowledge/drain.ts` (orquestador + `noopProcessor` + `KnowledgeEventProcessor`).
+- `src/app/api/knowledge/drain/route.ts` (endpoint GET/POST fail-closed `CRON_SECRET`, `?dry`).
+- `.github/workflows/knowledge-drain.yml` (cron `*/5`, mirror de caja-chica).
+- `src/lib/knowledge/drain.test.ts` (6 tests).
+- **Validación:** typecheck **0** · lint limpio (mis archivos) · tests **285/285** (44 files, +6 drain).
+
+**DoD E2.1:** ciclo completo (claim→processing→processed | failed+backoff | dead tras 3) ✅ · lock SKIP LOCKED + re-claim safe ✅ · recover_stuck por lease ✅ · idempotente ✅ · telemetría ✅ · endpoint fail-closed (401 sin Bearer; lógica probada por construcción + unit tests) ✅ · cron `*/5` ✅ · E1/E2.0 intactos ✅.
+
+**Caveat de deploy:** el endpoint y el cron quedan **vivos solo tras el deploy** (Netlify manual; el worktree ni siquiera está mergeado a `main`). La parte activa en prod es la migración `0133`. El `?dry` live se valida post-deploy (fuera del "no deploy" de E2.1).
+
+**Repo (pendiente de sync):** `0133` + `drain.ts` + `drain.test.ts` + `route.ts` + `knowledge-drain.yml` + plan E2.1 — **sin commitear**. **E2.2 no iniciada.**
 
 ## E2.2 — Adaptadores · E2.3 — KPIs + Panel · E2.4 — EOL
 *(pendientes, secuenciales)*
