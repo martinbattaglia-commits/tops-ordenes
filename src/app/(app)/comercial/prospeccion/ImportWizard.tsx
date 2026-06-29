@@ -14,7 +14,11 @@ import type { ProspectImportInput } from "@/lib/prospeccion/domain/prospect";
 type Preview = PreviewModel<ProspectImportInput>;
 const DOT: Record<string, string> = { nuevo: "🟢", posible: "🟡", exacto: "🔴" };
 
-export function ImportWizard() {
+interface ImportWizardProps {
+  onImportSuccess?: (result: { inserted: number }) => void;
+}
+
+export function ImportWizard({ onImportSuccess }: ImportWizardProps = {}) {
   const router = useRouter();
   const [drag, setDrag] = useState(false);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -38,6 +42,7 @@ export function ImportWizard() {
       if (!r.ok) { setError(r.error.message); return; }
       setDone(`Importados ${r.value.inserted} · duplicados ${r.value.duplicates} · rechazados ${r.value.rejected}`);
       setPreview(null);
+      onImportSuccess?.({ inserted: r.value.inserted });
       router.refresh();
     });
   }
