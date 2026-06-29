@@ -1,4 +1,4 @@
--- ENTREGADA, NO APLICADA — F0.5.1 Knowledge Layer · AuditLogAdapter (0109)
+-- ENTREGADA, NO APLICADA — F0.5.1 Knowledge Layer · AuditLogAdapter (0128)
 -- Verificar numeración contra prod arsksytgdnzukbmfgkju antes de aplicar.
 -- Toda la lógica de la fuente audit_log (Opción A): mapeo único + trigger + backfill + registro.
 -- NO inserta directo en knowledge_events: construye KnowledgeEventCanonical y llama a knowledge_emit_event (R-A).

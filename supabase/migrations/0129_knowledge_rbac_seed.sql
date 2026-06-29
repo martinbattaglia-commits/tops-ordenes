@@ -1,5 +1,5 @@
 -- ENTREGADA, NO APLICADA — F0.5 Knowledge Layer; verificar numeración contra prod arsksytgdnzukbmfgkju
--- 0110 — Permisos knowledge.* + grant a roles staff. Molde 0087 / 0089:419-440.
+-- 0129 — Permisos knowledge.* + grant a roles staff. Molde 0087 / 0089:419-440.
 --        permission_action_t es CERRADO → solo view/create/edit/delete/admin.
 --        Respeta unique(module,action) (0009:50) y unique(slug). on conflict do nothing.
 

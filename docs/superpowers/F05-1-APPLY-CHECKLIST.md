@@ -5,6 +5,28 @@
 
 ---
 
+> **🔢 RECONCILIACIÓN DE NUMERACIÓN (R-N1 · 2026-06-29 · decisión Dirección)**
+>
+> El bloque Knowledge F0.5 fue **renumerado `0106-0111` → `0125-0130`**: prospección F1
+> tomó y aplicó `0106`/`0107` en prod el 2026-06-29 (`0106_prospeccion_qualification`,
+> `0107_prospeccion_approval`), colisionando con el bloque reservado. Mapeo vigente:
+>
+> | Original | Vigente | Archivo |
+> |---|---|---|
+> | 0106 | **0125** | `knowledge_module_enum` |
+> | 0107 | **0126** | `knowledge_core` |
+> | 0108 | **0127** | `knowledge_rpc` |
+> | 0109 | **0128** | `knowledge_projection_triggers` |
+> | 0110 | **0129** | `knowledge_rbac_seed` |
+> | 0111 | **0130** | `knowledge_views` |
+>
+> Verificado libre en prod y en **todas** las ramas (máx prefijo previo: `0124`).
+> Contenido SQL y orden lógico **sin cambios**; solo cambia el prefijo de archivo.
+> Reconciliado en el Master Dossier. **F0.5.0 confirmado NO aplicado en prod** (Bloque 1):
+> se aplican las **6** migraciones, no solo el trío F0.5.1.
+
+---
+
 > **ADVERTENCIA G3 — Governance de migraciones**
 >
 > Las migraciones de F0.5.1 están **entregadas pero NO aplicadas** en producción.
@@ -20,10 +42,10 @@
 
 ## 1. Pre-requisitos: confirmar F0.5.0 aplicada
 
-F0.5.1 (0108/0109/0111) depende de las migraciones de F0.5.0 (0106/0107/0110).
+F0.5.1 (0127/0128/0130) depende de las migraciones de F0.5.0 (0125/0126/0129).
 Ejecutar las siguientes verificaciones en el SQL Editor **antes de aplicar cualquier archivo**:
 
-### 1.1 Confirmar existencia de las tablas núcleo (F0.5.0 / 0107)
+### 1.1 Confirmar existencia de las tablas núcleo (F0.5.0 / 0126)
 
 ```sql
 -- Ejecutar en prod: deben devolver el nombre de la tabla, no NULL.
@@ -35,9 +57,9 @@ select
 ```
 
 **Resultado esperado:** las 4 columnas muestran el nombre del objeto (ej. `public.knowledge_events`).
-Si alguna devuelve `NULL`, F0.5.0 no está aplicada → aplicar primero 0106 → 0107 → 0110.
+Si alguna devuelve `NULL`, F0.5.0 no está aplicada → aplicar primero 0125 → 0126 → 0129.
 
-### 1.2 Confirmar enum `knowledge` registrado (F0.5.0 / 0106)
+### 1.2 Confirmar enum `knowledge` registrado (F0.5.0 / 0125)
 
 ```sql
 select exists(
@@ -50,7 +72,7 @@ select exists(
 
 **Resultado esperado:** `true`.
 
-### 1.3 Confirmar permisos knowledge.* insertados (F0.5.0 / 0110)
+### 1.3 Confirmar permisos knowledge.* insertados (F0.5.0 / 0129)
 
 ```sql
 select slug from public.permissions
@@ -61,6 +83,10 @@ order by slug;
 **Resultado esperado:** 5 filas: `knowledge.admin`, `knowledge.create`, `knowledge.delete`, `knowledge.edit`, `knowledge.view`.
 
 ### 1.4 Verificar numeración libre en prod (landmine de timestamps)
+
+> **✓ Materializado y resuelto (2026-06-29):** este landmine ocurrió —prospección F1 tomó
+> `0106`/`0107` en prod— y se resolvió renumerando el bloque a **`0125-0130`** (ver banner
+> arriba). Igualmente, re-verificar en vivo (`list_migrations`, read-only) antes de aplicar.
 
 Prod rastrea migraciones por **timestamp**, no por prefijo `0xxx`. Verificar qué está
 pendiente comparando el worktree contra prod antes de aplicar:
@@ -78,7 +104,7 @@ Confirmar con `list_migrations` en la UI de Supabase o con `supabase migration l
 
 ## 2. Decisión D-1 — Visibilidad de entidades operativas (confirmar ANTES del backfill)
 
-**Ubicación:** `0108_knowledge_rpc.sql`, función `public.knowledge_visibility_for`, líneas 55-56.
+**Ubicación:** `0127_knowledge_rpc.sql`, función `public.knowledge_visibility_for`, líneas 55-56.
 
 ```sql
 when 'purchase_order','supplier_invoice','vendor','fleet_vehicle','warehouse','compliance_item'
@@ -97,7 +123,7 @@ verlas en el timeline (incluyendo roles con acceso limitado).
 | A (default spec) | `'public_auth'` | Todo usuario autenticado con `knowledge.view` ve estas entidades |
 | B (conservador) | `'staff'` | Solo staff interno; `cliente_b2b` excluido |
 
-**Si se elige opción B**, editar en `0108_knowledge_rpc.sql` **antes de aplicarlo**:
+**Si se elige opción B**, editar en `0127_knowledge_rpc.sql` **antes de aplicarlo**:
 
 ```sql
 -- Cambiar línea 56 de:
@@ -138,18 +164,18 @@ Aplicar en este orden exacto. Esperar el mensaje `Success. No rows returned` (o 
 antes de continuar con el siguiente.
 
 ```
-0106_knowledge_module_enum.sql      ← F0.5.0 (si no está aplicada)
-0107_knowledge_core.sql             ← F0.5.0 (si no está aplicada)
-0108_knowledge_rpc.sql              ← F0.5.1 ← APLICAR AQUÍ
-0109_knowledge_projection_triggers.sql ← F0.5.1
-0110_knowledge_rbac_seed.sql        ← F0.5.0 (si no está aplicada; no depende de 0108/0109)
-0111_knowledge_views.sql            ← F0.5.1
+0125_knowledge_module_enum.sql      ← F0.5.0 (si no está aplicada)
+0126_knowledge_core.sql             ← F0.5.0 (si no está aplicada)
+0127_knowledge_rpc.sql              ← F0.5.1 ← APLICAR AQUÍ
+0128_knowledge_projection_triggers.sql ← F0.5.1
+0129_knowledge_rbac_seed.sql        ← F0.5.0 (si no está aplicada; no depende de 0127/0128)
+0130_knowledge_views.sql            ← F0.5.1
 ```
 
-> **Nota sobre 0110:** la migración 0110 (`knowledge_rbac_seed`) fue entregada como parte
-> de F0.5.0 y no tiene dependencia DDL con 0108/0109 (solo inserta permisos y grants
+> **Nota sobre 0129:** la migración 0129 (`knowledge_rbac_seed`) fue entregada como parte
+> de F0.5.0 y no tiene dependencia DDL con 0127/0128 (solo inserta permisos y grants
 > en tablas de RBAC que existen desde 0009). Puede aplicarse en cualquier momento
-> después de 0107, pero por orden numérico va entre 0109 y 0111.
+> después de 0126, pero por orden numérico va entre 0128 y 0130.
 
 **Pegar el contenido de cada archivo completo** en el SQL Editor y ejecutar.
 No fragmentar archivos. No saltar archivos.
@@ -158,7 +184,7 @@ No fragmentar archivos. No saltar archivos.
 
 ## 4. Smokes de verificación (POST-aplicación)
 
-Ejecutar en orden después de aplicar los 3 archivos de F0.5.1 (0108, 0109, 0111).
+Ejecutar en orden después de aplicar los 3 archivos de F0.5.1 (0127, 0128, 0130).
 
 ### 4.1 Positivo — Proyección en vivo desde `audit_log`
 
@@ -295,7 +321,7 @@ RESET ROLE;
 
 ### 4.6 Advisors (Security & Performance)
 
-Tras aplicar 0111, verificar que no hay nuevos warnings de `security_definer view`
+Tras aplicar 0130, verificar que no hay nuevos warnings de `security_definer view`
 en los Advisors de Supabase. Las vistas entregadas son `security_invoker` (correcto).
 
 ```sql
@@ -318,7 +344,7 @@ WHERE pubname = 'supabase_realtime'
 
 **Resultado esperado:** 1 fila con `tablename = 'knowledge_events'`.
 
-Si no aparece, verificar que 0111 se aplicó correctamente (el bloque `alter publication`
+Si no aparece, verificar que 0130 se aplicó correctamente (el bloque `alter publication`
 es idempotente y solo lo agrega si no existe).
 
 ### 4.8 Limpieza de datos de prueba
@@ -362,20 +388,20 @@ UPDATE public.knowledge_sources SET enabled = false WHERE source_table = 'audit_
 ### Rollback completo (eliminar objetos DDL de F0.5.1)
 
 ```sql
--- 1) Eliminar trigger de proyección (0109).
+-- 1) Eliminar trigger de proyección (0128).
 DROP TRIGGER IF EXISTS tg_project_audit_log ON public.audit_log;
 
--- 2) Eliminar funciones de 0108 y 0109.
+-- 2) Eliminar funciones de 0127 y 0128.
 DROP FUNCTION IF EXISTS public.knowledge_visibility_for(text, text);
 DROP FUNCTION IF EXISTS public.knowledge_emit_event(public.knowledge_event_canonical);
 DROP FUNCTION IF EXISTS public.knowledge_audit_log_to_canonical(public.audit_log);
 DROP FUNCTION IF EXISTS public.project_audit_log();
 DROP FUNCTION IF EXISTS public.knowledge_backfill_audit_log(int);
 
--- 3) Eliminar tipo compuesto de 0108.
+-- 3) Eliminar tipo compuesto de 0127.
 DROP TYPE IF EXISTS public.knowledge_event_canonical;
 
--- 4) Eliminar vistas de 0111.
+-- 4) Eliminar vistas de 0130.
 DROP VIEW IF EXISTS public.v_knowledge_entity_360;
 DROP VIEW IF EXISTS public.v_knowledge_timeline;
 
@@ -385,7 +411,7 @@ DELETE FROM public.knowledge_sources WHERE source_table = 'audit_log';
 
 > **IMPORTANTE:** el rollback NO elimina las tablas `knowledge_events`, `knowledge_sources`,
 > `knowledge_annotations`, `knowledge_entities` ni ninguna otra tabla fuente.
-> Esos objetos pertenecen a F0.5.0 (0107) y son independientes de F0.5.1.
+> Esos objetos pertenecen a F0.5.0 (0126) y son independientes de F0.5.1.
 > Si se quiere revertir también F0.5.0, requiere una sesión de rollback separada.
 
 ---
@@ -394,10 +420,10 @@ DELETE FROM public.knowledge_sources WHERE source_table = 'audit_log';
 
 | Archivo | Objetos creados/modificados |
 |---------|----------------------------|
-| `0108_knowledge_rpc.sql` | `TYPE public.knowledge_event_canonical`, `FUNCTION knowledge_visibility_for(text,text)`, `FUNCTION knowledge_emit_event(knowledge_event_canonical)` |
-| `0109_knowledge_projection_triggers.sql` | `INSERT INTO knowledge_sources` (registro fuente), `FUNCTION knowledge_audit_log_to_canonical(audit_log)`, `FUNCTION project_audit_log()`, `TRIGGER tg_project_audit_log ON audit_log`, `FUNCTION knowledge_backfill_audit_log(int)` |
-| `0111_knowledge_views.sql` | `VIEW v_knowledge_timeline` (security_invoker), `VIEW v_knowledge_entity_360` (security_invoker), `ALTER PUBLICATION supabase_realtime ADD TABLE knowledge_events` |
+| `0127_knowledge_rpc.sql` | `TYPE public.knowledge_event_canonical`, `FUNCTION knowledge_visibility_for(text,text)`, `FUNCTION knowledge_emit_event(knowledge_event_canonical)` |
+| `0128_knowledge_projection_triggers.sql` | `INSERT INTO knowledge_sources` (registro fuente), `FUNCTION knowledge_audit_log_to_canonical(audit_log)`, `FUNCTION project_audit_log()`, `TRIGGER tg_project_audit_log ON audit_log`, `FUNCTION knowledge_backfill_audit_log(int)` |
+| `0130_knowledge_views.sql` | `VIEW v_knowledge_timeline` (security_invoker), `VIEW v_knowledge_entity_360` (security_invoker), `ALTER PUBLICATION supabase_realtime ADD TABLE knowledge_events` |
 
 ---
 
-*Checklist generado: 2026-06-28 · F0.5.1 · TOPS Nexus Knowledge Layer*
+*Checklist generado: 2026-06-28 · F0.5.1 · TOPS Nexus Knowledge Layer · renumerado `0106-0111`→`0125-0130` (2026-06-29 · R-N1)*

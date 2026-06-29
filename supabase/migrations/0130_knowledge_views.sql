@@ -1,4 +1,4 @@
--- ENTREGADA, NO APLICADA — F0.5.1 Knowledge Layer · Vistas de consumo (0111)
+-- ENTREGADA, NO APLICADA — F0.5.1 Knowledge Layer · Vistas de consumo (0130)
 -- Verificar numeración contra prod arsksytgdnzukbmfgkju antes de aplicar.
 -- v_knowledge_timeline + v_knowledge_entity_360, ambas security_invoker → respetan RLS del usuario que consulta.
 -- v_knowledge_search DIFERIDA a F0.5.2 (depende de searchable_items poblado por orders).

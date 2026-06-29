@@ -1,5 +1,5 @@
 -- ENTREGADA, NO APLICADA — F0.5 Knowledge Layer; verificar numeración contra prod arsksytgdnzukbmfgkju
--- 0107 — Núcleo del Knowledge Layer: 9 tablas knowledge_*, extensiones FTS,
+-- 0126 — Núcleo del Knowledge Layer: 9 tablas knowledge_*, extensiones FTS,
 --        índices GIN, RLS con visibility_key, triggers touch/append-only.
 -- 100% ADITIVA. No altera DDL existente. Idempotente.
 
@@ -286,7 +286,7 @@ create policy knowledge_sources_select on public.knowledge_sources
   for select using (public.is_staff());
 
 -- NOTA: NINGUNA tabla recibe policy de INSERT/UPDATE/DELETE para authenticated/anon.
--- Toda escritura va por RPC SECURITY DEFINER (0108) o triggers de proyección (0109),
+-- Toda escritura va por RPC SECURITY DEFINER (0127) o triggers de proyección (0128),
 -- que corren con privilegios del owner y saltan RLS. Superficie de máquina cerrada.
 
 select pg_notify('pgrst', 'reload schema');

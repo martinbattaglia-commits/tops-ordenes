@@ -1,4 +1,4 @@
--- ENTREGADA, NO APLICADA — F0.5.1 Knowledge Layer · Pipeline agnóstico (0108)
+-- ENTREGADA, NO APLICADA — F0.5.1 Knowledge Layer · Pipeline agnóstico (0127)
 -- Verificar numeración contra prod arsksytgdnzukbmfgkju antes de aplicar.
 -- Contrato: KnowledgeEventCanonical (composite type). knowledge_emit_event = ÚNICO punto de escritura en knowledge_events.
 -- AGNÓSTICO: este archivo no conoce ninguna fuente (sin audit_log/recon/orders/searchable, sin CASE por source_table).
@@ -53,7 +53,7 @@ begin
     when 'crm_lead','crm_opportunity','crm_contract' then return 'perm:comercial.view';
     when 'prospect','prospeccion_prospects' then return 'perm:prospeccion.view';
     when 'purchase_order','supplier_invoice','vendor','fleet_vehicle','warehouse','compliance_item'
-      then return 'public_auth';  -- DECISIÓN Dirección: endurecer a 'staff' con cliente_b2b
+      then return 'staff';  -- D-1 = B (Dirección, 2026-06-29): endurecido a 'staff' (cliente_b2b excluido)
     when 'rrhh_solicitud','rrhh_empleado','rrhh_document' then return 'perm:rrhh.view';
     else return 'staff';  -- default conservador
   end case;
