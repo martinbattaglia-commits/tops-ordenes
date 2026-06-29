@@ -10,6 +10,9 @@
  * desde Drive (no implementada aún, sólo arquitectura).
  */
 
+import type { ComplianceCaseLite, EstadoAdministrativo, Etapa, NivelRiesgo, Temporal } from "./cases/types";
+import { computeSemaforo, temporalOf, resolveAnticipacion } from "./semaforo";
+
 export type Riesgo = "Verde" | "Amarillo" | "Naranja" | "Rojo";
 export type Sede = "MAGALDI" | "LUJAN";
 
@@ -24,6 +27,7 @@ export interface ComplianceItem {
   vencimiento: string | null;
   frecuencia: string;
   estado: string;
+  /** Semáforo (color). Lo computa deriveComplianceStatus; los consumidores lo leen como color. */
   riesgo: Riesgo;
   fuente: string;
   nota: string;
@@ -31,6 +35,14 @@ export interface ComplianceItem {
   dias: number | null;
   venc_fmt: string;
   emi_fmt: string;
+  /** Override de anticipación 🟡 (nivel más alto de la jerarquía D6). */
+  anticipacion_dias?: number | null;
+  /** Caso regulatorio activo asociado (si lo hay). Lo adjunta source.ts. */
+  activeCase?: ComplianceCaseLite | null;
+  /** Proyecciones del caso para la UI (las setea deriveComplianceStatus). */
+  estadoAdministrativo?: EstadoAdministrativo | null;
+  etapa?: Etapa | null;
+  nivelRiesgo?: NivelRiesgo | null;
 }
 
 export const AUDIT_META = {
@@ -56,7 +68,7 @@ export const RISK_HEX: Record<Riesgo, string> = {
 };
 export const RISK_ORDER: Record<Riesgo, number> = { Rojo: 0, Naranja: 1, Amarillo: 2, Verde: 3 };
 export const RISK_LABEL: Record<Riesgo, string> = {
-  Verde: "Vigente", Amarillo: "A verificar", Naranja: "Próximo", Rojo: "Vencido / Falta",
+  Verde: "Vigente", Amarillo: "Próximo a vencer", Naranja: "En trámite administrativo", Rojo: "Vencido / Falta",
 };
 
 export const ITEMS: ComplianceItem[] = [
@@ -128,26 +140,57 @@ function diffDays(venc: string, today: string): number {
   return Math.round((Date.UTC(vy, vm - 1, vd) - Date.UTC(ty, tm - 1, td)) / 86_400_000);
 }
 
-/** Recalcula dias/estado/riesgo de UN ítem contra la fecha actual (o `today` inyectada para tests). */
-export function deriveComplianceStatus(item: ComplianceItem, today: string = todayAr()): ComplianceItem {
-  if (!item.vencimiento) return item; // sin fecha → manda el estado documental base
-  const dias = diffDays(item.vencimiento, today);
-  let riesgo: Riesgo;
-  let estado: string;
-  if (dias < 0) {
-    riesgo = "Rojo";
-    estado = "Vencido";
-  } else if (dias <= 30) {
-    riesgo = "Naranja";
-    estado = "Vencimiento inminente";
-  } else if (dias <= 60) {
-    riesgo = "Amarillo";
-    estado = "Alerta preventiva";
-  } else {
-    riesgo = "Verde";
-    estado = "Vigente";
+/** Default de anticipación cuando no se inyecta config (espejo del seed 0125). */
+export const ANTICIPACION_DEFAULT: Record<string, number> = {
+  Mensual: 7, Trimestral: 15, Semestral: 30, Anual: 60, Bienal: 90, Trienal: 120, Cuatrienal: 180, __default__: 60,
+};
+
+/**
+ * Recalcula dias + semáforo (riesgo) + estado contra la fecha actual y el caso activo.
+ * El color sale de (temporal + estado administrativo); el riesgo (prioridad) viaja aparte.
+ */
+export function deriveComplianceStatus(
+  item: ComplianceItem,
+  today: string = todayAr(),
+  anticConfig: Record<string, number> = ANTICIPACION_DEFAULT,
+): ComplianceItem {
+  const caso = item.activeCase ?? null;
+  const estadoAdm = caso?.estadoAdministrativo ?? null;
+  // "falta": base documental indica faltante/proyecto (Rojo sin vencimiento en el snapshot).
+  const baseFalta = !item.vencimiento && item.riesgo === "Rojo";
+
+  const dias = item.vencimiento ? diffDays(item.vencimiento, today) : null;
+  const anticipacion = resolveAnticipacion({
+    itemOverride: item.anticipacion_dias ?? null,
+    frecuencia: item.frecuencia || null,
+    config: anticConfig,
+  });
+  const temporal: Temporal = temporalOf({ vencimiento: item.vencimiento, dias, baseFalta, anticipacion });
+
+  // Estado efectivo para la cascada: el del caso, o uno inferido del eje temporal.
+  const estadoEfectivo = estadoAdm ?? (temporal === "vigente" ? "vigente" : temporal === "falta" ? "sin_iniciar" : "sin_iniciar");
+
+  // Si NO hay caso y NO hay vencimiento NI falta (permanente vigente del snapshot) → conservar base.
+  if (!caso && !item.vencimiento && !baseFalta) {
+    return { ...item, dias, estadoAdministrativo: estadoAdm, etapa: null, nivelRiesgo: null };
   }
-  return { ...item, dias, riesgo, estado };
+
+  const semaforo = computeSemaforo(temporal, estadoEfectivo as EstadoAdministrativo);
+  const estadoTxt =
+    semaforo === "Verde" ? "Vigente"
+    : semaforo === "Amarillo" ? (estadoAdm === "pendiente_emision" ? "Pendiente de emisión" : "Próximo a vencer")
+    : semaforo === "Naranja" ? "En trámite administrativo"
+    : "Vencido / Falta";
+
+  return {
+    ...item,
+    dias,
+    riesgo: semaforo,
+    estado: estadoTxt,
+    estadoAdministrativo: estadoAdm,
+    etapa: caso?.etapa ?? null,
+    nivelRiesgo: caso?.nivelRiesgo ?? null,
+  };
 }
 
 /** Inventario con vencimientos VIVOS — la entrada que deben usar page/ficha/score. */
