@@ -34,6 +34,9 @@ import {
   extractDates,
 } from "./classify";
 import type { ComplianceSyncReport, SyncEvent, SyncRunStatus, SyncTrigger } from "./types";
+import { syncCasesFromSheet } from "@/lib/compliance/cases/sync";
+import { alertSeverity } from "@/lib/compliance/semaforo";
+import type { ComplianceCaseLite } from "@/lib/compliance/cases/types";
 
 interface RunOpts {
   trigger: SyncTrigger;
@@ -149,6 +152,20 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
     return make("error", `No se pudieron leer compliance_items: ${msg(e)}`);
   }
 
+  // Paso 0: la planilla 00_ESTADO_COMPLIANCE es la fuente primaria del estado administrativo.
+  let casesUpserted = 0;
+  if (!dryRun) {
+    try {
+      const res = await syncCasesFromSheet(db, { fileId: env.compliance.estadoSheetFileId });
+      casesUpserted = res.upserted;
+      if (res.skipped) events.push({ level: "info", category: "item", action: "cases_skipped", detail: res.skipped });
+      else events.push({ level: "info", category: "item", action: "cases_synced", detail: `${res.upserted} casos (${res.closed} cerrados).` });
+      for (const e of res.errors) events.push({ level: "warn", category: "item", action: "cases_error", detail: e });
+    } catch (e) {
+      events.push({ level: "warn", category: "item", action: "cases_error", detail: msg(e) });
+    }
+  }
+
   // Índice sede|categoria → itemId, SÓLO cuando es único (evita asociar mal).
   const comboCount = new Map<string, number>();
   const comboItem = new Map<string, string>();
@@ -179,6 +196,7 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
   let errors = 0;
   let truncated = false;
   const seenDriveIds = new Set<string>();
+  const reviewSignals: { itemId: string; titulo: string; detalle: string }[] = [];
   const docsPerItem = new Map<string, number>(); // itemId → docs asociados esta corrida
   const itemsTouchedSet = new Set<string>();
 
@@ -211,6 +229,13 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
       const { emision, vencimiento } = extractDates(file.name);
       const itemId = itemForCombo(sede, categoria);
       if (itemId) docsPerItem.set(itemId, (docsPerItem.get(itemId) ?? 0) + 1);
+      if (itemId && vencimiento) {
+        reviewSignals.push({
+          itemId,
+          titulo: file.name,
+          detalle: `Documento con vencimiento ${vencimiento} detectado en Drive (confianza baja). Confirmar en 00_ESTADO_COMPLIANCE.`,
+        });
+      }
 
       if (dryRun) continue;
 
@@ -287,6 +312,23 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
       }
     }
 
+    // Evidencia secundaria → alertas de revisión (confianza por origen). NUNCA muta estado.
+    if (!dryRun && reviewSignals.length) {
+      const reviewRows = reviewSignals.map((s) => ({
+        item_id: s.itemId,
+        nivel: "info",
+        kind: "review",
+        titulo: `${s.titulo} — revisar y confirmar en la planilla`,
+        detalle: s.detalle,
+        run_id: runId,
+        estado: "abierta",
+        origen: "nombre_archivo",
+        confianza: "baja",
+      }));
+      const { error } = await db.from("compliance_alerts").insert(reviewRows);
+      if (error) events.push({ level: "warn", category: "alert", action: "review_error", detail: error.message });
+    }
+
     // Actualizar ítems asociados: docs live + last_synced_at + source='drive'.
     if (!dryRun) {
       for (const [itemId, count] of docsPerItem) {
@@ -307,7 +349,8 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
     let alertsCreated = 0;
     if (!dryRun) {
       try {
-        alertsCreated = await rebuildAlerts(db, itemRows, runId, events);
+        const activeCases = await loadActiveCasesMap(db);
+        alertsCreated = await rebuildAlerts(db, itemRows, activeCases, runId, events);
       } catch (e) {
         errors += 1;
         events.push({ level: "error", category: "alert", action: "rebuild_error", detail: msg(e) });
@@ -344,6 +387,28 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
   }
 }
 
+async function loadActiveCasesMap(db: AdminDb): Promise<Map<string, ComplianceCaseLite>> {
+  const map = new Map<string, ComplianceCaseLite>();
+  try {
+    const { data, error } = await db
+      .from("compliance_cases")
+      .select("item_id,estado_administrativo,etapa,nivel_riesgo,origen,confianza,activo")
+      .eq("activo", true);
+    if (error || !data) return map;
+    for (const r of data as Array<Record<string, string | null>>) {
+      if (!r.item_id) continue;
+      map.set(r.item_id, {
+        estadoAdministrativo: (r.estado_administrativo ?? "sin_iniciar") as ComplianceCaseLite["estadoAdministrativo"],
+        etapa: (r.etapa ?? null) as ComplianceCaseLite["etapa"],
+        nivelRiesgo: (r.nivel_riesgo ?? null) as ComplianceCaseLite["nivelRiesgo"],
+        origen: (r.origen ?? "sheet") as ComplianceCaseLite["origen"],
+        confianza: (r.confianza ?? "confirmada") as ComplianceCaseLite["confianza"],
+      });
+    }
+  } catch { /* sin casos */ }
+  return map;
+}
+
 /** Cuenta cuántas alertas generaría el estado actual (para dry-run). */
 function countAlertsDryRun(itemRows: ComplianceRow[]): number {
   let n = 0;
@@ -368,11 +433,10 @@ function countAlertsDryRun(itemRows: ComplianceRow[]): number {
 async function rebuildAlerts(
   db: AdminDb,
   itemRows: ComplianceRow[],
+  activeCases: Map<string, ComplianceCaseLite>,
   runId: string | null,
   events: SyncEvent[],
 ): Promise<number> {
-  // Cerrar SÓLO las alertas abiertas generadas por sync (run_id no nulo);
-  // preservar las manuales/externas (run_id nulo).
   await db
     .from("compliance_alerts")
     .update({ estado: "resuelta", resolved_at: new Date().toISOString() })
@@ -381,17 +445,24 @@ async function rebuildAlerts(
 
   const rows: Record<string, unknown>[] = [];
   for (const r of itemRows) {
-    const it = deriveComplianceStatus(rowToItem(r));
+    const baseItem = rowToItem(r);
+    const c = activeCases.get(baseItem.id) ?? null;
+    const it = deriveComplianceStatus(c ? { ...baseItem, activeCase: c } : baseItem);
     if (it.riesgo === "Verde") continue;
 
-    let nivel: "critical" | "warning";
+    const nivel = alertSeverity(it.nivelRiesgo ?? null, it.riesgo);
     let kind: "expiration" | "missing_doc" | "audit_observation";
     let titulo: string;
     let detalle: string;
 
-    if (it.vencimiento) {
+    if (it.riesgo === "Naranja") {
+      kind = "audit_observation";
+      titulo = `${it.documento} — En trámite administrativo`;
+      detalle = c?.etapa
+        ? `Expediente en trámite (${c.etapa}). ${it.nota || ""}`.trim()
+        : `Expediente en trámite. ${it.nota || ""}`.trim();
+    } else if (it.vencimiento) {
       kind = "expiration";
-      nivel = it.riesgo === "Rojo" ? "critical" : "warning";
       titulo = `${it.documento} — ${it.estado}`;
       detalle =
         it.dias !== null && it.dias < 0
@@ -399,14 +470,12 @@ async function rebuildAlerts(
           : `Vence en ${it.dias} días (${it.venc_fmt}).`;
     } else if (it.riesgo === "Rojo") {
       kind = "missing_doc";
-      nivel = "critical";
       titulo = `${it.documento} — faltante / en proyecto`;
       detalle = it.nota || "Documento faltante o brecha regulatoria a cerrar.";
     } else {
       kind = "audit_observation";
-      nivel = "warning";
       titulo = `${it.documento} — a verificar`;
-      detalle = it.nota || "Documentación a verificar (sin fecha de vencimiento determinada).";
+      detalle = it.nota || "Documentación a verificar.";
     }
 
     rows.push({
@@ -419,6 +488,8 @@ async function rebuildAlerts(
       dias: it.dias,
       run_id: runId,
       estado: "abierta",
+      origen: c?.origen ?? "sheet",
+      confianza: c?.confianza ?? "confirmada",
     });
   }
 
