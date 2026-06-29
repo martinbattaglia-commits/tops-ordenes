@@ -298,7 +298,8 @@ export function executiveKpis(items: ComplianceItem[]) {
   return [
     { key: "auditados", label: "Documentos auditados", value: AUDIT_META.docsTotal, tone: "neutral" as const, href: "#matriz", suffix: "" },
     { key: "vigentes", label: "Vigentes", value: items.filter((i) => i.riesgo === "Verde").length, tone: "Verde" as const, href: "#matriz", suffix: "" },
-    { key: "proximos", label: "Próximos a vencer", value: items.filter((i) => i.riesgo === "Naranja").length, tone: "Naranja" as const, href: "#timeline", suffix: "" },
+    { key: "proximos", label: "Próximos a vencer", value: items.filter((i) => i.riesgo === "Amarillo").length, tone: "Amarillo" as const, href: "#timeline", suffix: "" },
+    { key: "en_tramite", label: "En trámite administrativo", value: items.filter((i) => i.riesgo === "Naranja").length, tone: "Naranja" as const, href: "#alertas", suffix: "" },
     { key: "vencidos", label: "Vencidos / Faltantes", value: items.filter((i) => i.riesgo === "Rojo").length, tone: "Rojo" as const, href: "#alertas", suffix: "" },
     { key: "criticos", label: "Hallazgos críticos", value: items.filter((i) => i.riesgo === "Rojo").length, tone: "Rojo" as const, href: "#alertas", suffix: "" },
     { key: "abiertos", label: "Riesgos abiertos", value: noVerde.length, tone: "Naranja" as const, href: "#matriz", suffix: "" },
