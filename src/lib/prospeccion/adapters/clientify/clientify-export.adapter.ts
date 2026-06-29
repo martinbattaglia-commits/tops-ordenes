@@ -62,20 +62,20 @@ function splitName(fullName: string | null): { firstName: string; lastName: stri
   return { firstName, lastName };
 }
 
-/** Construye el payload para Clientify a partir de un prospecto. */
+/** Construye el payload para Clientify a partir de un prospecto.
+ * Solo incluye campos opcionales cuando tienen un valor explícito y no vacío. */
 function buildContactPayload(p: ProspectToExport): CreateContactPayload {
   const { firstName, lastName } = splitName(p.full_name);
   return {
     first_name: firstName || p.company_name || "Prospecto",
-    last_name: lastName,
-    title: p.cargo ?? "",
-    company_name: p.company_name ?? "",
-    emails: p.email ? [{ type: 1, email: p.email }] : [],
-    phones: p.phone ? [{ type: 1, phone: p.phone }] : [],
-    taxpayer_identification_number: p.cuit ?? "",
+    ...(lastName && { last_name: lastName }),
+    ...(p.cargo && { title: p.cargo }),
+    ...(p.company_name && { company_name: p.company_name }),
+    ...(p.email && { emails: [{ type: 1, email: p.email }] }),
+    ...(p.phone && { phones: [{ type: 1, phone: p.phone }] }),
+    ...(p.cuit && { taxpayer_identification_number: p.cuit }),
     channel: "linkedin",
     contact_source: "Prospección Inteligente TOPS",
-    medium: "nexus_prospeccion",
   };
 }
 
