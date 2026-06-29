@@ -35,6 +35,19 @@ const NewClientSchema = z.object({
   tags: z.array(z.string()).max(20).optional().default([]),
   depot: z.enum(["MAGALDI", "LUJAN", ""]).optional().default(""),
   observ: z.string().max(2000).optional().default(""),
+  // Categoría fiscal + imputación contable capturadas desde el alta (req. Contadora 7).
+  condicion_iva: z
+    .enum([
+      "RESPONSABLE_INSCRIPTO",
+      "MONOTRIBUTO",
+      "EXENTO",
+      "CONSUMIDOR_FINAL",
+      "NO_RESPONSABLE",
+      "NO_CATEGORIZADO",
+    ])
+    .optional()
+    .default("RESPONSABLE_INSCRIPTO"),
+  cuenta_contable: z.string().max(20).optional().default(""),
 });
 
 export type NewClientInput = z.input<typeof NewClientSchema>;
@@ -159,6 +172,22 @@ async function createClientInner(input: NewClientInput): Promise<CreateClientRes
     return { ok: true, client: memClient, source: "clientify+supabase" };
   }
 
+  const cuenta = data.cuenta_contable?.trim() || null;
+  if (cuenta) {
+    const { data: acc, error: accErr } = await admin
+      .from("chart_of_accounts")
+      .select("code, is_postable, is_active")
+      .eq("code", cuenta)
+      .maybeSingle();
+    // Si el catálogo está disponible: validar. Si falla la consulta, no bloquea.
+    if (!accErr) {
+      if (!acc) return { ok: false, error: `La cuenta ${cuenta} no existe en el Plan de Cuentas.` };
+      if (!acc.is_postable || !acc.is_active) {
+        return { ok: false, error: `La cuenta ${cuenta} no es imputable.` };
+      }
+    }
+  }
+
   const { data: row, error } = await admin
     .from("clients")
     .insert({
@@ -169,8 +198,10 @@ async function createClientInner(input: NewClientInput): Promise<CreateClientRes
       contacto: data.contacto || null,
       email: data.email || null,
       tags: data.tags,
+      condicion_iva: data.condicion_iva,
+      cuenta_contable: cuenta,
     })
-    .select("id, razon, cuit, domicilio, telefono, contacto, email, tags, created_at")
+    .select("id, razon, cuit, domicilio, telefono, contacto, email, tags, created_at, condicion_iva, cuenta_contable")
     .single();
 
   if (error || !row) {
@@ -188,6 +219,58 @@ async function createClientInner(input: NewClientInput): Promise<CreateClientRes
     client: row as Client,
     source: clientifySynced ? "clientify+supabase" : "supabase",
   };
+}
+
+// ============================================================================
+// Action: editar datos fiscales/contables de un cliente existente (ficha)
+// ============================================================================
+
+const ClientFiscalSchema = z.object({
+  id: z.string().uuid(),
+  condicion_iva: z.enum([
+    "RESPONSABLE_INSCRIPTO",
+    "MONOTRIBUTO",
+    "EXENTO",
+    "CONSUMIDOR_FINAL",
+    "NO_RESPONSABLE",
+    "NO_CATEGORIZADO",
+  ]),
+  cuenta_contable: z.string().max(20).optional().default(""),
+});
+export type ClientFiscalInput = z.input<typeof ClientFiscalSchema>;
+
+export async function updateClientFiscal(
+  input: ClientFiscalInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const parsed = ClientFiscalSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
+  }
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Backend no disponible." };
+  const d = parsed.data;
+  const cuenta = d.cuenta_contable?.trim() || null;
+  if (cuenta) {
+    const { data: acc, error: accErr } = await admin
+      .from("chart_of_accounts")
+      .select("code, is_postable, is_active")
+      .eq("code", cuenta)
+      .maybeSingle();
+    if (!accErr) {
+      if (!acc) return { ok: false, error: `La cuenta ${cuenta} no existe en el Plan de Cuentas.` };
+      if (!acc.is_postable || !acc.is_active) {
+        return { ok: false, error: `La cuenta ${cuenta} no es imputable.` };
+      }
+    }
+  }
+  const { error } = await admin
+    .from("clients")
+    .update({ condicion_iva: d.condicion_iva, cuenta_contable: cuenta })
+    .eq("id", d.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/clientes/${d.id}`);
+  revalidatePath("/clients");
+  return { ok: true };
 }
 
 // ============================================================================

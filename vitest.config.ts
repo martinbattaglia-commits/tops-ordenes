@@ -17,6 +17,8 @@ export default defineConfig({
       "src/lib/clientify/**/*.test.ts",
       "src/lib/erp/**/*.test.ts",
       "src/lib/udie/**/*.test.ts",
+      "src/lib/fiscal/**/*.test.ts",
+      "src/lib/compras/**/*.test.ts",
     ],
     environment: "node",
   },

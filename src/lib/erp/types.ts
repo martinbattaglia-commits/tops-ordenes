@@ -98,3 +98,49 @@ export const SUPPLIER_COMPROBANTE_LABEL: Record<SupplierComprobante, string> = {
 export const SUPPLIER_COMPROBANTE_VALUES = Object.keys(
   SUPPLIER_COMPROBANTE_LABEL
 ) as SupplierComprobante[];
+
+// ==================================================================
+// PLAN DE CUENTAS (chart_of_accounts) — catálogo contable reutilizable
+// Espeja la migración 0120_chart_of_accounts_baseline.
+// ==================================================================
+
+export type AccountType =
+  | "activo"
+  | "pasivo"
+  | "patrimonio_neto"
+  | "ingreso"
+  | "gasto"
+  | "orden";
+
+export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
+  activo: "Activo",
+  pasivo: "Pasivo",
+  patrimonio_neto: "Patrimonio Neto",
+  ingreso: "Ingreso",
+  gasto: "Gasto",
+  orden: "Cuenta de Orden",
+};
+
+/** Una cuenta del Plan de Cuentas. `is_postable`: solo las hojas imputables. */
+export interface ChartAccount {
+  id: string;
+  code: string;
+  name: string;
+  type: AccountType;
+  subtype: string | null;
+  parent_id: string | null;
+  is_postable: boolean;
+  is_active: boolean;
+  is_system: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Regla de imputación por defecto (source_type + rule_key → código de cuenta). */
+export interface AccountingRule {
+  id: string;
+  source_type: string;
+  rule_key: string;
+  account_code: string;
+  notes: string | null;
+}

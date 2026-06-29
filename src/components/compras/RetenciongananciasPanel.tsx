@@ -19,6 +19,8 @@ import {
   saveVendorConceptoGananciasAction,
   type RetenciónContext,
 } from "@/app/(app)/compras/facturas/nueva/retencion-actions";
+// Servicio único de exclusión/vigencia (reqs. 5 y 6) — evita duplicar lógica.
+import { certificadoVigente } from "@/lib/fiscal/exclusion-retenciones";
 
 // ─── Props ────────────────────────────────────────────────────
 
@@ -55,11 +57,8 @@ function computeSemaforo(
   ctx: RetenciónContext,
   fecha: string,
 ): SemaforoColor {
-  if (ctx.vendor.cert_exclusion_hasta) {
-    const vigencia = new Date(ctx.vendor.cert_exclusion_hasta);
-    const hoy      = new Date(fecha || new Date().toISOString().slice(0, 10));
-    if (vigencia >= hoy) return "rojo";
-  }
+  if (certificadoVigente(ctx.vendor.cert_exclusion_hasta, fecha || new Date().toISOString().slice(0, 10)))
+    return "rojo";
   if (ctx.retenciónExistente && result.corresponde) return "rojo";
   if (alertas.some((a) => a.type === "danger"))     return "rojo";
   return result.corresponde ? "naranja" : "verde";
@@ -89,9 +88,8 @@ function buildAlertas(
 
   if (ctx.vendor.cert_exclusion_hasta) {
     const vigencia  = new Date(ctx.vendor.cert_exclusion_hasta);
-    const hoy       = new Date(fecha || new Date().toISOString().slice(0, 10));
     const fmtFecha  = vigencia.toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" });
-    if (vigencia >= hoy) {
+    if (certificadoVigente(ctx.vendor.cert_exclusion_hasta, fecha || new Date().toISOString().slice(0, 10))) {
       items.push({ type: "warn", msg: `Certificado de Exclusión vigente hasta el ${fmtFecha}. Verificar con el estudio contable antes de practicar retención.` });
     } else {
       items.push({ type: "info", msg: `Certificado de Exclusión vencido el ${fmtFecha}. Corresponde retención normal.` });

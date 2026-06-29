@@ -24,8 +24,32 @@ export const CbteTipo = {
   NOTA_DEBITO_C: 12,
   NOTA_CREDITO_C: 13,
   FACTURA_E: 19,
+  // Factura de Crédito Electrónica MiPyME (RG 4367 / Ley 27.440). Preparado
+  // para activación (emisión real requiere Opcionales/CBU + WS de padrón + credenciales ARCA).
+  FCE_MIPYME_FACTURA_A: 201,
+  FCE_MIPYME_NOTA_DEBITO_A: 202,
+  FCE_MIPYME_NOTA_CREDITO_A: 203,
+  FCE_MIPYME_FACTURA_B: 206,
+  FCE_MIPYME_NOTA_DEBITO_B: 207,
+  FCE_MIPYME_NOTA_CREDITO_B: 208,
+  FCE_MIPYME_FACTURA_C: 211,
+  FCE_MIPYME_NOTA_DEBITO_C: 212,
+  FCE_MIPYME_NOTA_CREDITO_C: 213,
 } as const;
 export type CbteTipoCode = (typeof CbteTipo)[keyof typeof CbteTipo];
+
+/** Códigos ARCA de la familia FCE MiPyME (para detección/preparación). */
+export const FCE_MIPYME_CODES: readonly CbteTipoCode[] = [
+  CbteTipo.FCE_MIPYME_FACTURA_A,
+  CbteTipo.FCE_MIPYME_NOTA_DEBITO_A,
+  CbteTipo.FCE_MIPYME_NOTA_CREDITO_A,
+  CbteTipo.FCE_MIPYME_FACTURA_B,
+  CbteTipo.FCE_MIPYME_NOTA_DEBITO_B,
+  CbteTipo.FCE_MIPYME_NOTA_CREDITO_B,
+  CbteTipo.FCE_MIPYME_FACTURA_C,
+  CbteTipo.FCE_MIPYME_NOTA_DEBITO_C,
+  CbteTipo.FCE_MIPYME_NOTA_CREDITO_C,
+];
 
 /** 1 = Productos, 2 = Servicios, 3 = Productos y Servicios. */
 export const Concepto = {
