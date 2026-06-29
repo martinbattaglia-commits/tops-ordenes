@@ -212,6 +212,12 @@ export const env = {
     driveSubpath:
       process.env.COMPLIANCE_DRIVE_PATH?.trim() || "AGENCIA GUBERNAMENTAL DE CONTROL",
     /**
+     * Planilla central 00_ESTADO_COMPLIANCE (Google Sheet) — fuente primaria del
+     * estado administrativo. El cron la lee por fileId y la exporta a CSV.
+     * Si está vacía, el Paso 0 del cron se saltea (degradación: cálculo por fecha).
+     */
+    estadoSheetFileId: process.env.COMPLIANCE_ESTADO_SHEET_FILE_ID?.trim() ?? "",
+    /**
      * ¿Intentar extraer fechas del contenido del PDF (además del nombre)? Off por
      * defecto: la extracción por nombre/metadata es robusta; el parseo de PDF es
      * opcional y costoso. Activar con COMPLIANCE_SYNC_EXTRACT_TEXT=1.
