@@ -168,7 +168,7 @@ export function deriveComplianceStatus(
   const temporal: Temporal = temporalOf({ vencimiento: item.vencimiento, dias, baseFalta, anticipacion });
 
   // Estado efectivo para la cascada: el del caso, o uno inferido del eje temporal.
-  const estadoEfectivo = estadoAdm ?? (temporal === "vigente" ? "vigente" : temporal === "falta" ? "sin_iniciar" : "sin_iniciar");
+  const estadoEfectivo = estadoAdm ?? (temporal === "vigente" ? "vigente" : "sin_iniciar");
 
   // Si NO hay caso y NO hay vencimiento NI falta (permanente vigente del snapshot) → conservar base.
   if (!caso && !item.vencimiento && !baseFalta) {

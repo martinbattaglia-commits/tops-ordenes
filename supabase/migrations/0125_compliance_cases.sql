@@ -163,6 +163,24 @@ begin
     check (kind in ('expiration','missing_doc','audit_observation','regulatory_update','review'));
 end $$;
 
+-- Extender el CHECK de nivel para incluir 'info' (nombre-agnóstico: introspección).
+do $$
+declare cname text;
+begin
+  select con.conname into cname
+  from pg_constraint con
+  join pg_class rel on rel.oid = con.conrelid
+  where rel.relname = 'compliance_alerts'
+    and con.contype = 'c'
+    and pg_get_constraintdef(con.oid) ilike '%nivel%'
+    and pg_get_constraintdef(con.oid) not ilike '%kind%';
+  if cname is not null then
+    execute format('alter table compliance_alerts drop constraint %I', cname);
+  end if;
+  alter table compliance_alerts add constraint compliance_alerts_nivel_chk
+    check (nivel in ('critical','warning','ok','info'));
+end $$;
+
 -- 6) Evidencias: respaldo de cada cambio de estado (D12) ----------------------
 create table if not exists compliance_evidence (
   id                 uuid primary key default gen_random_uuid(),

@@ -159,6 +159,13 @@ export async function syncCasesFromSheet(
   // Transiciones inválidas → NO se aplican: alerta de revisión + error de corrida (D11).
   for (const b of blocked) errors.push(`Transición no permitida ${b.from}→${b.to} para ${b.item_id}: cambio no aplicado.`);
   if (blocked.length) {
+    // Idempotencia: cerrar alertas de revisión de transición previas (origen sheet) de estos ítems
+    const { error: closeErr } = await db.from("compliance_alerts")
+      .update({ estado: "resuelta", resolved_at: now })
+      .eq("kind", "review").eq("origen", "sheet").eq("estado", "abierta")
+      .in("item_id", blocked.map((b) => b.item_id));
+    if (closeErr) errors.push(`Cierre de alertas de revisión previas: ${closeErr.message}`);
+
     const reviewRows = blocked.map((b) => ({
       item_id: b.item_id, nivel: "warning", kind: "review",
       titulo: `${b.item_id} — transición de estado no permitida`,
