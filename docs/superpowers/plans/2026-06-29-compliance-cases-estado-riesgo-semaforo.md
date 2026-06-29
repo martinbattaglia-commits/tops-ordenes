@@ -23,12 +23,13 @@
 ## File Structure
 
 **Nuevos:**
-- `supabase/migrations/0125_compliance_cases.sql` — tablas `compliance_cases`, `compliance_anticipacion_config` (+seed), `compliance_normalizacion` (+seed); `compliance_items.anticipacion_dias`; alters de `compliance_alerts`.
+- `supabase/migrations/0125_compliance_cases.sql` — tablas `compliance_cases`, `compliance_anticipacion_config` (+seed), `compliance_normalizacion` (+seed), **`compliance_evidence`** (D12); `compliance_items.anticipacion_dias`; alters de `compliance_alerts`.
 - `src/lib/compliance/cases/types.ts` — enums y tipos del caso (`EstadoAdministrativo`, `Etapa`, `NivelRiesgo`, `Semaforo`, `Origen`, `Confianza`, `Temporal`, `ComplianceCase`, `ComplianceCaseLite`).
 - `src/lib/compliance/cases/normalize.ts` (+ `.test.ts`) — diccionario por defecto + `normalizar(texto, dimension, dict?)`.
+- `src/lib/compliance/cases/transitions.ts` (+ `.test.ts`) — **máquina de estados** (D11): `TRANSICIONES`, `canTransition(from, to)`.
 - `src/lib/compliance/semaforo.ts` (+ `.test.ts`) — `temporalOf`, `resolveAnticipacion`, `computeSemaforo`, `alertSeverity`.
 - `src/lib/compliance/cases/sheet.ts` (+ `.test.ts`) — `parseCsv`, `parseEstadoSheet(csv, dict, anticConfig)` → `{ rows, errors }`.
-- `src/lib/compliance/cases/sync.ts` — `syncCasesFromSheet(db, deps)` (lee Sheet vía `exportGoogleFile`, normaliza, upsert idempotente).
+- `src/lib/compliance/cases/sync.ts` (+ `.test.ts`) — `syncCasesFromSheet(db, deps)`: lee Sheet, normaliza, **valida transición (D11)** y registra **evidencia (D12)** por cada cambio de estado aplicado.
 
 **Modificados:**
 - `src/lib/compliance/data.ts` — tipo `Semaforo`, extensión de `ComplianceItem` (campos del caso), refactor `deriveComplianceStatus`, `RISK_LABEL`, `executiveKpis`.
@@ -45,7 +46,7 @@
 - Create: `supabase/migrations/0125_compliance_cases.sql`
 
 **Interfaces:**
-- Produces (DB): tablas `compliance_cases`, `compliance_anticipacion_config`, `compliance_normalizacion`; columna `compliance_items.anticipacion_dias`; columnas `compliance_alerts.origen/confianza/case_id` + `kind='review'`.
+- Produces (DB): tablas `compliance_cases`, `compliance_anticipacion_config`, `compliance_normalizacion`, `compliance_evidence`; columna `compliance_items.anticipacion_dias`; columnas `compliance_alerts.origen/confianza/case_id` + `kind='review'`.
 
 - [ ] **Step 1: Escribir la migración completa**
 
@@ -216,12 +217,37 @@ begin
   alter table compliance_alerts add constraint compliance_alerts_kind_chk
     check (kind in ('expiration','missing_doc','audit_observation','regulatory_update','review'));
 end $$;
+
+-- 6) Evidencias: respaldo de cada cambio de estado (D12) ----------------------
+create table if not exists compliance_evidence (
+  id                 uuid primary key default gen_random_uuid(),
+  case_id            uuid references compliance_cases(id) on delete cascade,
+  item_id            text references compliance_items(id) on delete set null,
+  from_estado        text,
+  to_estado          text not null,
+  origen             text not null check (origen in ('manual','sheet','documento','correo','ia','nombre_archivo')),
+  nivel_verificacion text not null check (nivel_verificacion in ('confirmada','alta','media','baja')),
+  fecha_evidencia    date,
+  document_id        uuid references compliance_documents(id) on delete set null,
+  drive_file_id      text,
+  url                text,
+  titulo             text,
+  descripcion        text,
+  created_at         timestamptz not null default now()
+);
+create index if not exists compliance_evidence_case_idx on compliance_evidence(case_id);
+create index if not exists compliance_evidence_item_idx on compliance_evidence(item_id);
+
+alter table compliance_evidence enable row level security;
+drop policy if exists compliance_evidence_select on compliance_evidence;
+create policy compliance_evidence_select on compliance_evidence
+  for select to authenticated using (true);
 ```
 
 - [ ] **Step 2: Verificar (sin aplicar)**
 
 Run: `grep -c "create table if not exists" supabase/migrations/0125_compliance_cases.sql`
-Expected: `3` (las tres tablas nuevas).
+Expected: `4` (compliance_cases, compliance_anticipacion_config, compliance_normalizacion, compliance_evidence).
 
 > **No aplicar.** La migración es gateada. Validación profunda = revisión humana contra spec §3 y `0081`. (Si en el futuro hay `supabase db lint` disponible y un proyecto local, correrlo; hoy no está.)
 
@@ -229,7 +255,7 @@ Expected: `3` (las tres tablas nuevas).
 
 ```bash
 git add supabase/migrations/0125_compliance_cases.sql
-git commit -m "feat(compliance): migración 0125 — casos regulatorios, config anticipación y diccionario"
+git commit -m "feat(compliance): migración 0125 — casos, config anticipación, diccionario y evidencias"
 ```
 
 ---
@@ -704,6 +730,101 @@ Expected: PASS.
 ```bash
 git add src/lib/compliance/semaforo.ts src/lib/compliance/semaforo.test.ts
 git commit -m "feat(compliance): motor de semáforo (estado→color, riesgo→prioridad)"
+```
+
+---
+
+## Task 4B: Máquina de estados (`cases/transitions.ts`) — D11
+
+**Files:**
+- Create: `src/lib/compliance/cases/transitions.ts`
+- Test: `src/lib/compliance/cases/transitions.test.ts`
+
+**Interfaces:**
+- Consumes: `EstadoAdministrativo` (Task 2).
+- Produces: `TRANSICIONES: Record<EstadoAdministrativo, EstadoAdministrativo[]>`, `canTransition(from, to): boolean`.
+
+- [ ] **Step 1: Escribir el test (falla)**
+
+Crear `src/lib/compliance/cases/transitions.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { canTransition, TRANSICIONES } from "./transitions";
+
+describe("canTransition · máquina de estados (D11)", () => {
+  it("auto-transición siempre válida (idempotencia del re-sync)", () => {
+    expect(canTransition("en_tramite", "en_tramite")).toBe(true);
+  });
+  it("sin_iniciar → cualquiera (creación inicial)", () => {
+    expect(canTransition("sin_iniciar", "vigente")).toBe(true);
+    expect(canTransition("sin_iniciar", "rechazado")).toBe(true);
+  });
+  it("en_tramite → pendiente_emision / aprobado / rechazado permitido", () => {
+    expect(canTransition("en_tramite", "pendiente_emision")).toBe(true);
+    expect(canTransition("en_tramite", "rechazado")).toBe(true);
+  });
+  it("pendiente_emision → vigente permitido (se incorporó el cert)", () => {
+    expect(canTransition("pendiente_emision", "vigente")).toBe(true);
+  });
+  it("rechazado → vigente NO permitido (debe reabrir trámite)", () => {
+    expect(canTransition("rechazado", "vigente")).toBe(false);
+  });
+  it("vigente → pendiente_emision NO permitido (no salta el trámite)", () => {
+    expect(canTransition("vigente", "pendiente_emision")).toBe(false);
+  });
+  it("todo destino declarado es un estado válido del enum", () => {
+    const all = Object.keys(TRANSICIONES);
+    for (const tos of Object.values(TRANSICIONES)) for (const t of tos) expect(all).toContain(t);
+  });
+});
+```
+
+- [ ] **Step 2: Correr (falla)**
+
+Run: `npx vitest run src/lib/compliance/cases/transitions.test.ts`
+Expected: FAIL ("Cannot find module './transitions'").
+
+- [ ] **Step 3: Implementar**
+
+Crear `src/lib/compliance/cases/transitions.ts`:
+
+```ts
+/**
+ * Máquina de estados administrativos (D11): impide cambios inconsistentes.
+ * `from → [destinos permitidos]`. Auto-transición (X→X) siempre válida.
+ * `sin_iniciar` como origen = creación: permite cualquier estado inicial.
+ * Tuneable (constante en código; promovible a tabla en una iteración futura).
+ */
+import type { EstadoAdministrativo } from "./types";
+
+export const TRANSICIONES: Record<EstadoAdministrativo, EstadoAdministrativo[]> = {
+  sin_iniciar:       ["vigente", "en_tramite", "observado", "pendiente_emision", "aprobado", "rechazado"],
+  en_tramite:        ["observado", "pendiente_emision", "aprobado", "rechazado", "vigente"],
+  observado:         ["en_tramite", "pendiente_emision", "aprobado", "rechazado"],
+  pendiente_emision: ["vigente", "aprobado", "rechazado"],
+  aprobado:          ["vigente", "pendiente_emision"],
+  vigente:           ["en_tramite", "observado", "rechazado"],
+  rechazado:         ["en_tramite", "sin_iniciar"],
+};
+
+/** ¿Se permite la transición from→to? La auto-transición siempre es válida. */
+export function canTransition(from: EstadoAdministrativo, to: EstadoAdministrativo): boolean {
+  if (from === to) return true;
+  return TRANSICIONES[from]?.includes(to) ?? false;
+}
+```
+
+- [ ] **Step 4: Correr (pasa)**
+
+Run: `npx vitest run src/lib/compliance/cases/transitions.test.ts`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/lib/compliance/cases/transitions.ts src/lib/compliance/cases/transitions.test.ts
+git commit -m "feat(compliance): máquina de estados con transiciones permitidas (D11)"
 ```
 
 ---
@@ -1220,32 +1341,69 @@ git commit -m "feat(compliance): env COMPLIANCE_ESTADO_SHEET_FILE_ID (planilla d
 - Test: `src/lib/compliance/cases/sync.test.ts`
 
 **Interfaces:**
-- Consumes: `parseEstadoSheet` (Task 5), `exportGoogleFile` (drive), `AdminDb`.
-- Produces: `syncCasesFromSheet(db, deps): Promise<{ upserted: number; closed: number; errors: string[]; skipped?: string }>` con `deps = { fileId, readCsv?, loadDict? }` (inyectables para test).
+- Consumes: `parseEstadoSheet`/`SheetCaseRow` (Task 5), `canTransition` (Task 4B), `exportGoogleFile` (drive), `EstadoAdministrativo` (Task 2).
+- Produces (puras, testeables sin DB):
+  - `mapSheetRowToCaseRecord(r, now?) → CaseRecord` (origen='sheet', confianza='confirmada', activo=true, row_hash).
+  - `planCaseChanges(rows, prior): { apply: SheetCaseRow[]; blocked: { item_id, from, to }[] }` — valida transición vs estado activo previo (D11).
+  - `evidenceFor(args) → EvidenceRecord` (origen='sheet', nivel_verificacion='confirmada', from/to, fecha, referencia).
+- Produces (orquestación): `syncCasesFromSheet(db, deps): Promise<{ upserted: number; closed: number; evidence: number; blocked: number; errors: string[]; skipped?: string }>` con `deps = { fileId, readCsv?, dict? }`. Por cada cambio aplicado: cierra el caso previo, inserta el nuevo (devuelve id) e inserta `compliance_evidence`. Por cada bloqueado: alerta `review` + error.
 
-- [ ] **Step 1: Escribir el test (falla)** — usa un `db` y `readCsv` mockeados (sin red).
+- [ ] **Step 1: Escribir el test (falla)** — sólo funciones puras (sin red ni DB).
 
 Crear `src/lib/compliance/cases/sync.test.ts`:
 
 ```ts
-import { describe, it, expect, vi } from "vitest";
-import { mapSheetRowToCaseRecord } from "./sync";
+import { describe, it, expect } from "vitest";
+import { mapSheetRowToCaseRecord, planCaseChanges, evidenceFor } from "./sync";
+import type { SheetCaseRow } from "./sheet";
+
+const row = (over: Partial<SheetCaseRow> = {}): SheetCaseRow => ({
+  item_id: "MAG-04", sede: "MAGALDI", tipo_certificado: "CAA", expediente_nro: "EX-1",
+  organismo: "MAD", estado_administrativo: "en_tramite", etapa: "pronto_despacho",
+  nivel_riesgo: "alto", fecha_inicio: "2023-09-01", fecha_pronto_despacho: "2025-02-01",
+  ultima_actuacion: "X", proxima_accion: "Y", observaciones: "Z", ...over,
+});
 
 describe("mapSheetRowToCaseRecord", () => {
-  it("marca origen=sheet, confianza=confirmada, activo=true", () => {
-    const rec = mapSheetRowToCaseRecord({
-      item_id: "MAG-04", sede: "MAGALDI", tipo_certificado: "CAA", expediente_nro: "EX-1",
-      organismo: "MAD", estado_administrativo: "en_tramite", etapa: "pronto_despacho",
-      nivel_riesgo: "alto", fecha_inicio: "2023-09-01", fecha_pronto_despacho: "2025-02-01",
-      ultima_actuacion: "X", proxima_accion: "Y", observaciones: "Z",
-    });
+  it("marca origen=sheet, confianza=confirmada, activo=true, con row_hash", () => {
+    const rec = mapSheetRowToCaseRecord(row());
     expect(rec.origen).toBe("sheet");
     expect(rec.confianza).toBe("confirmada");
     expect(rec.activo).toBe(true);
-    expect(rec.item_id).toBe("MAG-04");
     expect(rec.estado_administrativo).toBe("en_tramite");
     expect(typeof rec.row_hash).toBe("string");
     expect(rec.row_hash.length).toBeGreaterThan(0);
+  });
+});
+
+describe("planCaseChanges · valida transición vs estado activo previo (D11)", () => {
+  it("creación (sin caso previo) siempre se aplica", () => {
+    const { apply, blocked } = planCaseChanges([row()], new Map());
+    expect(apply).toHaveLength(1);
+    expect(blocked).toHaveLength(0);
+  });
+  it("transición permitida (en_tramite→pendiente_emision) se aplica", () => {
+    const prior = new Map([["MAG-04", "en_tramite" as const]]);
+    const { apply, blocked } = planCaseChanges([row({ estado_administrativo: "pendiente_emision" })], prior);
+    expect(apply).toHaveLength(1);
+    expect(blocked).toHaveLength(0);
+  });
+  it("transición prohibida (rechazado→vigente) se bloquea y NO se aplica", () => {
+    const prior = new Map([["MAG-04", "rechazado" as const]]);
+    const { apply, blocked } = planCaseChanges([row({ estado_administrativo: "vigente" })], prior);
+    expect(apply).toHaveLength(0);
+    expect(blocked).toEqual([{ item_id: "MAG-04", from: "rechazado", to: "vigente" }]);
+  });
+});
+
+describe("evidenceFor", () => {
+  it("registra origen=sheet, nivel_verificacion=confirmada y la transición", () => {
+    const ev = evidenceFor({ caseId: "c1", itemId: "MAG-04", from: "en_tramite", to: "pendiente_emision", fecha: "2025-02-01" });
+    expect(ev.origen).toBe("sheet");
+    expect(ev.nivel_verificacion).toBe("confirmada");
+    expect(ev.from_estado).toBe("en_tramite");
+    expect(ev.to_estado).toBe("pendiente_emision");
+    expect(ev.case_id).toBe("c1");
   });
 });
 ```
@@ -1268,6 +1426,8 @@ Crear `src/lib/compliance/cases/sync.ts`:
 import { createHash } from "crypto";
 import { exportGoogleFile } from "@/lib/drive/client";
 import { parseEstadoSheet, type SheetCaseRow } from "./sheet";
+import { canTransition } from "./transitions";
+import type { EstadoAdministrativo } from "./types";
 import type { NormRow } from "./normalize";
 
 export interface CaseRecord {
@@ -1315,6 +1475,60 @@ export function mapSheetRowToCaseRecord(r: SheetCaseRow, now: string = new Date(
   };
 }
 
+export interface EvidenceRecord {
+  case_id: string | null;
+  item_id: string | null;
+  from_estado: string | null;
+  to_estado: string;
+  origen: "sheet";
+  nivel_verificacion: "confirmada";
+  fecha_evidencia: string | null;
+  drive_file_id: string | null;
+  url: string | null;
+  titulo: string | null;
+  descripcion: string | null;
+}
+
+/** Construye la evidencia de un cambio de estado (D12). En iteración 1 el respaldo es la planilla. */
+export function evidenceFor(args: {
+  caseId: string | null;
+  itemId: string | null;
+  from: EstadoAdministrativo | null;
+  to: EstadoAdministrativo;
+  fecha: string | null;
+  titulo?: string | null;
+}): EvidenceRecord {
+  return {
+    case_id: args.caseId,
+    item_id: args.itemId,
+    from_estado: args.from,
+    to_estado: args.to,
+    origen: "sheet",
+    nivel_verificacion: "confirmada",
+    fecha_evidencia: args.fecha,
+    drive_file_id: null,
+    url: null,
+    titulo: args.titulo ?? "Planilla 00_ESTADO_COMPLIANCE",
+    descripcion: `Cambio de estado ${args.from ?? "—"} → ${args.to} confirmado en la planilla.`,
+  };
+}
+
+/** Decide qué filas se aplican y cuáles se bloquean por transición inválida (D11). PURA. */
+export function planCaseChanges(
+  rows: SheetCaseRow[],
+  prior: Map<string, EstadoAdministrativo>,
+): { apply: SheetCaseRow[]; blocked: { item_id: string; from: EstadoAdministrativo; to: EstadoAdministrativo }[] } {
+  const apply: SheetCaseRow[] = [];
+  const blocked: { item_id: string; from: EstadoAdministrativo; to: EstadoAdministrativo }[] = [];
+  for (const r of rows) {
+    const from = prior.get(r.item_id) ?? "sin_iniciar";
+    const to = r.estado_administrativo;
+    if (canTransition(from, to)) apply.push(r);
+    else blocked.push({ item_id: r.item_id, from, to });
+  }
+  return { apply, blocked };
+}
+
 // AdminDb laxo para no acoplar al tipo de Supabase en este módulo.
 type DbLike = {
   from: (t: string) => any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -1331,44 +1545,81 @@ export interface SyncCasesDeps {
 export async function syncCasesFromSheet(
   db: DbLike,
   deps: SyncCasesDeps,
-): Promise<{ upserted: number; closed: number; errors: string[]; skipped?: string }> {
-  if (!deps.fileId) return { upserted: 0, closed: 0, errors: [], skipped: "COMPLIANCE_ESTADO_SHEET_FILE_ID ausente" };
+): Promise<{ upserted: number; closed: number; evidence: number; blocked: number; errors: string[]; skipped?: string }> {
+  if (!deps.fileId) return { upserted: 0, closed: 0, evidence: 0, blocked: 0, errors: [], skipped: "COMPLIANCE_ESTADO_SHEET_FILE_ID ausente" };
   const read = deps.readCsv ?? ((id: string) => exportGoogleFile(id, "text/csv"));
 
   let csv: string;
   try {
     csv = await read(deps.fileId);
   } catch (e) {
-    return { upserted: 0, closed: 0, errors: [`No se pudo leer la planilla: ${e instanceof Error ? e.message : String(e)}`] };
+    return { upserted: 0, closed: 0, evidence: 0, blocked: 0, errors: [`No se pudo leer la planilla: ${e instanceof Error ? e.message : String(e)}`] };
   }
 
   const { rows, errors } = parseEstadoSheet(csv, deps.dict);
   const now = new Date().toISOString();
-  const records = rows.map((r) => mapSheetRowToCaseRecord(r, now));
-  const itemIds = records.map((r) => r.item_id);
 
-  // 1) Cerrar casos activos de los ítems presentes (se reemplazan por la versión de la planilla).
-  let closed = 0;
+  // Estado activo previo por ítem (para validar transición, D11).
+  const prior = new Map<string, EstadoAdministrativo>();
+  const itemIds = [...new Set(rows.map((r) => r.item_id))];
   if (itemIds.length) {
-    const { error, count } = await db
+    const { data, error } = await db
       .from("compliance_cases")
-      .update({ activo: false, updated_at: now }, { count: "exact" })
+      .select("item_id,estado_administrativo")
       .in("item_id", itemIds)
-      .eq("activo", true)
-      .eq("origen", "sheet");
-    if (error) errors.push(`Cierre de casos previos: ${error.message}`);
-    else closed = count ?? 0;
+      .eq("activo", true);
+    if (error) errors.push(`Lectura de casos activos: ${error.message}`);
+    for (const c of (data ?? []) as Array<{ item_id: string; estado_administrativo: EstadoAdministrativo }>) {
+      prior.set(c.item_id, c.estado_administrativo);
+    }
   }
 
-  // 2) Insertar los casos vigentes de la planilla.
-  let upserted = 0;
-  if (records.length) {
-    const { error } = await db.from("compliance_cases").insert(records);
-    if (error) errors.push(`Insert de casos: ${error.message}`);
-    else upserted = records.length;
+  const { apply, blocked } = planCaseChanges(rows, prior);
+
+  // Transiciones inválidas → NO se aplican: alerta de revisión + error de corrida (D11).
+  for (const b of blocked) errors.push(`Transición no permitida ${b.from}→${b.to} para ${b.item_id}: cambio no aplicado.`);
+  if (blocked.length) {
+    const reviewRows = blocked.map((b) => ({
+      item_id: b.item_id, nivel: "warning", kind: "review",
+      titulo: `${b.item_id} — transición de estado no permitida`,
+      detalle: `La planilla pide ${b.from}→${b.to}, transición inválida. Estado conservado. Revisar.`,
+      estado: "abierta", origen: "sheet", confianza: "confirmada",
+    }));
+    const { error } = await db.from("compliance_alerts").insert(reviewRows);
+    if (error) errors.push(`Alertas de revisión (transiciones): ${error.message}`);
   }
 
-  return { upserted, closed, errors };
+  let closed = 0, upserted = 0, evidence = 0;
+  for (const r of apply) {
+    const from = prior.get(r.item_id) ?? null;
+    if (from === r.estado_administrativo) continue; // idempotencia: sin cambio → sin evidencia
+
+    // 1) Cerrar el caso activo previo (sólo origen sheet).
+    const close = await db
+      .from("compliance_cases")
+      .update({ activo: false, updated_at: now })
+      .eq("item_id", r.item_id).eq("activo", true).eq("origen", "sheet");
+    if (close.error) { errors.push(`Cierre previo ${r.item_id}: ${close.error.message}`); continue; }
+    if (from) closed += 1;
+
+    // 2) Insertar el nuevo caso activo (devuelve id para la evidencia).
+    const rec = mapSheetRowToCaseRecord(r, now);
+    const ins = await db.from("compliance_cases").insert(rec).select("id").single();
+    if (ins.error || !ins.data) { errors.push(`Insert caso ${r.item_id}: ${ins.error?.message ?? "sin id"}`); continue; }
+    upserted += 1;
+    const caseId = (ins.data as { id: string }).id;
+
+    // 3) Registrar evidencia del cambio de estado (D12).
+    const ev = evidenceFor({
+      caseId, itemId: r.item_id, from: from as EstadoAdministrativo | null,
+      to: r.estado_administrativo, fecha: r.fecha_pronto_despacho ?? r.fecha_inicio ?? null,
+    });
+    const evIns = await db.from("compliance_evidence").insert(ev);
+    if (evIns.error) errors.push(`Evidencia ${r.item_id}: ${evIns.error.message}`);
+    else evidence += 1;
+  }
+
+  return { upserted, closed, evidence, blocked: blocked.length, errors };
 }
 ```
 
@@ -1383,7 +1634,7 @@ Expected: PASS.
 
 ```bash
 git add src/lib/compliance/cases/sync.ts src/lib/compliance/cases/sync.test.ts
-git commit -m "feat(compliance): syncCasesFromSheet (Paso 0 — planilla → compliance_cases)"
+git commit -m "feat(compliance): syncCasesFromSheet — planilla + validación de transiciones (D11) + evidencias (D12)"
 ```
 
 ---
@@ -1756,7 +2007,7 @@ Como `runComplianceSync` degrada si Drive/Supabase no están configurados, verif
 
 - [ ] **Step 3: Verificación contra spec (checklist)**
 
-Confirmar que el plan cubrió: D6 (anticipación parametrizable, Task 1+4+6), D7 (riesgo≠color, Task 4), D8 (`pendiente_emision`, Task 1+4+6), D9 (diccionario, Task 1+3), D10 (origen+confianza, Task 1+2+9+11). Cascada §5.2 (Task 4). Planilla §4 (Task 5+9). Cron §6 (Task 11). Dashboard §7 (Task 12).
+Confirmar que el plan cubrió: D6 (anticipación parametrizable, Task 1+4+6), D7 (riesgo≠color, Task 4), D8 (`pendiente_emision`, Task 1+4+6), D9 (diccionario, Task 1+3), D10 (origen+confianza, Task 1+2+9+11), **D11 (máquina de estados, Task 1+4B+9)**, **D12 (evidencias `compliance_evidence`, Task 1+9)**, **D13 (alcance Sheets+Drive, sin correos)**. Cascada §5.2 (Task 4). Máquina §5.4 (Task 4B). Planilla §4 (Task 5+9). Cron §6 (Task 11). Dashboard §7 (Task 12).
 
 - [ ] **Step 4: Resumen de estado para Dirección**
 
@@ -1772,7 +2023,7 @@ git add -A && git commit -m "chore(compliance): cierre de plan — suite verde, 
 
 ## Self-Review del plan (hecho por el autor)
 
-- **Cobertura de spec:** D1–D10 y §§3–8 mapeadas a tareas (ver Task 13 Step 3). ✔
+- **Cobertura de spec:** D1–D13 y §§3–8 mapeadas a tareas (ver Task 13 Step 3). Máquina de estados (Task 4B) y evidencias (Task 1+9) incluidas. ✔
 - **Placeholders:** sin "TBD/TODO"; todo paso con código real o comando con salida esperada. ✔
 - **Consistencia de tipos:** `Semaforo`=`Riesgo` (color); `nivelRiesgo` (prioridad) separado; `ComplianceCaseLite` consumido igual en `data.ts`, `source.ts`, `engine.ts`; `deriveComplianceStatus(item, today?, anticConfig?)` con la misma firma en todos los call-sites. ✔
 - **Riesgo conocido:** `compliance_alerts.origen/confianza` y `kind='review'` dependen de `0081` aplicada; el código degrada (los `insert` con esas columnas fallan si la tabla no existe, pero el cron sólo corre con DB configurada y migraciones aplicadas — gateado). Documentado en Global Constraints y Task 13.

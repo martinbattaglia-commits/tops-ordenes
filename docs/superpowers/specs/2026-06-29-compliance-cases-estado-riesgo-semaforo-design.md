@@ -52,6 +52,9 @@ Que el semáforo refleje el **verdadero estado regulatorio** del trámite y no s
 | **D8** | **Estado "Aprobado"** | No vuelve a 🟢 automáticamente. Se agrega estado transitorio **`pendiente_emision`** (aprobado/resolución emitida sin certificado nuevo) → 🟡. Pasa a `vigente`/🟢 sólo al incorporar el nuevo certificado y actualizar `vencimiento` (§5.2). |
 | **D9** | **Vocabulario** | **Diccionario de normalización** (tabla `compliance_normalizacion`): sinónimos → valor canónico. Extensible por datos, **sin tocar el motor** (§3.5, §4.2). |
 | **D10** | **Confianza** | Dos dimensiones independientes: **`origen`** ∈ {manual, sheet, documento, correo, ia, nombre_archivo} y **`confianza`** ∈ {confirmada, alta, media, baja}. Sólo `confianza='confirmada'` escribe estado (§3.1, §6). |
+| **D11** | **Máquina de estados** | El `estado_administrativo` se gobierna con una **máquina de estados de transiciones permitidas** (§5.4). Un cambio que no respete una transición válida **no se aplica**: se conserva el estado previo y se emite alerta de revisión. Impide cambios inconsistentes. |
+| **D12** | **Evidencias** | Entidad **`compliance_evidence`** (§3.6): registra qué documento/correo/archivo respaldó **cada cambio de estado** (transición `from→to`), con `origen`, `fecha`, **nivel de verificación** y **referencia al documento**. Trazabilidad/auditoría completa. |
+| **D13** | **Alcance iteración 1** | **Sheets + Drive + Compliance** únicamente. Correos/Gmail quedan fuera (pipeline preparado, fuente diferida). |
 
 ---
 
@@ -162,6 +165,35 @@ create table compliance_normalizacion (
 ```
 
 El motor resuelve `normalizar(texto, dimension)` consultando esta tabla (cacheada por corrida). Agregar un sinónimo = `INSERT`, **sin tocar el motor**. Seed inicial en §4.2.
+
+### 3.6 Nueva tabla `compliance_evidence` (D12 — trazabilidad de cambios de estado)
+
+Registra **qué respaldó cada cambio de estado** de un caso (transición `from_estado → to_estado`), con su origen, nivel de verificación y referencia al documento.
+
+```sql
+create table compliance_evidence (
+  id                 uuid primary key default gen_random_uuid(),
+  case_id            uuid references compliance_cases(id) on delete cascade,
+  item_id            text references compliance_items(id) on delete set null,
+  from_estado        text,                 -- estado anterior (null = creación del caso)
+  to_estado          text not null,        -- estado resultante del cambio
+  origen             text not null check (origen in ('manual','sheet','documento','correo','ia','nombre_archivo')),
+  nivel_verificacion text not null check (nivel_verificacion in ('confirmada','alta','media','baja')),
+  fecha_evidencia    date,                 -- fecha del respaldo (p.ej. fecha de la actuación/documento)
+  document_id        uuid references compliance_documents(id) on delete set null,  -- doc de Drive si aplica
+  drive_file_id      text,                 -- referencia directa al archivo de Drive
+  url                text,                 -- webViewLink del documento
+  titulo             text,                 -- nombre/descripción del respaldo
+  descripcion        text,
+  created_at         timestamptz not null default now()
+);
+create index if not exists compliance_evidence_case_idx on compliance_evidence(case_id);
+create index if not exists compliance_evidence_item_idx on compliance_evidence(item_id);
+```
+
+**RLS**: `SELECT` autenticado; escritura sólo `service_role`/`admin`.
+
+**Cuándo se escribe**: en cada **cambio de estado aplicado** dentro del cron (creación de caso o transición válida). En iteración 1 el respaldo típico es `origen='sheet'`, `nivel_verificacion='confirmada'` (la propia planilla), con referencia opcional a un documento de Drive si la fila lo menciona. La evidencia es **append-only** (no se borra): es el historial auditable. Las señales de evidencia secundaria que NO cambian estado (alertas `review`) no generan filas de evidencia.
 
 ---
 
@@ -274,13 +306,35 @@ if temporal == 'sin_fecha':
 
 Default por categoría (cuando la planilla no informa riesgo, editable): `ANMAT`, `Residuos`, `Habilitación`, `Impacto Ambiental`, `Incendio` ⇒ `alto`; resto ⇒ `medio`.
 
+### 5.4 Máquina de estados administrativos (D11)
+
+El `estado_administrativo` no cambia libremente: una transición sólo se aplica si está permitida. Esto impide cambios inconsistentes (p. ej. saltar de `rechazado` a `vigente` sin reabrir trámite).
+
+**Transiciones permitidas** (`from → [to...]`; la auto-transición `X→X` siempre es válida por idempotencia; `sin_iniciar` como origen permite cualquier estado inicial = creación):
+
+| Desde | Hacia permitido |
+|---|---|
+| `sin_iniciar` | (cualquiera — creación inicial) |
+| `en_tramite` | `observado`, `pendiente_emision`, `aprobado`, `rechazado`, `vigente` |
+| `observado` | `en_tramite`, `pendiente_emision`, `aprobado`, `rechazado` |
+| `pendiente_emision` | `vigente`, `aprobado`, `rechazado` |
+| `aprobado` | `vigente`, `pendiente_emision` |
+| `vigente` | `en_tramite`, `observado`, `rechazado` |
+| `rechazado` | `en_tramite`, `sin_iniciar` |
+
+**Función pura**: `canTransition(from, to): boolean`.
+
+**Aplicación (en el cron, Paso 0)**: para un ítem con caso activo previo en estado `prev`, si la planilla trae `next` y `canTransition(prev, next)` es **false** ⇒ **no se aplica** (se conserva el caso `prev` activo) y se emite alerta `kind='review'` ("transición no permitida `prev`→`next`, revisar planilla") + se loguea como error de corrida. Si es **true** ⇒ se cierra el caso previo, se inserta el nuevo activo y se registra una fila en `compliance_evidence` (§3.6) con la transición. La primera carga de un ítem (sin caso previo) es siempre creación válida.
+
+> El mapa de transiciones es tuneable (constante en código; si se quiere editable por datos, se promueve a tabla en una iteración futura — YAGNI por ahora).
+
 ---
 
 ## 6. Flujo del cron (`runComplianceSync`)
 
 Sin cambios de schedule ni auth: GitHub Action `0 0 * * *` (21:00 ART) → `POST /api/compliance/sync` con `Bearer ${CRON_SECRET}`.
 
-1. **Paso 0 — Planilla primero (estado autoritativo)**: leer `COMPLIANCE_ESTADO_SHEET_FILE_ID` → CSV → normalizar (diccionario, §4.2) → **upsert `compliance_cases`** con `origen='sheet'`, `confianza='confirmada'`. Marcar `activo`; cerrar los casos que ya no figuran. Idempotente por `row_hash`.
+1. **Paso 0 — Planilla primero (estado autoritativo)**: leer `COMPLIANCE_ESTADO_SHEET_FILE_ID` → CSV → normalizar (diccionario, §4.2). Para cada fila: cargar el caso activo previo del ítem; **validar la transición** `prev→next` con la máquina de estados (§5.4). Si es válida ⇒ cerrar el caso previo, insertar el nuevo `activo` (`origen='sheet'`, `confianza='confirmada'`) y registrar **evidencia** (`compliance_evidence`, §3.6) de la transición. Si es inválida ⇒ conservar el caso previo + alerta `kind='review'` + error de corrida. Idempotente por `row_hash` (si la fila no cambió, no genera transición ni evidencia nueva).
 2. **Paso 1..N — Evidencia secundaria (NO muta estado)**: walk de Drive (docs/PDFs/nombres de archivo) y —más adelante— correos generan **alertas `kind='review'`** con su `origen` + `confianza` cuando detectan evidencia nueva/divergente. **Nunca** escriben estado.
 3. **Rebuild de alertas**: `rebuildAlerts` usa la cascada (§5) para el **color** y `nivel_riesgo` para la **severidad/prioridad** (§5.3).
 4. **Persistencia**: `compliance_sync_log` + contadores (`cases_upserted`, `review_alerts_created`).
@@ -335,7 +389,9 @@ Las unidades de cálculo son puras (no tocan DB) ⇒ TDD directo.
 ---
 
 ## 10. Fuera de alcance (YAGNI)
+- **Alcance iteración 1 = Sheets + Drive + Compliance** (D13). Correos/Gmail diferidos.
 - Correos/Gmail en iteración 1 (pipeline preparado, fuente diferida).
+- Mapa de transiciones (§5.4) editable por datos/tabla (iteración 1 = constante en código).
 - Interpretación por IA del contenido de PDFs (sólo nombres de archivo; IA ⇒ `confianza` baja/media, nunca escribe estado).
 - Editor de la matriz de semáforo por UI (iteración 1 = función pura).
 - Override manual del color desde el dashboard.
@@ -343,4 +399,4 @@ Las unidades de cálculo son puras (no tocan DB) ⇒ TDD directo.
 ---
 
 ## 11. Puntos abiertos
-Ninguno. Los 4 previos (anticipación, riesgo, "aprobado", vocabulario) quedaron resueltos en D6–D9; confianza ampliada en D10.
+Ninguno. Anticipación/riesgo/"aprobado"/vocabulario resueltos en D6–D9; confianza en 2 dimensiones (D10); máquina de estados (D11); evidencias (D12); alcance iteración 1 Sheets+Drive (D13). Diseño funcional y arquitectónico **cerrado**; listo para implementación.
