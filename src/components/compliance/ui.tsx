@@ -167,6 +167,34 @@ export function AlertCenter({ criticos, inmediatos, proximos }: { criticos: Comp
   );
 }
 
+/**
+ * Chips de caso regulatorio activo.
+ * Muestra estado administrativo (+ etapa si presente), nivel de riesgo y origen/confianza.
+ * Retorna null si el ítem no tiene activeCase.
+ */
+export function CaseChips({ item }: { item: ComplianceItem }) {
+  if (!item.activeCase) return null;
+  const { estadoAdministrativo, etapa, nivelRiesgo } = item;
+  const { origen, confianza } = item.activeCase;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1 text-[11px]">
+      {estadoAdministrativo && (
+        <span className="rounded px-1.5 py-0.5 bg-white/5 text-fg-secondary">
+          {estadoAdministrativo}{etapa ? ` · ${etapa}` : ""}
+        </span>
+      )}
+      {nivelRiesgo && (
+        <span className="rounded px-1.5 py-0.5 bg-white/5 text-fg-secondary">
+          riesgo: {nivelRiesgo}
+        </span>
+      )}
+      <span className="rounded px-1.5 py-0.5 bg-white/5 text-fg-muted opacity-70">
+        {origen}/{confianza}
+      </span>
+    </div>
+  );
+}
+
 /** Obligaciones recurrentes (Sección 9). */
 export function RecurringGrid({ rows }: { rows: ReturnType<typeof import("@/lib/compliance/data").recurringObligations> }) {
   const Side = ({ item }: { item: ComplianceItem | null }) => {

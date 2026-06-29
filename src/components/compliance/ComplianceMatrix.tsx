@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { RISK_HEX, RISK_ORDER, type ComplianceItem, type Riesgo, type Sede } from "@/lib/compliance/data";
+import { CaseChips } from "@/components/compliance/ui";
 
 const RIESGOS: Riesgo[] = ["Rojo", "Naranja", "Amarillo", "Verde"];
 
@@ -82,6 +83,7 @@ export function ComplianceMatrix({ items }: { items: ComplianceItem[] }) {
                 <td className="pr-2 max-w-[320px]">
                   <Link href={`/anmat/${i.id}`} className="text-[12.5px] font-semibold text-fg-link hover:underline leading-tight cursor-pointer" title="Abrir ficha regulatoria">{i.documento}</Link>
                   <div className="text-[10.5px] text-fg-muted mt-0.5 leading-snug">{i.nota}</div>
+                  <CaseChips item={i} />
                 </td>
                 <td className="pr-2 text-[11px] text-fg-muted max-w-[200px]">{i.organismo}</td>
                 <td className="pr-2 text-xs text-fg-secondary whitespace-nowrap">{i.emi_fmt}</td>
