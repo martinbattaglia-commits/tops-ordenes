@@ -15,6 +15,32 @@ import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { ITEMS, deriveComplianceStatus, type ComplianceItem } from "./data";
 import { rowToItem, COMPLIANCE_ITEM_COLUMNS, type ComplianceRow } from "./row";
+import type { ComplianceCaseLite } from "./cases/types";
+
+async function loadActiveCases(
+  db: ReturnType<typeof createClient>,
+): Promise<Map<string, ComplianceCaseLite>> {
+  const map = new Map<string, ComplianceCaseLite>();
+  if (!db) return map;
+  try {
+    const { data, error } = await db
+      .from("compliance_cases")
+      .select("item_id,estado_administrativo,etapa,nivel_riesgo,origen,confianza,activo")
+      .eq("activo", true);
+    if (error || !data) return map; // tabla inexistente (migración no aplicada) → sin casos
+    for (const r of data as Array<Record<string, string | null>>) {
+      if (!r.item_id) continue;
+      map.set(r.item_id, {
+        estadoAdministrativo: (r.estado_administrativo ?? "sin_iniciar") as ComplianceCaseLite["estadoAdministrativo"],
+        etapa: (r.etapa ?? null) as ComplianceCaseLite["etapa"],
+        nivelRiesgo: (r.nivel_riesgo ?? null) as ComplianceCaseLite["nivelRiesgo"],
+        origen: (r.origen ?? "sheet") as ComplianceCaseLite["origen"],
+        confianza: (r.confianza ?? "confirmada") as ComplianceCaseLite["confianza"],
+      });
+    }
+  } catch { /* sin casos */ }
+  return map;
+}
 
 export type CockpitOrigin = "supabase" | "fallback";
 
@@ -87,7 +113,13 @@ export async function loadComplianceItems(): Promise<CockpitSource> {
       logFallback("table-empty");
       return { items: ITEMS, origin: "fallback", reason: "Tabla compliance_items vacía" };
     }
-    return { items: rows.map(rowToItem), origin: "supabase", reason: null };
+    const cases = await loadActiveCases(db);
+    const items = rows.map((r) => {
+      const it = rowToItem(r);
+      const c = cases.get(it.id);
+      return c ? { ...it, activeCase: c } : it;
+    });
+    return { items, origin: "supabase", reason: null };
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     logFallback(`exception: ${reason}`);
@@ -182,7 +214,10 @@ export async function loadComplianceItem(id: string): Promise<ComplianceItem | u
       .eq("id", id)
       .maybeSingle();
     if (error || !data) return fallback();
-    return deriveComplianceStatus(rowToItem(data as ComplianceRow));
+    const cases = await loadActiveCases(db);
+    const it = rowToItem(data as ComplianceRow);
+    const c = cases.get(it.id);
+    return deriveComplianceStatus(c ? { ...it, activeCase: c } : it);
   } catch {
     return fallback();
   }
