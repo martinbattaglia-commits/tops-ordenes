@@ -9,17 +9,38 @@ interface QualificationDashboardProps {
   processingTimeMs?: number;
 }
 
+type KpiVariant = "default" | "green" | "amber" | "red" | "blue";
+
 interface StatCardProps {
   label: string;
   value: number | string;
-  colorClass?: string;
+  variant?: KpiVariant;
 }
 
-function StatCard({ label, value, colorClass }: StatCardProps) {
+const ACCENT_CLASS: Record<KpiVariant, string> = {
+  default: "bg-stroke-soft",
+  green:   "bg-status-success",
+  amber:   "bg-status-warning",
+  red:     "bg-tops-red",
+  blue:    "bg-tops-blue-700",
+};
+
+// Números en blanco neutro (protagonismo por tamaño, no por saturación);
+// el color semántico lo lleva la barra de acento + la etiqueta.
+const VALUE_CLASS: Record<KpiVariant, string> = {
+  default: "text-fg-primary",
+  green:   "text-fg-primary",
+  amber:   "text-fg-primary",
+  red:     "text-fg-primary",
+  blue:    "text-fg-primary",
+};
+
+function StatCard({ label, value, variant = "default" }: StatCardProps) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${colorClass ?? "text-gray-900"}`}>{value}</p>
+    <div className="card relative overflow-hidden p-4">
+      <div className={`absolute inset-x-0 top-0 h-px ${ACCENT_CLASS[variant]} opacity-60`} />
+      <p className="text-[10px] font-bold uppercase tracking-widest text-fg-muted">{label}</p>
+      <p className={`mt-2 text-3xl font-bold tabular-nums leading-none ${VALUE_CLASS[variant]}`}>{value}</p>
     </div>
   );
 }
@@ -46,23 +67,23 @@ export function QualificationDashboard({
 
   return (
     <div className="space-y-6">
-      {/* Header con CTA de calificación */}
+      {/* Banner: sin calificar */}
       {onQualifyAll && totalScoreado === 0 && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4 card bg-tops-blue-700/10 p-4">
           <div>
-            <p className="text-sm font-semibold text-blue-800">
+            <p className="text-sm font-semibold text-fg-primary">
               {totalImported > 0
-                ? `Hay ${totalImported} prospectos importados sin calificar.`
+                ? `${totalImported} prospectos importados sin calificar.`
                 : "Importá prospectos para comenzar la calificación."}
             </p>
-            <p className="text-xs text-blue-600 mt-0.5">
-              El motor de IA asigna score 0-100 y decide import / review / discard.
+            <p className="mt-0.5 text-xs text-fg-secondary">
+              El motor de IA asigna score 0–100 y decide Excelente / Revisar / Descartar.
             </p>
           </div>
           <button
             onClick={onQualifyAll}
             disabled={isQualifying || totalImported === 0}
-            className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="flex shrink-0 items-center gap-2 rounded-lg bg-tops-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-tops-blue-900 disabled:opacity-50 transition-colors"
           >
             {isQualifying ? (
               <>
@@ -80,7 +101,7 @@ export function QualificationDashboard({
       )}
 
       {isQualifying && totalScoreado > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="flex items-center gap-2 card bg-status-warning/10 p-3 text-sm text-amber-400">
           <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -90,116 +111,88 @@ export function QualificationDashboard({
       )}
 
       {processingTimeMs !== undefined && (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-fg-muted">
           Procesado en {(processingTimeMs / 1000).toFixed(1)}s
         </p>
       )}
 
-      {/* Grid de stat cards */}
+      {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <StatCard label="Importados" value={totalImported} />
-        <StatCard label="Calificados" value={totalScoreado} />
-        <StatCard
-          label="🟢 Excelentes"
-          value={decisionCounts.import}
-          colorClass="text-emerald-700"
-        />
-        <StatCard
-          label="🟡 Para revisar"
-          value={decisionCounts.review}
-          colorClass="text-amber-700"
-        />
-        <StatCard
-          label="🔴 Descartados"
-          value={decisionCounts.discard}
-          colorClass="text-red-700"
-        />
+        <StatCard label="Importados"      value={totalImported}  variant="blue" />
+        <StatCard label="Calificados"     value={totalScoreado}  variant="blue" />
+        <StatCard label="🟢 Excelentes"  value={decisionCounts.import}  variant="green" />
+        <StatCard label="🟡 Para revisar" value={decisionCounts.review} variant="amber" />
+        <StatCard label="🔴 Descartados" value={decisionCounts.discard} variant="red" />
         <StatCard
           label="Score promedio"
           value={avgScore > 0 ? avgScore.toFixed(1) : "—"}
-          colorClass="text-blue-700"
+          variant="blue"
         />
-        <StatCard
-          label="Aprobados"
-          value={totalAprobado}
-          colorClass="text-emerald-700"
-        />
+        <StatCard label="Aprobados" value={totalAprobado} variant="green" />
       </div>
 
-      {/* Distribución por decisión — barras horizontales */}
+      {/* Distribución por decisión */}
       {totalDecisions > 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-700">Distribución por decisión</h3>
-          {byDecision.map(({ decision, count }) => {
-            const pct = Math.round((count / totalDecisions) * 100);
-            const barColor =
-              decision === "import"
-                ? "bg-emerald-500"
-                : decision === "review"
-                  ? "bg-amber-400"
-                  : decision === "discard"
-                    ? "bg-red-400"
-                    : "bg-gray-300";
-            const label =
-              decision === "import"
-                ? "🟢 Excelente"
-                : decision === "review"
-                  ? "🟡 Revisar"
-                  : decision === "discard"
-                    ? "🔴 Descartar"
-                    : decision;
-            return (
-              <div key={decision} className="space-y-1">
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>{label}</span>
-                  <span className="font-medium">
-                    {count} ({pct}%)
-                  </span>
+        <div className="card p-5 space-y-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-fg-muted">
+            Distribución por decisión del motor
+          </h3>
+          <div className="space-y-3">
+            {byDecision.map(({ decision, count }) => {
+              const pct = Math.round((count / totalDecisions) * 100);
+              const cfg =
+                decision === "import"
+                  ? { label: "🟢 Excelente", barClass: "bg-status-success", textClass: "text-emerald-400" }
+                  : decision === "review"
+                    ? { label: "🟡 Revisar",    barClass: "bg-status-warning", textClass: "text-amber-400" }
+                    : decision === "discard"
+                      ? { label: "🔴 Descartar", barClass: "bg-tops-red",     textClass: "text-red-400" }
+                      : { label: decision,        barClass: "bg-stroke-soft",   textClass: "text-fg-muted" };
+              return (
+                <div key={decision} className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-fg-secondary">{cfg.label}</span>
+                    <span className={`font-semibold tabular-nums ${cfg.textClass}`}>
+                      {count} <span className="text-fg-muted">({pct}%)</span>
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-bg-surface-alt">
+                    <div
+                      className={`h-1.5 rounded-full transition-all duration-500 ${cfg.barClass}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 w-full rounded-full bg-gray-100">
-                  <div
-                    className={`h-2 rounded-full transition-all ${barColor}`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
       {/* Breakdowns */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {/* Por industria */}
         {byIndustry.length > 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700">Top industrias</h3>
-            <ul className="divide-y divide-gray-100">
+          <div className="card p-5 space-y-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-fg-muted">Top industrias</h3>
+            <ul className="divide-y divide-stroke-soft">
               {byIndustry.slice(0, 5).map(({ industry, count }) => (
-                <li
-                  key={industry ?? "_null"}
-                  className="flex items-center justify-between py-1.5 text-sm"
-                >
-                  <span className="text-gray-700">{industry ?? "Sin datos"}</span>
-                  <span className="text-xs font-medium text-gray-500">{count}</span>
+                <li key={industry ?? "_null"} className="flex items-center justify-between py-2 text-sm">
+                  <span className="text-fg-secondary">{industry ?? "Sin datos"}</span>
+                  <span className="text-xs font-semibold tabular-nums text-fg-muted">{count}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* Por cargo */}
         {byCargo.length > 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-2">
-            <h3 className="text-sm font-semibold text-gray-700">Top cargos</h3>
-            <ul className="divide-y divide-gray-100">
+          <div className="card p-5 space-y-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-fg-muted">Top cargos</h3>
+            <ul className="divide-y divide-stroke-soft">
               {byCargo.slice(0, 5).map(({ cargo, count }) => (
-                <li
-                  key={cargo ?? "_null"}
-                  className="flex items-center justify-between py-1.5 text-sm"
-                >
-                  <span className="text-gray-700">{cargo ?? "Sin datos"}</span>
-                  <span className="text-xs font-medium text-gray-500">{count}</span>
+                <li key={cargo ?? "_null"} className="flex items-center justify-between py-2 text-sm">
+                  <span className="text-fg-secondary">{cargo ?? "Sin datos"}</span>
+                  <span className="text-xs font-semibold tabular-nums text-fg-muted">{count}</span>
                 </li>
               ))}
             </ul>

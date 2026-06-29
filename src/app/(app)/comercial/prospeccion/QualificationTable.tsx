@@ -6,17 +6,43 @@ import { ScoreBadge } from "./ScoreBadge";
 import { DecisionBadge } from "./DecisionBadge";
 
 const STATUS_LABEL: Record<string, string> = {
-  raw: "Capturado",
-  imported: "Importado",
-  enriquecido: "Enriquecido",
-  scoreado: "Calificado",
-  con_ia: "En revisión",
-  aprobado: "Aprobado",
-  sincronizado: "Sincronizado",
+  raw:            "Capturado",
+  imported:       "Importado",
+  enriquecido:    "Enriquecido",
+  scoreado:       "Calificado",
+  con_ia:         "En revisión",
+  aprobado:       "Aprobado",
+  sincronizado:   "Sincronizado",
   cliente_creado: "Cliente",
-  rechazado: "Rechazado",
-  duplicado: "Duplicado",
+  rechazado:      "Rechazado",
+  duplicado:      "Duplicado",
 };
+
+// Estado = posición en el flujo: neutro en tránsito, color solo en estados
+// terminales/notables → reduce la carga cromática por fila (Score y Clasificación
+// quedan como los elementos con color). Distinto de DecisionBadge por forma
+// (rectángulo vs pill) y por la ausencia de punto.
+const STATUS_STYLE: Record<string, string> = {
+  raw:            "bg-bg-surface-alt text-fg-secondary",
+  imported:       "bg-bg-surface-alt text-fg-secondary",
+  enriquecido:    "bg-bg-surface-alt text-fg-secondary",
+  scoreado:       "bg-bg-surface-alt text-fg-secondary",
+  con_ia:         "bg-bg-surface-alt text-fg-secondary",
+  aprobado:       "bg-status-success/10 text-emerald-400",
+  sincronizado:   "bg-tops-blue-700/10 text-fg-link",
+  cliente_creado: "bg-status-success/10 text-emerald-400",
+  rechazado:      "bg-tops-red/10 text-red-400",
+  duplicado:      "bg-bg-surface-alt text-fg-secondary",
+};
+
+function StatusChip({ status }: { status: string }) {
+  const style = STATUS_STYLE[status] ?? "bg-bg-surface-alt text-fg-secondary";
+  return (
+    <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${style}`}>
+      {STATUS_LABEL[status] ?? status}
+    </span>
+  );
+}
 
 interface QualificationTableProps {
   items: ProspectWithScore[];
@@ -76,11 +102,11 @@ export function QualificationTable({
   const someSelected = selectedIds.size > 0 && selectedIds.size < items.length;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200">
-      <table className="min-w-full divide-y divide-gray-200 text-sm">
-        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+    <div className="card overflow-x-auto">
+      <table className="min-w-full divide-y divide-stroke-soft text-sm">
+        <thead className="bg-bg-surface text-left">
           <tr>
-            <th className="px-3 py-2 w-8">
+            <th className="w-8 px-3 py-2.5">
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -88,25 +114,25 @@ export function QualificationTable({
                   if (el) el.indeterminate = someSelected;
                 }}
                 onChange={toggleSelectAll}
-                className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 cursor-pointer"
+                className="h-3.5 w-3.5 cursor-pointer rounded accent-tops-blue-700"
               />
             </th>
-            <th className="px-3 py-2">ID</th>
-            <th className="px-3 py-2">Empresa</th>
-            <th className="px-3 py-2">Contacto</th>
-            <th className="px-3 py-2">Cargo</th>
-            <th className="px-3 py-2">Industria</th>
-            <th className="px-3 py-2 text-center">Score</th>
-            <th className="px-3 py-2">Clasificación</th>
-            <th className="px-3 py-2 max-w-[200px]">Motivo</th>
-            <th className="px-3 py-2">Estado</th>
-            <th className="px-3 py-2 text-right">Acciones</th>
+            <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">ID</th>
+            <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">Empresa</th>
+            <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">Contacto</th>
+            <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">Cargo</th>
+            <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">Industria</th>
+            <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-widest text-fg-muted">Score</th>
+            <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">Clasificación IA</th>
+            <th className="max-w-[200px] px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">Justificación</th>
+            <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-fg-muted">Estado</th>
+            <th className="px-3 py-2.5 text-right text-[10px] font-bold uppercase tracking-widest text-fg-muted">Acciones</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100 bg-white">
+        <tbody className="divide-y divide-stroke-soft">
           {items.length === 0 ? (
             <tr>
-              <td colSpan={11} className="px-4 py-8 text-center text-gray-400">
+              <td colSpan={11} className="px-4 py-10 text-center text-fg-muted">
                 Sin prospectos para mostrar. Importá un CSV para comenzar.
               </td>
             </tr>
@@ -115,71 +141,71 @@ export function QualificationTable({
               <>
                 <tr
                   key={p.id}
-                  className={`hover:bg-gray-50 transition-colors ${selectedIds.has(p.id) ? "bg-blue-50" : ""}`}
+                  className={`transition-colors duration-150 ${
+                    selectedIds.has(p.id)
+                      ? "bg-tops-blue-700/10"
+                      : "bg-bg-surface hover:bg-bg-surface-alt"
+                  }`}
                 >
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2.5">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(p.id)}
                       onChange={() => toggleSelect(p.id)}
-                      className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 cursor-pointer"
+                      className="h-3.5 w-3.5 cursor-pointer rounded accent-tops-blue-700"
                     />
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-gray-500">
+                  <td className="px-3 py-2.5 font-mono text-xs text-fg-muted">
                     {p.shortId ?? p.id.slice(0, 8)}
                   </td>
-                  <td className="px-3 py-2 font-medium text-gray-900 max-w-[140px] truncate">
+                  <td className="max-w-[140px] truncate px-3 py-2.5 font-semibold text-fg-primary">
                     {p.companyName ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-gray-700 max-w-[120px] truncate">
+                  <td className="max-w-[120px] truncate px-3 py-2.5 text-fg-secondary">
                     {p.fullName ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">
+                  <td className="max-w-[120px] truncate px-3 py-2.5 text-fg-muted">
                     {p.cargo ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">
+                  <td className="max-w-[120px] truncate px-3 py-2.5 text-fg-muted">
                     {p.industryNormalized ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="px-3 py-2.5 text-center">
                     {p.score !== null ? (
                       <ScoreBadge score={p.score} />
                     ) : (
-                      <span className="text-xs text-gray-400">—</span>
+                      <span className="text-xs text-fg-muted">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2.5">
                     {p.decision ? (
                       <DecisionBadge decision={p.decision} />
                     ) : (
-                      <span className="text-xs text-gray-400">Sin calificar</span>
+                      <span className="text-xs text-fg-muted">Sin calificar</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 max-w-[200px]">
+                  <td className="max-w-[200px] px-3 py-2.5">
                     {p.explanation ? (
                       <span
                         title={p.explanation}
-                        className="block truncate text-xs text-gray-500 cursor-help"
+                        className="block cursor-help truncate text-xs text-fg-muted"
                       >
                         {truncate(p.explanation, 60)}
                       </span>
                     ) : (
-                      <span className="text-xs text-gray-400">—</span>
+                      <span className="text-xs text-fg-muted">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2">
-                    <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                      {STATUS_LABEL[p.status] ?? p.status}
-                    </span>
+                  <td className="px-3 py-2.5">
+                    <StatusChip status={p.status} />
                   </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-end gap-1.5">
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center justify-end gap-0.5">
                       {/* Ver detalle */}
                       <button
-                        onClick={() =>
-                          setExpandedId(expandedId === p.id ? null : p.id)
-                        }
+                        onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                         title="Ver detalle"
-                        className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                        className="flex h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-bg-surface-alt hover:text-fg-secondary transition-colors"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -193,7 +219,7 @@ export function QualificationTable({
                           onClick={() => onApprove(p.id)}
                           disabled={isPending}
                           title="Aprobar"
-                          className="rounded p-1 text-emerald-500 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-40 transition-colors"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-emerald-500/10 hover:text-emerald-400 disabled:opacity-40 transition-colors"
                         >
                           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -210,7 +236,7 @@ export function QualificationTable({
                           }}
                           disabled={isPending}
                           title="Rechazar"
-                          className="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40 transition-colors"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40 transition-colors"
                         >
                           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -224,7 +250,7 @@ export function QualificationTable({
                           onClick={() => onExport(p.id)}
                           disabled={isPending}
                           title="Enviar a Clientify"
-                          className="rounded p-1 text-blue-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-40 transition-colors"
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-fg-muted hover:bg-tops-blue-700/10 hover:text-fg-link disabled:opacity-40 transition-colors"
                         >
                           <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m-7 7l7-7 7 7" />
@@ -235,72 +261,72 @@ export function QualificationTable({
                   </td>
                 </tr>
 
-                {/* Fila expandida de detalle */}
+                {/* Detalle expandido */}
                 {expandedId === p.id && (
-                  <tr key={`${p.id}-detail`} className="bg-gray-50">
-                    <td colSpan={11} className="px-4 py-4">
+                  <tr key={`${p.id}-detail`} className="bg-bg-surface-alt">
+                    <td colSpan={11} className="px-5 py-4">
                       <div className="grid grid-cols-2 gap-4 text-xs sm:grid-cols-3 lg:grid-cols-4">
                         <div>
-                          <p className="font-medium text-gray-500">Email</p>
-                          <p className="text-gray-700">{p.email ?? "—"}</p>
+                          <p className="font-semibold text-fg-muted">Email</p>
+                          <p className="mt-0.5 text-fg-secondary">{p.email ?? "—"}</p>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-500">CUIT</p>
-                          <p className="font-mono text-gray-700">{p.cuit ?? "—"}</p>
+                          <p className="font-semibold text-fg-muted">CUIT</p>
+                          <p className="mt-0.5 font-mono text-fg-secondary">{p.cuit ?? "—"}</p>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-500">Sitio web</p>
+                          <p className="font-semibold text-fg-muted">Sitio web</p>
                           {p.website ? (
-                            <a href={p.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate block">
+                            <a href={p.website} target="_blank" rel="noopener noreferrer" className="mt-0.5 block truncate text-fg-link hover:underline">
                               {p.website}
                             </a>
                           ) : (
-                            <p className="text-gray-700">—</p>
+                            <p className="mt-0.5 text-fg-secondary">—</p>
                           )}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-500">LinkedIn</p>
+                          <p className="font-semibold text-fg-muted">LinkedIn</p>
                           {p.linkedinUrl ? (
-                            <a href={p.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate block">
+                            <a href={p.linkedinUrl} target="_blank" rel="noopener noreferrer" className="mt-0.5 block text-fg-link hover:underline">
                               Ver perfil
                             </a>
                           ) : (
-                            <p className="text-gray-700">—</p>
+                            <p className="mt-0.5 text-fg-secondary">—</p>
                           )}
                         </div>
                         <div>
-                          <p className="font-medium text-gray-500">Confianza</p>
-                          <p className="text-gray-700">{p.confidence !== null ? `${p.confidence}%` : "—"}</p>
+                          <p className="font-semibold text-fg-muted">Confianza</p>
+                          <p className="mt-0.5 text-fg-secondary">{p.confidence !== null ? `${p.confidence}%` : "—"}</p>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-500">Prioridad</p>
-                          <p className="text-gray-700">{p.priorityTier ?? "—"}</p>
+                          <p className="font-semibold text-fg-muted">Prioridad</p>
+                          <p className="mt-0.5 text-fg-secondary">{p.priorityTier ?? "—"}</p>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-500">Banda de empleados</p>
-                          <p className="text-gray-700">{p.employeeBand ?? "—"}</p>
+                          <p className="font-semibold text-fg-muted">Banda de empleados</p>
+                          <p className="mt-0.5 text-fg-secondary">{p.employeeBand ?? "—"}</p>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-500">Argentina</p>
-                          <p className="text-gray-700">
+                          <p className="font-semibold text-fg-muted">Argentina</p>
+                          <p className="mt-0.5 text-fg-secondary">
                             {p.isArgentina === null ? "—" : p.isArgentina ? "Sí" : "No"}
                           </p>
                         </div>
                         {p.explanation && (
                           <div className="col-span-full">
-                            <p className="font-medium text-gray-500">Justificación IA</p>
-                            <p className="text-gray-700">{p.explanation}</p>
+                            <p className="font-semibold text-fg-muted">Justificación IA</p>
+                            <p className="mt-0.5 text-fg-secondary">{p.explanation}</p>
                           </div>
                         )}
                         {p.rejectionReason && (
                           <div className="col-span-full">
-                            <p className="font-medium text-red-500">Motivo de rechazo</p>
-                            <p className="text-gray-700">{p.rejectionReason}</p>
+                            <p className="font-semibold text-red-400">Motivo de rechazo</p>
+                            <p className="mt-0.5 text-fg-secondary">{p.rejectionReason}</p>
                           </div>
                         )}
                         <div>
-                          <p className="font-medium text-gray-500">Creado</p>
-                          <p className="text-gray-700">{p.createdAt.slice(0, 10)}</p>
+                          <p className="font-semibold text-fg-muted">Creado</p>
+                          <p className="mt-0.5 text-fg-secondary">{p.createdAt.slice(0, 10)}</p>
                         </div>
                       </div>
                     </td>
@@ -309,7 +335,7 @@ export function QualificationTable({
 
                 {/* Inline reject form */}
                 {rejectingId === p.id && (
-                  <tr key={`${p.id}-reject`} className="bg-red-50">
+                  <tr key={`${p.id}-reject`} className="bg-tops-red/10">
                     <td colSpan={11} className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <input
@@ -317,7 +343,7 @@ export function QualificationTable({
                           placeholder="Motivo del rechazo (opcional)"
                           value={rejectReason}
                           onChange={(e) => setRejectReason(e.target.value)}
-                          className="flex-1 rounded-md border border-red-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                          className="flex-1 rounded-lg border border-tops-red/30 bg-bg-surface px-3 py-1.5 text-sm text-fg-primary placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-tops-red/30"
                           autoFocus
                           onKeyDown={(e) => {
                             if (e.key === "Enter") handleRejectConfirm(p.id);
@@ -327,13 +353,13 @@ export function QualificationTable({
                         <button
                           onClick={() => handleRejectConfirm(p.id)}
                           disabled={isPending}
-                          className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition-colors"
+                          className="rounded-lg bg-tops-red px-3 py-1.5 text-xs font-semibold text-white hover:bg-tops-red/90 disabled:opacity-40 transition-colors"
                         >
                           Confirmar rechazo
                         </button>
                         <button
                           onClick={() => setRejectingId(null)}
-                          className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="rounded-lg border border-stroke-soft px-3 py-1.5 text-xs font-semibold text-fg-secondary hover:bg-bg-surface-alt transition-colors"
                         >
                           Cancelar
                         </button>

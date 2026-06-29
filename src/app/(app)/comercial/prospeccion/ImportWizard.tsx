@@ -52,19 +52,28 @@ export function ImportWizard({ onImportSuccess }: ImportWizardProps = {}) {
     <section className="card p-5 space-y-3">
       <h2 className="text-sm font-semibold">Importar prospectos</h2>
       <label
-        className={`flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-lg p-8 cursor-pointer transition-colors ${drag ? "border-tops-red bg-fg-primary/5" : "border-stroke-strong hover:bg-fg-primary/5"}`}
+        className={`flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-10 cursor-pointer transition-all duration-200 ${drag ? "border-tops-blue-700 bg-tops-blue-700/10 scale-[1.01]" : "border-stroke-soft hover:border-tops-blue-700/40 hover:bg-bg-surface-alt"}`}
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) onFile(f); }}
       >
-        <span className="text-sm font-semibold text-fg-secondary">Arrastrá un CSV o XLSX, o hacé clic</span>
-        <span className="text-[11px] text-fg-muted">LinkedIn · Evaboot · Apollo · Wiza · Clientify · CSV genérico</span>
+        <div className={`flex h-12 w-12 items-center justify-center rounded-xl transition-colors ${drag ? "bg-tops-blue-700/10 text-fg-link" : "bg-bg-surface-alt text-fg-muted"}`}>
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+        </div>
+        <div className="space-y-0.5 text-center">
+          <span className="block text-sm font-semibold text-fg-secondary">
+            {drag ? "Soltá aquí para importar" : "Arrastrá un CSV o XLSX, o hacé clic"}
+          </span>
+          <span className="block text-[11px] text-fg-muted">LinkedIn · Evaboot · Apollo · Wiza · Clientify · CSV genérico</span>
+        </div>
         <input type="file" className="hidden" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
       </label>
 
-      {error && <p className="text-sm text-tops-red">{error}</p>}
-      {done && <p className="text-sm text-status-success">{done}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      {done && <p className="text-sm text-emerald-400">{done}</p>}
 
       {s && (
         <div className="space-y-2 text-sm">
@@ -78,22 +87,22 @@ export function ImportWizard({ onImportSuccess }: ImportWizardProps = {}) {
             <span>🔴 {s.duplicadosExactos} exactos</span>
           </div>
           {s.unmappedHeaders.length > 0 && <p className="text-xs text-fg-muted">Columnas no reconocidas: {s.unmappedHeaders.join(", ")}</p>}
-          {s.excedeMaxBatch && <p className="text-xs text-tops-red">Se importarán solo las primeras 500 filas (límite por lote).</p>}
+          {s.excedeMaxBatch && <p className="text-xs text-amber-400">Se importarán solo las primeras 500 filas (límite por lote).</p>}
 
-          <div className="max-h-64 overflow-auto rounded border border-stroke-soft">
+          <div className="max-h-64 overflow-auto rounded-md border border-stroke-soft">
             <table className="min-w-full text-xs">
-              <thead className="bg-fg-primary/5 text-left">
+              <thead className="bg-bg-surface-alt text-left">
                 <tr><th className="px-2 py-1">#</th><th className="px-2 py-1">Estado</th><th className="px-2 py-1">Empresa</th><th className="px-2 py-1">Contacto</th><th className="px-2 py-1">Email</th><th className="px-2 py-1">Motivo</th></tr>
               </thead>
               <tbody>
                 {preview!.rows.slice(0, 50).map((r) => (
-                  <tr key={r.index} className={r.valid ? "" : "bg-tops-red/5"}>
+                  <tr key={r.index} className={r.valid ? "" : "bg-tops-red/10"}>
                     <td className="px-2 py-1">{r.index + 1}</td>
                     <td className="px-2 py-1">{DOT[r.dedupStatus]} {r.dedupStatus}</td>
                     <td className="px-2 py-1">{r.row.company_name ?? "—"}</td>
                     <td className="px-2 py-1">{r.row.full_name ?? "—"}</td>
                     <td className="px-2 py-1">{r.row.email ?? "—"}</td>
-                    <td className="px-2 py-1 text-tops-red">{r.valid ? r.dedupReason : (r.diagnostics[0]?.message ?? "inválido")}</td>
+                    <td className="px-2 py-1 text-red-400">{r.valid ? r.dedupReason : (r.diagnostics[0]?.message ?? "inválido")}</td>
                   </tr>
                 ))}
               </tbody>

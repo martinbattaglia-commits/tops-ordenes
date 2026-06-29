@@ -24,12 +24,12 @@ export function BulkActionsBar({
   const hasSelection = selectedIds.length > 0;
 
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-      {/* Acciones de aprobación */}
+    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 card px-4 py-3">
+      {/* Aprobar todos los verdes */}
       <button
         onClick={onApproveAll}
         disabled={isPending || totalGreen === 0}
-        className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 rounded-lg bg-status-success px-3 py-1.5 text-xs font-semibold text-white hover:bg-status-success/90 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
       >
         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -37,10 +37,11 @@ export function BulkActionsBar({
         Aprobar todos los 🟢 ({totalGreen})
       </button>
 
+      {/* Aprobar selección */}
       <button
         onClick={onApproveSelected}
         disabled={isPending || !hasSelection}
-        className="flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 rounded-lg bg-status-success/10 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-status-success/20 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
       >
         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -48,10 +49,11 @@ export function BulkActionsBar({
         Aprobar selección ({selectedIds.length})
       </button>
 
+      {/* Descartar selección */}
       <button
         onClick={onRejectSelected}
         disabled={isPending || !hasSelection}
-        className="flex items-center gap-1.5 rounded-md border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 rounded-lg bg-tops-red/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-tops-red/20 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
       >
         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -60,13 +62,13 @@ export function BulkActionsBar({
       </button>
 
       {/* Separador */}
-      <div className="h-5 w-px bg-gray-200" />
+      <div className="h-5 w-px bg-stroke-soft" />
 
-      {/* Acciones de exportación */}
+      {/* Exportar aprobados */}
       <button
         onClick={onExportApproved}
         disabled={isPending}
-        className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 rounded-lg bg-tops-blue-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-tops-blue-900 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
       >
         {isPending ? (
           <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -81,10 +83,11 @@ export function BulkActionsBar({
         Exportar aprobados a Clientify
       </button>
 
+      {/* Exportar todo */}
       <button
         onClick={onExportAll}
         disabled={isPending}
-        className="flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 rounded-lg border border-stroke-soft px-3 py-1.5 text-xs font-semibold text-fg-secondary hover:bg-bg-surface-alt hover:text-fg-primary disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
       >
         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />

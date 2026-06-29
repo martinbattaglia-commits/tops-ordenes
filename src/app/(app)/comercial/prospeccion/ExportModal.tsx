@@ -21,7 +21,6 @@ export function ExportModal({
 }: ExportModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Cerrar con Escape
   useEffect(() => {
     if (!isOpen) return;
     function handleKey(e: KeyboardEvent) {
@@ -45,41 +44,39 @@ export function ExportModal({
     >
       {/* Overlay */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Modal */}
       <div
         ref={dialogRef}
-        className="relative z-10 w-full max-w-md rounded-xl border border-gray-200 bg-white p-6 shadow-xl"
+        className="relative z-10 w-full max-w-md rounded-xl border border-stroke-soft bg-bg-surface p-6 shadow-lg"
       >
         {results ? (
-          /* Estado post-exportación */
+          /* Post-exportación */
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100">
-                <svg className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-status-success/10">
+                <svg className="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
               </span>
               <div>
-                <h2 className="text-base font-semibold text-gray-900">Exportación completa</h2>
-                <p className="mt-1 text-sm text-gray-500">
-                  <span className="text-emerald-700 font-medium">{successCount} exitosos</span>
+                <h2 className="text-base font-semibold text-fg-primary">Exportación completa</h2>
+                <p className="mt-1 text-sm text-fg-secondary">
+                  <span className="font-semibold text-emerald-400">{successCount} exitosos</span>
                   {errorCount > 0 && (
-                    <span className="ml-2 text-red-700 font-medium">{errorCount} errores</span>
+                    <span className="ml-2 font-semibold text-red-400">{errorCount} errores</span>
                   )}
                 </p>
               </div>
             </div>
 
             {errorItems.length > 0 && (
-              <div className="rounded-lg border border-red-100 bg-red-50 p-3 space-y-1">
-                <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">
-                  Errores
-                </p>
-                <ul className="space-y-1 text-xs text-red-700">
+              <div className="rounded-lg bg-tops-red/10 p-3 space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-red-400">Errores</p>
+                <ul className="space-y-1 text-xs text-red-400">
                   {errorItems.map((r) => (
                     <li key={r.prospect_id} className="font-mono">
                       {r.prospect_id.slice(0, 8)}… — {r.error ?? "Error desconocido"}
@@ -92,31 +89,31 @@ export function ExportModal({
             <div className="flex justify-end pt-2">
               <button
                 onClick={onClose}
-                className="rounded-md bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-colors"
+                className="rounded-lg border border-stroke-soft px-4 py-2 text-sm font-semibold text-fg-secondary hover:bg-bg-surface-alt hover:text-fg-primary transition-colors"
               >
                 Cerrar
               </button>
             </div>
           </div>
         ) : (
-          /* Estado de confirmación */
+          /* Confirmación */
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                <svg className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-tops-blue-700/10">
+                <svg className="h-5 w-5 text-fg-link" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m-7 7l7-7 7 7" />
                 </svg>
               </span>
               <div>
-                <h2 className="text-base font-semibold text-gray-900">Exportar a Clientify</h2>
-                <p className="mt-1 text-sm text-gray-500">
+                <h2 className="text-base font-semibold text-fg-primary">Exportar a Clientify</h2>
+                <p className="mt-1 text-sm text-fg-secondary">
                   ¿Exportar{" "}
-                  <span className="font-medium text-gray-700">
+                  <span className="font-semibold text-fg-primary">
                     {approvedCount} prospecto{approvedCount !== 1 ? "s" : ""} aprobado{approvedCount !== 1 ? "s" : ""}
                   </span>{" "}
                   a Clientify CRM?
                 </p>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="mt-1 text-xs text-fg-muted">
                   Esta acción crea o actualiza contactos en Clientify. Es reversible desde el CRM.
                 </p>
               </div>
@@ -126,14 +123,14 @@ export function ExportModal({
               <button
                 onClick={onClose}
                 disabled={isPending}
-                className="rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                className="rounded-lg border border-stroke-soft px-4 py-2 text-sm font-semibold text-fg-secondary hover:bg-bg-surface-alt disabled:opacity-40 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={onConfirm}
                 disabled={isPending || approvedCount === 0}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-2 rounded-lg bg-tops-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-tops-blue-900 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
               >
                 {isPending ? (
                   <>
