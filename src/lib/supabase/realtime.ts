@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/client";
  * Importante: en demo mode (sin Supabase) NO suscribe nada, returning cleanly.
  */
 export function useRealtimeTable(
-  table: "orders" | "notifications" | "order_services",
+  table: "orders" | "notifications" | "order_services" | "knowledge_events",
   onChange: (payload: {
     eventType: "INSERT" | "UPDATE" | "DELETE";
     new: Record<string, unknown> | null;

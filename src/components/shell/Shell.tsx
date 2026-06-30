@@ -12,22 +12,23 @@ interface ShellProps {
   canViewExecutive?: boolean;
   canViewSistema?: boolean;
   canViewRrhhDocs?: boolean;
+  canViewKnowledge?: boolean;
   children: ReactNode;
 }
 
-export default function Shell({ user, canViewExecutive, canViewSistema, canViewRrhhDocs, children }: ShellProps) {
+export default function Shell({ user, canViewExecutive, canViewSistema, canViewRrhhDocs, canViewKnowledge, children }: ShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <div className="h-[100dvh] flex bg-bg-page overflow-hidden">
       {/* Sidebar fijo desktop */}
       <aside className="hidden lg:flex w-[248px] shrink-0 h-full">
-        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} />
       </aside>
 
       {/* Drawer mobile */}
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} onNavigate={() => setDrawerOpen(false)} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} onNavigate={() => setDrawerOpen(false)} />
       </MobileDrawer>
 
       <div className="flex-1 min-w-0 flex flex-col">

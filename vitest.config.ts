@@ -16,6 +16,7 @@ export default defineConfig({
       "src/lib/prospeccion/**/*.test.ts",
       "src/lib/clientify/**/*.test.ts",
       "src/lib/erp/**/*.test.ts",
+      "src/lib/knowledge/**/*.test.ts",
       "src/lib/udie/**/*.test.ts",
       "src/lib/fiscal/**/*.test.ts",
       "src/lib/compras/**/*.test.ts",

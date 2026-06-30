@@ -36,6 +36,8 @@ export interface BootPermissions {
   sistema: boolean;
   /** RRHH → Documentación (rrhh.documentacion.view). */
   rrhhDocs: boolean;
+  /** Conocimiento → Panel administrativo (knowledge.admin). */
+  knowledge: boolean;
 }
 
 export interface BootContext {
@@ -44,8 +46,8 @@ export interface BootContext {
   perms: BootPermissions;
 }
 
-const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true };
-const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false };
+const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true };
+const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false };
 
 /** Presupuesto máximo de awaits del boot (F2). */
 const BOOT_BUDGET_MS = 3000;
@@ -96,13 +98,13 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     //   checkPermission: error de count → fail-closed (exec=false)
     //   canAccess: error → count null → bootstrap → !enforce
     const open = !env.rbac.enforce;
-    return { exec: false, sistema: open, rrhhDocs: open };
+    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open };
   }
 
   if ((count ?? 0) === 0) {
     // Bootstrap per-user (no asignado): permitir salvo RBAC_ENFORCE=1.
     const open = !env.rbac.enforce;
-    return { exec: open, sistema: open, rrhhDocs: open };
+    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open };
   }
 
   // Asignado → enforcement real con UNA query anidada (set completo de slugs).
@@ -130,6 +132,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     exec: slugs.has("cockpit.view"),
     sistema: slugs.has("sistema.view") || isLegacyAdmin,
     rrhhDocs: slugs.has("rrhh.documentacion.view") || isLegacyAdmin,
+    knowledge: slugs.has("knowledge.admin") || isLegacyAdmin,
   };
 });
 
