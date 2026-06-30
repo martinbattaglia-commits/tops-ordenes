@@ -18,6 +18,7 @@
     "lint:udie-boundary": "node scripts/udie-boundary.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "^10.7.8",
     "@napi-rs/canvas": "^0.1.100",
     "@react-pdf/renderer": "^4.1.5",
     "@supabase/ssr": "^0.5.2",
