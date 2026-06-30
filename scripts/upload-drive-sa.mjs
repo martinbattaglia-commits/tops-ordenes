@@ -19,7 +19,7 @@
  *   - Se almacena como envelope JSON con checksum SHA-256 en el store "secrets".
  */
 
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,6 +119,17 @@ function sha256Hex(value) {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+/**
+ * Comparación de checksums en tiempo CONSTANTE (anti timing-attack), espejo de
+ * src/lib/credentials/checksum.ts: re-hashea ambos operandos a 32 bytes fijos y
+ * usa crypto.timingSafeEqual (que exige igual longitud). Nunca lanza por longitud.
+ */
+function checksumsEqual(a, b) {
+  const na = createHash("sha256").update(String(a).trim().toLowerCase(), "utf8").digest();
+  const nb = createHash("sha256").update(String(b).trim().toLowerCase(), "utf8").digest();
+  return timingSafeEqual(na, nb);
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -141,7 +152,7 @@ function sha256Hex(value) {
       process.exit(1);
     }
     const actualHash = sha256Hex(envelope.value ?? "");
-    if (actualHash !== envelope.sha256) {
+    if (!checksumsEqual(actualHash, envelope.sha256 ?? "")) {
       console.error(
         `[verify] ERROR INTEGRIDAD: checksum no coincide.\n` +
         `  almacenado : ${envelope.sha256}\n` +
@@ -183,7 +194,7 @@ function sha256Hex(value) {
   const stored = await store.get(BLOB_KEY, { type: "text" });
   const storedEnv = JSON.parse(stored);
   const verifyHash = sha256Hex(storedEnv.value);
-  if (verifyHash !== storedEnv.sha256) {
+  if (!checksumsEqual(verifyHash, storedEnv.sha256 ?? "")) {
     console.error("[upload] ERROR: verificación post-upload falló (checksum no coincide).");
     process.exit(1);
   }

@@ -1,6 +1,6 @@
 import type { CredentialProvider, CredentialRecord } from "../types";
 import { CredentialIntegrityError } from "../types";
-import { sha256Hex } from "../checksum";
+import { sha256Hex, checksumsEqual } from "../checksum";
 
 /**
  * Provider de credenciales desde variables de entorno.
@@ -29,7 +29,8 @@ export class EnvironmentProvider implements CredentialProvider {
 
     const sha256 = sha256Hex(raw);
     const expected = process.env[`${envName}_SHA256`]?.trim();
-    if (expected && expected.toLowerCase() !== sha256) {
+    // Comparación en tiempo CONSTANTE (anti timing-attack).
+    if (expected && !checksumsEqual(expected, sha256)) {
       throw new CredentialIntegrityError(key, expected, sha256, this.name);
     }
     return { value: raw, sha256, source: this.name };

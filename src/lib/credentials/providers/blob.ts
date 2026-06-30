@@ -1,7 +1,7 @@
 import { getStore } from "@netlify/blobs";
 import type { CredentialProvider, CredentialRecord } from "../types";
 import { CredentialIntegrityError } from "../types";
-import { sha256Hex, CHECKSUM_ALGO } from "../checksum";
+import { sha256Hex, CHECKSUM_ALGO, checksumsEqual } from "../checksum";
 
 /**
  * Provider de credenciales desde Netlify Blobs.
@@ -69,7 +69,8 @@ export class BlobProvider implements CredentialProvider {
     if (typeof env.value !== "string") return null;
 
     const actual = sha256Hex(env.value);
-    if (env.sha256 && env.sha256.toLowerCase() !== actual) {
+    // Comparación en tiempo CONSTANTE (anti timing-attack): nunca `!==` sobre el hash.
+    if (env.sha256 && !checksumsEqual(env.sha256, actual)) {
       throw new CredentialIntegrityError(key, env.sha256, actual, this.name);
     }
     return { value: env.value, sha256: actual, source: this.name };

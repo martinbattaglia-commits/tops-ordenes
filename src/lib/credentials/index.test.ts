@@ -7,7 +7,7 @@ import {
   CredentialIntegrityError,
 } from "./index";
 import type { CredentialProvider, CredentialRecord } from "./types";
-import { sha256Hex } from "./checksum";
+import { sha256Hex, checksumsEqual } from "./checksum";
 import { EnvironmentProvider } from "./providers/environment";
 import { buildEnvelope } from "./providers/blob";
 
@@ -179,5 +179,29 @@ describe("sha256Hex", () => {
     expect(sha256Hex("")).toBe(
       "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checksumsEqual — comparación en tiempo constante (anti timing-attack)
+// ---------------------------------------------------------------------------
+describe("checksumsEqual (constant-time)", () => {
+  it("true para hashes idénticos", () => {
+    const h = sha256Hex("payload");
+    expect(checksumsEqual(h, h)).toBe(true);
+  });
+
+  it("false para hashes distintos", () => {
+    expect(checksumsEqual(sha256Hex("a"), sha256Hex("b"))).toBe(false);
+  });
+
+  it("normaliza mayúsculas y espacios (mismo hash ⇒ true)", () => {
+    const h = sha256Hex("x");
+    expect(checksumsEqual(h.toUpperCase(), `  ${h}  `)).toBe(true);
+  });
+
+  it("no lanza ante longitudes distintas; devuelve false", () => {
+    expect(checksumsEqual("abc", sha256Hex("abc"))).toBe(false);
+    expect(checksumsEqual("", sha256Hex("x"))).toBe(false);
   });
 });

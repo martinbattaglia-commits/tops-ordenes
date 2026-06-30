@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     include: [
       "src/lib/*.test.ts",
+      "src/lib/credentials/**/*.test.ts",
       "src/lib/tesoreria/**/*.test.ts",
       "src/lib/tesoreria/caja-chica/**/*.test.ts",
       "src/app/api/tesoreria/caja-chica/**/*.test.ts",
