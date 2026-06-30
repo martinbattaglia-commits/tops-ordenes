@@ -4,6 +4,8 @@
 - **Estado**: ⛔ **E2E en vivo BLOQUEADA por incidencia de proveedor (Supabase)**. Paquete listo para ejecutar apenas el provisioning se recupere.
 - **Prod**: intocable (sólo lecturas read-only para descubrimiento). Worktree/rama: sin cambios de scope.
 
+> ⚠️ **AVISO (2026-06-30, actualización de Dirección).** El enfoque de "entorno de Integración" (proyectos Supabase `sa-east-1`/`us-east-1`) fue **DESCARTADO** por un incidente de infraestructura de Supabase; esos proyectos (`frcpzfeacejccerqwnqq`, `jyiygusacxbdosfkptci`, `bmrtlojmqmkuirhuzhyt`) **ya no existen / eliminación solicitada a soporte** y **NO deben usarse**. Las menciones a ellos en este documento son **únicamente registro histórico del incidente**. El **único proyecto Supabase autorizado** para desarrollo, validación y deploy es **`arsksytgdnzukbmfgkju`** (`https://arsksytgdnzukbmfgkju.supabase.co`). La validación de Compliance se realiza sobre el proyecto oficial; ver el **Plan de Integración** (transplante de Compliance sobre el commit desplegado en prod).
+
 ---
 
 ## 0. Incidencia de provisioning (proveedor) — STOP aplicado
@@ -30,30 +32,18 @@ La MCP **no expone borrado de proyectos** y **no permite pausar** proyectos en `
 
 ---
 
-## 1. Entorno de Integración — especificación (objetivo)
+## 1. Entorno de validación — proyecto oficial
+
+> El enfoque de "entorno de Integración dedicado" fue **descartado** (ver AVISO arriba). La validación se hace **exclusivamente** sobre el proyecto oficial.
 
 | Campo | Valor |
 |---|---|
-| Nombre | `tops-ordenes-integracion-use1` (canónico tras borrar el de sa-east-1) |
-| Project ID / ref | `bmrtlojmqmkuirhuzhyt` |
-| Región | `us-east-1` |
+| Proyecto autorizado (ÚNICO) | `arsksytgdnzukbmfgkju` (`https://arsksytgdnzukbmfgkju.supabase.co`), `sa-east-1` |
 | Org | `bzpogcxjwsfvtlebijuy` |
-| PostgreSQL | objetivo 17.x (prod = 17.6.1.127) — confirmar con `select version()` al levantar |
-| Costo | USD 10/mes (permanente, autorizado) |
-| Datos de prod | **NO se copian** (sólo seed de prueba) |
+| PostgreSQL | 17.6.1.127 (prod) |
+| Datos | producción real — **operar con extrema cautela; sólo lecturas read-only salvo la migración `0141` gateada** |
 
-### Variables de entorno (para apuntar el dev server al branch de Integración)
-`.env.local` (NO commitear; usar valores del proyecto de Integración, NO de prod):
-```
-NEXT_PUBLIC_SUPABASE_URL=https://bmrtlojmqmkuirhuzhyt.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<get_publishable_keys del proyecto Integración>
-SUPABASE_URL=https://bmrtlojmqmkuirhuzhyt.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<dashboard → Project Settings → API (la MCP no lo expone)>
-CRON_SECRET=<cualquier valor de prueba>
-COMPLIANCE_ESTADO_SHEET_FILE_ID=         # vacío en iter 1 (cron Paso 0 → skipped)
-NEXT_PUBLIC_APP_DEMO_MODE=false
-```
-> El cockpit `/anmat` lee con cliente autenticado (anon + sesión) sujeto a RLS `to authenticated`. El `service_role` sólo lo usa el cron; para el E2E de UI alcanza anon + sesión.
+**Variables de entorno**: no se incluye ningún template `.env` que apunte a proyectos descartados. El proyecto oficial y sus claves se gestionan por los canales habituales de Dirección/DevOps; **prohibido** apuntar a `frcpzfeacejccerqwnqq`/`jyiygusacxbdosfkptci`/`bmrtlojmqmkuirhuzhyt` (inexistentes).
 
 ---
 
@@ -166,7 +156,7 @@ from public.compliance_cases c where c.item_id in ('MAG-04','LUJ-02','MAG-07','L
 
 ## 5. Fase 4 — Auditoría funcional E2E (Playwright)
 
-Levantar `next dev -p 3030` en el worktree con `.env.local` apuntando al proyecto de Integración. Crear usuario de prueba (signup vía anon API o insert en `auth.users` + `email_confirmed_at`; el trigger `handle_new_user` crea el `profiles`).
+Levantar `next dev -p 3030` en el worktree con `.env.local` apuntando **al proyecto oficial `arsksytgdnzukbmfgkju`** (NUNCA a proyectos descartados). Crear usuario de prueba (signup vía anon API o insert en `auth.users` + `email_confirmed_at`; el trigger `handle_new_user` crea el `profiles`).
 
 Checklist Playwright (capturar screenshot en cada uno):
 1. **login** — `/login`, email/clave de prueba → redirección a la app.
@@ -186,14 +176,12 @@ Checklist Playwright (capturar screenshot en cada uno):
 
 ---
 
-## 6. Procedimiento de regeneración desde cero
-1. Crear proyecto Supabase (org `bzpogcxjwsfvtlebijuy`, región `us-east-1`), plan con compute disponible.
-2. `apply_migration` en orden: `0001_init` → `0065_compliance_core` → `0081_compliance_drive_sync` → `0141_compliance_cases` (contenido de los archivos del worktree). Validar cada una (Fase 1/2).
-3. Smoke test (§3). Seed (§4). Crear usuario de prueba.
-4. `.env.local` → Integración. `npm i` + `next dev`. Playwright (§5).
-5. Conservar el proyecto (NO destruir). Re-medir línea base de tiempos.
-
-> **Nota de fidelidad**: este entorno es el **slice de Compliance** (auth `0001` + compliance `0065/0081/0141`). NO es aún un mirror completo de prod (prod mezcla migraciones trackeadas + DDL fuera de banda — `compliance_items/alerts` no figuran en `list_migrations` de prod pese a existir; por eso el branch-desde-prod no es viable). Para convertirlo en el entorno oficial de **todas** las features: replicar el schema de prod vía `pg_dump --schema-only` (o replay del `supabase_migrations` de prod) + aplicar `0141` encima. Follow-up separado.
+## 6. Procedimiento de validación (sobre el proyecto oficial)
+> El "entorno de Integración dedicado" quedó **DESCARTADO** (ver AVISO). NO crear proyectos/branches de Supabase. Todo se valida sobre el proyecto oficial `arsksytgdnzukbmfgkju`.
+1. Migración (gateada, con autorización expresa): aplicar **sólo** la pendiente de Compliance `0141_compliance_cases.sql` a prod — las tablas base (`compliance_items/alerts/documents/sync_log/categories`) ya existen en prod. **Re-verificar `max+1` con `list_migrations` justo antes de aplicar.**
+2. Smoke test (§3) y validación (§2) adaptados a prod (read-only salvo la migración gateada).
+3. Validación de UI: sobre el commit realmente desplegado en prod + transplante de Compliance (ver **Plan de Integración**); `.env.local` → proyecto **oficial**. Playwright (§5).
+4. Follow-up posible (sólo si Dirección lo dispone): entorno de Integración permanente vía `pg_dump --schema-only` de prod — registrado como idea, NO ejecutar sin autorización.
 
 ---
 
@@ -206,13 +194,10 @@ Checklist Playwright (capturar screenshot en cada uno):
 - H4 (memoria): Knowledge F0.5/F0.5.2 figura **aplicado en prod** (`0125-0140`), aunque la memoria lo daba como "entregado-no-aplicado".
 
 **Riesgos remanentes**
-- R1: hasta correr el E2E vivo, la validación de UI (render real de MAG-04 🟠) queda pendiente; mitigado por 309 tests + regresión 12/12 + SQL smoke listo.
-- R2: 2 proyectos Supabase trabados facturando hasta su borrado manual (dashboard).
-- R3: el entorno de Integración es slice de compliance, no mirror total (ver §6).
+- R1: la validación de UI en vivo (render real de MAG-04 🟠) se hará sobre el proyecto oficial `arsksytgdnzukbmfgkju` + transplante de Compliance (Plan de Integración); mitigado por 309 tests + regresión 12/12 + smoke SQL.
+- R2: proyectos de Integración (`frcpzfeacejccerqwnqq`, `jyiygusacxbdosfkptci`, `bmrtlojmqmkuirhuzhyt`) **DESCARTADOS** — eliminación solicitada a soporte de Supabase; **NO usar** (sólo registro histórico).
 
 **Recomendaciones**
-1. Reintentar el provisioning cuando Supabase normalice (status page / soporte); verificar límite de proyectos del plan de la org.
-2. Borrar los 2 proyectos trabados desde el dashboard.
-3. Al primer proyecto sano: correr Fases 1→4 de este runbook y capturar la línea base de tiempos.
-4. Planificar el follow-up "Integración = mirror completo de prod" vía `pg_dump --schema-only`.
+1. Operar **exclusivamente** sobre el proyecto oficial `arsksytgdnzukbmfgkju`. No crear proyectos/branches de Supabase.
+2. Ejecutar el **Plan de Integración** (transplante de Compliance sobre el commit desplegado en prod) y aplicar la migración `0141` — todo **gateado** y sólo con autorización expresa de Dirección.
 </content>

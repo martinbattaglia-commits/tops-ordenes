@@ -3,6 +3,8 @@
 > Documento de estado único del rediseño del modelo de Compliance (estado administrativo / riesgo / semáforo).
 > Pensado para que **cualquier desarrollador retome el trabajo sin contexto previo**.
 > **Fecha de cierre de iteración**: 2026-06-30.
+>
+> ⚠️ **Proyecto Supabase autorizado (ÚNICO): `arsksytgdnzukbmfgkju`** (`https://arsksytgdnzukbmfgkju.supabase.co`). Los proyectos de Integración (`frcpzfeacejccerqwnqq`, `jyiygusacxbdosfkptci`, `bmrtlojmqmkuirhuzhyt`) fueron **DESCARTADOS** por incidente de infraestructura; eliminación solicitada a soporte. Las menciones en §9-R2/§10 son **registro histórico** — NO usar. El camino a prod es el **Plan de Integración** (transplante de Compliance sobre el commit desplegado en prod), no un entorno de Integración dedicado.
 
 ---
 
@@ -116,7 +118,7 @@ Se rediseñó el modelo de **Compliance** de TOPS NEXUS para que el semáforo de
 ## 9. Riesgos pendientes
 
 - **R1**: la validación del **render real de la UI** (MAG-04 🟠 en pantalla) queda pendiente hasta correr el E2E vivo (bloqueado por infra). Mitigado por 309 tests + regresión 12/12 + smoke SQL listo.
-- **R2**: 2 proyectos Supabase quedaron **trabados en `COMING_UP` facturando** hasta su borrado manual desde el dashboard (la MCP no borra ni pausa proyectos en ese estado): `jyiygusacxbdosfkptci` (sa-east-1) y `bmrtlojmqmkuirhuzhyt` (us-east-1).
+- **R2**: los proyectos de Integración (`frcpzfeacejccerqwnqq`, `jyiygusacxbdosfkptci`, `bmrtlojmqmkuirhuzhyt`) quedaron **DESCARTADOS** — eliminación solicitada a soporte de Supabase. **NO usar** (sólo registro histórico del incidente). Único proyecto autorizado: **`arsksytgdnzukbmfgkju`**.
 - **R3**: el entorno de Integración objetivo es el **slice de Compliance** (auth `0001` + `0065/0081/0141`), no un mirror completo de prod. Prod mezcla migraciones trackeadas con **DDL fuera de banda** (`compliance_items/alerts` existen pero no figuran en `list_migrations`), por eso un branch-desde-prod no es viable. Mirror total = follow-up vía `pg_dump --schema-only`.
 - **R4 (numeración)**: la cadena Knowledge crece en paralelo; el número `0141` puede ser superado antes del merge → re-verificar `max+1` al aplicar (§4).
 
@@ -132,26 +134,24 @@ Al intentar montar un entorno aislado para el E2E, **3 provisionamientos quedaro
 | Proyecto `tops-ordenes-integracion` (`jyiygusacxbdosfkptci`) | sa-east-1 | >24 min, trabado |
 | Proyecto `tops-ordenes-integracion-use1` (`bmrtlojmqmkuirhuzhyt`) | us-east-1 | >12 min, trabado |
 
-**Diagnóstico**: prod sano + 2 proyectos nuevos sin provisionar en 2 regiones ⇒ **incidencia a nivel cuenta/plataforma de Supabase** (asignación de compute para proyectos nuevos), **NO del proyecto Nexus ni del diseño**. Se aplicó la regla de corte de Dirección (detener al repetirse el comportamiento). **Acción pendiente de Dirección**: borrar los 2 proyectos trabados desde el dashboard de Supabase y verificar límite de plan / aviso de incidente.
+**Diagnóstico**: prod sano + 2 proyectos nuevos sin provisionar en 2 regiones ⇒ **incidencia a nivel cuenta/plataforma de Supabase** (asignación de compute para proyectos nuevos), **NO del proyecto Nexus ni del diseño**. Se aplicó la regla de corte de Dirección (detener al repetirse el comportamiento). **Estado**: los 3 proyectos de Integración quedaron **DESCARTADOS**; eliminación solicitada a soporte de Supabase. El desarrollo continúa **exclusivamente** sobre el proyecto oficial `arsksytgdnzukbmfgkju` (ver §11).
 
 Detalle completo + línea base + acciones: `docs/superpowers/integration/2026-06-30-compliance-e2e-runbook.md`.
 
 ---
 
-## 11. Procedimiento exacto para reanudar el E2E (cuando Supabase normalice)
+## 11. Procedimiento para llevar Compliance a producción (proyecto oficial)
 
-> Requiere autorización explícita de Dirección. **No** reintentar creación de proyectos/branches sin esa autorización.
+> **Único proyecto autorizado: `arsksytgdnzukbmfgkju`.** NO crear proyectos/branches de Supabase. Requiere **autorización explícita de Dirección** antes de cualquier acción irreversible (merge/migración/deploy). El enfoque de "entorno de Integración dedicado" quedó **descartado** (ver §10/§9-R2).
 
-1. **Limpieza previa**: borrar del dashboard los 2 proyectos trabados (R2).
-2. **Entorno**: crear (o reutilizar) un proyecto Supabase aislado en una región con compute disponible (org `bzpogcxjwsfvtlebijuy`). Esperar `ACTIVE_HEALTHY`. **Medir y registrar tiempo de provisioning** (baseline objetivo 2–5 min).
-3. **Aplicar migraciones en orden** (vía `apply_migration` con el contenido de cada archivo del worktree), validando cada una: `0001_init` → `0065_compliance_core` → `0081_compliance_drive_sync` → `0141_compliance_cases`. (Para aplicar a **prod** algún día: re-verificar el número con `list_migrations` = max+1.)
-4. **Fase 1 (validación read-only)** y **Fase 2 (smoke test SQL)**: correr los bloques del runbook §2/§3 — exigir ✅; confirmar especialmente que el CHECK de `compliance_alerts.nivel` admite `info` y `kind` admite `review` (insert de prueba debe pasar).
-5. **Fase 3 (seed)**: insertar los 6 casos + evidencias (runbook §4). Verificar el semáforo esperado por ítem (tabla del runbook §4).
-6. **Fase 4 (E2E UI)**: `.env.local` → proyecto de Integración (URL + anon key del proyecto; `service_role` desde dashboard). `npm i` + `next dev -p 3030`. Crear usuario de prueba (signup + confirmar `email_confirmed_at`). Playwright: login → `/anmat`, validar los 12 puntos (dashboard, KPIs, timeline, filtros, búsqueda, alertas, evidencias, máquina de estados, cron, semáforos, CaseChips) con la **aserción dura MAG-04 → 🟠 "En trámite administrativo"**. Capturar screenshots + resultados.
-7. **Registrar la línea base** (provisioning / migración / seed / Playwright) y adjuntar al runbook.
-8. **Conservar** el proyecto de Integración (no destruir).
+1. **Identificar el commit desplegado en prod hoy** (read-only). Ver el **Plan de Integración** (`docs/superpowers/integration/`).
+2. **Rama de integración**: crear una rama **desde ese commit** y **transplantar exclusivamente** el diff del módulo Compliance (NO la base vieja `3ea0de1`).
+3. **Verificación sin regresión**: `npm run typecheck` + `npm run lint` + `npx vitest run` (objetivo 309/309 + regresión 12/12) sobre la rama de integración; confirmar que el diff toca **sólo** archivos de Compliance (sin tocar Fiscal/Knowledge/Connect/resto).
+4. **Migración (gateada)**: re-verificar `max+1` con `list_migrations` en prod y aplicar **sólo** `0141_compliance_cases.sql`. Smoke test (runbook §3): confirmar CHECK `nivel` admite `info` y `kind` admite `review`.
+5. **Deploy (gateado)**: build + deploy del commit de integración por el canal oficial (Netlify manual), con **plan de rollback**.
+6. **Validación post-deploy** sobre el proyecto oficial: `/anmat` — MAG-04 → 🟠 "En trámite administrativo"; KPIs/semáforos/CaseChips; cron `?dry=1`. (En prod los casos reales se cargan vía la planilla `00_ESTADO_COMPLIANCE`; el seed de 6 casos del runbook §4 es para validación.)
 
-**Referencias**: spec `docs/superpowers/specs/2026-06-29-compliance-cases-estado-riesgo-semaforo-design.md` · plan `docs/superpowers/plans/2026-06-29-compliance-cases-estado-riesgo-semaforo.md` · runbook `docs/superpowers/integration/2026-06-30-compliance-e2e-runbook.md`.
+**Referencias**: spec `docs/superpowers/specs/2026-06-29-compliance-cases-estado-riesgo-semaforo-design.md` · plan `docs/superpowers/plans/2026-06-29-compliance-cases-estado-riesgo-semaforo.md` · runbook `docs/superpowers/integration/2026-06-30-compliance-e2e-runbook.md` · **Plan de Integración** (informe entregado en esta sesión).
 
 ---
 
