@@ -96,9 +96,40 @@
 
 Sin diferencias repo↔prod. Sync local en el commit de cierre (`0134-0139` + plan E2.2 + este Run Log). **Sin push/merge/deploy.** **E2.3 NO iniciada** — espera autorización expresa de Dirección.
 
-## E2.3 — KPIs + Panel · E2.4 — EOL
-*(pendientes, secuenciales)*
+## E2.3 — KPIs + Panel Administrativo (G7 aprobado 2026-06-29)
+
+**Plan:** `docs/superpowers/plans/2026-06-29-f05-2-3-kpis-panel.md`. **Decisiones G7:** D-1 panel SOLO observación (sin acciones/control, sin mutar estados) · D-2 gate único `knowledge.admin` · D-3 Timeline/Entity360/Worker/Adaptadores CONGELADOS · D-4 fix `search_path` de `has_permission` FUERA · D-5 migración `0140` · D-6 híbrido (KPIs polling + alertas críticas realtime) · D-7 panel Dirección-first (Estado general → Health → KPIs → Worker → Cola → Fuentes → Dead-letter → técnico). **100% read-only y aditivo.**
+
+**Migración `0140_knowledge_kpis_admin`** — aplicada vía MCP y validada. 5 RPC `SECURITY DEFINER` **read-only** de agregación (cruzan la RLS por `visibility_key` para dar el panorama TOTAL al admin), gate interno fail-closed `if not coalesce(has_permission('knowledge.admin'), false) then return`:
+- `knowledge_kpi_health()` (signals crudos para el Health Score) · `knowledge_kpi_queue()` (cola/procesamiento) · `knowledge_kpi_sources()` (fuentes + conteo) · `knowledge_kpi_worker(interval)` (telemetría + liveness) · `knowledge_kpi_dead_letter(int)` (lista acotada).
+- Hardening H-E1-1 adaptado a RPC de lectura: `set search_path`, `revoke all from public`, `revoke execute from anon`, `grant execute to authenticated` (el gate interno es la frontera; NO `service_role`).
+- **2 correcciones in-flight** (detectadas por la validación, plegadas al archivo antes del cierre): (a) `knowledge_kpi_worker` — `win.*` qualifica las columnas que chocaban con los OUT homónimos (`processed`/`failed_retried`/`failed_dead`); (b) `health`/`queue` devuelven `oldest_pending_age_seconds int` (en vez de `interval`) para un contrato TS robusto.
+
+**Validaciones (read-only sobre prod `arsksytgdnzukbmfgkju`):**
+| Verificación | Resultado |
+|---|---|
+| ACL de las 5 RPC | SECDEF · `anon`/`public` sin execute · `authenticated` sí ✅ |
+| Gate fail-closed (sin contexto auth) | las 5 RPC devuelven **0 filas** ✅ |
+| Gate abre para admin (smoke `set_config` JWT + rollback) | datos reales: queue total=233/processed=233/dead=0 · sources=8 (5 activas) · dead-letter=0 ✅ |
+| Coherencia matemática | `knowledge_events`=233 (todos `processed`) = suma de la RPC ✅ |
+| No-mutación | `knowledge_events`=233 antes y después; smokes en tx+rollback ✅ |
+| Migración registrada | `0140` = 1 fila (las correcciones in-flight no duplican migración) ✅ |
+
+**Código TS/UI (read-only, patrón de capas):**
+- `src/lib/knowledge/admin-types.ts` (DTOs) · `admin-health.ts` (**función pura `computeHealth`** + `isWorkerStale`) · `admin-data.ts` (wrappers RPC, `isMock`→vacío, snake→camel) · `admin-health.test.ts` (**11 tests**).
+- `src/app/(app)/knowledge/admin/` → `page.tsx` (server, `canAccess('knowledge.admin')` fail-closed + `ModuleUnavailable`), `panel-ui.tsx` (secciones D-7), `LiveRefresh.tsx` (client: polling + realtime de dead-letter vía `useRealtimeTable`, `knowledge_events` ya publicada en E1).
+- Nav gateado: `boot-permissions.ts` (+flag `knowledge` = `slugs.has('knowledge.admin')||admin`, **0 round-trips extra**) → `layout.tsx`/`Shell.tsx`/`Sidebar.tsx` (dominio "Conocimiento", `gate:"knowledge"`).
+- **Validación:** typecheck **0** · lint **0** (archivos tocados) · tests **296/296** (45 files, +11). `npm run build` lo corre Dirección desde `main` (env), como en E2.1.
+
+**DoD E2.3:** sin `knowledge.admin` ⇒ `AccesoRestringido` (fail-closed) ✅ · KPIs reales coherentes con `knowledge_events` ✅ · agregados vía RPC SECDEF (no `security_invoker` → no subcuenta por RLS) ✅ · Health Score responde "¿sano?" (worker-idle NO degrada si no hay backlog) ✅ · híbrido polling+realtime ✅ · 0 escritura/control sobre el pipeline ✅ · Emisor/Worker/Adaptadores/Timeline intactos ✅.
+
+**Caveat de deploy:** la **capa DB (0140)** está **viva en prod**. Las **páginas/nav del panel** quedan vivas **sólo tras el deploy/merge** del worktree (Netlify manual; igual que el endpoint de E2.1). El panel se prueba en navegador post-deploy.
+
+**✅ E2.3 CERRADA (2026-06-29).** 1 migración (`0140`, read-only), 8 archivos TS/UI nuevos + 5 de shell (aditivos), 11 tests nuevos. Sin incidencias abiertas (las 2 correcciones in-flight quedaron resueltas y validadas). Sync local en el commit de cierre. **Sin push/merge/deploy.** **E2.4 (EOL) NO iniciada** — espera autorización expresa de Dirección.
+
+## E2.4 — EOL
+*(pendiente)*
 
 ---
 
-*Run Log E2 iniciado: 2026-06-29 · subfase activa: E2.0.*
+*Run Log E2 iniciado: 2026-06-29 · E2.0/E2.1/E2.2/E2.3 cerradas · próxima: E2.4 (espera GO).*

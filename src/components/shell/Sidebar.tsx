@@ -22,8 +22,8 @@ interface NavItem {
   badge?: string;
   /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
   exec?: boolean;
-  /** Gate RBAC: "sistema" (requiere sistema.view) · "rrhhDocs" (requiere rrhh.documentacion.view). */
-  gate?: "sistema" | "rrhhDocs";
+  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin). */
+  gate?: "sistema" | "rrhhDocs" | "knowledge";
   /** Abre el link en nueva pestaña (para assets estáticos o recursos externos). */
   external?: boolean;
 }
@@ -32,8 +32,8 @@ interface Domain {
   id: string;
   label: string;
   items: NavItem[];
-  /** Gate RBAC de todo el dominio (ej. "sistema"). */
-  gate?: "sistema";
+  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge"). */
+  gate?: "sistema" | "knowledge";
 }
 
 /**
@@ -178,6 +178,14 @@ const DOMAINS: Domain[] = [
       { href: "/settings", label: "Configuración", icon: "gear" },
     ],
   },
+  {
+    id: "conocimiento",
+    label: "Conocimiento",
+    gate: "knowledge",
+    items: [
+      { href: "/knowledge/admin", label: "Panel del Knowledge Engine", icon: "dashboard" },
+    ],
+  },
 ];
 
 interface Props {
@@ -188,6 +196,8 @@ interface Props {
   canViewSistema?: boolean;
   /** ¿Mostrar RRHH → Documentación (requiere rrhh.documentacion.view)? (default: sí). */
   canViewRrhhDocs?: boolean;
+  /** ¿Mostrar Conocimiento → Panel (requiere knowledge.admin)? (default: sí). */
+  canViewKnowledge?: boolean;
   onNavigate?: () => void;
 }
 
@@ -196,11 +206,13 @@ export default function Sidebar({
   canViewExecutive = true,
   canViewSistema = true,
   canViewRrhhDocs = true,
+  canViewKnowledge = true,
   onNavigate,
 }: Props) {
   // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
-  const gateAllowed = (gate?: "sistema" | "rrhhDocs") =>
-    !gate || (gate === "sistema" ? canViewSistema : canViewRrhhDocs);
+  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge") =>
+    !gate ||
+    (gate === "sistema" ? canViewSistema : gate === "rrhhDocs" ? canViewRrhhDocs : canViewKnowledge);
   const pathname = usePathname();
 
   const isActive = (href: string) => {
