@@ -364,8 +364,8 @@ Sin cambios de schedule ni auth: GitHub Action `0 0 * * *` (21:00 ART) → `POST
 
 ## 8. Migración y aplicación
 
-- **Archivo**: `supabase/migrations/0125_compliance_cases.sql` — `compliance_cases`, `compliance_anticipacion_config` (+seed), `compliance_normalizacion` (+seed), `compliance_items.anticipacion_dias`, alters de `compliance_alerts`.
-- **Numeración**: la base del worktree (`origin/main`) llega a `0105`, pero el universo integrado incluye prospección `0106/0107`, el rango contendido `0108–0118` (worktrees Knowledge F0.5 / Connect, no mergeados) y fiscal `0120–0124` (prod). **`0125` es el primer slot libre seguro.** Re-verificar con `ls supabase/migrations` al aplicar (prod puede usar timestamps).
+- **Archivo**: `supabase/migrations/0141_compliance_cases.sql` — `compliance_cases`, `compliance_anticipacion_config` (+seed), `compliance_normalizacion` (+seed), `compliance_items.anticipacion_dias`, alters de `compliance_alerts`.
+- **Numeración**: prod ya tiene aplicada (verificado por `list_migrations`, 2026-06-30) la cadena Knowledge `0125_knowledge_module_enum … 0140_knowledge_kpis_admin` (incl. `0139_knowledge_adapter_rrhh`), más prospección `0106/0107` y fiscal `0120–0124`. La migración se renumeró `0125→0139→0141`: **`0141` es el primer número libre (max+1)**. La cadena Knowledge crece en paralelo (worktree no mergeado) ⇒ **re-verificar con `list_migrations` y usar max+1 en el momento de aplicar.**
 - **Dependencia**: requiere `0081` aplicada primero (crea `compliance_alerts`/`compliance_documents`).
 - **Gating**: code-complete, **NO se aplica / mergea / pushea / deploya**. Aplicación manual = decisión de Dirección. El cron de la planilla queda inerte hasta configurar `COMPLIANCE_ESTADO_SHEET_FILE_ID`.
 

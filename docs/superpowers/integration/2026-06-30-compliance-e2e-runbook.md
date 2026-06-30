@@ -203,7 +203,7 @@ Checklist Playwright (capturar screenshot en cada uno):
 - H1 (proveedor, BLOQUEANTE del E2E vivo): provisioning de proyectos nuevos estancado en 2 regiones; prod sano ⇒ incidencia Supabase cuenta/plataforma.
 - H2 (entrega, RESUELTO): colisión de numeración — prod ya tiene Knowledge `0125…0138` aplicado; la migración se **renumeró `0125→0141`** (commit `91e96ca`).
 - H3 (infra prod): `compliance_items/alerts/documents/sync_log` existen en prod pero **NO** en `list_migrations` ⇒ creadas fuera de banda; el historial de prod no es 100% replicable (impide branch limpio).
-- H4 (memoria): Knowledge F0.5/F0.5.2 figura **aplicado en prod** (`0125-0138`), aunque la memoria lo daba como "entregado-no-aplicado".
+- H4 (memoria): Knowledge F0.5/F0.5.2 figura **aplicado en prod** (`0125-0140`), aunque la memoria lo daba como "entregado-no-aplicado".
 
 **Riesgos remanentes**
 - R1: hasta correr el E2E vivo, la validación de UI (render real de MAG-04 🟠) queda pendiente; mitigado por 309 tests + regresión 12/12 + SQL smoke listo.

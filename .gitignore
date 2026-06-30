@@ -56,3 +56,6 @@ backup-sa-key.json
 gcp-sa-*.json
 *.dump
 lifecycle.json.bak
+
+# SDD scratch (briefs/reports/diffs/ledger) — no es entregable
+.superpowers/

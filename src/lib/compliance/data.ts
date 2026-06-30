@@ -140,7 +140,7 @@ function diffDays(venc: string, today: string): number {
   return Math.round((Date.UTC(vy, vm - 1, vd) - Date.UTC(ty, tm - 1, td)) / 86_400_000);
 }
 
-/** Default de anticipación cuando no se inyecta config (espejo del seed 0125). */
+/** Default de anticipación cuando no se inyecta config (espejo del seed 0141). */
 export const ANTICIPACION_DEFAULT: Record<string, number> = {
   Mensual: 7, Trimestral: 15, Semestral: 30, Anual: 60, Bienal: 90, Trienal: 120, Cuatrienal: 180, __default__: 60,
 };

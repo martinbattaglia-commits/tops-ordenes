@@ -16,7 +16,7 @@ export function stripKey(s: string): string {
     .trim();
 }
 
-/** Fallback en código (espejo del seed de 0125). `sinonimo` ya viene normalizado con stripKey. */
+/** Fallback en código (espejo del seed de 0141). `sinonimo` ya viene normalizado con stripKey. */
 const RAW: Array<[NormDimension, string, string]> = [
   ["estado", "en elaboracion", "en_tramite"],
   ["estado", "en analisis", "en_tramite"],

@@ -13,17 +13,18 @@
 - **NO aplicar migraciones · NO mergear · NO pushear · NO deploy.** Todo queda en el worktree/rama `worktree-feat+compliance-cases-semaforo` hasta revisión final de Dirección.
 - **Test runner:** `npx vitest run <archivo>` (config del repo: `npm test` = `vitest run`). Tests co-locados `*.test.ts`.
 - **Typecheck:** `npm run typecheck` (`tsc --noEmit`) debe pasar tras cada tarea que toque TS.
-- **Migración:** archivo `supabase/migrations/0125_compliance_cases.sql`. Re-verificar numeración con `ls supabase/migrations` antes de aplicar (rango 0106–0118 contendido; fiscal 0120–0124). Depende de `0081` (crea `compliance_alerts`).
+- **Migración:** archivo `supabase/migrations/0141_compliance_cases.sql` (renumerada `0125→0139→0141`; prod ya aplicó Knowledge `0125-0140`). **Re-verificar el número con `list_migrations` y usar max+1 al aplicar** (la cadena Knowledge crece en paralelo). Depende de `0081` (crea `compliance_alerts`).
 - **El campo `ComplianceItem.riesgo` (Verde/Amarillo/Naranja/Rojo) ES el semáforo (color)** y lo consumen ~25 sitios (scoring/KPIs/timeline/UI). NO se renombra: lo computa la cascada nueva. El "nivel de riesgo" (bajo/medio/alto/critico) es un campo NUEVO y SEPARADO (`nivelRiesgo`), usado sólo para prioridad/orden/filtros.
 - **Zona horaria AR** para fechas: reutilizar `todayAr()` / `diffDays()` existentes en `data.ts`.
 - **Commits frecuentes**, uno por tarea, en español, sin co-author de máquinas externas. Formato sugerido: `feat(compliance): <tarea>`.
+- **Batería de regresión permanente del motor** (`src/lib/compliance/derive.regression.test.ts`, Task 6R): matriz de 12 escenarios de negocio que `deriveComplianceStatus` DEBE satisfacer siempre. Es un gate obligatorio: ninguna tarea posterior avanza si no está 100% verde, y toda modificación futura del algoritmo debe seguir pasándola.
 
 ---
 
 ## File Structure
 
 **Nuevos:**
-- `supabase/migrations/0125_compliance_cases.sql` — tablas `compliance_cases`, `compliance_anticipacion_config` (+seed), `compliance_normalizacion` (+seed), **`compliance_evidence`** (D12); `compliance_items.anticipacion_dias`; alters de `compliance_alerts`.
+- `supabase/migrations/0141_compliance_cases.sql` — tablas `compliance_cases`, `compliance_anticipacion_config` (+seed), `compliance_normalizacion` (+seed), **`compliance_evidence`** (D12); `compliance_items.anticipacion_dias`; alters de `compliance_alerts`.
 - `src/lib/compliance/cases/types.ts` — enums y tipos del caso (`EstadoAdministrativo`, `Etapa`, `NivelRiesgo`, `Semaforo`, `Origen`, `Confianza`, `Temporal`, `ComplianceCase`, `ComplianceCaseLite`).
 - `src/lib/compliance/cases/normalize.ts` (+ `.test.ts`) — diccionario por defecto + `normalizar(texto, dimension, dict?)`.
 - `src/lib/compliance/cases/transitions.ts` (+ `.test.ts`) — **máquina de estados** (D11): `TRANSICIONES`, `canTransition(from, to)`.
@@ -40,20 +41,20 @@
 
 ---
 
-## Task 1: Migración `0125_compliance_cases.sql`
+## Task 1: Migración `0141_compliance_cases.sql`
 
 **Files:**
-- Create: `supabase/migrations/0125_compliance_cases.sql`
+- Create: `supabase/migrations/0141_compliance_cases.sql`
 
 **Interfaces:**
 - Produces (DB): tablas `compliance_cases`, `compliance_anticipacion_config`, `compliance_normalizacion`, `compliance_evidence`; columna `compliance_items.anticipacion_dias`; columnas `compliance_alerts.origen/confianza/case_id` + `kind='review'`.
 
 - [ ] **Step 1: Escribir la migración completa**
 
-Crear `supabase/migrations/0125_compliance_cases.sql`:
+Crear `supabase/migrations/0141_compliance_cases.sql`:
 
 ```sql
--- 0125_compliance_cases.sql
+-- 0141_compliance_cases.sql
 -- Casos regulatorios: estado administrativo + nivel de riesgo + origen/confianza.
 -- Semáforo (color) = computado en runtime (no se almacena como verdad).
 -- DEPENDE de 0081 (compliance_alerts/compliance_documents).
@@ -246,7 +247,7 @@ create policy compliance_evidence_select on compliance_evidence
 
 - [ ] **Step 2: Verificar (sin aplicar)**
 
-Run: `grep -c "create table if not exists" supabase/migrations/0125_compliance_cases.sql`
+Run: `grep -c "create table if not exists" supabase/migrations/0141_compliance_cases.sql`
 Expected: `4` (compliance_cases, compliance_anticipacion_config, compliance_normalizacion, compliance_evidence).
 
 > **No aplicar.** La migración es gateada. Validación profunda = revisión humana contra spec §3 y `0081`. (Si en el futuro hay `supabase db lint` disponible y un proyecto local, correrlo; hoy no está.)
@@ -254,8 +255,8 @@ Expected: `4` (compliance_cases, compliance_anticipacion_config, compliance_norm
 - [ ] **Step 3: Commit**
 
 ```bash
-git add supabase/migrations/0125_compliance_cases.sql
-git commit -m "feat(compliance): migración 0125 — casos, config anticipación, diccionario y evidencias"
+git add supabase/migrations/0141_compliance_cases.sql
+git commit -m "feat(compliance): migración 0141 — casos, config anticipación, diccionario y evidencias"
 ```
 
 ---
@@ -462,7 +463,7 @@ export function stripKey(s: string): string {
     .trim();
 }
 
-/** Fallback en código (espejo del seed de 0125). `sinonimo` ya viene normalizado con stripKey. */
+/** Fallback en código (espejo del seed de 0141). `sinonimo` ya viene normalizado con stripKey. */
 const RAW: Array<[NormDimension, string, string]> = [
   ["estado", "en elaboracion", "en_tramite"],
   ["estado", "en analisis", "en_tramite"],
@@ -1156,7 +1157,7 @@ Reemplazar la función completa (líneas 131-151) por:
 import { computeSemaforo, temporalOf, resolveAnticipacion } from "./semaforo";
 import type { Temporal } from "./cases/types";
 
-/** Default de anticipación cuando no se inyecta config (espejo del seed 0125). */
+/** Default de anticipación cuando no se inyecta config (espejo del seed 0141). */
 export const ANTICIPACION_DEFAULT: Record<string, number> = {
   Mensual: 7, Trimestral: 15, Semestral: 30, Anual: 60, Bienal: 90, Trienal: 120, Cuatrienal: 180, __default__: 60,
 };
@@ -1222,6 +1223,118 @@ Expected: PASS (5 tests) y typecheck OK. Si `tsc` marca usos de `RISK_LABEL.Nara
 ```bash
 git add src/lib/compliance/data.ts src/lib/compliance/derive.test.ts
 git commit -m "feat(compliance): deriveComplianceStatus usa caso activo + anticipación parametrizable"
+```
+
+---
+
+## Task 6R: Batería de regresión permanente del motor (GATE obligatorio)
+
+**Files:**
+- Create: `src/lib/compliance/derive.regression.test.ts`
+
+**Interfaces:**
+- Consumes: `deriveComplianceStatus`, `ComplianceItem` (Task 6); `ComplianceCaseLite` (Task 2).
+
+**Por qué:** `deriveComplianceStatus` es el punto central del motor. Esta matriz de 12 escenarios de negocio queda como test PERMANENTE; toda modificación futura del algoritmo debe pasarla. **Gate: no se avanza a Task 7+ hasta que esté 100% verde.**
+
+- [ ] **Step 1: Escribir la suite de regresión completa**
+
+Crear `src/lib/compliance/derive.regression.test.ts`:
+
+```ts
+/**
+ * BATERÍA DE REGRESIÓN PERMANENTE — motor de Compliance (deriveComplianceStatus).
+ * Matriz de escenarios de negocio. Cualquier cambio futuro del algoritmo DEBE pasar
+ * estos 12 casos. No relajar ni borrar sin aprobación de Dirección.
+ */
+import { describe, it, expect } from "vitest";
+import { deriveComplianceStatus, type ComplianceItem } from "./data";
+import type { ComplianceCaseLite } from "./cases/types";
+
+const TODAY = "2026-06-29";
+const CFG = { Anual: 60, Cuatrienal: 180, __default__: 60 };
+
+function item(over: Partial<ComplianceItem> = {}): ComplianceItem {
+  return {
+    id: "T", sede: "MAGALDI", categoria: "Residuos", documento: "Cert", organismo: "Org", tipo: "Certificado",
+    emision: "2022-10-06", vencimiento: "2023-10-06", frecuencia: "Anual", estado: "", riesgo: "Rojo",
+    fuente: "Leído", nota: "", docs: 0, dias: null, venc_fmt: "", emi_fmt: "", ...over,
+  };
+}
+function caso(over: Partial<ComplianceCaseLite> = {}): ComplianceCaseLite {
+  return { estadoAdministrativo: "en_tramite", etapa: null, nivelRiesgo: "medio", origen: "sheet", confianza: "confirmada", ...over };
+}
+const color = (it: ComplianceItem) => deriveComplianceStatus(it, TODAY, CFG).riesgo;
+
+describe("REGRESIÓN · matriz de escenarios de negocio (motor de Compliance)", () => {
+  it("1. Certificado vigente → Verde", () => {
+    expect(color(item({ vencimiento: "2027-06-29", frecuencia: "Anual" }))).toBe("Verde");
+  });
+  it("2. Próximo a vencer según anticipación parametrizada (Cuatrienal 180d) → Amarillo", () => {
+    expect(color(item({ vencimiento: "2026-09-01", frecuencia: "Cuatrienal" }))).toBe("Amarillo");
+  });
+  it("3. Vencido sin caso regulatorio → Rojo", () => {
+    expect(color(item({ vencimiento: "2023-10-06", activeCase: null }))).toBe("Rojo");
+  });
+  it("4. Vencido con caso EN_TRAMITE → Naranja", () => {
+    expect(color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "en_tramite" }) }))).toBe("Naranja");
+  });
+  it("5. Vencido con PRONTO_DESPACHO (en_tramite + etapa) → Naranja", () => {
+    expect(color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "en_tramite", etapa: "pronto_despacho" }) }))).toBe("Naranja");
+  });
+  it("6. Vencido con PENDIENTE_EMISION → Amarillo", () => {
+    expect(color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "pendiente_emision" }) }))).toBe("Amarillo");
+  });
+  it("7. Vencido con RECHAZADO → Rojo", () => {
+    expect(color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "rechazado" }) }))).toBe("Rojo");
+  });
+  it("8. Riesgo ALTO no modifica el color (vencido+en_tramite sigue Naranja)", () => {
+    expect(color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "en_tramite", nivelRiesgo: "alto" }) }))).toBe("Naranja");
+  });
+  it("9. Riesgo CRÍTICO no modifica el color (vencido+en_tramite sigue Naranja)", () => {
+    expect(color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "en_tramite", nivelRiesgo: "critico" }) }))).toBe("Naranja");
+  });
+  it("10. Cambiar SÓLO el riesgo → semáforo idéntico", () => {
+    const medio = color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "en_tramite", nivelRiesgo: "medio" }) }));
+    const critico = color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "en_tramite", nivelRiesgo: "critico" }) }));
+    expect(medio).toBe(critico);
+  });
+  it("11. Cambiar SÓLO el estado administrativo → semáforo cambia", () => {
+    const tramite = color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "en_tramite" }) }));
+    const rechazado = color(item({ vencimiento: "2023-10-06", activeCase: caso({ estadoAdministrativo: "rechazado" }) }));
+    expect(tramite).toBe("Naranja");
+    expect(rechazado).toBe("Rojo");
+    expect(tramite).not.toBe(rechazado);
+  });
+  it("12. Caso real MAG-04 (EX-2023-116887453) → Naranja 'En trámite administrativo'", () => {
+    const mag04 = item({
+      id: "MAG-04",
+      documento: "Certificado Ambiental Anual (CAA) – Nación – Generador R. Peligrosos",
+      vencimiento: "2023-10-06", frecuencia: "Anual",
+      activeCase: caso({ estadoAdministrativo: "en_tramite", etapa: "pronto_despacho", nivelRiesgo: "alto" }),
+    });
+    const out = deriveComplianceStatus(mag04, TODAY, CFG);
+    expect(out.riesgo).toBe("Naranja");
+    expect(out.estado).toBe("En trámite administrativo");
+  });
+});
+```
+
+- [ ] **Step 2: Correr la batería — DEBE quedar 100% verde**
+
+Run: `npx vitest run src/lib/compliance/derive.regression.test.ts`
+Expected: 12/12 PASS. Si algún escenario falla, NO es un test mal escrito: es un bug del motor (Task 6) → corregir el motor, no el test (salvo error de fixture evidente).
+
+- [ ] **Step 3: Suite completa + typecheck**
+
+Run: `npx vitest run src/lib/compliance && npm run typecheck`
+Expected: todo verde.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/lib/compliance/derive.regression.test.ts
+git commit -m "test(compliance): batería de regresión permanente del motor (12 escenarios de negocio)"
 ```
 
 ---
@@ -2011,7 +2124,7 @@ Confirmar que el plan cubrió: D6 (anticipación parametrizable, Task 1+4+6), D7
 
 - [ ] **Step 4: Resumen de estado para Dirección**
 
-Dejar nota en el commit final / PR-draft: migración `0125` **sin aplicar**; `COMPLIANCE_ESTADO_SHEET_FILE_ID` sin configurar; el cambio 🔴→🟠 de casos reales (ej. MAG-04) requiere (1) aplicar `0081`+`0125`, (2) crear la planilla y cargar `COMPLIANCE_ESTADO_SHEET_FILE_ID`, (3) corrida del cron. Nada mergeado/pusheado/deployado.
+Dejar nota en el commit final / PR-draft: migración `0141` **sin aplicar**; `COMPLIANCE_ESTADO_SHEET_FILE_ID` sin configurar; el cambio 🔴→🟠 de casos reales (ej. MAG-04) requiere (1) aplicar `0081`+`0141`, (2) crear la planilla y cargar `COMPLIANCE_ESTADO_SHEET_FILE_ID`, (3) corrida del cron. Nada mergeado/pusheado/deployado.
 
 - [ ] **Step 5: Commit final (si quedó algo suelto)**
 
