@@ -57,7 +57,7 @@ NEXT_PUBLIC_APP_DEMO_MODE=false
 
 ---
 
-## 2. Fase 1 — Validación read-only del entorno (ANTES de 0139)
+## 2. Fase 1 — Validación read-only del entorno (ANTES de 0141)
 
 Tras aplicar `0001 → 0065 → 0081` (ver §3), correr y exigir ✅:
 
@@ -69,7 +69,7 @@ where table_schema='public' and table_name in
 order by 1;
 -- Políticas RLS por tabla (esperado: ≥1 select policy c/u)
 select tablename, policyname from pg_policies where schemaname='public' and tablename like 'compliance_%' order by 1,2;
--- CHECK constraints PRE-0139 de compliance_alerts (esperado: nivel in critical/warning/ok; kind 4 valores)
+-- CHECK constraints PRE-0141 de compliance_alerts (esperado: nivel in critical/warning/ok; kind 4 valores)
 select conname, pg_get_constraintdef(oid) from pg_constraint
 where conrelid='public.compliance_alerts'::regclass and contype='c';
 -- Índices (esperado: *_item_idx, *_estado_idx, drive_file_uniq, etc.)
@@ -92,11 +92,11 @@ Aplicar en orden, **validando cada una** (vía `apply_migration` con el contenid
 | 1 | `supabase/migrations/0001_init.sql` | `profiles`, enum `user_role_t`, `current_role()`, `handle_new_user`, auth base |
 | 2 | `supabase/migrations/0065_compliance_core.sql` | `compliance_items` (+seed 33) |
 | 3 | `supabase/migrations/0081_compliance_drive_sync.sql` | `compliance_alerts/documents/sync_log/categories` + cols sync en items |
-| 4 | `supabase/migrations/0139_compliance_cases.sql` | `compliance_cases/evidence/anticipacion_config/normalizacion` + alters alerts |
+| 4 | `supabase/migrations/0141_compliance_cases.sql` | `compliance_cases/evidence/anticipacion_config/normalizacion` + alters alerts |
 
-### Smoke test SQL (post-0139) — exigir ✅
+### Smoke test SQL (post-0141) — exigir ✅
 ```sql
--- (a) Tablas nuevas de 0139 (esperado: las 4)
+-- (a) Tablas nuevas de 0141 (esperado: las 4)
 select table_name from information_schema.tables where table_schema='public'
  and table_name in ('compliance_cases','compliance_evidence','compliance_anticipacion_config','compliance_normalizacion') order by 1;
 -- (b) BUG #1 FIX — nivel ahora admite 'info' (debe INSERTAR sin error)
@@ -188,12 +188,12 @@ Checklist Playwright (capturar screenshot en cada uno):
 
 ## 6. Procedimiento de regeneración desde cero
 1. Crear proyecto Supabase (org `bzpogcxjwsfvtlebijuy`, región `us-east-1`), plan con compute disponible.
-2. `apply_migration` en orden: `0001_init` → `0065_compliance_core` → `0081_compliance_drive_sync` → `0139_compliance_cases` (contenido de los archivos del worktree). Validar cada una (Fase 1/2).
+2. `apply_migration` en orden: `0001_init` → `0065_compliance_core` → `0081_compliance_drive_sync` → `0141_compliance_cases` (contenido de los archivos del worktree). Validar cada una (Fase 1/2).
 3. Smoke test (§3). Seed (§4). Crear usuario de prueba.
 4. `.env.local` → Integración. `npm i` + `next dev`. Playwright (§5).
 5. Conservar el proyecto (NO destruir). Re-medir línea base de tiempos.
 
-> **Nota de fidelidad**: este entorno es el **slice de Compliance** (auth `0001` + compliance `0065/0081/0139`). NO es aún un mirror completo de prod (prod mezcla migraciones trackeadas + DDL fuera de banda — `compliance_items/alerts` no figuran en `list_migrations` de prod pese a existir; por eso el branch-desde-prod no es viable). Para convertirlo en el entorno oficial de **todas** las features: replicar el schema de prod vía `pg_dump --schema-only` (o replay del `supabase_migrations` de prod) + aplicar `0139` encima. Follow-up separado.
+> **Nota de fidelidad**: este entorno es el **slice de Compliance** (auth `0001` + compliance `0065/0081/0141`). NO es aún un mirror completo de prod (prod mezcla migraciones trackeadas + DDL fuera de banda — `compliance_items/alerts` no figuran en `list_migrations` de prod pese a existir; por eso el branch-desde-prod no es viable). Para convertirlo en el entorno oficial de **todas** las features: replicar el schema de prod vía `pg_dump --schema-only` (o replay del `supabase_migrations` de prod) + aplicar `0141` encima. Follow-up separado.
 
 ---
 
@@ -201,7 +201,7 @@ Checklist Playwright (capturar screenshot en cada uno):
 
 **Hallazgos**
 - H1 (proveedor, BLOQUEANTE del E2E vivo): provisioning de proyectos nuevos estancado en 2 regiones; prod sano ⇒ incidencia Supabase cuenta/plataforma.
-- H2 (entrega, RESUELTO): colisión de numeración — prod ya tiene Knowledge `0125…0138` aplicado; la migración se **renumeró `0125→0139`** (commit `91e96ca`).
+- H2 (entrega, RESUELTO): colisión de numeración — prod ya tiene Knowledge `0125…0138` aplicado; la migración se **renumeró `0125→0141`** (commit `91e96ca`).
 - H3 (infra prod): `compliance_items/alerts/documents/sync_log` existen en prod pero **NO** en `list_migrations` ⇒ creadas fuera de banda; el historial de prod no es 100% replicable (impide branch limpio).
 - H4 (memoria): Knowledge F0.5/F0.5.2 figura **aplicado en prod** (`0125-0138`), aunque la memoria lo daba como "entregado-no-aplicado".
 

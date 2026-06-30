@@ -1,10 +1,11 @@
--- 0139_compliance_cases.sql
+-- 0141_compliance_cases.sql
 -- Casos regulatorios: estado administrativo + nivel de riesgo + origen/confianza.
 -- Semáforo (color) = computado en runtime (no se almacena como verdad).
 -- DEPENDE de 0081 (compliance_alerts/compliance_documents).
--- NUMERACIÓN: renumerada de 0125→0139 (2026-06-30). Prod ya tiene aplicada la cadena
---   Knowledge 0125_knowledge_module_enum … 0138_knowledge_adapter_custody; 0139 es el
---   primer número libre. Re-verificar con list_migrations al aplicar.
+-- NUMERACIÓN: renumerada 0125→0139→0141 (2026-06-30). Prod ya tiene aplicada la cadena
+--   Knowledge 0125_knowledge_module_enum … 0140_knowledge_kpis_admin (incl. 0139_knowledge_adapter_rrhh);
+--   0141 es el primer número libre. La cadena Knowledge crece en paralelo (worktree no mergeado):
+--   RE-VERIFICAR el número con list_migrations en el momento de aplicar y usar max+1.
 -- GATING: aplicación manual por Dirección. NO ejecutar automáticamente.
 
 -- 1) Casos regulatorios -------------------------------------------------------
