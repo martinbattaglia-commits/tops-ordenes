@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import { RiskBadge } from "@/components/compliance/ui";
 import { RISK_HEX, RISK_LABEL } from "@/lib/compliance/data";
 import { loadComplianceItem } from "@/lib/compliance/source";
@@ -33,8 +34,13 @@ export default async function FichaRegulatoriaPage({ params }: { params: { id: s
           <RiskBadge riesgo={item.riesgo}>{item.estado}</RiskBadge>
           <span className="text-[11px] text-fg-muted">{item.sede}</span>
         </div>
-        <h1 className="page-title mt-1">{item.documento}</h1>
-        <p className="page-subtitle">{item.categoria} · {item.organismo}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3 mt-1">
+          <div>
+            <h1 className="page-title">{item.documento}</h1>
+            <p className="page-subtitle">{item.categoria} · {item.organismo}</p>
+          </div>
+          <EntityConversationButton entityType="compliance_items" entityId={item.id} />
+        </div>
       </div>
 
       {/* Riesgo + fechas destacado */}

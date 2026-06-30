@@ -22,8 +22,8 @@ interface NavItem {
   badge?: string;
   /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
   exec?: boolean;
-  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin). */
-  gate?: "sistema" | "rrhhDocs" | "knowledge";
+  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view). */
+  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect";
   /** Abre el link en nueva pestaña (para assets estáticos o recursos externos). */
   external?: boolean;
 }
@@ -32,8 +32,8 @@ interface Domain {
   id: string;
   label: string;
   items: NavItem[];
-  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge"). */
-  gate?: "sistema" | "knowledge";
+  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge" / "connect"). */
+  gate?: "sistema" | "knowledge" | "connect";
 }
 
 /**
@@ -56,6 +56,18 @@ const DOMAINS: Domain[] = [
       { href: "/organigrama", label: "Organigrama", icon: "building", gate: "sistema" },
       { href: "/analytics", label: "Analytics Ejecutivo", icon: "report", exec: true },
       { href: "/manual-nexus/index.html", label: "Manual de usuario", icon: "book", badge: "Docs", external: true, exec: true },
+    ],
+  },
+  {
+    id: "connect",
+    label: "Nexus Link",
+    gate: "connect",
+    items: [
+      { href: "/connect", label: "Inicio", icon: "home", badge: "Nuevo" },
+      { href: "/connect/actividad", label: "Actividad", icon: "activity" },
+      { href: "/connect/notificaciones", label: "Notificaciones", icon: "bell" },
+      { href: "/connect/buscar", label: "Búsqueda", icon: "search" },
+      { href: "/connect/canales", label: "Canales", icon: "megaphone" },
     ],
   },
   {
@@ -199,6 +211,8 @@ interface Props {
   canViewRrhhDocs?: boolean;
   /** ¿Mostrar Conocimiento → Panel (requiere knowledge.admin)? (default: sí). */
   canViewKnowledge?: boolean;
+  /** ¿Mostrar Nexus Link → Conversaciones (requiere connect.view)? (default: sí). */
+  canViewConnect?: boolean;
   onNavigate?: () => void;
 }
 
@@ -208,17 +222,25 @@ export default function Sidebar({
   canViewSistema = true,
   canViewRrhhDocs = true,
   canViewKnowledge = true,
+  canViewConnect = true,
   onNavigate,
 }: Props) {
   // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
-  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge") =>
+  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect") =>
     !gate ||
-    (gate === "sistema" ? canViewSistema : gate === "rrhhDocs" ? canViewRrhhDocs : canViewKnowledge);
+    (gate === "sistema"
+      ? canViewSistema
+      : gate === "rrhhDocs"
+        ? canViewRrhhDocs
+        : gate === "connect"
+          ? canViewConnect
+          : canViewKnowledge);
   const pathname = usePathname();
 
   const isActive = (href: string) => {
     // Rutas exactas (no usar prefix match — evita colisiones tipo /compras y /compras/ordenes)
     const exact = new Set([
+      "/connect",
       "/ejecutivo",
       "/analytics",
       "/dashboard",

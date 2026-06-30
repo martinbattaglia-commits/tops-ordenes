@@ -5,6 +5,7 @@ import { getProveedorFicha } from "@/lib/legajo/data";
 import { listChartOfAccounts, getAccountByCode } from "@/lib/erp/accounting-data";
 import type { ChartAccount } from "@/lib/erp/types";
 import { ProveedorFiscalEditor } from "@/components/compras/ProveedorFiscalEditor";
+import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 
 export const metadata = { title: "Ficha de proveedor" };
 export const dynamic = "force-dynamic";
@@ -46,10 +47,13 @@ export default async function ProveedorFichaPage({ params }: { params: { id: str
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1200px] mx-auto">
-      <div>
-        <Link href="/compras/proveedores" className="text-[11px] text-fg-link hover:underline">← Proveedores</Link>
-        <h1 className="page-title mt-1">{p.razon}</h1>
-        <p className="page-subtitle">Legajo digital de proveedor · CUIT {p.cuit ?? "—"}{p.categoria ? ` · ${p.categoria}` : ""}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/compras/proveedores" className="text-[11px] text-fg-link hover:underline">← Proveedores</Link>
+          <h1 className="page-title mt-1">{p.razon}</h1>
+          <p className="page-subtitle">Legajo digital de proveedor · CUIT {p.cuit ?? "—"}{p.categoria ? ` · ${p.categoria}` : ""}</p>
+        </div>
+        <EntityConversationButton entityType="vendors" entityId={p.id} />
       </div>
 
       {/* General */}

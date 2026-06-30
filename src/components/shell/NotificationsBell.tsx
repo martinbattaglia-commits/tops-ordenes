@@ -101,6 +101,13 @@ export function NotificationsBell() {
                 <NotificationRow key={n.id} n={n} onClose={() => setOpen(false)} />
               ))}
             </div>
+            <Link
+              href="/connect/notificaciones"
+              onClick={() => setOpen(false)}
+              className="block border-t border-stroke-soft bg-neutral-50 px-3 py-2 text-center text-[11px] font-semibold text-fg-link hover:underline"
+            >
+              Ver todo el centro de notificaciones
+            </Link>
           </div>
         </>
       )}

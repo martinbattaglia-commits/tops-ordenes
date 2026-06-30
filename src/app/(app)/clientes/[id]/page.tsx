@@ -5,6 +5,7 @@ import { getClienteFicha } from "@/lib/legajo/data";
 import { listChartOfAccounts, getAccountByCode } from "@/lib/erp/accounting-data";
 import type { ChartAccount } from "@/lib/erp/types";
 import { ClienteFiscalEditor } from "@/components/comercial/ClienteFiscalEditor";
+import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import type { CondicionIva } from "@/lib/invoicing/types";
 
 export const metadata = { title: "Ficha de cliente" };
@@ -46,13 +47,16 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1200px] mx-auto">
-      <div>
-        <Link href="/clients" className="text-[11px] text-fg-link hover:underline">← Clientes</Link>
-        <div className="flex items-center gap-3 mt-1">
-          <h1 className="page-title">{c.razon ?? "—"}</h1>
-          {c.activo === false && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-neutral-200 text-fg-secondary">Inactivo</span>}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/clients" className="text-[11px] text-fg-link hover:underline">← Clientes</Link>
+          <div className="flex items-center gap-3 mt-1">
+            <h1 className="page-title">{c.razon ?? "—"}</h1>
+            {c.activo === false && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-neutral-200 text-fg-secondary">Inactivo</span>}
+          </div>
+          <p className="page-subtitle">Legajo digital de cliente · CUIT {c.cuit ?? "—"}</p>
         </div>
-        <p className="page-subtitle">Legajo digital de cliente · CUIT {c.cuit ?? "—"}</p>
+        <EntityConversationButton entityType="clients" entityId={c.id} />
       </div>
 
       {/* General */}

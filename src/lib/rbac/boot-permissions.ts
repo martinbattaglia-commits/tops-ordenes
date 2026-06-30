@@ -38,6 +38,8 @@ export interface BootPermissions {
   rrhhDocs: boolean;
   /** Conocimiento → Panel administrativo (knowledge.admin). */
   knowledge: boolean;
+  /** Nexus Link → Conversaciones (connect.view). */
+  connect: boolean;
 }
 
 export interface BootContext {
@@ -46,8 +48,8 @@ export interface BootContext {
   perms: BootPermissions;
 }
 
-const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true };
-const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false };
+const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true };
+const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false };
 
 /** Presupuesto máximo de awaits del boot (F2). */
 const BOOT_BUDGET_MS = 3000;
@@ -98,13 +100,13 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     //   checkPermission: error de count → fail-closed (exec=false)
     //   canAccess: error → count null → bootstrap → !enforce
     const open = !env.rbac.enforce;
-    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open };
+    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open, connect: open };
   }
 
   if ((count ?? 0) === 0) {
     // Bootstrap per-user (no asignado): permitir salvo RBAC_ENFORCE=1.
     const open = !env.rbac.enforce;
-    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open };
+    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open, connect: open };
   }
 
   // Asignado → enforcement real con UNA query anidada (set completo de slugs).
@@ -133,6 +135,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     sistema: slugs.has("sistema.view") || isLegacyAdmin,
     rrhhDocs: slugs.has("rrhh.documentacion.view") || isLegacyAdmin,
     knowledge: slugs.has("knowledge.admin") || isLegacyAdmin,
+    connect: slugs.has("connect.view") || isLegacyAdmin,
   };
 });
 
