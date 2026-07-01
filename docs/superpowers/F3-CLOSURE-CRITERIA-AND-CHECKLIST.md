@@ -81,3 +81,28 @@ F3 se declara **CERRADA** únicamente cuando **todos** los siguientes criterios 
 - **Único camino restante a cierre:** ejecutar `F3-PILOT-MANUAL-VALIDATION-PACK.md` con los 7 usuarios → consolidar → Dirección acepta deudas (H-1, hydration shell, `seguridad→knowledge.edit`) + aprueba cierre (D6/D7) → autoriza F4 (D8).
 - **Migraciones aplicadas en esta línea de trabajo:** `0156_fix_connect_search_ambiguous_conversation_id`, `0157_fix_connect_search_union_order_by` (ambas en `schema_migrations`). Deploy de UI NO revertido; producción en `88add4b`.
 - 🚫 **F4 sigue BLOQUEADA.**
+
+---
+
+## 6. CIERRE FORMAL APROBADO (2026-07-01) — supera §2/§5
+
+**Dirección aprobó el cierre de F3 tras validación manual autenticada con varios usuarios (PASS).**
+
+- **Producción evolucionó de `88add4b` → `a6c23f9`** por los hotfixes del piloto (DEFECT-1..10). K1 se reinterpreta como "prod estable en `a6c23f9`".
+- **Todos los criterios K1–K11: ✅ Completo.**
+
+| Ítem Dirección | Resultado |
+|---|---|
+| D1 Producción estable | ✅ `a6c23f9` (`/api/version`=`a6c23f9`, 0 5xx) |
+| D2 Nexus Link visible/operativo | ✅ |
+| D3 Piloto ejecutado con usuarios | ✅ |
+| D4 Deuda A (hydration) aceptada | ✅ |
+| D5 Deuda B (`seguridad→knowledge.edit`) | ✅ tomada nota (revisar en ventana posterior) |
+| D6 Resultado del piloto | ✅ **APROBADO** |
+| D7 **CIERRE FORMAL de F3** | ✅ **APROBADO** |
+| D8 Inicio de F4 | ✅ **AUTORIZADO** (solo planificación / kickoff) |
+
+- **Defects resueltos y en prod:** F-SEARCH + DEFECT-1..10 (ver `F3-FINAL-CLOSURE-REPORT.md` §3).
+- **Migraciones prod:** `0156/0157/0158/0159`.
+- **Deudas no bloqueantes** (A, B, H-1, R-2, R-3, F-1, F-3) registradas y aceptadas — no impiden el cierre.
+- **🏁 F3 CERRADA.** **F4 ABIERTA solo en fase de planificación** (`F4-KICKOFF-SCOPE-PLAN.md`); sin desarrollo hasta Master Plan aprobado.
