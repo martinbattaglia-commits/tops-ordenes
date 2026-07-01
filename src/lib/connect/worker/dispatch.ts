@@ -72,7 +72,11 @@ export interface DispatchSummary {
   errors: string[];
 }
 
-const DEFAULTS = { batchSize: 50, maxBatches: 20, maxDurationMs: 50_000, maxRetries: 3, pruneKeepDays: 30 };
+// Defaults dimensionados al TIMEOUT REAL de funciones síncronas en Netlify (~10s default /
+// 26s máx — hallazgo de revisión adversarial: 50s excedía el presupuesto y mataba la corrida
+// a mitad, perdiendo la telemetría). El backlog grande se drena por invocaciones manuales
+// repetidas del route en la ventana (runbook), no en una sola corrida del schedule.
+const DEFAULTS = { batchSize: 50, maxBatches: 3, maxDurationMs: 8_000, maxRetries: 3, pruneKeepDays: 30 };
 
 function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
@@ -132,10 +136,24 @@ export async function dispatchConnectOutbox(
 
   try {
     // Dry-run: solo cuenta los eventos due, sin reclamar ni procesar (D-F41-3: conteo antes).
+    // La corrida dry TAMBIÉN se registra en telemetría (evidencia persistente del "antes").
     if (dry) {
       summary.pendingRemaining = await countDue();
       if (summary.errors.length > 0) summary.status = "error";
       summary.durationMs = Date.now() - startMs;
+      try {
+        await supabase.rpc("connect_record_worker_run", {
+          p_started_at: startedAt.toISOString(),
+          p_duration_ms: summary.durationMs,
+          p_dry: true,
+          p_claimed: 0, p_processed: 0, p_skipped: 0, p_failed_retried: 0, p_failed_dead: 0,
+          p_retries: 0, p_batches: 0, p_pruned: 0,
+          p_avg_event_ms: null, p_max_event_ms: null,
+          p_correlation_id: correlationId,
+        });
+      } catch {
+        // best-effort
+      }
       return summary;
     }
 

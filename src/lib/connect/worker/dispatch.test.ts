@@ -76,7 +76,7 @@ describe("dispatchConnectOutbox — guards", () => {
 });
 
 describe("dispatchConnectOutbox — dry-run (D-F41-3)", () => {
-  it("dry=1 cuenta due sin reclamar ni procesar ni prunear", async () => {
+  it("dry=1 cuenta due sin reclamar ni procesar ni prunear (y persiste telemetría dry)", async () => {
     const m = makeSupabase({ claims: [[ROW]], dueCount: 42 });
     const s = await dispatchConnectOutbox({ dry: true });
     expect(s.dry).toBe(true);
@@ -84,7 +84,8 @@ describe("dispatchConnectOutbox — dry-run (D-F41-3)", () => {
     expect(s.claimed).toBe(0);
     expect(m.calls()["connect_claim_batch"]).toBeUndefined();
     expect(m.calls()["connect_prune_outbox"]).toBeUndefined();
-    expect(m.calls()["connect_record_worker_run"]).toBeUndefined();
+    // Revisión adversarial: la corrida dry también queda registrada (evidencia D-F41-3 "antes").
+    expect(m.calls()["connect_record_worker_run"]).toBe(1);
   });
 });
 

@@ -29,7 +29,14 @@ function renderWithMentions(body: string, names: string[]): ReactNode {
     let best: { idx: number; name: string } | null = null;
     for (const name of valid) {
       const idx = rest.indexOf(`@${name}`);
-      if (idx >= 0 && (best === null || idx < best.idx)) best = { idx, name };
+      if (idx < 0) continue;
+      // Frontera de palabra: "@Anabela" no resalta "@Ana" (revisión adversarial).
+      const after = rest.charAt(idx + name.length + 1);
+      if (after && /[\p{L}\p{N}_]/u.test(after)) continue;
+      // Desempate en mismo idx: gana el nombre MÁS LARGO ("Ana María" sobre "Ana").
+      if (best === null || idx < best.idx || (idx === best.idx && name.length > best.name.length)) {
+        best = { idx, name };
+      }
     }
     if (!best) {
       parts.push(rest);
@@ -162,15 +169,15 @@ export function ThreadView({
     setMentionQuery(m ? m[2] : null);
   }
 
-  /** Inserta la mención elegida reemplazando el @token en curso. */
-  function pickMention(pick: MentionPick) {
+  /** Inserta la mención elegida reemplazando el @token en curso. false = no había token en el caret. */
+  function pickMention(pick: MentionPick): boolean {
     const el = textareaRef.current;
     const caret = el?.selectionStart ?? draft.length;
     const upToCaret = draft.slice(0, caret);
     const m = /(^|\s)@([^\s@]*)$/.exec(upToCaret);
     if (!m) {
       setMentionQuery(null);
-      return;
+      return false;
     }
     const start = caret - m[2].length - 1; // posición del '@'
     const next = `${draft.slice(0, start)}@${pick.name} ${draft.slice(caret)}`;
@@ -182,6 +189,7 @@ export function ThreadView({
       const pos = start + pick.name.length + 2;
       el?.setSelectionRange(pos, pos);
     });
+    return true;
   }
 
   async function send() {
@@ -301,6 +309,12 @@ export function ThreadView({
                 setDraft(e.target.value);
                 updateMentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length);
               }}
+              // Recalcula el token @ también cuando el caret se mueve sin tipear
+              // (flechas/click) — revisión adversarial: evita dropdown/Enter stale.
+              onSelect={(e) => {
+                const t = e.currentTarget;
+                updateMentionQuery(t.value, t.selectionStart ?? t.value.length);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Escape" && mentionQuery !== null) {
                   e.preventDefault();
@@ -308,12 +322,11 @@ export function ThreadView({
                   return;
                 }
                 if (e.key === "Enter" && !e.shiftKey) {
-                  if (mentionQuery !== null && candidates.length > 0) {
-                    e.preventDefault();
-                    pickMention(candidates[0]);
-                    return;
-                  }
                   e.preventDefault();
+                  if (mentionQuery !== null && candidates.length > 0) {
+                    // Si el caret ya no está sobre un token @, cae a enviar (sin Enter fantasma).
+                    if (pickMention(candidates[0])) return;
+                  }
                   void send();
                 }
               }}

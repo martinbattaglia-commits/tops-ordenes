@@ -13,9 +13,16 @@ import { searchProfilesAction, type ProfileHit } from "@/lib/connect/adapters/dr
 export function MemberSearch({
   onAdd,
   disabled = false,
+  placeholder = "Agregar: buscá por nombre o email…",
+  ariaLabel = "Buscar usuario interno para agregar al canal",
+  hint = "Solo usuarios internos. Buscá por nombre o email y seleccioná.",
 }: {
   onAdd: (profileId: string) => Promise<boolean>;
   disabled?: boolean;
+  /** F4.1C: textos configurables — el componente también se reusa para delegar notificaciones. */
+  placeholder?: string;
+  ariaLabel?: string;
+  hint?: string;
 }) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<ProfileHit[]>([]);
@@ -75,8 +82,8 @@ export function MemberSearch({
         onFocus={() => {
           if (hits.length > 0 || msg) setOpen(true);
         }}
-        placeholder="Agregar: buscá por nombre o email…"
-        aria-label="Buscar usuario interno para agregar al canal"
+        placeholder={placeholder}
+        aria-label={ariaLabel}
         disabled={busy}
         className="w-full rounded border border-stroke-soft bg-bg-page px-2 py-1 text-[11px] text-fg-primary outline-none focus:border-tops-red disabled:opacity-60"
       />
@@ -103,7 +110,7 @@ export function MemberSearch({
         </div>
       )}
       <p className="mt-1 text-[10px] text-fg-muted">
-        {searching ? "Buscando…" : "Solo usuarios internos. Buscá por nombre o email y seleccioná."}
+        {searching ? "Buscando…" : hint}
       </p>
     </div>
   );

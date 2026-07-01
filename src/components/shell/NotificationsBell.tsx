@@ -27,9 +27,13 @@ export function NotificationsBell() {
   const load = async () => {
     const supabase = createClient();
     if (!supabase) return;
+    // F4.1C: la campana respeta el snooze (mismo criterio que el Centro, D-F41-10):
+    // una notificación pospuesta no se lista ni cuenta en el badge hasta su remind_at.
+    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("notifications")
       .select("*")
+      .or(`remind_at.is.null,remind_at.lte.${nowIso}`)
       .order("created_at", { ascending: false })
       .limit(15);
     if (!error && data) {

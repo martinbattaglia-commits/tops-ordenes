@@ -251,10 +251,14 @@ function NotificationRow({
         <div className="border-t border-stroke-soft pt-2">
           <MemberSearch
             disabled={pending}
+            placeholder="Delegar a: buscá por nombre o email…"
+            ariaLabel="Buscar usuario interno para delegar la notificación"
+            hint="La delegación queda auditada. Delegar al dueño la devuelve."
             onAdd={async (profileId) => {
               const r = await delegateNotificationAction({ id: item.id, toProfileId: profileId });
               if (r.ok) setShowDelegate(false);
-              else onAction(async () => r);
+              // Éxito o error, pasa por run() → refresh en éxito / mensaje en error.
+              onAction(async () => r);
               return r.ok;
             }}
           />

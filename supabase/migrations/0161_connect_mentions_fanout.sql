@@ -161,6 +161,19 @@ begin
     into v_author_name
     from public.profiles p where p.id = v_author;
 
+  -- Coalescing de menciones (revisión adversarial · espíritu D-F41-2): máx. 1 notificación
+  -- connect_mention NO leída por conversación/usuario — 5 menciones seguidas ≠ 5 avisos.
+  if exists (
+    select 1 from public.notifications n
+     where n.user_id = v_profile
+       and n.kind = 'connect_mention'
+       and n.entity = 'connect'
+       and n.entity_id = v_conv
+       and n.read_at is null
+  ) then
+    return new;
+  end if;
+
   select coalesce(c.title, '#' || c.slug, 'una conversación')
     into v_conv_label
     from public.connect_conversations c where c.id = v_conv;

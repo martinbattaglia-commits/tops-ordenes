@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { dispatchConnectOutbox } from "@/lib/connect/worker/dispatch";
 
@@ -26,8 +27,11 @@ async function handle(req: Request): Promise<Response> {
       { status: 503 },
     );
   }
+  // Comparación timing-safe (patrón clientify/webhook; endurecido vs /api/knowledge/drain).
   const auth = req.headers.get("authorization") || "";
-  if (auth !== `Bearer ${secret}`) {
+  const expected = Buffer.from(`Bearer ${secret}`);
+  const got = Buffer.from(auth);
+  if (got.length !== expected.length || !timingSafeEqual(got, expected)) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 

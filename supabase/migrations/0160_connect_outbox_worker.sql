@@ -87,6 +87,9 @@ end;
 $$;
 
 -- 4) recover_stuck: processing con lease vencido (available_at < now()) -> failed (reprograma).
+--    Hallazgo de revisión adversarial: SÍ incrementa retry_count (una corrida matada por timeout
+--    de plataforma cuenta como intento) y pasa a dead si superó el máximo — sin esto, un evento
+--    que siempre mata la corrida ciclaría pending→processing→failed para siempre.
 create or replace function public.connect_recover_stuck()
 returns int
 language plpgsql
@@ -96,9 +99,18 @@ as $$
 declare v_n int;
 begin
   update public.connect_outbox
-     set status = 'failed', available_at = now()
+     set status = 'failed',
+         available_at = now(),
+         retry_count = retry_count + 1,
+         last_error = coalesce(last_error, 'recovered: lease vencido (corrida interrumpida)')
    where status = 'processing' and available_at < now();
   get diagnostics v_n = row_count;
+
+  -- Dead-letter de los que agotaron reintentos también por esta vía (espejo de mark_failed, max=3).
+  update public.connect_outbox
+     set status = 'dead', processed_at = now()
+   where status = 'failed' and retry_count > 3;
+
   return v_n;
 end;
 $$;

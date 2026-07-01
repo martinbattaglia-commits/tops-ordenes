@@ -48,15 +48,23 @@ export async function listNotificationCenter(): Promise<NotificationItem[]> {
   ]);
   const uid = userRes.data.user?.id ?? null;
 
-  const items: NotificationItem[] = [];
-  // Anti-fatiga F4.1B (D-F41-2/3): si una conversación ya tiene notificación connect NO leída
-  // (mención/DM), se omite su fila derivada de "no leídos" — una sola entrada por conversación.
+  // Anti-fatiga F4.1B (D-F41-2): set COMPLETO de conversaciones con notificación connect NO leída
+  // (query dedicada, no la página de 50 — hallazgo de revisión; incluye snoozeadas: una notif
+  // pospuesta sigue suprimiendo la fila derivada de "no leídos" de su conversación).
   const notifiedConvIds = new Set<string>();
+  const { data: unreadConnect } = await supabase
+    .from("notifications")
+    .select("entity_id")
+    .eq("entity", "connect")
+    .is("read_at", null)
+    .limit(500);
+  for (const r of (unreadConnect ?? []) as Array<{ entity_id: string | null }>) {
+    if (r.entity_id) notifiedConvIds.add(r.entity_id);
+  }
+
+  const items: NotificationItem[] = [];
   for (const r of (notifs.data ?? []) as NotifRow[]) {
     if (r.remind_at && r.remind_at > nowIso) continue; // snooze: oculto hasta su hora
-    if (r.entity === "connect" && r.entity_id && r.read_at == null) {
-      notifiedConvIds.add(r.entity_id);
-    }
     items.push({
       id: r.id, source: "notification", priority: toPriority(r.priority), kind: r.kind,
       title: r.title, message: r.message, href: hrefFor(r.entity, r.entity_id),

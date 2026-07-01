@@ -35,6 +35,19 @@ create policy "notifications mark read own"
   using (user_id = auth.uid() or delegated_to = auth.uid() or public.current_role() = 'admin')
   with check (user_id = auth.uid() or delegated_to = auth.uid() or public.current_role() = 'admin');
 
+-- ─── Hardening (hallazgo CRÍTICO de la revisión adversarial F4.1) ───
+-- RLS filtra FILAS, no COLUMNAS: con la policy ampliada + el grant table-level de UPDATE,
+-- un usuario podía por UPDATE directo (PostgREST) forjar/transferir notificaciones
+-- (`set user_id='<víctima>', delegated_to=auth.uid(), title/entity arbitrarios` pasa el
+-- WITH CHECK por la rama delegated_to) o re-delegar sin validación ni auditoría,
+-- bypasseando connect_notif_delegate. Mismo patrón que SEC-PARTICIPANTS-1 (0143):
+-- grant POR COLUMNA — el camino directo solo puede marcar leída (read_at) y posponer
+-- (remind_at), que es lo que usan los flujos existentes (Bell/Centro, compatibles con la
+-- ventana apply-first). delegated_to / priority / user_id / title / message / entity solo
+-- mutan vía RPC SECDEF (corre como owner; no la afecta este grant).
+revoke update on public.notifications from authenticated;
+grant  update (read_at, remind_at) on public.notifications to authenticated;
+
 -- ===== Guard compartido: dueño o delegado actual (NULL-safe, P-1) =====
 create or replace function public._notif_assert_owner_or_delegate(p_id uuid)
 returns void
