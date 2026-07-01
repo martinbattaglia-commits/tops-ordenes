@@ -174,7 +174,7 @@ export function ThreadView({
       {readOnly ? (
         <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt/50 px-4 py-3 text-center text-[12px] text-fg-muted">
           <Icon name="folder" size={13} className="text-fg-muted" />
-          Este canal está archivado. Es de solo lectura: no se pueden enviar mensajes.
+          Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.
         </div>
       ) : (
         <div className="border-t border-stroke-soft bg-bg-surface px-3 py-2.5">

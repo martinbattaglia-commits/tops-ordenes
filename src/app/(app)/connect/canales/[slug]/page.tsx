@@ -2,6 +2,7 @@ import { Icon } from "@/components/Icon";
 import { listMessages } from "@/lib/connect/read/inbox-data";
 import { getCurrentUserId } from "@/lib/connect/data";
 import { getChannelBySlug, getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
+import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { ChannelView } from "../../_components/ChannelView";
 
 export const dynamic = "force-dynamic";
@@ -20,11 +21,13 @@ export default async function ConnectChannelPage({ params }: { params: { slug: s
     );
   }
 
-  const myRole = await getMyRole(channel.id);
+  // DEFECT-9: el admin/superadmin (profiles.role='admin') puede administrar aunque no sea miembro.
+  const [myRole, profileRole] = await Promise.all([getMyRole(channel.id), getProfileRole()]);
+  const isAdmin = profileRole === "admin";
 
-  if (!myRole) {
-    // Canal público del que NO soy miembro: vista de unión (sin mensajes — RLS exige membresía).
-    return <ChannelView channel={channel} myRole={null} currentUserId={null} />;
+  if (!myRole && !isAdmin) {
+    // Canal público del que NO soy miembro (ni admin): vista de unión (sin mensajes — RLS exige membresía).
+    return <ChannelView channel={channel} myRole={null} isAdmin={false} currentUserId={null} />;
   }
 
   const [initialMessages, members, pinned, currentUserId] = await Promise.all([
@@ -38,6 +41,7 @@ export default async function ConnectChannelPage({ params }: { params: { slug: s
     <ChannelView
       channel={channel}
       myRole={myRole}
+      isAdmin={isAdmin}
       members={members}
       pinned={pinned}
       initialMessages={initialMessages}

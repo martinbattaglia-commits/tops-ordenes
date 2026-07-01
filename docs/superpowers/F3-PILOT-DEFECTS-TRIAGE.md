@@ -253,3 +253,28 @@ Al archivar un canal, la confirmación aparece pero el canal **sigue como activo
 ## Estado (DEFECT-6 + DEFECT-7)
 - QA local: typecheck **0** · lint **0** · tests **382** · build **exit 0**. Revisión adversarial: **GO** (0 bloqueantes de código; residuales R-1 deploy-ordering / R-2 notificaciones / R-3 post-server-side documentados).
 - **Prod intacta `be405ba`. `0159` NO aplicada. Sin deploy/push/merge. F4 BLOQUEADA.**
+- **[Posterior] APLICADO Y DESPLEGADO EN PROD** (`0159` aplicada + deploy `18f3ae6`, 0 5xx). Base de este hotfix (DEFECT-8/9/10) = `18f3ae6` = prod.
+
+---
+
+# DEFECT-8 / DEFECT-9 / DEFECT-10 — Administración de canales inconsistente (IMPLEMENTADO LOCAL, 2026-07-01)
+
+> Autorizado por Dirección. **Frontend, SIN migración. NO deploy/push/merge. Prod intacta `18f3ae6`. F4 BLOQUEADA.** Detalle: **`F3-DEFECT8-10-HOTFIX-PLAN.md`**.
+
+## Causa raíz común
+La UI de administración vivía **solo en `ChannelView`** (`/connect/canales/[slug]`, kind=channel) y su gate `canModerateActive` miraba **solo el `member_role`** del canal, **ignorando `is_admin()`/superadmin**. El sidebar (`ConversationList`) enruta **todo** a `/connect/c/[id]`, que renderizaba **solo `ThreadView`** (sin controles). Los **grupos** (kind=group, slug=null) **no tenían superficie de admin**. Evidencia prod: martin `is_admin=true`; sidebar=8 (5 ch + 3 grp), directorio=1; martin OWNea 3 grupos (sin admin UI) + 4 canales archivados; `test-martin` (único activo) martin es `member` + `owner_id=NULL`.
+
+- **DEFECT-8** (Alto, bloquea F3): `/connect/c/[id]` sin controles de administración.
+- **DEFECT-9** (Alto, bloquea F3): `canModerate` ignora `is_admin` → superadmin no-owner no ve controles (RPCs SÍ permiten `is_admin()`); grupos sin superficie.
+- **DEFECT-10** (Medio-Alto): directorio (kind=channel activo) vs sidebar (participante) → grupos + archivados sin superficie de admin.
+
+## Fix implementado (frontend, sin migración)
+1. **`canAdminister(myRole, isAdmin) = isAdmin || canModerate(role)`** (`domain/channel.ts`, +3 tests TDD).
+2. **`ConversationAdmin.tsx`** (nuevo): superficie de admin **compartida** (channel+group), extraída del member view de `ChannelView` (opera por `conversationId`; noun-aware; gate `canAdminister`; `archiveRedirectTo` parametrizado; prop opcional `links`). `ChannelView` refactorizado → delega el member view (conserva ramas join/archivado); recibe `isAdmin`.
+3. **`c/[conversationId]/page.tsx`**: para channel/group → `ConversationAdmin` (carga myRole/isAdmin/members/pinned/links, `archiveRedirectTo="/connect"`); otras kinds → header + `ThreadView` (intacto).
+4. **`canales/[slug]/page.tsx`**: `isAdmin=getProfileRole()==='admin'`; no-miembro no-admin → join; miembro o admin → pasa `isAdmin`.
+5. `ThreadView`: banner archivado genérico ("conversación").
+
+## Estado (DEFECT-8/9/10)
+- QA local: typecheck **0** · lint **0** · tests **385** · build **exit 0**. Revisión adversarial (workflow 3 dim + verificación): **GO** — 0 bloqueantes; constraint "ningún control admin se filtra a no-autorizados" verificada firme; 3 hallazgos BAJO (F-2 banner corregido; F-1 sin join en `/c/[id]` para no-miembro no-admin = residual UX; F-3 hilo vacío para admin no-miembro = residual RLS, fuera de alcance).
+- **Prod intacta `18f3ae6`. Sin migración. Sin deploy/push/merge. F4 BLOQUEADA.**

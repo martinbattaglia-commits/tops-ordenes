@@ -1,8 +1,11 @@
 import { Icon } from "@/components/Icon";
 import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
 import { listConversationLinks, getCurrentUserId } from "@/lib/connect/data";
+import { getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
+import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
 import { ThreadView } from "../../_components/ThreadView";
+import { ConversationAdmin } from "../../_components/ConversationAdmin";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +35,40 @@ export default async function ConnectThreadPage({
     );
   }
 
+  // DEFECT-8/9/10: canales y grupos exponen la superficie de administración compartida DESDE ESTA RUTA
+  // (la del sidebar), con el MISMO criterio de permisos que /connect/canales/[slug]
+  // (owner/moderator/admin). Los grupos no tienen slug ni entran al directorio → esta es su única
+  // superficie de administración.
+  if (conversation.kind === "channel" || conversation.kind === "group") {
+    const [myRole, profileRole, members, pinned] = await Promise.all([
+      getMyRole(conversation.id),
+      getProfileRole(),
+      listParticipants(conversation.id),
+      listPinned(conversation.id),
+    ]);
+    return (
+      <ConversationAdmin
+        conversationId={conversation.id}
+        kind={conversation.kind}
+        title={conversation.title}
+        topic={conversation.topic}
+        slug={conversation.slug}
+        contextId={conversation.contextId}
+        visibility={conversation.visibility}
+        archivedAt={conversation.archivedAt}
+        myRole={myRole}
+        isAdmin={profileRole === "admin"}
+        members={members}
+        pinned={pinned}
+        initialMessages={messages}
+        currentUserId={currentUserId}
+        links={links}
+        archiveRedirectTo="/connect"
+      />
+    );
+  }
+
+  // Otras conversaciones (dm / erp / incident / whatsapp / ai): header + hilo (comportamiento actual).
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header del hilo */}

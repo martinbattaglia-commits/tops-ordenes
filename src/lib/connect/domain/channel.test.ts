@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeSlug, isValidSlug, canModerate, canManageRoles, normalizeTopic, MAX_TOPIC_LENGTH, normalizeTitle, MAX_TITLE_LENGTH } from "./channel";
+import { normalizeSlug, isValidSlug, canModerate, canManageRoles, canAdminister, normalizeTopic, MAX_TOPIC_LENGTH, normalizeTitle, MAX_TITLE_LENGTH } from "./channel";
 
 describe("connect/domain/channel · slug", () => {
   it("normaliza nombre a kebab-case sin acentos", () => {
@@ -33,6 +33,27 @@ describe("connect/domain/channel · roles", () => {
   it("canManageRoles = solo owner", () => {
     expect(canManageRoles("owner")).toBe(true);
     expect(canManageRoles("moderator")).toBe(false);
+  });
+});
+
+// DEFECT-9 (piloto F3): superadmin/owner/moderator pueden administrar; el admin (profiles.role='admin')
+// puede administrar cualquier canal/grupo aunque no sea owner/moderator ni miembro (los RPCs ya lo permiten).
+describe("connect/domain/channel · canAdminister (DEFECT-9)", () => {
+  it("owner/moderator administran (sin ser admin)", () => {
+    expect(canAdminister("owner", false)).toBe(true);
+    expect(canAdminister("moderator", false)).toBe(true);
+  });
+  it("member/guest/null NO administran si no son admin", () => {
+    expect(canAdminister("member", false)).toBe(false);
+    expect(canAdminister("guest", false)).toBe(false);
+    expect(canAdminister(null, false)).toBe(false);
+    expect(canAdminister(undefined, false)).toBe(false);
+  });
+  it("admin/superadmin administra aunque sea member/guest/no-miembro", () => {
+    expect(canAdminister("member", true)).toBe(true);
+    expect(canAdminister("guest", true)).toBe(true);
+    expect(canAdminister(null, true)).toBe(true);
+    expect(canAdminister("owner", true)).toBe(true);
   });
 });
 

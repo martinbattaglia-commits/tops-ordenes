@@ -29,6 +29,16 @@ export function canManageRoles(role: MemberRole | null | undefined): boolean {
   return role === "owner";
 }
 
+/**
+ * DEFECT-9 (piloto F3): ¿puede administrar el canal/grupo (renombrar, tema, miembros, archivar)?
+ * owner/moderator del canal, O admin/superadmin global (`profiles.role='admin'` = `is_admin()`).
+ * Espeja el gate de los RPCs (`connect_set_title`/`archive`/`set_topic`/`add_member`), que ya
+ * permiten `is_admin()` aunque no sea owner/moderator ni miembro. NO abre RBAC global.
+ */
+export function canAdminister(role: MemberRole | null | undefined, isAdmin: boolean): boolean {
+  return isAdmin || canModerate(role);
+}
+
 export const MAX_TOPIC_LENGTH = 280;
 export function normalizeTopic(topic: string | null | undefined): string {
   return (topic ?? "").trim().slice(0, MAX_TOPIC_LENGTH);
