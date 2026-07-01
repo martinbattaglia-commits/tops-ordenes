@@ -21,7 +21,11 @@ export async function listChannelDirectory(): Promise<ChannelItem[]> {
   return listChannels(); // v_connect_channels (RC1.1)
 }
 
-/** Miembros de una conversación (panel). */
+/**
+ * Miembros de una conversación (panel).
+ * DEFECT-2 (piloto F3): resuelve `profile_id → full_name` vía `profiles_public`
+ * (SECDEF view id+full_name) para mostrar identidad humana en vez del UUID.
+ */
 export async function listParticipants(conversationId: string): Promise<ChannelMember[]> {
   if (isMock()) return MOCK_MEMBERS[conversationId] ?? [];
   const supabase = createClient();
@@ -35,11 +39,36 @@ export async function listParticipants(conversationId: string): Promise<ChannelM
     console.error("[connect/listParticipants] query error:", error.message);
     return [];
   }
-  return (data ?? []).map((r) => {
-    const row = r as Record<string, unknown>;
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+  // Resolución de nombres (DEFECT-2): 1 query batch a profiles_public por los ids presentes.
+  const ids = Array.from(
+    new Set(rows.map((r) => r.profile_id as string | null).filter((v): v is string => !!v))
+  );
+  const nameById = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: profs, error: perr } = await supabase
+      .from("profiles_public")
+      .select("id, full_name")
+      .in("id", ids);
+    if (perr) {
+      console.error("[connect/listParticipants] profiles_public error:", perr.message);
+    } else {
+      for (const p of (profs ?? []) as Array<{ id: string; full_name: string | null }>) {
+        const n = (p.full_name ?? "").trim();
+        if (n) nameById.set(p.id, n);
+      }
+    }
+  }
+
+  return rows.map((row) => {
+    const pid = row.profile_id as string | null;
     return {
-      profileId: row.profile_id as string | null, name: null, avatar: null,
-      memberRole: row.member_role as MemberRole, participantType: row.participant_type as ChannelMember["participantType"],
+      profileId: pid,
+      name: (pid ? nameById.get(pid) : undefined) ?? null,
+      avatar: null,
+      memberRole: row.member_role as MemberRole,
+      participantType: row.participant_type as ChannelMember["participantType"],
     };
   });
 }

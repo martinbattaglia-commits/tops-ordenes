@@ -51,13 +51,41 @@ export async function addMemberAction(raw: unknown): Promise<SimpleResult> {
     conversationId: z.string().min(1), profileId: z.string().uuid(),
     role: z.enum(MEMBER_ROLES).default("member"),
   }).safeParse(raw);
-  if (!p.success) return { ok: false, message: "Datos inválidos." };
+  // DEFECT-4: mensaje claro (el UUID lo resuelve el selector; si falta, guiar al usuario).
+  if (!p.success) return { ok: false, message: "Seleccioná un usuario válido de la lista (buscá por nombre o email)." };
   const g = await guard("connect.edit");
   if (!g.ok) return g;
   const r = await ops(g.client).member.add(p.data.conversationId, p.data.profileId, p.data.role);
   if (!r.ok) return { ok: false, message: r.error.message };
   revalidateChannel();
   return { ok: true };
+}
+
+// ── Búsqueda de usuarios internos para agregar miembros (DEFECT-3) ────────────
+// SEGURIDAD: NO exponemos email (PII lockdown 0040); solo id + nombre. La RPC permite
+// buscar por email pero no lo devuelve.
+export type ProfileHit = { profileId: string; fullName: string | null };
+
+export async function searchProfilesAction(
+  raw: unknown
+): Promise<{ ok: true; hits: ProfileHit[] } | { ok: false; message: string }> {
+  const p = z.object({ q: z.string() }).safeParse(raw);
+  if (!p.success) return { ok: false, message: "Ingresá un texto para buscar." };
+  const query = p.data.q.trim();
+  if (query.length < 2) return { ok: true, hits: [] };
+  const supabase = createClient();
+  if (!supabase) return { ok: false, message: "Modo demo: la búsqueda de usuarios no está disponible." };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Sesión no autenticada." };
+  const { data, error } = await supabase.rpc("connect_search_profiles", { q: query, limit_count: 10 });
+  if (error) {
+    console.error("[connect/searchProfilesAction] rpc error:", error.message);
+    return { ok: false, message: "No se pudo buscar usuarios. Intentá de nuevo." };
+  }
+  const hits = ((data ?? []) as Array<{ profile_id: string; full_name: string | null }>).map(
+    (r) => ({ profileId: r.profile_id, fullName: r.full_name })
+  );
+  return { ok: true, hits };
 }
 
 export async function removeMemberAction(raw: unknown): Promise<SimpleResult> {

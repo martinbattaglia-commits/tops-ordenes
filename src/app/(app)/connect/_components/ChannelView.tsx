@@ -13,6 +13,7 @@ import {
   addMemberAction, removeMemberAction, setMemberRoleAction, unpinMessageAction,
 } from "@/lib/connect/adapters/driving/channel-actions";
 import { ThreadView } from "./ThreadView";
+import { MemberSearch } from "./MemberSearch";
 
 const ROLES: MemberRole[] = ["owner", "moderator", "member", "guest"];
 const ROLE_LABEL: Record<MemberRole, string> = { owner: "Dueño", moderator: "Moderador", member: "Miembro", guest: "Invitado" };
@@ -33,7 +34,6 @@ export function ChannelView({
   const [showPinned, setShowPinned] = useState(true);
   const [editingTopic, setEditingTopic] = useState(false);
   const [topicDraft, setTopicDraft] = useState(channel.topic ?? "");
-  const [newMember, setNewMember] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const moderator = canModerate(myRole);
 
@@ -170,17 +170,21 @@ export function ChannelView({
               </button>
             </div>
             <ul className="flex-1 overflow-y-auto p-2">
-              {members.map((m) => (
-                <li key={m.profileId ?? m.name} className="flex items-center gap-2 rounded px-1.5 py-1.5 hover:bg-bg-surface-alt">
+              {members.map((m) => {
+                // DEFECT-2: identidad humana (nombre); nunca el UUID como etiqueta principal
+                // (el profile_id queda como title/tooltip técnico secundario).
+                const displayName = m.name ?? "Usuario interno";
+                return (
+                <li key={m.profileId ?? m.name} title={m.profileId ?? undefined} className="flex items-center gap-2 rounded px-1.5 py-1.5 hover:bg-bg-surface-alt">
                   <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-bg-surface-alt text-[10px] font-bold text-fg-secondary">
-                    {m.avatar ?? (m.name ?? "?").slice(0, 2).toUpperCase()}
+                    {m.avatar ?? displayName.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12px] text-fg-primary">{m.name ?? m.profileId ?? "—"}</div>
+                    <div className="truncate text-[12px] text-fg-primary">{displayName}</div>
                     {canManageRoles(myRole) && m.profileId ? (
                       <select
                         value={m.memberRole}
-                        aria-label={`Rol de ${m.name ?? "miembro"}`}
+                        aria-label={`Rol de ${displayName}`}
                         disabled={busy}
                         onChange={(e) => void run(() => setMemberRoleAction({ conversationId: channel.id, profileId: m.profileId!, role: e.target.value }))}
                         className="mt-0.5 rounded border border-stroke-soft bg-bg-page px-1 py-0.5 text-[10px] text-fg-secondary"
@@ -198,19 +202,15 @@ export function ChannelView({
                     </button>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
             {moderator && (
               <div className="border-t border-stroke-soft p-2">
-                <div className="flex items-center gap-1.5">
-                  <input value={newMember} onChange={(e) => setNewMember(e.target.value)} placeholder="profile_id (uuid)" aria-label="ID de miembro (UUID)"
-                    className="min-w-0 flex-1 rounded border border-stroke-soft bg-bg-page px-2 py-1 text-[11px] text-fg-primary outline-none focus:border-tops-red" />
-                  <button type="button" className="btn btn-primary btn-sm" disabled={busy || !newMember.trim()}
-                    onClick={async () => { if (await run(() => addMemberAction({ conversationId: channel.id, profileId: newMember.trim(), role: "member" }))) setNewMember(""); }}>
-                    <Icon name="plus" size={13} />
-                  </button>
-                </div>
-                <p className="mt-1 text-[10px] text-fg-muted">Agregar por ID (selector de usuarios: fase posterior).</p>
+                <MemberSearch
+                  disabled={busy}
+                  onAdd={(profileId) => run(() => addMemberAction({ conversationId: channel.id, profileId, role: "member" }))}
+                />
               </div>
             )}
           </aside>
