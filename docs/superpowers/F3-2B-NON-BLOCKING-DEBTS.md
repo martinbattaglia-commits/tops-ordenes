@@ -45,3 +45,32 @@
 | B · RBAC `seguridad→knowledge.edit` | **No** | No (solo si se decide revocar) | **Sí** | Media-baja |
 
 Ambas quedan registradas para seguimiento. **Ninguna es condición para declarar F3 cerrada**, siempre que Dirección tome nota de (B).
+
+---
+
+## C. H-1 — RBAC dormido / anti-lockout (deuda ACEPTADA temporalmente)
+
+| Campo | Detalle |
+|---|---|
+| **Clasificación** | Deuda técnica **preexistente y global del ERP** · **ACEPTADA temporalmente por Dirección (A+D)** para el piloto interno |
+| **Hallazgo** | `RBAC_ENFORCE` ≠ "1" → usuarios **sin rol** reciben acceso permisivo (fail-open) por diseño anti-lockout. No es defecto de Nexus Link. |
+| **Alcance** | Interno; 3 cuentas sin rol (todas de Martín); 0 clientes. |
+| **Estado** | Aceptada como deuda temporal. **Debe resolverse (activar `RBAC_ENFORCE=1` con seed previo de `martin@`) ANTES de** habilitar clientes/proveedores/externos o exposición mayor. Detalle: `F3-H1-RBAC-DECISION-PACK.md`. |
+| **Acción esta ventana** | Ninguna (no se activó enforcement, no se seedearon roles). |
+
+---
+
+## Nota — F-SEARCH (RESUELTO, no es deuda)
+
+El bug de búsqueda `connect_search` (`42702` + `0A000`) detectado en el smoke **NO se aceptó como deuda**: Dirección exigió corregirlo antes del cierre. **Resuelto** con migs `0156`+`0157` aplicadas a prod (búsqueda operativa RPC+UI). Ver `F3-FSEARCH-HOTFIX-EXECUTION-LOG.md`.
+
+---
+
+## Resumen de deudas vigentes al cierre de F3
+
+| Deuda | Bloquea F3 | Estado |
+|---|---|---|
+| A · Hydration shell #425/#422 | No | Abierta (cosmético, fix futuro) |
+| B · RBAC `seguridad→knowledge.edit` | No | Abierta (decisión Dirección) |
+| C · H-1 RBAC dormido | No (aceptada A+D) | Aceptada temporal; resolver antes de exposición externa |
+| ~~F-SEARCH~~ | — | **RESUELTO** (0156+0157) |

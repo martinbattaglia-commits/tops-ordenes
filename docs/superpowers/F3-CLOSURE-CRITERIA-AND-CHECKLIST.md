@@ -71,3 +71,13 @@ F3 se declara **CERRADA** únicamente cuando **todos** los siguientes criterios 
 
 - **F4 NO debe comenzar** hasta que D6 (piloto) esté Aprobado, D7 (cierre F3) esté Completo y D8 autorice explícitamente.
 - Mientras tanto: sin push/merge/deploy/migraciones/cambios de código/DB/permisos, salvo autorización explícita por ítem.
+
+---
+
+## 5. Actualización de estado (2026-07-01, post-hotfix búsqueda)
+
+- **F-SEARCH RESUELTO:** `connect_search` estaba roto (bug `42702` + bug `0A000`). Corregido con **migs `0156` + `0157` APLICADAS a prod** (autorizadas por Dirección). Búsqueda **operativa RPC + UI** (smoke aprobado). Commit local `d935640`.
+- **Actualización de criterios técnicos:** K1 ✅ · K2 ✅ · K3 ✅ · **K5/K6 (0 críticos / 0 regresiones):** técnicos ✅ (search era el hallazgo crítico y quedó resuelto) — falta confirmación en piloto manual · **K7 (RBAC):** modelo validado + fail-closed app-layer ✅, con H-1 aceptado como deuda temporal · K8 (rollback) ✅ no requerido · K9 ✅ · K10 🟡 (deudas registradas; falta nota formal de Dirección) · **K4 (piloto) ⏳ PENDIENTE** · **K11 (aprobación Dirección) ⏳ PENDIENTE**.
+- **Único camino restante a cierre:** ejecutar `F3-PILOT-MANUAL-VALIDATION-PACK.md` con los 7 usuarios → consolidar → Dirección acepta deudas (H-1, hydration shell, `seguridad→knowledge.edit`) + aprueba cierre (D6/D7) → autoriza F4 (D8).
+- **Migraciones aplicadas en esta línea de trabajo:** `0156_fix_connect_search_ambiguous_conversation_id`, `0157_fix_connect_search_union_order_by` (ambas en `schema_migrations`). Deploy de UI NO revertido; producción en `88add4b`.
+- 🚫 **F4 sigue BLOQUEADA.**
