@@ -460,3 +460,25 @@ constatar el estado real de workflows/secrets en GitHub).
 
 **Próximo paso:** decisión de Dirección — aprobar este plan v1.1 + resolver D-F41-1..10 → recién
 entonces autorizar implementación F4.1. Hasta entonces, STOP.
+
+---
+
+## Addendum de implementación (2026-07-01, post-aprobación)
+
+**A1 · Numeración D-F41 autoritativa.** El mandato de aprobación de Dirección RENUMERÓ las
+decisiones respecto de la tabla §9 de este plan. La numeración vinculante (citada por código,
+migraciones y logs) es la del MANDATO: D-F41-1 alcance A-D · D-F41-2 fan-out selectivo ·
+D-F41-3 backlog sin spam · D-F41-4 regla post_message (sin overload) · D-F41-5 matriz de
+archivado · D-F41-6 F-3/SEC-1 sin fallback · D-F41-7 acciones de notificación · D-F41-8
+menciones · D-F41-9 scheduling Netlify · D-F41-10 estrategia de release. La tabla §9 queda
+como registro histórico de la propuesta.
+
+**A2 · Desvíos de implementación declarados** (detalle en
+`F4-1-COLLABORATION-FOUNDATION-EXECUTION-LOG.md` §5): policies de `notifications` extendidas con
+`delegated_to` + grant de UPDATE por columna (§19 decía "sin cambios"; imprescindible y además
+cierra un vector de forja detectado como CRÍTICO en la revisión adversarial del código);
+ADR-TASKS diferido a F4.2/F4.3 (el mandato no lo incluyó en las etapas); worker dimensionado a
+~8s/corrida por el timeout real de Netlify (backlog por corridas repetidas); coalescing extendido
+también a menciones. Resultado del bloque: 6 commits locales, migs `0160`–`0163` entregadas-NO-
+aplicadas, `0164` NO creada, QA verde (typecheck 0 / lint 0 / 410 tests / build OK), revisión
+adversarial 1C+4I+14m corregidos/aceptados-documentados.
