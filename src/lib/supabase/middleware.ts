@@ -85,6 +85,12 @@ export async function updateSession(request: NextRequest) {
     // postea con `Authorization: Bearer CRON_SECRET` sin cookie; la auth se valida DENTRO
     // del handler. Sólo la ruta exacta — no /api/clientify/* (ping sigue privado).
     pathname === "/api/clientify/sync-deals" ||
+    // Worker de connect_outbox (F4.1A, D-F41-9): la Netlify Scheduled Function postea con
+    // `Authorization: Bearer CRON_SECRET` sin cookie; la auth se valida DENTRO del handler
+    // (timing-safe, 503 sin secret / 401 mismatch). Sólo la ruta exacta.
+    // Hallazgo del smoke DRAFT de la ventana F4.1: sin esta línea el middleware devolvía 401
+    // incluso con Bearer válido (mismo patrón que los 5 crons de arriba).
+    pathname === "/api/connect/cron/dispatch-outbox" ||
     pathname.startsWith("/compras/validar") ||
     // Trazabilidad de despliegue: sólo metadata de build (commit/branch/fecha/buildId/entorno),
     // sin datos sensibles. Pública para verificar deploys y monitoreo externo. La misma info
