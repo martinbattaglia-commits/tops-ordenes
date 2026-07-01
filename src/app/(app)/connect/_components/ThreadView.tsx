@@ -74,9 +74,22 @@ export function ThreadView({
         deletedAt: null,
         redacted: false,
         createdAt: (row.created_at as string) ?? new Date().toISOString(),
+        clientMsgId: (row.client_msg_id as string) ?? undefined,
       };
       setMessages((prev) => {
+        // Ya tenemos el mensaje real (por id) o su seq real ya reconciliado → no-op (idempotente).
         if (prev.some((m) => m.id === incoming.id || (m.seq === incoming.seq && m.status === undefined))) return prev;
+        // DEFECT-5: si el eco realtime corresponde a un mensaje optimista PROPIO (mismo client_msg_id),
+        // reconciliarlo EN SU LUGAR en vez de agregar una 2ª burbuja. Idempotente con el ACK de send():
+        // corra el que corra primero, converge a UN solo mensaje (por client_msg_id / id).
+        if (incoming.clientMsgId && prev.some((m) => m.clientMsgId === incoming.clientMsgId)) {
+          return prev.map((m) =>
+            m.clientMsgId === incoming.clientMsgId
+              ? { ...m, id: incoming.id, seq: incoming.seq, status: undefined }
+              : m,
+          );
+        }
+        // Mensaje de otro usuario/origen → append.
         return [...prev, incoming];
       });
     },

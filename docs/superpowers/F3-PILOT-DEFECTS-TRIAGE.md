@@ -154,3 +154,57 @@ Ambos usan el canal `realtime:notifications:all`. Supabase reutiliza el canal po
 - **Producción NO modificada** (`88add4b`; `0156`/`0157` intactas). Diagnóstico 100% read-only + lectura de código.
 - **F3 NO se cierra** hasta resolver/aceptar estos defects.
 - 🚫 **F4 sigue BLOQUEADA.**
+
+---
+
+# DEFECT-5 — Mensajes duplicados (diagnóstico read-only, 2026-07-01)
+
+## Resumen
+Durante la validación manual, los mensajes aparecen **duplicados en el hilo** (ej.: "hbola", "como va?", "/todo bien"). **Diagnóstico: duplicación VISUAL/FRONTEND TRANSITORIA (opción D), NO duplicación en DB, NO doble-submit.**
+
+## 1. ¿DB o UI? → SOLO UI (evidencia SQL)
+`connect_messages` (conversación `5f699e77-6807-40bd-902f-6f60bfb2b69f`):
+| body | id | seq | client_msg_id | filas |
+|---|---|---|---|---|
+| hbola | 2561a768… | 5 | a6b2a9e8… | **1** |
+| como va? | 3c90d175… | 6 | 29ec9e8c… | **1** |
+| /todo bien | 32d7cf1b… | 7 | f7092ed6… | **1** |
+
+**1 sola fila por mensaje**, `seq` y `client_msg_id` distintos. **NO hay duplicación en DB** (descarta A). Composer con guard `sending` + botón disabled + `preventDefault` en Enter → **no doble-submit** (descarta C).
+
+## 2. ¿Persiste tras reload? → NO (transitorio)
+En carga **fresca** de la conversación, los mensajes aparecen **UNA vez** (screenshot `~/CODE/defect5-fresh-load.png`). La duplicación ocurre **solo en vivo durante el envío**; **desaparece al recargar**. (Los 2 errores de consola en esa página = React #425/#422 = hydration shell, deuda A pre-existente, NO de DEFECT-5.)
+
+## 3. Causa raíz (frontend — `src/app/(app)/connect/_components/ThreadView.tsx`)
+El handler realtime **no reconcilia el eco con el mensaje optimista por `client_msg_id`**:
+- `send()` (L89-108) agrega un optimista: `id="tmp-<clientMsgId>"`, `seq=MAX_SAFE_INTEGER`, `status="sending"`, `clientMsgId`.
+- La RPC inserta → **realtime INSERT** (id real, seq real). El dedup (L79): `m.id === incoming.id || (m.seq === incoming.seq && m.status === undefined)`. El optimista tiene `id=tmp` (≠ real) y `status="sending"` (≠ undefined) → **no matchea** → **agrega el eco como mensaje nuevo**.
+- Luego la reconciliación (L113-121) le pone al optimista el `id` real → **2 mensajes con el mismo `id` real** → 2 burbujas (+ key duplicada de React). Al recargar, el fetch inicial trae 1 fila → 1 burbuja.
+- El payload realtime **no incluye `client_msg_id`** en el objeto `incoming` (L63-77), y el dedup **no lo usa** → no puede matchear optimista↔eco.
+
+## 4. Severidad + ¿bloquea F3?
+**Medio** — VISUAL, **transitorio** (resuelve al recargar; DB limpia, sin pérdida de datos). **Afecta el flujo central de mensajería** durante el chat en vivo (los usuarios del piloto lo ven al conversar). Recomendación: **corregir** (fix chico y de bajo riesgo, solo `ThreadView.tsx`) — Dirección decide si lo considera bloqueante de cierre. NO es corrupción de datos.
+
+## 5. Plan de hotfix (frontend, sin migración)
+**Archivo:** `src/app/(app)/connect/_components/ThreadView.tsx` (handler realtime).
+- Incluir `clientMsgId: row.client_msg_id` en el `incoming`.
+- Dedup/reconciliar por `client_msg_id`:
+  ```
+  setMessages((prev) => {
+    const cmid = (row.client_msg_id as string | null) ?? null;
+    if (prev.some((m) => m.id === incoming.id)) return prev;               // ya tenemos el mensaje real
+    if (cmid && prev.some((m) => m.clientMsgId === cmid))                  // eco de un optimista propio → reconciliar en su lugar
+      return prev.map((m) => (m.clientMsgId === cmid ? { ...m, id: incoming.id, seq: incoming.seq, status: undefined } : m));
+    return [...prev, incoming];                                           // mensaje de otro usuario → append
+  });
+  ```
+Ambas reconciliaciones (ACK de `send()` + realtime) convergen a 1 mensaje sin importar el orden (idempotente por `client_msg_id`). **Sin migración; requiere DEPLOY** (frontend). Defensa en profundidad opcional (no requerido): constraint único `(conversation_id, client_msg_id)` en `connect_messages` — verificar si ya existe antes de proponerlo.
+
+## 6. Smoke plan post-hotfix
+Enviar con Enter · con botón · doble-Enter rápido · doble-click → **1 sola burbuja por mensaje**, **1 sola fila en DB**; recargar → sigue 1; realtime entre 2 sesiones sin duplicar; 0 500/502; consola sin errores nuevos (los #425/#422 son deuda A aparte).
+
+## 7. Riesgos / Rollback
+Riesgo bajo (cambio acotado a `ThreadView`). DEPLOY-1 (mitigado con Node 22 + NO-worktree + draft-first). Rollback = re-publish del deploy previo (`6131248`). Sin datos que revertir.
+
+## 8. Recomendación GO/NO-GO
+🟢 **GO** a implementar el fix de `ThreadView` (frontend, sin migración) + deploy controlado, **con autorización explícita**. Esta ventana fue **solo diagnóstico read-only**; **NO implementado, prod intacta `6131248`, F4 bloqueada.**
