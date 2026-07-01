@@ -122,3 +122,52 @@ deploy) + pre-flight §1.1 verde + `CRON_SECRET` confirmado + toolchain Node 22/
 mig; evaluar rollback parcial según §7) · prod cambió respecto de lo verificado · draft con 5xx.
 **Cierre de F4.1** exige además: smoke §3 verde + backlog §4 drenado + evidencia §5 + piloto §6
 iniciado + informe de ventana.
+
+---
+
+# RESULTADO DE LA VENTANA (2026-07-01, 22:54–23:3xZ) — registro
+
+- **Apply:** 0160/0161/0162/0163 = 4/4 success (22:57–23:06Z); `schema_migrations` top
+  `20260701230222`, 4 nombradas. `0164` NO creada/aplicada.
+- **C1–C4:** PASS (ver Execution Log Apéndice C — funcionales con rollback: compat 5-args,
+  mención+notif+coalescing, DM end-to-end, anti-forja 3/3 denegadas, guardas archivado,
+  P-1/0151 vivo, exentas OK, archive/search intactos).
+- **DRAFT 1** `6a459cfdfbd0cf7f70371dbb` (080cbe3) → detectó middleware sin allowlist del worker
+  (401 con Bearer válido) → fix `8c44003` → **DRAFT 2** `6a459e03efd74590791f8c5d` PASS.
+- **PROD:** deploy **`6a459f4e9a96c5ccaf9fc3f2`** commit **`8c44003`** (23:14–23:15Z). Smoke base
+  PASS (version 8c44003, login 200, 5 rutas 307, worker 401 sin/mal secret, 0 5xx).
+- **Rollback:** NO requerido. Rollback point previo: `6a45820a7b7b7de8d59c6160` (`a6c23f9`).
+- **Worker manual:** positivo remoto NO verificable por el operador asistido (netlify env:get no
+  entrega el valor runtime del secret — write-only). Aislamiento LOCAL con secret propio: 401/401
+  negativos + dry=1 success con `pending_remaining=34` contra prod (read-only) → handler+RPCs OK.
+  El positivo remoto manual queda en el checklist de Martín (tiene el secret real).
+- **Scheduling:** ver sección de evidencia al final (ticks */5 post-deploy).
+
+## Checklist smoke funcional autenticado (PENDIENTE — Martín, sin credenciales en sesión asistida)
+
+1. Mención: en un canal, tipear `@` → autocomplete de miembros → enviar → el mencionado ve
+   campana high "Te mencionaron en …" → click navega AL HILO. Verificar que el texto de la
+   notificación NO incluye el contenido del mensaje.
+2. Mención repetida al mismo usuario con la 1ª sin leer → NO genera 2ª notificación.
+3. DM: primer mensaje → contraparte recibe 1 notif normal; 2º y 3º mensaje sin leer → sigue 1.
+4. Snooze 1h/Mañana/1 semana → desaparece del CENTRO y del BELL; (opcional) verificar reaparición.
+5. Delegar a otro usuario interno → el delegado la ve (chip "Delegada a mí"); en Administración/
+   audit consta `connect.notification.delegate`. Delegar de vuelta al dueño la des-delega.
+6. Prioridad: cambiar a Urgente → reordena a la sección Urgente.
+7. Archivados: canal archivado con no-leídos NO cuenta en el Centro; intentar reaccionar/editar
+   en archivado → error claro.
+8. F-1: entrar por URL `/connect/c/<id>` a un canal público del que NO sos miembro (con un usuario
+   no-admin) → pantalla "Unirme" → unirse → hilo visible.
+9. SEC-1: admin NO-miembro de un canal → puede administrar pero el hilo se ve vacío (por diseño).
+10. Worker manual (con el CRON_SECRET real):
+    `curl -X POST -H "Authorization: Bearer <secret>" https://nexus.logisticatops.com/api/connect/cron/dispatch-outbox?dry=1`
+    → `success:true` y conteo.
+
+## Evidencia de scheduling — RESULTADO (23:57Z)
+
+Schedule REGISTRADO en la plataforma (`searchSiteFunctions` → `*/5 * * * *`, tras el fix
+declarativo `bef2f78`) pero **ejecución programada NO evidenciada** (ticks 23:40-23:55 sin
+corridas; logs vacíos). **PENDIENTE BLOQUEANTE DE CIERRE F4.1** (mandato Etapa 10). Verificación
+para Martín: dashboard Netlify → Functions → `connect-dispatch-outbox` (badge "Scheduled" / Next
+run) y `select * from connect_worker_runs order by started_at desc` — si aparecen corridas */5,
+el pendiente se cierra sin más cambios. Si no: decidir (b) cron externo o (c) Netlify Support.
