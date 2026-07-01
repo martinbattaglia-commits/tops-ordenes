@@ -6,6 +6,7 @@ import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
 import { ThreadView } from "../../_components/ThreadView";
 import { ConversationAdmin } from "../../_components/ConversationAdmin";
+import { JoinChannelPrompt } from "../../_components/JoinChannelPrompt";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,22 @@ export default async function ConnectThreadPage({
       listParticipants(conversation.id),
       listPinned(conversation.id),
     ]);
+    // F4.1D · F-1: no-miembro no-admin en canal PÚBLICO activo → rama "Unirme" (espejo de
+    // /connect/canales/[slug]). Antes veía el hilo vacío (RLS) y el envío fallaba.
+    if (
+      conversation.kind === "channel" &&
+      conversation.visibility === "public" &&
+      !conversation.archivedAt &&
+      myRole === null &&
+      profileRole !== "admin"
+    ) {
+      return (
+        <JoinChannelPrompt
+          conversationId={conversation.id}
+          title={conversation.title ?? (conversation.slug ? `#${conversation.slug}` : "Canal")}
+        />
+      );
+    }
     return (
       <ConversationAdmin
         conversationId={conversation.id}

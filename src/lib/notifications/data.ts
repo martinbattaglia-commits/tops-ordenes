@@ -40,7 +40,10 @@ export async function listNotificationCenter(): Promise<NotificationItem[]> {
     supabase
       .from("v_connect_inbox")
       .select("conversation_id, title, slug, kind, unread_count, last_message_at")
-      .gt("unread_count", 0),
+      .gt("unread_count", 0)
+      // R-2 (F4.1D): una conversación archivada con no-leídos NO cuenta como aviso
+      // (la vista expone archived_at desde 0145).
+      .is("archived_at", null),
     supabase.auth.getUser(),
   ]);
   const uid = userRes.data.user?.id ?? null;
