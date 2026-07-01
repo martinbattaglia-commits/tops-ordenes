@@ -17,6 +17,8 @@ const PostMessageSchema = z.object({
   replyTo: z.string().uuid().nullable().optional(),
   clientMsgId: z.string().min(8).max(64),
   attachmentIds: z.array(z.string().uuid()).max(10).default([]),
+  // F4.1B (D-F41-8): profile ids ya resueltos por resolveMentions en el composer.
+  mentions: z.array(z.string().uuid()).max(20).default([]),
 });
 
 export type PostMessageResult =
@@ -46,6 +48,7 @@ export async function postMessageAction(raw: unknown): Promise<PostMessageResult
     replyTo: parsed.data.replyTo ?? null,
     clientMsgId: parsed.data.clientMsgId,
     attachmentIds: parsed.data.attachmentIds,
+    mentions: parsed.data.mentions,
   });
   if (!result.ok) return { ok: false, message: result.error.message };
 

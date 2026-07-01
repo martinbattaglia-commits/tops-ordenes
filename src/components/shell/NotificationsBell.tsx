@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeTable } from "@/lib/supabase/realtime";
+import { hrefFor } from "@/lib/notifications/href";
 import { relTime } from "@/lib/utils";
 
 interface Notification {
@@ -116,8 +117,9 @@ export function NotificationsBell() {
 }
 
 function NotificationRow({ n, onClose }: { n: Notification; onClose: () => void }) {
-  const href =
-    n.entity === "orders" && n.entity_id ? `/orders/${n.entity_id}` : "#";
+  // F4.1B: ruteo unificado con el Centro (hrefFor) — una mención/DM navega al hilo,
+  // no a "#" (hasta F3 solo orders tenía destino).
+  const href = hrefFor(n.entity, n.entity_id);
   const isUnread = !n.read_at;
   return (
     <Link

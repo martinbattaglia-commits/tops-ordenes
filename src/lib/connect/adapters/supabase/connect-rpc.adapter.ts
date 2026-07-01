@@ -49,6 +49,8 @@ export class ConnectRpcAdapter implements ConnectWritePort {
       p_reply_to: input.replyTo ?? null,
       p_client_msg_id: input.clientMsgId,
       p_attachment_ids: input.attachmentIds ?? [],
+      // F4.1B: null = sin menciones (compatible con la firma 6-args de 0161, default null).
+      p_mentions: input.mentions && input.mentions.length > 0 ? input.mentions : null,
     });
     if (error) return err(domainError("rpc_error", mapPgError(error.message)));
     // connect_post_message returns table(id, seq) → array de una fila.

@@ -219,7 +219,15 @@ export function ConversationAdmin({
       {/* Cuerpo: hilo + panel de miembros */}
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 flex-1 flex-col">
-          <ThreadView conversationId={conversationId} initialMessages={initialMessages} currentUserId={currentUserId ?? null} readOnly={archived} />
+          <ThreadView
+            conversationId={conversationId}
+            initialMessages={initialMessages}
+            currentUserId={currentUserId ?? null}
+            readOnly={archived}
+            mentionables={members
+              .filter((m) => m.profileId && m.name)
+              .map((m) => ({ profileId: m.profileId as string, name: m.name as string }))}
+          />
         </div>
 
         {showMembers && (

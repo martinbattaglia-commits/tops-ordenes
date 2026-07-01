@@ -2,7 +2,7 @@
 // escritura. Sin Supabase directo (testeable con un fake del puerto). El borde (server action)
 // traduce el Result a la union {ok}.
 
-import { canPost, normalizeBody } from "../domain/message";
+import { canPost, normalizeBody, MAX_MENTIONS } from "../domain/message";
 import { err, domainError, type Result } from "../domain/result";
 import type {
   ConnectWritePort, CreateConversationInput, PostMessageInput,
@@ -31,6 +31,9 @@ export class PostMessageUseCase {
     }
     if (!input.clientMsgId) {
       return err(domainError("missing_client_msg_id", "Falta el identificador de idempotencia."));
+    }
+    if ((input.mentions?.length ?? 0) > MAX_MENTIONS) {
+      return err(domainError("too_many_mentions", `Demasiadas menciones (máximo ${MAX_MENTIONS}).`));
     }
     return this.write.postMessage({ ...input, body: normalizeBody(input.body) });
   }

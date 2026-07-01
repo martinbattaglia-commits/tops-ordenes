@@ -19,12 +19,17 @@ export default async function ConnectThreadPage({
 }: {
   params: { conversationId: string };
 }) {
-  const [conversation, messages, links, currentUserId] = await Promise.all([
+  const [conversation, messages, links, currentUserId, participants] = await Promise.all([
     getConversation(params.conversationId),
     listMessages(params.conversationId),
     listConversationLinks(params.conversationId),
     getCurrentUserId(),
+    // F4.1B: mencionables (@) — miembros con nombre resuelto (la FK de menciones exige miembros).
+    listParticipants(params.conversationId),
   ]);
+  const mentionables = participants
+    .filter((m) => m.profileId && m.name)
+    .map((m) => ({ profileId: m.profileId as string, name: m.name as string }));
 
   if (!conversation) {
     return (
@@ -107,6 +112,7 @@ export default async function ConnectThreadPage({
         initialMessages={messages}
         currentUserId={currentUserId}
         readOnly={!!conversation.archivedAt}
+        mentionables={mentionables}
       />
     </div>
   );

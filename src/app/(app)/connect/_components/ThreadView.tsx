@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 import { useRealtimeTable } from "@/lib/supabase/realtime";
 import type { Message } from "@/lib/connect/types";
-import { messageDisplayBody } from "@/lib/connect/domain/message";
+import {
+  messageDisplayBody, resolveMentions, type MentionPick,
+} from "@/lib/connect/domain/message";
 import { timeHM } from "@/lib/connect/format";
 import { postMessageAction } from "@/lib/connect/adapters/driving/message-actions";
 import { markReadAction } from "@/lib/connect/adapters/driving/read-actions";
@@ -15,23 +17,71 @@ interface UiMessage extends Message {
   clientMsgId?: string;
 }
 
+/** Resalta las @menciones de miembros conocidos dentro del cuerpo (F4.1B). */
+function renderWithMentions(body: string, names: string[]): ReactNode {
+  if (!body || names.length === 0) return body;
+  const valid = names.filter((n) => n && n.trim().length > 0);
+  if (valid.length === 0) return body;
+  const parts: ReactNode[] = [];
+  let rest = body;
+  let key = 0;
+  while (rest.length > 0) {
+    let best: { idx: number; name: string } | null = null;
+    for (const name of valid) {
+      const idx = rest.indexOf(`@${name}`);
+      if (idx >= 0 && (best === null || idx < best.idx)) best = { idx, name };
+    }
+    if (!best) {
+      parts.push(rest);
+      break;
+    }
+    if (best.idx > 0) parts.push(rest.slice(0, best.idx));
+    parts.push(
+      <span key={`m-${key++}`} className="rounded bg-tops-red/10 px-0.5 font-semibold text-tops-red">
+        @{best.name}
+      </span>,
+    );
+    rest = rest.slice(best.idx + best.name.length + 1);
+  }
+  return parts;
+}
+
 export function ThreadView({
   conversationId,
   initialMessages,
   currentUserId,
   readOnly = false,
+  mentionables = [],
 }: {
   conversationId: string;
   initialMessages: Message[];
   currentUserId: string | null;
   /** DEFECT-6 (piloto F3): canal archivado → composer deshabilitado (solo lectura). */
   readOnly?: boolean;
+  /** F4.1B: miembros mencionables (@) — la FK de menciones exige miembros (D-F41-8). */
+  mentionables?: MentionPick[];
 }) {
   const [messages, setMessages] = useState<UiMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [picks, setPicks] = useState<MentionPick[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sentSeqRef = useRef(0);
+
+  const mentionNames = useMemo(
+    () => mentionables.map((m) => m.name).filter((n): n is string => !!n),
+    [mentionables],
+  );
+  const candidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionables
+      .filter((m) => m.profileId && m.name && m.profileId !== currentUserId)
+      .filter((m) => q.length === 0 || m.name.toLowerCase().includes(q))
+      .slice(0, 6);
+  }, [mentionQuery, mentionables, currentUserId]);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -42,6 +92,8 @@ export function ThreadView({
   useEffect(() => {
     setMessages(initialMessages);
     sentSeqRef.current = 0;
+    setPicks([]);
+    setMentionQuery(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
@@ -99,9 +151,44 @@ export function ThreadView({
     { filter: `conversation_id=eq.${conversationId}` },
   );
 
+  /** Detecta si el caret está dentro de un token @… en curso (dispara el autocomplete). */
+  function updateMentionQuery(value: string, caret: number) {
+    if (mentionables.length === 0) {
+      setMentionQuery(null);
+      return;
+    }
+    const upToCaret = value.slice(0, caret);
+    const m = /(^|\s)@([^\s@]*)$/.exec(upToCaret);
+    setMentionQuery(m ? m[2] : null);
+  }
+
+  /** Inserta la mención elegida reemplazando el @token en curso. */
+  function pickMention(pick: MentionPick) {
+    const el = textareaRef.current;
+    const caret = el?.selectionStart ?? draft.length;
+    const upToCaret = draft.slice(0, caret);
+    const m = /(^|\s)@([^\s@]*)$/.exec(upToCaret);
+    if (!m) {
+      setMentionQuery(null);
+      return;
+    }
+    const start = caret - m[2].length - 1; // posición del '@'
+    const next = `${draft.slice(0, start)}@${pick.name} ${draft.slice(caret)}`;
+    setDraft(next);
+    setPicks((prev) => (prev.some((p) => p.profileId === pick.profileId) ? prev : [...prev, pick]));
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      el?.focus();
+      const pos = start + pick.name.length + 2;
+      el?.setSelectionRange(pos, pos);
+    });
+  }
+
   async function send() {
     const body = draft.trim();
     if (!body || sending || readOnly) return;
+    // F4.1B: menciones efectivas = picks ∩ cuerpo final (dominio puro; dedupe/tope/sin autor).
+    const mentions = resolveMentions(body, picks, currentUserId);
     const clientMsgId = crypto.randomUUID();
     const optimistic: UiMessage = {
       id: `tmp-${clientMsgId}`,
@@ -123,8 +210,10 @@ export function ThreadView({
     };
     setMessages((prev) => [...prev, optimistic]);
     setDraft("");
+    setPicks([]);
+    setMentionQuery(null);
     setSending(true);
-    const res = await postMessageAction({ conversationId, body, clientMsgId });
+    const res = await postMessageAction({ conversationId, body, clientMsgId, mentions });
     setSending(false);
     setMessages((prev) =>
       prev.map((m) =>
@@ -158,7 +247,9 @@ export function ThreadView({
                 {!own && m.authorName && (
                   <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">{m.authorName}</div>
                 )}
-                <div className="whitespace-pre-wrap break-words">{messageDisplayBody(m)}</div>
+                <div className="whitespace-pre-wrap break-words">
+                  {renderWithMentions(messageDisplayBody(m), mentionNames)}
+                </div>
                 <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
                   {m.status === "sending" && <span>enviando…</span>}
                   {m.status === "failed" && <span className="text-tops-red">no se pudo enviar</span>}
@@ -177,19 +268,60 @@ export function ThreadView({
           Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.
         </div>
       ) : (
-        <div className="border-t border-stroke-soft bg-bg-surface px-3 py-2.5">
+        <div className="relative border-t border-stroke-soft bg-bg-surface px-3 py-2.5">
+          {mentionQuery !== null && candidates.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Mencionar miembro"
+              className="absolute bottom-full left-3 z-20 mb-1 w-64 overflow-hidden rounded border border-stroke-soft bg-bg-surface shadow-lg"
+            >
+              {candidates.map((c) => (
+                <button
+                  key={c.profileId}
+                  type="button"
+                  role="option"
+                  aria-selected="false"
+                  onClick={() => pickMention(c)}
+                  className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-bg-surface-alt"
+                >
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-bg-surface-alt text-[9px] font-bold text-fg-secondary">
+                    {c.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span className="truncate text-[12px] text-fg-primary">{c.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <textarea
+              ref={textareaRef}
               value={draft}
               aria-label="Escribir mensaje"
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                updateMentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length);
+              }}
               onKeyDown={(e) => {
+                if (e.key === "Escape" && mentionQuery !== null) {
+                  e.preventDefault();
+                  setMentionQuery(null);
+                  return;
+                }
                 if (e.key === "Enter" && !e.shiftKey) {
+                  if (mentionQuery !== null && candidates.length > 0) {
+                    e.preventDefault();
+                    pickMention(candidates[0]);
+                    return;
+                  }
                   e.preventDefault();
                   void send();
                 }
               }}
-              placeholder="Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
+              placeholder={
+                mentionables.length > 0
+                  ? "Escribí un mensaje…  (@ menciona · Enter envía · Shift+Enter salto)"
+                  : "Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
+              }
               rows={1}
               className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
             />

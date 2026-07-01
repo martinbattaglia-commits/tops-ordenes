@@ -39,6 +39,44 @@ export function parseMentions(body: string | null | undefined): string[] {
   return out;
 }
 
+// ───────────────────────── Menciones (F4.1B) ─────────────────────────
+
+/** Tope de menciones por mensaje (espejo del guard de connect_post_message, D-F41-8). */
+export const MAX_MENTIONS = 20;
+
+/** Una selección de mención hecha en el composer (pick del autocomplete). */
+export interface MentionPick {
+  profileId: string;
+  name: string;
+}
+
+/**
+ * Resuelve las menciones EFECTIVAS de un mensaje a partir de los picks del composer (F4.1B).
+ * Fuente de verdad = picks (ids reales elegidos del autocomplete de miembros), cruzada con el
+ * cuerpo final: si el usuario borró el "@Nombre" del texto, la mención se descarta (no se
+ * notifica a alguien que ya no está mencionado). Reglas D-F41-8: dedupe por profileId,
+ * excluye al autor, tope MAX_MENTIONS (los excedentes se descartan en orden).
+ */
+export function resolveMentions(
+  body: string | null | undefined,
+  picks: readonly MentionPick[],
+  authorProfileId: string | null | undefined,
+): string[] {
+  if (typeof body !== "string" || body.length === 0 || picks.length === 0) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const pick of picks) {
+    if (!pick.profileId || !pick.name) continue;
+    if (authorProfileId && pick.profileId === authorProfileId) continue;
+    if (seen.has(pick.profileId)) continue;
+    if (!body.includes(`@${pick.name}`)) continue;
+    seen.add(pick.profileId);
+    out.push(pick.profileId);
+    if (out.length >= MAX_MENTIONS) break;
+  }
+  return out;
+}
+
 /** Texto a mostrar (respeta soft-delete/redacción — append-only real). */
 export function messageDisplayBody(m: Pick<Message, "deletedAt" | "redacted" | "body">): string {
   if (m.deletedAt || m.redacted) return "Mensaje eliminado";

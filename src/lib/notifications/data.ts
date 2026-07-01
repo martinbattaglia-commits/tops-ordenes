@@ -7,21 +7,11 @@ import "server-only";
 
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { CONNECT_ENTITY_TYPES } from "@/lib/connect/types";
+import { hrefFor } from "./href";
 import { type NotificationItem, toPriority, byPriorityThenRecency } from "./types";
 
 function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
-}
-
-/** Ruta destino de una notificación según su entidad. */
-function hrefFor(entity: string | null, entityId: string | null): string {
-  if (!entity) return "/connect/notificaciones";
-  if (entity === "orders" && entityId) return `/orders/${entityId}`;
-  if ((CONNECT_ENTITY_TYPES as readonly string[]).includes(entity) && entityId) {
-    return `/connect/e/${entity}/${entityId}`;
-  }
-  return "/connect/notificaciones";
 }
 
 interface NotifRow {
@@ -53,8 +43,14 @@ export async function listNotificationCenter(): Promise<NotificationItem[]> {
   ]);
 
   const items: NotificationItem[] = [];
+  // Anti-fatiga F4.1B (D-F41-2/3): si una conversación ya tiene notificación connect NO leída
+  // (mención/DM), se omite su fila derivada de "no leídos" — una sola entrada por conversación.
+  const notifiedConvIds = new Set<string>();
   for (const r of (notifs.data ?? []) as NotifRow[]) {
     if (r.remind_at && r.remind_at > nowIso) continue; // snooze: oculto hasta su hora
+    if (r.entity === "connect" && r.entity_id && r.read_at == null) {
+      notifiedConvIds.add(r.entity_id);
+    }
     items.push({
       id: r.id, source: "notification", priority: toPriority(r.priority), kind: r.kind,
       title: r.title, message: r.message, href: hrefFor(r.entity, r.entity_id),
@@ -62,6 +58,7 @@ export async function listNotificationCenter(): Promise<NotificationItem[]> {
     });
   }
   for (const c of (inbox.data ?? []) as InboxUnreadRow[]) {
+    if (notifiedConvIds.has(c.conversation_id)) continue;
     items.push({
       id: `conv:${c.conversation_id}`, source: "conversation", priority: "normal", kind: "message",
       title: c.title ?? c.slug ?? "Conversación",

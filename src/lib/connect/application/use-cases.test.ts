@@ -64,6 +64,25 @@ describe("connect/application · PostMessageUseCase", () => {
     });
     expect(res.ok).toBe(true);
   });
+  it("F4.1B: pasa las menciones al puerto", async () => {
+    const port = new FakeWritePort();
+    const res = await new PostMessageUseCase(port).execute({
+      conversationId: "c1", body: "hola @María", clientMsgId: "abcdefgh",
+      mentions: ["11111111-1111-4111-8111-111111111111"],
+    });
+    expect(res.ok).toBe(true);
+    expect(port.posted[0].mentions).toEqual(["11111111-1111-4111-8111-111111111111"]);
+  });
+  it("F4.1B (D-F41-8): rechaza más de MAX_MENTIONS sin llegar al puerto", async () => {
+    const port = new FakeWritePort();
+    const res = await new PostMessageUseCase(port).execute({
+      conversationId: "c1", body: "hola", clientMsgId: "abcdefgh",
+      mentions: Array.from({ length: 21 }, (_, i) => `id-${i}`),
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("too_many_mentions");
+    expect(port.posted).toHaveLength(0);
+  });
 });
 
 describe("connect/application · CreateConversationUseCase", () => {

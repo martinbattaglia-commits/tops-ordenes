@@ -23,6 +23,8 @@ export interface PostMessageInput {
   /** Idempotencia de usuario (UUID del front). */
   clientMsgId: string;
   attachmentIds?: string[];
+  /** Menciones (F4.1B): profile ids resueltos por el composer (resolveMentions, D-F41-8). */
+  mentions?: string[];
 }
 
 export interface ConnectWritePort {
