@@ -41,6 +41,9 @@ export class ConnectOpsAdapter implements ChannelOpsPort {
   setTopic(conversationId: string, topic: string): Promise<Result<void>> {
     return this.voidRpc("connect_set_topic", { p_conversation_id: conversationId, p_topic: topic });
   }
+  setTitle(conversationId: string, title: string): Promise<Result<void>> {
+    return this.voidRpc("connect_set_title", { p_conversation_id: conversationId, p_title: title });
+  }
   pinMessage(messageId: string): Promise<Result<void>> {
     return this.voidRpc("connect_pin_message", { p_message_id: messageId });
   }

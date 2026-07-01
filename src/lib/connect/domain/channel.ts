@@ -33,3 +33,12 @@ export const MAX_TOPIC_LENGTH = 280;
 export function normalizeTopic(topic: string | null | undefined): string {
   return (topic ?? "").trim().slice(0, MAX_TOPIC_LENGTH);
 }
+
+/**
+ * DEFECT-7 (piloto F3): el NOMBRE VISIBLE del canal (`title`) es un campo distinto de
+ * `topic` (tema/descripción) y de `slug` (URL estable). Renombrar cambia solo `title`.
+ */
+export const MAX_TITLE_LENGTH = 120;
+export function normalizeTitle(title: string | null | undefined): string {
+  return (title ?? "").trim().slice(0, MAX_TITLE_LENGTH);
+}

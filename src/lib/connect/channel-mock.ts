@@ -28,12 +28,12 @@ export const MOCK_EXTRA_CHANNELS: ChannelItem[] = [
   {
     id: "c-ch-2", contextId: "CTX-2026-000010", slug: "anuncios", title: "Anuncios",
     topic: "Comunicados de Dirección a todo el staff", visibility: "public",
-    lastMessageAt: T(300), isMember: false,
+    lastMessageAt: T(300), isMember: false, archivedAt: null,
   },
   {
     id: "c-ch-3", contextId: "CTX-2026-000011", slug: "compras-proveedores", title: "Compras · Proveedores",
     topic: "Coordinación de OC y proveedores", visibility: "public",
-    lastMessageAt: T(600), isMember: false,
+    lastMessageAt: T(600), isMember: false, archivedAt: null,
   },
 ];
 

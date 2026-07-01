@@ -121,6 +121,8 @@ export interface ChannelItem {
   visibility: "public" | "private" | null;
   lastMessageAt: string | null;
   isMember: boolean;
+  /** DEFECT-6 (piloto F3): si está archivado, el directorio/sidebar lo excluyen y la vista es read-only. */
+  archivedAt: string | null;
 }
 
 // ───────────────────────── Filas DB (snake_case) — entrada de los mappers ─────────────────────────

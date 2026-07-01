@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeSlug, isValidSlug, canModerate, canManageRoles, normalizeTopic, MAX_TOPIC_LENGTH } from "./channel";
+import { normalizeSlug, isValidSlug, canModerate, canManageRoles, normalizeTopic, MAX_TOPIC_LENGTH, normalizeTitle, MAX_TITLE_LENGTH } from "./channel";
 
 describe("connect/domain/channel · slug", () => {
   it("normaliza nombre a kebab-case sin acentos", () => {
@@ -41,5 +41,18 @@ describe("connect/domain/channel · topic", () => {
     expect(normalizeTopic("  hola  ")).toBe("hola");
     expect(normalizeTopic("x".repeat(MAX_TOPIC_LENGTH + 50)).length).toBe(MAX_TOPIC_LENGTH);
     expect(normalizeTopic(null)).toBe("");
+  });
+});
+
+// DEFECT-7 (piloto F3): el nombre VISIBLE del canal (title) es distinto de topic y de slug.
+describe("connect/domain/channel · title (DEFECT-7)", () => {
+  it("trimea y acota el nombre visible del canal", () => {
+    expect(normalizeTitle("  Operaciones Magaldi  ")).toBe("Operaciones Magaldi");
+    expect(normalizeTitle("x".repeat(MAX_TITLE_LENGTH + 50)).length).toBe(MAX_TITLE_LENGTH);
+  });
+  it("vacío para entradas nulas/blancas (el use-case lo rechaza)", () => {
+    expect(normalizeTitle(null)).toBe("");
+    expect(normalizeTitle(undefined)).toBe("");
+    expect(normalizeTitle("   ")).toBe("");
   });
 });

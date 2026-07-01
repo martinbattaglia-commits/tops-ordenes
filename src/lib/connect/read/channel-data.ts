@@ -4,7 +4,7 @@
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import type { ChannelItem, MemberRole } from "../types";
-import { listChannels } from "./inbox-data";
+import { listChannels, mapChannel, CHANNEL_VIEW_COLS } from "./inbox-data";
 import { mockChannels } from "../mock";
 import {
   MOCK_EXTRA_CHANNELS, MOCK_MEMBERS, MOCK_MY_ROLE, MOCK_PINNED,
@@ -15,10 +15,28 @@ function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
 }
 
-/** Directorio de canales: visibles (públicos o donde soy miembro). */
+/** Directorio de canales: visibles (públicos o donde soy miembro). Excluye archivados (DEFECT-6). */
 export async function listChannelDirectory(): Promise<ChannelItem[]> {
-  if (isMock()) return [...mockChannels(), ...MOCK_EXTRA_CHANNELS];
-  return listChannels(); // v_connect_channels (RC1.1)
+  if (isMock()) return [...mockChannels(), ...MOCK_EXTRA_CHANNELS].filter((c) => !c.archivedAt);
+  return listChannels(); // v_connect_channels (RC1.1) — filtra archived_at en el loader
+}
+
+/**
+ * Un canal por slug INCLUYENDO archivados (DEFECT-6): la ruta /canales/[slug] lo usa para
+ * poder mostrar la vista read-only "Archivado" en acceso por URL directa. A diferencia del
+ * directorio, NO filtra archived_at. La RLS de connect_conversations sigue siendo la frontera.
+ */
+export async function getChannelBySlug(slug: string): Promise<ChannelItem | null> {
+  if (isMock()) return [...mockChannels(), ...MOCK_EXTRA_CHANNELS].find((c) => c.slug === slug) ?? null;
+  const supabase = createClient();
+  if (!supabase) return [...mockChannels(), ...MOCK_EXTRA_CHANNELS].find((c) => c.slug === slug) ?? null;
+  const { data, error } = await supabase
+    .from("v_connect_channels")
+    .select(CHANNEL_VIEW_COLS)
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapChannel(data as Record<string, unknown>);
 }
 
 /**

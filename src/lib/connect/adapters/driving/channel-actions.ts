@@ -112,7 +112,19 @@ export async function setMemberRoleAction(raw: unknown): Promise<SimpleResult> {
   return { ok: true };
 }
 
-// ── Moderación: tema / archivar ─────────────────────────────────────────────
+// ── Moderación: nombre (title) / tema (topic) / archivar ─────────────────────
+// DEFECT-7: renombrar canal = cambia `title` (nombre visible), NUNCA `slug` ni `topic`.
+export async function setTitleAction(raw: unknown): Promise<SimpleResult> {
+  const p = z.object({ conversationId: z.string().min(1), title: z.string().min(1).max(120) }).safeParse(raw);
+  if (!p.success) return { ok: false, message: "El nombre del canal es obligatorio (máx. 120 caracteres)." };
+  const g = await guard("connect.edit");
+  if (!g.ok) return g;
+  const r = await ops(g.client).title.execute(p.data.conversationId, p.data.title);
+  if (!r.ok) return { ok: false, message: r.error.message };
+  revalidateChannel();
+  return { ok: true };
+}
+
 export async function setTopicAction(raw: unknown): Promise<SimpleResult> {
   const p = z.object({ conversationId: z.string().min(1), topic: z.string().max(280) }).safeParse(raw);
   if (!p.success) return { ok: false, message: "Datos inválidos." };

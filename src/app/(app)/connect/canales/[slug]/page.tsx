@@ -1,14 +1,15 @@
 import { Icon } from "@/components/Icon";
 import { listMessages } from "@/lib/connect/read/inbox-data";
 import { getCurrentUserId } from "@/lib/connect/data";
-import { listChannelDirectory, getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
+import { getChannelBySlug, getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
 import { ChannelView } from "../../_components/ChannelView";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConnectChannelPage({ params }: { params: { slug: string } }) {
-  const channels = await listChannelDirectory();
-  const channel = channels.find((c) => c.slug === params.slug);
+  // DEFECT-6: getChannelBySlug incluye archivados → un canal archivado abierto por URL directa
+  // resuelve y ChannelView lo muestra read-only (en vez de "no existe").
+  const channel = await getChannelBySlug(params.slug);
 
   if (!channel) {
     return (

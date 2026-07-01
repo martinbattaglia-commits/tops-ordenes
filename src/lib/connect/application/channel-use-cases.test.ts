@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { channelOps, SetTopicUseCase, PinMessageUseCase } from "./channel-use-cases";
+import { channelOps, SetTopicUseCase, SetTitleUseCase, PinMessageUseCase } from "./channel-use-cases";
 import { ok, type Result } from "../domain/result";
 import type { ChannelOpsPort } from "../ports/channel-ops-port";
 import type { MemberRole } from "../types";
@@ -13,6 +13,7 @@ class FakeOps implements ChannelOpsPort {
   setMemberRole(c: string, p: string, r: MemberRole) { return this.rec("setRole", [c, p, r]); }
   archiveConversation(c: string) { return this.rec("archive", [c]); }
   setTopic(c: string, t: string) { return this.rec("setTopic", [c, t]); }
+  setTitle(c: string, t: string) { return this.rec("setTitle", [c, t]); }
   pinMessage(m: string) { return this.rec("pin", [m]); }
   unpinMessage(m: string) { return this.rec("unpin", [m]); }
 }
@@ -29,6 +30,18 @@ describe("connect/application · channel use-cases", () => {
     const res = await new SetTopicUseCase(ops).execute("c1", "  Coordinación  ");
     expect(res.ok).toBe(true);
     expect(ops.calls[0]).toEqual(["setTopic", ["c1", "Coordinación"]]);
+  });
+  it("setTitle rechaza nombre vacío sin llegar al port (DEFECT-7)", async () => {
+    const ops = new FakeOps();
+    const res = await new SetTitleUseCase(ops).execute("c1", "   ");
+    expect(res.ok).toBe(false);
+    expect(ops.calls).toHaveLength(0);
+  });
+  it("setTitle normaliza (trim) y persiste el nombre visible (DEFECT-7)", async () => {
+    const ops = new FakeOps();
+    const res = await new SetTitleUseCase(ops).execute("c1", "  Operaciones Magaldi  ");
+    expect(res.ok).toBe(true);
+    expect(ops.calls[0]).toEqual(["setTitle", ["c1", "Operaciones Magaldi"]]);
   });
   it("pin rechaza messageId vacío", async () => {
     const res = await new PinMessageUseCase(new FakeOps()).pin("");

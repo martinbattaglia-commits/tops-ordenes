@@ -42,6 +42,11 @@ export default async function ConnectThreadPage({
               {conversation.title ?? KIND_LABEL[conversation.kind]}
             </h2>
             <span className="chip text-[10px]">{KIND_LABEL[conversation.kind]}</span>
+            {conversation.archivedAt && (
+              <span className="chip text-[10px] bg-amber-400/15 text-amber-500">
+                <Icon name="folder" size={10} /> Archivado
+              </span>
+            )}
           </div>
           <p className="mt-0.5 truncate font-mono text-[11px] text-fg-muted">
             {conversation.contextId}
@@ -64,6 +69,7 @@ export default async function ConnectThreadPage({
         conversationId={conversation.id}
         initialMessages={messages}
         currentUserId={currentUserId}
+        readOnly={!!conversation.archivedAt}
       />
     </div>
   );

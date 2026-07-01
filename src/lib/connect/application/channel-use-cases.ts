@@ -1,7 +1,7 @@
 // Nexus Link · application (RC1.2). Use-cases de canal/membresía/moderación/fijados.
 // Orquestan validación de dominio + ChannelOpsPort. Testeables con un fake del port.
 
-import { normalizeTopic } from "../domain/channel";
+import { normalizeTopic, normalizeTitle } from "../domain/channel";
 import { err, domainError, type Result } from "../domain/result";
 import type { ChannelOpsPort } from "../ports/channel-ops-port";
 import type { MemberRole } from "../types";
@@ -35,6 +35,15 @@ export class SetTopicUseCase {
   }
 }
 
+export class SetTitleUseCase {
+  constructor(private readonly ops: ChannelOpsPort) {}
+  async execute(conversationId: string, title: string): Promise<Result<void>> {
+    const t = normalizeTitle(title);
+    if (t.length === 0) return err(domainError("empty_title", "El nombre del canal no puede estar vacío."));
+    return this.ops.setTitle(conversationId, t);
+  }
+}
+
 export class ArchiveConversationUseCase {
   constructor(private readonly ops: ChannelOpsPort) {}
   execute(conversationId: string): Promise<Result<void>> {
@@ -59,6 +68,7 @@ export function channelOps(ops: ChannelOpsPort) {
     join: new JoinChannelUseCase(ops),
     member: new ManageMemberUseCase(ops),
     topic: new SetTopicUseCase(ops),
+    title: new SetTitleUseCase(ops),
     archive: new ArchiveConversationUseCase(ops),
     pin: new PinMessageUseCase(ops),
   };

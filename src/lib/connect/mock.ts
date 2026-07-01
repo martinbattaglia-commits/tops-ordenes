@@ -112,5 +112,6 @@ export function mockChannels(): ChannelItem[] {
   return MOCK_CONVERSATIONS.filter((c) => c.kind === "channel").map((c) => ({
     id: c.id, contextId: c.contextId, slug: c.slug, title: c.title, topic: c.topic,
     visibility: c.visibility, lastMessageAt: c.lastMessageAt, isMember: true,
+    archivedAt: c.archivedAt,
   }));
 }

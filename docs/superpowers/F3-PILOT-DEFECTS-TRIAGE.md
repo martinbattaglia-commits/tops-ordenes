@@ -208,3 +208,48 @@ Riesgo bajo (cambio acotado a `ThreadView`). DEPLOY-1 (mitigado con Node 22 + NO
 
 ## 8. Recomendación GO/NO-GO
 🟢 **GO** a implementar el fix de `ThreadView` (frontend, sin migración) + deploy controlado, **con autorización explícita**. Esta ventana fue **solo diagnóstico read-only**; **NO implementado, prod intacta `6131248`, F4 bloqueada.**
+
+---
+
+# DEFECT-6 — Archivar canal no se refleja en la UI (implementado local, 2026-07-01)
+
+## Resumen
+Al archivar un canal, la confirmación aparece pero el canal **sigue como activo** ("no pasó nada"). **Causa: la DB archiva bien, pero la UI no filtra ni conoce el estado archivado.**
+
+## Causa raíz
+- `connect_archive_conversation` (0144) setea `archived_at` correctamente (varios canales ya archivados en prod: `canal-privado`, `grupo`, `prueba-f3-canal-piloto`, `test2`).
+- **`v_connect_channels` (0145) NO exponía `archived_at`** → el directorio no podía filtrar.
+- `listChannels`/`listInbox` **no filtraban** archivados. `ChannelItem` sin `archivedAt`. `ChannelView` sin estado archivado, sin badge/redirect/deshabilitación de composer.
+- (`v_connect_inbox` sí exponía `archived_at` desde 0145 — solo faltaba usarlo.)
+
+## Severidad / ¿bloquea F3?
+**Alta — SÍ.** Confirmado por Dirección.
+
+## Fix implementado (mig `0159` + frontend)
+- **`0159`:** `v_connect_channels` expone `archived_at` (grants preservados).
+- **Loaders:** `listChannels` (directorio/Home) y `listInbox` (sidebar/favoritos/Home) excluyen `archived_at is null`. `ChannelItem.archivedAt` mapeado. Nuevo `getChannelBySlug` (incluye archivados → vista read-only por URL).
+- **UI:** al archivar → **redirect a `/connect/canales`** + refresh (actualiza sidebar/listados). URL directa a archivado → **vista "Archivado" read-only** (composer deshabilitado, acciones de moderación off). Sin borrar datos/mensajes/miembros — archivado lógico.
+- Detalle completo, QA, revisión adversarial, rollback, smoke y GO/NO-GO: **`F3-DEFECT6-7-HOTFIX-PLAN.md`**.
+
+---
+
+# DEFECT-7 — Editar nombre del canal no cambia el nombre (implementado local, 2026-07-01)
+
+## Resumen
+"Editar" solo cambiaba el **tema/descripción**, no el **nombre visible**. **Causa: la UI editaba `topic`; no existía RPC para renombrar (`title`).**
+
+## Causa raíz
+- Nombre visible = `connect_conversations.title`; slug = `.slug`; tema = `.topic`.
+- El botón "editar" del header llamaba a `connect_set_topic` → modificaba `topic`. **No existía `connect_set_title`.**
+
+## Severidad / ¿bloquea F3?
+**Medio-Alto — bloqueante blando** (rename es acción esperada del piloto).
+
+## Fix implementado (mig `0159` + frontend)
+- **`0159`:** RPC nueva `connect_set_title` — `SECURITY DEFINER` + `search_path` fijo + revoke/grant como `connect_set_topic`; gate owner/moderator/admin **NULL-safe** (`is distinct from`); valida no-vacío/trim/`left(120)`; bloquea renombrar archivados; **cambia solo `title`, nunca `slug` ni `topic`**.
+- **Frontend:** `SetTitleUseCase` + `setTitle` en port/adapter + `setTitleAction` (guard `connect.edit`) + edición de **nombre** en `ChannelView` (separada de la edición de tema). Tras guardar → refresh de header/sidebar/directorio; slug/URL estable.
+- Núcleo (`normalizeTitle`, `SetTitleUseCase`) por **TDD** (+4 tests). Detalle: **`F3-DEFECT6-7-HOTFIX-PLAN.md`**.
+
+## Estado (DEFECT-6 + DEFECT-7)
+- QA local: typecheck **0** · lint **0** · tests **382** · build **exit 0**. Revisión adversarial: **GO** (0 bloqueantes de código; residuales R-1 deploy-ordering / R-2 notificaciones / R-3 post-server-side documentados).
+- **Prod intacta `be405ba`. `0159` NO aplicada. Sin deploy/push/merge. F4 BLOQUEADA.**

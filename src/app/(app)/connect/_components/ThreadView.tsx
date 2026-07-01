@@ -19,10 +19,13 @@ export function ThreadView({
   conversationId,
   initialMessages,
   currentUserId,
+  readOnly = false,
 }: {
   conversationId: string;
   initialMessages: Message[];
   currentUserId: string | null;
+  /** DEFECT-6 (piloto F3): canal archivado → composer deshabilitado (solo lectura). */
+  readOnly?: boolean;
 }) {
   const [messages, setMessages] = useState<UiMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
@@ -98,7 +101,7 @@ export function ThreadView({
 
   async function send() {
     const body = draft.trim();
-    if (!body || sending) return;
+    if (!body || sending || readOnly) return;
     const clientMsgId = crypto.randomUUID();
     const optimistic: UiMessage = {
       id: `tmp-${clientMsgId}`,
@@ -168,33 +171,40 @@ export function ThreadView({
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-stroke-soft bg-bg-surface px-3 py-2.5">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={draft}
-            aria-label="Escribir mensaje"
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send();
-              }
-            }}
-            placeholder="Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
-            rows={1}
-            className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
-          />
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={!draft.trim() || sending}
-            className="btn btn-primary btn-sm shrink-0"
-            aria-label="Enviar mensaje"
-          >
-            <Icon name="send" size={15} />
-          </button>
+      {readOnly ? (
+        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt/50 px-4 py-3 text-center text-[12px] text-fg-muted">
+          <Icon name="folder" size={13} className="text-fg-muted" />
+          Este canal está archivado. Es de solo lectura: no se pueden enviar mensajes.
         </div>
-      </div>
+      ) : (
+        <div className="border-t border-stroke-soft bg-bg-surface px-3 py-2.5">
+          <div className="flex items-end gap-2">
+            <textarea
+              value={draft}
+              aria-label="Escribir mensaje"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send();
+                }
+              }}
+              placeholder="Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
+              rows={1}
+              className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
+            />
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={!draft.trim() || sending}
+              className="btn btn-primary btn-sm shrink-0"
+              aria-label="Enviar mensaje"
+            >
+              <Icon name="send" size={15} />
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

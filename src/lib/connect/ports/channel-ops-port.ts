@@ -13,6 +13,8 @@ export interface ChannelOpsPort {
   setMemberRole(conversationId: string, profileId: string, role: MemberRole): Promise<Result<void>>;
   archiveConversation(conversationId: string): Promise<Result<void>>;
   setTopic(conversationId: string, topic: string): Promise<Result<void>>;
+  /** Renombra el canal: cambia `title` (nombre visible), NUNCA `slug` ni `topic` (RPC connect_set_title, 0159). */
+  setTitle(conversationId: string, title: string): Promise<Result<void>>;
   pinMessage(messageId: string): Promise<Result<void>>;
   unpinMessage(messageId: string): Promise<Result<void>>;
 }

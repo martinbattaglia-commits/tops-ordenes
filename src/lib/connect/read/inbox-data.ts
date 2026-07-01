@@ -45,6 +45,20 @@ function mapInbox(r: InboxRow): InboxItem {
   };
 }
 
+/** Fila de v_connect_channels → ChannelItem. Compartido por listChannels y getChannelBySlug. */
+export function mapChannel(r: Record<string, unknown>): ChannelItem {
+  return {
+    id: r.id as string, contextId: r.context_id as string, slug: r.slug as string | null,
+    title: r.title as string | null, topic: r.topic as string | null,
+    visibility: r.visibility as ChannelItem["visibility"], lastMessageAt: r.last_message_at as string | null,
+    isMember: Boolean(r.is_member), archivedAt: (r.archived_at as string | null) ?? null,
+  };
+}
+
+/** Columnas de v_connect_channels (incluye archived_at desde 0159). */
+export const CHANNEL_VIEW_COLS =
+  "id, context_id, slug, title, topic, visibility, last_message_at, is_member, archived_at";
+
 // ───────────────────────── Lecturas ─────────────────────────
 
 /** Bandeja unificada: mis conversaciones ordenadas por último mensaje. */
@@ -57,6 +71,8 @@ export async function listInbox(): Promise<InboxItem[]> {
     .select(
       "conversation_id, context_id, kind, title, slug, topic, last_message_at, last_message_seq, last_read_seq, unread_count, is_favorite, muted_until, archived_at",
     )
+    // DEFECT-6 (piloto F3): la bandeja/sidebar activa excluye conversaciones archivadas.
+    .is("archived_at", null)
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (error) {
     console.error("[connect/listInbox] query error:", error.message);
@@ -123,19 +139,13 @@ export async function listChannels(): Promise<ChannelItem[]> {
   if (!supabase) return mockChannels();
   const { data, error } = await supabase
     .from("v_connect_channels")
-    .select("id, context_id, slug, title, topic, visibility, last_message_at, is_member")
+    .select(CHANNEL_VIEW_COLS)
+    // DEFECT-6 (piloto F3): el directorio de canales activos excluye archivados.
+    .is("archived_at", null)
     .order("last_message_at", { ascending: false, nullsFirst: false });
   if (error) {
     console.error("[connect/listChannels] query error:", error.message);
     return [];
   }
-  return (data ?? []).map((r) => {
-    const row = r as Record<string, unknown>;
-    return {
-      id: row.id as string, contextId: row.context_id as string, slug: row.slug as string | null,
-      title: row.title as string | null, topic: row.topic as string | null,
-      visibility: row.visibility as ChannelItem["visibility"], lastMessageAt: row.last_message_at as string | null,
-      isMember: Boolean(row.is_member),
-    };
-  });
+  return (data ?? []).map((r) => mapChannel(r as Record<string, unknown>));
 }
