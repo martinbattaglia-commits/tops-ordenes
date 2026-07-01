@@ -18,6 +18,7 @@ interface NotifRow {
   id: string; kind: string; title: string; message: string | null;
   entity: string | null; entity_id: string | null; read_at: string | null;
   created_at: string; priority: string | null; remind_at: string | null;
+  delegated_to: string | null;
 }
 interface InboxUnreadRow {
   conversation_id: string; title: string | null; slug: string | null;
@@ -30,17 +31,19 @@ export async function listNotificationCenter(): Promise<NotificationItem[]> {
   if (!supabase) return mockNotificationCenter();
 
   const nowIso = new Date().toISOString();
-  const [notifs, inbox] = await Promise.all([
+  const [notifs, inbox, userRes] = await Promise.all([
     supabase
       .from("notifications")
-      .select("id, kind, title, message, entity, entity_id, read_at, created_at, priority, remind_at")
+      .select("id, kind, title, message, entity, entity_id, read_at, created_at, priority, remind_at, delegated_to")
       .order("created_at", { ascending: false })
       .limit(50),
     supabase
       .from("v_connect_inbox")
       .select("conversation_id, title, slug, kind, unread_count, last_message_at")
       .gt("unread_count", 0),
+    supabase.auth.getUser(),
   ]);
+  const uid = userRes.data.user?.id ?? null;
 
   const items: NotificationItem[] = [];
   // Anti-fatiga F4.1B (D-F41-2/3): si una conversación ya tiene notificación connect NO leída
@@ -55,6 +58,8 @@ export async function listNotificationCenter(): Promise<NotificationItem[]> {
       id: r.id, source: "notification", priority: toPriority(r.priority), kind: r.kind,
       title: r.title, message: r.message, href: hrefFor(r.entity, r.entity_id),
       createdAt: r.created_at, read: r.read_at != null,
+      isDelegated: r.delegated_to != null,
+      delegatedToMe: uid != null && r.delegated_to === uid,
     });
   }
   for (const c of (inbox.data ?? []) as InboxUnreadRow[]) {

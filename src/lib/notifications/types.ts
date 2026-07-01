@@ -13,6 +13,10 @@ export interface NotificationItem {
   href: string;
   createdAt: string;
   read: boolean;
+  /** F4.1C: la notificación fue delegada (delegated_to != null). */
+  isDelegated?: boolean;
+  /** F4.1C: fue delegada A MÍ (delegated_to = usuario actual). */
+  delegatedToMe?: boolean;
 }
 
 /** Mapea la prioridad de la tabla (low/normal/high/urgent) al bucket visual. */

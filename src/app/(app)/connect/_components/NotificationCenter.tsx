@@ -13,11 +13,15 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { useRealtimeTable } from "@/lib/supabase/realtime";
 import { relTime } from "@/lib/utils";
 import type { NotificationItem, NotificationPriority } from "@/lib/notifications/types";
+import { SNOOZE_PRESETS } from "@/lib/notifications/snooze";
 import {
   markNotificationReadAction,
   markAllNotificationsReadAction,
   snoozeNotificationAction,
+  delegateNotificationAction,
+  setNotificationPriorityAction,
 } from "@/lib/notifications/actions";
+import { MemberSearch } from "./MemberSearch";
 
 const SECTIONS: { priority: NotificationPriority; label: string; dot: string }[] = [
   { priority: "urgente", label: "Urgente", dot: "bg-tops-red" },
@@ -109,6 +113,13 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
   );
 }
 
+const PRIORITY_OPTIONS: { value: "low" | "normal" | "high" | "urgent"; label: string }[] = [
+  { value: "low", label: "Baja" },
+  { value: "normal", label: "Normal" },
+  { value: "high", label: "Importante" },
+  { value: "urgent", label: "Urgente" },
+];
+
 function NotificationRow({
   item,
   dot,
@@ -121,60 +132,132 @@ function NotificationRow({
   onAction: (action: () => Promise<{ ok: true } | { ok: false; message: string }>) => void;
 }) {
   const canAct = item.source === "notification";
+  const [showSnooze, setShowSnooze] = useState(false);
+  const [showDelegate, setShowDelegate] = useState(false);
   return (
     <div
-      className={`card flex items-start justify-between gap-3 p-3 ${
-        item.read ? "" : "bg-tops-blue-700/5"
-      }`}
+      className={`card flex flex-col gap-2 p-3 ${item.read ? "" : "bg-tops-blue-700/5"}`}
     >
-      <Link href={item.href} className="flex min-w-0 flex-1 items-start gap-2.5">
-        {!item.read && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />}
-        <div className="min-w-0">
-          <p
-            className={`truncate text-sm text-fg-primary ${
-              item.read ? "font-medium" : "font-bold"
-            }`}
-          >
-            {item.title}
-          </p>
-          {item.message && (
-            <p className="mt-0.5 line-clamp-2 text-[12px] text-fg-secondary">{item.message}</p>
-          )}
-          <p className="mt-1 flex items-center gap-1 text-[11px] text-fg-muted">
-            <Icon name="clock" size={11} /> {relTime(item.createdAt)}
-          </p>
-        </div>
-      </Link>
+      <div className="flex items-start justify-between gap-3">
+        <Link href={item.href} className="flex min-w-0 flex-1 items-start gap-2.5">
+          {!item.read && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />}
+          <div className="min-w-0">
+            <p
+              className={`truncate text-sm text-fg-primary ${
+                item.read ? "font-medium" : "font-bold"
+              }`}
+            >
+              {item.title}
+            </p>
+            {item.message && (
+              <p className="mt-0.5 line-clamp-2 text-[12px] text-fg-secondary">{item.message}</p>
+            )}
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] text-fg-muted">
+              <Icon name="clock" size={11} /> {relTime(item.createdAt)}
+              {item.delegatedToMe && (
+                <span className="chip bg-tops-red/10 text-[10px] text-tops-red">Delegada a mí</span>
+              )}
+              {item.isDelegated && !item.delegatedToMe && (
+                <span className="chip text-[10px]">Delegada</span>
+              )}
+            </p>
+          </div>
+        </Link>
 
-      {canAct && (
-        <div className="flex shrink-0 items-center gap-1">
-          {!item.read && (
+        {canAct && (
+          <div className="flex shrink-0 items-center gap-1">
+            {!item.read && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={pending}
+                title="Marcar leída"
+                onClick={() => onAction(() => markNotificationReadAction({ id: item.id }))}
+              >
+                <Icon name="check" size={13} />
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-ghost btn-sm"
               disabled={pending}
-              title="Marcar leída"
-              onClick={() => onAction(() => markNotificationReadAction({ id: item.id }))}
+              title="Posponer…"
+              aria-expanded={showSnooze}
+              onClick={() => { setShowSnooze((v) => !v); setShowDelegate(false); }}
             >
-              <Icon name="check" size={13} />
+              <Icon name="clock" size={13} />
             </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={pending}
+              title="Delegar a otro usuario"
+              aria-expanded={showDelegate}
+              onClick={() => { setShowDelegate((v) => !v); setShowSnooze(false); }}
+            >
+              <Icon name="users" size={13} />
+            </button>
+            <select
+              aria-label="Cambiar prioridad"
+              className="rounded border border-stroke-soft bg-bg-page px-1 py-0.5 text-[11px] text-fg-secondary"
+              disabled={pending}
+              defaultValue=""
+              onChange={(e) => {
+                const v = e.target.value as "low" | "normal" | "high" | "urgent" | "";
+                e.target.value = "";
+                if (!v) return;
+                onAction(() => setNotificationPriorityAction({ id: item.id, priority: v }));
+              }}
+            >
+              <option value="" disabled>
+                Prioridad
+              </option>
+              {PRIORITY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {canAct && showSnooze && (
+        <div className="flex items-center gap-1.5 border-t border-stroke-soft pt-2">
+          <span className="text-[11px] text-fg-muted">Posponer:</span>
+          {SNOOZE_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={pending}
+              onClick={() => {
+                setShowSnooze(false);
+                onAction(() =>
+                  snoozeNotificationAction({
+                    id: item.id,
+                    until: p.until(new Date()).toISOString(),
+                  })
+                );
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {canAct && showDelegate && (
+        <div className="border-t border-stroke-soft pt-2">
+          <MemberSearch
             disabled={pending}
-            title="Posponer 1 hora"
-            onClick={() =>
-              onAction(() =>
-                snoozeNotificationAction({
-                  id: item.id,
-                  until: new Date(Date.now() + 3600e3).toISOString(),
-                })
-              )
-            }
-          >
-            <Icon name="clock" size={13} /> 1h
-          </button>
+            onAdd={async (profileId) => {
+              const r = await delegateNotificationAction({ id: item.id, toProfileId: profileId });
+              if (r.ok) setShowDelegate(false);
+              else onAction(async () => r);
+              return r.ok;
+            }}
+          />
         </div>
       )}
     </div>
