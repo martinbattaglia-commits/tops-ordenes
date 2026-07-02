@@ -1,5 +1,11 @@
 # F4.3 · Tareas + Workflows + Cockpit — Validation Pack
 
+> **🏁 EJECUTADO Y CERRADO (2026-07-02):** ventana única completada — C1-C7 PASS
+> (cero fixes in-window), DRAFT+PROD PASS, smoke funcional autenticado **PASS
+> 100% por Dirección**. Prod = `f30f79d`. Rollback no requerido. Backlog visual
+> registrado: `UI-POLISH-CHAT-DARK-CONTRAST` (bajo, ver Execution Log §0-bis).
+> Este pack queda como guion de referencia/re-validación.
+
 > Kit de la futura ventana apply+deploy de F4.3 (migs `0167`–`0170` + UI).
 > SQL read-only / 0-footprint (sentinel `__QA_ROLLBACK__`). Lo corre quien
 > ejecute la ventana; complementa `ROLLBACK_0167_0170.md`.

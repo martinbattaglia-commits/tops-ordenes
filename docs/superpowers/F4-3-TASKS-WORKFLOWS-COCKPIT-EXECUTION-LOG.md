@@ -1,6 +1,45 @@
 # F4.3 · Tareas + Workflows + Cockpit — Execution Log
 
-## 0. 🏁 VENTANA APPLY+DEPLOY EJECUTADA (2026-07-02 ~03:28-03:40Z, autorizada por Dirección)
+## 0-bis. 🏁🏁 F4.3 CERRADA FORMALMENTE (Dirección, 2026-07-02)
+
+**Smoke funcional autenticado: PASS 100% validado por Dirección** en producción
+(`f30f79d`, deploy `6a45dd06046d9f4002a59a18`): creación · listado · detalle ·
+reclamar vacante · asignar/reasignar · seguidores · prioridad · fecha límite
+informativa · iniciar · completar · cancelar · reabrir · hilo lazy · comentario ·
+mención · tarea desde incidente · workflow seed · avance lineal · cancelación de
+cadena · cockpit read-only · notificación al detalle · usuario sin permiso
+denegado · funcionamiento general correcto.
+
+**Criterios de cierre completos:** migs `0167-0170` aplicadas · C1-C7 PASS ·
+smoke PROD base PASS (0 500/502, 0 PostgREST 300) · smoke funcional autenticado
+PASS · **rollback NUNCA requerido** · CERO fixes in-window. Riesgos remanentes =
+solo los Bajos documentados en la Parte I §5 (backlog/follow-up, ninguno bloqueante).
+
+### 🎨 Backlog visual registrado: `UI-POLISH-CHAT-DARK-CONTRAST`
+Observación de Dirección durante el smoke: en Nexus Link / chat, en **modo
+oscuro**, el contraste del área de chat y los mensajes no se ve suficientemente
+claro. Clasificación: **visual polish / UX · severidad BAJA · NO bloquea F4.3 ·
+sin rollback ni hotfix**. Tratamiento: mini-fase posterior de polish visual
+(candidata junto con las deudas UX acumuladas). Referencias técnicas para esa
+mini-fase: memoria `nexus_darkmode_token_opacity` (los tokens `var()` no
+soportan `/opacity` — falla silenciosa; usar paleta literal o `-400`), superficie
+afectada: `ThreadView`/burbujas de mensaje/área de composer.
+
+**Estado final:** prod = `f30f79d` · DB top = `20260702033205 0170` · Knowledge
+adapter de tareas APAGADO (activación piloto = decisión Dirección) · scheduler
+OPS F4.1 sin tocar · rama `feat/connect-f4-3-tasks-workflows-cockpit` local sin
+push/merge · ⚠️ coordinación vigente: el fix Drive paralelo debe rebasarse sobre
+`f30f79d` antes de su deploy.
+
+**Próximo bloque:** según Master Plan F4 → **F4.4 (spikes de de-risk WhatsApp/
+Email + automatizaciones MVP sobre el outbox)**, HABILITADO SOLO PARA
+PLANIFICACIÓN. Nota: las automatizaciones de F4.4 dependen del worker/scheduler
+(deuda OPS F4.1 abierta) — resolver o decidir esa deuda es candidata a
+precondición del plan F4.4. Sin desarrollo hasta plan aprobado por Dirección.
+
+---
+
+## 0. Ventana apply+deploy ejecutada (2026-07-02 ~03:28-03:40Z, autorizada por Dirección)
 
 **Resultado: ÉXITO — rollback NO requerido · CERO fixes in-window. Prod = `f30f79d`.**
 
