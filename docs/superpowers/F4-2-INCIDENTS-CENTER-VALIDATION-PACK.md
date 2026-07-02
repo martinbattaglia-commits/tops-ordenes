@@ -1,5 +1,10 @@
 # F4.2 · Centro de Incidentes — Validation Pack
 
+> **🏁 EJECUTADO Y CERRADO (2026-07-02):** ventana única completada — C1-C7 PASS
+> (1 fix in-window declarado, ver Execution Log §0), DRAFT+PROD PASS, smoke
+> funcional autenticado **PASS 100% por Dirección**. Prod = `484a447`. Rollback
+> no requerido. Este pack queda como guion de referencia/re-validación.
+
 > Kit de validación de la ventana apply+deploy de F4.2 (migs `0164`–`0166` + UI).
 > TODO el SQL de este pack es **read-only o 0-footprint** (fixtures transaccionales con
 > sentinel `__qa_rollback__`, patrón de los 18 kits del repo). Lo corre Martín; el

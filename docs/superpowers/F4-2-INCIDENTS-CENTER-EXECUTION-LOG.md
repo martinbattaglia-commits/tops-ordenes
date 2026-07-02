@@ -1,6 +1,35 @@
 # F4.2 · Centro de Incidentes — Execution Log
 
-## 0. 🏁 VENTANA APPLY+DEPLOY EJECUTADA (2026-07-02, autorizada por Dirección)
+## 0-bis. 🏁🏁 F4.2 CERRADA FORMALMENTE (Dirección, 2026-07-02)
+
+**Smoke funcional autenticado: PASS 100% validado por Dirección.** Verificado en
+producción (`484a447`, deploy `6a45c96d220b1ec727fecf03`): creación de incidente ·
+numeración `INC-AAAA-NNNN` · listado · detalle · comentarios · menciones ·
+asignación/reclamo · cambios de severidad/prioridad · cambios de estado ·
+resolución con detalle · cierre · reapertura · notificaciones al detalle ·
+navegación correcta · sin errores visuales bloqueantes · funcionamiento general
+100% correcto.
+
+**Criterios de cierre completos:** migs `0164-0166` aplicadas · C1-C7 PASS ·
+smoke PROD base PASS (0 500/502, 0 PostgREST 300) · smoke funcional autenticado
+PASS por Dirección · **rollback NUNCA requerido**. Riesgos remanentes = solo los
+Bajos documentados en §5 de la Parte I (idempotency-key del alta, interacción
+moderación-hilo, coalescing de notifs de estado, patrón 0152 a revisar) — todos
+como backlog/follow-up, ninguno bloqueante.
+
+**Estado final:** prod = `484a447` · DB top = `20260702020617 0166` · Knowledge
+adapter de incidentes APAGADO (activación piloto = decisión de Dirección) ·
+scheduler OPS F4.1 sin tocar (deuda abierta, sin cambios) · rama
+`feat/connect-f4-2-incidents-center` local sin push/merge.
+
+**Próximo bloque:** según Master Plan F4 → **F4.3 (Tareas + workflows + cockpit
+colaborativo)**, HABILITADO SOLO PARA PLANIFICACIÓN — precondición dura:
+**ADR-TASKS aprobado antes de una línea de código** (las tareas no existen en el
+spec; gobernanza del Dossier). Sin desarrollo F4.3 hasta plan aprobado por Dirección.
+
+---
+
+## 0. Ventana apply+deploy ejecutada (2026-07-02, autorizada por Dirección)
 
 **Resultado: ÉXITO — rollback NO requerido. Prod = `484a447`.**
 
