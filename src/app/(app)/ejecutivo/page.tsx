@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Icon, type IconName } from "@/components/Icon";
 import { CountUp } from "@/components/CountUp";
@@ -126,8 +127,13 @@ export default async function CockpitPage() {
       <QuickAccessRow />
 
       {/* BLOQUE 1D — Colaboración (F4.3, read-only): incidentes + tareas + workflows.
-          Solo con permiso connect; se auto-oculta si las fuentes no responden. */}
-      {boot.perms.connect && <CollabCard />}
+          Solo con permiso connect; se auto-oculta si las fuentes no responden.
+          Suspense: sus 6 counts no bloquean el TTFB del cockpit (fix M-4). */}
+      {boot.perms.connect && (
+        <Suspense fallback={null}>
+          <CollabCard />
+        </Suspense>
+      )}
 
       {/* BLOQUE 2 — KPIs Ejecutivos (FILA 1 financiero+operativo · FILA 2 ocupación).
           Responsive: 1 col mobile · 2 col tablet · 4 col desktop. */}

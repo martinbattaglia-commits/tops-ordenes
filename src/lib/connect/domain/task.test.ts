@@ -33,10 +33,17 @@ describe("connect/domain/task · roles NULL-safe", () => {
 });
 
 describe("connect/domain/task · availableTaskActions (espejo de 0169)", () => {
-  it("cancelada es terminal absoluto: sin acciones", () => {
+  it("cancelada es terminal absoluto: sin acciones de gestión", () => {
     const t = task({ estado: "cancelada", asignadoA: "u-asig" });
     expect(availableTaskActions(t, admin)).toEqual([]);
     expect(availableTaskActions(t, creator)).toEqual([]);
+  });
+
+  it("cancelada · un seguidor puede DEJAR de seguir (fix I-4)", () => {
+    const t = task({ estado: "cancelada" });
+    const follower: TaskViewer = { userId: "u-fan", isTaskAdmin: false, isFollower: true };
+    expect(availableTaskActions(t, follower)).toEqual(["follow"]);
+    expect(availableTaskActions(t, { ...follower, isFollower: false })).toEqual([]);
   });
 
   it("pendiente VACANTE · un tercero solo puede reclamar y seguir", () => {

@@ -46,8 +46,10 @@ as $$
       'incident_id', p.incident_id,
       'workflow_instance_id', p.workflow_instance_id,
       'step_no', p.step_no,
-      'conversation_id', p.conversation_id
-    ),                                                               -- payload (IDs/estados)
+      'conversation_id', p.conversation_id,
+      'context_id', (select cc.context_id from public.connect_conversations cc
+                      where cc.id = p.conversation_id)
+    ),                                                               -- payload (IDs/estados; context_id = contrato 0149/0166)
     'staff',                                                         -- visibility_key (interno)
     'connect_tasks',                                                 -- source_table
     p.id::text,                                                      -- source_pk (idem_uq incluye event_type)

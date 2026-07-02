@@ -77,7 +77,9 @@ function applyMockFilters(items: Task[], f: TaskFilters, uid: string): Task[] {
       case "todas": return true;
       case "abiertas":
       default:
-        return t.estado === "pendiente" || t.estado === "en_progreso";
+        // Espejo del SQL (fix M-2 adversarial): un filtro de estado explícito
+        // reemplaza la restricción "abiertas".
+        return f.estado ? true : (t.estado === "pendiente" || t.estado === "en_progreso");
     }
   });
 }
@@ -108,10 +110,12 @@ export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
   if (filters.prioridad) query = query.eq("prioridad", filters.prioridad);
   switch (filters.vista ?? "abiertas") {
     case "mias":
-      if (uid) query = query.eq("asignado_a", uid);
+      if (!uid) return []; // fix M-3 adversarial: sin sesión NO degradar a "todas"
+      query = query.eq("asignado_a", uid);
       break;
     case "creadas":
-      if (uid) query = query.eq("creado_por", uid);
+      if (!uid) return [];
+      query = query.eq("creado_por", uid);
       break;
     case "vacantes":
       query = query.is("asignado_a", null).in("estado", ["pendiente", "en_progreso"]);

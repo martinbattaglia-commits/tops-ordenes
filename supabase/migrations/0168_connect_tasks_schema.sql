@@ -182,7 +182,13 @@ alter table public.connect_workflow_templates enable row level security;
 alter table public.connect_workflow_steps     enable row level security;
 alter table public.connect_workflow_instances enable row level security;
 
--- Tareas: privado-por-involucrados (D-F43-4) + task_admin/admin. NULL-safe.
+-- Tareas: privado-por-involucrados (D-F43-4) + task_admin/admin + VACANTES
+-- abiertas visibles para todo staff con connect.view. La rama de vacantes es
+-- REQUERIDA por el ADR §5 ("vacante = reclamable por cualquier staff") y por
+-- el flujo de workflows (aviso role_target → claim): sin ella, la tarea
+-- vacante era invisible para quien debía reclamarla (fix C-1 adversarial
+-- frontend F4.3 — el "tablero de vacantes" leía bajo la misma RLS). Al
+-- asignarse, la tarea vuelve a ser privada-por-involucrados. NULL-safe.
 drop policy if exists "connect_tasks select" on public.connect_tasks;
 create policy "connect_tasks select" on public.connect_tasks
   for select to authenticated
@@ -191,6 +197,7 @@ create policy "connect_tasks select" on public.connect_tasks
     and (
       (creado_por = auth.uid())
       or (asignado_a = auth.uid())
+      or (asignado_a is null and estado in ('pendiente','en_progreso'))
       or public._connect_task_is_follower(id)
       or (conversation_id is not null and public._connect_is_member(conversation_id))
       or public.is_admin()
@@ -223,7 +230,9 @@ create policy "connect_workflow_steps select" on public.connect_workflow_steps
   using (coalesce(public.has_permission('connect.view'), false));
 
 -- Instancias: iniciador, quien vea alguna de sus tareas (RLS de tasks aplica
--- en la subquery), task_admin o admin.
+-- en la subquery), task_admin o admin. ⚠️ El lado externo va CALIFICADO
+-- (fix I-1 adversarial: `= id` sin calificar resolvía contra t.id → rama
+-- siempre falsa; patrón 0143 de calificar el lado externo).
 drop policy if exists "connect_workflow_instances select" on public.connect_workflow_instances;
 create policy "connect_workflow_instances select" on public.connect_workflow_instances
   for select to authenticated
@@ -231,7 +240,8 @@ create policy "connect_workflow_instances select" on public.connect_workflow_ins
     coalesce(public.has_permission('connect.view'), false)
     and (
       iniciado_por = auth.uid()
-      or exists (select 1 from public.connect_tasks t where t.workflow_instance_id = id)
+      or exists (select 1 from public.connect_tasks t
+                  where t.workflow_instance_id = connect_workflow_instances.id)
       or public.is_admin()
       or coalesce(public.has_permission('connect.task_admin'), false)
     )
@@ -239,11 +249,11 @@ create policy "connect_workflow_instances select" on public.connect_workflow_ins
 
 -- Escrituras: SIN policies (deny) — TODO por RPCs SECDEF de 0169.
 -- Hardening belt-and-suspenders (patrón SEC-PARTICIPANTS-1 / 0164).
-revoke insert, update, delete on public.connect_tasks              from authenticated;
-revoke insert, update, delete on public.connect_task_followers     from authenticated;
-revoke insert, update, delete on public.connect_workflow_templates from authenticated;
-revoke insert, update, delete on public.connect_workflow_steps     from authenticated;
-revoke insert, update, delete on public.connect_workflow_instances from authenticated;
+revoke insert, update, delete on public.connect_tasks              from anon, authenticated;
+revoke insert, update, delete on public.connect_task_followers     from anon, authenticated;
+revoke insert, update, delete on public.connect_workflow_templates from anon, authenticated;
+revoke insert, update, delete on public.connect_workflow_steps     from anon, authenticated;
+revoke insert, update, delete on public.connect_workflow_instances from anon, authenticated;
 
 -- ===== Realtime (lista de tareas viva; patrón 0147/0164) =====
 do $$
@@ -263,7 +273,7 @@ end $$;
 -- ⚠️ Sin `on conflict do nothing` sin target (precedente 0070): el arbiter es slug.
 insert into public.permissions (slug, module, action, label, description) values
   ('connect.task_admin', 'connect', 'task_admin', 'Administrar tareas',
-   'Administracion avanzada de tareas y workflows: reasignar, cancelar/cerrar cross, gestionar seguidores, instanciar workflows')
+   'Administracion avanzada de tareas: reasignar, cancelar/cerrar cross, gestionar seguidores. Instanciar workflows solo requiere connect.create (ADR paragrafo 13)')
 on conflict (slug) do nothing;
 
 insert into public.role_permissions (role_id, permission_id)

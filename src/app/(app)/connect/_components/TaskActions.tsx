@@ -40,7 +40,14 @@ export function TaskActions({
   const [motivo, setMotivo] = useState("");
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<ProfileHit[]>([]);
-  const [due, setDue] = useState("");
+  // Fix M-6 adversarial: precargar la fecha existente en formato datetime-local
+  // (hora local del navegador, no UTC).
+  const [due, setDue] = useState(() => {
+    if (!task.dueAt) return "";
+    const d = new Date(task.dueAt);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0, 16);
+  });
   const [editingDue, setEditingDue] = useState(false);
 
   async function run(fn: () => Promise<{ ok: boolean; message?: string }>) {
@@ -155,7 +162,9 @@ export function TaskActions({
             <Icon name="plus" size={13} /> Agregar seguidor
           </button>
         )}
-        {!hasThread && (
+        {!hasThread && task.estado !== "completada" && task.estado !== "cancelada" && (
+          // Fix I-3 adversarial: en estados terminales no se ofrece crear un
+          // hilo que nacería read-only (el RPC también lo rechaza).
           <button type="button" className="btn btn-ghost btn-sm" disabled={busy}
             onClick={() => void run(() => ensureTaskThreadAction({ taskId: task.id }))}>
             <Icon name="chat" size={13} /> Iniciar conversación
@@ -188,6 +197,11 @@ export function TaskActions({
 
       {canceling && (
         <div className="card space-y-2 p-3">
+          {task.workflowInstanceId && (
+            <p className="text-[11px] text-amber-500">
+              Esta tarea es el paso {task.stepNo} de un workflow: cancelarla detiene la cadena.
+            </p>
+          )}
           <textarea className="input min-h-16 w-full" value={motivo} maxLength={300}
             placeholder="Motivo breve de la cancelación (obligatorio)…"
             onChange={(e) => setMotivo(e.target.value)} />

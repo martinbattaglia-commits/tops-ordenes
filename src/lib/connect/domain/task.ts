@@ -58,7 +58,12 @@ export function availableTaskActions(t: Task, v: TaskViewer): TaskAction[] {
   const terminal = t.estado === "completada" || t.estado === "cancelada";
   const out: TaskAction[] = [];
 
-  if (t.estado === "cancelada") return out; // terminal absoluto
+  if (t.estado === "cancelada") {
+    // Terminal absoluto — pero un seguidor puede DEJAR de seguir (fix I-4
+    // adversarial F4.3: quedaba pegado a la tarea cancelada sin salida por UI).
+    if (v.userId != null && v.isFollower) out.push("follow");
+    return out;
+  }
 
   // Asignación (claim SOLO vacante — lección I-1 heredada).
   if (!terminal) {

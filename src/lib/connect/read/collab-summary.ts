@@ -47,7 +47,9 @@ export async function getCollabSummary(): Promise<CollabSummary | null> {
       supabase.from("connect_workflow_instances").select("*", { count: "exact", head: true })
         .eq("estado", "en_curso"),
     ]);
-    if (incAb.error || tAb.error) return null; // tablas aún no aplicadas → card se oculta
+    // Cualquier fuente con error → card oculta (fix M-4 adversarial: sin ceros
+    // silenciosos por fallas parciales; tablas no aplicadas también caen acá).
+    if (incAb.error || incCr.error || tAb.error || tVenc.error || tVac.error || wf.error) return null;
     return {
       incidentesAbiertos: incAb.count ?? 0,
       incidentesCriticos: incCr.count ?? 0,

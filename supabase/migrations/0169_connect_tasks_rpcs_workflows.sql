@@ -19,6 +19,32 @@
 -- (conversaciones/notifs), 0009/0004. Rollback: ROLLBACK_0167_0170.md.
 -- ─────────────────────────────────────────────────────────────────────────
 
+-- ===== Policy de notifications: los broadcasts a rol se pueden marcar leídos =====
+-- Fix I-2 adversarial F4.3: F4.3 es el PRIMER emisor de role_target ≠ 'admin'
+-- (operaciones/supervisor en los avisos de workflow). La policy de UPDATE de
+-- 0162 solo contemplaba user_id/delegated_to/current_role()='admin' → esos
+-- broadcasts quedaban NO-LEÍDOS PARA SIEMPRE para el rol destino (el UPDATE de
+-- read_at matcheaba 0 filas en silencio). Extensión MÍNIMA: el miembro del rol
+-- destino puede accionar (limitado por el grant POR COLUMNA de 0162 a
+-- read_at/remind_at; marcarla leída la marca para todo el rol — semántica
+-- inherente del broadcast de 0004, aceptada). Se re-crea la policy COMPLETA
+-- de 0162 + la rama nueva (cuerpo base = 0162:33-36 VIGENTE).
+drop policy if exists "notifications mark read own" on public.notifications;
+create policy "notifications mark read own"
+  on public.notifications for update
+  using (
+    user_id = auth.uid()
+    or delegated_to = auth.uid()
+    or (role_target is not null and role_target = public.current_role())
+    or public.current_role() = 'admin'
+  )
+  with check (
+    user_id = auth.uid()
+    or delegated_to = auth.uid()
+    or (role_target is not null and role_target = public.current_role())
+    or public.current_role() = 'admin'
+  );
+
 -- ===== Helpers =====
 create or replace function public._connect_task_is_admin()
 returns boolean
@@ -217,9 +243,12 @@ begin
     perform public._connect_task_notify(v_t.creado_por, p_id,
       'Tarea ' || v_t.public_id || ' quedó vacante',
       'El responsable devolvió la tarea.', public._connect_task_prio(v_t.prioridad));
-    perform public._connect_task_notify(v_t.asignado_a, p_id,
-      'Tarea ' || v_t.public_id || ' des-asignada',
-      'Ya no sos el responsable.', 'normal');
+    -- Dedupe (fix M-3 adversarial): si creador = asignado, UNA sola notificación.
+    if v_t.asignado_a is distinct from v_t.creado_por then
+      perform public._connect_task_notify(v_t.asignado_a, p_id,
+        'Tarea ' || v_t.public_id || ' des-asignada',
+        'Ya no sos el responsable.', 'normal');
+    end if;
     return;
   end if;
 
@@ -358,6 +387,28 @@ begin
          when v_new = 'completada' then 'La tarea fue completada.'
          else 'La tarea está en progreso.' end,
     public._connect_task_prio(v_t.prioridad));
+
+  -- ===== Cancelación de paso de workflow → la INSTANCIA también se cancela =====
+  -- Fix I-1 adversarial: sin esto, cancelar el paso activo dejaba la instancia
+  -- 'en_curso' PARA SIEMPRE (el avance solo dispara al completar; el unique
+  -- (instance, step) impide recrear el paso; 'cancelado' era código muerto).
+  if v_new = 'cancelada' and v_t.workflow_instance_id is not null then
+    select * into v_inst from public.connect_workflow_instances
+     where connect_workflow_instances.id = v_t.workflow_instance_id for update;
+    if found and v_inst.estado = 'en_curso' and v_inst.current_step = v_t.step_no then
+      update public.connect_workflow_instances
+         set estado = 'cancelado', completed_at = now()
+       where connect_workflow_instances.id = v_inst.id;
+      perform public._connect_task_notify(v_inst.iniciado_por, p_id,
+        'Workflow cancelado',
+        'Se canceló el paso ' || v_t.step_no || ' (' || v_t.public_id || ') y la cadena se detuvo.',
+        'normal');
+      insert into public.audit_log (user_id, entity, entity_id, action, payload)
+      values (auth.uid(), 'connect_task', p_id, 'connect.task.workflow_advance',
+              jsonb_build_object('instance_id', v_inst.id, 'from_step', v_t.step_no,
+                                 'cancelled', true));
+    end if;
+  end if;
 
   -- ===== Avance de WORKFLOW LINEAL (síncrono, sin scheduler) =====
   if v_new = 'completada' and v_t.workflow_instance_id is not null then
@@ -582,6 +633,11 @@ begin
   if not (public._connect_task_is_involved(p_id) or public._connect_task_is_admin() or public.is_admin()) then
     raise exception 'sin acceso a la tarea' using errcode = 'insufficient_privilege';
   end if;
+  -- Fix I-3 adversarial: no crear hilos nuevos en estados terminales (nacerían
+  -- read-only e inútiles). Si el hilo YA existe, se devuelve normalmente.
+  if v_t.conversation_id is null and v_t.estado in ('completada','cancelada') then
+    raise exception 'la tarea está en estado terminal (sin hilo)' using errcode = 'check_violation';
+  end if;
 
   if v_t.conversation_id is not null then
     -- Ya existe: garantizar que el caller (involucrado) sea miembro.
@@ -604,9 +660,12 @@ begin
       union select f.profile_id from public.connect_task_followers f where f.task_id = p_id
     ) s where u is not null
   loop
+    -- ⚠️ Fix C-1 adversarial (BLOQUEANTE): un CASE cuyas ramas son todas
+    -- literales unknown se resuelve como TEXT, y text→enum NO tiene coerción
+    -- de asignación → 42804 en la primera ejecución. Cast explícito al enum.
     insert into public.connect_participants (conversation_id, participant_type, profile_id, member_role)
     values (v_conv, 'staff', v_member,
-            case when v_member = v_t.creado_por then 'owner' else 'member' end)
+            (case when v_member = v_t.creado_por then 'owner' else 'member' end)::public.connect_member_role_t)
     on conflict (conversation_id, profile_id) do nothing;
   end loop;
 
