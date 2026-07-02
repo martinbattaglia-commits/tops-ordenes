@@ -63,10 +63,11 @@ export function availableActions(i: Incident, v: IncidentViewer): IncidentAction
 
   if (i.estado === "cerrado") return out; // terminal
 
-  // Asignación (atributo, no estado — D4).
+  // Asignación (atributo, no estado — D4). Fix I-1/I-3 adversarial: la
+  // auto-asignación es un "claim" SOLO de incidentes VACANTES (el RPC exige
+  // asignado_a null para no-admins; reasignar — incluso a uno mismo — es de admin).
   if (admin) out.push("assign");
-  if (!assignee && v.userId != null && !admin) out.push("assign_self");
-  if (!assignee && admin) out.push("assign_self");
+  if (i.asignadoA == null && v.userId != null) out.push("assign_self");
 
   switch (i.estado) {
     case "abierto":

@@ -5,8 +5,7 @@
 
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
-import { canAccess } from "@/lib/rbac/guard";
-import { getIncident } from "@/lib/connect/read/incidents-data";
+import { getIncident, hasIncidentAdmin } from "@/lib/connect/read/incidents-data";
 import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
 import { listParticipants } from "@/lib/connect/read/channel-data";
 import { getCurrentUserId } from "@/lib/connect/data";
@@ -35,12 +34,14 @@ export default async function IncidentDetailPage({
     );
   }
 
+  // hasIncidentAdmin: espejo FAIL-CLOSED del permiso real (no canAccess, que es
+  // fail-open con RBAC dormido) — el RPC re-valida cada acción igual.
   const [conversation, messages, participants, currentUserId, isIncidentAdmin] = await Promise.all([
     getConversation(incident.conversationId),
     listMessages(incident.conversationId),
     listParticipants(incident.conversationId),
     getCurrentUserId(),
-    canAccess("connect.incident_admin"),
+    hasIncidentAdmin(),
   ]);
   const mentionables = participants
     .filter((m) => m.profileId && m.name)

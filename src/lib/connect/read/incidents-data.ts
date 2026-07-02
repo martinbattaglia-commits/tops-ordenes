@@ -35,7 +35,12 @@ function mapIncident(r: IncidentRow): Incident {
   };
 }
 
-/** Resuelve nombres (full_name + apellido) de los perfiles involucrados, sin email. */
+/**
+ * Resuelve nombres de los perfiles involucrados vía `profiles_public` (0046):
+ * la tabla `profiles` tiene lockdown 0040 (`id = auth.uid() OR is_admin()`) y
+ * para un viewer no-admin los nombres nunca resolverían (fix I-1 adversarial;
+ * mismo patrón que channel-data DEFECT-2). Solo id + full_name, sin email.
+ */
 async function withNames(items: Incident[]): Promise<Incident[]> {
   const ids = Array.from(
     new Set(items.flatMap((i) => [i.reportadoPor, i.asignadoA]).filter((x): x is string => x != null)),
@@ -44,13 +49,13 @@ async function withNames(items: Incident[]): Promise<Incident[]> {
   const supabase = createClient();
   if (!supabase) return items;
   const { data, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, apellido")
+    .from("profiles_public")
+    .select("id, full_name")
     .in("id", ids);
   if (error || !data) return items;
   const names = new Map<string, string>();
-  for (const p of data as Array<{ id: string; full_name: string | null; apellido: string | null }>) {
-    const n = [p.full_name, p.apellido].filter(Boolean).join(" ").trim();
+  for (const p of data as Array<{ id: string; full_name: string | null }>) {
+    const n = (p.full_name ?? "").trim();
     if (n) names.set(p.id, n);
   }
   return items.map((i) => ({
@@ -95,9 +100,19 @@ export async function listIncidents(filters: IncidentFilters = {}): Promise<Inci
     query = query.neq("estado", "cerrado");
   }
   if (filters.severidad) query = query.eq("severidad", filters.severidad);
-  if (filters.sector) query = query.ilike("sector", filters.sector);
+  if (filters.sector) {
+    // ilike sin % = igualdad case-insensitive; se escapan comodines del usuario
+    // (fix M-1 adversarial: sector=%25 listaba todo lo visible).
+    query = query.ilike("sector", filters.sector.replace(/[\\%_]/g, (m) => `\\${m}`));
+  }
   if (filters.asignado) query = query.eq("asignado_a", filters.asignado);
-  query = query.order("created_at", { ascending: false }).limit(200);
+  // Orden de negocio EN SQL antes del límite (fix I-4 adversarial: ordenar por
+  // created_at desc y limitar recortaba justo las críticas más antiguas).
+  // El enum severidad se declara baja→critica: descending = crítica primero.
+  query = query
+    .order("severidad", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(200);
 
   const { data, error } = await query;
   if (error) {
@@ -106,6 +121,23 @@ export async function listIncidents(filters: IncidentFilters = {}): Promise<Inci
   }
   const items = (data ?? []).map((r) => mapIncident(r as unknown as IncidentRow));
   return sortIncidents(await withNames(items));
+}
+
+/**
+ * ¿El usuario es admin de incidentes? Resuelto FAIL-CLOSED vía RPC has_permission
+ * (fix I-2 adversarial: canAccess() es fail-open con RBAC dormido — usuarios sin
+ * fila en user_roles verían la botonera de admin y el RPC les rechazaría cada
+ * click). Es un espejo de UX, no un gate: el RPC de 0165 re-valida siempre.
+ */
+export async function hasIncidentAdmin(): Promise<boolean> {
+  if (isMock()) return true; // demo: mostrar la superficie completa
+  const supabase = createClient();
+  if (!supabase) return true;
+  const { data, error } = await supabase.rpc("has_permission", {
+    p_slug: "connect.incident_admin",
+  });
+  if (error) return false;
+  return data === true;
 }
 
 /** Un incidente por id (detalle). */

@@ -46,7 +46,7 @@ function revalidateIncidents(incidentId?: string) {
 }
 
 const OpenSchema = z.object({
-  titulo: z.string().min(1).max(200),
+  titulo: z.string().min(1).max(160), // alineado a MAX_INCIDENT_TITLE y al RPC (M-3)
   severidad: z.enum(INCIDENT_SEVERITIES),
   sector: z.string().max(60).nullable().optional(),
   ubicacion: z.string().max(120).nullable().optional(),
@@ -80,7 +80,7 @@ export async function openIncidentAction(raw: unknown): Promise<OpenIncidentResu
 }
 
 const AssignSchema = z.object({
-  incidentId: z.string().uuid().or(z.string().min(1)),
+  incidentId: z.string().uuid(),
   toProfileId: z.string().uuid(),
 });
 

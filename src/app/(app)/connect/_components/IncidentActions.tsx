@@ -51,16 +51,21 @@ export function IncidentActions({
     if (busy) return;
     setError(null);
     setBusy(true);
-    const r = await fn();
-    setBusy(false);
-    if (!r.ok) {
-      setError(("message" in r && r.message) || "No se pudo completar la acción.");
-      return;
+    try {
+      const r = await fn();
+      if (!r.ok) {
+        setError(("message" in r && r.message) || "No se pudo completar la acción.");
+        return;
+      }
+      setResolving(false);
+      setAssigning(false);
+      setResolution("");
+      router.refresh();
+    } catch {
+      setError("No se pudo completar la acción. Reintentá.");
+    } finally {
+      setBusy(false); // M-4: la botonera no queda pegada si la action lanza
     }
-    setResolving(false);
-    setAssigning(false);
-    setResolution("");
-    router.refresh();
   }
 
   function transition(action: IncidentAction) {

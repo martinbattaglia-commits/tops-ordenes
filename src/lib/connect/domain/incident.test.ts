@@ -57,10 +57,22 @@ describe("connect/domain/incident · availableActions (espejo de 0165)", () => {
     expect(acts).toContain("start");
   });
 
-  it("abierto · un tercero solo puede auto-asignarse", () => {
-    const i = incident({ estado: "abierto" });
+  it("abierto sin asignar · un tercero solo puede reclamarlo (claim)", () => {
+    const i = incident({ estado: "abierto", asignadoA: null });
     const acts = availableActions(i, outsider);
     expect(acts).toEqual(["assign_self"]);
+  });
+
+  it("abierto YA asignado · un tercero no tiene NINGUNA acción (fix I-1: no robo de asignación)", () => {
+    const i = incident({ estado: "abierto", asignadoA: "u-asig" });
+    expect(availableActions(i, outsider)).toEqual([]);
+  });
+
+  it("asignado a otro · solo el admin puede reasignar (assign), sin assign_self", () => {
+    const i = incident({ estado: "abierto", asignadoA: "u-asig" });
+    const acts = availableActions(i, admin);
+    expect(acts).toContain("assign");
+    expect(acts).not.toContain("assign_self");
   });
 
   it("en_progreso ↔ en_espera solo asignado/admin", () => {
@@ -80,11 +92,17 @@ describe("connect/domain/incident · availableActions (espejo de 0165)", () => {
     expect(acts).not.toContain("force_close");
   });
 
-  it("resuelto · un tercero no puede cerrar ni reabrir", () => {
+  it("resuelto · un tercero no puede cerrar, reabrir ni auto-asignarse", () => {
     const i = incident({ estado: "resuelto", asignadoA: "u-asig" });
     const acts = availableActions(i, outsider);
     expect(acts).not.toContain("close");
     expect(acts).not.toContain("reopen");
+    expect(acts).not.toContain("assign_self");
+  });
+
+  it("viewer sin sesión (userId null) no recibe acciones de asignación", () => {
+    const i = incident({ estado: "abierto", asignadoA: null });
+    expect(availableActions(i, { userId: null, isIncidentAdmin: false })).toEqual([]);
   });
 
   it("set_severity solo asignado/admin en estados no terminales", () => {

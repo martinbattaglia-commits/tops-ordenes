@@ -29,9 +29,41 @@
 --   · Comentarios/fotos del incidente = connect_post_message / connect_attachments
 --     sobre la conversación vinculada (motor existente; acá NO se duplica).
 -- IDEMPOTENTE (create or replace + revoke/grant re-ejecutables).
--- DEPENDE de: 0164 (tabla/enums/permiso), 0143/0144/0151/0161 (Connect core),
--- 0147 (notifications ext), 0009 (RBAC), 0004 (notifications).
+-- DEPENDE de: 0164 (tabla/enums/valor 'incident_admin' de permission_action_t —
+-- por eso el SEED del permiso vive ACÁ, en tx separada), 0143/0144/0151/0161
+-- (Connect core), 0147 (notifications ext), 0009 (RBAC), 0004 (notifications).
 -- ─────────────────────────────────────────────────────────────────────────
+
+-- ===== D3 · RBAC (parte 2/2): permiso connect.incident_admin =====
+-- El valor de enum 'incident_admin' se agregó en 0164 (tx separada). Acá se
+-- siembra el permiso + grants (SOLO catálogo; patrón 0146/0155). action =
+-- 'incident_admin' porque ('connect','admin') está ocupado (UNIQUE module+action).
+-- ⚠️ NO usar `on conflict do nothing` sin target acá: taparía en silencio un
+-- conflicto de (module,action) y el permiso no existiría (precedente 0070).
+insert into public.permissions (slug, module, action, label, description) values
+  ('connect.incident_admin', 'connect', 'incident_admin', 'Administrar incidentes',
+   'Administracion avanzada del Centro de Incidentes: reasignar, cerrar forzado, ajustar severidad')
+on conflict (slug) do nothing;
+
+insert into public.role_permissions (role_id, permission_id)
+select ro.id, p.id
+from public.roles ro
+join public.permissions p on p.slug = 'connect.incident_admin'
+where ro.slug in ('admin','director_ops')
+on conflict do nothing;
+
+-- ===== Helper: ¿el usuario es admin de incidentes? (NULL-safe, P-1) =====
+-- has_permission puede devolver NULL si el usuario no tiene fila en profiles
+-- (current_role() NULL → `false or null` = NULL). Hallazgo I-2 adversarial:
+-- `if not NULL` no levanta → fail-open. coalesce lo cierra.
+create or replace function public._connect_incident_is_admin()
+returns boolean
+language sql stable security definer set search_path = public, pg_temp
+as $$
+  select coalesce(public.has_permission('connect.incident_admin'), false);
+$$;
+revoke all on function public._connect_incident_is_admin() from public, anon, authenticated;
+grant execute on function public._connect_incident_is_admin() to service_role;
 
 -- ===== Helper: prioridad de notificación según severidad =====
 create or replace function public._connect_incident_priority(p_sev public.connect_incident_severity_t)
@@ -88,8 +120,8 @@ declare
   v_pub    text;
   v_admin  uuid;
 begin
-  -- P-1: fail-closed explícito.
-  if auth.uid() is null or not public.has_permission('connect.create') then
+  -- P-1: fail-closed explícito (coalesce: has_permission puede devolver NULL, I-2).
+  if auth.uid() is null or not coalesce(public.has_permission('connect.create'), false) then
     raise exception 'Sin permiso connect.create' using errcode = 'insufficient_privilege';
   end if;
 
@@ -142,7 +174,11 @@ begin
                              'sector', nullif(btrim(coalesce(p_sector,'')),'')));
 
   -- D2: notificación SÍNCRONA acotada a los tenedores de connect.incident_admin
-  -- (staff interno activo; el reportante se excluye en el helper).
+  -- (RBAC formal) UNION los admins legacy (profiles.role='admin') — fix I-3
+  -- adversarial: con el RBAC dormido (1 asignación en user_roles en prod), solo
+  -- el RBAC formal dejaría el fan-out VACÍO y nadie se enteraría de la apertura.
+  -- Acotado por diseño (puñado de usuarios internos activos); el reportante se
+  -- excluye en el helper.
   for v_admin in
     select distinct ur.user_id
       from public.user_roles ur
@@ -152,6 +188,12 @@ begin
      where pe.slug = 'connect.incident_admin'
        and coalesce(pr.active, true)
        and pr.client_id is null
+    union
+    select p.id
+      from public.profiles p
+     where p.role = 'admin'
+       and coalesce(p.active, true)
+       and p.client_id is null
   loop
     perform public._connect_incident_notify(
       v_admin, v_inc,
@@ -193,12 +235,20 @@ begin
     raise exception 'el incidente está cerrado' using errcode = 'check_violation';
   end if;
 
-  -- P-1: NULL-safe. Admin de incidentes, o auto-asignación de staff con connect.create.
-  v_is_admin := public.has_permission('connect.incident_admin');
-  if not v_is_admin
-     and not (p_to = auth.uid() and public.has_permission('connect.create')) then
-    raise exception 'solo connect.incident_admin puede asignar a terceros'
-      using errcode = 'insufficient_privilege';
+  -- P-1: NULL-safe (helper con coalesce, fix I-2). Reglas (fix I-1 adversarial):
+  --   · incident_admin: asigna/REASIGNA a cualquiera (incluido sí mismo).
+  --   · staff con connect.create: SOLO auto-asignación tipo "claim" de un
+  --     incidente VACANTE (asignado_a null). Sin esto, cualquier staff se
+  --     apropiaba de incidentes ya asignados (robo de asignación + entrada al
+  --     hilo + ciclo completo resolve/close sin ser admin).
+  v_is_admin := public._connect_incident_is_admin();
+  if not v_is_admin then
+    if not (p_to = auth.uid()
+            and v_inc.asignado_a is null
+            and coalesce(public.has_permission('connect.create'), false)) then
+      raise exception 'solo connect.incident_admin puede asignar o reasignar a terceros'
+        using errcode = 'insufficient_privilege';
+    end if;
   end if;
 
   -- Destino: staff interno activo (mismo criterio que connect_notif_delegate / 0158).
@@ -279,7 +329,7 @@ begin
     raise exception 'incidente inexistente' using errcode = 'no_data_found';
   end if;
 
-  v_is_admin    := public.has_permission('connect.incident_admin');
+  v_is_admin    := public._connect_incident_is_admin();  -- NULL-safe (I-2)
   -- P-1: comparaciones NULL-safe.
   v_is_assignee := v_inc.asignado_a is not distinct from auth.uid() and v_inc.asignado_a is not null;
   v_is_reporter := v_inc.reportado_por is not distinct from auth.uid() and v_inc.reportado_por is not null;
@@ -333,6 +383,16 @@ begin
          resolucion_text = case when v_reopen then null else resolucion_text end
    where connect_incidents.id = p_id;
 
+  -- Reapertura: la resolución anterior se PRESERVA como mensaje system en el
+  -- hilo (visible solo a miembros — misma frontera PII que el resto del hilo).
+  -- Fix I-4 adversarial: NO va texto libre a audit_log (legible por supervisor);
+  -- allí solo queda la longitud como evidencia de que existía.
+  if v_reopen and v_inc.resolucion_text is not null then
+    insert into public.connect_messages (conversation_id, kind, body)
+    values (v_inc.conversation_id, 'system',
+            'Reapertura de ' || v_inc.public_id || '. Resolución anterior: ' || v_inc.resolucion_text);
+  end if;
+
   v_action := case
     when v_reopen then 'connect.incident.reopen'
     when v_forced then 'connect.incident.force_close'
@@ -342,21 +402,25 @@ begin
   values (auth.uid(), 'connect_incident', p_id, v_action,
           jsonb_build_object('public_id', v_inc.public_id,
                              'from', v_inc.estado, 'to', v_new, 'forced', v_forced,
-                             'prev_resolucion', case when v_reopen then v_inc.resolucion_text end));
+                             'prev_resolucion_len',
+                             case when v_reopen then coalesce(length(v_inc.resolucion_text), 0) end));
 
-  -- D2: reportante + asignado se enteran síncrono (helper excluye al actor).
+  -- D2: reportante + asignado se enteran síncrono (helper excluye al actor;
+  -- fix M-3 adversarial: si reportante = asignado, UNA sola notificación).
   perform public._connect_incident_notify(
     v_inc.reportado_por, p_id,
     'Incidente ' || v_inc.public_id || ': ' || replace(v_new::text, '_', ' '),
     case when v_reopen then 'El incidente fue reabierto.'
          else 'Cambio de estado: ' || replace(v_inc.estado::text,'_',' ') || ' → ' || replace(v_new::text,'_',' ') end,
     public._connect_incident_priority(v_inc.severidad));
-  perform public._connect_incident_notify(
-    v_inc.asignado_a, p_id,
-    'Incidente ' || v_inc.public_id || ': ' || replace(v_new::text, '_', ' '),
-    case when v_reopen then 'El incidente fue reabierto.'
-         else 'Cambio de estado: ' || replace(v_inc.estado::text,'_',' ') || ' → ' || replace(v_new::text,'_',' ') end,
-    public._connect_incident_priority(v_inc.severidad));
+  if v_inc.asignado_a is distinct from v_inc.reportado_por then
+    perform public._connect_incident_notify(
+      v_inc.asignado_a, p_id,
+      'Incidente ' || v_inc.public_id || ': ' || replace(v_new::text, '_', ' '),
+      case when v_reopen then 'El incidente fue reabierto.'
+           else 'Cambio de estado: ' || replace(v_inc.estado::text,'_',' ') || ' → ' || replace(v_new::text,'_',' ') end,
+      public._connect_incident_priority(v_inc.severidad));
+  end if;
 end;
 $$;
 revoke all on function public.connect_incident_set_status(uuid, text) from public, anon;
@@ -388,7 +452,7 @@ begin
     raise exception 'el incidente está cerrado' using errcode = 'check_violation';
   end if;
   if not ((v_inc.asignado_a is not null and v_inc.asignado_a is not distinct from auth.uid())
-          or public.has_permission('connect.incident_admin')) then
+          or public._connect_incident_is_admin()) then
     raise exception 'solo el asignado o incident_admin' using errcode = 'insufficient_privilege';
   end if;
   if v_inc.severidad = v_new then
@@ -407,10 +471,12 @@ begin
       v_inc.reportado_por, p_id,
       'Incidente ' || v_inc.public_id || ' escalado a crítica',
       left(v_inc.titulo, 120), 'urgent');
-    perform public._connect_incident_notify(
-      v_inc.asignado_a, p_id,
-      'Incidente ' || v_inc.public_id || ' escalado a crítica',
-      left(v_inc.titulo, 120), 'urgent');
+    if v_inc.asignado_a is distinct from v_inc.reportado_por then
+      perform public._connect_incident_notify(
+        v_inc.asignado_a, p_id,
+        'Incidente ' || v_inc.public_id || ' escalado a crítica',
+        left(v_inc.titulo, 120), 'urgent');
+    end if;
   end if;
 end;
 $$;
@@ -443,7 +509,7 @@ begin
     raise exception 'transición inválida: % → resuelto', v_inc.estado using errcode = 'check_violation';
   end if;
   if not ((v_inc.asignado_a is not null and v_inc.asignado_a is not distinct from auth.uid())
-          or public.has_permission('connect.incident_admin')) then
+          or public._connect_incident_is_admin()) then
     raise exception 'solo el asignado o incident_admin pueden resolver'
       using errcode = 'insufficient_privilege';
   end if;
@@ -461,11 +527,13 @@ begin
     'Incidente ' || v_inc.public_id || ' resuelto',
     'Podés verificar y cerrar (o reabrir).',
     public._connect_incident_priority(v_inc.severidad));
-  perform public._connect_incident_notify(
-    v_inc.asignado_a, p_id,
-    'Incidente ' || v_inc.public_id || ' resuelto',
-    'El incidente quedó resuelto.',
-    'normal');
+  if v_inc.asignado_a is distinct from v_inc.reportado_por then
+    perform public._connect_incident_notify(
+      v_inc.asignado_a, p_id,
+      'Incidente ' || v_inc.public_id || ' resuelto',
+      'El incidente quedó resuelto.',
+      'normal');
+  end if;
 end;
 $$;
 revoke all on function public.connect_incident_resolve(uuid, text) from public, anon;

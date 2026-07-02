@@ -28,21 +28,26 @@ export function NewIncidentForm() {
     if (busy) return;
     setError(null);
     setBusy(true);
-    const result = await openIncidentAction({
-      titulo,
-      severidad,
-      sector: sector.trim() || null,
-      ubicacion: ubicacion.trim() || null,
-      tipoAveria: tipoAveria.trim() || null,
-      descripcion: descripcion.trim() || null,
-    });
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
-      return;
+    try {
+      const result = await openIncidentAction({
+        titulo,
+        severidad,
+        sector: sector.trim() || null,
+        ubicacion: ubicacion.trim() || null,
+        tipoAveria: tipoAveria.trim() || null,
+        descripcion: descripcion.trim() || null,
+      });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      router.push(`/connect/incidentes/${result.id}`);
+      router.refresh();
+    } catch {
+      setError("No se pudo reportar el incidente. Reintentá.");
+    } finally {
+      setBusy(false); // M-4: el form no queda pegado si la action lanza
     }
-    router.push(`/connect/incidentes/${result.id}`);
-    router.refresh();
   }
 
   return (

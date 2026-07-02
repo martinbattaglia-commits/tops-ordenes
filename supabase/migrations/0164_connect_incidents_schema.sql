@@ -13,8 +13,13 @@
 --   · RLS: SELECT = connect.view + miembro del hilo (o admin). Escrituras SOLO
 --     vía RPCs SECDEF de 0165 (sin policies de INSERT/UPDATE/DELETE = deny) +
 --     revoke de escritura table-level (hardening patrón SEC-PARTICIPANTS-1).
---   · D3: permiso nuevo `connect.incident_admin` (solo catálogo; grants a
---     admin/director_ops). SIN otros cambios RBAC. RBAC_ENFORCE intacto.
+--   · D3: acá se agrega SOLO el valor de enum `incident_admin` a
+--     permission_action_t (fix C-1 de la revisión adversarial: `permissions`
+--     tiene UNIQUE (module, action) y ('connect','admin') ya lo ocupa
+--     connect.admin de 0146 — verificado en prod; un INSERT con action='admin'
+--     abortaría el batch). El SEED del permiso + grants va en 0165 (batch/tx
+--     separado: Postgres prohíbe USAR un valor de enum nuevo en la misma tx).
+--     SIN otros cambios RBAC. RBAC_ENFORCE intacto.
 -- 100% ADITIVA · IDEMPOTENTE (re-run = no-op). DEPENDE de: 0143 (enums/tablas/
 -- _connect_is_member), 0146 (permissions connect), 0009 (RBAC), 0004 (tg_touch_updated_at).
 -- Rollback: ver docs/superpowers/ROLLBACK_0164_0166.md.
@@ -37,10 +42,14 @@ create sequence if not exists public.connect_incident_seq;
 create or replace function public._connect_set_incident_public_id()
 returns trigger language plpgsql set search_path = public, pg_temp
 as $$
+declare v_n text;
 begin
   if new.public_id is null or new.public_id = '' then
+    -- greatest(): lpad TRUNCA si el número supera el ancho (INC-…-10000 → '1000',
+    -- colisión determinística; hallazgo M-1 de la revisión adversarial).
+    v_n := nextval('public.connect_incident_seq')::text;
     new.public_id := 'INC-' || to_char(now(),'YYYY') || '-' ||
-                     lpad(nextval('public.connect_incident_seq')::text, 4, '0');
+                     lpad(v_n, greatest(4, length(v_n)), '0');
   end if;
   return new;
 end;
@@ -94,13 +103,21 @@ create trigger trg_connect_incidents_touch
 -- ===== RLS =====
 alter table public.connect_incidents enable row level security;
 
--- SELECT (A2): connect.view + miembro del hilo, o admin.
+-- SELECT (A2 + fix I-3/C-1 adversarial): connect.view + (miembro del hilo, admin,
+-- o tenedor de connect.incident_admin — sin esto un incident_admin no-admin
+-- recibiría la notificación de apertura pero la RLS le ocultaría el incidente).
+-- has_permission puede devolver NULL (sin fila en profiles): en policy, NULL
+-- excluye la fila (fail-closed); coalesce explícito por claridad P-1.
 drop policy if exists "connect_incidents select" on public.connect_incidents;
 create policy "connect_incidents select" on public.connect_incidents
   for select to authenticated
   using (
-    public.has_permission('connect.view')
-    and (public._connect_is_member(conversation_id) or public.is_admin())
+    coalesce(public.has_permission('connect.view'), false)
+    and (
+      public._connect_is_member(conversation_id)
+      or public.is_admin()
+      or coalesce(public.has_permission('connect.incident_admin'), false)
+    )
   );
 
 -- Escrituras: SIN policies de INSERT/UPDATE/DELETE (deny) — todo ciclo de vida
@@ -124,20 +141,11 @@ exception
   when undefined_object then null;  -- publicación inexistente (entorno no-Supabase)
 end $$;
 
--- ===== D3 · RBAC: permiso connect.incident_admin (SOLO catálogo, patrón 0146) =====
--- Administración avanzada de incidentes: reasignar, cierre forzado, ajustar
--- severidad, acciones que exceden al creador/asignado. Reportar/ver NO lo
--- requieren (usan connect.view / connect.create existentes).
-insert into public.permissions (slug, module, action, label, description) values
-  ('connect.incident_admin', 'connect', 'admin', 'Administrar incidentes',
-   'Administracion avanzada del Centro de Incidentes: reasignar, cerrar forzado, ajustar severidad')
-on conflict (slug) do nothing;
-
-insert into public.role_permissions (role_id, permission_id)
-select ro.id, p.id
-from public.roles ro
-join public.permissions p on p.slug = 'connect.incident_admin'
-where ro.slug in ('admin','director_ops')
-on conflict do nothing;
+-- ===== D3 · RBAC (parte 1/2): valor de enum para el permiso nuevo =====
+-- ('connect','admin') está OCUPADO por connect.admin (0146, UNIQUE module+action).
+-- Se agrega la acción 'incident_admin' al catálogo de acciones; el INSERT del
+-- permiso + grants va en 0165 (tx separada — regla "enum nuevo no se usa en la
+-- misma tx", patrón 0021/0029/0052). idempotente (if not exists).
+alter type public.permission_action_t add value if not exists 'incident_admin';
 
 notify pgrst, 'reload schema';
