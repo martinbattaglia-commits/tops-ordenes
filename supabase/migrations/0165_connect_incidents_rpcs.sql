@@ -111,6 +111,12 @@ create or replace function public.connect_incident_open(
 ) returns table (id uuid, public_id text, conversation_id uuid)
 language plpgsql security definer set search_path = public, pg_temp
 as $$
+-- Los OUT params (id/public_id/conversation_id) colisionan con nombres de
+-- columna DENTRO de cláusulas parseadas como expresión (p.ej. el target de
+-- ON CONFLICT) → 42702. use_column resuelve a favor de la columna; los OUT
+-- solo se asignan en plpgsql puro al final (defecto detectado por el
+-- checkpoint funcional C2 de la ventana, fix in-window declarado).
+#variable_conflict use_column
 declare
   v_titulo text;
   v_sev    public.connect_incident_severity_t;
