@@ -233,3 +233,15 @@ buscar)/dashboard 307 fail-closed · worker SIN secret 401 · MAL secret 401 · 
 `0164` NO creada/aplicada · Knowledge drain NO tocado (solo doc OPS previa) · WhatsApp/email/
 incidentes/tareas NO implementados · sin push / sin merge · RBAC global intacto · Netlify site
 correcto en todo momento.
+
+## I. Cierre de la ventana — ACEPTADA COMO EXITOSA por Dirección (2026-07-02)
+
+Dirección confirma: **la ventana apply+deploy F4.1 queda ACEPTADA COMO EXITOSA.**
+- Producción SANA en **`bef2f78`** (deploy `6a45a3bdd89a6fe23d1994ab`); 0 5xx; sin PostgREST 300;
+  composer compatible; worker fail-closed; C1–C4 PASS; migs `0160–0163` aplicadas; `0164` no existe.
+- **Rollback NO requerido** (points preservados sin uso).
+- **F4.1 = DEPLOYADA pero NO CERRADA.** Pendientes de cierre (ninguno bloquea la operación):
+  1. **Smoke funcional autenticado de Martín** (checklist de 10 puntos en el Validation Pack).
+  2. **Scheduling del worker**: evidencia de ejecución real O decisión OPS alternativa —
+     ver `F4-1-SCHEDULING-OPS-FINDING.md` (opciones A/B/C para Dirección).
+- Sin más esperas de ticks ni monitoreo largo en Cloud Code (directiva de Dirección).
