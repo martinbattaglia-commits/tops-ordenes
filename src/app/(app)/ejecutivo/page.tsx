@@ -8,6 +8,7 @@ import { getBootContext } from "@/lib/rbac/boot-permissions";
 import { env } from "@/lib/env";
 import { ws } from "@/lib/google/workspace";
 import { getAnnouncements, type Announcement } from "@/lib/ejecutivo/announcements";
+import { CollabCard } from "./_components/CollabCard";
 import { ORG, PRODUCT } from "@/lib/org";
 
 export const metadata = { title: "Cockpit ejecutivo" };
@@ -123,6 +124,10 @@ export default async function CockpitPage() {
 
       {/* BLOQUE 1C — Accesos rápidos (Mail · Calendario · Drive · Compliance) */}
       <QuickAccessRow />
+
+      {/* BLOQUE 1D — Colaboración (F4.3, read-only): incidentes + tareas + workflows.
+          Solo con permiso connect; se auto-oculta si las fuentes no responden. */}
+      {boot.perms.connect && <CollabCard />}
 
       {/* BLOQUE 2 — KPIs Ejecutivos (FILA 1 financiero+operativo · FILA 2 ocupación).
           Responsive: 1 col mobile · 2 col tablet · 4 col desktop. */}

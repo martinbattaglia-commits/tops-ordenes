@@ -223,6 +223,94 @@ export interface Incident {
   updatedAt: string;
 }
 
+// ───────────────────────── F4.3 · Tareas colaborativas (0167-0169) ─────────────────────────
+
+/** Estados de tarea (enum connect_task_status_t, ADR-F4-3 §4). */
+export const TASK_STATUSES = ["pendiente", "en_progreso", "completada", "cancelada"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+/** Prioridades (enum connect_task_priority_t). */
+export const TASK_PRIORITIES = ["baja", "media", "alta", "urgente"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  pendiente: "Pendiente",
+  en_progreso: "En progreso",
+  completada: "Completada",
+  cancelada: "Cancelada",
+};
+
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  baja: "Baja",
+  media: "Media",
+  alta: "Alta",
+  urgente: "Urgente",
+};
+
+/** Tarea (forma dominio/UI). Nombres denormalizados resueltos en read. */
+export interface Task {
+  id: string;
+  /** TSK-AAAA-NNNN (sequence + trigger de 0168). */
+  publicId: string;
+  titulo: string;
+  descripcion: string | null;
+  estado: TaskStatus;
+  prioridad: TaskPriority;
+  /** INFORMATIVO (ADR §9): ordena/colorea, no dispara nada. */
+  dueAt: string | null;
+  creadoPor: string | null;
+  asignadoA: string | null;
+  creadoPorName?: string | null;
+  asignadoAName?: string | null;
+  /** Hilo LAZY (ADR §10): null hasta el primer comentario. */
+  conversationId: string | null;
+  incidentId: string | null;
+  workflowInstanceId: string | null;
+  stepNo: number | null;
+  area: string | null;
+  cancelReason: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskRow {
+  id: string;
+  public_id: string;
+  titulo: string;
+  descripcion: string | null;
+  estado: TaskStatus;
+  prioridad: TaskPriority;
+  due_at: string | null;
+  creado_por: string | null;
+  asignado_a: string | null;
+  conversation_id: string | null;
+  incident_id: string | null;
+  workflow_instance_id: string | null;
+  step_no: number | null;
+  area: string | null;
+  cancel_reason: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Seguidor de tarea (ADR §7). */
+export interface TaskFollower {
+  taskId: string;
+  profileId: string;
+  name?: string | null;
+}
+
+/** Plantilla de workflow lineal (catálogo por seed, D-F43-6). */
+export interface WorkflowTemplate {
+  id: string;
+  nombre: string;
+  descripcion: string | null;
+  activo: boolean;
+  steps: Array<{ stepNo: number; titulo: string; rolSugerido: string | null }>;
+}
+
 /** Fila DB de connect_incidents (entrada del mapper de read). */
 export interface IncidentRow {
   id: string;

@@ -12,6 +12,8 @@ export function hrefFor(entity: string | null, entityId: string | null): string 
   // F4.2: entity='connect_incident' + entity_id=<incident_id> (convención 0165)
   // navega al detalle del incidente, NO al hilo (el detalle embebe el hilo).
   if (entity === "connect_incident" && entityId) return `/connect/incidentes/${entityId}`;
+  // F4.3: entity='connect_task' + entity_id=<task_id> (convención 0169).
+  if (entity === "connect_task" && entityId) return `/connect/tareas/${entityId}`;
   if (entity === "orders" && entityId) return `/orders/${entityId}`;
   if ((CONNECT_ENTITY_TYPES as readonly string[]).includes(entity) && entityId) {
     return `/connect/e/${entity}/${entityId}`;

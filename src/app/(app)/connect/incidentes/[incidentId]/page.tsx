@@ -9,10 +9,12 @@ import { getIncident, hasIncidentAdmin } from "@/lib/connect/read/incidents-data
 import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
 import { listParticipants } from "@/lib/connect/read/channel-data";
 import { getCurrentUserId } from "@/lib/connect/data";
+import { listTasks } from "@/lib/connect/read/tasks-data";
 import { timeAgo, timeHM } from "@/lib/connect/format";
 import { ThreadView } from "../../_components/ThreadView";
 import { IncidentActions } from "../../_components/IncidentActions";
 import { SeverityChip, StatusChip } from "../../_components/IncidentChips";
+import { TaskStatusChip } from "../../_components/TaskChips";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Nexus Link · Incidente" };
@@ -36,12 +38,14 @@ export default async function IncidentDetailPage({
 
   // hasIncidentAdmin: espejo FAIL-CLOSED del permiso real (no canAccess, que es
   // fail-open con RBAC dormido) — el RPC re-valida cada acción igual.
-  const [conversation, messages, participants, currentUserId, isIncidentAdmin] = await Promise.all([
+  const [conversation, messages, participants, currentUserId, isIncidentAdmin, linkedTasks] = await Promise.all([
     getConversation(incident.conversationId),
     listMessages(incident.conversationId),
     listParticipants(incident.conversationId),
     getCurrentUserId(),
     hasIncidentAdmin(),
+    // F4.3: tareas originadas en este incidente (RLS de tareas aplica).
+    listTasks({ vista: "todas", incidentId: incident.id }),
   ]);
   const mentionables = participants
     .filter((m) => m.profileId && m.name)
@@ -91,6 +95,22 @@ export default async function IncidentDetailPage({
             <span className="font-semibold">Resolución:</span> {incident.resolucionText}
           </div>
         )}
+
+        {/* F4.3 · relación incidente→tarea (unidireccional, ADR-F4-3 §19 del plan) */}
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {!closed && (
+            <Link href={`/connect/tareas/nueva?incidente=${incident.id}`} className="btn btn-ghost btn-sm">
+              <Icon name="plus" size={13} /> Crear tarea
+            </Link>
+          )}
+          {linkedTasks.map((t) => (
+            <Link key={t.id} href={`/connect/tareas/${t.id}`}
+              className="flex items-center gap-1.5 text-[11px] text-fg-link hover:underline">
+              <span className="font-mono">{t.publicId}</span>
+              <TaskStatusChip estado={t.estado} />
+            </Link>
+          ))}
+        </div>
 
         <div className="mt-3">
           <IncidentActions

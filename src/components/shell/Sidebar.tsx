@@ -69,6 +69,7 @@ const DOMAINS: Domain[] = [
       { href: "/connect/buscar", label: "Búsqueda", icon: "search" },
       { href: "/connect/canales", label: "Canales", icon: "megaphone" },
       { href: "/connect/incidentes", label: "Incidentes", icon: "bolt" },
+      { href: "/connect/tareas", label: "Tareas", icon: "check" },
     ],
   },
   {
