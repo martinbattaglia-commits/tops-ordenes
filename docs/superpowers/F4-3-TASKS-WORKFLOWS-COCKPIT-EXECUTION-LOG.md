@@ -1,4 +1,41 @@
-# F4.3 · Tareas + Workflows + Cockpit — Execution Log (implementación LOCAL)
+# F4.3 · Tareas + Workflows + Cockpit — Execution Log
+
+## 0. 🏁 VENTANA APPLY+DEPLOY EJECUTADA (2026-07-02 ~03:28-03:40Z, autorizada por Dirección)
+
+**Resultado: ÉXITO — rollback NO requerido · CERO fixes in-window. Prod = `f30f79d`.**
+
+| Paso | Resultado | Evidencia |
+|---|---|---|
+| Pre-flight (15 puntos) | **PASS 15/15** | prod `484a447` sana, top `0166`, `0167-0171` libres, worktree `f30f79d` limpio, package files intactos, sin secretos, Netlify OK, Node v22.23.1, checkout NO-worktree, F4.2 sana (1 incidente real) |
+| Apply `0167` (batch AISLADO, regla enums) | **OK** 03:28:14→03:28:20Z | `20260702032820` |
+| Apply `0168` | **OK** →03:29:19Z | `20260702032919` — permiso `connect.task_admin` sembrado con `action='task_admin'` SIN conflicto (C2.6=1) |
+| Apply `0169` | **OK** →03:31:32Z | `20260702033132` — seeds 2 plantillas + 6 pasos; policy notifications extendida |
+| Apply `0170` | **OK** →03:32:05Z | `20260702033205` — fuente `enabled=false` (D-F43-9), 0 eventos |
+| Checkpoints catálogo C1-C4 | **PASS 21/21** | enums, 5 tablas, 5 policies (incl. rama VACANTES fix C-1 y instancias CALIFICADAS fix I-1), permiso+grants, 0 write grants (anon+authenticated), realtime, uidx anti doble-avance, 8 RPCs + 7 helpers con search_path 100%, policy notif con rama role_target (fix I-2) |
+| Funcional C6 (0-footprint, `__QA_ROLLBACK__`) | **PASS íntegro** | Alta TSK-format · fail-closed sin permisos · claim de vacante + anti-robo · **`ensure_thread` REAL (fix C-1 CASE→enum verificado en prod: hilo creado, creador=owner, idempotente)** · post_message al hilo de tarea · seguidores+notif · máquina completa (start/complete/reopen auditado/cancel-exige-motivo/cancelada terminal; motivo en tabla y SOLO length en audit) · **RLS bajo rol authenticated real: vacante VISIBLE para staff, privada OCULTA a terceros, asignación de terceros denegada** · **workflow 3 pasos end-to-end** (instanciar→notif role_target operaciones→claim→completar→paso 2 vacante+notif supervisor→…→instancia `completado`) · **broadcast role_target MARCADO LEÍDO por el rol (fix I-2, row_count=1)** · **cancelar paso activo → instancia `cancelado` (fix I-1)** · 0 overloads. Footprint final: tasks/instances/notifs/audit/convs = **0/0/0/0/0** |
+| Regresiones C7 | **PASS** | incidentes F4.2 intactos (1 real), RPCs F4.1/F4.2 presentes, 0 PostgREST 300, outbox 35 pending (34+1 del mensaje del incidente real del smoke F4.2 — orgánico, inerte, scheduler NO tocado), seeds intactos |
+| Deploy DRAFT | **OK** | deploy `6a45dc8ae614c8789f9d2ca5`, draft URL `https://6a45dc8ae614c8789f9d2ca5--tops-ordenes.netlify.app`, build Node 22 sin ENOENT/PLUGIN_DIR |
+| Smoke DRAFT | **PASS** | `/api/version=f30f79d`; login 200; tareas/incidentes/notificaciones/canales/dashboard/ejecutivo 307 fail-closed; 0 5xx |
+| Deploy PROD | **OK** 03:37→03:39Z | deploy **`6a45dd06046d9f4002a59a18`** → `https://nexus.logisticatops.com`. **Rollback point (no usado): `6a45c96d220b1ec727fecf03` (`484a447`)** |
+| Smoke PROD | **PASS** | `/api/version=f30f79d` production; 12/12 rutas OK; **0 500/502; 0 PostgREST 300** |
+| Smoke funcional autenticado | **PENDIENTE de Dirección** | Checklist de 23 puntos (mandato Etapa 8) = Validation Pack §3 |
+
+**Nota operativa:** el deploy `f30f79d` NO incluye el fix del incidente Drive
+(rama paralela `fix/drive-credentials-provider-f42`, esperando su propio GO) —
+tras esta ventana ese fix debe REBASARSE sobre `f30f79d` antes de su deploy,
+o su deploy pisaría F4.3.
+
+**Cumplimiento:** cero push/merge · migraciones SOLO 0167-0170 (0171 NO creada) ·
+scheduler OPS F4.1 intacto · Knowledge drain intacto · sin WhatsApp/Email/IA/
+CCTV/automatizaciones/cron-reminders/portal/kanban/builder/sub-tareas ·
+RBAC_ENFORCE intacto · cambios RBAC = `connect.task_admin` + extensión declarada
+de la policy de notifications (rollback documentado).
+
+**Cierre formal F4.3** = smoke funcional autenticado PASS por Dirección (o aceptación explícita).
+
+---
+
+# Parte I — Implementación LOCAL (histórico de la preparación)
 
 > Fecha: 2026-07-02. ADR-F4-3 + Master Plan aprobados por Dirección con
 > D-F43-1..9 ratificadas (defaults). **Paquete 100% LOCAL: cero escrituras en
