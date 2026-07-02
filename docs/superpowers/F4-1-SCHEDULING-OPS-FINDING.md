@@ -107,3 +107,13 @@ diagnóstico (Martín, 1 minuto, en el mismo dashboard):** abrir el panel de LOG
 - `status=200 …success:true` → ejecutó y persistió (recargar la query de connect_worker_runs).
 - panel sin entrada → la invocación no corrió código de usuario (evidencia fuerte para Opción B).
 Con esa única línea se decide entre corregir env (ventana chica) u Opción B (ticket, borrador §3).
+
+## 6. Resolución respecto de F4.1 (Dirección, 2026-07-02)
+
+**Aceptado como DEUDA OPS NO BLOQUEANTE.** F4.1 se cierra formalmente sin el scheduler activo:
+el core funcional (menciones/DM/notificaciones, fan-out síncrono) fue validado PASS por Dirección
+en producción. Directivas: no seguir investigando ahora · no abrir ticket a Netlify ahora · no
+rotar CRON_SECRET · no redeployar. **Este finding queda ABIERTO como backlog OPS**: cuando se
+retome, el primer paso sigue siendo la línea de log del dashboard (§5) y las opciones A/B/C (§3).
+Impacto mientras tanto: el backlog de `connect_outbox` (34+ pending) permanece inerte y sin
+efectos; drenable manualmente cuando se desee (Validation Pack §4).

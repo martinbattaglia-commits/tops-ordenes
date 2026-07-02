@@ -171,3 +171,13 @@ corridas; logs vacíos). **PENDIENTE BLOQUEANTE DE CIERRE F4.1** (mandato Etapa 
 para Martín: dashboard Netlify → Functions → `connect-dispatch-outbox` (badge "Scheduled" / Next
 run) y `select * from connect_worker_runs order by started_at desc` — si aparecen corridas */5,
 el pendiente se cierra sin más cambios. Si no: decidir (b) cron externo o (c) Netlify Support.
+
+---
+
+# 🏁 CIERRE (2026-07-02)
+
+**Smoke funcional autenticado: PASS por Dirección** (validación visual: composer + menciones +
+notificaciones OK en prod `bef2f78`). El punto 10 del checklist (worker manual) queda absorbido
+por la deuda OPS del scheduler. **Scheduler = deuda OPS no bloqueante**
+(ver `F4-1-SCHEDULING-OPS-FINDING.md` §6). Rollback no requerido; producción no tocada en el
+cierre. **F4.1 CERRADA FORMALMENTE.**

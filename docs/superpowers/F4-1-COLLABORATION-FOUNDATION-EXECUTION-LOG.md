@@ -245,3 +245,16 @@ Dirección confirma: **la ventana apply+deploy F4.1 queda ACEPTADA COMO EXITOSA.
   2. **Scheduling del worker**: evidencia de ejecución real O decisión OPS alternativa —
      ver `F4-1-SCHEDULING-OPS-FINDING.md` (opciones A/B/C para Dirección).
 - Sin más esperas de ticks ni monitoreo largo en Cloud Code (directiva de Dirección).
+
+## J. 🏁 CIERRE FORMAL DE F4.1 (Dirección, 2026-07-02)
+
+- **Smoke funcional autenticado: PASS** — validación visual autenticada realizada por Dirección:
+  composer, menciones y notificaciones funcionando correctamente en producción.
+- **Scheduler de Netlify: aceptado como DEUDA OPS NO BLOQUEANTE** (decisión de Dirección):
+  no se investiga más ahora, no se abre ticket, no se rota CRON_SECRET, no se redeploya.
+  Motivo: el core funcional está operativo (fan-out crítico SÍNCRONO por triggers); el worker
+  queda como mejora operativa posterior. Detalle y opciones en `F4-1-SCHEDULING-OPS-FINDING.md`.
+- **Estado final:** producción **`bef2f78`** (deploy `6a45a3bdd89a6fe23d1994ab`), migs
+  `0160–0163` aplicadas, 0 5xx, **rollback NO requerido**, producción no tocada en el cierre.
+- **F4.1 QUEDA FORMALMENTE CERRADA.** **F4.2 (Centro de Incidentes) queda HABILITADA para
+  PLANIFICACIÓN** (sin código hasta plan aprobado, misma metodología que F4.1).
