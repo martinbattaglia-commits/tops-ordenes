@@ -9,6 +9,9 @@ import { CONNECT_ENTITY_TYPES } from "@/lib/connect/types";
 export function hrefFor(entity: string | null, entityId: string | null): string {
   if (!entity) return "/connect/notificaciones";
   if (entity === "connect" && entityId) return `/connect/c/${entityId}`;
+  // F4.2: entity='connect_incident' + entity_id=<incident_id> (convención 0165)
+  // navega al detalle del incidente, NO al hilo (el detalle embebe el hilo).
+  if (entity === "connect_incident" && entityId) return `/connect/incidentes/${entityId}`;
   if (entity === "orders" && entityId) return `/orders/${entityId}`;
   if ((CONNECT_ENTITY_TYPES as readonly string[]).includes(entity) && entityId) {
     return `/connect/e/${entity}/${entityId}`;

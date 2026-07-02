@@ -172,3 +172,73 @@ export interface InboxRow {
   muted_until: string | null;
   archived_at: string | null;
 }
+
+// ───────────────────────── F4.2 · Centro de Incidentes (0164) ─────────────────────────
+
+/** Estados del incidente (enum connect_incident_status_t, Addendum A2 / D4). */
+export const INCIDENT_STATUSES = [
+  "abierto", "en_progreso", "en_espera", "resuelto", "cerrado",
+] as const;
+export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
+
+/** Severidades (enum connect_incident_severity_t). */
+export const INCIDENT_SEVERITIES = ["baja", "media", "alta", "critica"] as const;
+export type IncidentSeverity = (typeof INCIDENT_SEVERITIES)[number];
+
+export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
+  abierto: "Abierto",
+  en_progreso: "En progreso",
+  en_espera: "En espera",
+  resuelto: "Resuelto",
+  cerrado: "Cerrado",
+};
+
+export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
+  baja: "Baja",
+  media: "Media",
+  alta: "Alta",
+  critica: "Crítica",
+};
+
+/** Incidente (forma dominio/UI). Nombres denormalizados resueltos en read. */
+export interface Incident {
+  id: string;
+  /** INC-AAAA-NNNN (sequence + trigger de 0164). */
+  publicId: string;
+  conversationId: string;
+  titulo: string;
+  sector: string | null;
+  ubicacion: string | null;
+  tipoAveria: string | null;
+  severidad: IncidentSeverity;
+  estado: IncidentStatus;
+  reportadoPor: string | null;
+  asignadoA: string | null;
+  reportadoPorName?: string | null;
+  asignadoAName?: string | null;
+  slaDueAt: string | null;
+  resueltoAt: string | null;
+  resolucionText: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fila DB de connect_incidents (entrada del mapper de read). */
+export interface IncidentRow {
+  id: string;
+  public_id: string;
+  conversation_id: string;
+  titulo: string;
+  sector: string | null;
+  ubicacion: string | null;
+  tipo_averia: string | null;
+  severidad: IncidentSeverity;
+  estado: IncidentStatus;
+  reportado_por: string | null;
+  asignado_a: string | null;
+  sla_due_at: string | null;
+  resuelto_at: string | null;
+  resolucion_text: string | null;
+  created_at: string;
+  updated_at: string;
+}
