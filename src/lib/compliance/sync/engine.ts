@@ -20,10 +20,9 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import {
   isDriveConfigured,
-  findFolderByPath,
-  isUnderRoot,
   walkFolderForSync,
 } from "@/lib/drive/client";
+import { resolveComplianceFolder } from "./resolve-folder";
 import { env } from "@/lib/env";
 import { deriveComplianceStatus } from "@/lib/compliance/data";
 import { rowToItem, COMPLIANCE_ITEM_COLUMNS, type ComplianceRow } from "@/lib/compliance/row";
@@ -61,21 +60,6 @@ function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += Math.max(1, size)) out.push(arr.slice(i, i + size));
   return out;
-}
-
-/** Resuelve la carpeta regulatoria de Drive (id directo, por ruta, o root). */
-async function resolveComplianceFolder(): Promise<{ id: string | null; via: string }> {
-  const root = env.google.driveRootFolderId || undefined;
-  const direct = env.compliance.driveFolderId;
-  if (direct) {
-    if (!root || direct === root || (await isUnderRoot(direct))) return { id: direct, via: "env-id" };
-    return root ? { id: root, via: "root" } : { id: null, via: "none" };
-  }
-  const subpath = env.compliance.driveSubpath.split("/").map((s) => s.trim()).filter(Boolean);
-  const byPath = await findFolderByPath(subpath);
-  if (byPath) return { id: byPath, via: "path" };
-  if (root) return { id: root, via: "root" };
-  return { id: null, via: "none" };
 }
 
 export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncReport> {
@@ -188,7 +172,12 @@ export async function runComplianceSync(opts: RunOpts): Promise<ComplianceSyncRe
     try {
       walk = await walkFolderForSync(folderId, { maxDepth: 4, maxFiles, deadlineMs: walkDeadlineMs });
     } catch (e) {
-      const report = make("error", `Error recorriendo Drive: ${msg(e)}`, { runId, folderId, folderVia, errors: 1 });
+      // Con carpeta explícita, el error más probable es share faltante: decirlo claro.
+      const hint =
+        folderVia === "env-id"
+          ? `Carpeta COMPLIANCE_DRIVE_FOLDER_ID (${folderId}) inaccesible o inexistente para la Service Account — verificar el share (Lector). `
+          : "";
+      const report = make("error", `${hint}Error recorriendo Drive: ${msg(e)}`, { runId, folderId, folderVia, errors: 1 });
       await persist(db, runId, dryRun, report, events);
       return report;
     }
