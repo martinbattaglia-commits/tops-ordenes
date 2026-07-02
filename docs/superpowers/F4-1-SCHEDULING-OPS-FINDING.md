@@ -83,3 +83,27 @@ tarda y Dirección quiere el worker activo ya — con los riesgos aceptados por 
 
 **Cierre de este finding** = evidencia de ≥2 corridas programadas en `connect_worker_runs`
 (opción A exitosa) O mecanismo alternativo aprobado y operando (B/C).
+
+## 5. Actualización — Run now manual desde el dashboard (2026-07-02 ~00:28Z)
+
+Dirección ejecutó **Run now** en el dashboard (function visible con badge Scheduled, cron */5,
+Next execution visible; toast "Function invoked successfully"). Resultado verificado read-only:
+- **`connect_worker_runs`: SIN fila nueva** (consultado 00:29:33 / 00:30:25 / 00:35:49Z; única
+  fila sigue siendo el dry manual local de 23:13:55Z). Backlog intacto (34 pending).
+- Ticks automáticos 00:30 y 00:35 tampoco registraron corrida.
+- Logs vía CLI (`netlify logs --source functions --function connect-dispatch-outbox`): vacíos.
+
+**Interpretación:** el toast de Netlify confirma la INVOCACIÓN, pero la ejecución no llegó al
+handler interno o falló antes de persistir. El wrapper (`connect-dispatch-outbox.mts`) loguea
+SIEMPRE una línea diagnóstica: `misconfigured: falta URL o CRON_SECRET` (env ausente en el
+runtime de la function) o `status=<n> body=<json>` (resultado del route). **Siguiente paso
+diagnóstico (Martín, 1 minuto, en el mismo dashboard):** abrir el panel de LOGS de la function
+(debajo del botón Run now) y leer la línea de la invocación de ~00:28. Decodificación:
+- `misconfigured…` → falta `URL` o `CRON_SECRET` en el scope de runtime de ESA function
+  (revisar scopes de la env var en Site settings → Environment variables).
+- `status=401` → el Bearer que envía la function no matchea el del route (mismatch de contexto
+  de env — raro, ambos leen el mismo process.env).
+- `status=503` → el route no ve CRON_SECRET.
+- `status=200 …success:true` → ejecutó y persistió (recargar la query de connect_worker_runs).
+- panel sin entrada → la invocación no corrió código de usuario (evidencia fuerte para Opción B).
+Con esa única línea se decide entre corregir env (ventana chica) u Opción B (ticket, borrador §3).
