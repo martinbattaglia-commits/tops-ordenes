@@ -1,5 +1,6 @@
 import { google, type drive_v3 } from "googleapis";
 import { JWT } from "google-auth-library";
+import { getCredential, resetCredentialCache, CredentialNotFoundError } from "@/lib/credentials";
 
 /**
  * Cliente Google Drive — Service Account based.
@@ -30,41 +31,74 @@ const SCOPES = [
   "https://www.googleapis.com/auth/drive.file",
 ];
 
+const CREDENTIAL_KEY = "google-service-account";
+
 let driveCached: drive_v3.Drive | null = null;
+let credsCache: { email: string; key: string } | null = null;
 let serviceAccountEmail: string | null = null;
 // Map<`${parentId}/${name}`, folderId> — caché in-process del lookup ensureFolder.
 const folderCache = new Map<string, string>();
 
 /**
- * Reset del cache del cliente Drive. Útil tras rotar la SA o cambiar env vars
- * sin reiniciar el proceso. Llamable desde un endpoint admin / health-check.
+ * Reset del cache del cliente Drive. Útil tras rotar la SA o cambiar la credencial
+ * sin reiniciar el proceso. Limpia también la caché de la capa de credenciales.
  */
 export function resetDriveCache(): void {
   driveCached = null;
+  credsCache = null;
   serviceAccountEmail = null;
   folderCache.clear();
+  resetCredentialCache(CREDENTIAL_KEY);
 }
 
-function getCredentials(): { email: string; key: string } | null {
-  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!json) return null;
+/**
+ * Carga las credenciales de la Service Account a través de la capa de abstracción
+ * `CredentialProvider` (env → Blobs → …). El origen físico es transparente para Drive.
+ *
+ *  · No encontrada en ningún provider → `null` (Drive queda "no configurado", 503).
+ *  · Falla de integridad (checksum) → se propaga (`CredentialIntegrityError`): NO se
+ *    usa una credencial cuya integridad no se pudo validar.
+ */
+async function loadServiceAccount(): Promise<{ email: string; key: string } | null> {
+  if (credsCache) return credsCache;
+  let value: string;
   try {
-    const parsed = JSON.parse(json) as { client_email: string; private_key: string };
-    if (!parsed.client_email || !parsed.private_key) return null;
-    return { email: parsed.client_email, key: parsed.private_key };
+    const rec = await getCredential(CREDENTIAL_KEY);
+    value = rec.value;
   } catch (e) {
-    console.error("[drive] GOOGLE_SERVICE_ACCOUNT_JSON inválido:", (e as Error).message);
+    if (e instanceof CredentialNotFoundError) return null;
+    throw e; // integridad u otro error → propagar, no degradar en silencio
+  }
+  try {
+    const parsed = JSON.parse(value) as { client_email: string; private_key: string };
+    if (!parsed.client_email || !parsed.private_key) return null;
+    credsCache = { email: parsed.client_email, key: parsed.private_key };
+    serviceAccountEmail = parsed.client_email;
+    return credsCache;
+  } catch (e) {
+    console.error("[drive] credencial de Service Account inválida:", (e as Error).message);
     return null;
   }
 }
 
+/**
+ * ¿Está disponible la integración Drive? Chequeo SÍNCRONO best-effort para gating de
+ * UI (no carga la credencial). Verdadero si hay root configurado y existe una fuente
+ * de credencial conocida: el JSON en env (dev) o el email proyectado `GOOGLE_SA_EMAIL`
+ * (que acompaña a la credencial relocalizada en Blobs en producción). La validación
+ * real —y la de integridad— ocurre al primer uso vía `requireDrive()`.
+ */
 export function isDriveConfigured(): boolean {
-  return getCredentials() !== null && Boolean(process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID);
+  const hasRoot = Boolean(process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim());
+  const hasCredentialHint =
+    Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()) ||
+    Boolean(process.env.GOOGLE_SA_EMAIL?.trim());
+  return hasRoot && hasCredentialHint;
 }
 
-function getDriveSync(): drive_v3.Drive | null {
+async function getDrive(): Promise<drive_v3.Drive | null> {
   if (driveCached) return driveCached;
-  const creds = getCredentials();
+  const creds = await loadServiceAccount();
   if (!creds) return null;
   const auth = new JWT({
     email: creds.email,
@@ -76,10 +110,25 @@ function getDriveSync(): drive_v3.Drive | null {
   return driveCached;
 }
 
+/**
+ * Email de la Service Account para diagnóstico/UI. SÍNCRONO best-effort:
+ * cache en memoria (tras el primer uso) → `GOOGLE_SA_EMAIL` → parseo del JSON en env.
+ * `null` si aún no se cargó y no hay proyección disponible.
+ */
 export function getServiceAccountEmail(): string | null {
   if (serviceAccountEmail) return serviceAccountEmail;
-  const creds = getCredentials();
-  return creds?.email ?? null;
+  const projected = process.env.GOOGLE_SA_EMAIL?.trim();
+  if (projected) return projected;
+  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim();
+  if (json) {
+    try {
+      const parsed = JSON.parse(json) as { client_email?: string };
+      return parsed.client_email ?? null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export class DriveError extends Error {
@@ -89,9 +138,9 @@ export class DriveError extends Error {
   }
 }
 
-function requireDrive(): drive_v3.Drive {
-  const drive = getDriveSync();
-  if (!drive) throw new DriveError("Google Drive no configurado (GOOGLE_SERVICE_ACCOUNT_JSON)", 503);
+async function requireDrive(): Promise<drive_v3.Drive> {
+  const drive = await getDrive();
+  if (!drive) throw new DriveError("Google Drive no configurado", 503);
   return drive;
 }
 
@@ -157,7 +206,7 @@ export async function ensureFolder(name: string, parentId: string): Promise<stri
   const cacheKey = `${parentId}/${name}`;
   if (folderCache.has(cacheKey)) return folderCache.get(cacheKey)!;
 
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const safeName = name.replace(/'/g, "\\'");
   const res = await drive.files.list({
     q: `'${parentId}' in parents and name='${safeName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
@@ -221,7 +270,7 @@ export async function uploadPdf(opts: {
   buffer: Buffer;
   description?: string;
 }): Promise<DriveUploadResult> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const { Readable } = await import("stream");
   const stream = Readable.from(opts.buffer);
 
@@ -263,7 +312,7 @@ export interface DrivePing {
 }
 
 export async function ping(): Promise<DrivePing> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
   if (!rootId) throw new DriveError("GOOGLE_DRIVE_ROOT_FOLDER_ID no configurado", 503);
 
@@ -361,7 +410,7 @@ export async function listChildren(
   folderId?: string,
   opts: { pageSize?: number; pageToken?: string; query?: string } = {}
 ): Promise<ListChildrenPage> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
   const trimmedFolder = folderId?.trim();
   const target = trimmedFolder && trimmedFolder.length > 0 ? trimmedFolder : rootId;
@@ -420,7 +469,7 @@ export async function searchFiles(
   opts: { pageSize?: number; bounded?: boolean } = {}
 ): Promise<{ entries: DriveEntry[]; bounded: boolean; rootScoped: boolean }> {
   if (!query.trim()) return { entries: [], bounded: false, rootScoped: false };
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const safe = escapeDriveQuery(query);
   const pageSize = Math.min(Math.max(opts.pageSize ?? 30, 1), PAGE_SIZE_MAX);
   const bounded = opts.bounded ?? true;
@@ -481,7 +530,7 @@ export async function searchFiles(
  *   ajenas accesibles por la SA.
  */
 export async function getBreadcrumbs(folderId: string): Promise<DriveBreadcrumb[]> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
   const trimmed = folderId?.trim();
   if (!trimmed) return [];
@@ -535,7 +584,7 @@ export async function listRecent(
   limit = 10,
   opts: { bounded?: boolean } = {}
 ): Promise<DriveEntry[]> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
   const bounded = opts.bounded ?? true;
   const safeLimit = Math.min(Math.max(limit, 1), 50);
@@ -583,7 +632,7 @@ export async function listRecent(
  * Camina hacia arriba hasta `maxDepth` niveles.
  */
 export async function isUnderRoot(fileId: string, maxDepth = 6): Promise<boolean> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const root = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
   if (!root) return false;
   if (fileId === root) return true;
@@ -648,7 +697,7 @@ function mapSyncEntry(f: drive_v3.Schema$File): DriveSyncEntry {
  * carpeta más profunda, o null si algún tramo no existe.
  */
 export async function findFolderByPath(parts: string[], fromFolderId?: string): Promise<string | null> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   let current = (fromFolderId || process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || "").trim();
   if (!current) return null;
   for (const raw of parts) {
@@ -672,7 +721,7 @@ export async function findFolderByPath(parts: string[], fromFolderId?: string): 
  *  pensado para contenedores configurados explícitamente (Contratos), que viven fuera
  *  del root de la SA. */
 export async function getFileName(fileId: string): Promise<string | null> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const res = await drive.files.get({ fileId, fields: "name", supportsAllDrives: true });
   return res.data.name ?? null;
 }
@@ -714,7 +763,7 @@ export async function resolveContratosFolderIds(): Promise<{
 
 /** Lista todos los hijos directos de un folder (paginado completo) con metadata de sync. */
 export async function listFolderForSync(folderId: string): Promise<DriveSyncEntry[]> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const out: DriveSyncEntry[] = [];
   let pageToken: string | undefined;
   do {
@@ -831,7 +880,7 @@ export async function walkFolderForSync(
 
 /** Descarga el contenido binario de un archivo (PDF/XLSX/DOCX). */
 export async function downloadFileBuffer(fileId: string): Promise<Buffer> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const res = await drive.files.get(
     { fileId, alt: "media", supportsAllDrives: true },
     { responseType: "arraybuffer" },
@@ -841,7 +890,7 @@ export async function downloadFileBuffer(fileId: string): Promise<Buffer> {
 
 /** Exporta un archivo Google-native (Doc/Sheet) a texto (text/plain, text/csv). */
 export async function exportGoogleFile(fileId: string, mimeType: string): Promise<string> {
-  const drive = requireDrive();
+  const drive = await requireDrive();
   const res = await drive.files.export({ fileId, mimeType }, { responseType: "text" });
   return typeof res.data === "string" ? res.data : String(res.data ?? "");
 }

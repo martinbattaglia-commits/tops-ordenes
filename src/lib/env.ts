@@ -174,13 +174,21 @@ export const env = {
     configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
   },
   google: {
-    /** JSON de la Service Account de Drive (línea única). Compartida como lector. */
+    /**
+     * JSON de la Service Account de Drive (línea única). SOLO presente en dev local.
+     * En producción la credencial vive en Netlify Blobs (capa CredentialProvider);
+     * el cliente la carga vía `@/lib/credentials`, no desde esta env var.
+     */
     serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() ?? "",
     /** Carpeta raíz a la que está acotada la SA (scope). */
     driveRootFolderId: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim() ?? "",
-    /** True si la integración Drive corporativa está disponible. */
+    /**
+     * True si la integración Drive corporativa está disponible. Reconoce ambas
+     * fuentes de credencial: el JSON en env (dev) o el email proyectado
+     * `GOOGLE_SA_EMAIL` que acompaña a la credencial en Blobs (producción).
+     */
     configured: Boolean(
-      process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() &&
+      (process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || process.env.GOOGLE_SA_EMAIL?.trim()) &&
         process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim(),
     ),
   },
@@ -236,7 +244,7 @@ export const env = {
     /** True si el job puede correr (fileId presente + Drive corporativo configurado). */
     configured: Boolean(
       process.env.CAJA_CHICA_DRIVE_FILE_ID?.trim() &&
-        process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim(),
+        (process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || process.env.GOOGLE_SA_EMAIL?.trim()),
     ),
   },
   cron: {
