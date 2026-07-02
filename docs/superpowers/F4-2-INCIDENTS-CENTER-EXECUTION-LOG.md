@@ -1,4 +1,32 @@
-# F4.2 · Centro de Incidentes — Execution Log (implementación LOCAL)
+# F4.2 · Centro de Incidentes — Execution Log
+
+## 0. 🏁 VENTANA APPLY+DEPLOY EJECUTADA (2026-07-02, autorizada por Dirección)
+
+**Resultado: ÉXITO — rollback NO requerido. Prod = `484a447`.**
+
+| Paso | Resultado | Evidencia |
+|---|---|---|
+| Pre-flight (14 puntos) | **PASS 14/14** | prod `bef2f78` sana (0 5xx), top `0163`, `0164-0167` libres, worktree `484a447` limpio, package files intactos, sin secretos, Netlify `tops-ordenes` (`d84a7d34…`) autenticado, Node v22.23.1, checkout NO-worktree `~/CODE/deploy-f3-nexus-clean` |
+| Apply `0164` | **OK** 02:03:44→02:04:12Z | `schema_migrations` `20260702020412 0164_connect_incidents_schema` |
+| Apply `0165` | **OK** →02:05:44Z | `20260702020544 0165_connect_incidents_rpcs` — permiso sembrado con `action='incident_admin'` SIN conflicto ni skip (fix C-1 verificado: C2.4=1) |
+| Apply `0166` | **OK** →02:06:17Z | `20260702020617 0166_connect_incidents_knowledge` — fuente `enabled=false` (D5), 0 eventos |
+| Checkpoints catálogo C1/C2/C6 | **PASS 18/18** | tabla+RLS+1 policy+2 enums+7 índices+realtime+0 grants de escritura; 5 RPCs+3 helpers+search_path 100%; adapter apagado |
+| **⚠️ Fix in-window (declarado)** | `connect_incident_open` fallaba con **42702** (`conversation_id` ambiguo: PL/pgSQL sustituye OUT params en el target de `ON CONFLICT`) — detectado por el checkpoint funcional ANTES del deploy | Fix: `#variable_conflict use_column`; re-CREATE idéntico a 0165 corregida (misma firma, sin overload); archivo local 0165 actualizado y commiteado. **Observación**: 0152 (`connect_get_or_create_entity_conversation`, F3, en prod) comparte el patrón OUT-param+ON CONFLICT — revisar como follow-up |
+| Checkpoint funcional C2-C5 (0-footprint, `__QA_ROLLBACK__`) | **PASS íntegro** | Alta (INC-format, 1er mensaje, fan-out ≥2 admins sin auto-notif) · asignación (notif+membresía) · resolve-only · máquina completa por asignado real (en_progreso↔en_espera, severidad) · no-admin NO fuerza cierre · resolver exige detalle · usuario sin permisos: open/steal/close DENEGADOS 3/3 · reapertura auditada (`prev_resolucion_len`, texto al hilo como system) y limpia resolución · terminal · claim de vacante OK y robo post-claim DENEGADO · `connect_post_message` OK · 1 sola firma · audit ≥8. Todo rollbackeado: footprint 0/0 |
+| Regresiones C7 | **PASS** | mentions trigger, RPCs notif F4.1, search_profiles, guarda archivado intactos; outbox 34 pending SIN cambios (scheduler NO tocado); 0 overloads |
+| Deploy DRAFT | **OK** | deploy `6a45c8ce9ea2f26c37ecb6a8`, draft URL `https://6a45c8ce9ea2f26c37ecb6a8--tops-ordenes.netlify.app`, build Node 22 sin ENOENT/PLUGIN_DIR |
+| Smoke DRAFT | **PASS** | `/api/version=484a447`; login 200; 6 rutas connect + dashboard 307 fail-closed; `/api/today` 401; 0 5xx |
+| Deploy PROD | **OK** 02:14→02:15Z | deploy **`6a45c96d220b1ec727fecf03`** → `https://nexus.logisticatops.com`. **Rollback point (no usado): `6a45a3bdd89a6fe23d1994ab` (`bef2f78`)** |
+| Smoke PROD | **PASS** | `/api/version=484a447` production; 12/12 rutas OK (login 200, protegidas 307, api/today 401); **0 500/502; 0 PostgREST 300** |
+| Smoke funcional autenticado | **PENDIENTE de Dirección** | Checklist de 20 puntos (mandato Etapa 8) = Validation Pack §5 + §C7 en vivo; sin credenciales en sesión asistida |
+
+**Cumplimiento:** cero push/merge · migraciones SOLO 0164-0166 (0167 NO creada) · scheduler OPS F4.1 intacto · Knowledge drain intacto · sin WhatsApp/Email/Tareas/automatizaciones · RBAC_ENFORCE intacto · único cambio RBAC = `connect.incident_admin`.
+
+**Cierre formal F4.2** = smoke funcional autenticado PASS por Dirección (o aceptación explícita).
+
+---
+
+# Parte I — Implementación LOCAL (histórico de la preparación)
 
 > Fecha: 2026-07-02. Master Plan aprobado por Dirección con D1–D6 ratificadas
 > (defaults). **Paquete 100% LOCAL: cero contacto de escritura con producción,
