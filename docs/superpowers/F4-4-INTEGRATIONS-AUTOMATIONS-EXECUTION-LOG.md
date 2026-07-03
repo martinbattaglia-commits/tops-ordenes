@@ -157,6 +157,42 @@ QA re-corrido tras los fixes: **tsc 0 · lint 0 (3 warns pre-existentes) ·
 | `bff1462` | feat(connect): add WhatsApp and email sandbox spikes |
 | `ef8c0b8` | feat(connect): add internal automation MVP safeguards |
 
+## 8b. Ventana 2026-07-03 ~01:00-01:10Z — ABORTADA EN ETAPA 2 (checklist de secrets)
+
+Autorizada por Dirección con GO condicionado ("NO deployar si el checklist de
+secrets no está claro"). Resultado: **STOP limpio, sin tocar nada.**
+
+**Etapa 1 pre-flight: PASS 12/12** — prod `8a4b7bb` sana (307/200, 0 5xx), top
+mig `0170`, `0171/0172` libres (`to_regclass` null), worktree @ `bc8868b` tree
+limpio, package files = `4c19d38`, Netlify site `tops-ordenes` linkeado y CLI
+autenticada, Node 22.23.1 disponible (Homebrew `node@22`), sin secretos
+impresos, Drive/Compliance sin tocar, F5 no iniciada.
+
+**Etapa 2 secrets (contexto production, 39 vars, solo nombres): FAIL — 2
+stop-conditions del mandato:**
+
+| Check | Resultado |
+|---|---|
+| `META_WA_TOKEN` / `META_WA_PHONE_NUMBER_ID` / `META_WA_BUSINESS_ACCOUNT_ID` / `META_WA_WEBHOOK_VERIFY_TOKEN` | ✔ presentes ⇒ el canal WA saliente ESTÁ configurado en prod (el aviso OC probablemente sale hoy) |
+| `META_WA_APP_SECRET` | ✖ **AUSENTE** — no se puede descartar que la WABA apunte a prod (verificarlo en el panel Meta = Dirección) ⇒ stop-condition 1 |
+| `WHATSAPP_NOTIFY_DEFAULT` | ✔ presente |
+| `WHATSAPP_SANDBOX_ALLOWLIST` | ✖ **AUSENTE** ⇒ allowlist vacía NO incluye `WHATSAPP_NOTIFY_DEFAULT` ⇒ **stop-condition 2 explícita** (post-deploy el aviso OC quedaría bloqueado por el sandbox) |
+| `WHATSAPP_SANDBOX` | ausente = default ON en código ✔ (correcto para F4.4) |
+| `WHATSAPP_SEND_SECRET` | ausente (opcional; usa `CRON_SECRET`) ✔ |
+| `RESEND_API_KEY` (scope production) + `RESEND_FROM_EMAIL` | ✔ presentes; dominio sigue sin verificar (403 testing-mode) — el cambio F4.4 solo VISIBILIZA fallas, no envía masivo ✔ |
+
+Gotcha nuevo: `netlify env:list --json` sin `--context production` lista el
+contexto DEV y **omite** vars scoped a production (`META_WA_TOKEN`,
+`RESEND_API_KEY`, `OPENAI_API_KEY` no aparecían) — siempre pasar
+`--context production` en pre-flights.
+
+**Consecuencia:** Etapas 3–7 NO ejecutadas (migs NO aplicadas, cero deploys).
+Producción intacta `8a4b7bb`. **Ajuste de env requerido (Dirección) antes de
+re-intentar la ventana:** (1) alta `META_WA_APP_SECRET` (panel Meta → Settings
+→ Basic), (2) alta `WHATSAPP_SANDBOX_ALLOWLIST` incluyendo el número de
+`WHATSAPP_NOTIFY_DEFAULT` (+ números internos de prueba), (3) opcional
+`WHATSAPP_SEND_SECRET`. Con eso, re-correr esta ventana desde la Etapa 1.
+
 ## 9. Confirmaciones del mandato
 
 - Producción NO modificada (solo lecturas). Drive/Compliance/Caja Chica/CRM:
