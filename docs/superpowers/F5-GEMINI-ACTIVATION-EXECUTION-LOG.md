@@ -56,9 +56,36 @@
   (`martin.battaglia@logisticatops.com`). Son dos cuentas distintas. **Decisión de Dirección**
   requerida: ¿el "Martín" piloto es `martin.battaglia@` (ya seedeado) y `martin@` no debe tener
   acceso, o hay que agregar `martin@` a `ai_pilot_users`? El asistente NO tocó el seed.
-- **⏳ Falta para cerrar Etapa 4:** ver la **respuesta mock de un PILOTO** (respuesta con citas +
-  fila de auditoría). Requiere sesión de una de las 5 cuentas piloto — la sesión disponible en el
-  navegador (`martin@`) no es piloto, así que este paso queda para un login piloto (ver Handoff).
+## Etapa 4b — `martin@` agregado al piloto + VALIDACIÓN MOCK COMPLETA ✅ (2026-07-03 ~06:42Z)
+
+Decisión de Dirección: agregar `martin@logisticatops.com` (cuenta diaria, admin) al piloto,
+manteniendo `martin.battaglia@`.
+
+- **Pre-flight:** `martin@logisticatops.com` existe en `profiles` (id `1f39803f-…`, role admin) y
+  `auth.users` (confirmado); NO estaba en `ai_pilot_users`; los 5 previos intactos.
+- **Insert idempotente** en `ai_pilot_users` (única tabla autorizada; `on conflict do nothing`;
+  ni roles ni RBAC ni otras tablas tocadas). **Pilotos: 5 → 6.** Lista: Cynthia, joseluis,
+  martin.battaglia, **martin**, martinrinas, ruth. (El gate lee la tabla en runtime → sin redeploy.)
+- **Smoke autenticado REAL** (sesión existente del navegador como `martin@`, sin ingresar
+  credenciales): `/copilot` **ya NO** dice "piloto cerrado" → carga el chat.
+  - Consulta 1 "¿Qué incidentes críticos están abiertos?" → **"No tengo evidencia suficiente en
+    Nexus para afirmarlo."** (correcto: `ai_incidents_overview(critica)` devolvió 0 reales; el
+    MockProvider planificó el tool y la **RPC real** corrió con la RLS del usuario) + disclaimer.
+  - Consulta 2 "¿Qué documentos de compliance están pendientes?" → **respuesta con 8 fuentes
+    reales** (docs compliance) + citas **[S1]…[S8]** + chips + feedback 👍/👎 + disclaimer.
+- **Auditoría verificada en DB:** 1 sesión, 4 mensajes (seq2 `no_evidence`/`incidents_overview`;
+  seq4 `answered`/`compliance_pending`), ambos `provider=mock`/`model=mock-deterministic-v1`,
+  **8 filas en `ai_sources`**, `cost_estimate=null`, `ai_monthly_spend()=0`.
+- **Confirmado:** provider `mock` · costo IA **$0** · **cero llamadas a Gemini** · 0 500/502 ·
+  gate de piloto funcionando (denegado antes de agregar, permitido después).
+
+**Etapa 4 (activación mock) = CERRADA con evidencia real.** El pipeline read-only (gate → tools
+read-only RLS → citas validadas / frase de no-evidencia → auditoría append-only) funciona
+end-to-end en producción.
+
+Observación de datos (no bloqueante): la consulta de compliance devolvió 8 filas del mismo
+documento ("VTO MAYO 2023.pdf", categoría "Incendio", campo estado vacío) — refleja los datos de
+`compliance_documents`, no un defecto del Copilot; se anota para higiene de datos.
 
 ## Etapa 5 — Activación GEMINI ⏸️ NO EJECUTADA (por diseño de seguridad)
 - **Decisión: NO se activó `AI_PROVIDER=gemini`.** Motivo (contrato de trabajo: evidencia antes

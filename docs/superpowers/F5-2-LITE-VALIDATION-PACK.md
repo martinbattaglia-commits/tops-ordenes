@@ -2,8 +2,12 @@
 
 > ✅ **EJECUTADO 2026-07-03** — resultados completos en `F5-2-LITE-EXECUTION-LOG.md`.
 > Secciones 0–6 y 8–9: PASS (checkpoints 🔴 todos verdes; C2 con identidades reales vía JWT
-> simulado + rollback). Sección 7 (provider real): NO ejecutada — Dirección no autorizó
-> activación en esta ventana; queda para la mini-ventana de activación Anthropic.
+> simulado + rollback).
+> ✅ **MINI-VENTANA MOCK 2026-07-03** (`F5-GEMINI-ACTIVATION-EXECUTION-LOG.md`): rama F5 `45f59b7`
+> deployada; `AI_ENABLED=1`+`AI_PROVIDER=mock`; `martin@logisticatops.com` agregado al piloto
+> (6/6); **smoke autenticado REAL PASS** (no-evidence + answered con 8 citas; auditoría verificada;
+> provider mock; costo $0; cero Gemini).
+> ⏳ Sección 7 (provider real **Gemini**): pendiente de autorización — próximo paso.
 
 > Checklist OBLIGATORIO (decisión Dirección 2026-07-03, §6): el riesgo SQL se
 > cierra en esta ventana con **ejecución real** de cada pieza. Si cualquier
