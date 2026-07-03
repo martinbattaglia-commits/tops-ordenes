@@ -87,7 +87,61 @@ Observación de datos (no bloqueante): la consulta de compliance devolvió 8 fil
 documento ("VTO MAYO 2023.pdf", categoría "Incendio", campo estado vacío) — refleja los datos de
 `compliance_documents`, no un defecto del Copilot; se anota para higiene de datos.
 
-## Etapa 5 — Activación GEMINI ⏸️ NO EJECUTADA (por diseño de seguridad)
+## Etapa 5b — MICRO-ACTIVACIÓN GEMINI REAL + HALLAZGO + ROLLBACK (2026-07-03 ~06:50–06:57Z)
+
+Autorizada por Dirección ("micro-activación Gemini para una consulta controlada").
+
+### Activación
+- Pre-flight 10/10 PASS (prod `45f59b7`, locked, `AI_ENABLED=1`, `AI_PROVIDER=mock`, keys Gemini
+  presentes, `ai_monthly_spend()=0`, `martin@` piloto 6/6).
+- `AI_PROVIDER=gemini` (mantenido `AI_ENABLED=1`; `AI_MODEL` sin setear → default `gemini-2.5-pro`).
+- Env-redeploy `--skip-functions-cache` (unlock→deploy→lock). Deploy Gemili: `6a475bc7aace219b03bb5033`.
+- Smoke básico PASS: version `45f59b7`, `/copilot` 307, webhook 401, 0 5xx.
+
+### Consulta real controlada (sesión piloto `martin@`)
+Pregunta: "¿Qué documentos de compliance están pendientes?". **Gemini respondió** con síntesis de
+alta calidad (distinguió caso activo MAGALDI "CAA Nación R. Peligrosos" de documentos vencidos —
+Certificado Ambiental Anual, incendio 2023 — y sugirió NAVEGAR al módulo, sin acción de escritura).
+
+**Auditoría real (evidencia en DB):** `provider=gemini` · `model=gemini-2.5-pro` ·
+`outcome=answered` · **tokens_in=7577 / tokens_out=234** · **cost_estimate=$0.011811** ·
+latency 19.9s · tools=[compliance_pending×2] · error=null · `ai_monthly_spend()=0.011811`.
+
+### 🔴 HALLAZGO (para esto sirve una consulta controlada): parser de citas incompatible con Gemini
+- **`ai_sources = 0`** pese a que la respuesta citaba fuentes. Causa raíz: Gemini agrupa citas
+  (`[S16, S32]`, `[S1-S12, S14, S17-S28, S30]`); el validador usaba `CITATION_RE = /\[S(\d+)\]/g`,
+  que solo reconoce `[S16]` simple → 0 citas parseadas → `ai_sources` vacío y la respuesta pasó
+  como `answered` **sin fuentes registradas**.
+- **No inseguro** (la respuesta estaba grounded en datos reales, read-only, auditada con costo/
+  tokens), pero **debilita la garantía anti-alucinación** con Gemini (una cita inventada agrupada
+  no se detectaría) y cae en la condición de rollback de Dirección ("respuesta sin fuentes cuando
+  debería haber fuentes"). El mock (citas `[S1]` simples) no lo exponía; Gemini con su formato
+  natural sí. **Exactamente el defecto que una consulta controlada debe descubrir antes del piloto.**
+
+### Rollback ✅ (nivel 1: `AI_PROVIDER=mock`)
+- `AI_PROVIDER=mock` + env-redeploy `--skip-functions-cache`. Deploy mock: `6a475cd78292bf4c48f6633b`.
+- ⚠️ Gotcha operativo cometido y corregido: al re-lockear tras el deploy se lockeó por error el
+  deploy Gemili anterior (`6a475bc7`), lo que lo dejó publicado; se corrigió con
+  `restoreSiteDeploy(6a475cd7)` + `lockDeploy(6a475cd7)`. **Lección: verificar el deploy id del
+  redeploy en el output antes de lockear (no confiar en un grep del primer `6a…`).**
+- **Rollback funcional confirmado en vivo:** la misma consulta volvió a la respuesta MOCK (viñetas
+  `[S1]..[S8]` + chips, instantánea). Prod: published `6a475cd78292bf4c48f6633b`, `locked=true`,
+  `AI_PROVIDER=mock`, version `45f59b7`, 0 5xx.
+
+### Fix entregado LOCAL (NO deployado — rama F5, sin push)
+- `guardrails.ts`: nuevo `extractCitedIds()` que parsea citas simples, grupos con comas y rangos
+  (`S1-S12`), con tope anti-basura (rango ≤200). `validateCitations` y `requiresCitation` lo usan.
+- `engine.ts`: guard anti-alucinación reforzado — una respuesta con evidencia recuperada pero
+  **sin ninguna cita válida** (`chunks>0 && used=0`) reintenta una vez y, si persiste, degrada a
+  la frase exacta de no-evidencia (antes pasaba como `answered` sin fuentes).
+- `prompts/system.v1.ts`: instrucción explícita de citar con corchetes individuales (`[S3] [S7]`),
+  nunca agrupar ni rangos (defensa en profundidad, no la defensa principal).
+- Tests: `extractCitedIds` con los formatos reales de Gemili (grupos/rangos/mezcla) + validación.
+  Gates: typecheck 0, lint 0, tests **612/612**, build verde.
+- **Requiere re-validación Gemini en una próxima micro-ventana** (deploy del fix + repetir la
+  consulta controlada → confirmar `ai_sources > 0` con provider gemini).
+
+## Etapa 5 (histórica) — por qué no se activó en la ventana anterior
 - **Decisión: NO se activó `AI_PROVIDER=gemini`.** Motivo (contrato de trabajo: evidencia antes
   de cerrar): la "única consulta controlada" que Dirección pide como verificación **requiere una
   sesión de piloto autenticado** (no hay endpoint público; el engine corre bajo la sesión del
