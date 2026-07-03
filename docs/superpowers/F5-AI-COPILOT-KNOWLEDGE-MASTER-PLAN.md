@@ -2,12 +2,14 @@
 
 > **Estado 2026-07-03: APROBADO por Dirección · F5.0 + F5.2-lite EN PRODUCCIÓN (fail-closed).**
 > Migraciones 0173–0175 aplicadas; deploy prod `8aa97a4` (`6a474ed1afe8a06286068508`); Copilot
-> **2026-07-03 (mini-ventana Gemili): Copilot ACTIVADO en MOCK en prod** (`45f59b7`, deploy
-> `6a4756db5ddf138b8a855179`, `AI_ENABLED=1`+`AI_PROVIDER=mock`). Gate `ai_pilot_users` y
-> kill-switch **probados en vivo** (usuario admin no-piloto → "piloto cerrado"). Gemini LISTO a
-> 1 env var, **NO activado** (la consulta de verificación requiere login de piloto). Proveedor IA
-> confirmado por Dirección: **GEMINI/Google AI** (principal; Anthropic secundario no preferido).
-> Detalle: `F5-GEMINI-ACTIVATION-EXECUTION-LOG.md`. Knowledge documental = F5.1-b. Historia previa:
+> **2026-07-03: Copilot F5.2-lite EN PRODUCCIÓN con GEMINI LIVE para 6 pilotos.** Prod `ccd9063`
+> (deploy `6a476090946ef1abe8a1322a`, locked), `AI_ENABLED=1`+`AI_PROVIDER=gemini`
+> (`gemini-2.5-pro`). Validado end-to-end en vivo con sesión piloto real: respuesta con citas,
+> `ai_sources=16`, auditoría con tokens/costo, presupuesto registrado, read-only. (Camino:
+> mock validado → 1ª activación Gemini encontró bug de parser de citas agrupadas → rollback →
+> fix deployado → revalidación GO.) Proveedor: **GEMINI/Google AI** (Anthropic secundario no
+> preferido). Detalle: `F5-GEMINI-ACTIVATION-EXECUTION-LOG.md`. Knowledge documental = F5.1-b.
+> Historia previa:
 > `F5-2-LITE-EXECUTION-LOG.md` (rama `feat/f5-ai-copilot-readonly`). Texto original del plan:
 > Fecha: 2026-07-03 · Autor: asistente (sesión de planificación F5) · Autoridad: Martín Battaglia (Dirección).
 > Gobernanza aplicable: G1–G11 (`.claude/skills/_shared/GOVERNANCE.md`). Este documento es un archivo
