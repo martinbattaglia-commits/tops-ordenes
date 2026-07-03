@@ -40,7 +40,8 @@ export interface BootPermissions {
   knowledge: boolean;
   /** Nexus Link → Conversaciones (connect.view). */
   connect: boolean;
-  /** Nexus Copilot — gate del piloto (AI_ENABLED + ai_pilot_users), independiente del RBAC. */
+  /** Visibilidad del ítem "Nexus Copilot" = membresía en ai_pilot_users (kill-switch
+   *  AI_ENABLED se aplica al ENTRAR a /copilot, no al mostrar el ítem). Indep. del RBAC. */
   copilot: boolean;
 }
 
@@ -84,21 +85,25 @@ export const getProfileRole = cache(async (): Promise<string | null> => {
 const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
   // Demo / Supabase no configurado → permisivo (espejo de checkPermission demo
   // fail-open y de canAccess sin cliente).
-  if (env.app.demoMode || env.app.needsSupabase) return { ...PERMISSIVE, copilot: env.ai.enabled };
+  if (env.app.demoMode || env.app.needsSupabase) return PERMISSIVE;
   const supabase = createClient();
-  if (!supabase) return { ...PERMISSIVE, copilot: env.ai.enabled };
+  if (!supabase) return PERMISSIVE;
 
   const user = await getSessionUser();
   if (!user) return CLOSED; // espejo: checkPermission 401 / canAccess false
 
-  // Gate del Copilot (espejo de checkGate en gate.ts): AI_ENABLED + membresía en
-  // ai_pilot_users. INDEPENDIENTE del RBAC de roles (un piloto sin roles igual debe
-  // verlo). Se consulta EN PARALELO con el count de roles para no sumar latencia al boot.
+  // VISIBILIDAD del ítem "Nexus Copilot" en el sidebar = membresía en ai_pilot_users.
+  // NO se acopla a AI_ENABLED: ese env var es de contexto `production` únicamente, así
+  // que en deploy-preview/branch-deploy sería false y el ítem nunca se podría testear en
+  // un DRAFT. El KILL-SWITCH AI_ENABLED se sigue aplicando en `/copilot` (checkGate,
+  // gate.ts): si está apagado, el piloto ve el ítem pero al entrar recibe "desactivado".
+  // Fail-closed para no-pilotos. Independiente del RBAC de roles (un piloto sin roles
+  // igual debe verlo). Se consulta EN PARALELO con el count de roles (sin latencia extra).
   const [{ count, error: countErr }, pilot] = await Promise.all([
     supabase.from("user_roles").select("*", { count: "exact", head: true }).eq("user_id", user.id),
     supabase.from("ai_pilot_users").select("user_id").eq("user_id", user.id).maybeSingle(),
   ]);
-  const copilot = env.ai.enabled && !pilot.error && !!pilot.data;
+  const copilot = !pilot.error && !!pilot.data;
 
   if (countErr) {
     // Espejo exacto de la asimetría previa:

@@ -45,8 +45,8 @@ const DOMAINS: Domain[] = [
     id: "cockpit",
     label: "Cockpit",
     items: [
-      // Nexus Copilot — piloto cerrado F5.2-lite: sólo visible para ai_pilot_users
-      // (gate "copilot"). Los no-pilotos no lo ven; la página además auto-gatea.
+      // Nexus Copilot — piloto cerrado F5.2-lite: visible sólo para ai_pilot_users
+      // (gate "copilot"). Los no-pilotos no lo ven; /copilot aplica el kill-switch AI_ENABLED.
       { href: "/copilot", label: "Nexus Copilot", icon: "sparkle", gate: "copilot", badge: "Piloto" },
       // Cockpit único. Los ítems ejecutivos/financieros (`exec:true`) se ocultan a
       // los roles sin permiso ejecutivo (Comercial, Finanzas, encargados de depósito),
@@ -218,7 +218,7 @@ interface Props {
   canViewKnowledge?: boolean;
   /** ¿Mostrar Nexus Link → Conversaciones (requiere connect.view)? (default: sí). */
   canViewConnect?: boolean;
-  /** ¿Mostrar Nexus Copilot? (piloto cerrado: AI_ENABLED + ai_pilot_users) — default: NO. */
+  /** ¿Mostrar Nexus Copilot? (piloto cerrado: membresía en ai_pilot_users) — default: NO. */
   canViewCopilot?: boolean;
   onNavigate?: () => void;
 }
