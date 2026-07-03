@@ -7,6 +7,7 @@ import {
   buildContext,
   chunkToBlock,
   extractCitedIds,
+  isEmptyAnswer,
   isMetadataContentRisk,
   redactPii,
   requiresCitation,
@@ -313,5 +314,58 @@ describe("F5.1-b.0.1 · firma/vigencia de contrato = METADATA (no over-degrada)"
     for (const [q, t] of reclosed) {
       expect(isMetadataContentRisk(q, [{ entityType: t }]), q).toBe(true);
     }
+  });
+});
+
+describe("F5.1-b.0.1.1 · 'archivo' de compliance = METADATA; 'resumime el archivo' = contenido", () => {
+  const cmp = { entityType: "compliance_documento" as const };
+
+  it("listar/buscar ARCHIVOS documentales → metadata (no degrada, la feature vive)", () => {
+    // Sin este fix, "cuáles son los archivos de compliance" NO tenía término de metadata
+    // → el guard la degradaba aunque el ruteo a docs_browse fuera correcto (hallazgo smoke).
+    const permits = [
+      "cuáles son los archivos de compliance",
+      "buscame archivos de compliance",
+      "qué archivos de compliance hay de MAGALDI",
+      "buscame el archivo de residuos Nación de Magaldi de compliance",
+    ];
+    for (const q of permits) expect(isMetadataContentRisk(q, [cmp]), q).toBe(false);
+  });
+
+  it("resumir / qué dice 'EL archivo' (singular) → contenido (degrada, fail-closed)", () => {
+    expect(isMetadataContentRisk("resumime el archivo X", [cmp])).toBe(true);
+    expect(isMetadataContentRisk("qué dice el archivo de residuos", [cmp])).toBe(true);
+  });
+
+  it("re-cierra los bypasses del review adversarial (archivo singular + verbo de contenido/interpretación)", () => {
+    // "archivo" es plural-only en METADATA_INTENT_TERMS + "menciona"/"se refiere" en CONTENT_TERMS
+    // ⇒ estas paráfrasis de CONTENIDO sobre "el archivo" singular vuelven a degradar.
+    const degradan: Array<[string, "compliance_documento" | "contrato"]> = [
+      ["el archivo de compliance menciona X", "compliance_documento"],
+      ["según el archivo de compliance, ¿qué pasa si incumplo?", "compliance_documento"],
+      ["a qué se refiere el archivo de compliance de MAGALDI", "compliance_documento"],
+      ["el archivo del contrato menciona una penalidad", "contrato"],
+    ];
+    for (const [q, t] of degradan) {
+      expect(isMetadataContentRisk(q, [{ entityType: t }]), q).toBe(true);
+    }
+  });
+
+  it("las listas en PLURAL siguen pasando tras el fix (no over-degrada)", () => {
+    const permits = [
+      "cuáles son los archivos de compliance",
+      "qué archivos de compliance hay de MAGALDI",
+      "buscame el archivo de residuos Nación de Magaldi de compliance", // entra por "busc"
+    ];
+    for (const q of permits) expect(isMetadataContentRisk(q, [cmp]), q).toBe(false);
+  });
+});
+
+describe("F5.1-b.0.1.1 · isEmptyAnswer", () => {
+  it("vacío / whitespace = true; con texto = false", () => {
+    expect(isEmptyAnswer("")).toBe(true);
+    expect(isEmptyAnswer("   \n\t ")).toBe(true);
+    expect(isEmptyAnswer("hola [S1]")).toBe(false);
+    expect(isEmptyAnswer(NO_EVIDENCE)).toBe(false);
   });
 });

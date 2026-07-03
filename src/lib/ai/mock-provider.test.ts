@@ -38,6 +38,9 @@ describe("routing por pregunta (round 1)", () => {
     ["¿Qué pasó hoy en operaciones?", "ops_digest"],
     ["¿Qué clientes tienen más problemas?", "clients_health"],
     ["¿Qué documentos de compliance están pendientes?", "compliance_pending"],
+    // F5.1-b.0.1.1 · tools documentales nuevas
+    ["cuáles son los archivos de compliance", "docs_browse"],
+    ["qué contratos están próximos a vencer", "contracts_overview"],
     ["¿Qué workflow está trabado?", "workflows_stuck"],
     ["¿Qué debería mirar primero mañana?", "my_agenda"],
     ["Resumime el estado del depósito", "ops_digest"],

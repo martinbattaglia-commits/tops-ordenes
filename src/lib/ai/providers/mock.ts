@@ -52,6 +52,25 @@ function pickTools(question: string): ToolCall[] {
     });
     return calls;
   }
+  // F5.1-b.0.1.1: "archivo(s)" → docs_browse (fichas documentales); "contrato(s)" →
+  // contracts_overview (grano contrato). Van ANTES de compliance_pending para que
+  // "archivos de compliance" y "contratos por vencer" no caigan en compliance.
+  if (/archivo/.test(q)) {
+    calls.push({
+      tool: "docs_browse",
+      args: { tipo: /contrato/.test(q) ? "contrato" : "compliance" },
+    });
+    return calls;
+  }
+  if (/contrato/.test(q)) {
+    const mode = /vencer|vencimiento/.test(q)
+      ? "por_vencer"
+      : /firmad|firmo|firma/.test(q)
+        ? "firmados_recientes"
+        : "todos";
+    calls.push({ tool: "contracts_overview", args: { mode } });
+    return calls;
+  }
   if (/compliance|habilitacion|vencimiento|documentacion|certificad|documentos?\b/.test(q)) {
     calls.push({ tool: "compliance_pending", args: {} });
     return calls;
@@ -126,6 +145,19 @@ export class MockProvider implements AiProvider {
   readonly model = "mock-deterministic-v1";
 
   async plan(req: ProviderTurnRequest): Promise<ProviderTurnResponse> {
+    // Harness de test (F5.1-b.0.1.1): sentinela que fuerza un 'final' VACÍO para
+    // verificar que el engine NO deja pasar 'answered' vacío. No matchea preguntas reales.
+    if (norm(req.question).includes("__force_empty_answer__")) {
+      return { kind: "final", answer: "" };
+    }
+    // Harness (F5.1-b.0.1.1): round 1 recupera chunks (tool), luego devuelve 'final' VACÍO
+    // → prueba el guard de respuesta vacía DESPUÉS de recuperar evidencia (empty-after-tools).
+    if (norm(req.question).includes("__empty_after_tools__")) {
+      if (req.round === 1 && req.chunks.length === 0) {
+        return { kind: "tool_calls", toolCalls: [{ tool: "incidents_overview", args: {} }] };
+      }
+      return { kind: "final", answer: "" };
+    }
     // Round 1 sin evidencia: pedir tools según la pregunta.
     if (req.round === 1 && req.chunks.length === 0) {
       return { kind: "tool_calls", toolCalls: pickTools(req.question) };

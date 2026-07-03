@@ -12,6 +12,7 @@ import { checkGate } from "./gate";
 import {
   NO_EVIDENCE,
   buildContext,
+  isEmptyAnswer,
   isMetadataContentRisk,
   redactPii,
   sanitizeQuestion,
@@ -123,18 +124,28 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
       const finalAnswer = res.kind === "final" ? res.answer : NO_EVIDENCE;
       const check = validateCitations(finalAnswer, chunks);
       const isNoEvidence = finalAnswer.trim() === NO_EVIDENCE;
+      // F5.1-b.0.1.1: una respuesta VACÍA no es una respuesta (hallazgo smoke b.0.1:
+      // el modelo devolvió answered vacío sin tools ni fuentes).
+      const emptyAnswer = isEmptyAnswer(finalAnswer);
       // Anti-alucinación: una afirmación de negocio con evidencia recuperada
       // DEBE citar al menos una fuente válida. Sin citas válidas (formato roto,
       // o el modelo no citó) no la damos por buena aunque no haya citas
       // "inválidas" explícitas.
       const missingCitations =
         !isNoEvidence && chunks.length > 0 && check.used.length === 0;
-      if ((!check.valid || missingCitations) && !retriedCitations) {
-        // Única segunda oportunidad: citó fuentes inexistentes o no citó nada.
+      if ((!check.valid || missingCitations || emptyAnswer) && !retriedCitations) {
+        // Única segunda oportunidad: citó fuentes inexistentes, no citó nada, o
+        // devolvió una respuesta vacía (F5.1-b.0.1.1).
         retriedCitations = true;
         continue;
       }
-      if (!check.valid) {
+      if (emptyAnswer) {
+        // F5.1-b.0.1.1: nunca dar por 'answered' una respuesta vacía. El modelo
+        // debió citar evidencia o decir EXACTAMENTE la frase de sin-evidencia.
+        answer = NO_EVIDENCE;
+        outcome = "no_evidence";
+        errorDetail = "empty_answer_no_sources";
+      } else if (!check.valid) {
         answer = NO_EVIDENCE;
         outcome = "no_evidence";
         errorDetail = `citas inválidas: ${check.invalid.join(",")}`;

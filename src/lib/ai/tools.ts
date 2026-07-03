@@ -255,7 +255,7 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
   docs_browse: {
     rpc: "ai_docs_browse",
     description:
-      "Listado de FICHAS de documentos ya cargadas (tipo: compliance | contrato), opcionalmente por nombre/entidad. Para 'buscame documentos', 'qué documentos de compliance hay de X', 'listame contratos'. Devuelve la ficha (título/categoría/fechas), NO el contenido del documento.",
+      "USALA para LISTAR o BUSCAR archivos/documentos/fichas ya cargados (compliance o contratos). Cubre pedidos como 'cuáles son los archivos de compliance', 'buscame archivos/documentos de compliance', 'buscame el archivo de residuos Nación de Magaldi', 'qué archivos/documentos de compliance hay de MAGALDI', 'listá documentos de compliance', 'buscame contratos', 'qué contratos existen'. tipo = compliance | contrato; query filtra por nombre/entidad (p.ej. MAGALDI, residuos, Nación). Devuelve la FICHA de metadata (título/categoría/fechas), NO el contenido interno del documento; para resumir/cláusulas/qué dice, NO la uses.",
     schema: z.object({
       tipo: z.enum(["compliance", "contrato"]).optional(),
       query: z.string().max(120).optional(),

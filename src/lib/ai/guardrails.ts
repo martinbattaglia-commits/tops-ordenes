@@ -137,6 +137,13 @@ export function sanitizeQuestion(q: string, maxLen = 2000): string {
   return q.replace(/\s+/g, " ").trim().slice(0, maxLen);
 }
 
+/** F5.1-b.0.1.1: ¿la respuesta del modelo es VACÍA (sin contenido citable)? Un
+ *  'answered' vacío no es una respuesta — el engine debe degradarlo a NO_EVIDENCE.
+ *  (Hallazgo smoke b.0.1: el modelo devolvió answered vacío sin tools ni fuentes.) */
+export function isEmptyAnswer(answer: string): boolean {
+  return answer.trim().length === 0;
+}
+
 // ── Guard estructural metadata-vs-contenido (F5.1-b.0 · D5 / hallazgo H6) ────
 // b.0 proyecta FICHAS DE METADATA de documentos (título, categoría, fechas), NO
 // el contenido del PDF. Como esas fichas tienen un `body` citable, una pregunta
@@ -179,6 +186,9 @@ const CONTENT_TERMS = [
   "segun el contrato", "segun el acuerdo", "segun lo pactado", "segun el documento", "segun el convenio",
   "lo pactado", "que tiene el contrato", "que tiene el acuerdo", "puntos importantes",
   "contenido", "texto del", "texto completo", "transcrib", "que implica", "puntos clave",
+  // F5.1-b.0.1.1 (hardening tras revisión adversarial): verbos de contenido/interpretación
+  // por paráfrasis natural que evadían el guard cuando el objeto era "archivo".
+  "menciona", "se refiere",
   "monto del", "plazo del", "vigencia del contrato", "que penaliza", "leeme el", "leer el",
   // English
   "summariz", "what does it say", "what says", "the terms", "obligations", "coverage",
@@ -189,7 +199,7 @@ const CONTENT_TERMS = [
 // Verbos AMBIGUOS: sólo cuentan como contenido si el objeto es un documento SINGULAR.
 const AMBIGUOUS_CONTENT_VERBS = ["resum", "detall", "explic", "desarroll", "profundiz"];
 const SINGULAR_DOC_OBJECT =
-  /\b(el|la|este|esta|ese|esa|del|de la|dicho|dicha|un|una|mi|su)\s+(contrato|documento|poliza|acuerdo|convenio|expediente|certificado|habilitacion|informe|adenda|anexo|reclamo)\b/;
+  /\b(el|la|este|esta|ese|esa|del|de la|dicho|dicha|un|una|mi|su)\s+(contrato|documento|poliza|acuerdo|convenio|expediente|certificado|habilitacion|informe|adenda|anexo|reclamo|archivo)\b/;
 
 // Señales FUERTES de intención METADATA (listado / existencia / vencimiento / campo
 // proyectado poco co-optable). NO se incluyen interrogativos genéricos (cual/cuant/
@@ -200,6 +210,13 @@ const METADATA_INTENT_TERMS = [
   "busc", "list", "mostr", "enumera", "encontr", "filtr", "orden",
   " hay", "hay ", "existe", "que documento", "que contrato",
   "documentos", "contratos", "fichas", "polizas", "expedientes", "certificados", "habilitaciones",
+  // F5.1-b.0.1.1: "archivos" (PLURAL = listado) como intención metadata. A PROPÓSITO no
+  // "archivo" singular: un archivo singular SIN verbo de búsqueda ("el archivo … menciona /
+  // según el archivo … / a qué se refiere el archivo") es CONTENIDO y debe degradar (bypass
+  // confirmado en revisión adversarial). El plural habilita "cuáles son los archivos de
+  // compliance"; "buscame el archivo de X" entra igual por "busc". SINGULAR_DOC_OBJECT
+  // incluye "archivo" para que "resumime EL archivo" degrade como contenido.
+  "archivos",
   "vencimiento", "vence", "vencer", "vencid", "por vencer", "caduc",
   "estado", "categor", "riesgo", "sede", "deposito", "tipo de documento", "tipo de contrato",
   // F5.1-b.0.1: ESTADO de firma como METADATA (firmado / se firmó), NO el firmante. Preciso

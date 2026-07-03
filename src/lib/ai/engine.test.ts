@@ -93,6 +93,40 @@ describe("flujo completo en demo mode (provider mock + fixtures)", () => {
     expect(res.answer).toBe(NO_EVIDENCE);
   });
 
+  it("respuesta VACÍA del modelo (answered vacío) → degrada a NO_EVIDENCE (F5.1-b.0.1.1)", async () => {
+    // El sentinel del MockProvider fuerza un 'final' vacío (simula el fallo del smoke
+    // b.0.1: Gemini devolvió answered vacío sin tools ni fuentes). El engine no debe
+    // dejarlo pasar como answered.
+    const { askCopilot, NO_EVIDENCE } = await loadEngine();
+    const res = await askCopilot(baseReq("__force_empty_answer__"));
+    expect(res.outcome).toBe("no_evidence");
+    expect(res.answer).toBe(NO_EVIDENCE);
+    expect(res.sources).toEqual([]);
+  });
+
+  it("respuesta VACÍA DESPUÉS de recuperar chunks (round 2) → NO_EVIDENCE (F5.1-b.0.1.1)", async () => {
+    // Cubre el gap del review: empty-answer con chunks>0 (reintento incluido) también degrada,
+    // y el guard de vacío corre ANTES que isMetadataContentRisk (outcome nunca queda 'answered').
+    const { askCopilot, NO_EVIDENCE } = await loadEngine();
+    const res = await askCopilot(baseReq("__empty_after_tools__"));
+    expect(res.outcome).toBe("no_evidence");
+    expect(res.answer).toBe(NO_EVIDENCE);
+  });
+
+  it("ruteo a docs_browse (archivos de compliance) → answered con fuentes (F5.1-b.0.1.1)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("cuáles son los archivos de compliance"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBeGreaterThan(0);
+  });
+
+  it("ruteo a contracts_overview (contratos por vencer) → answered con fuentes (F5.1-b.0.1.1)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("qué contratos están próximos a vencer"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBeGreaterThan(0);
+  });
+
   it("PII embebida en fixtures/citas queda redactada en la respuesta", async () => {
     const { askCopilot } = await loadEngine();
     const res = await askCopilot(baseReq("¿Qué incidentes críticos están abiertos?"));
