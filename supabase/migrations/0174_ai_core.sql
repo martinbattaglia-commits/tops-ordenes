@@ -477,6 +477,17 @@ begin
   );
 end $$;
 
+-- 4.1b Gasto IA del mes en curso (USD, agregado global — sin contenido).
+-- SECURITY DEFINER a propósito: el tope mensual (D-F5-8) es GLOBAL y el
+-- cliente RLS de un usuario solo ve sus propios mensajes. Devuelve un único
+-- número; no expone prompts, usuarios ni detalle.
+create or replace function public.ai_monthly_spend() returns numeric
+language sql stable security definer set search_path = public, pg_temp as $$
+  select coalesce(sum(m.cost_estimate), 0)::numeric
+  from public.ai_messages m
+  where m.created_at >= date_trunc('month', now())
+$$;
+
 -- 4.2 Feedback 👍/👎 del dueño del mensaje (upsert por (message_id, user_id)).
 create or replace function public.ai_set_feedback(
   p_message_id uuid,
@@ -517,6 +528,7 @@ revoke all on function public.ai_clients_health(int)                          fr
 revoke all on function public.ai_ops_digest(int, int)                         from public, anon;
 revoke all on function public.ai_my_agenda(int)                               from public, anon;
 revoke all on function public.ai_log_interaction(uuid, text, text, jsonb, jsonb) from public, anon;
+revoke all on function public.ai_monthly_spend()                              from public, anon;
 revoke all on function public.ai_set_feedback(uuid, text, text)               from public, anon;
 
 grant execute on function public.ai_search_knowledge(text, text[], int)       to authenticated;
@@ -530,6 +542,7 @@ grant execute on function public.ai_clients_health(int)                       to
 grant execute on function public.ai_ops_digest(int, int)                      to authenticated;
 grant execute on function public.ai_my_agenda(int)                            to authenticated;
 grant execute on function public.ai_log_interaction(uuid, text, text, jsonb, jsonb) to authenticated;
+grant execute on function public.ai_monthly_spend()                           to authenticated;
 grant execute on function public.ai_set_feedback(uuid, text, text)            to authenticated;
 
 notify pgrst, 'reload schema';
