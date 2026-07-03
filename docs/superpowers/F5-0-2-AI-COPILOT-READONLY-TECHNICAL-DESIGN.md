@@ -272,9 +272,19 @@ interface AiProvider {
 }
 ```
 
-- Registry por env `AI_PROVIDER = 'mock' | 'anthropic' | 'openai'` (default **`'mock'`**).
+- Registry por env `AI_PROVIDER = 'mock' | 'gemini' | 'anthropic' | 'openai'` (default **`'mock'`**).
 - `'mock'`: determinista (fixture-based), sin red — habilita TDD/QA completos y demo sin costo.
-- `'anthropic'` (actualización por decisión Dirección 2026-07-03): **implementado e INERTE** —
+- `'gemini'` (**PROVEEDOR PRINCIPAL — confirmado por Dirección 2026-07-03**): implementado e
+  INERTE — Generative Language API `generateContent` con function calling sobre el catálogo
+  cerrado, vía `fetch` sin SDK (al consolidar, evaluar `@google/genai`). Fail-closed sin key;
+  keys en Netlify: `AI_GEMINI_API_KEY` (primaria) con fallback `GEMINI_API_KEY` (mismo valor,
+  cargadas por Dirección; verificadas por nombre). Modelo default `gemini-2.5-pro`
+  (configurable `AI_MODEL`; confirmar id vigente al activar). La key viaja SOLO en header
+  `x-goog-api-key` (nunca en URL). Schemas del catálogo sanitizados al subset OpenAPI de
+  Gemini (sin `additionalProperties`/`minimum`/`maximum`). `temperature: 0.2` (Gemini sí
+  acepta sampling params). Pricing cacheado para `cost_estimate` (pro $1.25/$10 · flash
+  $0.30/$2.50 por MTok).
+- `'anthropic'` (**secundario, NO preferido** — se mantiene implementado e inerte): —
   Messages API (`v1/messages`) con tool use sobre el catálogo cerrado, vía `fetch` sin SDK
   (cero dependencia hasta la elección formal; al activar, evaluar migrar a `@anthropic-ai/sdk`).
   Fail-closed: sin `AI_ANTHROPIC_API_KEY` no existe camino de red (la key la carga Dirección en
@@ -285,8 +295,9 @@ interface AiProvider {
   "temperatura baja" de §8/§14 se implementa vía system prompt + citas validadas, no por sampling.
   Thinking adaptativo (`{type:"adaptive"}`); `budget_tokens` no existe en estos modelos.
 - `'openai'`: stub deshabilitado.
-- Vars: `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_ANTHROPIC_API_KEY`, `AI_DAILY_LIMIT`,
-  `AI_MONTHLY_BUDGET_USD` (tope mensual global leído vía RPC agregada `ai_monthly_spend()`).
+- Vars: `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_GEMINI_API_KEY` (primaria) /
+  `GEMINI_API_KEY` (fallback), `AI_ANTHROPIC_API_KEY` (secundaria no preferida),
+  `AI_DAILY_LIMIT`, `AI_MONTHLY_BUDGET_USD` (tope mensual global vía RPC `ai_monthly_spend()`).
 - Requisitos de activación (checklist en `F5-2-LITE-VALIDATION-PACK.md` §7, rama F5): DPA/
   no-training, región, evaluación con eval set, y prueba real de costo/presupuesto.
 
