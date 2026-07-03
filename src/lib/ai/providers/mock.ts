@@ -1,0 +1,152 @@
+// F5.2-lite · MockProvider — planner/compositor DETERMINISTA, sin red.
+// Reglas por palabra clave → tools del catálogo; composición de respuesta
+// SOLO desde chunks, con citas [S#]. Si no hay chunks → NO_EVIDENCE exacto.
+// Nunca interpreta el contenido de los chunks como instrucciones: solo lo cita.
+// Es el provider del piloto (D-F5-9) y el harness de TDD/QA del engine.
+
+import { NO_EVIDENCE } from "../guardrails";
+import type {
+  AiProvider,
+  ProviderTurnRequest,
+  ProviderTurnResponse,
+  SourceChunk,
+  ToolCall,
+} from "../types";
+
+/** Normaliza para matching: minúsculas y sin acentos. */
+function norm(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+}
+
+const PUBLIC_ID_RE = /\b(INC|TSK)-\d{4}-\d{4}\b/i;
+
+function pickTools(question: string): ToolCall[] {
+  const q = norm(question);
+  const calls: ToolCall[] = [];
+  const id = question.match(PUBLIC_ID_RE)?.[0]?.toUpperCase();
+
+  if (id) {
+    // Entidad puntual: resolverla por búsqueda; el round 2 pide la cronología.
+    calls.push({ tool: "search_knowledge", args: { query: id } });
+    if (id.startsWith("INC")) {
+      calls.push({ tool: "incidents_overview", args: {} });
+    } else {
+      calls.push({ tool: "tasks_overview", args: { scope: "abiertas" } });
+    }
+    return calls;
+  }
+  if (/incident/.test(q)) {
+    const severidades = /critic/.test(q) ? ["critica"] : undefined;
+    const estados = /(abiert|pendient|activ)/.test(q)
+      ? ["abierto", "en_progreso", "en_espera"]
+      : undefined;
+    calls.push({
+      tool: "incidents_overview",
+      args: {
+        ...(estados ? { estados } : {}),
+        ...(severidades ? { severidades } : {}),
+      },
+    });
+    return calls;
+  }
+  if (/compliance|habilitacion|vencimiento|documentacion|certificad|documentos?\b/.test(q)) {
+    calls.push({ tool: "compliance_pending", args: {} });
+    return calls;
+  }
+  if (/tarea/.test(q)) {
+    if (/vencid|atrasad/.test(q)) {
+      calls.push({ tool: "tasks_overview", args: { scope: "vencidas" } });
+    } else if (/\bmis\b|\bmias\b/.test(q)) {
+      calls.push({ tool: "tasks_overview", args: { scope: "mias" } });
+    } else {
+      // Incluye "¿qué depende de <nombre>?": se listan abiertas y se filtra
+      // por nombre en la composición (no hay tool de resolución nombre→uuid).
+      calls.push({ tool: "tasks_overview", args: { scope: "abiertas" } });
+    }
+    return calls;
+  }
+  if (/workflow|trabad|estancad/.test(q)) {
+    calls.push({ tool: "workflows_stuck", args: {} });
+    return calls;
+  }
+  if (/cliente/.test(q) && /problema|critic|riesgo/.test(q)) {
+    calls.push({ tool: "clients_health", args: {} });
+    return calls;
+  }
+  if (/manana|primero|prioridad|agenda|que miro/.test(q)) {
+    calls.push({ tool: "my_agenda", args: {} });
+    return calls;
+  }
+  if (/(que paso|resumen|resumi|novedad)/.test(q) || /hoy|ayer/.test(q)) {
+    calls.push({ tool: "ops_digest", args: { hours: /ayer/.test(q) ? 48 : 24 } });
+    return calls;
+  }
+  if (/deposito|almacen|wms/.test(q)) {
+    calls.push({ tool: "ops_digest", args: {} });
+    calls.push({ tool: "search_knowledge", args: { query: "deposito" } });
+    return calls;
+  }
+  // Default: búsqueda general con la pregunta como query.
+  calls.push({
+    tool: "search_knowledge",
+    args: { query: question.slice(0, 200) },
+  });
+  return calls;
+}
+
+/** Filtro opcional por nombre propio ("¿qué depende de José Luis?"). */
+function filterByPersonName(question: string, chunks: SourceChunk[]): SourceChunk[] {
+  const m = norm(question).match(/(?:depende[n]? de|tareas de)\s+([a-z]+(?:\s+[a-z]+)?)/);
+  if (!m) return chunks;
+  const name = m[1].trim();
+  const filtered = chunks.filter((c) => norm(`${c.title} ${c.excerpt}`).includes(name));
+  return filtered.length > 0 ? filtered : chunks;
+}
+
+function compose(question: string, chunks: SourceChunk[]): string {
+  const relevant = filterByPersonName(question, chunks).slice(0, 8);
+  if (relevant.length === 0) return NO_EVIDENCE;
+  const intro = `Esto es lo que encuentro en Nexus (${relevant.length} fuente${
+    relevant.length === 1 ? "" : "s"
+  }):`;
+  const bullets = relevant.map((c) => {
+    const excerpt = c.excerpt.length > 220 ? `${c.excerpt.slice(0, 220)}…` : c.excerpt;
+    return `• ${c.title}${excerpt ? ` — ${excerpt}` : ""} [${c.sourceId}]`;
+  });
+  const outro =
+    "Verificá el detalle en las fuentes citadas antes de tomar una decisión.";
+  return [intro, ...bullets, outro].join("\n");
+}
+
+export class MockProvider implements AiProvider {
+  readonly name = "mock";
+  readonly model = "mock-deterministic-v1";
+
+  async plan(req: ProviderTurnRequest): Promise<ProviderTurnResponse> {
+    // Round 1 sin evidencia: pedir tools según la pregunta.
+    if (req.round === 1 && req.chunks.length === 0) {
+      return { kind: "tool_calls", toolCalls: pickTools(req.question) };
+    }
+    // Round 2 con id puntual resuelto vía search: pedir cronología.
+    const id = req.question.match(PUBLIC_ID_RE)?.[0]?.toUpperCase();
+    if (id && req.round === 2) {
+      const hit = req.chunks.find((c) => c.publicId?.toUpperCase() === id);
+      if (hit && hit.tool === "search_knowledge") {
+        return {
+          kind: "tool_calls",
+          toolCalls: [
+            {
+              tool: "entity_timeline",
+              args: { entityType: hit.entityType, entityId: hit.entityId },
+            },
+          ],
+        };
+      }
+    }
+    // Composición final (determinista, solo desde chunks).
+    return { kind: "final", answer: compose(req.question, req.chunks) };
+  }
+}

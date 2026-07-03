@@ -26,6 +26,7 @@ export default defineConfig({
       "src/lib/udie/**/*.test.ts",
       "src/lib/fiscal/**/*.test.ts",
       "src/lib/compras/**/*.test.ts",
+      "src/lib/ai/**/*.test.ts",
     ],
     environment: "node",
   },

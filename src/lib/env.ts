@@ -81,6 +81,31 @@ export const env = {
     webhookSecret: process.env.CLIENTIFY_WEBHOOK_SECRET?.trim() ?? "",
     webhookConfigured: Boolean(process.env.CLIENTIFY_WEBHOOK_SECRET?.trim()),
   },
+  ai: {
+    /**
+     * F5.2-lite — Kill-switch global del Copilot. FAIL-CLOSED: ausente o
+     * distinto de "1" → el Copilot no existe (ni UI ni server action).
+     * Lección del patrón CRON_SECRET: nunca fail-open.
+     */
+    enabled: process.env.AI_ENABLED === "1",
+    /**
+     * Provider del modelo. 'mock' (default) = determinista, sin red, sin
+     * secretos. Providers reales requieren aprobación de Dirección (DPA/
+     * región/costos) — D-F5-9: en esta etapa NO hay llamadas reales.
+     */
+    provider: (process.env.AI_PROVIDER?.trim() || "mock") as
+      | "mock"
+      | "anthropic"
+      | "openai",
+    /** Límites duros del piloto (D-F5-8). Ajustables por env, defaults en código. */
+    limits: {
+      requestsPerDay: Number(process.env.AI_LIMIT_REQUESTS_PER_DAY) || 40,
+      toolRoundsPerRequest: Number(process.env.AI_LIMIT_TOOL_ROUNDS) || 4,
+      maxOutputTokens: Number(process.env.AI_LIMIT_OUTPUT_TOKENS) || 4000,
+      maxContextChars: Number(process.env.AI_LIMIT_CONTEXT_CHARS) || 24000,
+      maxTurnsPerSession: Number(process.env.AI_LIMIT_TURNS) || 10,
+    },
+  },
   whatsapp: {
     provider: (process.env.WHATSAPP_PROVIDER ?? "meta") as "meta" | "twilio" | "none",
     metaToken: process.env.META_WA_TOKEN?.trim() ?? "",
