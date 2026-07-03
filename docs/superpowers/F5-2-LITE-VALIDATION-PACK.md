@@ -68,13 +68,25 @@ al menos una vez**:
 - [ ] 🔴 Pregunta sin respuesta posible → frase EXACTA: "No tengo evidencia suficiente en Nexus para afirmarlo."
 - [ ] Toda respuesta con datos lleva citas [S#] y chips clickeables.
 
-## 7. Provider real (SOLO si Dirección activa Anthropic en esta ventana)
+## 7. Provider real — GEMINI (mini-ventana de activación; requiere autorización explícita)
 
-- [ ] Dirección cargó `AI_ANTHROPIC_API_KEY` en Netlify (secret; nunca por chat).
-- [ ] `AI_PROVIDER=anthropic`, `AI_MODEL=claude-opus-4-8` — 1 consulta de prueba de un piloto.
-- [ ] `tokens_in/out` y `cost_estimate` poblados en `ai_messages`; `ai_monthly_spend()` refleja el gasto.
+> Actualizado 2026-07-03: Dirección confirmó **Gemini/Google AI como proveedor principal**.
+> Keys YA cargadas en Netlify (`AI_GEMINI_API_KEY` + `GEMINI_API_KEY`, secret, all scopes/
+> contexts — verificadas por nombre). Anthropic queda como secundario no preferido (inerte).
+
+Secuencia recomendada de la mini-ventana:
+- [ ] Paso 0 (costo cero): `AI_ENABLED=1` + `AI_PROVIDER=mock` → smoke autenticado de los 5
+      pilotos (chat con citas sobre datos reales; auditoría poblándose en `ai_*`).
+- [ ] Paso 1: `AI_PROVIDER=gemini` (+ `AI_MODEL` — confirmar model id vigente; default
+      `gemini-2.5-pro`) → 1 consulta de prueba de un piloto.
+- [ ] `tokens_in/out` y `cost_estimate` poblados en `ai_messages`; `ai_monthly_spend()` refleja gasto.
 - [ ] Simular tope: `AI_MONTHLY_BUDGET_USD=0.000001` → corta con mensaje de presupuesto mensual.
-- [ ] Checklist de activación pendiente de Dirección: DPA/no-training, región, y evaluar migración a `@anthropic-ai/sdk` oficial (hoy: fetch sin dependencia).
+- [ ] Fail-closed re-verificado: quitar `AI_ENABLED` → Copilot desaparece; provider real sin key → error controlado sin red.
+- [ ] Pendientes de Dirección al activar: términos de datos de Google AI (no-training/retención),
+      re-validar pricing del modelo elegido, y evaluar migración a `@google/genai` oficial
+      (hoy: fetch sin dependencia).
+- [ ] Nota env-only changes: si el deploy es solo de variables, usar `--skip-functions-cache`
+      (gotcha del incidente Drive).
 
 ## 8. Pendiente OPS registrado (NO en esta ventana salvo decisión)
 

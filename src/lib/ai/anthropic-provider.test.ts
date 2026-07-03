@@ -33,6 +33,9 @@ beforeEach(() => {
   vi.resetModules();
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "");
+  // El default de AI_MODEL depende del provider (gemini es el principal);
+  // este suite prueba el provider secundario Anthropic explícitamente.
+  vi.stubEnv("AI_PROVIDER", "anthropic");
 });
 
 afterEach(() => {

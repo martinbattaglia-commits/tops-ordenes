@@ -116,8 +116,23 @@ describe("presupuesto (D-F5-8)", () => {
   });
 });
 
-describe("provider real deshabilitado (D-F5-9)", () => {
-  it("AI_PROVIDER=anthropic → error controlado, sin llamadas de red", async () => {
+describe("providers reales sin key → inertes (D-F5-9 / decisión Gemini)", () => {
+  it("AI_PROVIDER=gemini sin key → error controlado, cero red", async () => {
+    vi.stubEnv("AI_ENABLED", "1");
+    vi.stubEnv("AI_PROVIDER", "gemini");
+    vi.stubEnv("AI_GEMINI_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿incidentes?"));
+    expect(res.outcome).toBe("error");
+    expect(res.sources).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("AI_PROVIDER=anthropic (secundario) sin key → error controlado", async () => {
     vi.stubEnv("AI_ENABLED", "1");
     vi.stubEnv("AI_PROVIDER", "anthropic");
     const { askCopilot } = await loadEngine();

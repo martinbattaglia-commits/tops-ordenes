@@ -89,23 +89,36 @@ export const env = {
      */
     enabled: process.env.AI_ENABLED === "1",
     /**
-     * Provider del modelo. 'mock' (default) = determinista, sin red, sin
-     * secretos. Providers reales requieren aprobación de Dirección (DPA/
-     * región/costos) — D-F5-9: en esta etapa NO hay llamadas reales.
+     * Provider del modelo (decisión Dirección 2026-07-03: **Gemini es el
+     * proveedor principal previsto**). 'mock' (default) = determinista, sin
+     * red, sin secretos. La activación real requiere ventana aprobada:
+     * AI_ENABLED=1 + AI_PROVIDER=gemini + key en Netlify.
      */
     provider: (process.env.AI_PROVIDER?.trim() || "mock") as
       | "mock"
+      | "gemini"
       | "anthropic"
       | "openai",
     /**
-     * Modelo para el provider real (decisión Dirección: soportar Anthropic,
-     * activación en ventana aparte). Default: Claude Opus 4.8. Ojo: en
-     * Opus 4.7+ los sampling params (temperature/top_p/top_k) fueron
-     * ELIMINADOS de la API (400 si se envían) — el estilo se controla por
-     * prompt, no por temperatura.
+     * Modelo del provider real. Sin AI_MODEL explícito, el default depende
+     * del provider (gemini → gemini-2.5-pro; anthropic → claude-opus-4-8).
+     * Confirmar el model id vigente en la ventana de activación.
      */
-    model: process.env.AI_MODEL?.trim() || "claude-opus-4-8",
-    /** API key Anthropic — SOLO backend, Netlify env; jamás en repo (G9). */
+    model:
+      process.env.AI_MODEL?.trim() ||
+      ((process.env.AI_PROVIDER?.trim() || "mock") === "anthropic"
+        ? "claude-opus-4-8"
+        : "gemini-2.5-pro"),
+    /**
+     * API key Gemini (proveedor PRINCIPAL) — primaria AI_GEMINI_API_KEY,
+     * fallback GEMINI_API_KEY (ambas cargadas por Dirección en Netlify con
+     * el mismo valor). SOLO backend; jamás en repo ni en logs (G9).
+     */
+    geminiApiKey:
+      process.env.AI_GEMINI_API_KEY?.trim() ||
+      process.env.GEMINI_API_KEY?.trim() ||
+      "",
+    /** API key Anthropic (proveedor SECUNDARIO, no preferido) — solo backend. */
     anthropicApiKey: process.env.AI_ANTHROPIC_API_KEY?.trim() ?? "",
     /** Límites duros del piloto (D-F5-8). Ajustables por env, defaults en código. */
     limits: {
