@@ -1,9 +1,11 @@
 # F5.0 + F5.2-lite — Nexus AI Copilot read-only — DISEÑO TÉCNICO DETALLADO
 
-> **Estado 2026-07-03: IMPLEMENTADO Y EN PRODUCCIÓN (fail-closed).** Migraciones 0173–0175
-> aplicadas y validadas con ejecución real (checkpoints C1–C6); prod = `8aa97a4`
-> (deploy `6a474ed1afe8a06286068508`); Copilot desactivado hasta la ventana de activación.
-> Ver `F5-2-LITE-EXECUTION-LOG.md` y `F5-2-LITE-VALIDATION-PACK.md` (rama F5). Diseño original:
+> **Estado 2026-07-03: F5.2-lite CERRADA — Copilot read-only EN PRODUCCIÓN con GEMINI LIVE para 6
+> pilotos.** Prod `ccd9063` (deploy `6a476090946ef1abe8a1322a`, locked), `AI_ENABLED=1`,
+> `AI_PROVIDER=gemini` (`gemini-2.5-pro`). Migs 0173–0175 aplicadas; validado end-to-end en vivo
+> (`ai_sources=16`, auditoría con tokens/costo, RLS del usuario). Ver
+> `F5-GEMINI-ACTIVATION-EXECUTION-LOG.md`. Próximo bloque: F5.1-b (Knowledge documental / Drive /
+> RAG). Diseño original:
 > Fecha: 2026-07-03 · Deriva de `F5-AI-COPILOT-KNOWLEDGE-MASTER-PLAN.md` (aprobado por Dirección)
 > y de las decisiones D-F5-1 … D-F5-10. Gobernanza G1–G11 vigente. Sin embeddings, sin agentes,
 > sin escrituras (salvo auditoría IA), sin canales salientes, sin tocar `main`, sin deploy.
