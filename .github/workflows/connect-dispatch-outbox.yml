@@ -1,0 +1,71 @@
+name: Connect · Dispatch Outbox (cada 10 min)
+
+# F4.4-E1 — Drenado del outbox de Nexus Link (connect_outbox → worker F4.1).
+# Reemplaza a la Netlify Scheduled Function `connect-dispatch-outbox` (registrada
+# en netlify.toml pero NUNCA invocada en este sitio: los deploys manuales por CLI
+# no activan schedules — finding F4-1-SCHEDULING-OPS-FINDING.md). El mecanismo
+# cron probado del proyecto es GitHub Actions sobre la default branch (evidencia
+# F4.4-E1: corridas event=schedule diarias verdes de los 5 workflows existentes).
+#
+# ⚠️ ACTIVACIÓN: los schedules de GH Actions solo corren desde la DEFAULT BRANCH.
+# Este archivo queda inerte hasta que Dirección lo lleve a `main` (push/merge
+# autorizado aparte) o lo dispare por workflow_dispatch. Nada corre desde ramas.
+#
+# Secrets requeridos (ya configurados — los usan los 5 workflows existentes):
+#   - CRON_SECRET : mismo valor que la env var CRON_SECRET en Netlify.
+#   - APP_URL     : (opcional) base URL del deploy; default https://nexus.logisticatops.com
+#
+# El endpoint es fail-closed estricto (503 sin secret / 401 Bearer inválido) y
+# procesa en lotes con lease + backoff (F4.1A). `partial` = quedó backlog para
+# la próxima corrida; no es falla.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *" # cada 10 min (el fan-out crítico es síncrono; esto drena avisos)
+  workflow_dispatch: {} # disparo manual on-demand (primera evidencia de cierre del finding)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: connect-dispatch-outbox
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger connect outbox worker endpoint
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_URL:-https://nexus.logisticatops.com}"
+          echo "POST $BASE/api/connect/cron/dispatch-outbox"
+          code=$(curl -sS --max-time 90 -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "$BASE/api/connect/cron/dispatch-outbox")
+          echo "HTTP $code"
+          cat /tmp/resp.json || true
+          echo
+          test "$code" = "200"
+          status=$(jq -r '.status // "unknown"' /tmp/resp.json)
+          dead=$(jq -r '.failed_dead // 0' /tmp/resp.json)
+          backlog=$(jq -r '.pending_remaining // 0' /tmp/resp.json)
+          # Semántica real del worker (DispatchSummary): backlog remanente sin
+          # errores = "ok" + pending_remaining>0; "partial" = errores por-evento
+          # (reintentos/backoff); dead-letter debe ponerse ROJO para ser visible.
+          if [ "$dead" != "0" ]; then
+            echo "::error::$dead evento(s) a dead-letter en esta corrida. Revisar connect_worker_runs/last_error."
+            exit 1
+          fi
+          if [ "$backlog" != "0" ]; then
+            echo "::notice::Backlog remanente: $backlog evento(s); continúa en la próxima corrida."
+          fi
+          case "$status" in
+            ok)      echo "Corrida OK." ;;
+            partial) echo "::warning::Errores por-evento (quedaron en retry/backoff). Revisar reporte arriba." ;;
+            *)       echo "::error::Worker no completó (status=$status). Revisar reporte arriba."; exit 1 ;;
+          esac
