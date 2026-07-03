@@ -12,6 +12,7 @@ import { checkGate } from "./gate";
 import {
   NO_EVIDENCE,
   buildContext,
+  isMetadataContentRisk,
   redactPii,
   sanitizeQuestion,
   validateCitations,
@@ -153,6 +154,22 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
     outcome = "error";
     errorDetail = err instanceof Error ? err.message : String(err);
     console.error("[ai/engine] error:", errorDetail);
+  }
+
+  // F5.1-b.0 · Guard estructural metadata-vs-contenido (D5 / H6): si la respuesta
+  // se apoya SOLO en fichas de metadata documental y el usuario pidió CONTENIDO
+  // (resumen/qué dice/cláusulas…), degradar a NO_EVIDENCE — b.0 no proyecta el texto
+  // del documento, solo su ficha. Control en código; no depende del prompt.
+  if (outcome === "answered") {
+    const citedNow = validateCitations(answer, chunks).used;
+    const citedChunksNow = chunks.filter((c) => citedNow.includes(c.sourceId));
+    // Evalúa citadas Y recuperadas (chunks): fail-closed no depende de dónde el
+    // modelo puso el [S#]. Follow-ups escuetos multi-turno también degradan (seguro).
+    if (isMetadataContentRisk(question, citedChunksNow, chunks)) {
+      answer = NO_EVIDENCE;
+      outcome = "no_evidence";
+      errorDetail = "riesgo metadata-vs-contenido (b.0 no proyecta el texto del documento)";
+    }
   }
 
   // Fuentes efectivamente citadas (solo esas van a UI y auditoría).

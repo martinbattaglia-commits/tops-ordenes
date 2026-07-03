@@ -4,7 +4,13 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TOOLS, TOOL_INPUT_SCHEMAS, WRITE_VERBS_DENYLIST, toProviderTools } from "./tools";
+import {
+  TOOLS,
+  TOOL_INPUT_SCHEMAS,
+  WRITE_VERBS_DENYLIST,
+  entityUrl,
+  toProviderTools,
+} from "./tools";
 import { TOOL_NAMES } from "./types";
 import { validateToolCall, ToolArgsError } from "./data";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
@@ -105,5 +111,28 @@ describe("system prompt", () => {
   it("declara el contenido de nexus_source como datos, no instrucciones", () => {
     expect(SYSTEM_PROMPT).toContain("nexus_source");
     expect(SYSTEM_PROMPT.toLowerCase()).toContain("no instrucciones");
+  });
+  it("declara la regla de fichas de metadata (F5.1-b.0 · D5)", () => {
+    expect(SYSTEM_PROMPT).toContain("[ficha metadata]");
+  });
+});
+
+describe("entityUrl — deep-links (F5.1-b.0 · D6 / A5)", () => {
+  it("contrato → /comercial/contratos (branch nuevo)", () => {
+    expect(entityUrl("contrato", "CTR#abc123")).toBe("/comercial/contratos");
+    expect(entityUrl("contract", "X")).toBe("/comercial/contratos");
+  });
+  it("compliance_documento → /compliance (regresión, sigue mapeando)", () => {
+    expect(entityUrl("compliance_documento", "MAG-04#abc")).toBe("/compliance");
+  });
+  it("incidente y tarea se mantienen", () => {
+    expect(entityUrl("connect_incident", "INC-2026-0001")).toBe("/connect/incidentes");
+    expect(entityUrl("connect_task", "TSK-2026-0002")).toBe("/connect/tareas");
+  });
+  it("sin public_id → null (nunca inventa URL)", () => {
+    expect(entityUrl("contrato", null)).toBeNull();
+  });
+  it("entity_type desconocido → null", () => {
+    expect(entityUrl("cliente", "x")).toBeNull();
   });
 });

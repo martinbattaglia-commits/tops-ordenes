@@ -2,10 +2,12 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  METADATA_CARD_ENTITY_TYPES,
   NO_EVIDENCE,
   buildContext,
   chunkToBlock,
   extractCitedIds,
+  isMetadataContentRisk,
   redactPii,
   requiresCitation,
   sanitizeQuestion,
@@ -149,5 +151,122 @@ describe("sanitizeQuestion", () => {
   it("colapsa espacios y recorta al máximo", () => {
     expect(sanitizeQuestion("  hola \n  mundo  ")).toBe("hola mundo");
     expect(sanitizeQuestion("x".repeat(3000)).length).toBe(2000);
+  });
+});
+
+describe("isMetadataContentRisk (F5.1-b.0 · D5 / H6, fail-closed)", () => {
+  const meta = (t: "compliance_documento" | "contrato") => ({ entityType: t });
+  const real = { entityType: "knowledge_event" };
+
+  it("los entity_types de ficha están declarados", () => {
+    expect(METADATA_CARD_ENTITY_TYPES.has("compliance_documento")).toBe(true);
+    expect(METADATA_CARD_ENTITY_TYPES.has("contrato")).toBe(true);
+    expect(METADATA_CARD_ENTITY_TYPES.has("knowledge_event")).toBe(false);
+  });
+
+  it("pide CONTENIDO citando una ficha → degrada (incluye paráfrasis contractual e inglés)", () => {
+    const probes = [
+      "resumime el contrato con Cliente X",
+      "¿de qué trata el documento MAG-04?",
+      "¿qué dice el contrato de logística?",
+      "¿qué obligaciones asume TOPS en el contrato?",
+      "detallame el acuerdo",
+      "¿qué pasa si se incumple el contrato?",
+      "¿cuál es el plazo del contrato?",
+      "¿qué penalidades y garantías tiene?",
+      "decime los términos del contrato",
+      "¿qué cláusulas tiene el acuerdo?",
+      "listame las obligaciones del contrato",
+      "explicame ese contrato",
+      "transcribime el contrato",
+      "resumiendo el contrato, ¿qué dice?",
+      "summarize the contract",
+      "what does it say?",
+      "what are the obligations?",
+    ];
+    for (const q of probes) {
+      expect(isMetadataContentRisk(q, [meta("contrato")]), q).toBe(true);
+    }
+  });
+
+  it("bypass por dilución: cita ficha + evento real → sigue degradando (some, no every)", () => {
+    expect(
+      isMetadataContentRisk("¿qué obligaciones tiene el contrato?", [meta("contrato"), real])
+    ).toBe(true);
+  });
+
+  it("contenido explícito que RECUPERÓ una ficha aunque cite otra cosa → degrada", () => {
+    expect(
+      isMetadataContentRisk("¿de qué trata el contrato?", [real], [real, meta("contrato")])
+    ).toBe(true);
+  });
+
+  it("intención METADATA (listado/existencia/vencimiento) → NO degrada (feature vive)", () => {
+    const probes = [
+      "¿qué contratos hay para Cliente X?",
+      "buscame documentos de compliance",
+      "¿qué documentos están por vencer?",
+      "¿cuándo vence el contrato de Cliente X?",
+      "listame los documentos de ANMAT",
+      "dame un resumen de los documentos por vencer",
+      "resumime cuántos contratos hay por vencer",
+      "mostrame el estado de las habilitaciones",
+      "¿cuáles documentos están vencidos?",
+    ];
+    for (const q of probes) {
+      expect(isMetadataContentRisk(q, [meta("compliance_documento")]), q).toBe(false);
+    }
+  });
+
+  it("desambigua por objeto: verbo ambiguo + documento singular vs colección", () => {
+    expect(isMetadataContentRisk("resumime el contrato", [meta("contrato")])).toBe(true);
+    expect(isMetadataContentRisk("resumime los vencimientos", [meta("contrato")])).toBe(false);
+    expect(isMetadataContentRisk("detallame el acuerdo", [meta("contrato")])).toBe(true);
+    expect(isMetadataContentRisk("detallame los documentos por vencer", [meta("contrato")])).toBe(false);
+  });
+
+  it("respuesta sin fichas (solo evento real) → NO degrada", () => {
+    expect(isMetadataContentRisk("resumime el estado", [real], [real])).toBe(false);
+    expect(isMetadataContentRisk("¿qué dice?", [real], [real])).toBe(false);
+  });
+
+  it("follow-up escueto multi-turno citando ficha → fail-closed (degrada, seguro)", () => {
+    expect(isMetadataContentRisk("y el segundo?", [meta("contrato")])).toBe(true);
+    expect(isMetadataContentRisk("dale", [meta("contrato")])).toBe(true);
+  });
+
+  it("re-review: interrogativos 'cuál/cuánto' sobre CONTENIDO ya NO evaden (fail-closed)", () => {
+    const bypasses = [
+      "cuáles son los puntos importantes del acuerdo",
+      "cuál es el objeto del contrato",
+      "cuál es la responsabilidad de cada parte según el contrato",
+      "cuánto pagamos por mes según el contrato",
+      "cuáles son las restricciones del acuerdo",
+      "cuáles son mis derechos y deberes según el acuerdo",
+      "cuántos días de preaviso exige el contrato",
+      "qué documentos debemos entregar según el acuerdo",
+      "en qué fecha nos comprometemos a entregar la mercadería",
+      "qué organismo controla lo pactado",
+    ];
+    for (const q of bypasses) {
+      expect(isMetadataContentRisk(q, [meta("contrato")]), q).toBe(true);
+    }
+  });
+
+  it("re-review: consultas de metadata legítimas siguen permitiendo (sin over-degradar)", () => {
+    const permits = [
+      "cuántos contratos hay por vencer",
+      "cuál es el estado del contrato de Cliente X",
+      "cuáles documentos están vencidos",
+      "cuándo vence el contrato de Cliente X",
+      "mostrame el estado de las habilitaciones",
+    ];
+    for (const q of permits) {
+      expect(isMetadataContentRisk(q, [meta("compliance_documento")]), q).toBe(false);
+    }
+  });
+
+  it("sin fichas citadas ni recuperadas → false (el guard cero-citas ya actúa)", () => {
+    expect(isMetadataContentRisk("resumime el contrato", [], [])).toBe(false);
   });
 });

@@ -16,6 +16,9 @@ export const NO_EVIDENCE =
 const PII_PATTERNS: Array<{ label: string; re: RegExp }> = [
   // CUIT/CUIL 20-12345678-3 (con o sin guiones) — va antes que DNI (lo contiene).
   { label: "cuit", re: /\b(20|23|24|25|26|27|30|33|34)-?\d{8}-?\d\b/g },
+  // CUIT/DNI PUNTUADO: grupos de dígitos separados por . / espacio / - (33.604.896.889,
+  // 12.345.678). Exige >=2 grupos de 3 → no pisa precios de miles (1.234). F5.1-b.0 (fix leak).
+  { label: "num", re: /\d{1,3}(?:[.\s-]\d{3}){2,}(?:[.\s-]\d{1,3})?/g },
   // CBU: 22 dígitos corridos.
   { label: "cbu", re: /\b\d{22}\b/g },
   // Email de terceros.
@@ -132,4 +135,106 @@ export function requiresCitation(answer: string): boolean {
 /** Recorte defensivo del input del usuario (no es un límite de UX, es un guard). */
 export function sanitizeQuestion(q: string, maxLen = 2000): string {
   return q.replace(/\s+/g, " ").trim().slice(0, maxLen);
+}
+
+// ── Guard estructural metadata-vs-contenido (F5.1-b.0 · D5 / hallazgo H6) ────
+// b.0 proyecta FICHAS DE METADATA de documentos (título, categoría, fechas), NO
+// el contenido del PDF. Como esas fichas tienen un `body` citable, una pregunta
+// por CONTENIDO matchea una ficha y el guard "cero citas" (engine) NO alcanza:
+// el modelo podría presentar la metadata como si fuera el documento.
+//
+// DISEÑO DEL CONTROL (tras revisión adversarial): FAIL-CLOSED, no denylist de
+// verbos (evadible por paráfrasis/inglés). Se degrada a NO_EVIDENCE si la respuesta
+// TOCA una ficha (citada o recuperada) y la pregunta NO es claramente de METADATA
+// (listado/existencia/vencimiento/estado). Además:
+//  - usa `some` (no `every`): citar 1 ficha + 1 evento NO evade el control;
+//  - desambigua por OBJETO: "resumime EL CONTRATO" (singular) = contenido; pero
+//    "resumime LOS VENCIMIENTOS/DOCUMENTOS" (colección) = metadata → se permite;
+//  - normaliza acentos/mayúsculas (sin \b ASCII-only);
+//  - fail-closed cubre follow-ups escuetos multi-turno (mejor NO_EVIDENCE que fuga).
+// El prefijo [ficha metadata] y el system prompt son defensa en profundidad.
+
+/** entity_types que son FICHAS DE METADATA documental (b.0), no contenido. */
+export const METADATA_CARD_ENTITY_TYPES = new Set<string>([
+  "compliance_documento",
+  "contrato",
+]);
+
+const stripAccents = (s: string): string =>
+  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+const includesAny = (haystack: string, needles: string[]): boolean =>
+  needles.some((n) => haystack.includes(n));
+
+// Vocabulario INEQUÍVOCO de "contenido del documento" (ES + EN), sobre texto normalizado.
+// Incluye conectores de "según el documento" y campos de CONTENIDO (no proyectados como
+// metadata): objeto, obligaciones, derechos/deberes, responsabilidad, preaviso, penalidades…
+const CONTENT_TERMS = [
+  "que dice", "de que trata", "que trata", "de que habla", "que establece", "que estipula", "que dispone",
+  "clausula", "obligacion", "penalidad", "multa", "garantia", "cobertura", "responsabilidad",
+  "condiciones del", "condiciones contractuales", "termino", "alcance del", "incumplimiento",
+  "a que se compromete", "que se compromete", "nos comprometemos", "me comprometo", "comprometemos a",
+  "que incluye", "que cubre", "que ampara", "objeto del", "objeto de la", "cada parte",
+  "derechos", "deberes", "restriccion", "preaviso", "exige el contrato", "exige el acuerdo",
+  "segun el contrato", "segun el acuerdo", "segun lo pactado", "segun el documento", "segun el convenio",
+  "lo pactado", "que tiene el contrato", "que tiene el acuerdo", "puntos importantes",
+  "contenido", "texto del", "texto completo", "transcrib", "que implica", "puntos clave",
+  "monto del", "plazo del", "vigencia del contrato", "que penaliza", "leeme el", "leer el",
+  // English
+  "summariz", "what does it say", "what says", "the terms", "obligations", "coverage",
+  "penalties", "clause", "content of", "what is in", "what's in", "tell me about the contract",
+  "break down the contract", "overview of the contract", "this contract about",
+];
+
+// Verbos AMBIGUOS: sólo cuentan como contenido si el objeto es un documento SINGULAR.
+const AMBIGUOUS_CONTENT_VERBS = ["resum", "detall", "explic", "desarroll", "profundiz"];
+const SINGULAR_DOC_OBJECT =
+  /\b(el|la|este|esta|ese|esa|del|de la|dicho|dicha|un|una|mi|su)\s+(contrato|documento|poliza|acuerdo|convenio|expediente|certificado|habilitacion|informe|adenda|anexo|reclamo)\b/;
+
+// Señales FUERTES de intención METADATA (listado / existencia / vencimiento / campo
+// proyectado poco co-optable). NO se incluyen interrogativos genéricos (cual/cuant/
+// cuando/which) ni "fecha"/"organismo": actuaban de llave maestra que permitía filtrar
+// contenido formulado como "cuál es… / cuánto… del contrato" (hallazgo re-review). El
+// vocabulario de contenido (arriba) tiene prioridad (content OR !meta) y cierra los co-optados.
+const METADATA_INTENT_TERMS = [
+  "busc", "list", "mostr", "enumera", "encontr", "filtr", "orden",
+  " hay", "hay ", "existe", "que documento", "que contrato",
+  "documentos", "contratos", "fichas", "polizas", "expedientes", "certificados", "habilitaciones",
+  "vencimiento", "vence", "vencer", "vencid", "por vencer", "caduc",
+  "estado", "categor", "riesgo", "sede", "deposito", "tipo de documento", "tipo de contrato",
+  // English
+  "show", "search", "find", "documents", "contracts", "expir", "due", "status", "list",
+];
+
+function isContentIntent(question: string): boolean {
+  const q = stripAccents(question);
+  if (includesAny(q, CONTENT_TERMS)) return true;
+  if (includesAny(q, AMBIGUOUS_CONTENT_VERBS) && SINGULAR_DOC_OBJECT.test(q)) return true;
+  return false;
+}
+
+function isMetadataIntent(question: string): boolean {
+  return includesAny(stripAccents(question), METADATA_INTENT_TERMS);
+}
+
+/** ¿La respuesta corre riesgo de presentar METADATA de una ficha como si fuera el
+ *  CONTENIDO del documento? Si sí → el engine debe degradar a NO_EVIDENCE (b.0 no
+ *  proyecta el texto). Fail-closed. Se evalúa sobre citadas Y recuperadas para no
+ *  depender de dónde el modelo puso el [S#]. `retrievedChunks` default = citadas. */
+export function isMetadataContentRisk(
+  question: string,
+  citedChunks: Array<{ entityType: string }>,
+  retrievedChunks: Array<{ entityType: string }> = citedChunks
+): boolean {
+  const citesFicha = citedChunks.some((c) => METADATA_CARD_ENTITY_TYPES.has(c.entityType));
+  const retrievedFicha = retrievedChunks.some((c) =>
+    METADATA_CARD_ENTITY_TYPES.has(c.entityType)
+  );
+  const content = isContentIntent(question);
+  const meta = isMetadataIntent(question);
+  // 1) La respuesta CITA una ficha y NO es claramente metadata → fail-closed.
+  if (citesFicha && (content || !meta)) return true;
+  // 2) Pregunta de CONTENIDO explícito que RECUPERÓ una ficha (aunque cite otra cosa).
+  if (retrievedFicha && content && !meta) return true;
+  return false;
 }

@@ -18,6 +18,10 @@ export function entityUrl(entityType: string, publicId: string | null): string |
     return "/connect/incidentes";
   if (publicId.startsWith("TSK-") || entityType.includes("task")) return "/connect/tareas";
   if (entityType.includes("compliance")) return "/compliance";
+  // F5.1-b.0 (D6): fichas de contrato → módulo Comercial. El deep-link lleva al
+  // módulo (no al binario de Drive): la cita es a la FICHA de metadata, no al PDF.
+  if (entityType.includes("contrato") || entityType.includes("contract"))
+    return "/comercial/contratos";
   return null;
 }
 
