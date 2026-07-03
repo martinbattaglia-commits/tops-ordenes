@@ -121,8 +121,15 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
       // Respuesta final (o se agotaron las rondas).
       const finalAnswer = res.kind === "final" ? res.answer : NO_EVIDENCE;
       const check = validateCitations(finalAnswer, chunks);
-      if (!check.valid && !retriedCitations) {
-        // Única segunda oportunidad: el provider citó fuentes inexistentes.
+      const isNoEvidence = finalAnswer.trim() === NO_EVIDENCE;
+      // Anti-alucinación: una afirmación de negocio con evidencia recuperada
+      // DEBE citar al menos una fuente válida. Sin citas válidas (formato roto,
+      // o el modelo no citó) no la damos por buena aunque no haya citas
+      // "inválidas" explícitas.
+      const missingCitations =
+        !isNoEvidence && chunks.length > 0 && check.used.length === 0;
+      if ((!check.valid || missingCitations) && !retriedCitations) {
+        // Única segunda oportunidad: citó fuentes inexistentes o no citó nada.
         retriedCitations = true;
         continue;
       }
@@ -130,9 +137,13 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
         answer = NO_EVIDENCE;
         outcome = "no_evidence";
         errorDetail = `citas inválidas: ${check.invalid.join(",")}`;
+      } else if (missingCitations) {
+        answer = NO_EVIDENCE;
+        outcome = "no_evidence";
+        errorDetail = "respuesta sin citas válidas pese a evidencia recuperada";
       } else {
         answer = finalAnswer;
-        outcome = finalAnswer.trim() === NO_EVIDENCE ? "no_evidence" : "answered";
+        outcome = isNoEvidence ? "no_evidence" : "answered";
       }
       break;
     }

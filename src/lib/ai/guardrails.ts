@@ -75,7 +75,34 @@ export function buildContext(
 
 // ── Validación de citas (§8 paso 5) ─────────────────────────────────────────
 
-const CITATION_RE = /\[S(\d+)\]/g;
+// Bloques de cita: cualquier [...] que contenga al menos un token "S<dígitos>".
+// Los modelos reales (p.ej. Gemini) agrupan citas: [S16, S32] o rangos
+// [S1-S12, S14, S17-S28]. El parser debe entender todas esas formas — no
+// alcanza con [S1] simple (hallazgo de la consulta controlada 2026-07-03).
+const CITATION_BLOCK_RE = /\[([^\]]*?S\d[^\]]*?)\]/g;
+const CITATION_RANGE_RE = /S(\d+)\s*[-–]\s*S(\d+)/g; // S1-S12
+const CITATION_SINGLE_RE = /S(\d+)/g; // S16
+
+/** Extrae todos los sourceIds citados en la respuesta, expandiendo rangos y
+ *  grupos dentro de cada bloque [...]. Devuelve ids tipo "S3". */
+export function extractCitedIds(answer: string): string[] {
+  const ids = new Set<string>();
+  for (const block of answer.matchAll(CITATION_BLOCK_RE)) {
+    let inner = block[1];
+    // 1) rangos S<a>-S<b> → S<a>..S<b> (acotado para no expandir basura).
+    for (const r of inner.matchAll(CITATION_RANGE_RE)) {
+      const a = Number(r[1]);
+      const b = Number(r[2]);
+      if (b >= a && b - a <= 200) {
+        for (let n = a; n <= b; n++) ids.add(`S${n}`);
+      }
+    }
+    inner = inner.replace(CITATION_RANGE_RE, " ");
+    // 2) citas sueltas S<n> restantes.
+    for (const s of inner.matchAll(CITATION_SINGLE_RE)) ids.add(`S${s[1]}`);
+  }
+  return [...ids];
+}
 
 export interface CitationCheck {
   valid: boolean;
@@ -89,8 +116,7 @@ export function validateCitations(answer: string, chunks: SourceChunk[]): Citati
   const known = new Set(chunks.map((c) => c.sourceId));
   const used = new Set<string>();
   const invalid = new Set<string>();
-  for (const m of answer.matchAll(CITATION_RE)) {
-    const id = `S${m[1]}`;
+  for (const id of extractCitedIds(answer)) {
     if (known.has(id)) used.add(id);
     else invalid.add(id);
   }
@@ -100,7 +126,7 @@ export function validateCitations(answer: string, chunks: SourceChunk[]): Citati
 /** ¿La respuesta afirma algo de negocio sin citar nada? (meta-charla exenta) */
 export function requiresCitation(answer: string): boolean {
   if (answer.trim() === NO_EVIDENCE) return false;
-  return !/\[S\d+\]/.test(answer);
+  return extractCitedIds(answer).length === 0;
 }
 
 /** Recorte defensivo del input del usuario (no es un límite de UX, es un guard). */

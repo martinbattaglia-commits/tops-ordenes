@@ -5,6 +5,7 @@ import {
   NO_EVIDENCE,
   buildContext,
   chunkToBlock,
+  extractCitedIds,
   redactPii,
   requiresCitation,
   sanitizeQuestion,
@@ -86,6 +87,53 @@ describe("validateCitations", () => {
     const bad = validateCitations("Dato inventado [S9].", chunks);
     expect(bad.valid).toBe(false);
     expect(bad.invalid).toEqual(["S9"]);
+  });
+});
+
+describe("extractCitedIds — formatos reales de modelos (hallazgo Gemini 2026-07-03)", () => {
+  it("cita simple [S16]", () => {
+    expect(extractCitedIds("caso [S16].")).toEqual(["S16"]);
+  });
+  it("grupo con comas [S16, S32]", () => {
+    expect(extractCitedIds("caso [S16, S32].").sort()).toEqual(["S16", "S32"]);
+  });
+  it("rango [S1-S12] se expande", () => {
+    expect(extractCitedIds("docs [S1-S12].")).toEqual(
+      Array.from({ length: 12 }, (_, i) => `S${i + 1}`)
+    );
+  });
+  it("mezcla real de Gemini [S1-S12, S14, S17-S28, S30]", () => {
+    const ids = extractCitedIds("incendio [S1-S12, S14, S17-S28, S30].");
+    expect(ids).toContain("S1");
+    expect(ids).toContain("S12");
+    expect(ids).toContain("S14");
+    expect(ids).toContain("S17");
+    expect(ids).toContain("S28");
+    expect(ids).toContain("S30");
+    expect(ids).not.toContain("S13");
+    expect(ids).not.toContain("S15");
+    expect(ids).not.toContain("S29");
+  });
+  it("sin citas → vacío", () => {
+    expect(extractCitedIds("no hay nada acá")).toEqual([]);
+  });
+  it("no expande rangos absurdos (>200)", () => {
+    expect(extractCitedIds("[S1-S9999]")).toEqual([]);
+  });
+});
+
+describe("validateCitations con formatos agrupados/rango", () => {
+  it("valida un grupo de Gemini contra chunks reales", () => {
+    const chunks = [chunk("S16"), chunk("S32")];
+    const r = validateCitations("caso [S16, S32].", chunks);
+    expect(r.valid).toBe(true);
+    expect(r.used.sort()).toEqual(["S16", "S32"]);
+  });
+  it("detecta invento dentro de un grupo", () => {
+    const chunks = [chunk("S1")];
+    const r = validateCitations("dato [S1, S99].", chunks);
+    expect(r.valid).toBe(false);
+    expect(r.invalid).toEqual(["S99"]);
   });
 });
 
