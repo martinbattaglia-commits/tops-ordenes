@@ -1,5 +1,5 @@
 -- 0174_ai_core.sql — F5.2-lite · Nexus AI Copilot read-only.
--- ENTREGADA, NO APLICADA (G3) — verificar número libre en prod antes de aplicar.
+-- ✅ APLICADA EN PROD 2026-07-03 (ventana autorizada; ver F5-2-LITE-EXECUTION-LOG.md)
 -- ─────────────────────────────────────────────────────────────────────────
 -- Contenido:
 --   1. Tablas de gate + auditoría IA: ai_pilot_users, ai_sessions, ai_messages,

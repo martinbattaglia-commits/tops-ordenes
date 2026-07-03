@@ -1,5 +1,5 @@
 -- 0175_ai_rbac_seed.sql — F5.2-lite · Nexus AI Copilot read-only.
--- ENTREGADA, NO APLICADA (G3) — verificar número libre en prod antes de aplicar.
+-- ✅ APLICADA EN PROD 2026-07-03 (ventana autorizada; ver F5-2-LITE-EXECUTION-LOG.md)
 -- ─────────────────────────────────────────────────────────────────────────
 -- 1. Permisos del módulo 'ai' en el catálogo RBAC (futuro-proofing: el gate
 --    EFECTIVO del piloto es ai_pilot_users, decisión Dirección 2026-07-03;

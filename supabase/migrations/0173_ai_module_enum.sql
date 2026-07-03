@@ -1,6 +1,5 @@
 -- 0173_ai_module_enum.sql — F5.2-lite · Nexus AI Copilot read-only.
--- ENTREGADA, NO APLICADA (G3) — verificar el siguiente número libre en prod
--- arsksytgdnzukbmfgkju (schema_migrations) antes de aplicar.
+-- ✅ APLICADA EN PROD 2026-07-03 (ventana autorizada; ver F5-2-LITE-EXECUTION-LOG.md)
 -- ─────────────────────────────────────────────────────────────────────────
 -- Agrega el valor 'ai' al enum permission_module_t. AISLADA en su propia
 -- migración: Postgres prohíbe USAR un valor de enum recién agregado dentro de

@@ -1,5 +1,10 @@
 # F5.2-lite — VALIDATION PACK de la ventana de aplicación 0173–0175
 
+> ✅ **EJECUTADO 2026-07-03** — resultados completos en `F5-2-LITE-EXECUTION-LOG.md`.
+> Secciones 0–6 y 8–9: PASS (checkpoints 🔴 todos verdes; C2 con identidades reales vía JWT
+> simulado + rollback). Sección 7 (provider real): NO ejecutada — Dirección no autorizó
+> activación en esta ventana; queda para la mini-ventana de activación Anthropic.
+
 > Checklist OBLIGATORIO (decisión Dirección 2026-07-03, §6): el riesgo SQL se
 > cierra en esta ventana con **ejecución real** de cada pieza. Si cualquier
 > checkpoint crítico (🔴) falla → **NO deployar**; rollback según
