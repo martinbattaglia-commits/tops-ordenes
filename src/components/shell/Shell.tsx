@@ -14,22 +14,23 @@ interface ShellProps {
   canViewRrhhDocs?: boolean;
   canViewKnowledge?: boolean;
   canViewConnect?: boolean;
+  canViewCopilot?: boolean;
   children: ReactNode;
 }
 
-export default function Shell({ user, canViewExecutive, canViewSistema, canViewRrhhDocs, canViewKnowledge, canViewConnect, children }: ShellProps) {
+export default function Shell({ user, canViewExecutive, canViewSistema, canViewRrhhDocs, canViewKnowledge, canViewConnect, canViewCopilot, children }: ShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
     <div className="h-[100dvh] flex bg-bg-page overflow-hidden">
       {/* Sidebar fijo desktop */}
       <aside className="hidden lg:flex w-[248px] shrink-0 h-full">
-        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} />
       </aside>
 
       {/* Drawer mobile */}
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} onNavigate={() => setDrawerOpen(false)} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} onNavigate={() => setDrawerOpen(false)} />
       </MobileDrawer>
 
       <div className="flex-1 min-w-0 flex flex-col">

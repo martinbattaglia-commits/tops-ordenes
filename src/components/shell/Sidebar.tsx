@@ -22,8 +22,8 @@ interface NavItem {
   badge?: string;
   /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
   exec?: boolean;
-  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view). */
-  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect";
+  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view) · "copilot" (piloto AI). */
+  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot";
   /** Abre el link en nueva pestaña (para assets estáticos o recursos externos). */
   external?: boolean;
 }
@@ -45,6 +45,9 @@ const DOMAINS: Domain[] = [
     id: "cockpit",
     label: "Cockpit",
     items: [
+      // Nexus Copilot — piloto cerrado F5.2-lite: sólo visible para ai_pilot_users
+      // (gate "copilot"). Los no-pilotos no lo ven; la página además auto-gatea.
+      { href: "/copilot", label: "Nexus Copilot", icon: "sparkle", gate: "copilot", badge: "Piloto" },
       // Cockpit único. Los ítems ejecutivos/financieros (`exec:true`) se ocultan a
       // los roles sin permiso ejecutivo (Comercial, Finanzas, encargados de depósito),
       // que ven sólo los accesos operativos (Vacancia, Google, CCTV, Tracking, Organigrama).
@@ -215,6 +218,8 @@ interface Props {
   canViewKnowledge?: boolean;
   /** ¿Mostrar Nexus Link → Conversaciones (requiere connect.view)? (default: sí). */
   canViewConnect?: boolean;
+  /** ¿Mostrar Nexus Copilot? (piloto cerrado: AI_ENABLED + ai_pilot_users) — default: NO. */
+  canViewCopilot?: boolean;
   onNavigate?: () => void;
 }
 
@@ -225,10 +230,11 @@ export default function Sidebar({
   canViewRrhhDocs = true,
   canViewKnowledge = true,
   canViewConnect = true,
+  canViewCopilot = false, // piloto cerrado: por defecto NO se muestra (fail-closed en display)
   onNavigate,
 }: Props) {
   // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
-  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect") =>
+  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot") =>
     !gate ||
     (gate === "sistema"
       ? canViewSistema
@@ -236,7 +242,9 @@ export default function Sidebar({
         ? canViewRrhhDocs
         : gate === "connect"
           ? canViewConnect
-          : canViewKnowledge);
+          : gate === "copilot"
+            ? canViewCopilot
+            : canViewKnowledge);
   const pathname = usePathname();
 
   const isActive = (href: string) => {

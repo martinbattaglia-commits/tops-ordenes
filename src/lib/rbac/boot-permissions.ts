@@ -40,6 +40,8 @@ export interface BootPermissions {
   knowledge: boolean;
   /** Nexus Link → Conversaciones (connect.view). */
   connect: boolean;
+  /** Nexus Copilot — gate del piloto (AI_ENABLED + ai_pilot_users), independiente del RBAC. */
+  copilot: boolean;
 }
 
 export interface BootContext {
@@ -48,8 +50,8 @@ export interface BootContext {
   perms: BootPermissions;
 }
 
-const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true };
-const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false };
+const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true, copilot: true };
+const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false, copilot: false };
 
 /** Presupuesto máximo de awaits del boot (F2). */
 const BOOT_BUDGET_MS = 3000;
@@ -82,31 +84,34 @@ export const getProfileRole = cache(async (): Promise<string | null> => {
 const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
   // Demo / Supabase no configurado → permisivo (espejo de checkPermission demo
   // fail-open y de canAccess sin cliente).
-  if (env.app.demoMode || env.app.needsSupabase) return PERMISSIVE;
+  if (env.app.demoMode || env.app.needsSupabase) return { ...PERMISSIVE, copilot: env.ai.enabled };
   const supabase = createClient();
-  if (!supabase) return PERMISSIVE;
+  if (!supabase) return { ...PERMISSIVE, copilot: env.ai.enabled };
 
   const user = await getSessionUser();
   if (!user) return CLOSED; // espejo: checkPermission 401 / canAccess false
 
-  // ¿Tiene roles asignados? (Estrategia B: count propio, RLS self)
-  const { count, error: countErr } = await supabase
-    .from("user_roles")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
+  // Gate del Copilot (espejo de checkGate en gate.ts): AI_ENABLED + membresía en
+  // ai_pilot_users. INDEPENDIENTE del RBAC de roles (un piloto sin roles igual debe
+  // verlo). Se consulta EN PARALELO con el count de roles para no sumar latencia al boot.
+  const [{ count, error: countErr }, pilot] = await Promise.all([
+    supabase.from("user_roles").select("*", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase.from("ai_pilot_users").select("user_id").eq("user_id", user.id).maybeSingle(),
+  ]);
+  const copilot = env.ai.enabled && !pilot.error && !!pilot.data;
 
   if (countErr) {
     // Espejo exacto de la asimetría previa:
     //   checkPermission: error de count → fail-closed (exec=false)
     //   canAccess: error → count null → bootstrap → !enforce
     const open = !env.rbac.enforce;
-    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open, connect: open };
+    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot };
   }
 
   if ((count ?? 0) === 0) {
     // Bootstrap per-user (no asignado): permitir salvo RBAC_ENFORCE=1.
     const open = !env.rbac.enforce;
-    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open, connect: open };
+    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot };
   }
 
   // Asignado → enforcement real con UNA query anidada (set completo de slugs).
@@ -114,7 +119,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     .from("user_roles")
     .select("role:roles(role_permissions(permission:permissions(slug)))")
     .eq("user_id", user.id);
-  if (qErr) return CLOSED; // espejo: checkPermission query-failed → 403 · RPC error → false
+  if (qErr) return { ...CLOSED, copilot }; // espejo: checkPermission query-failed → 403 · RPC error → false
 
   type RowShape = {
     role?: { role_permissions?: Array<{ permission?: { slug: string } }> };
@@ -136,6 +141,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     rrhhDocs: slugs.has("rrhh.documentacion.view") || isLegacyAdmin,
     knowledge: slugs.has("knowledge.admin") || isLegacyAdmin,
     connect: slugs.has("connect.view") || isLegacyAdmin,
+    copilot,
   };
 });
 
