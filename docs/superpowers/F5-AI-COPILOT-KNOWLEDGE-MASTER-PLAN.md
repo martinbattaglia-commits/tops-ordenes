@@ -1,6 +1,10 @@
 # F5 — Nexus AI / Copilot / Knowledge-RAG — MASTER PLAN
 
-> **Estado: BORRADOR PARA APROBACIÓN DE DIRECCIÓN — NADA IMPLEMENTADO.**
+> **Estado 2026-07-03: APROBADO por Dirección · F5.0 + F5.2-lite EN PRODUCCIÓN (fail-closed).**
+> Migraciones 0173–0175 aplicadas; deploy prod `8aa97a4` (`6a474ed1afe8a06286068508`); Copilot
+> desactivado (`AI_ENABLED` ausente), provider real Anthropic INERTE (activación = mini-ventana
+> posterior); Knowledge documental = F5.1-b. Ejecución completa:
+> `F5-2-LITE-EXECUTION-LOG.md` (rama `feat/f5-ai-copilot-readonly`). Texto original del plan:
 > Fecha: 2026-07-03 · Autor: asistente (sesión de planificación F5) · Autoridad: Martín Battaglia (Dirección).
 > Gobernanza aplicable: G1–G11 (`.claude/skills/_shared/GOVERNANCE.md`). Este documento es un archivo
 > nuevo **sin commitear**; no hubo cambios de código, DB, RBAC, deploy, push ni merge en su producción.

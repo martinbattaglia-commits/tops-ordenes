@@ -1,6 +1,9 @@
 # F5.0 + F5.2-lite — Nexus AI Copilot read-only — DISEÑO TÉCNICO DETALLADO
 
-> **Estado: DISEÑO PARA APROBACIÓN — NADA IMPLEMENTADO. SIN MIGRACIONES CREADAS.**
+> **Estado 2026-07-03: IMPLEMENTADO Y EN PRODUCCIÓN (fail-closed).** Migraciones 0173–0175
+> aplicadas y validadas con ejecución real (checkpoints C1–C6); prod = `8aa97a4`
+> (deploy `6a474ed1afe8a06286068508`); Copilot desactivado hasta la ventana de activación.
+> Ver `F5-2-LITE-EXECUTION-LOG.md` y `F5-2-LITE-VALIDATION-PACK.md` (rama F5). Diseño original:
 > Fecha: 2026-07-03 · Deriva de `F5-AI-COPILOT-KNOWLEDGE-MASTER-PLAN.md` (aprobado por Dirección)
 > y de las decisiones D-F5-1 … D-F5-10. Gobernanza G1–G11 vigente. Sin embeddings, sin agentes,
 > sin escrituras (salvo auditoría IA), sin canales salientes, sin tocar `main`, sin deploy.
