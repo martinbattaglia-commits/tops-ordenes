@@ -141,6 +141,31 @@ latency 19.9s · tools=[compliance_pending×2] · error=null · `ai_monthly_spen
 - **Requiere re-validación Gemini en una próxima micro-ventana** (deploy del fix + repetir la
   consulta controlada → confirmar `ai_sources > 0` con provider gemini).
 
+## Etapa 5c — REVALIDACIÓN GEMINI TRAS FIX ✅ GO (2026-07-03 ~07:06–07:15Z)
+
+Autorizada por Dirección ("micro-ventana de revalidación Gemini tras fix de citas").
+
+- Pre-flight 10/10 PASS (prod `45f59b7`/`6a475cd7` locked, mock, keys, `ai_monthly_spend()=0.0118`,
+  rama F5 con fix `ccd9063`/`a22eb15`).
+- **Deploy del fix** (procedimiento seguro completo): DRAFT `6a475f7dd79c15b202aaa0c9`
+  (smoke PASS: version `ccd9063`, rutas 307, webhook 401, 0 5xx) → PROD `6a475ffe0816ecb1bd6214df`
+  (re-lock verificando el id exacto del `Unique deploy URL`; mock sigue sano).
+- **Activación Gemini**: `AI_PROVIDER=gemini` (`AI_ENABLED=1`) + env-redeploy
+  `--skip-functions-cache` → deploy `6a476090946ef1abe8a1322a` (published+locked). Smoke básico PASS.
+- **Consulta real controlada** (sesión piloto `martin@`): "¿Qué documentos de compliance están
+  pendientes?". Gemini respondió con **citas INDIVIDUALES** (`[S16]`, `[S13]`, `[S1] [S2]…[S14]`,
+  `[S15]` — el system prompt reforzado surtió efecto) y la UI **renderizó los 16 chips de fuentes**
+  (S1–S16), que antes del fix NO aparecían.
+- **Auditoría real (evidencia en DB):** `provider=gemini` · `model=gemini-2.5-pro` ·
+  `outcome=answered` · tokens 3966/272 · **cost $0.007678** · latency 18.2s · tools=[compliance_pending] ·
+  error=null · **`ai_sources = 16`** (era 0) · source_types = `compliance_caso, compliance_documento`
+  (coinciden con las citas) · `ai_monthly_spend()` `0.011811 → 0.019489`.
+- Sin PII sensible en la respuesta/auditoría · read-only (sugirió navegar, no escribió) · 0 5xx · 0 PostgREST 300.
+
+**✅ CRITERIO GO CUMPLIDO** (`ai_sources > 0` + todo lo demás). **Rollback NO requerido.**
+**Estado final: `AI_PROVIDER=gemini` en prod, Copilot Gemili-live para los 6 pilotos**, con citas
+auditadas, presupuesto registrado y anti-alucinación operativa. El fix cerró el hallazgo de §5b.
+
 ## Etapa 5 (histórica) — por qué no se activó en la ventana anterior
 - **Decisión: NO se activó `AI_PROVIDER=gemini`.** Motivo (contrato de trabajo: evidencia antes
   de cerrar): la "única consulta controlada" que Dirección pide como verificación **requiere una

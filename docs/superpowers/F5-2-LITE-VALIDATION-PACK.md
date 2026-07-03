@@ -7,12 +7,12 @@
 > deployada; `AI_ENABLED=1`+`AI_PROVIDER=mock`; `martin@logisticatops.com` agregado al piloto
 > (6/6); **smoke autenticado REAL PASS** (no-evidence + answered con 8 citas; auditoría verificada;
 > provider mock; costo $0; cero Gemini).
-> 🟡 **MICRO-ACTIVACIÓN GEMINI 2026-07-03** (`F5-GEMINI-ACTIVATION-EXECUTION-LOG.md` §5b):
-> Gemini activado y consulta real ejecutada (`provider=gemini`, `gemini-2.5-pro`, tokens 7577/234,
-> costo $0.0118). **Hallazgo bloqueante:** el validador de citas no parseaba el formato agrupado
-> de Gemini (`[S16, S32]`) → `ai_sources=0`. **Rollback a mock aplicado** (prod sano). **Fix
-> entregado local** (parser robusto + guard anti-alucinación + prompt; tests 612/612) — NO
-> deployado. **Re-validación Gemini requerida** antes del piloto con Gemini.
+> 🟢 **GEMINI LIVE — REVALIDADO 2026-07-03** (`F5-GEMINI-ACTIVATION-EXECUTION-LOG.md` §5c):
+> fix de citas deployado (`ccd9063`, prod `6a476090946ef1abe8a1322a`), `AI_PROVIDER=gemini`.
+> Consulta real: `provider=gemini`, `gemini-2.5-pro`, tokens 3966/272, costo $0.0077,
+> **`ai_sources=16`** (el fix cerró el hallazgo `ai_sources=0` de §5b), citas auditadas,
+> `ai_monthly_spend()=0.0195`. **GO al piloto Gemini (6 usuarios).** Rollback NO requerido.
+> Historia del hallazgo previo: §5b (formato agrupado `[S16, S32]` no parseado → rollback → fix).
 
 > Checklist OBLIGATORIO (decisión Dirección 2026-07-03, §6): el riesgo SQL se
 > cierra en esta ventana con **ejecución real** de cada pieza. Si cualquier
