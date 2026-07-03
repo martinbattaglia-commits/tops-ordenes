@@ -35,11 +35,13 @@ export function checkCronAuth(
   authorizationHeader: string | null | undefined,
   secret: string | undefined = process.env.CRON_SECRET,
 ): CronAuthResult {
-  const s = secret?.trim();
-  if (!s) {
+  if (!secret?.trim()) {
     return { ok: false, status: 503, error: "CRON_SECRET no configurado (fail-closed)" };
   }
-  if (!timingSafeStringEqual(authorizationHeader ?? "", `Bearer ${s}`)) {
+  // Comparación EXACTA contra el valor RAW del secret (fix adversarial F4.4):
+  // los guards previos y el del worker F4.1 comparaban sin trim — trimear acá
+  // rompería los 4 crons verdes si el secret guardado tuviera whitespace.
+  if (!timingSafeStringEqual(authorizationHeader ?? "", `Bearer ${secret}`)) {
     return { ok: false, status: 401, error: "Unauthorized" };
   }
   return { ok: true };

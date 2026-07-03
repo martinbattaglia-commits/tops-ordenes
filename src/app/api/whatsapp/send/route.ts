@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendText, sendTemplate, templates, isWhatsappConfigured } from "@/lib/whatsapp/meta";
 import { requireCronAuth } from "@/lib/cron-auth";
-import { checkOutboundAllowed } from "@/lib/whatsapp/sandbox";
+import { checkOutboundAllowed, normalizeMsisdn } from "@/lib/whatsapp/sandbox";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -25,7 +25,10 @@ export const dynamic = "force-dynamic";
  *    de la lista → 403 + auditoría. Pasar a "0" = decisión de Dirección (F5).
  */
 export async function POST(req: Request) {
-  const denied = requireCronAuth(req);
+  // Separación de privilegios opcional (fix adversarial F4.4): si Dirección
+  // define WHATSAPP_SEND_SECRET, este endpoint deja de compartir credencial
+  // con los crons de sync. Sin la var, sigue siendo CRON_SECRET (fail-closed).
+  const denied = requireCronAuth(req, process.env.WHATSAPP_SEND_SECRET ?? process.env.CRON_SECRET);
   if (denied) return denied;
 
   if (!isWhatsappConfigured()) {
@@ -43,7 +46,17 @@ export async function POST(req: Request) {
     );
   }
 
-  const decision = checkOutboundAllowed(String(body.to));
+  // Fix adversarial F4.4: se valida y se ENVÍA el mismo valor normalizado
+  // (antes se validaba String(body.to) pero se enviaba body.to crudo; además
+  // un number crudo rompía normalizePhone en meta.ts → 500).
+  const to = normalizeMsisdn(String(body.to));
+  if (!to) {
+    return NextResponse.json(
+      { ok: false, error: "`to` inválido: se espera un número E.164 (solo dígitos)" },
+      { status: 400 }
+    );
+  }
+  const decision = checkOutboundAllowed(to);
   if (!decision.allowed) {
     await auditSandboxRejection(String(body.kind));
     return NextResponse.json(
@@ -61,11 +74,11 @@ export async function POST(req: Request) {
     let result;
     switch (body.kind) {
       case "text":
-        result = await sendText({ to: body.to, text: body.text });
+        result = await sendText({ to, text: body.text });
         break;
       case "template":
         result = await sendTemplate({
-          to: body.to,
+          to,
           template: body.template,
           language: body.language,
           components: body.components,
@@ -73,14 +86,14 @@ export async function POST(req: Request) {
         break;
       case "oc_firmada":
         result = await templates.ocFirmada({
-          to: body.to,
+          to,
           publicId: body.publicId,
           total: body.total,
           pdfUrl: body.pdfUrl,
         });
         break;
       case "hello_world":
-        result = await templates.helloWorld(body.to);
+        result = await templates.helloWorld(to);
         break;
       default:
         return NextResponse.json(

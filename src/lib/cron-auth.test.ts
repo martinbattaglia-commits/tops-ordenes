@@ -56,8 +56,10 @@ describe("checkCronAuth (fail-closed)", () => {
     expect(checkCronAuth(`Bearer ${SECRET}`, SECRET)).toEqual({ ok: true });
   });
 
-  it("el secret configurado se trimea (paridad con env.ts) pero el header no", () => {
-    expect(checkCronAuth(`Bearer ${SECRET}`, `  ${SECRET}  `)).toEqual({ ok: true });
+  it("secret whitespace-only ⇒ 503, pero un secret con espacios se compara EXACTO (raw, paridad guards F4.1)", () => {
+    const raw = ` ${SECRET} `;
+    expect(checkCronAuth(`Bearer ${raw}`, raw)).toEqual({ ok: true });
+    expect(checkCronAuth(`Bearer ${SECRET}`, raw)).toMatchObject({ status: 401 });
     expect(checkCronAuth(`Bearer ${SECRET} `, SECRET)).toMatchObject({ status: 401 });
   });
 });

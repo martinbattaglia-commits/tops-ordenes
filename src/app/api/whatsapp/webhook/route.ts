@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyMetaSignature, verifyMetaVerifyToken } from "@/lib/whatsapp/webhook";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,7 +64,12 @@ export async function POST(req: Request) {
         { status: 503 },
       );
     }
-    await auditSignatureRejection(result.reason);
+    // Anti-flood (fix adversarial F4.4): el endpoint es público — sin límite,
+    // un atacante convierte cada POST basura en un insert de audit_log. El 401
+    // se responde SIEMPRE; solo se muestrea la auditoría (10/min por instancia).
+    if (rateLimit("whatsapp-webhook-audit", { limit: 10, windowMs: 60_000 }).ok) {
+      await auditSignatureRejection(result.reason);
+    }
     return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
   }
 

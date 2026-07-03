@@ -52,8 +52,18 @@ jobs:
           echo
           test "$code" = "200"
           status=$(jq -r '.status // "unknown"' /tmp/resp.json)
+          dead=$(jq -r '.failed_dead // 0' /tmp/resp.json)
+          backlog=$(jq -r '.pending_remaining // 0' /tmp/resp.json)
+          # Semántica real del worker (DispatchSummary): backlog remanente sin
+          # errores = "ok" + pending_remaining>0; "partial" = errores por-evento
+          # (reintentos/backoff); dead-letter debe ponerse ROJO para ser visible.
+          if [ "$dead" != "0" ]; then
+            echo "::error::$dead evento(s) a dead-letter en esta corrida. Revisar connect_worker_runs/last_error."
+            exit 1
+          fi
+          [ "$backlog" != "0" ] && echo "::notice::Backlog remanente: $backlog evento(s); continúa en la próxima corrida."
           case "$status" in
-            ok)      echo "Outbox drenado." ;;
-            partial) echo "::warning::Drenado parcial (queda backlog); continúa en la próxima corrida." ;;
+            ok)      echo "Corrida OK." ;;
+            partial) echo "::warning::Errores por-evento (quedaron en retry/backoff). Revisar reporte arriba." ;;
             *)       echo "::error::Worker no completó (status=$status). Revisar reporte arriba."; exit 1 ;;
           esac

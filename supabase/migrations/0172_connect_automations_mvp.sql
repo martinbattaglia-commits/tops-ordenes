@@ -41,6 +41,9 @@ create policy automation_rules_select on public.automation_rules
   for select using (public.has_permission('connect.view'));
 -- Sin policies de escritura: altas/cambios SOLO por migración o SQL de
 -- Dirección; el worker (service_role) solo LEE.
+-- Revoke defensivo de escrituras (fix adversarial: cinturón además del RLS;
+-- se conserva SELECT para que la policy de lectura aplique).
+revoke insert, update, delete on table public.automation_rules from public, anon, authenticated;
 
 -- ===== 2) automation_runs (telemetría + idempotencia) =====
 create table if not exists public.automation_runs (
@@ -65,6 +68,8 @@ drop policy if exists automation_runs_select on public.automation_runs;
 create policy automation_runs_select on public.automation_runs
   for select using (public.has_permission('connect.view'));
 -- Sin policies de escritura: escribe solo el worker (service_role, bypassa RLS).
+revoke insert, update, delete on table public.automation_runs from public, anon, authenticated;
+revoke all on sequence public.automation_runs_id_seq from public, anon, authenticated;
 
 -- ===== 3) Enqueue de connect.incident.opened (trigger ADITIVO) =====
 -- AFTER INSERT: public_id ya viene seteado por el trigger BEFORE de 0164.
@@ -75,15 +80,21 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  insert into public.connect_outbox (topic, payload)
-  values (
-    'connect.incident.opened',
-    jsonb_build_object(
-      'incident_id', new.id,
-      'public_id',   new.public_id,
-      'severidad',   new.severidad::text
-    )
-  );
+  -- Fix adversarial: el enqueue JAMÁS puede voltear la apertura del incidente
+  -- (connect_incident_open es una RPC crítica de F4.2). Falla ⇒ warning y sigue.
+  begin
+    insert into public.connect_outbox (topic, payload)
+    values (
+      'connect.incident.opened',
+      jsonb_build_object(
+        'incident_id', new.id,
+        'public_id',   new.public_id,
+        'severidad',   new.severidad::text
+      )
+    );
+  exception when others then
+    raise warning 'connect_incidents_enqueue_opened falló (incidente NO afectado): %', sqlerrm;
+  end;
   return new;
 end;
 $$;
