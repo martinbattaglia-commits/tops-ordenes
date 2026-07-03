@@ -171,12 +171,12 @@ ai_feedback  (id uuid pk, message_id fk, user_id, verdict text /* 'up'|'down' */
   control efectivo: si `has_permission('ai.copilot.use')` no es confiable con RBAC dormido, el
   fallback de diseño es tabla `ai_pilot_users(user_id pk)` consultada por el guard — decisión de
   implementación documentada en §22.
-- **Verificación de pilotos contra `profiles` (read-only, 2026-07-03):**
-  ✅ `martin.battaglia@logisticatops.com` (⚠️ `role=operaciones` — ver §22),
+- **Verificación de pilotos contra `profiles` (re-verificado 2026-07-03):**
+  ✅ `martin.battaglia@logisticatops.com` (⚠️ `role=operaciones` — decisión Dirección: no cambiar ahora; si el Copilot no ve lo que Dirección necesita, ticket RBAC aparte),
   ✅ `Cynthia@logisticatops.com` (Cynthia Alba, supervisor),
   ✅ `ruth@logisticatops.com` (Ruth Carrasquero, supervisor),
   ✅ `martinrinas@logisticatops.com` (Martin Rinas, supervisor),
-  ❌ **José Luis: NO existe en `profiles`** → decisión pendiente (§22). No se inventa.
+  ✅ `joseluis@logisticatops.com` (**role=admin**; confirmado en profiles y auth.users con el email exacto provisto por Dirección — la búsqueda inicial por nombre no lo encontró porque su `full_name` es el email). **Piloto = 5 usuarios**, seedeados en 0175.
 - **RLS es la frontera:** todo retrieval corre con el cliente de la sesión → `visibility_key`
   (`staff`/`perm:*`/`client:*`) y las policies de `connect_*` aplican solas. Las RPCs nuevas son
   `SECURITY INVOKER` justamente para no perforar esa frontera; la única `SECURITY DEFINER` nueva
@@ -271,11 +271,21 @@ interface AiProvider {
 
 - Registry por env `AI_PROVIDER = 'mock' | 'anthropic' | 'openai'` (default **`'mock'`**).
 - `'mock'`: determinista (fixture-based), sin red — habilita TDD/QA completos y demo sin costo.
-- `'anthropic'` / `'openai'`: **esqueleto tipado sin llamadas reales en esta etapa** — la key
-  (`AI_PROVIDER_API_KEY`) ni se configura hasta que Dirección elija proveedor + DPA.
-- Sin secretos hardcodeados; sin SDKs pesados hasta la elección (evitar lock-in por dependencia).
-- Requisitos de activación futura (checklist en repo): DPA/no-training, región, precio, límites,
-  evaluación comparativa con el eval set (§17) en staging/mock antes de producción.
+- `'anthropic'` (actualización por decisión Dirección 2026-07-03): **implementado e INERTE** —
+  Messages API (`v1/messages`) con tool use sobre el catálogo cerrado, vía `fetch` sin SDK
+  (cero dependencia hasta la elección formal; al activar, evaluar migrar a `@anthropic-ai/sdk`).
+  Fail-closed: sin `AI_ANTHROPIC_API_KEY` no existe camino de red (la key la carga Dirección en
+  Netlify en la ventana de activación; jamás por chat ni en repo). Modelo default
+  `claude-opus-4-8` ($5/$25 por MTok; pricing cacheado para `cost_estimate`).
+  ⚠️ Corrección técnica al diseño original: en Opus 4.7+ los sampling params
+  (`temperature`/`top_p`/`top_k`) fueron **eliminados de la API** (400) — la directiva
+  "temperatura baja" de §8/§14 se implementa vía system prompt + citas validadas, no por sampling.
+  Thinking adaptativo (`{type:"adaptive"}`); `budget_tokens` no existe en estos modelos.
+- `'openai'`: stub deshabilitado.
+- Vars: `AI_ENABLED`, `AI_PROVIDER`, `AI_MODEL`, `AI_ANTHROPIC_API_KEY`, `AI_DAILY_LIMIT`,
+  `AI_MONTHLY_BUDGET_USD` (tope mensual global leído vía RPC agregada `ai_monthly_spend()`).
+- Requisitos de activación (checklist en `F5-2-LITE-VALIDATION-PACK.md` §7, rama F5): DPA/
+  no-training, región, evaluación con eval set, y prueba real de costo/presupuesto.
 
 ## 13. Kill-switch (D-F5-8)
 
@@ -390,25 +400,30 @@ Red-team pre-deploy (mismo estándar F4.4: 0 bloqueantes, ALTOs corregidos):
   altera nada previo), señal de diseño verificable en la revisión de la migración.
 - **Datos:** las tablas `ai_*` solo contienen auditoría propia; su drop no pierde datos de negocio.
 
-## 22. Decisiones pendientes antes de implementar
+## 22. Decisiones pendientes antes de implementar — ESTADO 2026-07-03 (post-decisiones Dirección)
 
-1. **José Luis no existe en `profiles`** (verificado 2026-07-03). Opciones: (a) crearlo por el
-   flujo normal de alta de usuarios antes del piloto (⚠️ recordar landmine `handle_new_user`
-   registrado en memoria del proyecto), o (b) piloto arranca con 4 usuarios. **Decisión de Dirección.**
-2. **Rol de Martín en `profiles` = `operaciones`** — con RLS por `visibility_key`/rol, define qué
-   ve el Copilot para él (p.ej. ítems `perm:*` que Presidencia debería ver). Confirmar si es
-   intencional o si corresponde ajustar su rol **por el flujo normal** antes del piloto (no lo
-   ajusta esta fase).
-3. **Mecanismo del gate de piloto:** `ai.copilot.use` por RBAC-seed (recomendado si
-   `has_permission()` responde bien con RBAC dormido — verificar en implementación) vs tabla
-   `ai_pilot_users`. Propuesta: decidir con evidencia en la primera semana de implementación.
-4. **Confirmar valores de presupuesto** §14 (defaults recomendados: 40 req/día, 4k tokens out,
-   US$100/mes al activar provider real).
-5. **Confirmar matiz de retención** §5 (180d para texto pleno; metadata/hash indefinida).
-6. **Proveedor final + DPA** — sigue abierto por D-F5-9; no bloquea implementar con `'mock'`,
-   sí bloquea cualquier activación real.
-7. Verificación de columnas de vínculo entidad↔cliente para `ai_clients_health` (§4) — tarea
-   técnica de inicio de implementación, no decisión de negocio.
+1. ~~José Luis~~ **RESUELTO**: existe con el email exacto `joseluis@logisticatops.com`
+   (`role=admin`); incluido en el seed 0175. Piloto = 5 usuarios.
+2. **Rol de Martín = `operaciones`** — decisión Dirección: no cambiar ahora; el Copilot respeta
+   RLS/RBAC actuales; si en el piloto falta visibilidad, ticket RBAC separado.
+3. ~~Gate de piloto~~ **RESUELTO por Dirección**: tabla `ai_pilot_users` (allowlist explícita;
+   estar ahí NO otorga permisos de datos).
+4. ~~Presupuesto~~ **APROBADO**: kill-switch `AI_ENABLED` default OFF, 40 req/usuario/día
+   (`AI_DAILY_LIMIT`), 4 rondas tools, 4k tokens out, USD 100/mes (`AI_MONTHLY_BUDGET_USD`,
+   enforzado vía `ai_monthly_spend()` con provider real; mock = costo cero).
+5. Retención §5 (180d texto pleno / metadata indefinida) — sigue como propuesta a ratificar en
+   la ventana.
+6. **Proveedor** — soporte Anthropic IMPLEMENTADO e inerte (§12); elección final + DPA + carga de
+   `AI_ANTHROPIC_API_KEY` en Netlify = ventana de activación (Dirección).
+7. Verificación entidad↔cliente para `ai_clients_health` — resuelta en implementación vía
+   `connect_conversation_links.entity_type='clients'`; validar con datos reales en la ventana.
+
+**Cierre del riesgo SQL:** checklist obligatorio de la ventana 0173–0175 en
+`docs/superpowers/F5-2-LITE-VALIDATION-PACK.md` (rama `feat/f5-ai-copilot-readonly`).
+**Siguiente bloque prioritario aprobado:** `F5.1-b — Knowledge documental / Drive / Compliance /
+RAG base` (backfill de `searchable_items` + drain + texto de documentos). Hasta entonces, las
+consultas documentales degradan a "sin evidencia" — aceptado por Dirección (variante Opción A,
+sin backfill masivo inicial).
 
 ---
 
