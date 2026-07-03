@@ -202,7 +202,7 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
   compliance_pending: {
     rpc: "ai_compliance_pending",
     description:
-      "Casos de compliance activos y documentos vencidos o por vencer (90 días), con riesgo y próxima acción.",
+      "SOLO compliance: casos activos y documentos de compliance vencidos o por vencer (90 días), con riesgo y próxima acción. NO cubre contratos comerciales (para contratos usá contracts_overview).",
     schema: z.object({ limit }),
     toRpcArgs: (a) => ({ p_limit: a.limit ?? 30 }),
     rowToChunk: (r) => ({
@@ -217,6 +217,63 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       }`,
       date: sn(r.fecha_clave),
       url: "/compliance",
+    }),
+  },
+  // F5.1-b.0.1 · contratos a GRANO CONTRATO (lee public.contracts vía ai_contracts_overview,
+  // SECURITY INVOKER). Cierra el hueco: compliance_pending no cubre contratos y solo 4/57
+  // contratos tienen fichas. entityType 'contrato' → bajo el guard metadata-vs-contenido.
+  contracts_overview: {
+    rpc: "ai_contracts_overview",
+    description:
+      "Contratos comerciales (metadata, NO el texto del contrato) por mode: por_vencer | vencidos | vigentes | firmados_recientes | todos. Devuelve razón social, tipo, estado, fecha de firma y fecha de fin. El filtro `query` matchea razón social, tipo (p.ej. 'ANMAT') o id. USALA para toda pregunta de vencimiento, vigencia o firma de CONTRATOS (compliance_pending no cubre contratos).",
+    schema: z.object({
+      mode: z
+        .enum(["por_vencer", "vencidos", "vigentes", "firmados_recientes", "todos"])
+        .optional(),
+      dias: z.number().int().min(1).max(365).optional(),
+      query: z.string().max(120).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({
+      p_mode: a.mode ?? "todos",
+      p_dias: a.dias ?? 90,
+      p_query: a.query ?? null,
+      p_limit: a.limit ?? 30,
+    }),
+    rowToChunk: (r) => ({
+      entityType: "contrato",
+      entityId: s(r.public_id),
+      publicId: sn(r.public_id),
+      title: `${s(r.razon_social) || "Contrato"}${r.tipo ? ` · ${s(r.tipo)}` : ""}`,
+      excerpt: `[ficha metadata] ${s(r.detalle)}`,
+      date: sn(r.fecha_fin) ?? sn(r.fecha_firma),
+      url: entityUrl("contrato", sn(r.public_id)),
+    }),
+  },
+  // F5.1-b.0.1 · listado determinista de FICHAS por tipo + nombre (lee searchable_items vía
+  // ai_docs_browse, SECURITY INVOKER); no depende del FTS frágil. entity_type real de la ficha.
+  docs_browse: {
+    rpc: "ai_docs_browse",
+    description:
+      "Listado de FICHAS de documentos ya cargadas (tipo: compliance | contrato), opcionalmente por nombre/entidad. Para 'buscame documentos', 'qué documentos de compliance hay de X', 'listame contratos'. Devuelve la ficha (título/categoría/fechas), NO el contenido del documento.",
+    schema: z.object({
+      tipo: z.enum(["compliance", "contrato"]).optional(),
+      query: z.string().max(120).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({
+      p_tipo: a.tipo ?? null,
+      p_query: a.query ?? null,
+      p_limit: a.limit ?? 30,
+    }),
+    rowToChunk: (r) => ({
+      entityType: s(r.entity_type),
+      entityId: s(r.entity_id),
+      publicId: sn(r.public_id),
+      title: s(r.title) || s(r.entity_type),
+      excerpt: s(r.excerpt),
+      date: sn(r.entity_date),
+      url: entityUrl(s(r.entity_type), sn(r.public_id)),
     }),
   },
   clients_health: {
@@ -337,6 +394,20 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
     ["entityType", "entityId"]
   ),
   compliance_pending: js({ limit: jsLimit }),
+  contracts_overview: js({
+    mode: {
+      type: "string",
+      enum: ["por_vencer", "vencidos", "vigentes", "firmados_recientes", "todos"],
+    },
+    dias: { type: "integer", minimum: 1, maximum: 365 },
+    query: { type: "string", description: "Filtro por razón social, tipo (p.ej. ANMAT) o public_id" },
+    limit: jsLimit,
+  }),
+  docs_browse: js({
+    tipo: { type: "string", enum: ["compliance", "contrato"] },
+    query: { type: "string", description: "Filtro por nombre/título de la entidad" },
+    limit: jsLimit,
+  }),
   clients_health: js({ limit: jsLimit }),
   ops_digest: js({ hours: { type: "integer", minimum: 1, maximum: 168 }, limit: jsLimit }),
   my_agenda: js({ limit: jsLimit }),

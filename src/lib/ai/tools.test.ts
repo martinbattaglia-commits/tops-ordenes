@@ -136,3 +136,67 @@ describe("entityUrl — deep-links (F5.1-b.0 · D6 / A5)", () => {
     expect(entityUrl("cliente", "x")).toBeNull();
   });
 });
+
+describe("F5.1-b.0.1 · tools documentales nuevas", () => {
+  it("contracts_overview: defaults de toRpcArgs (grano contrato)", () => {
+    expect(TOOLS.contracts_overview.toRpcArgs({})).toEqual({
+      p_mode: "todos",
+      p_dias: 90,
+      p_query: null,
+      p_limit: 30,
+    });
+    expect(
+      TOOLS.contracts_overview.toRpcArgs({
+        mode: "por_vencer",
+        dias: 30,
+        query: "ANMAT",
+        limit: 10,
+      })
+    ).toEqual({ p_mode: "por_vencer", p_dias: 30, p_query: "ANMAT", p_limit: 10 });
+  });
+
+  it("contracts_overview: rowToChunk marca ficha 'contrato' + deep-link + marcador", () => {
+    const chunk = TOOLS.contracts_overview.rowToChunk({
+      public_id: "CTR-2024-014",
+      razon_social: "Distribuidora Ficticia SRL",
+      tipo: "locacion",
+      estado: "vigente",
+      fecha_firma: "2024-03-10",
+      fecha_fin: "2026-09-30",
+      detalle: "Contrato · locacion · vence 2026-09-30",
+    });
+    expect(chunk.entityType).toBe("contrato"); // bajo el guard metadata-vs-contenido
+    expect(chunk.url).toBe("/comercial/contratos");
+    expect(chunk.excerpt).toContain("[ficha metadata]");
+    expect(chunk.date).toBe("2026-09-30");
+  });
+
+  it("docs_browse: defaults + preserva entity_type documental de la ficha", () => {
+    expect(TOOLS.docs_browse.toRpcArgs({})).toEqual({
+      p_tipo: null,
+      p_query: null,
+      p_limit: 30,
+    });
+    const chunk = TOOLS.docs_browse.rowToChunk({
+      entity_type: "compliance_documento",
+      entity_id: "x",
+      public_id: "MAG-04#abc",
+      title: "Habilitación municipal",
+      excerpt: "[ficha metadata] ...",
+      entity_date: "2026-08-15T03:00:00Z",
+    });
+    expect(chunk.entityType).toBe("compliance_documento");
+    expect(chunk.url).toBe("/compliance");
+  });
+
+  it("las 2 tools nuevas usan RPC ai_* de solo lectura (allowlist/denylist)", () => {
+    for (const name of ["contracts_overview", "docs_browse"] as const) {
+      const spec = TOOLS[name];
+      expect(spec.rpc.startsWith("ai_")).toBe(true);
+      for (const verb of WRITE_VERBS_DENYLIST) {
+        expect(name).not.toContain(verb);
+        expect(spec.rpc).not.toContain(verb);
+      }
+    }
+  });
+});

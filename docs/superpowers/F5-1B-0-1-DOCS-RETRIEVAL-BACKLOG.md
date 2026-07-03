@@ -70,3 +70,110 @@ Set versionado de consultas + expectativa, corrido en cada cambio de prompt/tool
 
 - **F5.1-b.1** (extracción de texto de PDF): NO-GO, plan propio.
 - **F5.1-b.2** (embeddings/pgvector): NO-GO/diferir hasta medir recall del FTS.
+
+---
+
+# Diseño técnico F5.1-b.0.1
+
+> Estado: **IMPLEMENTADO LOCAL, NO APLICADO / NO DEPLOYADO / NO PUSHEADO** (2026-07-03).
+> Rama `feat/f5-1b-0-1-docs-retrieval` (worktree, off `feat/f5-1b-0-docs-projection` @ `70cdd68`).
+> Diagnóstico read-only en vivo (prod `arsksytgdnzukbmfgkju`, solo SELECT/introspección).
+
+## 1. Root cause confirmado (en vivo)
+
+- **F-1 "contratos próximos a vencer" → NO_EVIDENCE**: el planner ruteó a `compliance_pending`
+  (auditado en `ai_messages.tools_used`), que **solo** cubre `compliance_cases`+`compliance_documents`,
+  **nunca `contracts`**. Hay **4 contratos con `fecha_fin` ≤90d** (`contracts_expiring_90d=4`) y
+  **los 4 no tienen `contract_documents`** → tampoco están en `searchable_items`. Solo **4/57** contratos
+  tienen fichas. ⇒ **los contratos deben leerse a grano contrato desde `public.contracts`.**
+- **F-2 "último contrato firmado" → NO_EVIDENCE**: `ai_search_knowledge` es FTS puro sin orden por firma;
+  la proyección pone `fecha_fin` en `entity_date`, **nunca `fecha_firma`**. Hay **41/57** con `fecha_firma`
+  (solo 1 con documentos). ⇒ grano contrato.
+- **F-3 búsquedas genéricas**: FTS mide 0 hits para `'vencimiento'` (vs 26 para `'vence'`: el stemmer no los
+  unifica), 0 para `'buscame contratos'`, 1 para `'documentos de compliance'`. El `body` no tiene vocabulario
+  de dominio; `websearch_to_tsquery` es AND + stopwords. Además "buscame documentos compliance" se ruteó a
+  `compliance_pending` (solo 15 vencidos), no a las 569 fichas.
+- **NO es el guard**: `error_detail=null` en F-1/F-2 (el guard marca su motivo). El guard se preserva.
+
+## 2. Paquete implementado (local)
+
+**Migración `0178_docs_retrieval_improvements.sql`** (idempotente, aditiva, NO aplicada) +
+**`ROLLBACK_0178_docs_retrieval_improvements.md`**:
+1. `create or replace view public.ai_docs_projection` — `body` enriquecido con vocabulario de dominio
+   (`documento compliance cumplimiento` / `contrato documento acuerdo comercial`), `vencimiento` (sustantivo)
+   junto a `vence`, y `firmado firma el <fecha_firma>` (metadata, no contenido). Solo cambia `body`
+   (title/status/entity_date/public_id/visibility_key intactos). `tsv` es columna generada → se re-indexa al
+   reproyectar. **No** hay estado temporal (vencido/vigente) baked en el body (evita staleness).
+2. `public.ai_contracts_overview(p_mode, p_dias, p_query, p_limit)` — **SECURITY INVOKER**, lee
+   `public.contracts` a grano contrato. `mode ∈ {por_vencer, vencidos, vigentes, firmados_recientes, todos}`.
+   Devuelve **solo metadata** (public_id, razon_social, tipo, estado, fecha_firma/inicio/fin, dias_para_vencer,
+   detalle); `razon_social`+`detalle` pasan por `ai_docs_redact`. `grant execute to authenticated`.
+3. `public.ai_docs_browse(p_tipo, p_query, p_limit)` — **SECURITY INVOKER**, lista fichas de
+   `searchable_items` por tipo (compliance|contrato) + nombre (ILIKE), acotado a los 2 entity_types
+   documentales. `grant execute to authenticated`.
+
+**Código TS** (worktree): `types.ts` (2 tool names), `tools.ts` (2 `ToolSpec` + 2 `TOOL_INPUT_SCHEMAS` +
+descripción de `compliance_pending` aclarada), `mock.ts` (2 fixtures), `guardrails.ts`
+(`METADATA_INTENT_TERMS` += firma/vigencia de contrato), `prompts/system.v1.ts` (guía de ruteo +
+`PROMPT_VERSION → system.v3`).
+
+**Tests** (vitest): `knowledge-eval.test.ts` (eval set), + casos en `guardrails.test.ts` y `tools.test.ts`.
+
+## 3. Decisiones de diseño (y por qué)
+
+- **Grano contrato leyendo `contracts`** (no `searchable_items`): los 4 por-vencer no tienen fichas ⇒ leer
+  fichas devolvería 0. `contracts_overview` arregla F-1/F-2 **sin depender de reproyección**.
+- **SECURITY INVOKER** (GO Dirección): hereda la RLS role-based de `contracts` (admin/supervisor/operaciones);
+  los 6 pilotos son staff. Nunca sobre-expone. Divergencia con el modelo permission-based de fichas es
+  **fail-closed** (un piloto no-staff futuro no vería contratos hasta ser staff). El retrieval corre con el
+  cliente de sesión (RLS activa); `src/lib/ai` tiene prohibido el service-role (lo vigila `tools.test.ts`).
+- **entityType `'contrato'`** en `contracts_overview` ⇒ queda bajo el guard metadata-vs-contenido: "resumime el
+  contenido del contrato X" degrada a NO_EVIDENCE aunque la tool devuelva metadata.
+- **`METADATA_INTENT_TERMS` += `firmad` + `se firmo`** (participio/reflexivo del estado de firma):
+  sin ese cambio, "último contrato firmado" caía en `!meta` y el guard fail-closed lo degradaba (falso
+  NO_EVIDENCE). Términos PRECISOS a propósito (revisión adversarial): NO el presente "firma" (firmante) ni
+  el adjetivo suelto "vigente" — reabrían "quién firma la habilitación" / "resumime lo vigente". La vigencia
+  como lista ya entra por "contratos". El vocabulario de CONTENIDO mantiene prioridad (`content OR !meta`)
+  ⇒ no se debilita el guard para preguntas de contenido (tests lo fijan, incl. las re-cerradas del review).
+- **`body` sin estado temporal**: vencido/vigente se resuelve por RPC date-aware, no por FTS (evita staleness).
+
+## 4. Eval set (guard-level; e2e Gemini = smoke DRAFT/PROD)
+
+`knowledge-eval.test.ts`: 7 metadata → responden (incl. último firmado / por vencer / buscar), 3 contenido →
+NO_EVIDENCE (resumen/cláusulas/obligaciones). + tools nuevas bajo el guard.
+
+## 5. Validación SQL (read-only, ejecutada en vivo 2026-07-03)
+
+Equivalentes a los cuerpos de las RPC (probados antes de existir la migración):
+
+```sql
+-- por_vencer (esperado 4) / firmados_recientes (esperado 41) / vencidos (esperado 0)
+select
+ (select count(*) from contracts where fecha_fin between current_date and current_date + 90) as por_vencer,
+ (select count(*) from contracts where fecha_firma is not null)                              as firmados,
+ (select count(*) from contracts where fecha_fin < current_date)                             as vencidos,
+ (select count(*) from contracts)                                                            as total; -- 57
+-- FTS: 'vencimiento' 0 hits vs 'vence' 26; 'buscame contratos' 0 (por eso docs_browse no usa FTS).
+```
+
+## 6. Riesgos remanentes
+
+- **R1** el `body` enriquecido solo surte efecto **tras reproyección** (`ai_docs_backfill_apply()`, paso de
+  apply aprobado aparte). `contracts_overview` (el fix más valioso) es independiente.
+- **R2** doble representación contrato-grano (57) vs fichas (4 contratos): el LLM no debe doble-contar
+  (mitigado por descripciones + citas por `public_id`).
+- **R3/R4 (seguridad/PII)** `contracts_overview` metadata-only, sin cuit/contenido; INVOKER = fail-closed;
+  `razon_social`+`detalle` redactados.
+- **R6** lenguaje natural aún depende del planner; `docs_browse` no usa FTS para mitigar.
+
+## 7. Rollback
+
+`ROLLBACK_0178_docs_retrieval_improvements.md`: drop de las 2 RPC + restaurar la vista 0176 (definición exacta);
+re-materializar `body` viejo = reproyección (paso de apply). TS: revertir por git (rama aislada, sin merge).
+
+## 8. GO / NO GO
+
+- **GO local**: cumplido (aditivo, metadata-only, RLS-preservada INVOKER, idempotente + rollback, evidencia
+  read-only 4/41/57, gates verdes, eval + guard tests).
+- **NO GO / fuera de scope**: texto/OCR/embeddings/pgvector; apply/deploy/push/merge/main; reproyección
+  productiva; Drive/knowledge drain/cron/RBAC_ENFORCE. Apply/DRAFT/PROD = ventana futura con nueva autorización.

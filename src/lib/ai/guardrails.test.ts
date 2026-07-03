@@ -270,3 +270,48 @@ describe("isMetadataContentRisk (F5.1-b.0 · D5 / H6, fail-closed)", () => {
     expect(isMetadataContentRisk("resumime el contrato", [], [])).toBe(false);
   });
 });
+
+describe("F5.1-b.0.1 · firma/vigencia de contrato = METADATA (no over-degrada)", () => {
+  const contrato = { entityType: "contrato" as const };
+
+  it("último firmado / firmados / vigentes → metadata (habilita la feature b.0.1)", () => {
+    const permits = [
+      "cuál fue el último contrato firmado",
+      "cuál fue el último contrato de ANMAT firmado",
+      "qué contratos firmamos este año",
+      "contratos vigentes",
+      "cuándo se firmó el contrato de Cliente X",
+    ];
+    for (const q of permits) {
+      expect(isMetadataContentRisk(q, [contrato]), q).toBe(false);
+    }
+  });
+
+  it("NO debilita el guard: vigencia-DEL-contrato y firma+contenido siguen degradando", () => {
+    // El vocabulario de CONTENIDO tiene prioridad (content OR !meta): agregar términos
+    // de metadata (firmad/se firmó) NO abre la puerta a preguntas de contenido.
+    const degradan = [
+      "cuál es la vigencia del contrato de Cliente X", // "vigencia del contrato" = contenido
+      "resumime el contrato firmado", // resum + doc singular
+      "qué dice el contrato firmado", // "que dice" = contenido
+    ];
+    for (const q of degradan) {
+      expect(isMetadataContentRisk(q, [contrato]), q).toBe(true);
+    }
+  });
+
+  it("re-cierra el widening del review: firmante (presente) y 'lo vigente' vago degradan", () => {
+    // Términos PRECISOS (firmad/se firmó, no "firma"/"vigente" sueltos): estas preguntas de
+    // firmante / adjetivo suelto vuelven a degradar (fail-closed). No filtran (metadata-only),
+    // pero el guard no debe darlas por metadata.
+    const reclosed: Array<[string, "compliance_documento" | "contrato"]> = [
+      ["quién firma la habilitación municipal", "compliance_documento"],
+      ["qué firma tiene el certificado", "compliance_documento"],
+      ["resumime lo vigente", "contrato"],
+      ["detallame lo vigente", "contrato"],
+    ];
+    for (const [q, t] of reclosed) {
+      expect(isMetadataContentRisk(q, [{ entityType: t }]), q).toBe(true);
+    }
+  });
+});

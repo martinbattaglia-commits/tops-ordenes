@@ -12,6 +12,9 @@ export const TOOL_NAMES = [
   "entity_timeline",
   "entity_360",
   "compliance_pending",
+  // F5.1-b.0.1 · retrieval documental: grano contrato (contracts) + listado de fichas.
+  "contracts_overview",
+  "docs_browse",
   "clients_health",
   "ops_digest",
   "my_agenda",

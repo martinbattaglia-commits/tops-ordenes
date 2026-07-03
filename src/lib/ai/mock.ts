@@ -127,6 +127,31 @@ export const MOCK_TOOL_ROWS: Record<ToolName, Row[]> = {
       detalle: "Habilitaciones",
     },
   ],
+  contracts_overview: [
+    {
+      public_id: "CTR-2024-014",
+      razon_social: "Distribuidora Ficticia SRL",
+      tipo: "locacion",
+      estado: "vigente",
+      fecha_firma: "2024-03-10",
+      fecha_inicio: "2024-04-01",
+      fecha_fin: "2026-09-30",
+      dias_para_vencer: 89,
+      detalle: "Contrato · locacion · estado vigente · firmado 2024-03-10 · vence 2026-09-30",
+    },
+  ],
+  docs_browse: [
+    {
+      entity_type: "compliance_documento",
+      entity_id: "demo-cmp-1",
+      public_id: "MAG-04#abc12345",
+      title: "Habilitación municipal Magaldi",
+      excerpt:
+        "[ficha metadata] documento compliance cumplimiento · Habilitación municipal Magaldi · Habilitaciones · vencimiento vence 2026-08-15",
+      status: null,
+      entity_date: "2026-08-15T03:00:00Z",
+    },
+  ],
   clients_health: [
     { cliente: "Cliente Demo SA", incidentes_abiertos: 2, tareas_abiertas: 3, total_abiertos: 5 },
     { cliente: "Distribuidora Ficticia SRL", incidentes_abiertos: 1, tareas_abiertas: 0, total_abiertos: 1 },

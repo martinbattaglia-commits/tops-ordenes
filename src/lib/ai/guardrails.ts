@@ -202,6 +202,12 @@ const METADATA_INTENT_TERMS = [
   "documentos", "contratos", "fichas", "polizas", "expedientes", "certificados", "habilitaciones",
   "vencimiento", "vence", "vencer", "vencid", "por vencer", "caduc",
   "estado", "categor", "riesgo", "sede", "deposito", "tipo de documento", "tipo de contrato",
+  // F5.1-b.0.1: ESTADO de firma como METADATA (firmado / se firmó), NO el firmante. Preciso
+  // A PROPÓSITO (revisión adversarial): participio "firmad(o/a/os)" y reflexivo "se firmó" —
+  // NO el presente "firma" ni el adjetivo suelto "vigente", que reabrían "quién firma la
+  // habilitación" o "resumime lo vigente". La vigencia como LISTA ya entra por "contratos".
+  // El vocabulario de CONTENIDO mantiene prioridad (content OR !meta).
+  "firmad", "se firmo",
   // English
   "show", "search", "find", "documents", "contracts", "expir", "due", "status", "list",
 ];
