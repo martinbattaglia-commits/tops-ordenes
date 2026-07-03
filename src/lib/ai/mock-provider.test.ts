@@ -40,6 +40,7 @@ describe("routing por pregunta (round 1)", () => {
     ["¿Qué documentos de compliance están pendientes?", "compliance_pending"],
     // F5.1-b.0.1.1 · tools documentales nuevas
     ["cuáles son los archivos de compliance", "docs_browse"],
+    ["dame el archivo de residuos de compliance", "docs_browse"],
     ["qué contratos están próximos a vencer", "contracts_overview"],
     ["¿Qué workflow está trabado?", "workflows_stuck"],
     ["¿Qué debería mirar primero mañana?", "my_agenda"],

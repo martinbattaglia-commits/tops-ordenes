@@ -28,6 +28,10 @@ describe("F5.1-b.0.1 · eval set — metadata SE RESPONDE (guard no degrada)", (
     ["qué archivos de compliance hay de MAGALDI", "compliance_documento"],
     ["buscame el archivo de residuos Nación de Magaldi de compliance", "compliance_documento"],
     ["listá documentos de compliance", "compliance_documento"],
+    // F5.1-b.0.1.2 · verbos de recuperación + "cuándo vence <doc puntual>" (hallazgo smoke vivo)
+    ["me podrias dar el archivo de plancheta de habilitacion de Lujan", "compliance_documento"],
+    ["dame el archivo de residuos", "compliance_documento"],
+    ["cuando vence el impacto ambiental de lujan", "compliance_documento"],
   ];
   it.each(cases)("responde (no degrada): %s", (q, t) => {
     expect(isMetadataContentRisk(q, [ficha(t)])).toBe(false);
@@ -53,8 +57,8 @@ describe("F5.1-b.0.1.1 · ruteo a docs_browse — vocabulario (proxy; ruteo real
 
   it("la descripción de docs_browse cubre el vocabulario de las consultas que fallaron", () => {
     for (const kw of [
-      "archivo", "documento", "ficha", "list", "buscame",
-      "compliance", "contratos", "magaldi", "residuos", "naci",
+      "archivo", "documento", "ficha", "list", "buscame", "dame",
+      "compliance", "contratos", "magaldi", "residuos", "ambiental", "plancheta", "lujan",
     ]) {
       expect(desc, kw).toContain(kw);
     }

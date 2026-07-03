@@ -361,6 +361,31 @@ describe("F5.1-b.0.1.1 · 'archivo' de compliance = METADATA; 'resumime el archi
   });
 });
 
+describe("F5.1-b.0.1.2 · verbos de RECUPERACIÓN de archivo = metadata; contenido sigue degradando", () => {
+  const cmp = { entityType: "compliance_documento" as const };
+
+  it("dame / me podrías dar / pasame el archivo de X → metadata (no degrada)", () => {
+    // Sin este fix el guard degradaba estos pedidos de RECUPERACIÓN aunque docs_browse
+    // encontrara la ficha (hallazgo smoke b.0.1.1 en vivo).
+    const permits = [
+      "me podrias dar el archivo de plancheta de habilitacion de Lujan",
+      "dame el archivo de residuos",
+      "pasame el archivo de impacto ambiental",
+      "cuando vence el impacto ambiental de lujan",
+    ];
+    for (const q of permits) expect(isMetadataContentRisk(q, [cmp]), q).toBe(false);
+  });
+
+  it("pedir el CONTENIDO del archivo sigue degradando (content priority)", () => {
+    const degradan = [
+      "dame el resumen del archivo de residuos",
+      "dame lo que dice el archivo de residuos",
+      "resumime el archivo de residuos",
+    ];
+    for (const q of degradan) expect(isMetadataContentRisk(q, [cmp]), q).toBe(true);
+  });
+});
+
 describe("F5.1-b.0.1.1 · isEmptyAnswer", () => {
   it("vacío / whitespace = true; con texto = false", () => {
     expect(isEmptyAnswer("")).toBe(true);

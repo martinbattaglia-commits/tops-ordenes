@@ -208,6 +208,11 @@ const SINGULAR_DOC_OBJECT =
 // vocabulario de contenido (arriba) tiene prioridad (content OR !meta) y cierra los co-optados.
 const METADATA_INTENT_TERMS = [
   "busc", "list", "mostr", "enumera", "encontr", "filtr", "orden",
+  // F5.1-b.0.1.2: verbos de RECUPERACIÓN/entrega de un archivo (metadata, no contenido).
+  // Sin esto, "dame/me podrías dar el archivo de X" (singular) caía en !meta y el guard lo
+  // degradaba aunque docs_browse lo encontrara (hallazgo smoke). El vocabulario de CONTENIDO
+  // mantiene prioridad → "dame el RESUMEN / lo que DICE el archivo" sigue degradando.
+  "dame", "damelo", "pasame", "traeme", "conseguime", "podrias dar", "me das",
   " hay", "hay ", "existe", "que documento", "que contrato",
   "documentos", "contratos", "fichas", "polizas", "expedientes", "certificados", "habilitaciones",
   // F5.1-b.0.1.1: "archivos" (PLURAL = listado) como intención metadata. A PROPÓSITO no
