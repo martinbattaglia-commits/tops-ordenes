@@ -4,7 +4,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { TOOLS, WRITE_VERBS_DENYLIST } from "./tools";
+import { TOOLS, TOOL_INPUT_SCHEMAS, WRITE_VERBS_DENYLIST, toProviderTools } from "./tools";
 import { TOOL_NAMES } from "./types";
 import { validateToolCall, ToolArgsError } from "./data";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
@@ -29,6 +29,25 @@ describe("catálogo cerrado read-only", () => {
       expect(
         spec.rpc.startsWith("ai_") || spec.rpc === "connect_search"
       ).toBe(true);
+    }
+  });
+});
+
+describe("schemas JSON para el provider real (paridad con el catálogo)", () => {
+  it("todas las tools tienen input_schema con additionalProperties:false", () => {
+    for (const name of Object.keys(TOOLS)) {
+      const schema = TOOL_INPUT_SCHEMAS[name as keyof typeof TOOL_INPUT_SCHEMAS];
+      expect(schema, name).toBeDefined();
+      expect(schema.type, name).toBe("object");
+      expect(schema.additionalProperties, name).toBe(false);
+      expect(Array.isArray(schema.required), name).toBe(true);
+    }
+  });
+  it("toProviderTools produce una entrada por tool con descripción", () => {
+    const tools = toProviderTools();
+    expect(tools).toHaveLength(Object.keys(TOOLS).length);
+    for (const t of tools) {
+      expect(t.description.length).toBeGreaterThan(10);
     }
   });
 });

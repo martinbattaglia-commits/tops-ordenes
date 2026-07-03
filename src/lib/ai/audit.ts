@@ -25,6 +25,9 @@ export interface AuditPayload {
   outcome: CopilotOutcome;
   errorDetail?: string | null;
   citedSources: SourceChunk[];
+  tokensIn?: number | null;
+  tokensOut?: number | null;
+  costEstimate?: number | null;
 }
 
 /** Devuelve el id del mensaje assistant auditado (para feedback) o null. */
@@ -49,6 +52,9 @@ export async function logInteraction(
       latency_ms: p.latencyMs,
       outcome: p.outcome,
       error_detail: p.errorDetail ?? null,
+      tokens_in: p.tokensIn ?? null,
+      tokens_out: p.tokensOut ?? null,
+      cost_estimate: p.costEstimate ?? null,
     },
   ];
   const sources = p.citedSources.map((c, i) => ({

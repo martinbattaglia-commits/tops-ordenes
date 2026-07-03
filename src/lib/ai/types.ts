@@ -58,9 +58,16 @@ export interface ProviderTurnRequest {
   retryAfterInvalidCitations?: boolean;
 }
 
+/** Consumo reportado por el provider en un turno (solo providers reales). */
+export interface ProviderUsage {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
 export type ProviderTurnResponse =
-  | { kind: "tool_calls"; toolCalls: ToolCall[] }
-  | { kind: "final"; answer: string };
+  | { kind: "tool_calls"; toolCalls: ToolCall[]; usage?: ProviderUsage }
+  | { kind: "final"; answer: string; usage?: ProviderUsage };
 
 export interface AiProvider {
   readonly name: string;

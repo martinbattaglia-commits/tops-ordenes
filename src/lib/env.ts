@@ -97,13 +97,28 @@ export const env = {
       | "mock"
       | "anthropic"
       | "openai",
+    /**
+     * Modelo para el provider real (decisión Dirección: soportar Anthropic,
+     * activación en ventana aparte). Default: Claude Opus 4.8. Ojo: en
+     * Opus 4.7+ los sampling params (temperature/top_p/top_k) fueron
+     * ELIMINADOS de la API (400 si se envían) — el estilo se controla por
+     * prompt, no por temperatura.
+     */
+    model: process.env.AI_MODEL?.trim() || "claude-opus-4-8",
+    /** API key Anthropic — SOLO backend, Netlify env; jamás en repo (G9). */
+    anthropicApiKey: process.env.AI_ANTHROPIC_API_KEY?.trim() ?? "",
     /** Límites duros del piloto (D-F5-8). Ajustables por env, defaults en código. */
     limits: {
-      requestsPerDay: Number(process.env.AI_LIMIT_REQUESTS_PER_DAY) || 40,
+      requestsPerDay:
+        Number(process.env.AI_DAILY_LIMIT) ||
+        Number(process.env.AI_LIMIT_REQUESTS_PER_DAY) ||
+        40,
       toolRoundsPerRequest: Number(process.env.AI_LIMIT_TOOL_ROUNDS) || 4,
       maxOutputTokens: Number(process.env.AI_LIMIT_OUTPUT_TOKENS) || 4000,
       maxContextChars: Number(process.env.AI_LIMIT_CONTEXT_CHARS) || 24000,
       maxTurnsPerSession: Number(process.env.AI_LIMIT_TURNS) || 10,
+      /** Tope mensual global en USD (suma cost_estimate de ai_messages). */
+      monthlyBudgetUsd: Number(process.env.AI_MONTHLY_BUDGET_USD) || 100,
     },
   },
   whatsapp: {

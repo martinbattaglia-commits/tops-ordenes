@@ -47,6 +47,39 @@ export function demoCount(userKey: string, now = new Date()): number {
   return entry.count;
 }
 
+/**
+ * Tope mensual global en USD (D-F5-8) — solo aplica con provider REAL
+ * (mock = costo cero, no se chequea). Lee el agregado vía RPC SECURITY
+ * DEFINER ai_monthly_spend() (número agregado, sin contenido). Fail-closed.
+ */
+export async function checkMonthlyBudget(
+  supabase: SupabaseClient | null
+): Promise<BudgetState> {
+  const cap = env.ai.limits.monthlyBudgetUsd;
+  if (env.ai.provider === "mock" || !supabase) {
+    return { allowed: true, requestsToday: 0, limit: cap, reason: null };
+  }
+  const { data, error } = await supabase.rpc("ai_monthly_spend");
+  if (error) {
+    return {
+      allowed: false,
+      requestsToday: -1,
+      limit: cap,
+      reason: "No pude verificar el presupuesto mensual de IA; reintentá en un momento.",
+    };
+  }
+  const spent = Number(data) || 0;
+  if (spent >= cap) {
+    return {
+      allowed: false,
+      requestsToday: -1,
+      limit: cap,
+      reason: `El presupuesto mensual de IA (USD ${cap}) está agotado. Dirección puede ajustarlo o esperar al próximo mes.`,
+    };
+  }
+  return { allowed: true, requestsToday: 0, limit: cap, reason: null };
+}
+
 /** Chequea y consume una unidad de presupuesto. En real: cuenta ai_messages
  *  propios del día (role='user') vía RLS. */
 export async function checkBudget(

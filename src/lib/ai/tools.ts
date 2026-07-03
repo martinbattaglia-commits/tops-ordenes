@@ -274,6 +274,83 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
   },
 };
 
+// ── JSON Schemas del catálogo (formato Anthropic Messages API tools) ─────────
+// Espejo de los schemas zod de arriba. Regla de la API: additionalProperties
+// false + required explícito. El test tools.test.ts verifica la paridad de
+// claves entre ambos. Solo los usa el provider real; el mock no los necesita.
+
+const js = (
+  properties: Record<string, unknown>,
+  required: string[] = []
+): Record<string, unknown> => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false,
+});
+
+const jsLimit = { type: "integer", minimum: 1, maximum: 50 };
+
+export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
+  search_knowledge: js(
+    {
+      query: { type: "string", description: "Términos de búsqueda (español)" },
+      types: { type: "array", items: { type: "string" }, description: "Filtrar por entity_type" },
+      limit: jsLimit,
+    },
+    ["query"]
+  ),
+  connect_search: js(
+    { query: { type: "string" }, limit: jsLimit },
+    ["query"]
+  ),
+  incidents_overview: js({
+    estados: {
+      type: "array",
+      items: { type: "string", enum: ["abierto", "en_progreso", "en_espera", "resuelto", "cerrado"] },
+    },
+    severidades: {
+      type: "array",
+      items: { type: "string", enum: ["baja", "media", "alta", "critica"] },
+    },
+    limit: jsLimit,
+  }),
+  tasks_overview: js(
+    {
+      scope: { type: "string", enum: ["abiertas", "vencidas", "mias", "de_usuario"] },
+      user: { type: "string", description: "uuid del usuario (solo scope de_usuario)" },
+      limit: jsLimit,
+    },
+    ["scope"]
+  ),
+  workflows_stuck: js({ daysIdle: { type: "integer", minimum: 1, maximum: 60 }, limit: jsLimit }),
+  entity_timeline: js(
+    { entityType: { type: "string" }, entityId: { type: "string" }, limit: jsLimit },
+    ["entityType", "entityId"]
+  ),
+  entity_360: js(
+    { entityType: { type: "string" }, entityId: { type: "string" }, limit: jsLimit },
+    ["entityType", "entityId"]
+  ),
+  compliance_pending: js({ limit: jsLimit }),
+  clients_health: js({ limit: jsLimit }),
+  ops_digest: js({ hours: { type: "integer", minimum: 1, maximum: 168 }, limit: jsLimit }),
+  my_agenda: js({ limit: jsLimit }),
+};
+
+/** Catálogo en el formato `tools` de la Messages API (para el provider real). */
+export function toProviderTools(): Array<{
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}> {
+  return (Object.keys(TOOLS) as ToolName[]).map((name) => ({
+    name,
+    description: TOOLS[name].description,
+    input_schema: TOOL_INPUT_SCHEMAS[name],
+  }));
+}
+
 /** Denylist estructural: ningún nombre de tool/RPC puede sugerir escritura. */
 export const WRITE_VERBS_DENYLIST = [
   "create",

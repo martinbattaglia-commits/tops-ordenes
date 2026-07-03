@@ -7,7 +7,7 @@
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { logInteraction } from "./audit";
-import { checkBudget } from "./budget";
+import { checkBudget, checkMonthlyBudget } from "./budget";
 import { checkGate } from "./gate";
 import {
   NO_EVIDENCE,
@@ -43,8 +43,10 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
   }
   const supabase = gate.demo ? null : createClient();
 
-  // 2. Presupuesto (D-F5-8) — antes de cualquier trabajo.
-  const budget = await checkBudget(supabase, gate.userId);
+  // 2. Presupuesto (D-F5-8) — antes de cualquier trabajo: diario por usuario
+  // y, con provider real, tope mensual global en USD.
+  const monthly = await checkMonthlyBudget(supabase);
+  const budget = monthly.allowed ? await checkBudget(supabase, gate.userId) : monthly;
   if (!budget.allowed) {
     const budgetAnswer = budget.reason ?? "Presupuesto diario agotado.";
     // D-F5-7: el corte por presupuesto también se audita (es una decisión).
@@ -71,6 +73,7 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
   const provider = getProvider();
   const chunks: SourceChunk[] = [];
   const toolsUsed: string[] = [];
+  const usage = { inputTokens: 0, outputTokens: 0, costUsd: 0 };
   let answer: string = NO_EVIDENCE;
   let outcome: CopilotAnswer["outcome"] = "no_evidence";
   let errorDetail: string | null = null;
@@ -90,6 +93,11 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
         maxRounds,
         retryAfterInvalidCitations: retriedCitations,
       });
+      if (res.usage) {
+        usage.inputTokens += res.usage.inputTokens;
+        usage.outputTokens += res.usage.outputTokens;
+        usage.costUsd += res.usage.costUsd;
+      }
 
       if (res.kind === "tool_calls" && round <= maxRounds) {
         const calls: ToolCall[] = res.toolCalls.slice(0, MAX_TOOL_CALLS_PER_ROUND);
@@ -154,6 +162,9 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
     outcome,
     errorDetail,
     citedSources,
+    tokensIn: usage.inputTokens || null,
+    tokensOut: usage.outputTokens || null,
+    costEstimate: usage.costUsd || null,
   });
 
   return { sessionId: req.sessionId, messageId, outcome, answer, sources: citedSources };
