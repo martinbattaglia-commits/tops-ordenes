@@ -21,24 +21,34 @@ const baseReport: CajaChicaSyncReport = {
   events: [],
 };
 
-const req = (qs = "", headers: Record<string, string> = {}) =>
+const req = (qs = "", headers: Record<string, string> = { authorization: "Bearer s3cr3t" }) =>
   new Request(`https://x/api/tesoreria/caja-chica/sync${qs}`, { method: "POST", headers });
 
+// F4.4-E2: el guard pasó a FAIL-CLOSED (requireCronAuth) — el default de la
+// suite es "secret configurado + Bearer correcto"; los casos de auth prueban
+// explícitamente 503 (sin secret) y 401 (Bearer inválido/ausente).
 beforeEach(() => {
   runMock.mockReset();
-  delete process.env.CRON_SECRET;
+  process.env.CRON_SECRET = "s3cr3t";
 });
 
 describe("route /api/tesoreria/caja-chica/sync", () => {
-  it("401 si CRON_SECRET seteado y no llega el Bearer correcto", async () => {
-    process.env.CRON_SECRET = "s3cr3t";
+  it("503 FAIL-CLOSED si CRON_SECRET no está configurado", async () => {
+    delete process.env.CRON_SECRET;
     const res = await POST(req());
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(503);
     expect(runMock).not.toHaveBeenCalled();
   });
 
+  it("401 si no llega el Bearer correcto", async () => {
+    const res = await POST(req("", {}));
+    expect(res.status).toBe(401);
+    expect(runMock).not.toHaveBeenCalled();
+    const res2 = await POST(req("", { authorization: "Bearer otro" }));
+    expect(res2.status).toBe(401);
+  });
+
   it("200 + JSON estructurado con Bearer correcto", async () => {
-    process.env.CRON_SECRET = "s3cr3t";
     runMock.mockResolvedValue(baseReport);
     const res = await POST(req("", { authorization: "Bearer s3cr3t" }));
     expect(res.status).toBe(200);

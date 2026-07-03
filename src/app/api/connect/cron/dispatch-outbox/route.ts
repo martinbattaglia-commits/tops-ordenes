@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { dispatchConnectOutbox } from "@/lib/connect/worker/dispatch";
+import { automationProcessor } from "@/lib/connect/worker/automations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,11 +42,17 @@ async function handle(req: Request): Promise<Response> {
   const maxBatches = clampInt(url.searchParams.get("maxBatches"), 1, 50);
 
   try {
-    const s = await dispatchConnectOutbox({
-      dry,
-      ...(batchSize != null ? { batchSize } : {}),
-      ...(maxBatches != null ? { maxBatches } : {}),
-    });
+    // F4.4-E4: el worker despacha con el processor de automatizaciones MVP.
+    // Compat total con F4.1: topic sin reglas habilitadas (o mig 0172 sin
+    // aplicar) ⇒ `skipped`, idéntico al governanceProcessor anterior.
+    const s = await dispatchConnectOutbox(
+      {
+        dry,
+        ...(batchSize != null ? { batchSize } : {}),
+        ...(maxBatches != null ? { maxBatches } : {}),
+      },
+      automationProcessor,
+    );
     const httpStatus = s.status === "error" ? 502 : 200;
     return NextResponse.json(
       {
