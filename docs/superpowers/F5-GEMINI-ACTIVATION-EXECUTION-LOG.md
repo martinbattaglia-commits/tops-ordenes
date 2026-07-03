@@ -1,5 +1,52 @@
 # F5 — GEMINI ACTIVATION · EXECUTION LOG (mini-ventana)
 
+## ✅✅ CIERRE FORMAL — F5.2-lite CERRADA (Dirección 2026-07-03)
+
+**F5.2-lite (Nexus AI Copilot read-only) queda CERRADA FORMALMENTE, con Gemini activo para el
+piloto de 6 usuarios.** Dirección aceptó el informe de revalidación (resultado PASS).
+
+| Ítem | Estado de cierre |
+|---|---|
+| Producción | `ccd9063` · deploy `6a476090946ef1abe8a1322a` · **published + locked** |
+| Copilot | read-only, operativo en prod, `AI_ENABLED=1` |
+| Provider | **Gemini** `gemini-2.5-pro` (`AI_PROVIDER=gemini`) |
+| Piloto | **6 usuarios**: martin@, martin.battaglia@, joseluis@, cynthia@, ruth@, martinrinas@ (todos @logisticatops.com) |
+| Consulta de validación | `martin@` · "¿Qué documentos de compliance están pendientes?" · PASS |
+| Costo/tokens de la validación | tokens 3966/272 · `cost_estimate=$0.007678` |
+| `ai_monthly_spend()` | `0.019489` USD acumulado (validaciones) |
+| Citas auditadas | `ai_sources=16` (compliance_caso + compliance_documento) — coinciden con las citas |
+| Auditoría | completa · sin PII sensible · sin escrituras de negocio · sin acciones automáticas |
+| Salud | 0 500/502 · 0 PostgREST 300 · webhook WA 401 (F4.4 intacto) |
+| Rollback | NO requerido |
+| main | intacta (`0acf4a3`) · sin push/merge/deploy |
+
+**Próximo bloque recomendado: `F5.1-b — Knowledge documental / Drive / RAG`** (ver §Riesgos y
+Próximo bloque más abajo). F5.2-lite no bloquea; F5.1-b amplía el alcance documental.
+
+### Riesgos remanentes (documentados al cierre)
+1. **Costo Gemini en vivo** — cada consulta ~$0.005–0.012 (gemini-2.5-pro). Contención: kill-switch
+   `AI_ENABLED`, límite diario por usuario (`AI_DAILY_LIMIT=40`), tope mensual global
+   (`AI_MONTHLY_BUDGET_USD=100` vía `ai_monthly_spend()`). **Acción sugerida:** monitorear
+   `ai_monthly_spend()` semanalmente; alertar cerca del tope.
+2. **`searchable_items` vacía** — `ai_search_knowledge` (búsqueda general) degrada a "sin
+   evidencia". Las RPCs estructuradas (incidentes/tareas/compliance/etc.) SÍ traen datos reales.
+   Lo resuelve F5.1-b (backfill/proyección).
+3. **Knowledge documental profundo ausente** — el Copilot no lee el TEXTO de PDFs/contratos ni
+   Drive; solo metadata proyectada. Es el núcleo de F5.1-b (Document Intelligence + RAG).
+4. **Retención de auditoría** — `ai_messages.content` retención propuesta 180d (metadata/hash
+   indefinida); el job de depuración es manual/documentado, aún no implementado.
+5. **Gobernanza del proveedor** — provider por `fetch` sin SDK; términos de datos de Google AI
+   (no-training/retención) a confirmar por Dirección; evaluar migrar a `@google/genai` oficial.
+6. **Formato de citas de Gemini** — el fix parsea simples/grupos/rangos; ante un formato inesperado
+   el guard degrada a "sin evidencia" (fail-safe, no fuga). Monitorear tasa de `no_evidence`.
+7. **`MAIN-RECONCILIATION`** — sigue vigente; no afecta F5.2-lite (deploy manual), pero cualquier
+   cron de F5.1-b (drain/refresh) lo requiere primero.
+8. **RLS por rol de piloto** — cada piloto ve según su rol (`martin@`=admin, otros supervisor/
+   operaciones). Si a Dirección le falta visibilidad, ticket RBAC separado (no dentro de F5.2-lite).
+
+---
+
+
 > Ejecutado 2026-07-03 (UTC) bajo autorización explícita de Dirección
 > ("Autorización mini-ventana de activación Gemini"). Alcance: publicar rama F5
 > con Gemini y encender el Copilot gradual (mock → gemini) solo para pilotos.

@@ -1,5 +1,11 @@
 # F5.2-lite — VALIDATION PACK de la ventana de aplicación 0173–0175
 
+> ✅✅ **F5.2-lite CERRADA FORMALMENTE (Dirección 2026-07-03) — Gemini live para 6 pilotos.**
+> Prod `ccd9063` / deploy `6a476090946ef1abe8a1322a` (locked) · `AI_PROVIDER=gemini`
+> (`gemini-2.5-pro`). Todos los checkpoints de este pack: PASS. Sección 7 (provider real):
+> revalidada con `ai_sources=16`. Cierre y riesgos remanentes en
+> `F5-GEMINI-ACTIVATION-EXECUTION-LOG.md`. Próximo bloque: `F5.1-b Knowledge documental / Drive / RAG`.
+
 > ✅ **EJECUTADO 2026-07-03** — resultados completos en `F5-2-LITE-EXECUTION-LOG.md`.
 > Secciones 0–6 y 8–9: PASS (checkpoints 🔴 todos verdes; C2 con identidades reales vía JWT
 > simulado + rollback).
