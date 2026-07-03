@@ -8,6 +8,7 @@ import { persistDealsSync } from "@/lib/comercial/dashboard-sync-db";
 import { reinjectedStoredReasons, buildStoredReasonsMap, checkLostReasonIntegrity } from "@/lib/comercial/sync-lost-reason";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import { requireCronAuth } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,17 +21,13 @@ const SYNC_VERSION = "2.1.0";
  * GET|POST /api/clientify/sync-deals
  * Snapshot diario de deals de Clientify → Supabase (caché + snapshots).
  * Cron 21:00 ART vía .github/workflows/clientify-dashboard-sync.yml.
- * Auth: si CRON_SECRET está seteado, exige Authorization: Bearer <secret>.
- * `?dry=1` recorre y reporta sin escribir. Status: 401 cron · 200 ok · 502 error · 503 sin key.
+ * Auth F4.4-E2: FAIL-CLOSED vía requireCronAuth() — 503 sin CRON_SECRET,
+ * 401 Bearer inválido (timing-safe). El workflow de GH Actions ya envía el Bearer.
+ * `?dry=1` recorre y reporta sin escribir. Status: 503/401 auth · 200 ok · 502 error · 503 sin key.
  */
 async function handle(req: Request): Promise<Response> {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization") || "";
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
-  }
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
   if (!env.clientify.configured) {
     return NextResponse.json({ ok: false, error: "CLIENTIFY_API_KEY no configurada" }, { status: 503 });
   }

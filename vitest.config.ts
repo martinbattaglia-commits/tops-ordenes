@@ -20,6 +20,7 @@ export default defineConfig({
       "src/lib/erp/**/*.test.ts",
       "src/lib/knowledge/**/*.test.ts",
       "src/lib/connect/**/*.test.ts",
+      "src/lib/whatsapp/**/*.test.ts",
       "src/lib/notifications/**/*.test.ts",
       "src/lib/profile/**/*.test.ts",
       "src/lib/udie/**/*.test.ts",
