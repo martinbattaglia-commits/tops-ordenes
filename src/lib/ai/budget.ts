@@ -26,7 +26,11 @@ export function computeBudgetState(requestsToday: number, limit: number): Budget
   };
 }
 
-/** Inicio del día en hora local del server (suficiente para un límite diario). */
+/** Inicio del día en hora local del server (suficiente para un límite diario).
+ *  NOTA: en prod el host corre en UTC → la ventana diaria resetea a medianoche
+ *  UTC (21:00 ART). Es una propiedad del contador diario (independiente del
+ *  `expires_at` de los overrides, que es UTC-absoluto); solo mueve la HORA del
+ *  reset, nunca ensancha el límite. */
 export function startOfTodayIso(now = new Date()): string {
   const d = new Date(now);
   d.setHours(0, 0, 0, 0);
@@ -81,18 +85,36 @@ export async function checkMonthlyBudget(
 }
 
 /** Chequea y consume una unidad de presupuesto. En real: cuenta ai_messages
- *  propios del día (role='user') vía RLS. */
+ *  PROPIOS del día (role='user') con filtro EXPLÍCITO por user_id — NUNCA se
+ *  apoya en la RLS para acotar las filas: la policy de ai_messages es
+ *  `(user_id = auth.uid() OR is_admin())`, así que para un admin el conteo sin
+ *  filtro devolvería mensajes de TERCEROS (global), no los suyos (bug F5).
+ *  El límite diario se resuelve por usuario vía ai_daily_limit_for() (override
+ *  vigente → default). Fail-closed: ante cualquier duda, el default (más bajo). */
 export async function checkBudget(
   supabase: SupabaseClient | null,
   userKey: string
 ): Promise<BudgetState> {
-  const limit = env.ai.limits.requestsPerDay;
+  const defaultLimit = env.ai.limits.requestsPerDay;
   if (!supabase) {
-    return computeBudgetState(demoCount(userKey) - 1, limit);
+    return computeBudgetState(demoCount(userKey) - 1, defaultLimit);
   }
+  // Límite efectivo del usuario actual (override vigente si existe). Fail-closed:
+  // si la función no está o falla, se usa el default (nunca uno más permisivo).
+  let limit = defaultLimit;
+  const { data: limitData, error: limitError } = await supabase.rpc(
+    "ai_daily_limit_for",
+    { p_default: defaultLimit }
+  );
+  if (!limitError) {
+    const resolved = Number(limitData);
+    if (Number.isFinite(resolved) && resolved > 0) limit = resolved;
+  }
+  // Conteo SIEMPRE personal: filtro explícito por user_id (no depende de la RLS).
   const { count, error } = await supabase
     .from("ai_messages")
     .select("id", { count: "exact", head: true })
+    .eq("user_id", userKey)
     .eq("role", "user")
     .gte("created_at", startOfTodayIso());
   if (error) {
