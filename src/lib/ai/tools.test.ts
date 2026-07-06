@@ -14,7 +14,7 @@ import {
 import { TOOL_NAMES } from "./types";
 import { validateToolCall, ToolArgsError } from "./data";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
-import { NO_EVIDENCE } from "./guardrails";
+import { METADATA_CARD_ENTITY_TYPES, NO_EVIDENCE } from "./guardrails";
 
 describe("catálogo cerrado read-only", () => {
   it("todas las tools declaradas existen y ninguna extra", () => {
@@ -82,6 +82,29 @@ describe("validación de args (zod antes de la RPC)", () => {
     });
     const rpcArgs = TOOLS.incidents_overview.toRpcArgs(args);
     expect(rpcArgs).toMatchObject({ p_severidades: ["critica"], p_limit: 30 });
+  });
+
+  // P1b (fix/f5-2): `limit` es un tope de resultados, no un arg semántico. Un
+  // límite fuera de rango del modelo (Gemini mandó limit>50 → crash real en prod)
+  // se CLAMPEA a [1,50], no rompe el turno. La RPC ya re-clampa igual.
+  it("clampa limit fuera de rango en vez de tirar (no crashea el turno)", () => {
+    const hi = validateToolCall({ tool: "incidents_overview", args: { limit: 100 } });
+    expect(hi.limit).toBe(50);
+    const lo = validateToolCall({ tool: "tasks_overview", args: { scope: "abiertas", limit: -3 } });
+    expect(lo.limit).toBe(1);
+    // válido dentro de rango: intacto.
+    const ok = validateToolCall({ tool: "incidents_overview", args: { limit: 12 } });
+    expect(ok.limit).toBe(12);
+  });
+
+  it("args SEMÁNTICOS fuera de rango siguen siendo error duro (no se clampan)", () => {
+    // hours/dias tienen significado para la pregunta del usuario → error, no clamp.
+    expect(() =>
+      validateToolCall({ tool: "ops_digest", args: { hours: 10000 } })
+    ).toThrow(ToolArgsError);
+    expect(() =>
+      validateToolCall({ tool: "tasks_overview", args: { scope: "todas" } })
+    ).toThrow(ToolArgsError);
   });
 });
 
@@ -196,6 +219,149 @@ describe("F5.1-b.0.1 · tools documentales nuevas", () => {
       for (const verb of WRITE_VERBS_DENYLIST) {
         expect(name).not.toContain(verb);
         expect(spec.rpc).not.toContain(verb);
+      }
+    }
+  });
+});
+
+// ── P2 (fix/f5-2): dominios que antes NO tenían tool (facturas/OC/proveedores) ─
+describe("P2 · deep-links de facturas/OC/proveedores (entityUrl)", () => {
+  it("mapea los nuevos entity_types a rutas internas reales", () => {
+    expect(entityUrl("customer_invoice", "A 2-21")).toBe("/billing");
+    expect(entityUrl("supplier_invoice", "FC A 00345")).toBe("/compras/facturas");
+    expect(entityUrl("purchase_order", "OC-2026-0371")).toBe("/compras/ordenes");
+    expect(entityUrl("supplier", "PROV#abc")).toBe("/compras/proveedores");
+  });
+  it("sin public_id → null (nunca inventa URL)", () => {
+    expect(entityUrl("customer_invoice", null)).toBeNull();
+    expect(entityUrl("purchase_order", null)).toBeNull();
+  });
+  it("los nuevos entity_types NO son fichas de metadata documental (no bajo el guard)", () => {
+    // facturas/OC/proveedores son registros estructurados (como incidentes/tareas),
+    // NO documentos — el guard metadata-vs-contenido no debe tocarlos.
+    for (const t of ["customer_invoice", "supplier_invoice", "purchase_order", "supplier"]) {
+      expect(METADATA_CARD_ENTITY_TYPES.has(t)).toBe(false);
+    }
+  });
+});
+
+describe("P2 · customer_invoices_overview", () => {
+  it("defaults + mapeo de args", () => {
+    expect(TOOLS.customer_invoices_overview.toRpcArgs({})).toEqual({
+      p_mode: "recientes",
+      p_query: null,
+      p_limit: 30,
+    });
+    expect(
+      TOOLS.customer_invoices_overview.toRpcArgs({ mode: "ultima", query: "ACME", limit: 5 })
+    ).toEqual({ p_mode: "ultima", p_query: "ACME", p_limit: 5 });
+  });
+  it("rowToChunk: factura emitida con fuente /billing", () => {
+    const chunk = TOOLS.customer_invoices_overview.rowToChunk({
+      public_id: "FACTURA_A 2-21",
+      razon_social: "ACME SA",
+      total: "2118710.00",
+      fecha: "2026-07-01",
+      estado: "AUTORIZADO_ARCA",
+      detalle: "Factura · cliente ACME SA · total ARS 2.118.710,00 · AUTORIZADO_ARCA",
+    });
+    expect(chunk.entityType).toBe("customer_invoice");
+    expect(chunk.url).toBe("/billing");
+    expect(chunk.publicId).toBe("FACTURA_A 2-21");
+    expect(chunk.date).toBe("2026-07-01");
+    expect(chunk.title.toLowerCase()).toContain("acme");
+  });
+});
+
+describe("P2 · supplier_invoices_overview", () => {
+  it("defaults + mapeo de args", () => {
+    expect(TOOLS.supplier_invoices_overview.toRpcArgs({})).toEqual({
+      p_mode: "recientes",
+      p_query: null,
+      p_limit: 30,
+    });
+    expect(
+      TOOLS.supplier_invoices_overview.toRpcArgs({ mode: "pendientes_aprobacion", limit: 10 })
+    ).toEqual({ p_mode: "pendientes_aprobacion", p_query: null, p_limit: 10 });
+  });
+  it("rowToChunk: factura de proveedor con fuente /compras/facturas", () => {
+    const chunk = TOOLS.supplier_invoices_overview.rowToChunk({
+      public_id: "FACTURA_A 00345",
+      proveedor: "Proveedor Ficticio SRL",
+      total: "12100.00",
+      fecha: "2026-06-28",
+      estado: "pendiente",
+      detalle: "Factura de proveedor · Proveedor Ficticio SRL · total ARS 12.100,00 · cargada",
+    });
+    expect(chunk.entityType).toBe("supplier_invoice");
+    expect(chunk.url).toBe("/compras/facturas");
+    expect(chunk.date).toBe("2026-06-28");
+  });
+});
+
+describe("P2 · purchase_orders_overview", () => {
+  it("defaults + mapeo de args", () => {
+    expect(TOOLS.purchase_orders_overview.toRpcArgs({})).toEqual({
+      p_mode: "recientes",
+      p_query: null,
+      p_limit: 30,
+    });
+    expect(TOOLS.purchase_orders_overview.toRpcArgs({ mode: "ultima" })).toEqual({
+      p_mode: "ultima",
+      p_query: null,
+      p_limit: 30,
+    });
+  });
+  it("rowToChunk: OC con fuente /compras/ordenes", () => {
+    const chunk = TOOLS.purchase_orders_overview.rowToChunk({
+      public_id: "OC-2026-0371",
+      proveedor: "Proveedor Ficticio SRL",
+      total: "45000.00",
+      fecha: "2026-07-06",
+      estado: "firmada",
+      detalle: "Orden de compra · Proveedor Ficticio SRL · total ARS 45.000,00 · firmada",
+    });
+    expect(chunk.entityType).toBe("purchase_order");
+    expect(chunk.url).toBe("/compras/ordenes");
+    expect(chunk.publicId).toBe("OC-2026-0371");
+    expect(chunk.date).toBe("2026-07-06");
+  });
+});
+
+describe("P2 · suppliers_overview", () => {
+  it("defaults + mapeo de args", () => {
+    expect(TOOLS.suppliers_overview.toRpcArgs({})).toEqual({ p_query: null, p_limit: 15 });
+    expect(TOOLS.suppliers_overview.toRpcArgs({ query: "ACME", limit: 5 })).toEqual({
+      p_query: "ACME",
+      p_limit: 5,
+    });
+  });
+  it("rowToChunk: proveedor con fuente /compras/proveedores", () => {
+    const chunk = TOOLS.suppliers_overview.rowToChunk({
+      public_id: "PROV#abc12345",
+      razon: "Proveedor Ficticio SRL",
+      categoria: "insumos",
+      detalle: "Proveedor · insumos · activo",
+    });
+    expect(chunk.entityType).toBe("supplier");
+    expect(chunk.url).toBe("/compras/proveedores");
+    expect(chunk.title.toLowerCase()).toContain("proveedor ficticio");
+  });
+});
+
+describe("P2 · las 4 tools nuevas son ai_* read-only", () => {
+  it("allowlist ai_* + denylist de verbos de escritura", () => {
+    for (const name of [
+      "customer_invoices_overview",
+      "supplier_invoices_overview",
+      "purchase_orders_overview",
+      "suppliers_overview",
+    ] as const) {
+      const spec = TOOLS[name];
+      expect(spec.rpc.startsWith("ai_")).toBe(true);
+      for (const verb of WRITE_VERBS_DENYLIST) {
+        expect(name.toLowerCase()).not.toContain(verb);
+        expect(spec.rpc.toLowerCase()).not.toContain(verb);
       }
     }
   });

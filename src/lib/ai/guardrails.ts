@@ -144,6 +144,51 @@ export function isEmptyAnswer(answer: string): boolean {
   return answer.trim().length === 0;
 }
 
+// ── Vacío honesto vs fallback anti-alucinación (P1a · fix/f5-2) ──────────────
+// El motor colapsaba en UN solo NO_EVIDENCE tres casos distintos: (1) la tool
+// corrió y devolvió 0 filas, (2) el modelo no pudo sustanciar, (3) el guard
+// degradó. Para (1) — la heladera vacía — el mensaje honesto es "no encontré X
+// para esta consulta", NO el fallback genérico. Esto NO relaja el guard: es más
+// preciso. Habla de LA CONSULTA (no afirma que no exista nada del dominio con
+// otros filtros): el modelo eligió los filtros, así que solo garantizamos que
+// ESTA búsqueda determinística no devolvió registros.
+
+const EMPTY_MESSAGE_BY_TOOL: Record<string, string> = {
+  incidents_overview: "No encontré incidentes que coincidan con tu consulta en Nexus.",
+  tasks_overview: "No encontré tareas que coincidan con tu consulta en Nexus.",
+  workflows_stuck: "No encontré workflows trabados que coincidan con tu consulta en Nexus.",
+  contracts_overview: "No encontré contratos que coincidan con tu consulta en Nexus.",
+  docs_browse: "No encontré documentos ni fichas que coincidan con tu consulta en Nexus.",
+  compliance_pending:
+    "No encontré documentos ni casos de compliance que coincidan con tu consulta en Nexus.",
+  customer_invoices_overview:
+    "No encontré facturas emitidas que coincidan con tu consulta en Nexus.",
+  supplier_invoices_overview:
+    "No encontré facturas de proveedor que coincidan con tu consulta en Nexus.",
+  purchase_orders_overview:
+    "No encontré órdenes de compra que coincidan con tu consulta en Nexus.",
+  suppliers_overview: "No encontré proveedores que coincidan con tu consulta en Nexus.",
+  clients_health: "No encontré clientes con incidentes o tareas abiertos en Nexus.",
+  ops_digest: "No encontré actividad operativa en Nexus para el período consultado.",
+  my_agenda:
+    "No tenés incidentes, tareas ni notificaciones pendientes asignadas en Nexus.",
+};
+
+/** Mensaje genérico (dominios mixtos, sin tools o tool sin mapa): honesto, no el
+ *  fallback anti-alucinación. */
+const EMPTY_GENERIC = "No encontré registros en Nexus que coincidan con tu consulta.";
+
+/** P1a: mensaje honesto cuando la(s) tool(s) corrieron y devolvieron 0 filas.
+ *  Único dominio → mensaje específico; mixto/desconocido/sin tools → genérico.
+ *  Herramientas repetidas (thrashing del modelo) colapsan por `Set`. */
+export function emptyResultMessage(toolsUsed: string[]): string {
+  const distinct = [...new Set(toolsUsed)];
+  if (distinct.length === 1) {
+    return EMPTY_MESSAGE_BY_TOOL[distinct[0]] ?? EMPTY_GENERIC;
+  }
+  return EMPTY_GENERIC;
+}
+
 // ── Guard estructural metadata-vs-contenido (F5.1-b.0 · D5 / hallazgo H6) ────
 // b.0 proyecta FICHAS DE METADATA de documentos (título, categoría, fechas), NO
 // el contenido del PDF. Como esas fichas tienen un `body` citable, una pregunta

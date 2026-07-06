@@ -18,6 +18,12 @@ export const TOOL_NAMES = [
   "clients_health",
   "ops_digest",
   "my_agenda",
+  // P2 (fix/f5-2): dominios financieros/compras que antes NO tenían tool ni
+  // proyección → el Copilot no podía responder "última factura/OC/proveedor".
+  "customer_invoices_overview",
+  "supplier_invoices_overview",
+  "purchase_orders_overview",
+  "suppliers_overview",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

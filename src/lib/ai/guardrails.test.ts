@@ -6,6 +6,7 @@ import {
   NO_EVIDENCE,
   buildContext,
   chunkToBlock,
+  emptyResultMessage,
   extractCitedIds,
   isEmptyAnswer,
   isMetadataContentRisk,
@@ -392,5 +393,66 @@ describe("F5.1-b.0.1.1 · isEmptyAnswer", () => {
     expect(isEmptyAnswer("   \n\t ")).toBe(true);
     expect(isEmptyAnswer("hola [S1]")).toBe(false);
     expect(isEmptyAnswer(NO_EVIDENCE)).toBe(false);
+  });
+});
+
+// ── P1a (fix/f5-2-copilot-context-retrieval) ────────────────────────────────
+// "tool corrió y devolvió 0 filas" ≠ "no puedo responder". El mensaje honesto de
+// vacío distingue la heladera-vacía del fallback anti-alucinación, SIN afirmar que
+// no existan registros con otros filtros (habla de LA CONSULTA, no del universo).
+describe("emptyResultMessage — vacío honesto por dominio (P1a)", () => {
+  it("nunca es el fallback genérico anti-alucinación", () => {
+    for (const tools of [
+      ["incidents_overview"],
+      ["tasks_overview"],
+      ["contracts_overview"],
+      ["compliance_pending"],
+      ["customer_invoices_overview"],
+      ["supplier_invoices_overview"],
+      ["purchase_orders_overview"],
+      ["suppliers_overview"],
+      ["my_agenda"],
+      ["search_knowledge"],
+      [],
+    ]) {
+      expect(emptyResultMessage(tools), tools.join(",")).not.toBe(NO_EVIDENCE);
+      expect(emptyResultMessage(tools).length, tools.join(",")).toBeGreaterThan(10);
+    }
+  });
+
+  it("es específico del dominio consultado", () => {
+    expect(emptyResultMessage(["incidents_overview"]).toLowerCase()).toContain("incidente");
+    expect(emptyResultMessage(["tasks_overview"]).toLowerCase()).toContain("tarea");
+    expect(emptyResultMessage(["contracts_overview"]).toLowerCase()).toContain("contrato");
+    expect(emptyResultMessage(["compliance_pending"]).toLowerCase()).toContain("compliance");
+    expect(emptyResultMessage(["customer_invoices_overview"]).toLowerCase()).toContain("factura");
+    expect(emptyResultMessage(["purchase_orders_overview"]).toLowerCase()).toContain("compra");
+    expect(emptyResultMessage(["suppliers_overview"]).toLowerCase()).toContain("proveedor");
+  });
+
+  it("factura de cliente vs de proveedor se distinguen", () => {
+    expect(emptyResultMessage(["supplier_invoices_overview"]).toLowerCase()).toContain("proveedor");
+    expect(emptyResultMessage(["customer_invoices_overview"]).toLowerCase()).not.toContain("proveedor");
+  });
+
+  it("my_agenda habla en primera persona (agenda del usuario)", () => {
+    expect(emptyResultMessage(["my_agenda"]).toLowerCase()).toMatch(/tenés|pendiente|asignad/);
+  });
+
+  it("herramientas repetidas (thrashing del modelo) colapsan a un solo dominio", () => {
+    const repeated = emptyResultMessage([
+      "incidents_overview",
+      "incidents_overview",
+      "incidents_overview",
+      "incidents_overview",
+    ]);
+    expect(repeated).toBe(emptyResultMessage(["incidents_overview"]));
+  });
+
+  it("dominios mixtos o sin tools → mensaje genérico honesto (no el fallback)", () => {
+    const mixed = emptyResultMessage(["incidents_overview", "contracts_overview"]);
+    expect(mixed).not.toBe(NO_EVIDENCE);
+    expect(mixed.toLowerCase()).toContain("nexus");
+    expect(emptyResultMessage([])).not.toBe(NO_EVIDENCE);
   });
 });

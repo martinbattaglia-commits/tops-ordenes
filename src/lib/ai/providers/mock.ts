@@ -71,6 +71,36 @@ function pickTools(question: string): ToolCall[] {
     calls.push({ tool: "contracts_overview", args: { mode } });
     return calls;
   }
+  // P2 (fix/f5-2): facturas / órdenes de compra / proveedores. "factura de
+  // proveedor" matchea ambos → supplier gana; "factura" a secas → customer.
+  if (/factura|facturamos|facturaci|comprobante/.test(q)) {
+    const ultima = /ultim|last/.test(q);
+    if (/proveedor/.test(q)) {
+      const mode = /pendient|aprobaci/.test(q)
+        ? "pendientes_aprobacion"
+        : ultima
+          ? "ultima"
+          : "recientes";
+      calls.push({ tool: "supplier_invoices_overview", args: { mode } });
+    } else {
+      calls.push({
+        tool: "customer_invoices_overview",
+        args: { mode: ultima ? "ultima" : "recientes" },
+      });
+    }
+    return calls;
+  }
+  if (/orden(es)? de compra|\boc\b|\bocs\b/.test(q)) {
+    calls.push({
+      tool: "purchase_orders_overview",
+      args: { mode: /ultim|last/.test(q) ? "ultima" : "recientes" },
+    });
+    return calls;
+  }
+  if (/proveedor/.test(q)) {
+    calls.push({ tool: "suppliers_overview", args: {} });
+    return calls;
+  }
   if (/compliance|habilitacion|vencimiento|documentacion|certificad|documentos?\b/.test(q)) {
     calls.push({ tool: "compliance_pending", args: {} });
     return calls;
@@ -157,6 +187,18 @@ export class MockProvider implements AiProvider {
         return { kind: "tool_calls", toolCalls: [{ tool: "incidents_overview", args: {} }] };
       }
       return { kind: "final", answer: "" };
+    }
+    // Harness (P1b · fix/f5-2): sentinela que fuerza un tool-call con args INVÁLIDOS
+    // (enum inexistente) → el engine debe SALTEAR la call y degradar limpio, nunca
+    // caer en outcome 'error' (reproduce el crash real de Gemini con limit>50).
+    if (norm(req.question).includes("__bad_tool_args__")) {
+      if (req.round === 1 && req.chunks.length === 0) {
+        return {
+          kind: "tool_calls",
+          toolCalls: [{ tool: "tasks_overview", args: { scope: "todas" } }],
+        };
+      }
+      return { kind: "final", answer: NO_EVIDENCE };
     }
     // Round 1 sin evidencia: pedir tools según la pregunta.
     if (req.round === 1 && req.chunks.length === 0) {

@@ -136,6 +136,74 @@ describe("flujo completo en demo mode (provider mock + fixtures)", () => {
   });
 });
 
+describe("P1a · vacío honesto: tool corrió y devolvió 0 filas (fix/f5-2)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("incidents_overview sin filas → mensaje de dominio, NO el fallback genérico", async () => {
+    // Fuerza la heladera vacía en demo: incidents_overview no devuelve filas.
+    // Reproduce el caso real de prod (0 incidentes críticos abiertos → NO_EVIDENCE
+    // engañoso). El engine debe distinguir "no hay registros" de "no puedo".
+    vi.doMock("./mock", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./mock")>();
+      return {
+        ...actual,
+        MOCK_TOOL_ROWS: { ...actual.MOCK_TOOL_ROWS, incidents_overview: [] },
+      };
+    });
+    const { askCopilot, NO_EVIDENCE } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué incidentes críticos están abiertos?"));
+    expect(res.outcome).toBe("no_evidence");
+    expect(res.answer).not.toBe(NO_EVIDENCE);
+    expect(res.answer.toLowerCase()).toContain("incidente");
+    expect(res.sources).toEqual([]);
+    vi.doUnmock("./mock");
+  });
+});
+
+describe("P2 · dominios financieros ahora responden (fix/f5-2)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'última factura emitida' → answered con fuente a /billing", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál fue la última factura emitida?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBeGreaterThan(0);
+    expect(res.sources[0].entityType).toBe("customer_invoice");
+    expect(res.sources[0].url).toBe("/billing");
+    expect(res.answer).toMatch(/\[S\d+\]/);
+  });
+
+  it("'última orden de compra' → answered con fuente a /compras/ordenes", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál fue la última orden de compra emitida?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("purchase_order");
+    expect(res.sources[0].url).toBe("/compras/ordenes");
+  });
+
+  it("'último proveedor cargado' → answered con fuente a /compras/proveedores", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál fue el último proveedor cargado?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("supplier");
+    expect(res.sources[0].url).toBe("/compras/proveedores");
+  });
+});
+
+describe("P1b · resiliencia: un tool-call con args inválidos no rompe el turno (fix/f5-2)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("args inválidos del modelo → se saltea la call, outcome NO es 'error'", async () => {
+    // Reproduce el crash real de prod: Gemini mandó limit>50 → todo el turno cayó
+    // en 'error' ("Copilot no está disponible"). Con la resiliencia, una call mala
+    // se saltea y el turno degrada limpio (no_evidence), nunca 'error'.
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("__bad_tool_args__"));
+    expect(res.outcome).not.toBe("error");
+    expect(["no_evidence", "answered"]).toContain(res.outcome);
+  });
+});
+
 describe("presupuesto (D-F5-8)", () => {
   it("corta en el límite diario con outcome budget", async () => {
     vi.stubEnv("AI_ENABLED", "1");

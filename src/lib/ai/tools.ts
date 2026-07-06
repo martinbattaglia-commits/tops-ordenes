@@ -8,7 +8,17 @@
 import { z } from "zod";
 import type { SourceChunk, ToolName } from "./types";
 
-const limit = z.number().int().min(1).max(50).optional();
+// P1b (fix/f5-2): `limit` es un TOPE DE RESULTADOS, no un argumento semántico de
+// la pregunta. Un valor fuera de rango del provider (Gemini mandó limit>50 → crash
+// real en prod, todo el turno cayó en 'error') se CLAMPEA a [1,50] en vez de tirar
+// —la RPC ya re-clampa con least(greatest(...,1),50)—. Los args SEMÁNTICOS
+// (hours/dias/daysIdle) siguen siendo error duro fuera de rango: cambiarlos alteraría
+// el significado de la consulta del usuario.
+const limit = z
+  .number()
+  .int()
+  .optional()
+  .transform((n) => (n == null ? undefined : Math.min(50, Math.max(1, n))));
 
 /** Deep-links internos conocidos. Si no hay ruta confiable → null (la UI
  *  muestra la cita sin link; nunca inventamos URLs). */
@@ -22,6 +32,12 @@ export function entityUrl(entityType: string, publicId: string | null): string |
   // módulo (no al binario de Drive): la cita es a la FICHA de metadata, no al PDF.
   if (entityType.includes("contrato") || entityType.includes("contract"))
     return "/comercial/contratos";
+  // P2 (fix/f5-2): rutas internas reales de facturación/compras (verificadas en
+  // src/app). Registros estructurados, NO documentos: no van bajo el guard metadata.
+  if (entityType === "customer_invoice") return "/billing";
+  if (entityType === "supplier_invoice") return "/compras/facturas";
+  if (entityType === "purchase_order") return "/compras/ordenes";
+  if (entityType === "supplier" || entityType === "vendor") return "/compras/proveedores";
   return null;
 }
 
@@ -333,6 +349,101 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
             : "/connect/notificaciones",
     }),
   },
+  // ── P2 (fix/f5-2): facturas emitidas / de proveedor / OC / proveedores ──────
+  // Determinístico: "último/recientes" lo calcula la RPC (order by fecha desc), el
+  // modelo solo elige el mode y redacta. Registros estructurados (no fichas): el
+  // guard metadata-vs-contenido no los toca. NUNCA exponen CUIT/contacto (la RPC
+  // proyecta solo campos de negocio; el engine re-redacta PII igual).
+  customer_invoices_overview: {
+    rpc: "ai_customer_invoices_overview",
+    description:
+      "Facturas EMITIDAS a clientes (ventas). mode: ultima | recientes | por_cliente | todas. `query` filtra por razón social del cliente o número de comprobante. Devuelve comprobante, cliente, total, fecha de emisión y estado ARCA. USALA para 'cuál fue la última factura emitida', 'facturas de <cliente>', 'qué facturamos'.",
+    schema: z.object({
+      mode: z.enum(["ultima", "recientes", "por_cliente", "todas"]).optional(),
+      query: z.string().max(120).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({
+      p_mode: a.mode ?? "recientes",
+      p_query: a.query ?? null,
+      p_limit: a.limit ?? 30,
+    }),
+    rowToChunk: (r) => ({
+      entityType: "customer_invoice",
+      entityId: s(r.public_id),
+      publicId: sn(r.public_id),
+      title: `${s(r.razon_social) || "Cliente"} · ${s(r.public_id)}`,
+      excerpt: s(r.detalle),
+      date: sn(r.fecha),
+      url: entityUrl("customer_invoice", sn(r.public_id)),
+    }),
+  },
+  supplier_invoices_overview: {
+    rpc: "ai_supplier_invoices_overview",
+    description:
+      "Facturas de PROVEEDORES (compras). mode: ultima | recientes | por_proveedor | pendientes_aprobacion | todas. `query` filtra por proveedor o número. Devuelve comprobante, proveedor, total, fecha, estado y estado de aprobación. USALA para 'última factura de proveedor', 'facturas de proveedor pendientes de aprobación'.",
+    schema: z.object({
+      mode: z
+        .enum(["ultima", "recientes", "por_proveedor", "pendientes_aprobacion", "todas"])
+        .optional(),
+      query: z.string().max(120).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({
+      p_mode: a.mode ?? "recientes",
+      p_query: a.query ?? null,
+      p_limit: a.limit ?? 30,
+    }),
+    rowToChunk: (r) => ({
+      entityType: "supplier_invoice",
+      entityId: s(r.public_id),
+      publicId: sn(r.public_id),
+      title: `${s(r.proveedor) || "Proveedor"} · ${s(r.public_id)}`,
+      excerpt: s(r.detalle),
+      date: sn(r.fecha),
+      url: entityUrl("supplier_invoice", sn(r.public_id)),
+    }),
+  },
+  purchase_orders_overview: {
+    rpc: "ai_purchase_orders_overview",
+    description:
+      "Órdenes de compra (OC) emitidas. mode: ultima | recientes | por_proveedor | todas. `query` filtra por proveedor o public_id (OC-####). Devuelve OC, proveedor, total, fecha y estado. USALA para 'cuál fue la última orden de compra', 'OC de <proveedor>'.",
+    schema: z.object({
+      mode: z.enum(["ultima", "recientes", "por_proveedor", "todas"]).optional(),
+      query: z.string().max(120).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({
+      p_mode: a.mode ?? "recientes",
+      p_query: a.query ?? null,
+      p_limit: a.limit ?? 30,
+    }),
+    rowToChunk: (r) => ({
+      entityType: "purchase_order",
+      entityId: s(r.public_id),
+      publicId: sn(r.public_id),
+      title: `${s(r.public_id)}${r.proveedor ? ` · ${s(r.proveedor)}` : ""}`,
+      excerpt: s(r.detalle),
+      date: sn(r.fecha),
+      url: entityUrl("purchase_order", sn(r.public_id)),
+    }),
+  },
+  suppliers_overview: {
+    rpc: "ai_suppliers_overview",
+    description:
+      "Proveedores (vendors) cargados. `query` filtra por razón social o categoría; sin query, ordena por más recientes (el primero = último proveedor cargado). Solo razón social, categoría y estado — NUNCA CUIT ni datos de contacto. USALA para 'cuál fue el último proveedor cargado', 'proveedores de <categoría>'.",
+    schema: z.object({ query: z.string().max(120).optional(), limit }),
+    toRpcArgs: (a) => ({ p_query: a.query ?? null, p_limit: a.limit ?? 15 }),
+    rowToChunk: (r) => ({
+      entityType: "supplier",
+      entityId: s(r.public_id) || s(r.razon),
+      publicId: sn(r.public_id),
+      title: s(r.razon) || "Proveedor",
+      excerpt: s(r.detalle),
+      date: null,
+      url: entityUrl("supplier", sn(r.public_id)),
+    }),
+  },
 };
 
 // ── JSON Schemas del catálogo (formato Anthropic Messages API tools) ─────────
@@ -411,6 +522,28 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   clients_health: js({ limit: jsLimit }),
   ops_digest: js({ hours: { type: "integer", minimum: 1, maximum: 168 }, limit: jsLimit }),
   my_agenda: js({ limit: jsLimit }),
+  customer_invoices_overview: js({
+    mode: { type: "string", enum: ["ultima", "recientes", "por_cliente", "todas"] },
+    query: { type: "string", description: "Filtro por razón social del cliente o comprobante" },
+    limit: jsLimit,
+  }),
+  supplier_invoices_overview: js({
+    mode: {
+      type: "string",
+      enum: ["ultima", "recientes", "por_proveedor", "pendientes_aprobacion", "todas"],
+    },
+    query: { type: "string", description: "Filtro por proveedor o número de comprobante" },
+    limit: jsLimit,
+  }),
+  purchase_orders_overview: js({
+    mode: { type: "string", enum: ["ultima", "recientes", "por_proveedor", "todas"] },
+    query: { type: "string", description: "Filtro por proveedor o public_id (OC-####)" },
+    limit: jsLimit,
+  }),
+  suppliers_overview: js({
+    query: { type: "string", description: "Filtro por razón social o categoría del proveedor" },
+    limit: jsLimit,
+  }),
 };
 
 /** Catálogo en el formato `tools` de la Messages API (para el provider real). */

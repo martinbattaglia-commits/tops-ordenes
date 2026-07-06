@@ -12,6 +12,7 @@ import { checkGate } from "./gate";
 import {
   NO_EVIDENCE,
   buildContext,
+  emptyResultMessage,
   isEmptyAnswer,
   isMetadataContentRisk,
   redactPii,
@@ -20,7 +21,7 @@ import {
 } from "./guardrails";
 import { getProvider } from "./provider";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
-import { executeTool } from "./data";
+import { ToolArgsError, executeTool } from "./data";
 import type {
   CopilotAnswer,
   CopilotRequest,
@@ -80,6 +81,7 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
   let outcome: CopilotAnswer["outcome"] = "no_evidence";
   let errorDetail: string | null = null;
   let retriedCitations = false;
+  let skippedToolArgs = 0; // P1b: tool-calls salteadas por args inválidos.
 
   try {
     const maxRounds = env.ai.limits.toolRoundsPerRequest;
@@ -104,7 +106,26 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
       if (res.kind === "tool_calls" && round <= maxRounds) {
         const calls: ToolCall[] = res.toolCalls.slice(0, MAX_TOOL_CALLS_PER_ROUND);
         for (const call of calls) {
-          const results = await executeTool(call);
+          let results;
+          try {
+            results = await executeTool(call);
+          } catch (toolErr) {
+            // P1b (fix/f5-2): una call con args inválidos del provider (p.ej. Gemini
+            // fuera de rango o enum inexistente) se SALTEA, no rompe el turno. Antes
+            // caía en el catch externo → outcome 'error' ("Copilot no disponible")
+            // por un solo mal argumento (crash real observado en ai_messages). Los
+            // errores de RPC ya los absorbe executeTool devolviendo []; acá solo
+            // llegan ToolArgsError. No se suma a toolsUsed (la tool no corrió).
+            if (toolErr instanceof ToolArgsError) {
+              skippedToolArgs += 1;
+              console.warn(
+                `[ai/engine] tool ${call.tool} salteada por args inválidos:`,
+                toolErr.message
+              );
+              continue;
+            }
+            throw toolErr;
+          }
           toolsUsed.push(call.tool);
           for (const partial of results) {
             chunks.push({
@@ -181,6 +202,27 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
       outcome = "no_evidence";
       errorDetail = "riesgo metadata-vs-contenido (b.0 no proyecta el texto del documento)";
     }
+  }
+
+  // P1a (fix/f5-2): distinguir "la tool corrió y devolvió 0 filas" (heladera vacía)
+  // del fallback anti-alucinación. Si el turno terminó SIN evidencia pero se corrieron
+  // tools que no trajeron filas, el mensaje honesto es de dominio ("no encontré
+  // incidentes que coincidan con tu consulta"), NO el genérico. Esto NO relaja el
+  // guard: es más preciso. Solo aplica cuando `answer` es EXACTAMENTE el fallback y no
+  // se recuperó ningún chunk (chunks>0 = degradación por citas/metadata, se respeta).
+  if (
+    outcome === "no_evidence" &&
+    answer === NO_EVIDENCE &&
+    chunks.length === 0 &&
+    toolsUsed.length > 0
+  ) {
+    answer = emptyResultMessage(toolsUsed);
+    errorDetail = errorDetail ? `${errorDetail}; empty_tool_result` : "empty_tool_result";
+  }
+  // Rastro de observabilidad para args salteados (P1b), aunque el turno haya podido
+  // responder con otras tools.
+  if (skippedToolArgs > 0 && errorDetail === null) {
+    errorDetail = `skipped_invalid_tool_args=${skippedToolArgs}`;
   }
 
   // Fuentes efectivamente citadas (solo esas van a UI y auditoría).

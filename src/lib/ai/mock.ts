@@ -192,4 +192,46 @@ export const MOCK_TOOL_ROWS: Record<ToolName, Row[]> = {
       created_at: "2026-07-02T16:30:00Z",
     },
   ],
+  // P2 (fix/f5-2): facturas emitidas / de proveedor / OC / proveedores (ficticio).
+  customer_invoices_overview: [
+    {
+      public_id: "FACTURA_A 2-45",
+      razon_social: "Distribuidora Ficticia SRL",
+      total: "450000.00",
+      fecha: "2026-07-01",
+      estado: "AUTORIZADO_ARCA",
+      detalle:
+        "Factura · cliente Distribuidora Ficticia SRL · total ARS 450.000,00 · estado ARCA AUTORIZADO_ARCA · emitida 2026-07-01",
+    },
+  ],
+  supplier_invoices_overview: [
+    {
+      public_id: "FACTURA_A 00345",
+      proveedor: "Insumos Demo SA",
+      total: "12100.00",
+      fecha: "2026-06-28",
+      estado: "pendiente",
+      detalle:
+        "Factura de proveedor · Insumos Demo SA · total ARS 12.100,00 · estado pendiente · aprobación cargada · emitida 2026-06-28",
+    },
+  ],
+  purchase_orders_overview: [
+    {
+      public_id: "OC-2026-0371",
+      proveedor: "Insumos Demo SA",
+      total: "89000.00",
+      fecha: "2026-07-06",
+      estado: "firmada",
+      detalle:
+        "Orden de compra · Insumos Demo SA · total ARS 89.000,00 · estado firmada · 2026-07-06",
+    },
+  ],
+  suppliers_overview: [
+    {
+      public_id: "PROV#demo1234",
+      razon: "Insumos Demo SA",
+      categoria: "insumos",
+      detalle: "Proveedor · categoría insumos · activo",
+    },
+  ],
 };
