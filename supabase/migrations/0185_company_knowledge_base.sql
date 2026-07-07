@@ -169,6 +169,13 @@ language sql stable security invoker set search_path = public, pg_temp as $$
       or d.tsv @@ websearch_to_tsquery('spanish', q.query)
       or d.title   ilike '%' || q.query || '%'
       or d.summary ilike '%' || q.query || '%'
+      -- OR por token (paridad con el demoFilter del código): recall para preguntas
+      -- comparativas/multi-tema ("diferencia entre ANMAT y cargas generales").
+      or exists (
+        select 1 from unnest(regexp_split_to_array(lower(q.query), '[^[:alnum:]]+')) as tok
+        where length(tok) >= 4
+          and (d.title ilike '%'||tok||'%' or d.summary ilike '%'||tok||'%' or d.content ilike '%'||tok||'%')
+      )
     )
   order by
     case when q.query is null then 0
