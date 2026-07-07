@@ -1,7 +1,7 @@
 // F5.2-lite · Tests estructurales del catálogo: read-only garantizado por
 // construcción (D-F5-2), args validados, sin service_role en el módulo.
 
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -145,18 +145,41 @@ describe("entityUrl — deep-links (F5.1-b.0 · D6 / A5)", () => {
     expect(entityUrl("contrato", "CTR#abc123")).toBe("/comercial/contratos");
     expect(entityUrl("contract", "X")).toBe("/comercial/contratos");
   });
-  it("compliance_documento → /compliance (regresión, sigue mapeando)", () => {
-    expect(entityUrl("compliance_documento", "MAG-04#abc")).toBe("/compliance");
+  it("compliance_documento/caso → /anmat (Compliance Cockpit; /compliance NO existe → 404)", () => {
+    expect(entityUrl("compliance_documento", "MAG-04#abc")).toBe("/anmat");
+    expect(entityUrl("compliance_caso", "CASO-1")).toBe("/anmat");
   });
   it("incidente y tarea se mantienen", () => {
     expect(entityUrl("connect_incident", "INC-2026-0001")).toBe("/connect/incidentes");
     expect(entityUrl("connect_task", "TSK-2026-0002")).toBe("/connect/tareas");
   });
-  it("sin public_id → null (nunca inventa URL)", () => {
-    expect(entityUrl("contrato", null)).toBeNull();
+  it("entity_type CONOCIDO sin public_id → ruta del MÓDULO (chip clickeable, no 404)", () => {
+    // Regresión chips: ai_compliance_pending devuelve ref=null en prod (15/15
+    // documentos) → exigir publicId dejaba url=null → chip sin link. Todos los
+    // deep-links actuales son a nivel MÓDULO: el entityType alcanza.
+    expect(entityUrl("contrato", null)).toBe("/comercial/contratos");
+    expect(entityUrl("compliance_documento", null)).toBe("/anmat");
+    expect(entityUrl("compliance_caso", null)).toBe("/anmat");
+    expect(entityUrl("customer_invoice", null)).toBe("/billing");
+    expect(entityUrl("supplier_invoice", null)).toBe("/compras/facturas");
+    expect(entityUrl("purchase_order", null)).toBe("/compras/ordenes");
+    expect(entityUrl("supplier", null)).toBe("/compras/proveedores");
+    expect(entityUrl("connect_incident", null)).toBe("/connect/incidentes");
+    expect(entityUrl("connect_task", null)).toBe("/connect/tareas");
   });
-  it("entity_type desconocido → null", () => {
+  it("entity_type DESCONOCIDO → null (nunca inventa URL; el chip queda sin link)", () => {
     expect(entityUrl("cliente", "x")).toBeNull();
+    expect(entityUrl("cliente", null)).toBeNull();
+  });
+  it("compliance_pending con ref NULL (caso real prod) → chip con url /anmat", () => {
+    const chunk = TOOLS.compliance_pending.rowToChunk({
+      kind: "documento",
+      ref: null,
+      titulo: "Incendio · Póliza",
+      estado: "vencido",
+    });
+    expect(chunk.url).toBe("/anmat");
+    expect(chunk.publicId).toBeNull();
   });
 });
 
@@ -209,7 +232,7 @@ describe("F5.1-b.0.1 · tools documentales nuevas", () => {
       entity_date: "2026-08-15T03:00:00Z",
     });
     expect(chunk.entityType).toBe("compliance_documento");
-    expect(chunk.url).toBe("/compliance");
+    expect(chunk.url).toBe("/anmat");
   });
 
   it("las 2 tools nuevas usan RPC ai_* de solo lectura (allowlist/denylist)", () => {
@@ -232,9 +255,9 @@ describe("P2 · deep-links de facturas/OC/proveedores (entityUrl)", () => {
     expect(entityUrl("purchase_order", "OC-2026-0371")).toBe("/compras/ordenes");
     expect(entityUrl("supplier", "PROV#abc")).toBe("/compras/proveedores");
   });
-  it("sin public_id → null (nunca inventa URL)", () => {
-    expect(entityUrl("customer_invoice", null)).toBeNull();
-    expect(entityUrl("purchase_order", null)).toBeNull();
+  it("sin public_id → ruta del módulo (link a nivel módulo, no 404)", () => {
+    expect(entityUrl("customer_invoice", null)).toBe("/billing");
+    expect(entityUrl("purchase_order", null)).toBe("/compras/ordenes");
   });
   it("los nuevos entity_types NO son fichas de metadata documental (no bajo el guard)", () => {
     // facturas/OC/proveedores son registros estructurados (como incidentes/tareas),
@@ -364,5 +387,43 @@ describe("P2 · las 4 tools nuevas son ai_* read-only", () => {
         expect(spec.rpc.toLowerCase()).not.toContain(verb);
       }
     }
+  });
+});
+
+// ── Anti-404 (fix/f5-2): todo deep-link debe resolver a una page.tsx REAL. Este
+// test habría atrapado el bug de compliance → /compliance (ruta inexistente). ─────
+describe("deep-links resuelven a rutas reales del App Router (anti-404)", () => {
+  const APP = join(process.cwd(), "src", "app", "(app)");
+  const routeFileExists = (url: string | null): boolean =>
+    !!url && existsSync(join(APP, ...url.replace(/^\//, "").split("/"), "page.tsx"));
+
+  it("cada entity_type conocido mapea a una page.tsx existente (no 404)", () => {
+    const cases: Array<[string, string | null]> = [
+      ["connect_incident", "INC-2026-0001"],
+      ["connect_task", "TSK-2026-0002"],
+      ["compliance_documento", null],
+      ["compliance_caso", "CASO-1"],
+      ["contrato", null],
+      ["customer_invoice", "A 2-21"],
+      ["supplier_invoice", null],
+      ["purchase_order", "OC-2026-0371"],
+      ["supplier", null],
+    ];
+    for (const [et, pid] of cases) {
+      const url = entityUrl(et, pid);
+      expect(url, `${et} sin URL`).not.toBeNull();
+      expect(routeFileExists(url), `${et} → ${url} no existe como page.tsx`).toBe(true);
+    }
+  });
+
+  it("URLs de tools resuelven a rutas reales (compliance_pending)", () => {
+    const chunk = TOOLS.compliance_pending.rowToChunk({
+      kind: "documento",
+      ref: "MAG-04",
+      titulo: "Habilitación municipal",
+      estado: "por_vencer",
+    });
+    expect(chunk.entityType).toBe("compliance_documento");
+    expect(routeFileExists(chunk.url), `compliance_pending → ${chunk.url}`).toBe(true);
   });
 });

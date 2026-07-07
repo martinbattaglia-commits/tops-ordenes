@@ -20,14 +20,19 @@ const limit = z
   .optional()
   .transform((n) => (n == null ? undefined : Math.min(50, Math.max(1, n))));
 
-/** Deep-links internos conocidos. Si no hay ruta confiable → null (la UI
- *  muestra la cita sin link; nunca inventamos URLs). */
+/** Deep-links internos conocidos — SIEMPRE a nivel MÓDULO (rutas reales del App
+ *  Router; el test anti-404 verifica cada una contra page.tsx). El entityType
+ *  alcanza para resolver; `publicId` es solo una PISTA (prefijo INC-/TSK-), NO un
+ *  requisito: exigirlo dejaba chips sin link cuando la RPC devolvía ref=null
+ *  (regresión real: ai_compliance_pending → 15/15 documentos con ref null en prod).
+ *  Tipo desconocido → null (la UI muestra la cita sin link; nunca inventamos URLs). */
 export function entityUrl(entityType: string, publicId: string | null): string | null {
-  if (!publicId) return null;
-  if (publicId.startsWith("INC-") || entityType.includes("incident"))
+  if (publicId?.startsWith("INC-") || entityType.includes("incident"))
     return "/connect/incidentes";
-  if (publicId.startsWith("TSK-") || entityType.includes("task")) return "/connect/tareas";
-  if (entityType.includes("compliance")) return "/compliance";
+  if (publicId?.startsWith("TSK-") || entityType.includes("task")) return "/connect/tareas";
+  // El módulo Compliance vive en /anmat ("Compliance Cockpit"). NO existe ruta
+  // /compliance → los chips de compliance_documento/compliance_caso daban 404.
+  if (entityType.includes("compliance")) return "/anmat";
   // F5.1-b.0 (D6): fichas de contrato → módulo Comercial. El deep-link lleva al
   // módulo (no al binario de Drive): la cita es a la FICHA de metadata, no al PDF.
   if (entityType.includes("contrato") || entityType.includes("contract"))
@@ -232,7 +237,9 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
         r.detalle ? ` · ${s(r.detalle)}` : ""
       }`,
       date: sn(r.fecha_clave),
-      url: "/compliance",
+      // Fuente única de deep-links: entityUrl → /anmat. Antes hardcodeaba
+      // /compliance (404). ref puede venir null (prod): el link es a nivel módulo.
+      url: entityUrl(`compliance_${s(r.kind)}`, sn(r.ref)),
     }),
   },
   // F5.1-b.0.1 · contratos a GRANO CONTRATO (lee public.contracts vía ai_contracts_overview,
