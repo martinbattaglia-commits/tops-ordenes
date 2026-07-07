@@ -86,6 +86,11 @@ async function fetchRowsValidated(
     rows = spec.resolve(args);
   } else if (isMock()) {
     rows = MOCK_TOOL_ROWS[tool] ?? [];
+    // Slice B: paridad demo/real de ARGS SEMÁNTICOS — tools cuyo RPC filtra por
+    // mode/base/periodo declaran un demoFilter para que los fixtures respondan
+    // al argumento igual que la RPC (sin esto, demo devolvía las mismas filas
+    // para cualquier período/base y las comparaciones eran imposibles de QA).
+    if (spec.demoFilter) rows = spec.demoFilter(rows, args);
     // Paridad demo/real (smoke humano): las RPC reales respetan p_limit; los
     // fixtures también deben respetarlo para que "singular → top 1" sea real
     // en demo y en tests (limit=1 ⇒ UNA fila, no el set completo).

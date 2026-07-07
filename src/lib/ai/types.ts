@@ -47,6 +47,10 @@ export const TOOL_NAMES = [
   // Responde sobre el propio sistema y declara brechas específicas (WMS, caja
   // chica, movimientos) en vez de responder otro tema.
   "coverage_overview",
+  // Slice B (aceptación 2026-07-07): comparador de compras/liquidez (ORQUESTADORA
+  // sobre RPCs existentes): gasto vs compromiso · variación m/m de proveedores ·
+  // saldo vs compromisos. Sin RPC nueva, sin migración.
+  "spend_comparison_report",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

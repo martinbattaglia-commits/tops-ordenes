@@ -208,3 +208,66 @@ No se maquilla: el umbral del manual es 85. El salto de 52→80 se hizo en esta 
 ## Confirmación de reglas duras
 
 ✅ No push · no merge · no deploy · no Netlify · sin migraciones · **cero Supabase writes** · sin backfill · sin reprojection · sin tocar auth/login/middleware · sin UDIE · sin service_role · **sin hardcodear respuestas del manual** (el runner ejerce el engine real; las preguntas NO están en ningún prompt ni respuesta enlatada) · brechas declaradas, no escondidas · **frenado antes de commit**.
+
+
+---
+
+# ADDENDUM · Slice B (mismo día, 2026-07-07) — comparaciones con fuente real
+
+**Base:** commit `b54b180` (Slice A) + Slice B **sin commit** (esperando OK).
+
+## Qué agregó Slice B (local, TDD, sin migración, sin writes)
+
+1. **Comparación m/m de facturación**: `billing_summary(ultimos_meses, meses=2)` + delta cards (variación absoluta y %) con honestidad total: mes EN CURSO declarado "(parcial)" en KPI/tabla/insight/warning (nunca se vende parcial-vs-completo como caída real) y meses no adyacentes declarados ("vs mes anterior CON DATOS").
+2. **Tool nueva `spend_comparison_report`** (orquestadora, sin RPC nueva): `gasto_vs_compromiso` (por proveedor, % ejecutado, pendiente real), `periodo_anterior` (variación con subas/bajas/nuevos, truncación balanceada top-10 subas + top-10 caídas declarada) y `saldo_vs_compromisos` (liquidez: saldo vs **pendiente estimado** = Σ max(compromiso−gasto,0), método declarado — no compromiso bruto histórico).
+3. **6 adaptadores visuales nuevos**: workflows_stuck, tasks_overview, incidents_overview, purchase_orders, supplier_invoices, ops_digest — la sección Operación pasó de texto crudo a tableros.
+4. **focoTop**: "peso del top sobre el total" → entidad principal + % del top listado con calificador honesto (fix también del mislabel gasto/compromiso en demo vía demoFilter exacto por base+período).
+5. **Brief**: delta m/m entre meses CERRADOS (headline = último mes cerrado; el mes en curso parcial se informa aparte, declarado), riesgo automático si la facturación cerrada cayó ≥15%, brecha "comparaciones multi-dominio parciales" declarada.
+6. Ruteo: "vigentes como dashboard", "qué está sano / qué mejoró-empeoró (multi-dominio)" → brief; comparaciones m/m de dominios sin serie (compliance/contratos/vacancia/operación) → brecha declarada.
+
+## Revisión adversarial multi-agente del diff (27 agentes, 4 dimensiones)
+
+**22 hallazgos confirmados → 20 corregidos en esta misma sesión, 2 aceptados con racional:**
+
+- 🔴 ALTO corregido: el brief comparaba mes EN CURSO parcial vs cerrado en prod → falso riesgo "cayó 92%" (demo no lo detectaba: fixtures solo meses cerrados). Fix: headline/delta con meses cerrados + fixture dinámico del mes en curso para que demo/tests ejerciten el caso.
+- 🔴 ALTO corregido: liquidez comparaba saldo actual vs compromiso BRUTO histórico (incluye OC ya facturadas) → tensión sobreestimada. Fix: pendiente estimado con método declarado.
+- Corregidos: superlativos deshonestos ("Mayor suba" sobre una baja; "mayor pendiente" por volumen y no por diferencia), truncación sesgada de caídas, canibalización de comparaciones por categoría/cliente, modo equivocado del comparador, pérdida de brecha declarada para m/m de dominios sin fuente, detector "qué mejoró" sin ancla multi-dominio, branch muerto, guard metadata ("pendiente de cumplir" = contenido), demoFilter con fallback que mezclaba períodos.
+- Aceptados (documentados): entityId con razón social (consistente con TODO el catálogo; no es PII bajo redactPii), toRpcArgs no usado en orquestadoras (campo requerido por la interface).
+
+## Resultados batería v6 (post-fixes)
+
+| Métrica | v1 | v4 (Slice A) | **v6 (Slice B)** |
+|---|---|---|---|
+| PASS | 28 | 59 | **73** |
+| PARTIAL | 35 | 45 | **31** |
+| FAIL | 41 | 0 | **0** |
+| Fallback a search | 27 | 0 | **0** |
+| Con tablero | 56 | 89 | **99** |
+| Citas válidas | — | 104/104 | **104/104** |
+
+Preguntas PARTIAL→PASS por Slice B: 2-3, 2-4, 3-1, 3-4, 3-5, 3-7, 4-4, 5-1, 9-1, 9-2, 9-3, 9-6, 9-7, 13-5.
+
+## Score de madurez v6
+
+| Dimensión | v4 | **v6** |
+|---|---|---|
+| Cobertura funcional | 19/25 | **21/25** |
+| Calidad / elaboración | 16/25 | **18/25** |
+| Visual UX | 17/20 | **19/20** |
+| Fuentes y links | 14/15 | **14/15** |
+| Brechas / honestidad | 9/10 | **10/10** (review adversarial cerrado; calificadores declarados en todos los caminos) |
+| Estabilidad | 5/5 | **5/5** |
+| **TOTAL** | **80/100** | **87/100** |
+
+## Veredicto v6
+
+**87/100 — zona APTO en la validación determinística (umbral 85), CONDICIONADO**: el pase de etapa sigue requiriendo el **smoke con Gemini + datos reales** (12 preguntas fuertes del manual, sesión piloto autorizada). Sin ese smoke, el veredicto operativo es **APTO CON OBSERVACIONES — no pasar de etapa todavía**.
+
+**PARTIAL restantes (31)**: mayoría requiere Slice C (RPC nueva, con OK): sede en compliance (6-1/6-4…), cliente 360 (11-x/13-6), movimientos de tesorería, outliers por factura, clientes del "Sin clasificar"; más elaboración narrativa que aporta Gemini en prod (9-x parcialmente).
+
+## Confirmación de reglas duras (Slice B)
+
+✅ No push · no merge · no deploy · no Netlify · **cero migraciones** · **cero Supabase writes** · sin backfill/reprojection · sin tocar auth/login/middleware · **sin tocar UDIE** (el ENOENT de `__boundary_probe.ts` en el dev server fue un artefacto del watcher: el test de boundary crea y borra ese archivo temporal; se resolvió reiniciando el server — cero cambios en UDIE) · sin service_role · sin hardcodear respuestas del manual · **frenado antes del commit de Slice B**.
+
+Nota de proceso: los tests de los fixes post-review se escribieron antes que las correcciones pero su fase RED no se verificó corriendo la suite en el estado intermedio (desvío puntual del ciclo estricto RED→GREEN, declarado); cada test ancla comportamiento nuevo inexistente antes del fix.
+

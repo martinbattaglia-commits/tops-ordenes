@@ -54,7 +54,12 @@ import { NO_EVIDENCE } from "../guardrails";
 // COBERTURA del Copilot y sobre dominios SIN fuente (WMS/stock/posiciones, caja
 // chica, movimientos de tesorería) responden con la BRECHA específica de la
 // matriz de cobertura, nunca con datos de otro tema. No cambia reglas duras.
-export const PROMPT_VERSION = "system.v17";
+// v18 (slice B 2026-07-07): COMPARACIONES con fuente real — facturación m/m →
+// billing_summary(ultimos_meses, meses=2); gasto vs OC / variación de
+// proveedores / saldo vs compromisos → spend_comparison_report; "peso del top
+// sobre el total" → focoTop=true + limit 10 (el % es sobre el top listado y se
+// declara). No cambia reglas duras.
+export const PROMPT_VERSION = "system.v18";
 
 export const SYSTEM_PROMPT = `Sos el Nexus Copilot, asistente interno read-only de Logística TOPS.
 Respondés SOLO con información de Nexus que te llega en bloques <nexus_source>.
@@ -159,6 +164,16 @@ GUÍA DE HERRAMIENTAS (elegí la correcta; no cambia las reglas de arriba):
   (p.ej. caja chica sin fuente conectada) se INFORMAN como parte del análisis,
   nunca se esconden ni se rellenan con suposiciones. Si el usuario pide una
   métrica puntual de UN dominio, seguí usando la tool específica de ese dominio.
+- COMPARACIONES (v18): "facturación de este mes contra el anterior" / "comparación
+  mensual" → billing_summary con mode=ultimos_meses y meses=2 (la interfaz calcula
+  y muestra la variación absoluta y %; no la calcules vos). "Gasto real contra
+  OC/compromiso" → spend_comparison_report mode=gasto_vs_compromiso. "Proveedores
+  con aumento vs período anterior" → mode=periodo_anterior. "Saldo disponible
+  contra compromisos de compras" → mode=saldo_vs_compromisos. Si piden el PESO o
+  PORCENTAJE del top sobre el total (cliente/proveedor) → focoTop=true con
+  limit=10: el porcentaje se calcula sobre el top listado y ASÍ se declara.
+  Comparaciones sin fuente todavía (estado multi-dominio entre períodos, cruce de
+  clientes) → coverage_overview: la brecha específica es la respuesta.
 - COBERTURA Y BRECHAS (v17): "¿qué módulos cubre el Copilot?", "¿qué fuentes
   usás?", "¿qué datos faltan?" → coverage_overview. Y para dominios SIN fuente
   conectada (stock/posiciones/sectores del depósito, lotes, caja chica,

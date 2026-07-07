@@ -90,17 +90,20 @@ export const TOOL_VISUALS: Partial<
   },
 
   // ── Facturación por cliente: kpi compacto (top-1) o ranking con barras ─────
-  customer_revenue_overview: (rows) => rankingVisual(rows, {
+  customer_revenue_overview: (rows, args) => rankingVisual(rows, {
     entidad: "cliente",
     nameKey: "cliente",
     title: "Facturación por cliente",
+    // Slice B: peso del top sobre el total listado (hint del router, no del RPC).
+    focoTop: args.focoTop === true,
   }),
 
   // ── Gasto/presupuesto por proveedor: mismo patrón ──────────────────────────
-  supplier_spend_overview: (rows) => rankingVisual(rows, {
+  supplier_spend_overview: (rows, args) => rankingVisual(rows, {
     entidad: s(rows[0]?.base) === "compromiso" ? "proveedor (presupuesto comprometido)" : "proveedor (gasto)",
     nameKey: "proveedor",
     title: s(rows[0]?.base) === "compromiso" ? "Presupuesto comprometido por proveedor" : "Gasto por proveedor",
+    focoTop: args.focoTop === true,
   }),
 
   // ── Saldos de Tesorería: tarjetas por banco + total + composición ──────────
@@ -133,8 +136,11 @@ export const TOOL_VISUALS: Partial<
     };
   },
 
-  // ── Total facturado por período: KPI (o barras si son varios meses) ────────
-  billing_summary: (rows) => {
+  // ── Total facturado por período: KPI · varios meses = COMPARACIÓN m/m ──────
+  // Slice B (aceptación 2026-07-07): con ≥2 meses el tablero calcula la
+  // variación absoluta y porcentual vs el mes anterior (delta cards con tono).
+  // Los totales vienen de la RPC; acá solo se restan — nunca se estiman.
+  billing_summary: (rows, args) => {
     if (rows.length === 0) return null;
     if (rows.length === 1) {
       const r = rows[0];
@@ -147,24 +153,471 @@ export const TOOL_VISUALS: Partial<
         ],
         chart: null,
         insights: [],
-        warnings: [],
+        // Pidieron comparar (ultimos_meses) y solo hay UN mes con datos → se
+        // declara: no se inventa el mes anterior.
+        warnings:
+          s(args.mode) === "ultimos_meses"
+            ? ["Solo hay un mes con datos: no encontré un mes anterior para comparar."]
+            : [],
       };
+    }
+    // Orden defensivo por período desc (la RPC ya ordena así; no se asume).
+    const sorted = [...rows].sort((a, b) => s(b.periodo).localeCompare(s(a.periodo)));
+    const ultimo = sorted[0];
+    const anterior = sorted[1];
+    const delta = num(ultimo.total) - num(anterior.total);
+    const deltaPct =
+      num(anterior.total) > 0 ? Math.round((1000 * delta) / num(anterior.total)) / 10 : null;
+    const subio = delta >= 0;
+    // Review adversarial (Slice B): honestidad de la comparación.
+    // (1) Si el último período es el MES EN CURSO, es un mes PARCIAL: la
+    //     variación contra un mes completo se declara siempre — jamás se vende
+    //     una "caída" que es un artefacto de comparar días contra un mes.
+    // (2) Si los períodos comparados NO son meses calendario consecutivos (hay
+    //     meses sin datos en el medio), se dice "mes anterior CON DATOS".
+    const hoy = new Date();
+    const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    const parcial = s(ultimo.periodo) === mesActual;
+    const mesPrevioCalendario = (p: string): string => {
+      const [y, m] = p.split("-").map(Number);
+      const d = new Date(y, m - 2, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+    const adyacentes = s(anterior.periodo) === mesPrevioCalendario(s(ultimo.periodo));
+    const warnings: string[] = [];
+    if (parcial) {
+      warnings.push(
+        `El mes ${s(ultimo.periodo)} está EN CURSO: la variación compara un mes parcial contra ${s(anterior.periodo)} completo — no es una caída/suba real hasta que cierre el mes.`
+      );
+    }
+    if (!adyacentes) {
+      warnings.push(
+        `Entre ${s(anterior.periodo)} y ${s(ultimo.periodo)} hay meses sin datos: la comparación es contra el mes anterior CON DATOS, no el mes calendario previo.`
+      );
     }
     return {
       kind: "report",
-      title: "Facturación por mes",
-      period: null,
-      kpis: [],
+      title: "Facturación por mes · comparación",
+      period: `${s(sorted[sorted.length - 1].periodo)} → ${s(ultimo.periodo)}`,
+      kpis: [
+        {
+          label: `Mes ${s(ultimo.periodo)}${parcial ? " (en curso, parcial)" : ""}`,
+          value: fmtMonto(num(ultimo.total)),
+          hint: `${s(ultimo.cantidad)} facturas`,
+          tone: "brand",
+        },
+        {
+          label: `Mes ${s(anterior.periodo)}`,
+          value: fmtMonto(num(anterior.total)),
+          hint: `${s(anterior.cantidad)} facturas`,
+          tone: "brand",
+        },
+        {
+          label: parcial
+            ? "Variación (mes parcial vs mes completo)"
+            : adyacentes
+              ? "Variación vs mes anterior"
+              : `Variación vs mes anterior con datos (${s(anterior.periodo)})`,
+          value: `${subio ? "+" : "−"}${fmtMonto(Math.abs(delta))}${deltaPct != null ? ` · ${subio ? "+" : ""}${deltaPct}%` : ""}`,
+          hint: `${s(anterior.periodo)} → ${s(ultimo.periodo)}`,
+          // Mes parcial: tono neutro de advertencia — ni verde ni rojo, porque
+          // el signo es un artefacto del corte, no una tendencia real.
+          tone: parcial ? "warn" : subio ? "ok" : "danger",
+        },
+      ],
       table: {
         columns: ["Mes", "Total", "Facturas"],
-        rows: rows.map((r) => [s(r.periodo), fmtMonto(num(r.total)), s(r.cantidad)]),
+        rows: sorted.map((r) => [
+          `${s(r.periodo)}${s(r.periodo) === mesActual ? " (parcial)" : ""}`,
+          fmtMonto(num(r.total)),
+          s(r.cantidad),
+        ]),
       },
       chart: {
         type: "bar",
-        labels: rows.map((r) => s(r.periodo)),
-        values: rows.map((r) => num(r.total)),
+        labels: [...sorted].reverse().map((r) => s(r.periodo)),
+        values: [...sorted].reverse().map((r) => num(r.total)),
         unit: "ARS",
       },
+      insights: [
+        parcial
+          ? `${s(ultimo.periodo)} está en curso (parcial): lleva ${fmtMonto(num(ultimo.total))} contra ${fmtMonto(num(anterior.total))} de ${s(anterior.periodo)} completo — la comparación definitiva es al cierre del mes.`
+          : `La facturación ${subio ? "subió" : "bajó"}${deltaPct != null ? ` ${Math.abs(deltaPct)}%` : ` ${fmtMonto(Math.abs(delta))}`} en ${s(ultimo.periodo)} respecto de ${s(anterior.periodo)}${adyacentes ? "" : " (mes anterior con datos)"}.`,
+      ],
+      warnings,
+    };
+  },
+
+  // ── Slice B: comparador de compras/liquidez (spend_comparison_report) ──────
+  spend_comparison_report: (rows, args) => {
+    if (rows.length === 0) return null;
+    const mode = s(args.mode) || "gasto_vs_compromiso";
+    if (mode === "periodo_anterior") {
+      const comps = rows.filter((r) => s(r.kind) === "comparacion");
+      const notas = rows.filter((r) => s(r.kind) === "nota").map((r) => s(r.detalle));
+      // Review adversarial: "Mayor suba" SOLO si de verdad hubo una suba — con
+      // todo en baja (estado normal a principios de mes: mes parcial vs mes
+      // completo), el KPI dice caída, nunca una "suba" con signo negativo.
+      const top = comps[0];
+      const huboSuba = top != null && num(top.variacion) > 0;
+      const totalActual = comps.reduce((a, r) => a + num(r.actual), 0);
+      const totalAnterior = comps.reduce((a, r) => a + num(r.anterior), 0);
+      return {
+        kind: "report",
+        title: "Variación de gasto por proveedor (mes en curso vs último mes)",
+        period: "gasto de facturas de proveedor · el mes en curso es PARCIAL",
+        kpis: [
+          huboSuba
+            ? {
+                label: "Mayor suba",
+                value: s(top.proveedor),
+                hint: `+${fmtMonto(num(top.variacion))}`,
+                tone: "warn" as const,
+              }
+            : {
+                label: "Sin subas — menor caída",
+                value: s(top?.proveedor) || "—",
+                hint: top ? `−${fmtMonto(Math.abs(num(top.variacion)))}` : null,
+                tone: "brand" as const,
+              },
+          { label: "Gasto mes en curso (parcial)", value: fmtMonto(totalActual), hint: null, tone: "brand" },
+          { label: "Gasto último mes", value: fmtMonto(totalAnterior), hint: null, tone: "brand" },
+        ],
+        table: {
+          columns: ["Proveedor", "Mes en curso", "Último mes", "Δ", "Δ%", "Estado"],
+          rows: comps.map((r) => [
+            s(r.proveedor),
+            fmtMonto(num(r.actual)),
+            fmtMonto(num(r.anterior)),
+            `${num(r.variacion) >= 0 ? "+" : "−"}${fmtMonto(Math.abs(num(r.variacion)))}`,
+            r.variacion_pct == null ? "—" : `${num(r.variacion_pct) >= 0 ? "+" : ""}${s(r.variacion_pct)}%`,
+            s(r.estado) === "nuevo" ? "🆕 nuevo" : s(r.estado) === "suba" ? "🔺 suba" : s(r.estado) === "baja" ? "🔻 baja" : s(r.estado),
+          ]),
+          rowLinks: comps.map((r) => (s(r.url) ? { url: s(r.url), label: "Ver" } : null)),
+        },
+        chart: {
+          type: "bar",
+          title: "Variación por proveedor",
+          labels: comps.map((r) => s(r.proveedor)),
+          values: comps.map((r) => Math.abs(num(r.variacion))),
+          unit: "ARS (valor absoluto de la variación)",
+        },
+        insights: top
+          ? [
+              huboSuba
+                ? `${s(top.proveedor)} lidera las subas: +${fmtMonto(num(top.variacion))}${top.variacion_pct != null ? ` (+${s(top.variacion_pct)}%)` : " (nuevo en el período)"}.`
+                : `No hubo subas de gasto: todos los proveedores cayeron o se mantuvieron (recordá que el mes en curso es parcial). La menor caída fue de ${s(top.proveedor)} (−${fmtMonto(Math.abs(num(top.variacion)))}).`,
+            ]
+          : [],
+        warnings: [
+          "El mes en curso es PARCIAL: las bajas pueden ser un artefacto del corte, no una tendencia.",
+          ...(comps.some((r) => s(r.estado) === "nuevo")
+            ? ["Los proveedores 'nuevo' no tienen gasto en el mes anterior: la variación % no aplica."]
+            : []),
+          ...notas,
+        ],
+      };
+    }
+    if (mode === "saldo_vs_compromisos") {
+      const conceptos = rows.filter((r) => s(r.kind) === "comparacion");
+      const resumen = rows.find((r) => s(r.kind) === "resumen");
+      const notas = rows.filter((r) => s(r.kind) === "nota").map((r) => s(r.detalle));
+      const tension = resumen ? num(resumen.monto) < 0 : false;
+      return {
+        kind: "report",
+        title: "Liquidez · saldo disponible vs pendiente de compras",
+        period: "saldos actuales vs pendiente estimado por OC (método declarado)",
+        kpis: [
+          ...conceptos.map((r) => ({
+            label: s(r.concepto),
+            value: fmtMonto(num(r.monto)),
+            hint: null,
+            tone: "brand" as const,
+            url: s(r.url) || null,
+            actionLabel: "Ver módulo",
+          })),
+          ...(resumen
+            ? [
+                {
+                  label: "Diferencia (saldo − pendiente estimado)",
+                  value: `${num(resumen.monto) >= 0 ? "+" : "−"}${fmtMonto(Math.abs(num(resumen.monto)))}`,
+                  hint: null,
+                  tone: (tension ? "danger" : "ok") as "danger" | "ok",
+                },
+              ]
+            : []),
+        ],
+        table: null,
+        chart:
+          conceptos.length > 1
+            ? {
+                type: "bar",
+                labels: conceptos.map((r) => s(r.concepto)),
+                values: conceptos.map((r) => num(r.monto)),
+                unit: "ARS",
+              }
+            : null,
+        insights: resumen ? [s(resumen.detalle)] : [],
+        warnings: [
+          ...(tension
+            ? ["Posible tensión de liquidez: validar contra las OC reales antes de decidir."]
+            : []),
+          ...notas,
+        ],
+      };
+    }
+    // gasto_vs_compromiso (default)
+    const comps = rows.filter((r) => s(r.kind) === "comparacion");
+    const totalGasto = comps.reduce((a, r) => a + num(r.gasto), 0);
+    const totalComp = comps.reduce((a, r) => a + num(r.compromiso), 0);
+    const unLado = comps.filter((r) => num(r.gasto) === 0 || num(r.compromiso) === 0).length;
+    return {
+      kind: "report",
+      title: "Gasto real vs compromiso por proveedor",
+      period: "facturas de proveedor vs OC firmadas/activas (todo el período)",
+      kpis: [
+        { label: "Compromiso total (OC)", value: fmtMonto(totalComp), hint: null, tone: "brand" },
+        { label: "Gasto real total", value: fmtMonto(totalGasto), hint: null, tone: "brand" },
+        {
+          label: "Pendiente de ejecución",
+          value: fmtMonto(totalComp - totalGasto),
+          hint: totalComp > 0 ? `${Math.round((1000 * totalGasto) / totalComp) / 10}% ejecutado` : null,
+          tone: "warn",
+        },
+      ],
+      table: {
+        columns: ["Proveedor", "Gasto", "Compromiso", "Diferencia", "% ejecutado"],
+        rows: comps.map((r) => [
+          s(r.proveedor),
+          fmtMonto(num(r.gasto)),
+          fmtMonto(num(r.compromiso)),
+          fmtMonto(num(r.diferencia)),
+          r.pct_ejecutado == null ? "—" : `${s(r.pct_ejecutado)}%`,
+        ]),
+        rowLinks: comps.map((r) => (s(r.url) ? { url: s(r.url), label: "Ver" } : null)),
+      },
+      chart: null,
+      // Review adversarial: el "mayor pendiente" se elige por DIFERENCIA real
+      // (no por volumen), y solo si existe un pendiente positivo — nunca se
+      // afirma un superlativo con ARS 0.00 o negativo.
+      insights: (() => {
+        const conPendiente = comps.filter((r) => num(r.diferencia) > 0);
+        if (conPendiente.length === 0)
+          return ["No hay pendientes de ejecución positivos: el gasto igualó o superó los compromisos listados."];
+        const mayor = conPendiente.reduce((a, b) =>
+          num(b.diferencia) > num(a.diferencia) ? b : a
+        );
+        return [
+          `El mayor pendiente de ejecución es de ${s(mayor.proveedor)} (${fmtMonto(num(mayor.diferencia))}).`,
+        ];
+      })(),
+      warnings: [
+        ...(unLado > 0
+          ? [`${unLado} proveedor(es) aparecen en una sola base (gasto sin OC, o OC sin gasto) — se muestran con 0 en el otro lado.`]
+          : []),
+        ...rows.filter((r) => s(r.kind) === "nota").map((r) => s(r.detalle)),
+      ],
+    };
+  },
+
+  // ── Slice B: adaptadores de OPERACIÓN y COMPRAS (datos sin sábana de texto) ─
+  workflows_stuck: (rows) => {
+    if (rows.length === 0) return null;
+    const peor = [...rows].sort((a, b) => num(b.idle_days) - num(a.idle_days))[0];
+    const sem = (d: number) => (d >= 5 ? "🔴" : d >= 3 ? "🟡" : "🟢");
+    return {
+      kind: "report",
+      title: "Workflows trabados",
+      period: "sin actividad en el paso actual",
+      kpis: [
+        {
+          label: "Workflows trabados",
+          value: String(rows.length),
+          hint: `el más antiguo: ${s(peor.idle_days)} días sin actividad`,
+          tone: num(peor.idle_days) >= 5 ? "danger" : "warn",
+          url: "/connect/tareas",
+          actionLabel: "Ver tareas",
+        },
+      ],
+      table: {
+        columns: ["Workflow", "Paso", "Días sin actividad", "Tarea", "Estado"],
+        rows: rows.map((r) => [
+          s(r.workflow),
+          `${s(r.current_step)}${r.step_titulo ? ` (${s(r.step_titulo)})` : ""}`,
+          `${sem(num(r.idle_days))} ${s(r.idle_days)}`,
+          s(r.task_public_id) || "—",
+          s(r.task_estado) || "sin tarea",
+        ]),
+        rowLinks: rows.map(() => ({ url: "/connect/tareas", label: "Ver" })),
+      },
+      chart: null,
+      insights: [
+        `Destrabar primero ${s(peor.workflow)} (paso ${s(peor.current_step)}, ${s(peor.idle_days)} días sin actividad).`,
+      ],
+      warnings: [],
+    };
+  },
+
+  tasks_overview: (rows, args) => {
+    if (rows.length === 0) return null;
+    const scope = s(args.scope);
+    const rank = (p: string) =>
+      p === "urgente" ? 0 : p === "alta" ? 1 : p === "media" ? 2 : 3;
+    const sorted = [...rows].sort((a, b) => rank(s(a.prioridad)) - rank(s(b.prioridad)));
+    const urgentes = rows.filter((r) => s(r.prioridad) === "urgente").length;
+    return {
+      kind: "report",
+      title:
+        scope === "vencidas"
+          ? "Tareas vencidas"
+          : scope === "mias"
+            ? "Mis tareas"
+            : "Tareas abiertas",
+      period: "priorizadas por urgencia",
+      kpis: [
+        {
+          label: scope === "vencidas" ? "Tareas vencidas" : "Tareas listadas",
+          value: String(rows.length),
+          hint: urgentes > 0 ? `${urgentes} urgentes` : null,
+          tone: scope === "vencidas" || urgentes > 0 ? "warn" : "brand",
+          url: "/connect/tareas",
+          actionLabel: "Ver tareas",
+        },
+      ],
+      table: {
+        columns: ["Tarea", "Título", "Prioridad", "Vence", "Asignado"],
+        rows: sorted.slice(0, 12).map((r) => [
+          s(r.public_id),
+          s(r.titulo),
+          s(r.prioridad) || "normal",
+          s(r.due_at).slice(0, 10) || "—",
+          s(r.asignado) || "vacante",
+        ]),
+        rowLinks: sorted.slice(0, 12).map(() => ({ url: "/connect/tareas", label: "Ver" })),
+      },
+      chart: null,
+      insights: [],
+      warnings: [],
+    };
+  },
+
+  incidents_overview: (rows) => {
+    if (rows.length === 0) return null;
+    const criticos = rows.filter((r) => s(r.severidad) === "critica").length;
+    const altos = rows.filter((r) => s(r.severidad) === "alta").length;
+    return {
+      kind: "report",
+      title: "Incidentes",
+      period: "estado actual",
+      kpis: [
+        {
+          label: "Incidentes críticos",
+          value: String(criticos),
+          hint: criticos > 0 ? "requieren acción inmediata" : null,
+          tone: criticos > 0 ? "danger" : "ok",
+          url: "/connect/incidentes",
+          actionLabel: "Ver incidentes",
+        },
+        { label: "Listados", value: String(rows.length), hint: altos > 0 ? `${altos} de severidad alta` : null, tone: "brand" },
+      ],
+      table: {
+        columns: ["ID", "Título", "Severidad", "Estado", "Sector", "Asignado"],
+        rows: rows.slice(0, 12).map((r) => [
+          s(r.public_id),
+          s(r.titulo),
+          s(r.severidad) === "critica" ? "🔴 crítica" : s(r.severidad),
+          s(r.estado),
+          s(r.sector) || "—",
+          s(r.asignado) || "sin asignar",
+        ]),
+        rowLinks: rows.slice(0, 12).map(() => ({ url: "/connect/incidentes", label: "Ver" })),
+      },
+      chart: null,
+      insights: [],
+      warnings: [],
+    };
+  },
+
+  purchase_orders_overview: (rows) => {
+    if (rows.length === 0) return null;
+    const total = rows.reduce((a, r) => a + num(r.total), 0);
+    return {
+      kind: "report",
+      title: "Órdenes de compra",
+      period: "más recientes primero",
+      kpis: [
+        { label: "OC listadas", value: String(rows.length), hint: null, tone: "brand", url: "/compras/ordenes", actionLabel: "Ver OC" },
+        { label: "Monto total listado", value: fmtMonto(total), hint: null, tone: "brand" },
+      ],
+      table: {
+        columns: ["OC", "Proveedor", "Total", "Fecha", "Estado"],
+        rows: rows.slice(0, 12).map((r) => [
+          s(r.public_id),
+          s(r.proveedor) || "—",
+          fmtMonto(num(r.total)),
+          s(r.fecha),
+          s(r.estado),
+        ]),
+        rowLinks: rows.slice(0, 12).map(() => ({ url: "/compras/ordenes", label: "Ver" })),
+      },
+      chart: null,
+      insights: [],
+      warnings: [],
+    };
+  },
+
+  supplier_invoices_overview: (rows, args) => {
+    if (rows.length === 0) return null;
+    const pendientes = s(args.mode) === "pendientes_aprobacion";
+    const total = rows.reduce((a, r) => a + num(r.total), 0);
+    return {
+      kind: "report",
+      title: pendientes ? "Facturas de proveedor pendientes de aprobación" : "Facturas de proveedor",
+      period: "más recientes primero",
+      kpis: [
+        {
+          label: pendientes ? "Pendientes de aprobación" : "Facturas listadas",
+          value: String(rows.length),
+          hint: `total ${fmtMonto(total)}`,
+          tone: pendientes ? "warn" : "brand",
+          url: "/compras/facturas",
+          actionLabel: "Ver facturas",
+        },
+      ],
+      table: {
+        columns: ["Comprobante", "Proveedor", "Total", "Fecha", "Estado"],
+        rows: rows.slice(0, 12).map((r) => [
+          s(r.public_id),
+          s(r.proveedor) || "—",
+          fmtMonto(num(r.total)),
+          s(r.fecha),
+          s(r.estado),
+        ]),
+        rowLinks: rows.slice(0, 12).map(() => ({ url: "/compras/facturas", label: "Ver" })),
+      },
+      chart: null,
+      insights: [],
+      warnings: [],
+    };
+  },
+
+  ops_digest: (rows) => {
+    if (rows.length === 0) return null;
+    return {
+      kind: "report",
+      title: "Actividad operativa",
+      period: "eventos más recientes",
+      kpis: [{ label: "Eventos", value: String(rows.length), hint: null, tone: "brand" }],
+      table: {
+        columns: ["Hora", "Evento", "Detalle", "Actor"],
+        rows: rows.slice(0, 12).map((r) => [
+          s(r.occurred_at).slice(11, 16) || s(r.occurred_at).slice(0, 10),
+          s(r.event_type),
+          s(r.summary),
+          s(r.actor_label) || "—",
+        ]),
+      },
+      chart: null,
       insights: [],
       warnings: [],
     };
@@ -854,10 +1307,47 @@ function docBadge(r: Record<string, unknown>): string {
 /** Patrón compartido ranking/top-1 (clientes, proveedores). */
 function rankingVisual(
   rows: RawRow[],
-  cfg: { entidad: string; nameKey: string; title: string }
+  cfg: { entidad: string; nameKey: string; title: string; focoTop?: boolean }
 ): CopilotVisual | null {
   if (rows.length === 0) return null;
   const period = periodoLabel(rows[0]) ?? s(rows[0].periodo) ?? null;
+  // Slice B · focoTop: la pregunta pide EL top y su PESO. Entidad principal
+  // primero + participación calculada SOBRE EL TOP LISTADO (calificador
+  // honesto: el % no es sobre el total global, y se dice).
+  if (cfg.focoTop && rows.length > 1) {
+    const top = rows[0];
+    const totalListado = rows.reduce((a, r) => a + num(r.total), 0);
+    const share = totalListado > 0 ? Math.round((1000 * num(top.total)) / totalListado) / 10 : 0;
+    return {
+      kind: "kpi",
+      title: cfg.title,
+      period,
+      kpis: [
+        {
+          label: `Top ${cfg.entidad}`,
+          value: s(top[cfg.nameKey]),
+          hint: `${fmtMonto(num(top.total))} · ${s(top.cantidad)} comprobantes`,
+          tone: "brand",
+        },
+        {
+          label: `Participación (del top ${rows.length} listado)`,
+          value: `${share}%`,
+          hint: `sobre los ${rows.length} mayores listados, no el total global`,
+          pct: share,
+          tone: "brand",
+        },
+      ],
+      table: {
+        columns: ["#", cfg.nameKey === "cliente" ? "Cliente" : "Proveedor", "Monto"],
+        rows: rows.slice(0, 5).map((r, i) => [String(i + 1), s(r[cfg.nameKey]), fmtMonto(num(r.total))]),
+      },
+      chart: null,
+      insights: [
+        `${s(top[cfg.nameKey])} concentra el ${share}% del top ${rows.length} listado.`,
+      ],
+      warnings: [],
+    };
+  }
   if (rows.length === 1) {
     const r = rows[0];
     return {

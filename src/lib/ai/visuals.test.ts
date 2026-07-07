@@ -439,3 +439,221 @@ describe("visual · management_brief → dashboard ejecutivo multi-dominio", () 
     expect(TOOL_VISUALS.management_brief!([], {})).toBeNull();
   });
 });
+
+// ── Slice B (aceptación 2026-07-07): comparaciones + visuales de operación ──
+
+describe("visual · billing_summary multi-mes → delta m/m (comparación)", () => {
+  const MESES = [
+    { periodo: "2026-06", total: "12500000.00", cantidad: 9, desde: "2026-06-01", hasta: "2026-06-30", detalle: "x" },
+    { periodo: "2026-05", total: "9800000.00", cantidad: 7, desde: "2026-05-01", hasta: "2026-05-31", detalle: "x" },
+  ];
+  it("dos meses → KPIs de variación absoluta y porcentual con tono semántico", () => {
+    const v = TOOL_VISUALS.billing_summary!(MESES, { mode: "ultimos_meses", meses: 2 });
+    expect(v!.kind).toBe("report");
+    const labels = v!.kpis!.map((k) => k.label.toLowerCase()).join(" | ");
+    expect(labels).toContain("2026-06");
+    expect(labels).toContain("2026-05");
+    expect(labels).toMatch(/variaci/);
+    // Variación: +2,700,000.00 = +27.6% (los números salen calculados, no narrados).
+    const flat = v!.kpis!.map((k) => `${k.label} ${k.value}`).join(" | ");
+    expect(flat).toContain("2,700,000.00");
+    expect(flat).toContain("27.6");
+    // Suba → tono ok en la card de variación.
+    const varKpi = v!.kpis!.find((k) => /variaci/i.test(k.label));
+    expect(varKpi?.tone).toBe("ok");
+    expect(v!.insights!.join(" ")).toMatch(/subi|aument/i);
+  });
+  it("caída de facturación → tono danger e insight de baja", () => {
+    const v = TOOL_VISUALS.billing_summary!(
+      [MESES[1], { ...MESES[0], periodo: "2026-04", total: "15000000.00" }],
+      { mode: "ultimos_meses", meses: 2 }
+    );
+    const varKpi = v!.kpis!.find((k) => /variaci/i.test(k.label));
+    expect(varKpi?.tone).toBe("danger");
+    expect(v!.insights!.join(" ")).toMatch(/baj|cay/i);
+  });
+  it("un solo mes con datos → sin delta y advertencia honesta (no se inventa el anterior)", () => {
+    const v = TOOL_VISUALS.billing_summary!([MESES[0]], { mode: "ultimos_meses", meses: 2 });
+    expect(v!.warnings!.join(" ").toLowerCase()).toMatch(/mes anterior|para comparar/);
+  });
+});
+
+describe("visual · spend_comparison_report → tabla comparativa con deltas", () => {
+  const GVC = [
+    { kind: "comparacion", proveedor: "Mobiliarios Demo SA", gasto: 3400000, compromiso: 580000000, diferencia: 576600000, detalle: "x" },
+    { kind: "comparacion", proveedor: "Insumos Demo SA", gasto: 1670000, compromiso: 1670000, diferencia: 0, detalle: "x" },
+  ];
+  it("gasto_vs_compromiso → columnas Gasto/Compromiso/Diferencia y KPI principal", () => {
+    const v = TOOL_VISUALS.spend_comparison_report!(GVC, { mode: "gasto_vs_compromiso" });
+    expect(v!.kind).toBe("report");
+    const cols = v!.table!.columns.join(" ");
+    expect(cols).toMatch(/Gasto/);
+    expect(cols).toMatch(/Compromiso/);
+    expect(cols).toMatch(/Diferencia|Pendiente/);
+    expect(v!.kpis!.length).toBeGreaterThanOrEqual(2);
+  });
+  const MM = [
+    { kind: "comparacion", proveedor: "Mobiliarios Demo SA", actual: 1900000, anterior: 1200000, variacion: 700000, variacion_pct: 58.3, estado: "suba", detalle: "x" },
+    { kind: "comparacion", proveedor: "Logística Ejemplo SA", actual: 450000, anterior: 0, variacion: 450000, variacion_pct: null, estado: "nuevo", detalle: "x" },
+    { kind: "comparacion", proveedor: "Insumos Demo SA", actual: 640000, anterior: 800000, variacion: -160000, variacion_pct: -20, estado: "baja", detalle: "x" },
+  ];
+  it("periodo_anterior → variaciones con signo, estado (suba/nuevo/baja) e insight de top suba", () => {
+    const v = TOOL_VISUALS.spend_comparison_report!(MM, { mode: "periodo_anterior" });
+    const flat = v!.table!.rows.map((r) => r.join(" ")).join(" | ");
+    expect(flat).toMatch(/nuevo/i);
+    expect(v!.insights!.join(" ")).toContain("Mobiliarios Demo SA");
+  });
+  it("sin filas → null", () => {
+    expect(TOOL_VISUALS.spend_comparison_report!([], { mode: "gasto_vs_compromiso" })).toBeNull();
+  });
+});
+
+describe("visual · adaptadores de operación (Slice B: datos sin sábana)", () => {
+  it("workflows_stuck → KPI + tabla con días sin actividad y semáforo", () => {
+    const v = TOOL_VISUALS.workflows_stuck!(
+      [{ workflow: "Alta de habilitación", current_step: 2, step_titulo: "Presentación", task_public_id: "TSK-2026-0003", task_estado: "en_progreso", idle_days: 4, iniciado: "2026-06-25" }],
+      {}
+    );
+    expect(v!.kpis![0].value).toBe("1");
+    expect(v!.table!.columns.join(" ")).toMatch(/Workflow/);
+    expect(v!.table!.rows[0].join(" ")).toContain("4");
+  });
+  it("tasks_overview scope=vencidas → tabla priorizada con vencimiento", () => {
+    const v = TOOL_VISUALS.tasks_overview!(
+      [
+        { public_id: "TSK-1", titulo: "A", estado: "pendiente", prioridad: "urgente", due_at: "2026-07-02", asignado: "Ruth" },
+        { public_id: "TSK-2", titulo: "B", estado: "en_progreso", prioridad: "alta", due_at: "2026-07-05", asignado: "Cynthia" },
+      ],
+      { scope: "vencidas" }
+    );
+    expect(v!.title.toLowerCase()).toContain("vencidas");
+    expect(v!.table!.columns.join(" ")).toMatch(/Prioridad/);
+    expect(v!.table!.rows.length).toBe(2);
+  });
+  it("incidents_overview → KPIs por severidad (críticos en danger)", () => {
+    const v = TOOL_VISUALS.incidents_overview!(
+      [
+        { public_id: "INC-1", titulo: "Corte", severidad: "critica", estado: "abierto", sector: "Cámara 3", asignado: "X" },
+        { public_id: "INC-2", titulo: "Stock", severidad: "media", estado: "en_progreso", sector: "PL", asignado: "Y" },
+      ],
+      {}
+    );
+    const crit = v!.kpis!.find((k) => /crític|critic/i.test(k.label));
+    expect(crit?.value).toBe("1");
+    expect(crit?.tone).toBe("danger");
+    expect(v!.table!.rows.length).toBe(2);
+  });
+  it("purchase_orders_overview → tabla de OC con monto total listado", () => {
+    const v = TOOL_VISUALS.purchase_orders_overview!(
+      [{ public_id: "OC-2026-0371", proveedor: "Insumos Demo SA", total: "89000.00", fecha: "2026-07-06", estado: "firmada", detalle: "x" }],
+      {}
+    );
+    expect(v!.table!.columns.join(" ")).toMatch(/OC|Orden/);
+    expect(v!.kpis!.some((k) => k.value.includes("89,000.00"))).toBe(true);
+  });
+  it("supplier_invoices_overview → tabla con estado de aprobación", () => {
+    const v = TOOL_VISUALS.supplier_invoices_overview!(
+      [{ public_id: "FACTURA_A 00345", proveedor: "Insumos Demo SA", total: "12100.00", fecha: "2026-06-28", estado: "pendiente", detalle: "x" }],
+      { mode: "pendientes_aprobacion" }
+    );
+    expect(v!.table!.rows.length).toBe(1);
+    expect(v!.kpis![0].tone).toBe("warn");
+  });
+  it("ops_digest → timeline en tabla (evento/detalle/actor)", () => {
+    const v = TOOL_VISUALS.ops_digest!(
+      [{ event_type: "task.completed", entity_type: "connect_task", entity_id: "t", summary: "Se completó la recepción", actor_label: "Depósito", occurred_at: "2026-07-03T11:00:00Z" }],
+      { hours: 24 }
+    );
+    expect(v!.table!.columns.join(" ")).toMatch(/Evento/);
+    expect(v!.table!.rows[0].join(" ")).toContain("recepción");
+  });
+});
+
+describe("visual · focoTop (singular con peso sobre el total listado)", () => {
+  const ROWS = [
+    { cliente: "Cliente Demo SA", total: "85000000.00", cantidad: 12, periodo: "todo", detalle: "x" },
+    { cliente: "Distribuidora Ficticia SRL", total: "41000000.00", cantidad: 6, periodo: "todo", detalle: "x" },
+    { cliente: "Otro SA", total: "14000000.00", cantidad: 2, periodo: "todo", detalle: "x" },
+  ];
+  it("focoTop=true → entidad principal PRIMERO + % del top listado con calificador honesto", () => {
+    const v = TOOL_VISUALS.customer_revenue_overview!(ROWS, { focoTop: true, limit: 10 });
+    expect(v!.kind).toBe("kpi");
+    expect(v!.kpis![0].value).toContain("Cliente Demo SA");
+    const pct = v!.kpis!.find((k) => k.value.includes("%"));
+    expect(pct, "KPI de participación").toBeTruthy();
+    // Honestidad: el % es sobre el top listado, no sobre el total global.
+    expect(`${pct!.label} ${pct!.hint ?? ""}`.toLowerCase()).toMatch(/listad/);
+    expect(pct!.value).toContain("60.7"); // 85M / 140M
+  });
+  it("sin focoTop → comportamiento actual intacto (ranking con barras)", () => {
+    const v = TOOL_VISUALS.customer_revenue_overview!(ROWS, {});
+    expect(v!.kind).toBe("ranking");
+  });
+});
+
+// ── Post-review adversarial (Slice B): honestidad de comparaciones ───────────
+
+describe("visual · billing m/m: mes EN CURSO parcial y meses no adyacentes (review)", () => {
+  it("último mes = mes calendario EN CURSO → se declara '(en curso, parcial)' y warning", () => {
+    const hoy = new Date();
+    const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    const v = TOOL_VISUALS.billing_summary!(
+      [
+        { periodo: mesActual, total: "1000000.00", cantidad: 1, detalle: "x" },
+        { periodo: "2026-06", total: "12500000.00", cantidad: 9, detalle: "x" },
+      ],
+      { mode: "ultimos_meses", meses: 2 }
+    );
+    const flat = v!.kpis!.map((k) => `${k.label}`).join(" | ").toLowerCase();
+    expect(flat).toMatch(/parcial|en curso/);
+    expect(v!.warnings!.join(" ").toLowerCase()).toMatch(/parcial|en curso/);
+    // La variación parcial-vs-completo NO puede presentarse como caída real.
+    expect(v!.insights!.join(" ").toLowerCase()).toMatch(/parcial|en curso/);
+  });
+  it("meses NO adyacentes (hueco sin datos) → se declara, no se vende como 'mes anterior'", () => {
+    const v = TOOL_VISUALS.billing_summary!(
+      [
+        { periodo: "2026-06", total: "12500000.00", cantidad: 9, detalle: "x" },
+        { periodo: "2026-04", total: "9800000.00", cantidad: 7, detalle: "x" },
+      ],
+      { mode: "ultimos_meses", meses: 2 }
+    );
+    expect(
+      `${v!.kpis!.map((k) => k.label).join(" ")} ${v!.warnings!.join(" ")}`.toLowerCase()
+    ).toMatch(/con datos|hueco|sin datos entre/);
+  });
+});
+
+describe("visual · spend_comparison: superlativos honestos (review)", () => {
+  it("gasto_vs_compromiso: el insight señala el MAYOR pendiente real, no el mayor volumen", () => {
+    const v = TOOL_VISUALS.spend_comparison_report!(
+      [
+        { kind: "comparacion", proveedor: "A Volumen SA", gasto: 10000000, compromiso: 10000000, diferencia: 0, pct_ejecutado: 100, detalle: "x" },
+        { kind: "comparacion", proveedor: "B Pendiente SA", gasto: 0, compromiso: 8000000, diferencia: 8000000, pct_ejecutado: 0, detalle: "x" },
+      ],
+      { mode: "gasto_vs_compromiso" }
+    );
+    expect(v!.insights!.join(" ")).toContain("B Pendiente SA");
+    expect(v!.insights!.join(" ")).not.toContain("A Volumen SA");
+  });
+  it("gasto_vs_compromiso: sin pendientes positivos → no se inventa un 'mayor pendiente'", () => {
+    const v = TOOL_VISUALS.spend_comparison_report!(
+      [{ kind: "comparacion", proveedor: "A SA", gasto: 500000, compromiso: 0, diferencia: -500000, pct_ejecutado: null, detalle: "x" }],
+      { mode: "gasto_vs_compromiso" }
+    );
+    expect((v!.insights ?? []).join(" ").toLowerCase()).not.toMatch(/mayor pendiente de ejecuci/);
+  });
+  it("periodo_anterior: si TODO cayó, el KPI no dice 'Mayor suba' — dice caída", () => {
+    const v = TOOL_VISUALS.spend_comparison_report!(
+      [
+        { kind: "comparacion", proveedor: "Insumos SA", actual: 640000, anterior: 800000, variacion: -160000, variacion_pct: -20, estado: "baja", detalle: "x" },
+        { kind: "comparacion", proveedor: "Otro SA", actual: 0, anterior: 450000, variacion: -450000, variacion_pct: -100, estado: "sin_gasto", detalle: "x" },
+      ],
+      { mode: "periodo_anterior" }
+    );
+    const kpi0 = v!.kpis![0];
+    expect(kpi0.label.toLowerCase()).not.toContain("mayor suba");
+    expect(v!.insights!.join(" ").toLowerCase()).not.toMatch(/lidera las subas/);
+    expect(v!.insights!.join(" ").toLowerCase()).toMatch(/cay|baja|no hubo subas/);
+  });
+});

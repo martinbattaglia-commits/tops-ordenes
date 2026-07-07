@@ -51,6 +51,39 @@ export function pickTools(question: string): ToolCall[] {
     calls.push({ tool: "management_brief", args: { focus: gerencial.focus } });
     return calls;
   }
+  // ── Slice B (aceptación 2026-07-07): COMPARACIONES con fuente real ──────────
+  // Van ANTES de la matriz de cobertura: estas comparaciones dejaron de ser
+  // brecha — facturación m/m (billing ultimos_meses) y gasto de proveedores
+  // (dos bases / dos períodos de supplier_spend) tienen fuente.
+  // Review adversarial: las comparaciones POR CATEGORÍA/CLIENTE ("ANMAT contra
+  // Cargas", "clientes ANMAT vs Cargas") NO son m/m — siguen en sus tools; y
+  // "comparación mensual" suelta solo aplica al dominio que la frase nombra.
+  if (/saldo[^?]*(compromisos?|compras)|liquidez[^?]*(compromiso|compra)/.test(q)) {
+    calls.push({ tool: "spend_comparison_report", args: { mode: "saldo_vs_compromisos" } });
+    return calls;
+  }
+  if (
+    /gasto (real )?(contra|vs) (ordenes|oc|compromiso)/.test(q) ||
+    /proveedor(es)?[^?]*(aumento|variacion|suba)[^?]*(periodo|mes) anterior/.test(q) ||
+    /(aumento|variacion|suba)[^?]*(periodo|mes) anterior[^?]*proveedor/.test(q) ||
+    (/comparacion mensual|compara(cion|me)? mensual/.test(q) && /proveedor|gasto/.test(q))
+  ) {
+    // gasto real vs OC/compromiso = comparar bases; todo lo demás del branch es
+    // variación entre períodos (review: el modo usa el patrón COMPLETO con
+    // objeto — "aumento de gasto contra el mes anterior" es período, no bases).
+    const modo = /gasto (real )?(contra|vs) (ordenes|oc|compromiso)/.test(q)
+      ? "gasto_vs_compromiso"
+      : "periodo_anterior";
+    calls.push({ tool: "spend_comparison_report", args: { mode: modo } });
+    return calls;
+  }
+  if (
+    !/anmat|cargas generales|categoria|cliente/.test(q) &&
+    /(compara|comparacion)[^?]*factur|factur[^?]*(compara|comparacion|contra el mes anterior|vs mes anterior)/.test(q)
+  ) {
+    calls.push({ tool: "billing_summary", args: { mode: "ultimos_meses", meses: 2 } });
+    return calls;
+  }
   // ── Slice A (aceptación 2026-07-07): COBERTURA y dominios SIN fuente ────────
   // Preguntas sobre el propio Copilot + dominios brecha (WMS/stock/posiciones,
   // movimientos financieros): la respuesta correcta es la matriz de cobertura
@@ -60,10 +93,12 @@ export function pickTools(question: string): ToolCall[] {
     /cobertura (completa )?(del copilot|de nexus)|que fuentes usa|que datos faltan|que modulos .*(cobertura|brecha)|copilot (puede|no puede) responder/.test(q) ||
     /\bposicion(es)?\b|\bubicacion(es)?\b|sector(es)? .*(ocupacion|subutilizad)|subutilizad|\blotes?\b|productos sensibles|\bpallets?\b|\bstock\b|\bwms\b/.test(q) ||
     /movimientos (financieros|bancarios|de tesoreria|de caja|relevantes)/.test(q) ||
-    // Comparaciones período-a-período y cruces cliente 360: BRECHA declarada
-    // (la matriz tiene la fila con qué falta y dónde está la fuente parcial).
-    /compara(me)?[^?]*\b(ultimo periodo|periodo anterior|mes anterior|estado actual de nexus)/.test(q) ||
-    /(aumento|variacion|suba)[^?]*periodo anterior/.test(q) ||
+    // Comparaciones AÚN sin fuente (estado multi-dominio, cruce de clientes, y
+    // m/m de dominios sin serie por período — compliance/contratos/vacancia/
+    // operación): BRECHA declarada con la fila específica de la matriz (review:
+    // el recorte de Slice B las dejaba caer al estado actual del dominio).
+    /compara(me)?[^?]*estado actual de nexus|compara(me)?[^?]*\bultimo periodo\b/.test(q) ||
+    /compara(me)?[^?]*(compliance|contratos?|vacancia|operacion|incidentes)[^?]*(mes|periodo) anterior/.test(q) ||
     /compara(me)? clientes/.test(q) ||
     /clientes .*(contactar|contactarse)/.test(q)
   ) {
@@ -159,12 +194,15 @@ export function pickTools(question: string): ToolCall[] {
   }
 
   // Facturación POR CLIENTE (top-1 o ranking) — antes que el total y que facturas.
+  // Slice B: singular + "peso/porcentaje sobre el total" → focoTop con top-10
+  // (el % se calcula sobre el top listado y el visual lo declara).
+  const quierePeso = /peso|porcentaje|particip|represent/.test(q);
   if (/cliente/.test(q) && /factur|ingres|venta/.test(q)) {
     calls.push({
       tool: "customer_revenue_overview",
       args: {
         periodo: periodo === "ultimos_30_dias" ? "todo" : periodo,
-        ...(singular ? { limit: 1 } : {}),
+        ...(singular && quierePeso ? { limit: 10, focoTop: true } : singular ? { limit: 1 } : {}),
       },
     });
     return calls;
@@ -192,13 +230,6 @@ export function pickTools(question: string): ToolCall[] {
     return calls;
   }
 
-  // Slice A · round 2: comparar GASTO REAL contra OC FIRMADAS = las dos bases
-  // del agregado de proveedores juntas (el modelo compara con ambas fuentes).
-  if (/gasto (real )?(contra|vs) (ordenes|oc|compromiso)|gasto real contra/.test(q)) {
-    calls.push({ tool: "supplier_spend_overview", args: { base: "gasto", periodo: "todo" } });
-    calls.push({ tool: "supplier_spend_overview", args: { base: "compromiso", periodo: "todo" } });
-    return calls;
-  }
   // Gasto/presupuesto por proveedor. Tolerancia de typo: "probador" en contexto de
   // gasto = proveedor (hallazgo smoke). "insumió/consume" = contexto de gasto.
   // Slice A · round 2: + dependencia/concentración de proveedores (el ranking con
@@ -210,7 +241,11 @@ export function pickTools(question: string): ToolCall[] {
     const base = /presupuesto|comprom/.test(q) ? "compromiso" : "gasto";
     calls.push({
       tool: "supplier_spend_overview",
-      args: { base, periodo, ...(singular ? { limit: 1 } : {}) },
+      args: {
+        base,
+        periodo,
+        ...(singular && quierePeso ? { limit: 10, focoTop: true } : singular ? { limit: 1 } : {}),
+      },
     });
     return calls;
   }
@@ -255,13 +290,19 @@ export function pickTools(question: string): ToolCall[] {
       });
       return calls;
     }
-    const mode = /vencer|vencimiento/.test(q)
-      ? "por_vencer"
-      : /firmad|firmo|firma/.test(q)
-        ? "firmados_recientes"
-        : /vigente/.test(q)
-          ? "vigentes"
-          : "todos";
+    // Slice B: "vigentes como dashboard/tablero/cartera" gana aunque la frase
+    // mencione vencimientos (el dashboard de cartera YA incluye la ventana de
+    // vencimiento y la calidad documental).
+    const mode =
+      /vigente/.test(q) && /dashboard|tablero|cartera|como dashboard/.test(q)
+        ? "vigentes"
+        : /vencer|vencimiento/.test(q)
+          ? "por_vencer"
+          : /firmad|firmo|firma/.test(q)
+            ? "firmados_recientes"
+            : /vigente/.test(q)
+              ? "vigentes"
+              : "todos";
     calls.push({
       tool: "contracts_overview",
       args: {

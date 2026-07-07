@@ -266,7 +266,21 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
     },
   ],
   // fix/f5-2 · analytics (ficticio).
+  // Slice B: mes EN CURSO (parcial, generado dinámicamente) + DOS meses cerrados
+  // (orden desc, igual que la RPC). Habilita en demo la comparación m/m Y el caso
+  // prod-crítico del review adversarial: mes parcial vs mes cerrado (el visual y
+  // el brief deben declararlo, jamás fabricar una "caída"). El demoFilter de la
+  // tool espeja el p_mode real de la RPC.
   billing_summary: [
+    {
+      periodo: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
+      total: "1000000.00",
+      cantidad: 1,
+      desde: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
+      hasta: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-07`,
+      detalle:
+        "Facturación del mes en curso (parcial) · total ARS 1,000,000.00 · 1 factura autorizada",
+    },
     {
       periodo: "2026-06",
       total: "12500000.00",
@@ -275,6 +289,15 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
       hasta: "2026-06-30",
       detalle:
         "Facturación 2026-06 · total ARS 12,500,000.00 · 9 facturas autorizadas · del 2026-06-01 al 2026-06-30",
+    },
+    {
+      periodo: "2026-05",
+      total: "9800000.00",
+      cantidad: 7,
+      desde: "2026-05-01",
+      hasta: "2026-05-31",
+      detalle:
+        "Facturación 2026-05 · total ARS 9,800,000.00 · 7 facturas autorizadas · del 2026-05-01 al 2026-05-31",
     },
   ],
   bank_balances_overview: [
@@ -371,6 +394,9 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
         "Ingresos Sin clasificar · ARS 1,000,000.00 · 8.0% del total · 1 factura · método: sin tag ni keyword (brecha de clasificación)",
     },
   ],
+  // Slice B: fixtures por BASE y PERÍODO (el demoFilter de la tool espeja los
+  // filtros p_base/p_periodo de la RPC). Habilita en demo: gasto vs compromiso,
+  // variación m/m de proveedores y el fix del mislabel "gasto" → filas compromiso.
   supplier_spend_overview: [
     {
       proveedor: "Mobiliarios Demo SA",
@@ -388,6 +414,72 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
       periodo: "todo",
       base: "compromiso",
       detalle: "Presupuesto comprometido · Insumos Demo SA · ARS 1,670,000.00 · 1 OC firmada",
+    },
+    {
+      proveedor: "Mobiliarios Demo SA",
+      total: "3400000.00",
+      cantidad: 4,
+      periodo: "todo",
+      base: "gasto",
+      detalle: "Gasto · Mobiliarios Demo SA · ARS 3,400,000.00 · 4 comprobantes · período: todo",
+    },
+    {
+      proveedor: "Insumos Demo SA",
+      total: "1670000.00",
+      cantidad: 2,
+      periodo: "todo",
+      base: "gasto",
+      detalle: "Gasto · Insumos Demo SA · ARS 1,670,000.00 · 2 comprobantes · período: todo",
+    },
+    {
+      // Con gasto pero SIN OC firmada asociada: la comparación gasto-vs-compromiso
+      // lo muestra con compromiso 0 (declarado), nunca lo esconde.
+      proveedor: "Logística Ejemplo SA",
+      total: "450000.00",
+      cantidad: 1,
+      periodo: "todo",
+      base: "gasto",
+      detalle: "Gasto · Logística Ejemplo SA · ARS 450,000.00 · 1 comprobante · período: todo",
+    },
+    {
+      proveedor: "Mobiliarios Demo SA",
+      total: "1200000.00",
+      cantidad: 2,
+      periodo: "ultimo_mes",
+      base: "gasto",
+      detalle: "Gasto · Mobiliarios Demo SA · ARS 1,200,000.00 · 2 comprobantes · período: último mes",
+    },
+    {
+      proveedor: "Insumos Demo SA",
+      total: "800000.00",
+      cantidad: 1,
+      periodo: "ultimo_mes",
+      base: "gasto",
+      detalle: "Gasto · Insumos Demo SA · ARS 800,000.00 · 1 comprobante · período: último mes",
+    },
+    {
+      proveedor: "Mobiliarios Demo SA",
+      total: "1900000.00",
+      cantidad: 1,
+      periodo: "mes_actual",
+      base: "gasto",
+      detalle: "Gasto · Mobiliarios Demo SA · ARS 1,900,000.00 · 1 comprobante · período: mes en curso",
+    },
+    {
+      proveedor: "Logística Ejemplo SA",
+      total: "450000.00",
+      cantidad: 1,
+      periodo: "mes_actual",
+      base: "gasto",
+      detalle: "Gasto · Logística Ejemplo SA · ARS 450,000.00 · 1 comprobante · período: mes en curso",
+    },
+    {
+      proveedor: "Insumos Demo SA",
+      total: "640000.00",
+      cantidad: 1,
+      periodo: "mes_actual",
+      base: "gasto",
+      detalle: "Gasto · Insumos Demo SA · ARS 640,000.00 · 1 comprobante · período: mes en curso",
     },
   ],
 };

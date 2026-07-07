@@ -60,6 +60,8 @@ export const COPILOT_SUGGESTION_SECTIONS: CopilotSuggestionSection[] = [
     coverage: "supported",
     prompts: [
       { id: "total-mes", label: "Facturación del último mes", prompt: "¿Cuánto se facturó el último mes?", coverage: "supported" },
+      // Slice B: comparación m/m con fuente real (billing ultimos_meses).
+      { id: "vs-mes-anterior", label: "Vs mes anterior", prompt: "Comparame la facturación de este mes contra el mes anterior y explicame la variación.", coverage: "supported" },
       { id: "categorias", label: "% ANMAT vs Cargas Generales", prompt: "Haceme un reporte de ingresos por categoría: qué porcentaje fue ANMAT y qué porcentaje Cargas Generales", coverage: "supported" },
       { id: "cliente-top", label: "Cliente que más facturó", prompt: "¿Cuál fue el cliente que más facturó?", coverage: "supported" },
       { id: "ranking-clientes", label: "Ranking de clientes", prompt: "Ranking de clientes por facturación", coverage: "supported" },

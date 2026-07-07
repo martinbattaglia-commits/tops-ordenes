@@ -107,14 +107,29 @@ describe("routing por pregunta (round 1)", () => {
     ["Detectá procesos sin actividad reciente y sugerí próximos pasos.", "workflows_stuck"],
     ["Detectá oportunidades de almacenamiento disponibles.", "vacancy_overview"],
     ["Preparame una lectura WMS para comercial y operaciones.", "coverage_overview"],
-    ["Comparame el estado actual de Nexus contra el último período disponible: qué mejoró, qué empeoró y qué se trabó.", "coverage_overview"],
+    // Slice B: "qué mejoró/empeoró" ahora va al BRIEF (trae el delta m/m real de
+    // facturación + estados por área + declara los límites de comparación) — es
+    // mejor respuesta que la brecha pura de coverage.
+    ["Comparame el estado actual de Nexus contra el último período disponible: qué mejoró, qué empeoró y qué se trabó.", "management_brief"],
     ["Comparame clientes ANMAT contra Cargas Generales.", "coverage_overview"],
     ["Qué clientes deberían contactarse esta semana y por qué.", "coverage_overview"],
     ["Preparame un mapa ejecutivo de áreas, responsables y módulos.", "organization_overview"],
-    ["Comparame la facturación de este mes contra el mes anterior y explicame la variación.", "coverage_overview"],
-    ["Detectá proveedores con aumento relevante respecto del período anterior.", "coverage_overview"],
     ["Detectá dependencia excesiva de proveedores y sugerí mitigaciones.", "supplier_spend_overview"],
     ["Qué clientes tienen riesgo documental o contractual.", "contracts_overview"],
+    // ── Slice B: comparaciones REALES (dejan de ser brecha declarada) ────────
+    // La facturación m/m y la variación de proveedores tienen fuente (billing
+    // ultimos_meses / supplier_spend por período): ahora se responden, no se
+    // declaran como brecha.
+    ["Comparame la facturación de este mes contra el mes anterior y explicame la variación.", "billing_summary"],
+    ["Haceme un informe ejecutivo de facturación con comparación mensual.", "billing_summary"],
+    ["Detectá proveedores con aumento relevante respecto del período anterior.", "spend_comparison_report"],
+    ["Comparame gasto real contra órdenes de compra firmadas.", "spend_comparison_report"],
+    ["Comparame saldo disponible contra compromisos de compras.", "spend_comparison_report"],
+    // Contratos: "vigentes como dashboard" gana aunque la frase mencione vencimientos.
+    ["Mostrame los contratos vigentes como dashboard: tipo, estado, vencimientos y calidad documental.", "contracts_overview"],
+    // Lectura gerencial 4 dimensiones → brief.
+    ["Qué está sano, qué está en riesgo, qué está trabado y qué oportunidad comercial aparece.", "management_brief"],
+    ["Decime qué empeoró y qué mejoró en Nexus respecto al período anterior.", "management_brief"],
   ];
   for (const [question, expectedTool] of sliceA) {
     it(`slice A: "${question.slice(0, 55)}…" → ${expectedTool}`, async () => {
@@ -128,16 +143,106 @@ describe("routing por pregunta (round 1)", () => {
     });
   }
 
-  it("comparar gasto real contra OC firmadas consulta las DOS bases del gasto", async () => {
+  it("comparar facturación m/m pide la serie de los últimos 2 meses (ultimos_meses)", async () => {
     const res = await provider.plan(
-      req({ question: "Comparame gasto real contra órdenes de compra firmadas." })
+      req({ question: "Comparame la facturación de este mes contra el mes anterior." })
     );
     if (res.kind === "tool_calls") {
-      const bases = res.toolCalls
-        .filter((c) => c.tool === "supplier_spend_overview")
-        .map((c) => c.args.base);
-      expect(bases).toContain("gasto");
-      expect(bases).toContain("compromiso");
+      const call = res.toolCalls.find((c) => c.tool === "billing_summary");
+      expect(call?.args).toMatchObject({ mode: "ultimos_meses", meses: 2 });
+    } else {
+      throw new Error("esperaba tool_calls");
+    }
+  });
+
+  it("gasto vs compromiso y variación m/m eligen el modo correcto del comparador", async () => {
+    const a = await provider.plan(
+      req({ question: "Comparame gasto real contra órdenes de compra firmadas." })
+    );
+    if (a.kind === "tool_calls") {
+      expect(a.toolCalls[0]).toMatchObject({
+        tool: "spend_comparison_report",
+        args: { mode: "gasto_vs_compromiso" },
+      });
+    } else throw new Error("esperaba tool_calls");
+    const b = await provider.plan(
+      req({ question: "Detectá proveedores con aumento relevante respecto del período anterior." })
+    );
+    if (b.kind === "tool_calls") {
+      expect(b.toolCalls[0]).toMatchObject({
+        tool: "spend_comparison_report",
+        args: { mode: "periodo_anterior" },
+      });
+    } else throw new Error("esperaba tool_calls");
+    // Liquidez: saldo en bancos vs compromisos de compra — modo propio (no es
+    // gasto-vs-compromiso por proveedor; sería responder otro tema).
+    const c = await provider.plan(
+      req({ question: "Comparame saldo disponible contra compromisos de compras." })
+    );
+    if (c.kind === "tool_calls") {
+      expect(c.toolCalls[0]).toMatchObject({
+        tool: "spend_comparison_report",
+        args: { mode: "saldo_vs_compromisos" },
+      });
+    } else throw new Error("esperaba tool_calls");
+  });
+
+  // ── Post-review adversarial (Slice B): regresiones de ruteo confirmadas ────
+  it("comparación POR CATEGORÍA/CLIENTE no la canibaliza el branch m/m (review)", async () => {
+    const a = await provider.plan(
+      req({ question: "Comparame la facturación de ANMAT contra Cargas Generales." })
+    );
+    if (a.kind === "tool_calls") {
+      expect(a.toolCalls[0].tool).toBe("revenue_by_category_report");
+    } else throw new Error("esperaba tool_calls");
+    const b = await provider.plan(
+      req({ question: "Haceme una comparación mensual del gasto de proveedores." })
+    );
+    if (b.kind === "tool_calls") {
+      expect(b.toolCalls[0].tool).toBe("spend_comparison_report");
+      expect(b.toolCalls[0].args).toMatchObject({ mode: "periodo_anterior" });
+    } else throw new Error("esperaba tool_calls");
+  });
+
+  it("variación de proveedores con 'gasto ... contra' en la frase NO cae en gasto_vs_compromiso (review)", async () => {
+    const res = await provider.plan(
+      req({ question: "¿Qué proveedores tuvieron aumento de gasto contra el mes anterior?" })
+    );
+    if (res.kind === "tool_calls") {
+      expect(res.toolCalls[0]).toMatchObject({
+        tool: "spend_comparison_report",
+        args: { mode: "periodo_anterior" },
+      });
+    } else throw new Error("esperaba tool_calls");
+  });
+
+  it("comparación m/m de un dominio SIN fuente (compliance) → brecha declarada, no estado actual (review)", async () => {
+    const res = await provider.plan(
+      req({ question: "Comparame el compliance de este mes contra el mes anterior." })
+    );
+    if (res.kind === "tool_calls") {
+      expect(res.toolCalls[0].tool).toBe("coverage_overview");
+    } else throw new Error("esperaba tool_calls");
+  });
+
+  it("'¿qué mejoró en compliance?' es de dominio puntual → compliance, no brief (review)", async () => {
+    const res = await provider.plan(
+      req({ question: "¿Qué mejoró en compliance el último mes?" })
+    );
+    if (res.kind === "tool_calls") {
+      expect(res.toolCalls.map((c) => c.tool)).toContain("compliance_pending");
+      expect(res.toolCalls.map((c) => c.tool)).not.toContain("management_brief");
+    } else throw new Error("esperaba tool_calls");
+  });
+
+  it("singular + peso sobre el total → focoTop con top-10 (no limit=1)", async () => {
+    const res = await provider.plan(
+      req({ question: "Cuál fue el cliente que más facturó y qué peso tuvo sobre el total." })
+    );
+    if (res.kind === "tool_calls") {
+      const call = res.toolCalls.find((c) => c.tool === "customer_revenue_overview");
+      expect(call?.args).toMatchObject({ focoTop: true });
+      expect(call?.args.limit).not.toBe(1);
     } else {
       throw new Error("esperaba tool_calls");
     }

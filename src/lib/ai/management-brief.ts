@@ -88,6 +88,14 @@ const MANAGEMENT_PATTERNS: Array<{ re: RegExp; focus: BriefFocus }> = [
   },
   { re: /tension(es)? financier/, focus: "riesgos" },
   { re: /pipeline ejecutivo/, focus: "oportunidades" },
+  // Slice B: lectura gerencial de 4 dimensiones y "qué mejoró/empeoró" (el
+  // brief trae el delta m/m de facturación y declara los límites del resto).
+  // Review adversarial: exige AMBOS verbos o un ancla multi-dominio — "¿qué
+  // mejoró en compliance?" es de dominio puntual y sigue en su tool.
+  {
+    re: /que esta sano|que (mejoro|empeoro),? ?y? ?que (mejoro|empeoro)|que (mejoro|empeoro)[^?]*(en nexus|la empresa|el negocio|en general)/,
+    focus: "resumen",
+  },
 ];
 
 /** Devuelve el foco gerencial de la pregunta, o null si es de dominio puntual. */
@@ -165,7 +173,10 @@ const MAX_BRECHAS = 4;
 // Cada consulta usa la tool EXISTENTE con args explícitos y acotados.
 
 const PLAN: Record<string, ToolCall> = {
-  billing: { tool: "billing_summary", args: { mode: "ultimo_mes" } },
+  // Slice B: 3 meses (desc) → aunque el mes EN CURSO tenga datos (parciales),
+  // quedan 2 meses CERRADOS para el headline y el delta m/m (review adversarial:
+  // comparar parcial-vs-completo fabricaba una falsa "caída de facturación").
+  billing: { tool: "billing_summary", args: { mode: "ultimos_meses", meses: 3 } },
   categorias: { tool: "revenue_by_category_report", args: { periodo: "ultimo_mes" } },
   clientes: { tool: "customer_revenue_overview", args: { periodo: "todo", limit: 5 } },
   bancos: { tool: "bank_balances_overview", args: { limit: 10 } },
@@ -214,16 +225,40 @@ export async function composeManagementBriefRows(
   const oportunidades: BriefOportunidadRow[] = [];
   const brechas: BriefBrechaRow[] = [];
 
-  // ── Facturación (billing + categorías + cliente top) ──────────────────────
+  // ── Facturación (billing + delta m/m + categorías + cliente top) ──────────
   {
-    const bill = d.billing[0];
+    // Slice B: la serie viene desc de la RPC; orden defensivo por período.
+    // Review adversarial (hallazgo ALTO): el headline y el delta usan meses
+    // CERRADOS — el mes calendario EN CURSO es parcial y solo se informa como
+    // dato adicional declarado, jamás como base de una variación "real".
+    const meses = [...d.billing].sort((a, b) => s(b.periodo).localeCompare(s(a.periodo)));
+    const hoyBrief = new Date();
+    const mesEnCursoId = `${hoyBrief.getFullYear()}-${String(hoyBrief.getMonth() + 1).padStart(2, "0")}`;
+    const cerrados = meses.filter((m) => s(m.periodo) !== mesEnCursoId);
+    const mesEnCurso = meses.find((m) => s(m.periodo) === mesEnCursoId);
+    const bill = cerrados[0] ?? meses[0];
+    const mesAnterior = cerrados[0] ? cerrados[1] : undefined;
     const cats = d.categorias;
     const lider = cats[0];
     const sinClasif = cats.find((r) => s(r.categoria) === "Sin clasificar");
     const topCliente = d.clientes[0];
     if (bill) {
+      // Delta m/m calculado (nunca estimado): solo si HAY mes anterior con datos.
+      const delta = mesAnterior ? num(bill.total) - num(mesAnterior.total) : null;
+      const deltaPct =
+        mesAnterior && num(mesAnterior.total) > 0
+          ? Math.round((1000 * (num(bill.total) - num(mesAnterior.total))) / num(mesAnterior.total)) / 10
+          : null;
+      const deltaTxt =
+        delta == null
+          ? ""
+          : `Variación vs mes anterior (${s(mesAnterior!.periodo)}): ${delta >= 0 ? "+" : "−"}${fmtMonto(Math.abs(delta))}${deltaPct != null ? ` (${delta >= 0 ? "+" : ""}${deltaPct}%)` : ""}.`;
       const partes = [
-        `Facturación ${s(bill.periodo)}: ${fmtMonto(num(bill.total))} (${s(bill.cantidad)} facturas autorizadas).`,
+        `Facturación ${s(bill.periodo)} (último mes cerrado): ${fmtMonto(num(bill.total))} (${s(bill.cantidad)} facturas autorizadas).`,
+        deltaTxt,
+        mesEnCurso
+          ? `Mes en curso ${s(mesEnCurso.periodo)} (PARCIAL): ${fmtMonto(num(mesEnCurso.total))} (${s(mesEnCurso.cantidad)} facturas) — no comparable con meses cerrados.`
+          : "",
         lider
           ? `Categoría líder: ${s(lider.categoria)} ${s(lider.porcentaje)}% (${fmtMonto(num(lider.monto))}).`
           : "",
@@ -234,13 +269,15 @@ export async function composeManagementBriefRows(
           ? `Sin clasificar: ${s(sinClasif.porcentaje)}% (${fmtMonto(num(sinClasif.monto))}) — brecha de clasificación.`
           : "",
       ].filter(Boolean);
+      const cayoFuerte = deltaPct != null && deltaPct <= -15;
       secciones.push({
         kind: "seccion",
         seccion: "facturacion",
         titulo: "Facturación",
-        estado: sinClasif && num(sinClasif.porcentaje) >= 10 ? "atencion" : "ok",
+        estado:
+          cayoFuerte || (sinClasif && num(sinClasif.porcentaje) >= 10) ? "atencion" : "ok",
         valor: fmtMonto(num(bill.total)),
-        hint: `${s(bill.periodo)} · ${s(bill.cantidad)} facturas${lider ? ` · líder ${s(lider.categoria)} ${s(lider.porcentaje)}%` : ""}`,
+        hint: `${s(bill.periodo)} · ${s(bill.cantidad)} facturas${deltaPct != null ? ` · vs mes anterior ${deltaPct >= 0 ? "+" : ""}${deltaPct}%` : ""}${lider ? ` · líder ${s(lider.categoria)} ${s(lider.porcentaje)}%` : ""}`,
         pct: null,
         url: "/billing",
         detalle: partes.join(" "),
@@ -251,6 +288,19 @@ export async function composeManagementBriefRows(
             }
           : {}),
       });
+      if (cayoFuerte) {
+        riesgos.push({
+          kind: "riesgo",
+          area: "Facturación",
+          titulo: `La facturación cayó ${Math.abs(deltaPct!)}% vs el mes anterior`,
+          impacto: "alto",
+          urgencia: "alta",
+          evidencia: `${s(bill.periodo)}: ${fmtMonto(num(bill.total))} vs ${s(mesAnterior!.periodo)}: ${fmtMonto(num(mesAnterior!.total))}`,
+          accion: "Revisar con Comercial la caída de facturación y las renovaciones en curso",
+          url: "/billing",
+          detalle: `Riesgo comercial alto/alta: la facturación de ${s(bill.periodo)} cayó ${Math.abs(deltaPct!)}% respecto de ${s(mesAnterior!.periodo)}. Acción: revisar con Comercial.`,
+        });
+      }
       if (sinClasif && num(sinClasif.monto) > 0) {
         brechas.push({
           kind: "brecha",
@@ -557,6 +607,15 @@ export async function composeManagementBriefRows(
     titulo: "Caja chica sin fuente conectada",
     detalle:
       "Brecha de cobertura: no encontré una fuente conectada para movimientos de caja chica (dominio aún no integrado al Copilot).",
+  });
+  // Slice B: la comparación entre períodos existe para facturación (m/m) y
+  // gasto de proveedores; el resto de las áreas se reporta a estado actual.
+  // Se declara para que "qué mejoró/empeoró" no sobreprometa.
+  brechas.push({
+    kind: "brecha",
+    titulo: "Comparaciones multi-dominio parciales",
+    detalle:
+      "Brecha de capacidad: la comparación entre períodos hoy cubre facturación (variación m/m) y gasto de proveedores; contratos, compliance, vacancia y operación se reportan a estado actual.",
   });
 
   // ── Orden final: riesgos por impacto/urgencia; foco reordena las citas ─────

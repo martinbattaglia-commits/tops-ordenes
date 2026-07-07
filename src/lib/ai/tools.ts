@@ -86,6 +86,9 @@ export interface ToolSpec {
    *  dinámico para no crear ciclos de módulo. Sigue siendo read-only por
    *  construcción: solo puede invocar tools de este mismo catálogo. */
   orchestrate?: (args: Record<string, unknown>) => Promise<RawRow[]>;
+  /** Slice B: filtro de FIXTURES en demo mode para args semánticos (mode/base/
+   *  periodo) — espeja lo que la RPC real filtra en SQL. Solo corre en isMock. */
+  demoFilter?: (rows: RawRow[], args: Record<string, unknown>) => RawRow[];
   /** smoke 2026-07-07 (links reales): enriquecimiento read-only POST-RPC con el
    *  cliente de SESIÓN (RLS) — p.ej. traer la URL de Drive de compliance_documents/
    *  contract_documents para las fichas devueltas. Errores → filas sin enriquecer. */
@@ -592,6 +595,21 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       meses: z.number().int().min(1).max(12).optional(),
     }),
     toRpcArgs: (a) => ({ p_mode: a.mode ?? "ultimo_mes", p_meses: a.meses ?? 3 }),
+    // Slice B: fixtures = [mes en curso parcial, meses cerrados…] desc; el
+    // demoFilter espeja p_mode de la RPC: ultimo_mes = último mes CERRADO,
+    // mes_actual = el mes calendario en curso, ultimos_meses = serie desc.
+    demoFilter: (rows, a) => {
+      const mode = String(a.mode ?? "ultimo_mes");
+      if (mode === "ultimos_meses") return rows.slice(0, Number(a.meses ?? 3));
+      const hoy = new Date();
+      const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+      if (mode === "mes_actual") {
+        const m = rows.filter((r) => r.periodo === mesActual);
+        return m.slice(0, 1);
+      }
+      const cerrados = rows.filter((r) => r.periodo !== mesActual);
+      return (cerrados.length > 0 ? cerrados : rows).slice(0, 1);
+    },
     rowToChunk: (r) => ({
       entityType: "billing_periodo",
       entityId: s(r.periodo),
@@ -625,6 +643,9 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
     schema: z.object({
       base: z.enum(["gasto", "compromiso"]).optional(),
       periodo: z.enum(["todo", "mes_actual", "ultimo_mes", "ultimos_30_dias"]).optional(),
+      // Slice B · hint VISUAL (no viaja al RPC): la pregunta pide el peso del
+      // top sobre el total → entidad principal + % del top listado.
+      focoTop: z.boolean().optional(),
       limit,
     }),
     toRpcArgs: (a) => ({
@@ -632,6 +653,15 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       p_periodo: a.periodo ?? "todo",
       p_limit: a.limit ?? 10,
     }),
+    // Slice B: el demoFilter espeja p_base/p_periodo de la RPC (sin esto, demo
+    // devolvía filas de compromiso para preguntas de gasto — mislabel real del
+    // examen de aceptación). Match EXACTO: sin fixture para esa combinación →
+    // vacío HONESTO (review adversarial: un fallback que mezcla períodos/bases
+    // re-etiqueta datos de otro período — peor que un vacío declarado).
+    demoFilter: (rows, a) =>
+      rows.filter(
+        (r) => r.base === String(a.base ?? "gasto") && r.periodo === String(a.periodo ?? "todo")
+      ),
     rowToChunk: (r) => ({
       entityType: "supplier_spend",
       entityId: s(r.proveedor),
@@ -654,6 +684,8 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       "FACTURACIÓN POR CLIENTE (agregado de facturas emitidas AUTORIZADAS, sin anuladas), ordenada de mayor a menor. periodo: todo | mes_actual | ultimo_mes. limit=1 para '¿cuál fue EL cliente que más facturó?' (singular = UNA entidad); limit>1 para rankings. USALA para 'cliente que más facturó', 'mayor facturación', 'ranking de clientes por facturación'. El total ya viene sumado: no lo calcules vos. NO uses search_knowledge para esto.",
     schema: z.object({
       periodo: z.enum(["todo", "mes_actual", "ultimo_mes"]).optional(),
+      // Slice B · hint VISUAL (no viaja al RPC): peso del top sobre el total.
+      focoTop: z.boolean().optional(),
       limit,
     }),
     toRpcArgs: (a) => ({ p_periodo: a.periodo ?? "todo", p_limit: a.limit ?? 10 }),
@@ -775,6 +807,33 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       date: null,
       // Cada fila del brief trae su ruta real de módulo (verificada anti-404
       // por construcción: reusa las mismas rutas que entityUrl).
+      url: sn(r.url),
+    }),
+  },
+  // ── Slice B (aceptación 2026-07-07): comparador de compras/liquidez ─────────
+  // ORQUESTADORA sobre RPCs existentes (ai_supplier_spend_overview +
+  // ai_bank_balances_overview): cruza y resta en código, nada se inventa.
+  spend_comparison_report: {
+    orchestrate: async (a) =>
+      (await import("./spend-comparison")).composeSpendComparisonRows(a),
+    description:
+      "COMPARACIONES de compras y liquidez (los montos salen de las tools; acá solo se cruzan): mode=gasto_vs_compromiso (facturas de proveedor vs OC firmadas, por proveedor, con % ejecutado y pendiente) | periodo_anterior (variación del gasto por proveedor: mes en curso vs último mes cerrado, con subas/bajas/nuevos) | saldo_vs_compromisos (liquidez: saldo en bancos y caja vs compromisos de OC). USALA para 'comparame gasto real contra órdenes de compra', 'proveedores con aumento respecto del período anterior', 'saldo disponible contra compromisos de compras', 'tensión de liquidez por compromisos'. NO la uses para el ranking simple de gasto (supplier_spend_overview).",
+    schema: z.object({
+      mode: z
+        .enum(["gasto_vs_compromiso", "periodo_anterior", "saldo_vs_compromisos"])
+        .optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({ mode: a.mode ?? "gasto_vs_compromiso", limit: a.limit ?? 20 }),
+    rowToChunk: (r) => ({
+      entityType: "spend_comparacion",
+      entityId: `${s(r.kind)}:${s(r.proveedor) || s(r.concepto)}`.slice(0, 80),
+      publicId: null,
+      title: s(r.proveedor)
+        ? `${s(r.proveedor)} · comparación de gasto`
+        : s(r.concepto) || "Comparación",
+      excerpt: s(r.detalle),
+      date: null,
       url: sn(r.url),
     }),
   },
@@ -937,10 +996,12 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   supplier_spend_overview: js({
     base: { type: "string", enum: ["gasto", "compromiso"] },
     periodo: { type: "string", enum: ["todo", "mes_actual", "ultimo_mes", "ultimos_30_dias"] },
+    focoTop: { type: "boolean", description: "true si piden el peso/porcentaje del top sobre el total (pasá limit 10)" },
     limit: jsLimit,
   }),
   customer_revenue_overview: js({
     periodo: { type: "string", enum: ["todo", "mes_actual", "ultimo_mes"] },
+    focoTop: { type: "boolean", description: "true si piden el peso/porcentaje del top sobre el total (pasá limit 10)" },
     limit: jsLimit,
   }),
   revenue_by_category_report: js({
@@ -966,6 +1027,14 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   }),
   coverage_overview: js({
     query: { type: "string", description: "Dominio consultado (p.ej. 'stock', 'caja chica', 'movimientos')" },
+    limit: jsLimit,
+  }),
+  spend_comparison_report: js({
+    mode: {
+      type: "string",
+      enum: ["gasto_vs_compromiso", "periodo_anterior", "saldo_vs_compromisos"],
+      description: "Qué comparación pidió el usuario",
+    },
     limit: jsLimit,
   }),
 };

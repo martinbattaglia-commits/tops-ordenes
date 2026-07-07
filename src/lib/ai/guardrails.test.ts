@@ -240,6 +240,14 @@ describe("isMetadataContentRisk (F5.1-b.0 · D5 / H6, fail-closed)", () => {
     expect(
       isMetadataContentRisk("¿qué dice el plan de acción del expediente?", [meta("compliance_documento")])
     ).toBe(true);
+    // Review adversarial Slice B: "pendiente DE CUMPLIR" pregunta por las
+    // OBLIGACIONES del contrato (contenido), no por el estado de la ficha.
+    expect(
+      isMetadataContentRisk("¿Qué quedó pendiente de cumplir en el contrato con TASA?", [meta("contrato")])
+    ).toBe(true);
+    expect(
+      isMetadataContentRisk("¿qué queda por cumplir del acuerdo?", [meta("contrato")])
+    ).toBe(true);
   });
 
   it("desambigua por objeto: verbo ambiguo + documento singular vs colección", () => {

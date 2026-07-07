@@ -188,6 +188,8 @@ const EMPTY_MESSAGE_BY_TOOL: Record<string, string> = {
     "No pude componer el informe de gestión: las fuentes conectadas no devolvieron datos en este momento.",
   coverage_overview:
     "No encontré esa capacidad en la matriz de cobertura del Copilot.",
+  spend_comparison_report:
+    "No encontré datos suficientes en Nexus para armar esa comparación de compras/liquidez.",
 };
 
 /** Mensaje genérico (dominios mixtos, sin tools o tool sin mapa): honesto, no el
@@ -252,6 +254,10 @@ const CONTENT_TERMS = [
   "menciona", "se refiere",
   // smoke 2026-07-07: interpretación condicional/consecuencias = contenido.
   "incumpl", "que pasa si", "segun la plancheta", "segun el plano",
+  // Review adversarial Slice B: "pendiente DE CUMPLIR / por cumplir" pregunta
+  // por las OBLIGACIONES del documento (contenido) — cierra el bypass que abrió
+  // "pendiente" como término de gestión (la prioridad de CONTENIDO gana).
+  "pendiente de cumplir", "por cumplir", "sin cumplir",
   "monto del", "plazo del", "vigencia del contrato", "que penaliza", "leeme el", "leer el",
   // English
   "summariz", "what does it say", "what says", "the terms", "obligations", "coverage",

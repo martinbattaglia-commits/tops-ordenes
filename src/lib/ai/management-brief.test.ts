@@ -56,6 +56,9 @@ describe("detectManagementIntent — intención gerencial (Fase 4)", () => {
     ["Armame un reporte de gobernanza: fuentes incompletas, datos sin clasificar y documentos sin link real.", "resumen"],
     ["Detectá posibles tensiones financieras usando saldos, compras y facturación.", "riesgos"],
     ["Preparame un pipeline ejecutivo con próximos pasos comerciales.", "oportunidades"],
+    // Slice B: lectura gerencial de 4 dimensiones y "qué mejoró/empeoró".
+    ["Qué está sano, qué está en riesgo, qué está trabado y qué oportunidad comercial aparece.", "resumen"],
+    ["Decime qué empeoró y qué mejoró en Nexus respecto al período anterior.", "resumen"],
   ];
   for (const [q, focus] of gerenciales) {
     it(`"${q.slice(0, 60)}…" → focus ${focus}`, async () => {
@@ -173,6 +176,45 @@ describe("composeManagementBriefRows — composición multi-dominio (demo mode)"
     const firstRiesgo = rows.findIndex((r) => r.kind === "riesgo");
     expect(firstRiesgo).toBeGreaterThanOrEqual(0);
     expect(firstRiesgo).toBeLessThan(firstSeccion);
+  });
+
+  // ── Slice B: comparación m/m dentro del brief (fuente: billing ultimos_meses) ──
+  it("la sección facturación trae la variación vs mes anterior (delta m/m)", async () => {
+    const { composeManagementBriefRows } = await loadBrief();
+    const rows: Row[] = await composeManagementBriefRows({});
+    const fact = rows.find((r) => r.kind === "seccion" && r.seccion === "facturacion");
+    expect(fact).toBeTruthy();
+    // Fixtures demo: 2026-06 = 12.5M vs 2026-05 = 9.8M → +27.6%.
+    expect(`${fact!.hint} ${fact!.detalle}`).toMatch(/mes anterior|vs 2026-05/);
+    expect(String(fact!.detalle)).toContain("27.6");
+  });
+
+  // Review adversarial Slice B (hallazgo ALTO): el headline y el delta del brief
+  // usan meses CERRADOS — el mes en curso parcial jamás fabrica una "caída".
+  it("el headline del brief es el último mes CERRADO; el mes en curso parcial no dispara riesgo falso", async () => {
+    const { composeManagementBriefRows } = await loadBrief();
+    const rows: Row[] = await composeManagementBriefRows({});
+    const fact = rows.find((r) => r.kind === "seccion" && r.seccion === "facturacion");
+    // Con el fixture del mes en curso (parcial), el valor principal sigue siendo
+    // el último mes CERRADO (2026-06 = 12.5M), no el parcial.
+    expect(String(fact!.valor)).toContain("12,500,000.00");
+    // Y el delta reportado es cerrado-vs-cerrado (+27.6%), nunca parcial-vs-cerrado.
+    expect(String(fact!.detalle)).toContain("27.6");
+    // Ningún riesgo de "caída de facturación" fabricado por el mes parcial.
+    const riesgoFact = rows.find(
+      (r) => r.kind === "riesgo" && /facturaci/i.test(String(r.area))
+    );
+    expect(riesgoFact).toBeUndefined();
+  });
+
+  it("declara la brecha de comparaciones multi-dominio (solo facturación compara)", async () => {
+    const { composeManagementBriefRows } = await loadBrief();
+    const rows: Row[] = await composeManagementBriefRows({});
+    const brechas = rows.filter((r) => r.kind === "brecha");
+    expect(
+      brechas.some((b) => /comparaci/i.test(String(b.detalle))),
+      "la limitación de comparación se declara, no se maquilla"
+    ).toBe(true);
   });
 
   it("'Sin clasificar' se declara como brecha visible (nunca se reparte)", async () => {

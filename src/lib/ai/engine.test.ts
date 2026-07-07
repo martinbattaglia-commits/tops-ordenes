@@ -137,6 +137,54 @@ describe("flujo completo en demo mode (provider mock + fixtures)", () => {
     expect(res.sources.some((s) => s.entityType === "brief_riesgo")).toBe(true);
   });
 
+  // ── Slice B (aceptación 2026-07-07): comparaciones con fuente real ─────────
+  it("comparación facturación m/m → answered con delta calculado y mes parcial DECLARADO", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("Comparame la facturación de este mes contra el mes anterior y explicame la variación.")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.answer).toMatch(/\[S\d+\]/);
+    expect(res.visual).toBeTruthy();
+    const kpis = res.visual!.kpis!.map((k) => `${k.label} ${k.value}`).join(" | ");
+    expect(kpis).toMatch(/[Vv]ariaci/);
+    // Fixtures: mes en curso (parcial, 1M) vs 2026-06 (12.5M) → la variación se
+    // calcula PERO el mes parcial se declara (review adversarial: nunca vender
+    // parcial-vs-completo como caída real).
+    expect(`${kpis} ${(res.visual!.warnings ?? []).join(" ")}`.toLowerCase()).toMatch(/parcial|en curso/);
+    expect(res.sources.some((s) => s.tool === "billing_summary")).toBe(true);
+  });
+
+  it("gasto real vs compromiso → answered con tabla comparativa por proveedor", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Comparame gasto real contra órdenes de compra firmadas."));
+    expect(res.outcome).toBe("answered");
+    expect(res.visual!.table!.columns.join(" ")).toMatch(/Gasto/);
+    expect(res.visual!.table!.columns.join(" ")).toMatch(/Compromiso/);
+    expect(res.sources.some((s) => s.tool === "spend_comparison_report")).toBe(true);
+  });
+
+  it("variación de proveedores vs período anterior → ranking de variación (top subas)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("Detectá proveedores con aumento relevante respecto del período anterior.")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.some((s) => s.tool === "spend_comparison_report")).toBe(true);
+    expect(res.visual!.table!.rows.length).toBeGreaterThan(0);
+  });
+
+  it("qué empeoró y qué mejoró → brief con delta m/m y sin fallback", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("Decime qué empeoró y qué mejoró en Nexus respecto al período anterior.")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.some((s) => s.tool === "management_brief")).toBe(true);
+    // El delta de facturación viaja en la evidencia del brief.
+    expect(res.sources.map((s) => s.excerpt).join(" ")).toMatch(/27\.6|mes anterior/);
+  });
+
   it("pregunta vacía/mínima → NO_EVIDENCE exacto", async () => {
     const { askCopilot, NO_EVIDENCE } = await loadEngine();
     const res = await askCopilot(baseReq("?"));
