@@ -4,6 +4,7 @@
 // pensando / respuesta con fuentes / sin evidencia / presupuesto / error.
 // Dark-mode-safe: tokens del design system, sin /opacity sobre var() (regla repo).
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { getPrincipalSections } from "@/lib/ai/copilot-suggestions";
@@ -253,7 +254,14 @@ function VisualReport({ v }: { v: CopilotVisual }) {
   );
 }
 
-const HERO_BADGES = ["Read-only", "Fuentes verificables", "Piloto F5.2", "Datos Nexus"];
+/** Badges del hero con marcador de color propio (hex literal, regla repo:
+ *  no /opacity sobre tokens var()). Sobrios: informan capacidades, no decoran. */
+const HERO_BADGES: Array<{ label: string; dot: string }> = [
+  { label: "Read-only", dot: "#22c55e" },
+  { label: "Fuentes verificables", dot: "#3b82f6" },
+  { label: "Piloto F5.2", dot: "#eab308" },
+  { label: "Datos Nexus", dot: "#8b5cf6" },
+];
 
 function SourceChips({ sources }: { sources: SourceChunk[] }) {
   if (sources.length === 0) return null;
@@ -315,64 +323,154 @@ function FeedbackButtons({ messageId }: { messageId: string }) {
   );
 }
 
-/** Command Center: hero + recomendaciones por sección. Se muestra al inicio y
- *  puede REABRIRSE después de una respuesta (botón "Volver a recomendaciones")
- *  sin borrar el historial del chat (smoke 2026-07-07). */
+/** Command Center: hero ejecutivo + recomendaciones por sección. Se muestra al
+ *  inicio y puede REABRIRSE después de una respuesta ("Volver a recomendaciones")
+ *  sin borrar el historial del chat (smoke 2026-07-07).
+ *
+ *  Estándar visual 2026-07-07 (round UI): hero con imagen de IA integrada por
+ *  fundido hacia var(--bg-surface) — se adapta a dark/light por token, sin
+ *  /opacity sobre var() (regla repo). Jerarquía: 1) hero/título · 2) imagen ·
+ *  3) cards de sección · 4) chips de consulta. Motion del sistema (.card-lift,
+ *  .nx-stagger) — nada custom. */
 function CommandCenter({ demo, onAsk }: { demo: boolean; onAsk: (q: string) => void }) {
   return (
     <div className="mx-auto max-w-3xl">
-      {/* ── Hero · command center (estándar 2026-07-07) ─────────────── */}
-      <div className="card px-6 py-7 text-center">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-fg-muted">
-          Centro de inteligencia · Nexus OS
-        </p>
-        <h2 className="mt-1.5 text-2xl font-extrabold tracking-tight text-fg-primary">
-          Preguntale a Nexus
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-fg-muted">
-          Consultá, analizá y visualizá datos reales del sistema operativo:
-          reportes, métricas, rankings y documentos — siempre con fuentes
-          verificables.
-          {demo ? " (Modo demo: datos ficticios.)" : ""}
-        </p>
-        <div className="mt-3.5 flex flex-wrap justify-center gap-1.5">
-          {HERO_BADGES.map((b) => (
+      {/* ── Hero ejecutivo · centro de inteligencia ─────────────────── */}
+      <div className="card nx-stagger relative overflow-hidden">
+        {/* Imagen IA (md+): panel derecho fundido al fondo del card. En mobile
+            se omite: el hero queda tipográfico, limpio y legible. */}
+        <div className="absolute inset-y-0 right-0 hidden w-[46%] md:block" aria-hidden>
+          <Image
+            src="/copilot/hero-ai.jpg"
+            alt=""
+            fill
+            priority
+            sizes="(min-width: 768px) 42vw, 1px"
+            className="object-cover object-[68%_28%]"
+          />
+          {/* Velos de integración: fundido lateral al color real del card
+              (token por tema) + apoyo inferior + tinte de marca sutil. */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to right, var(--bg-surface) 2%, transparent 58%)",
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to top, var(--bg-surface) 0%, transparent 38%)",
+            }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(115deg, rgba(59,130,246,0.12) 0%, transparent 55%)",
+            }}
+          />
+        </div>
+
+        <div className="relative px-6 py-8 sm:px-8 sm:py-9 md:max-w-[58%]">
+          <p className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-fg-muted">
             <span
-              key={b}
-              className="rounded-full border border-stroke-soft bg-bg-surface-alt px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted"
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ backgroundColor: "#3b82f6" }}
+              aria-hidden
+            />
+            Centro de inteligencia · Nexus OS
+          </p>
+          <h2 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight text-fg-primary sm:text-4xl">
+            Preguntale a{" "}
+            <span
+              style={{
+                background: "linear-gradient(92deg, #3b82f6 0%, #8b5cf6 100%)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }}
             >
-              {b}
+              Nexus
             </span>
-          ))}
+          </h2>
+          <p className="mt-3 max-w-md text-[13px] leading-relaxed text-fg-muted">
+            La capa de inteligencia del sistema operativo: reportes ejecutivos,
+            métricas, rankings y documentos — con datos reales y fuentes
+            verificables en cada respuesta.
+            {demo ? " (Modo demo: datos ficticios.)" : ""}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-1.5">
+            {HERO_BADGES.map((b) => (
+              <span
+                key={b.label}
+                className="inline-flex items-center gap-1.5 rounded-full border border-stroke-soft bg-bg-surface-alt px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-fg-muted"
+              >
+                <span
+                  className="h-1 w-1 rounded-full"
+                  style={{ backgroundColor: b.dot }}
+                  aria-hidden
+                />
+                {b.label}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* ── Sugerencias por sección de Nexus (solo cobertura real) ──── */}
-      <p className="mt-4 mb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
-        Explorá por sección — o escribí tu propia pregunta
-      </p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {getPrincipalSections().map((section) => (
+      {/* ── Separador de sección con línea (jerarquía clara) ─────────── */}
+      <div className="mt-6 mb-3 flex items-center gap-3">
+        <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+          Explorá por sección — o escribí tu propia pregunta
+        </p>
+        <span className="h-px flex-1 bg-stroke-soft" aria-hidden />
+      </div>
+
+      {/* ── Cards por sección (solo cobertura real) ──────────────────── */}
+      <div className="grid gap-2.5 sm:grid-cols-2">
+        {getPrincipalSections().map((section, i) => (
           <div
             key={section.id}
-            className="card p-3.5 transition-colors hover:border-stroke-strong"
-            style={{ borderLeft: `3px solid ${section.color}` }}
+            className="card card-lift nx-stagger p-4"
+            style={{
+              borderLeft: `3px solid ${section.color}`,
+              animationDelay: `${Math.min(i * 45, 400)}ms`,
+            }}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-base" aria-hidden>
+            <div className="flex items-center gap-2.5">
+              {/* Ícono en chip tintado con el acento del módulo (hex literal). */}
+              <span
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-base"
+                style={{
+                  backgroundColor: `${section.color}1f`,
+                  border: `1px solid ${section.color}36`,
+                }}
+                aria-hidden
+              >
                 {section.icon}
               </span>
-              <p className="text-xs font-bold text-fg-primary">{section.title}</p>
+              <div className="min-w-0">
+                <p className="truncate text-[13px] font-bold tracking-tight text-fg-primary">
+                  {section.title}
+                </p>
+                <p className="truncate text-[10px] text-fg-muted">{section.description}</p>
+              </div>
+              <span
+                className="ml-auto shrink-0 rounded-full border border-stroke-soft px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-fg-muted"
+                title={`${section.prompts.length} consultas disponibles`}
+              >
+                {section.prompts.length}
+              </span>
             </div>
-            <p className="mt-0.5 text-[10px] text-fg-muted">{section.description}</p>
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <div className="mt-3 flex flex-wrap gap-1.5">
               {section.prompts.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => onAsk(p.prompt)}
                   title={p.prompt}
-                  className="rounded-lg border border-stroke-soft bg-bg-surface-alt px-2.5 py-1.5 text-[11px] font-medium text-fg-primary transition-colors hover:bg-bg-surface hover:text-fg-link"
+                  className="rounded-lg border border-stroke-soft bg-bg-surface-alt px-2.5 py-1.5 text-[11px] font-medium text-fg-primary transition-colors hover:border-stroke-strong hover:bg-bg-surface hover:text-fg-link"
                 >
                   {p.label}
                 </button>
