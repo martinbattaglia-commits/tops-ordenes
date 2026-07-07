@@ -32,6 +32,8 @@ export const TOOL_NAMES = [
   "supplier_spend_overview",
   // smoke humano 2026-07-06: facturación agrupada POR CLIENTE (top-1 y ranking).
   "customer_revenue_overview",
+  // estándar gerencial 2026-07-07: ingresos por CATEGORÍA (ANMAT/Cargas/Sin clasificar).
+  "revenue_by_category_report",
   // fix/f5-2 · navegación: catálogo de secciones de Nexus (tool LOCAL).
   "nexus_sections_overview",
 ] as const;

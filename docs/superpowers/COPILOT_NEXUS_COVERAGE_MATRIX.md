@@ -96,6 +96,35 @@ Nueva fila de cobertura:
 |---|---|---|---|---|---|---|---|
 | **Facturación por cliente (top/ranking)** | /billing | ✔ | customer_invoices agrupado por cliente | **customer_revenue_overview (nuevo)** | customer_revenue → /billing | ✅ (código) | **mig 0183 entregada, NO aplicada** |
 
+## Addendum 2026-07-07 (2) · CAPA DE REPORTES GERENCIALES (nuevo estándar)
+
+**Estándar:** Copilot no solo encuentra registros — razona y elabora reportes ejecutivos
+(totales, %, rankings, comparaciones) con cálculo determinístico en SQL, redacción del
+modelo con números exactos, fuentes citadas y datos chart-ready. Caso testigo: **ingresos
+por categoría (ANMAT vs Cargas Generales)**.
+
+**Fuente de categoría (investigada, no asumida):** `clients.tags` (text[]: ANMAT /
+CARGAS GENERALES / OFICINAS / TRANSPORTE). Facturas/ítems/OS no tienen categoría propia;
+`contracts.tipo` (ANMAT|Cargas Generales) no mapea hoy a clientes de facturación (0
+matches por razón social). Regla terciaria: keywords `%anmat%/%regulad%` en ítems.
+
+**Criterio determinístico:** tags cliente (ANMAT→ANMAT; CARGAS GENERALES→CG) → keyword
+en ítems→ANMAT → **Sin clasificar** (siempre visible; nunca se inventa ni se filtra por
+nombre). Validado junio 2026: ANMAT 79,4% ($100,2M·9) · Sin clasificar 17,2% ($21,7M·7)
+· CG 3,5% ($4,4M·2); suma EXACTA al total ($126.229.317,50).
+
+| Capacidad | Tool | Entity → chip | Estado | Fix |
+|---|---|---|---|---|
+| Ingresos por categoría / % ANMAT vs CG / reporte ejecutivo / distribución | **revenue_by_category_report (nuevo)** | revenue_categoria → /billing | ✅ código · **mig 0184 entregada NO aplicada** | aplicar 0184 con OK |
+| Render de gráficos en la UI del chat | — | — | 👻 **brecha**: datos chart-ready listos (categoría+monto+%); falta chart renderer en CopilotChat | fase futura (decisión producto) |
+| Comparación entre períodos ("comparame este mes vs anterior") | — | — | 🟡 parcial: el modelo puede llamar la tool 2 veces (períodos distintos); tool comparativa dedicada = fase futura | backlog |
+| **Brecha de datos**: clientes sin tag (`CLIENTE TEST QA TOPS`, `Verotin SA`) | — | — | 👻 su facturación cae en "Sin clasificar" (visible) | asignar tags en /clients (dato, no código) |
+
+Base extensible: el patrón tool-por-reporte (opción A del diseño) queda establecido con
+`billing_summary`, `customer_revenue_overview`, `supplier_spend_overview`,
+`bank_balances_overview`, `revenue_by_category_report`. Próximos reportes de la matriz
+(compliance_risk_report, wms_occupancy_report) siguen el mismo molde.
+
 ## Criterio de arquitectura aplicado (y a aplicar en próximas fases)
 1. **Datos en DB** → RPC `SECURITY INVOKER` + tool (RLS del caller; migración aditiva con rollback, aplicada solo con OK).
 2. **Datos estáticos en frontend** → módulo compartido en `src/lib/` consumido por UI y Copilot (patrón `orgchart.ts` → `org-source.ts`; `nexus-sections.ts` como catálogo).

@@ -577,6 +577,60 @@ describe("customer_revenue_overview · facturación por cliente", () => {
   });
 });
 
+// ── Reportes gerenciales: ingresos por categoría (caso testigo ANMAT/Cargas) ──
+describe("revenue_by_category_report · ingresos por categoría", () => {
+  it("defaults + mapeo de args (mes_pasado = alias de ultimo_mes)", () => {
+    expect(TOOLS.revenue_by_category_report.toRpcArgs({})).toEqual({
+      p_periodo: "ultimo_mes",
+      p_limit: 10,
+    });
+    expect(TOOLS.revenue_by_category_report.toRpcArgs({ periodo: "mes_actual" })).toEqual({
+      p_periodo: "mes_actual",
+      p_limit: 10,
+    });
+  });
+
+  it("rowToChunk: categoría con monto/%/facturas y fuente /billing (chart-ready)", () => {
+    const chunk = TOOLS.revenue_by_category_report.rowToChunk({
+      categoria: "ANMAT",
+      monto: "100187092.50",
+      porcentaje: "79.4",
+      cantidad: 9,
+      total_periodo: "126229317.50",
+      periodo: "ultimo_mes",
+      detalle:
+        "Ingresos ANMAT · ARS 100,187,092.50 · 79.4% del total · 9 facturas · período 2026-06",
+    });
+    expect(chunk.entityType).toBe("revenue_categoria");
+    expect(chunk.url).toBe("/billing");
+    expect(chunk.title).toContain("ANMAT");
+    expect(chunk.excerpt).toContain("79.4");
+  });
+
+  it("'Sin clasificar' pasa intacta (nunca se renombra ni se oculta)", () => {
+    const chunk = TOOLS.revenue_by_category_report.rowToChunk({
+      categoria: "Sin clasificar",
+      monto: "21668075.00",
+      porcentaje: "17.2",
+      cantidad: 7,
+      total_periodo: "126229317.50",
+      periodo: "ultimo_mes",
+      detalle: "Ingresos Sin clasificar · ARS 21,668,075.00 · 17.2% del total · 7 facturas",
+    });
+    expect(chunk.title).toContain("Sin clasificar");
+  });
+
+  it("es ai_* read-only y entityUrl(revenue_categoria) → /billing", () => {
+    const spec = TOOLS.revenue_by_category_report;
+    expect(spec.rpc!.startsWith("ai_")).toBe(true);
+    for (const verb of WRITE_VERBS_DENYLIST) {
+      expect("revenue_by_category_report").not.toContain(verb);
+      expect(spec.rpc!.toLowerCase()).not.toContain(verb);
+    }
+    expect(entityUrl("revenue_categoria", null)).toBe("/billing");
+  });
+});
+
 // ── Catálogo de secciones de Nexus (fix/f5-2): navegación consultable ─────────
 describe("nexus_sections_overview · catálogo de secciones", () => {
   it("es tool LOCAL (resolve, sin RPC) y encuentra secciones por palabra clave", () => {

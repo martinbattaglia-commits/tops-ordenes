@@ -53,6 +53,7 @@ export function entityUrl(entityType: string, publicId: string | null): string |
   if (entityType === "billing_periodo") return "/billing";
   if (entityType === "bank_balance") return "/tesoreria/bancos";
   if (entityType === "customer_revenue") return "/billing";
+  if (entityType === "revenue_categoria") return "/billing";
   return null;
 }
 
@@ -572,6 +573,30 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       url: entityUrl("customer_revenue", null),
     }),
   },
+  // ── estándar gerencial 2026-07-07: ingresos por CATEGORÍA (caso testigo) ────
+  // Una fila POR CATEGORÍA (ANMAT / Cargas Generales / Sin clasificar) con monto,
+  // % del total y cantidad — chart-ready (pie/bar) por construcción. El criterio
+  // de clasificación es determinístico y auditable (tags de cliente → keyword de
+  // ítems → Sin clasificar); 'Sin clasificar' SIEMPRE visible, nunca se inventa.
+  revenue_by_category_report: {
+    rpc: "ai_revenue_by_category",
+    description:
+      "REPORTE de ingresos por CATEGORÍA / unidad de negocio (ANMAT, Cargas Generales, Sin clasificar): monto, PORCENTAJE del total, cantidad de facturas y total del período — todo ya calculado. periodo: ultimo_mes | mes_actual | todo. USALA para 'reporte de ingresos por categoría', '¿qué porcentaje fue ANMAT / cargas generales?', 'distribución/composición de ingresos', 'reporte ejecutivo de facturación'. Redactá el reporte (título, período, total, tabla por categoría, resumen) usando EXACTAMENTE estos números; si aparece 'Sin clasificar', mostralo con su monto y % y adverti la brecha.",
+    schema: z.object({
+      periodo: z.enum(["ultimo_mes", "mes_actual", "todo"]).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({ p_periodo: a.periodo ?? "ultimo_mes", p_limit: a.limit ?? 10 }),
+    rowToChunk: (r) => ({
+      entityType: "revenue_categoria",
+      entityId: s(r.categoria),
+      publicId: sn(r.categoria),
+      title: `Ingresos ${s(r.categoria)} · ${s(r.periodo)}`,
+      excerpt: s(r.detalle),
+      date: null,
+      url: entityUrl("revenue_categoria", null),
+    }),
+  },
   // ── fix/f5-2 · navegación: mapa de secciones de Nexus (tool LOCAL) ──────────
   nexus_sections_overview: {
     resolve: (a) => resolveNexusSections(a),
@@ -709,6 +734,10 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   }),
   customer_revenue_overview: js({
     periodo: { type: "string", enum: ["todo", "mes_actual", "ultimo_mes"] },
+    limit: jsLimit,
+  }),
+  revenue_by_category_report: js({
+    periodo: { type: "string", enum: ["ultimo_mes", "mes_actual", "todo"] },
     limit: jsLimit,
   }),
   nexus_sections_overview: js({

@@ -406,6 +406,64 @@ describe("Cliente que más facturó · customer_revenue_overview (smoke humano)"
   });
 });
 
+describe("Reportes gerenciales · ingresos por categoría (caso testigo ANMAT/Cargas)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("pregunta testigo completa → reporte por categoría con fuentes /billing (no vacío)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq(
+        "Me podrías dar un reporte que esté hecho por categoría de los ingresos de este último mes, qué porcentaje fue asignado a ANMAT y qué porcentaje fue asignado a cargas generales"
+      )
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBeGreaterThan(1); // una fuente por categoría
+    expect(res.sources.every((s) => s.entityType === "revenue_categoria")).toBe(true);
+    expect(res.sources[0].url).toBe("/billing");
+    expect(res.answer).toMatch(/%/); // porcentajes presentes (vienen de la tool)
+    expect(res.answer).toMatch(/ANMAT/i);
+  });
+
+  it("'¿Qué porcentaje de ingresos fue ANMAT el último mes?' → report tool, no search_knowledge", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué porcentaje de ingresos fue ANMAT el último mes?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("revenue_categoria");
+  });
+
+  it("'Haceme un reporte ejecutivo de facturación del último mes' → report tool", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Haceme un reporte ejecutivo de facturación del último mes"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("revenue_categoria");
+  });
+
+  it("'Mostrame distribución de ingresos por categoría' → report tool", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Mostrame la distribución de ingresos por categoría"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("revenue_categoria");
+  });
+
+  it("'Sin clasificar' es VISIBLE cuando existe (nunca se oculta ni se inventa categoría)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("Reporte de ingresos por categoría del último mes")
+    );
+    expect(res.outcome).toBe("answered");
+    // El fixture demo incluye una fila 'Sin clasificar': debe llegar a la respuesta.
+    expect(res.answer).toMatch(/sin clasificar/i);
+  });
+
+  it("regresión: 'cuánto se facturó' sigue en billing_summary y 'cliente que más facturó' en customer_revenue", async () => {
+    const { askCopilot } = await loadEngine();
+    const total = await askCopilot(baseReq("¿Cuánto se facturó el último mes?"));
+    expect(total.sources[0].entityType).toBe("billing_periodo");
+    const cliente = await askCopilot(baseReq("¿Cuál fue el cliente que más facturó?"));
+    expect(cliente.sources[0].entityType).toBe("customer_revenue");
+  });
+});
+
 describe("P1b · resiliencia: un tool-call con args inválidos no rompe el turno (fix/f5-2)", () => {
   beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
 

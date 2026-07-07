@@ -180,6 +180,8 @@ const EMPTY_MESSAGE_BY_TOOL: Record<string, string> = {
     "No encontré gasto ni presupuesto de proveedores registrado en Nexus para ese período.",
   customer_revenue_overview:
     "No encontré facturación por cliente registrada en Nexus para ese período.",
+  revenue_by_category_report:
+    "No encontré ingresos registrados en Nexus para ese período (reporte por categoría).",
   nexus_sections_overview: "No encontré una sección de Nexus que coincida con tu consulta.",
   organization_overview: "No encontré ese cargo o persona en el organigrama de Nexus.",
 };

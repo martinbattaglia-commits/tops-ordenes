@@ -280,6 +280,38 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
         "Facturación por cliente · Distribuidora Ficticia SRL · ARS 41,000,000.00 · 6 facturas autorizadas · período: todo",
     },
   ],
+  revenue_by_category_report: [
+    {
+      categoria: "ANMAT",
+      monto: "10000000.00",
+      porcentaje: "80.0",
+      cantidad: 6,
+      total_periodo: "12500000.00",
+      periodo: "ultimo_mes",
+      detalle:
+        "Ingresos ANMAT · ARS 10,000,000.00 · 80.0% del total ARS 12,500,000.00 · 6 facturas · método: tags de cliente",
+    },
+    {
+      categoria: "Cargas Generales",
+      monto: "1500000.00",
+      porcentaje: "12.0",
+      cantidad: 2,
+      total_periodo: "12500000.00",
+      periodo: "ultimo_mes",
+      detalle:
+        "Ingresos Cargas Generales · ARS 1,500,000.00 · 12.0% del total · 2 facturas · método: tags de cliente",
+    },
+    {
+      categoria: "Sin clasificar",
+      monto: "1000000.00",
+      porcentaje: "8.0",
+      cantidad: 1,
+      total_periodo: "12500000.00",
+      periodo: "ultimo_mes",
+      detalle:
+        "Ingresos Sin clasificar · ARS 1,000,000.00 · 8.0% del total · 1 factura · método: sin tag ni keyword (brecha de clasificación)",
+    },
+  ],
   supplier_spend_overview: [
     {
       proveedor: "Mobiliarios Demo SA",

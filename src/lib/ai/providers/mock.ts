@@ -71,6 +71,23 @@ function pickTools(question: string): ToolCall[] {
     return calls;
   }
 
+  // REPORTE por CATEGORÍA (estándar gerencial): porcentajes/distribución/ANMAT vs
+  // Cargas de ingresos → tool de reporte, nunca search_knowledge ni el total plano.
+  if (
+    (/porcentaje|categoria|distribucion|composicion|desglose|reporte/.test(q) ||
+      /anmat|cargas generales/.test(q)) &&
+    /ingres|factur/.test(q)
+  ) {
+    calls.push({
+      tool: "revenue_by_category_report",
+      args: {
+        periodo:
+          periodo === "mes_actual" ? "mes_actual" : periodo === "todo" ? "todo" : "ultimo_mes",
+      },
+    });
+    return calls;
+  }
+
   // Facturación POR CLIENTE (top-1 o ranking) — antes que el total y que facturas.
   if (/cliente/.test(q) && /factur|ingres|venta/.test(q)) {
     calls.push({
