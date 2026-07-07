@@ -110,10 +110,18 @@ const STOPWORDS = new Set([
   "accedo", "que", "cual", "cuales", "secciones", "seccion", "modulos", "modulo",
   "tiene", "hay", "nexus", "sistema", "el", "la", "los", "las", "de", "del", "en",
   "un", "una", "a", "al", "y", "o", "es", "son", "me", "mostrame", "decime", "ver",
+  // Slice A (aceptación 2026-07-07): la frase completa viaja como query — más
+  // vocabulario de catálogo para que "¿qué secciones tiene Nexus y para qué
+  // sirve cada una?" resuelva al MAPA completo, no a 0 filas.
+  "para", "sirve", "sirven", "cada", "cuenta", "tenemos", "existen", "funciona",
 ]);
 
-/** Devuelve secciones que matchean TODOS los tokens útiles de la consulta
- *  (sin stopwords). Sin tokens útiles → mapa completo (acotado por limit). */
+/** Devuelve las secciones más relevantes para la consulta. Slice A (aceptación
+ *  2026-07-07): scoring por CANTIDAD de tokens matcheados — antes exigía TODOS
+ *  (`every`) y una consulta multi-objetivo ("dónde veo OC, compliance y
+ *  contratos") o con frase completa devolvía 0 filas. Score 0 queda afuera: el
+ *  vacío honesto se mantiene para consultas sin relación real. Sin tokens
+ *  útiles → mapa completo (acotado por limit). */
 export function resolveNexusSections(args: Record<string, unknown>): NexusSection[] {
   const raw = typeof args.query === "string" ? norm(args.query) : "";
   const limit = typeof args.limit === "number" ? Math.max(1, Math.min(args.limit, 50)) : 30;
@@ -121,9 +129,10 @@ export function resolveNexusSections(args: Record<string, unknown>): NexusSectio
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length >= 2 && !STOPWORDS.has(t));
   if (tokens.length === 0) return NEXUS_SECTIONS.slice(0, limit);
-  const rows = NEXUS_SECTIONS.filter((s) => {
+  const scored = NEXUS_SECTIONS.map((s) => {
     const hay = norm(`${s.section} ${s.label} ${s.keywords}`);
-    return tokens.every((t) => hay.includes(t));
-  });
-  return rows.slice(0, limit);
+    return { s, score: tokens.filter((t) => hay.includes(t)).length };
+  }).filter((x) => x.score > 0);
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((x) => x.s);
 }

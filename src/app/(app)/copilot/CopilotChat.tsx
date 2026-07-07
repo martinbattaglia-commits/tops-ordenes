@@ -238,7 +238,15 @@ function VisualReport({ v }: { v: CopilotVisual }) {
       )}
 
       {v.insights && v.insights.length > 0 && (
-        <p className="mt-2.5 text-xs font-medium text-fg-primary">💡 {v.insights.join(" ")}</p>
+        <div className="mt-2.5 space-y-1">
+          {/* Una línea por insight: el brief de gestión trae recomendaciones y
+              oportunidades como items separados — no se aplastan en un párrafo. */}
+          {v.insights.map((ins, i) => (
+            <p key={i} className="text-xs font-medium text-fg-primary">
+              💡 {ins}
+            </p>
+          ))}
+        </div>
       )}
 
       {v.warnings && v.warnings.length > 0 && (

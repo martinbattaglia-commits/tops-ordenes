@@ -184,6 +184,10 @@ const EMPTY_MESSAGE_BY_TOOL: Record<string, string> = {
     "No encontré ingresos registrados en Nexus para ese período (reporte por categoría).",
   nexus_sections_overview: "No encontré una sección de Nexus que coincida con tu consulta.",
   organization_overview: "No encontré ese cargo o persona en el organigrama de Nexus.",
+  management_brief:
+    "No pude componer el informe de gestión: las fuentes conectadas no devolvieron datos en este momento.",
+  coverage_overview:
+    "No encontré esa capacidad en la matriz de cobertura del Copilot.",
 };
 
 /** Mensaje genérico (dominios mixtos, sin tools o tool sin mapa): honesto, no el
@@ -290,6 +294,12 @@ const METADATA_INTENT_TERMS = [
   "archivos",
   "vencimiento", "vence", "vencer", "vencid", "por vencer", "caduc",
   "estado", "categor", "riesgo", "sede", "deposito", "tipo de documento", "tipo de contrato",
+  // Slice A (manual de aceptación 2026-07-07): analítica de GESTIÓN documental —
+  // estado/pendiente/hallazgos/novedades preguntan por la FICHA y su gestión,
+  // nunca por el contenido del PDF. El vocabulario de CONTENIDO mantiene
+  // prioridad (content OR !meta): "resumime el contrato pendiente" y "¿qué dice
+  // el plan de acción del expediente?" siguen degradando.
+  "pendiente", "hallazgo", "plan de accion", "que paso", "novedad",
   // F5.1-b.0.1: ESTADO de firma como METADATA (firmado / se firmó), NO el firmante. Preciso
   // A PROPÓSITO (revisión adversarial): participio "firmad(o/a/os)" y reflexivo "se firmó" —
   // NO el presente "firma" ni el adjetivo suelto "vigente", que reabrían "quién firma la

@@ -43,7 +43,10 @@ describe("routing por pregunta (round 1)", () => {
     ["dame el archivo de residuos de compliance", "docs_browse"],
     ["qué contratos están próximos a vencer", "contracts_overview"],
     ["¿Qué workflow está trabado?", "workflows_stuck"],
-    ["¿Qué debería mirar primero mañana?", "my_agenda"],
+    // Paradigma 2026-07-07 (copiloto de gestión): "qué miro primero" es intención
+    // GERENCIAL → management brief (antes iba a my_agenda; my_agenda queda para
+    // "mi agenda"/"mis pendientes").
+    ["¿Qué debería mirar primero mañana?", "management_brief"],
     ["Resumime el estado del depósito", "ops_digest"],
     ["¿Qué pasó con el incidente INC-2026-0001?", "search_knowledge"],
     ["cualquier otra cosa rara", "search_knowledge"],
@@ -57,6 +60,113 @@ describe("routing por pregunta (round 1)", () => {
       }
     });
   }
+
+  // ── Copiloto de gestión (paradigma 2026-07-07): preguntas GERENCIALES ──────
+  // van al management brief — NUNCA a search_knowledge ni a una tool suelta.
+  const gerenciales: string[] = [
+    "Si mañana tengo una reunión de dirección, preparame el resumen ejecutivo de Nexus con KPIs, alertas, gráficos, riesgos, oportunidades y recomendaciones concretas basadas solo en datos de Nexus.",
+    "Haceme un informe ejecutivo de situación de Nexus usando facturación, tesorería, contratos, compliance, vacancia y operación.",
+    "Decime cuáles son los 10 riesgos más importantes que hoy aparecen en Nexus, ordenados por impacto y urgencia.",
+    "Qué debería mirar primero hoy?",
+    "Preparame un tablero para reunión de dirección.",
+  ];
+  for (const question of gerenciales) {
+    it(`gerencial: "${question.slice(0, 55)}…" → management_brief (no search_knowledge)`, async () => {
+      const res = await provider.plan(req({ question }));
+      expect(res.kind).toBe("tool_calls");
+      if (res.kind === "tool_calls") {
+        const tools = res.toolCalls.map((c) => c.tool);
+        expect(tools).toContain("management_brief");
+        expect(tools).not.toContain("search_knowledge");
+      }
+    });
+  }
+
+  // ── Slice A (manual de aceptación 2026-07-07): ruteos que caían en search ──
+  const sliceA: Array<[string, string]> = [
+    // Vacancia: formulaciones comerciales del brief.
+    ["Comparame disponibilidad ANMAT contra Cargas Generales.", "vacancy_overview"],
+    ["Qué capacidad ociosa deberíamos priorizar comercialmente.", "vacancy_overview"],
+    ["Haceme un tablero de ocupación por sede y unidad de negocio.", "vacancy_overview"],
+    ["Qué espacios disponibles pueden transformarse en oportunidad de venta.", "vacancy_overview"],
+    // Tesorería: composición de fondos.
+    ["Mostrame la composición de fondos por banco y caja con gráfico.", "bank_balances_overview"],
+    // Compras: reporte del dominio (OC + facturas de proveedor), no ingresos.
+    ["Haceme un reporte de compras: OC emitidas, facturas proveedor, pendientes y alertas.", "purchase_orders_overview"],
+    // Cobertura del propio Copilot y dominios sin fuente (WMS/movimientos):
+    // deben DECLARAR la brecha con la matriz de cobertura, no responder otro tema.
+    ["Qué módulos de Nexus tienen cobertura completa del Copilot y cuáles son brecha.", "coverage_overview"],
+    ["Qué fuentes usa Copilot para responder cada módulo.", "coverage_overview"],
+    ["Qué datos faltan para que el Copilot pueda responder mejor.", "coverage_overview"],
+    ["Qué posiciones o ubicaciones requieren atención.", "coverage_overview"],
+    ["Qué sectores tienen mayor ocupación y cuáles están subutilizados.", "coverage_overview"],
+    ["Qué movimientos financieros relevantes hubo en el último período.", "coverage_overview"],
+    // Slice A · round 2: últimos fallbacks del manual con destino honesto.
+    ["Qué riesgos regulatorios requieren atención inmediata y por qué.", "compliance_pending"],
+    ["Preparame un índice documental por sede con fuentes reales.", "docs_browse"],
+    ["Detectá procesos sin actividad reciente y sugerí próximos pasos.", "workflows_stuck"],
+    ["Detectá oportunidades de almacenamiento disponibles.", "vacancy_overview"],
+    ["Preparame una lectura WMS para comercial y operaciones.", "coverage_overview"],
+    ["Comparame el estado actual de Nexus contra el último período disponible: qué mejoró, qué empeoró y qué se trabó.", "coverage_overview"],
+    ["Comparame clientes ANMAT contra Cargas Generales.", "coverage_overview"],
+    ["Qué clientes deberían contactarse esta semana y por qué.", "coverage_overview"],
+    ["Preparame un mapa ejecutivo de áreas, responsables y módulos.", "organization_overview"],
+    ["Comparame la facturación de este mes contra el mes anterior y explicame la variación.", "coverage_overview"],
+    ["Detectá proveedores con aumento relevante respecto del período anterior.", "coverage_overview"],
+    ["Detectá dependencia excesiva de proveedores y sugerí mitigaciones.", "supplier_spend_overview"],
+    ["Qué clientes tienen riesgo documental o contractual.", "contracts_overview"],
+  ];
+  for (const [question, expectedTool] of sliceA) {
+    it(`slice A: "${question.slice(0, 55)}…" → ${expectedTool}`, async () => {
+      const res = await provider.plan(req({ question }));
+      expect(res.kind).toBe("tool_calls");
+      if (res.kind === "tool_calls") {
+        const tools = res.toolCalls.map((c) => c.tool);
+        expect(tools).toContain(expectedTool);
+        expect(tools).not.toContain("search_knowledge");
+      }
+    });
+  }
+
+  it("comparar gasto real contra OC firmadas consulta las DOS bases del gasto", async () => {
+    const res = await provider.plan(
+      req({ question: "Comparame gasto real contra órdenes de compra firmadas." })
+    );
+    if (res.kind === "tool_calls") {
+      const bases = res.toolCalls
+        .filter((c) => c.tool === "supplier_spend_overview")
+        .map((c) => c.args.base);
+      expect(bases).toContain("gasto");
+      expect(bases).toContain("compromiso");
+    } else {
+      throw new Error("esperaba tool_calls");
+    }
+  });
+
+  it("el reporte de compras consulta OC y facturas de proveedor juntas", async () => {
+    const res = await provider.plan(
+      req({ question: "Haceme un reporte de compras: OC emitidas, facturas proveedor, pendientes y alertas." })
+    );
+    if (res.kind === "tool_calls") {
+      const tools = res.toolCalls.map((c) => c.tool);
+      expect(tools).toContain("purchase_orders_overview");
+      expect(tools).toContain("supplier_invoices_overview");
+    } else {
+      throw new Error("esperaba tool_calls");
+    }
+  });
+
+  it("la pregunta de riesgos pasa focus=riesgos al brief", async () => {
+    const res = await provider.plan(
+      req({ question: "Decime cuáles son los 10 riesgos más importantes que hoy aparecen en Nexus" })
+    );
+    if (res.kind === "tool_calls") {
+      const call = res.toolCalls.find((c) => c.tool === "management_brief");
+      expect(call?.args).toMatchObject({ focus: "riesgos" });
+    } else {
+      throw new Error("esperaba tool_calls");
+    }
+  });
 
   it("severidad crítica se traduce a filtro estructurado", async () => {
     const res = await provider.plan(

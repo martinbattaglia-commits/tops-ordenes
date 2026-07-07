@@ -220,6 +220,28 @@ describe("isMetadataContentRisk (F5.1-b.0 · D5 / H6, fail-closed)", () => {
     }
   });
 
+  it("analítica de GESTIÓN sobre fichas (aceptación 2026-07-07) → NO degrada", () => {
+    // Preguntas del manual de aceptación que preguntan por ESTADO/gestión
+    // documental (nunca por el contenido del PDF) y el guard degradaba.
+    const probes = [
+      "¿Qué clientes tienen contrato vigente pero documentación pendiente?",
+      "Preparame un plan de acción para resolver hallazgos críticos de compliance.",
+      "¿Qué pasó en compliance en el último período?",
+    ];
+    for (const q of probes) {
+      expect(isMetadataContentRisk(q, [meta("compliance_documento")]), q).toBe(false);
+      expect(isMetadataContentRisk(q, [meta("contrato")]), q).toBe(false);
+    }
+    // El vocabulario de CONTENIDO mantiene prioridad: pedir el contenido de un
+    // hallazgo/documento puntual sigue degradando.
+    expect(
+      isMetadataContentRisk("resumime el contrato pendiente de Cliente X", [meta("contrato")])
+    ).toBe(true);
+    expect(
+      isMetadataContentRisk("¿qué dice el plan de acción del expediente?", [meta("compliance_documento")])
+    ).toBe(true);
+  });
+
   it("desambigua por objeto: verbo ambiguo + documento singular vs colección", () => {
     expect(isMetadataContentRisk("resumime el contrato", [meta("contrato")])).toBe(true);
     expect(isMetadataContentRisk("resumime los vencimientos", [meta("contrato")])).toBe(false);

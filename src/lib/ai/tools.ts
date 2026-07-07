@@ -13,6 +13,7 @@ import {
   getCorporateCapacity,
   getCorporateVacancySummary,
 } from "@/lib/wms/corporate-capacity";
+import { resolveCopilotCoverage } from "./coverage-source";
 import { resolveNexusSections } from "./nexus-sections";
 import { resolveOrgChart } from "./org-source";
 import type { SourceChunk, ToolName } from "./types";
@@ -80,6 +81,11 @@ export interface ToolSpec {
    *  que la UI (p.ej. motor de capacidad + snapshot CRM vía cliente de sesión/RLS).
    *  Sin RPC propia y sin duplicar cálculo. En demo se usan los fixtures. */
   fetchRows?: (args: Record<string, unknown>) => Promise<RawRow[]>;
+  /** Copiloto de gestión (2026-07-07): tool ORQUESTADORA — compone OTRAS tools
+   *  del catálogo cerrado (cada sub-tool resuelve su demo/real y su RLS). Import
+   *  dinámico para no crear ciclos de módulo. Sigue siendo read-only por
+   *  construcción: solo puede invocar tools de este mismo catálogo. */
+  orchestrate?: (args: Record<string, unknown>) => Promise<RawRow[]>;
   /** smoke 2026-07-07 (links reales): enriquecimiento read-only POST-RPC con el
    *  cliente de SESIÓN (RLS) — p.ej. traer la URL de Drive de compliance_documents/
    *  contract_documents para las fichas devueltas. Errores → filas sin enriquecer. */
@@ -742,6 +748,57 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       url: entityUrl("vacancy_metric", null),
     }),
   },
+  // ── Copiloto de gestión (2026-07-07): informe ejecutivo multi-dominio ───────
+  // Tool ORQUESTADORA: ejecuta las tools de dominio existentes (facturación,
+  // tesorería, compras, contratos, compliance, vacancia, operación), cruza los
+  // resultados y deriva riesgos/oportunidades/recomendaciones/brechas de forma
+  // determinística (management-brief.ts). El modelo narra; no calcula nada.
+  management_brief: {
+    orchestrate: async (a) =>
+      (await import("./management-brief")).composeManagementBriefRows(a),
+    description:
+      "INFORME EJECUTIVO DE GESTIÓN multi-dominio de Nexus: KPIs por área (facturación, tesorería, compras/proveedores, contratos, compliance, vacancia, operación) + RIESGOS priorizados por impacto/urgencia + OPORTUNIDADES + recomendaciones accionables + brechas de cobertura — todo calculado desde las tools de lectura, nada inventado. USALA para 'resumen ejecutivo', 'reunión de dirección', 'informe de situación', 'cómo viene el negocio', 'qué riesgos hay', 'qué oportunidades tenemos', 'qué debería mirar primero', 'qué priorizar', 'tablero de gestión'. focus: resumen (default) | riesgos | prioridades | oportunidades. NO la uses para una métrica puntual de un solo dominio (para eso están las tools específicas).",
+    schema: z.object({
+      focus: z.enum(["resumen", "riesgos", "prioridades", "oportunidades"]).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({ focus: a.focus ?? "resumen", limit: a.limit ?? 20 }),
+    rowToChunk: (r) => ({
+      entityType: `brief_${s(r.kind)}`,
+      entityId: `${s(r.kind)}:${s(r.seccion) || s(r.titulo)}`.slice(0, 80),
+      publicId: null,
+      title:
+        s(r.kind) === "seccion"
+          ? `${s(r.titulo)} · estado ${s(r.estado)}`
+          : s(r.titulo),
+      excerpt: s(r.detalle),
+      date: null,
+      // Cada fila del brief trae su ruta real de módulo (verificada anti-404
+      // por construcción: reusa las mismas rutas que entityUrl).
+      url: sn(r.url),
+    }),
+  },
+  // ── Slice A (aceptación 2026-07-07): cobertura del propio Copilot ───────────
+  // Tool LOCAL (datos del repo): qué módulos tienen fuente conectada, con qué
+  // tool/RPC responde cada uno, y qué dominios son BRECHA declarada (WMS/stock,
+  // caja chica, movimientos, comparaciones, cliente 360). Evita responder "otro
+  // tema" cuando preguntan por un dominio sin fuente: la brecha es la respuesta.
+  coverage_overview: {
+    resolve: (a) => resolveCopilotCoverage(a),
+    description:
+      "MATRIZ DE COBERTURA del Copilot: qué módulos de Nexus tienen fuente conectada (y cuál es la fuente/tool), y qué dominios son BRECHA declarada (WMS/depósito/stock/posiciones, caja chica, movimientos de tesorería, comparaciones entre períodos, cliente 360). USALA para '¿qué módulos cubre el Copilot?', '¿qué fuentes usa?', '¿qué datos faltan?', y para TODA pregunta de un dominio SIN fuente (stock, posiciones, sectores del depósito, lotes, caja chica, movimientos financieros): la respuesta correcta es la brecha específica + dónde está la fuente parcial (p.ej. capacidad física → Vacancia), nunca datos de otro tema.",
+    schema: z.object({ query: z.string().max(200).optional(), limit }),
+    toRpcArgs: (a) => ({ query: a.query ?? null, limit: a.limit ?? 30 }),
+    rowToChunk: (r) => ({
+      entityType: "copilot_coverage",
+      entityId: s(r.modulo),
+      publicId: null,
+      title: `${s(r.modulo)} · ${s(r.estado)}`,
+      excerpt: `${s(r.detalle)}${r.fuente ? ` · Fuente: ${s(r.fuente)}` : ""}`,
+      date: null,
+      url: sn(r.ruta),
+    }),
+  },
   // ── fix/f5-2 · navegación: mapa de secciones de Nexus (tool LOCAL) ──────────
   nexus_sections_overview: {
     resolve: (a) => resolveNexusSections(a),
@@ -897,6 +954,18 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   }),
   nexus_sections_overview: js({
     query: { type: "string", description: "Sección buscada (p.ej. 'órdenes de compra', 'compliance')" },
+    limit: jsLimit,
+  }),
+  management_brief: js({
+    focus: {
+      type: "string",
+      enum: ["resumen", "riesgos", "prioridades", "oportunidades"],
+      description: "Qué pidió el usuario: resumen ejecutivo (default), riesgos, prioridades u oportunidades",
+    },
+    limit: jsLimit,
+  }),
+  coverage_overview: js({
+    query: { type: "string", description: "Dominio consultado (p.ej. 'stock', 'caja chica', 'movimientos')" },
     limit: jsLimit,
   }),
 };

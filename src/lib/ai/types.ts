@@ -39,6 +39,14 @@ export const TOOL_NAMES = [
   "vacancy_overview",
   // fix/f5-2 · navegación: catálogo de secciones de Nexus (tool LOCAL).
   "nexus_sections_overview",
+  // Copiloto de gestión (paradigma 2026-07-07): tool ORQUESTADORA read-only que
+  // compone las tools de dominio existentes en un informe ejecutivo multi-dominio
+  // (secciones + riesgos + oportunidades + brechas). Sin RPC propia, sin escritura.
+  "management_brief",
+  // Slice A (aceptación 2026-07-07): matriz de COBERTURA del Copilot (tool LOCAL).
+  // Responde sobre el propio sistema y declara brechas específicas (WMS, caja
+  // chica, movimientos) en vez de responder otro tema.
+  "coverage_overview",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

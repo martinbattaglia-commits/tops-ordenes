@@ -22,6 +22,7 @@ import {
 import { getProvider } from "./provider";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
 import { ToolArgsError, executeTool } from "./data";
+import { detectManagementIntent } from "./management-brief";
 import { redactVisual } from "./visuals";
 import type {
   CopilotAnswer,
@@ -86,7 +87,37 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
   let skippedToolArgs = 0; // P1b: tool-calls salteadas por args inválidos.
   let turnVisual: CopilotVisual | null = null; // tablero determinístico del turno.
 
+  // Ingesta de resultados de tool → chunks con sourceId + PII redactada + primer
+  // tablero determinístico del turno. Compartido entre el pre-seed gerencial y
+  // el loop de tool-calls del provider (misma política, un solo lugar).
+  const ingest = (results: Awaited<ReturnType<typeof executeTool>>) => {
+    if (!turnVisual && results.visual) turnVisual = results.visual;
+    for (const partial of results.chunks) {
+      chunks.push({
+        ...partial,
+        sourceId: `S${chunks.length + 1}`,
+        // Redacción PII antes del provider Y antes de la auditoría.
+        excerpt: redactPii(partial.excerpt),
+        title: redactPii(partial.title),
+      });
+    }
+  };
+
   try {
+    // ── Copiloto de gestión (paradigma 2026-07-07) ──────────────────────────
+    // La intención GERENCIAL se detecta en CÓDIGO (no en prompt): el engine
+    // ejecuta el management brief ANTES del provider, que recibe la evidencia
+    // multi-dominio ya compuesta (secciones+riesgos+oportunidades+brechas) y el
+    // tablero ejecutivo determinístico. El modelo narra y puede pedir tools
+    // adicionales si le falta un dato puntual. No depende del ruteo del modelo.
+    const gerencial = detectManagementIntent(question);
+    if (gerencial) {
+      ingest(
+        await executeTool({ tool: "management_brief", args: { focus: gerencial.focus } })
+      );
+      toolsUsed.push("management_brief");
+    }
+
     const maxRounds = env.ai.limits.toolRoundsPerRequest;
     let round = 1;
     while (round <= maxRounds + 1) {
@@ -132,16 +163,7 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
           toolsUsed.push(call.tool);
           // Capa visual (estándar 2026-07-07): primer tablero determinístico del
           // turno (la primera tool analítica con datos define el dashboard).
-          if (!turnVisual && results.visual) turnVisual = results.visual;
-          for (const partial of results.chunks) {
-            chunks.push({
-              ...partial,
-              sourceId: `S${chunks.length + 1}`,
-              // Redacción PII antes del provider Y antes de la auditoría.
-              excerpt: redactPii(partial.excerpt),
-              title: redactPii(partial.title),
-            });
-          }
+          ingest(results);
         }
         round += 1;
         continue;

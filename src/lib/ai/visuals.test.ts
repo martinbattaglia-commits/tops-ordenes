@@ -349,3 +349,93 @@ describe("visuals · sin adaptador = sin tablero (respuestas simples quedan comp
     expect(TOOL_VISUALS.nexus_sections_overview).toBeUndefined();
   });
 });
+
+// ── Copiloto de gestión (paradigma 2026-07-07): tablero ejecutivo del brief ──
+
+describe("visual · management_brief → dashboard ejecutivo multi-dominio", () => {
+  const BRIEF_ROWS = [
+    {
+      kind: "seccion", seccion: "facturacion", titulo: "Facturación", estado: "ok",
+      valor: "ARS 12,500,000.00", hint: "último mes cerrado · 9 facturas", pct: null,
+      url: "/billing", detalle: "Facturación último mes ARS 12,500,000.00 · líder ANMAT 80%",
+      chart_labels: ["ANMAT", "Cargas Generales", "Sin clasificar"],
+      chart_values: [10000000, 1500000, 1000000],
+    },
+    {
+      kind: "seccion", seccion: "tesoreria", titulo: "Tesorería", estado: "ok",
+      valor: "ARS 57,000,000.00", hint: "2 cuentas", url: "/tesoreria/bancos",
+      detalle: "Saldo total bancos ARS 57,000,000.00",
+    },
+    {
+      kind: "seccion", seccion: "contratos", titulo: "Contratos", estado: "critico",
+      valor: "2 por vencer", hint: "1 con ≤30 días", url: "/comercial/contratos",
+      detalle: "2 contratos por vencer en 90 días",
+    },
+    {
+      kind: "seccion", seccion: "vacancia", titulo: "Vacancia", estado: "atencion",
+      valor: "37%", pct: 37, url: "/comercial/dashboard-vacancia",
+      detalle: "Vacancia corporativa 37% · 3700 m² disponibles",
+      chart_labels: ["ANMAT", "Cargas Generales"], chart_values: [1200, 2100],
+    },
+    {
+      kind: "riesgo", area: "Contratos", titulo: "Contrato Logística Ejemplo SA vence en 12 días",
+      impacto: "alto", urgencia: "alta", evidencia: "vence 2026-07-19",
+      accion: "Iniciar renovación esta semana", url: "/comercial/contratos",
+      detalle: "Riesgo alto/alta · contrato vence en 12 días",
+    },
+    {
+      kind: "riesgo", area: "Operación", titulo: "1 workflow trabado hace 4 días",
+      impacto: "medio", urgencia: "media", evidencia: "Alta de habilitación · paso 2",
+      accion: "Destrabar el paso 2", url: "/connect/tareas",
+      detalle: "Riesgo medio/media · workflow trabado",
+    },
+    {
+      kind: "oportunidad", titulo: "3.700 m² disponibles para comercializar",
+      evidencia: "vacancia corporativa 37%", accion: "Priorizar comercialización de Cargas Generales",
+      url: "/comercial/dashboard-vacancia", detalle: "Oportunidad: 3700 m² disponibles",
+    },
+    {
+      kind: "brecha", titulo: "Caja chica sin fuente conectada",
+      detalle: "Brecha de cobertura: no encontré una fuente conectada para caja chica.",
+    },
+  ];
+
+  it("kind report con KPIs por sección (tono semántico), tabla de riesgos y charts", () => {
+    const v = TOOL_VISUALS.management_brief!(BRIEF_ROWS, {});
+    expect(v).not.toBeNull();
+    expect(v!.kind).toBe("report");
+    expect(v!.title.toLowerCase()).toContain("ejecutivo");
+    // KPI por sección, con tono derivado del estado (critico → danger).
+    expect(v!.kpis!.length).toBeGreaterThanOrEqual(4);
+    const contratosKpi = v!.kpis!.find((k) => k.label.includes("Contratos"));
+    expect(contratosKpi?.tone).toBe("danger");
+    expect(contratosKpi?.url).toBe("/comercial/contratos");
+    // Tabla = top riesgos con acción recomendada y fuente por fila.
+    expect(v!.table!.columns.join(" ")).toMatch(/Riesgo/);
+    expect(v!.table!.columns.join(" ")).toMatch(/Acción|Accion/);
+    expect(v!.table!.rows.length).toBe(2);
+    expect(v!.table!.rowLinks?.[0]?.url).toBe("/comercial/contratos");
+    // Charts desde los datos de sección (donut ingresos + barras m²).
+    const charts = [...(v!.chart ? [v!.chart] : []), ...(v!.charts ?? [])];
+    expect(charts.length).toBeGreaterThanOrEqual(2);
+    expect(charts.some((c) => c.type === "donut")).toBe(true);
+  });
+
+  it("insights = oportunidades y recomendaciones accionables; warnings = brechas", () => {
+    const v = TOOL_VISUALS.management_brief!(BRIEF_ROWS, {});
+    const insights = (v!.insights ?? []).join(" ").toLowerCase();
+    expect(insights).toContain("oportunidad");
+    expect(insights).toMatch(/recomendaci/);
+    expect(insights).toContain("renovación esta semana".toLowerCase());
+    expect(v!.warnings!.join(" ").toLowerCase()).toContain("caja chica");
+  });
+
+  it("focus=riesgos → el tablero prioriza riesgos en el título", () => {
+    const v = TOOL_VISUALS.management_brief!(BRIEF_ROWS, { focus: "riesgos" });
+    expect(v!.title.toLowerCase()).toContain("riesgos");
+  });
+
+  it("sin filas → null (no se maquilla un vacío con dashboard)", () => {
+    expect(TOOL_VISUALS.management_brief!([], {})).toBeNull();
+  });
+});

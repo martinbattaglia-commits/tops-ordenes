@@ -5,6 +5,7 @@
 // Es el provider del piloto (D-F5-9) y el harness de TDD/QA del engine.
 
 import { NO_EVIDENCE } from "../guardrails";
+import { detectManagementIntent } from "../management-brief";
 import type {
   AiProvider,
   ProviderTurnRequest,
@@ -40,7 +41,36 @@ export function pickTools(question: string): ToolCall[] {
     }
     return calls;
   }
-  // fix/f5-2 · NAVEGACIÓN primero: "¿dónde veo X?" pide el mapa, no los datos de X.
+  // ── Copiloto de gestión (paradigma 2026-07-07): intención GERENCIAL ─────────
+  // "resumen ejecutivo / reunión de dirección / riesgos / prioridades / cómo
+  // viene el negocio" → management brief multi-dominio. NUNCA search_knowledge.
+  // Va ANTES de los matchers de dominio: "informe ejecutivo usando facturación,
+  // vacancia…" nombra dominios pero pide GESTIÓN.
+  const gerencial = detectManagementIntent(question);
+  if (gerencial) {
+    calls.push({ tool: "management_brief", args: { focus: gerencial.focus } });
+    return calls;
+  }
+  // ── Slice A (aceptación 2026-07-07): COBERTURA y dominios SIN fuente ────────
+  // Preguntas sobre el propio Copilot + dominios brecha (WMS/stock/posiciones,
+  // movimientos financieros): la respuesta correcta es la matriz de cobertura
+  // con la brecha específica — nunca datos de otro tema. Va ANTES de navegación:
+  // "qué módulos tienen cobertura" pregunta por el Copilot, no por el mapa.
+  if (
+    /cobertura (completa )?(del copilot|de nexus)|que fuentes usa|que datos faltan|que modulos .*(cobertura|brecha)|copilot (puede|no puede) responder/.test(q) ||
+    /\bposicion(es)?\b|\bubicacion(es)?\b|sector(es)? .*(ocupacion|subutilizad)|subutilizad|\blotes?\b|productos sensibles|\bpallets?\b|\bstock\b|\bwms\b/.test(q) ||
+    /movimientos (financieros|bancarios|de tesoreria|de caja|relevantes)/.test(q) ||
+    // Comparaciones período-a-período y cruces cliente 360: BRECHA declarada
+    // (la matriz tiene la fila con qué falta y dónde está la fuente parcial).
+    /compara(me)?[^?]*\b(ultimo periodo|periodo anterior|mes anterior|estado actual de nexus)/.test(q) ||
+    /(aumento|variacion|suba)[^?]*periodo anterior/.test(q) ||
+    /compara(me)? clientes/.test(q) ||
+    /clientes .*(contactar|contactarse)/.test(q)
+  ) {
+    calls.push({ tool: "coverage_overview", args: { query: question.slice(0, 200) } });
+    return calls;
+  }
+  // fix/f5-2 · NAVEGACIÓN: "¿dónde veo X?" pide el mapa, no los datos de X.
   if (/que secciones|que modulos|donde (veo|encuentro|esta|estan|miro)|como (llego|entro|accedo)/.test(q)) {
     calls.push({ tool: "nexus_sections_overview", args: { query: question.slice(0, 200) } });
     return calls;
@@ -74,9 +104,11 @@ export function pickTools(question: string): ToolCall[] {
   }
 
   // VACANCIA / CAPACIDAD / CUBÍCULOS (smoke 2026-07-07): métricas del motor
-  // corporativo — misma fuente que el dashboard de Vacancia.
+  // corporativo — misma fuente que el dashboard de Vacancia. Slice A (aceptación):
+  // + disponibilidad, capacidad ociosa, tablero/ocupación por sede y espacios
+  // disponibles (formulaciones comerciales del brief que caían en search).
   if (
-    /vacancia|capacidad comercializable|cubiculo|metros cuadrados|m2 (disponibles|libres|ocupados)|superficie disponible|cuantos m2|ocupacion (fisica|corporativa|del deposito)/.test(
+    /vacancia|capacidad comercializable|capacidad ociosa|cubiculo|metros cuadrados|m2 (disponibles|libres|ocupados)|superficie disponible|cuantos m2|ocupacion (fisica|corporativa|del deposito|por sede)|tablero de ocupacion|disponibilidad|espacios? disponibles?|almacenamiento disponible|oportunidades de almacenamiento/.test(
       q
     )
   ) {
@@ -99,6 +131,14 @@ export function pickTools(question: string): ToolCall[] {
       tool: "vacancy_overview",
       args: { ...(focus ? { focus } : {}), ...(categoria ? { categoria } : {}) },
     });
+    return calls;
+  }
+  // Slice A (aceptación 2026-07-07): REPORTE DE COMPRAS = dominio compras (OC +
+  // facturas de proveedor). Va ANTES del reporte por categoría: "reporte de
+  // compras… facturas proveedor" matchea /factur/ pero NO es de ingresos.
+  if (/(reporte|dashboard|tablero) de compras/.test(q)) {
+    calls.push({ tool: "purchase_orders_overview", args: { mode: "recientes" } });
+    calls.push({ tool: "supplier_invoices_overview", args: { mode: "pendientes_aprobacion" } });
     return calls;
   }
   // REPORTE por CATEGORÍA (estándar gerencial): porcentajes/distribución/ANMAT vs
@@ -139,21 +179,33 @@ export function pickTools(question: string): ToolCall[] {
     return calls;
   }
 
-  // Saldos bancarios.
-  if (/santander|galicia|saldo|plata hay|cuanta plata/.test(q) && !/proveedor|probador/.test(q)) {
+  // Saldos bancarios. Slice A: + composición de fondos por banco/caja.
+  if (
+    /santander|galicia|saldo|plata hay|cuanta plata|composicion de fondos|fondos por banco/.test(q) &&
+    !/proveedor|probador/.test(q)
+  ) {
     const bank = q.match(/santander|galicia|caja/)?.[0];
     calls.push({
       tool: "bank_balances_overview",
-      args: bank ? { query: bank } : {},
+      args: bank && !/composicion|fondos por banco/.test(q) ? { query: bank } : {},
     });
     return calls;
   }
 
+  // Slice A · round 2: comparar GASTO REAL contra OC FIRMADAS = las dos bases
+  // del agregado de proveedores juntas (el modelo compara con ambas fuentes).
+  if (/gasto (real )?(contra|vs) (ordenes|oc|compromiso)|gasto real contra/.test(q)) {
+    calls.push({ tool: "supplier_spend_overview", args: { base: "gasto", periodo: "todo" } });
+    calls.push({ tool: "supplier_spend_overview", args: { base: "compromiso", periodo: "todo" } });
+    return calls;
+  }
   // Gasto/presupuesto por proveedor. Tolerancia de typo: "probador" en contexto de
   // gasto = proveedor (hallazgo smoke). "insumió/consume" = contexto de gasto.
+  // Slice A · round 2: + dependencia/concentración de proveedores (el ranking con
+  // % de concentración ES el dato de dependencia).
   if (
     /proveedor|probador/.test(q) &&
-    /presupuesto|gast|consum|insumi|mayor|mas caro|ranking|mas plata/.test(q)
+    /presupuesto|gast|consum|insumi|mayor|mas caro|ranking|mas plata|dependencia|concentra/.test(q)
   ) {
     const base = /presupuesto|comprom/.test(q) ? "compromiso" : "gasto";
     calls.push({
@@ -256,7 +308,16 @@ export function pickTools(question: string): ToolCall[] {
     calls.push({ tool: "suppliers_overview", args: {} });
     return calls;
   }
-  if (/compliance|habilitacion|vencimiento|documentacion|certificad|documentos?\b/.test(q)) {
+  // Slice A · round 2: índice/reporte documental por sede → fichas documentales.
+  if (/indice documental|reporte documental/.test(q)) {
+    const sedeDoc = q.match(/lujan|magaldi|3159|1765/)?.[0];
+    calls.push({
+      tool: "docs_browse",
+      args: { tipo: "compliance", ...(sedeDoc ? { query: sedeDoc } : {}) },
+    });
+    return calls;
+  }
+  if (/compliance|regulatorio|habilitacion|vencimiento|documentacion|certificad|documentos?\b/.test(q)) {
     calls.push({ tool: "compliance_pending", args: {} });
     return calls;
   }
@@ -272,8 +333,15 @@ export function pickTools(question: string): ToolCall[] {
     }
     return calls;
   }
-  if (/workflow|trabad|estancad/.test(q)) {
+  if (/workflow|trabad|estancad|procesos sin actividad|sin actividad reciente/.test(q)) {
     calls.push({ tool: "workflows_stuck", args: {} });
+    return calls;
+  }
+  // Slice A · round 2: mapa ejecutivo de áreas y responsables = organigrama +
+  // mapa de secciones juntos (dos tools locales, cero DB).
+  if (/mapa ejecutivo/.test(q)) {
+    calls.push({ tool: "organization_overview", args: {} });
+    calls.push({ tool: "nexus_sections_overview", args: {} });
     return calls;
   }
   // fix/f5-2: organigrama — quién es X / a cargo de / roles / estructura.
@@ -290,6 +358,12 @@ export function pickTools(question: string): ToolCall[] {
       tool: "organization_overview",
       args: roleMatch ? { query: roleMatch[1] } : {},
     });
+    return calls;
+  }
+  // Slice A · round 2: riesgo DOCUMENTAL/CONTRACTUAL de clientes = dashboard
+  // contractual (calidad documental por contrato), no salud operativa.
+  if (/riesgo (documental|contractual)/.test(q)) {
+    calls.push({ tool: "contracts_overview", args: { mode: "todos", limit: 50 } });
     return calls;
   }
   if (/cliente/.test(q) && /problema|critic|riesgo/.test(q)) {
@@ -326,7 +400,31 @@ function filterByPersonName(question: string, chunks: SourceChunk[]): SourceChun
   return filtered.length > 0 ? filtered : chunks;
 }
 
+/** Composición EJECUTIVA determinística para el management brief: no "esto es
+ *  lo que encontré" sino estado por área → riesgos → oportunidades → brechas,
+ *  todo citado [S#]. El estándar del copiloto de gestión (paradigma 2026-07-07). */
+function composeBrief(chunks: SourceChunk[]): string {
+  const by = (t: string) => chunks.filter((c) => c.entityType === t);
+  const line = (c: SourceChunk) => `• ${c.excerpt} [${c.sourceId}]`;
+  const secciones = by("brief_seccion");
+  const riesgos = by("brief_riesgo");
+  const oportunidades = by("brief_oportunidad");
+  const brechas = by("brief_brecha");
+  const partes: string[] = [
+    "Resumen ejecutivo de Nexus — esto significa, esto importa y esto recomiendo:",
+  ];
+  if (secciones.length > 0) partes.push("Estado por área:", ...secciones.slice(0, 7).map(line));
+  if (riesgos.length > 0) partes.push("Riesgos priorizados (impacto/urgencia):", ...riesgos.map(line));
+  if (oportunidades.length > 0) partes.push("Oportunidades:", ...oportunidades.map(line));
+  if (brechas.length > 0) partes.push("Brechas de cobertura declaradas:", ...brechas.map(line));
+  partes.push("Verificá el detalle en las fuentes citadas antes de tomar una decisión.");
+  return partes.join("\n");
+}
+
 function compose(question: string, chunks: SourceChunk[]): string {
+  // Brief de gestión: composición ejecutiva propia (nunca el listado genérico).
+  const briefChunks = chunks.filter((c) => c.tool === "management_brief");
+  if (briefChunks.length > 0) return composeBrief(briefChunks);
   const relevant = filterByPersonName(question, chunks).slice(0, 8);
   if (relevant.length === 0) return NO_EVIDENCE;
   const intro = `Esto es lo que encuentro en Nexus (${relevant.length} fuente${

@@ -32,10 +32,11 @@ describe("catálogo cerrado read-only", () => {
 
   it("solo invoca RPCs del namespace ai_* o connect_search (allowlist)", () => {
     for (const spec of Object.values(TOOLS)) {
-      // Tools LOCALES (resolve: datos estáticos) y de FUENTE COMPARTIDA (fetchRows:
-      // misma lib server-side que la UI, cliente de sesión/RLS) no tienen RPC propia
+      // Tools LOCALES (resolve: datos estáticos), de FUENTE COMPARTIDA (fetchRows:
+      // misma lib server-side que la UI, cliente de sesión/RLS) y ORQUESTADORAS
+      // (orchestrate: componen otras tools de ESTE catálogo) no tienen RPC propia
       // → quedan fuera de la allowlist de RPC.
-      if (spec.resolve || spec.fetchRows) {
+      if (spec.resolve || spec.fetchRows || spec.orchestrate) {
         expect(spec.rpc).toBeUndefined();
         continue;
       }

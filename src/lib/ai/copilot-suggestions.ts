@@ -43,8 +43,10 @@ export const COPILOT_SUGGESTION_SECTIONS: CopilotSuggestionSection[] = [
     description: "Prioridades del día, operación e incidentes.",
     coverage: "supported",
     prompts: [
+      // Copiloto de gestión (2026-07-07): informe ejecutivo multi-dominio.
+      { id: "brief", label: "Resumen para dirección", prompt: "Preparame el resumen ejecutivo de Nexus para la reunión de dirección, con KPIs, riesgos, oportunidades y recomendaciones.", coverage: "supported" },
+      { id: "riesgos", label: "Top riesgos de hoy", prompt: "¿Cuáles son los principales riesgos que hoy aparecen en Nexus, ordenados por impacto y urgencia?", coverage: "supported" },
       { id: "agenda", label: "¿Qué miro primero hoy?", prompt: "¿Qué debería mirar primero hoy?", coverage: "supported" },
-      { id: "ops-hoy", label: "Operación de hoy", prompt: "¿Qué pasó hoy en operaciones?", coverage: "supported" },
       { id: "incidentes", label: "Incidentes críticos", prompt: "¿Qué incidentes críticos están abiertos?", coverage: "supported" },
       { id: "tareas", label: "Tareas vencidas", prompt: "¿Qué tareas están vencidas?", coverage: "supported" },
     ],

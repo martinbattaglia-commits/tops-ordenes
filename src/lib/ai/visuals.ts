@@ -649,6 +649,142 @@ export const TOOL_VISUALS: Partial<
     };
   },
 
+  // ── Copiloto de gestión (2026-07-07): dashboard ejecutivo multi-dominio ────
+  // Renderiza las filas del management brief: KPI por sección (tono semántico
+  // según estado), charts desde los datos de sección, tabla de RIESGOS con
+  // acción recomendada y fuente por fila, insights = oportunidades +
+  // recomendaciones, warnings = brechas de cobertura (nunca se esconden).
+  management_brief: (rows, args) => {
+    if (rows.length === 0) return null;
+    const secciones = rows.filter((r) => s(r.kind) === "seccion");
+    const riesgos = rows.filter((r) => s(r.kind) === "riesgo");
+    const oportunidades = rows.filter((r) => s(r.kind) === "oportunidad");
+    const brechas = rows.filter((r) => s(r.kind) === "brecha");
+    const focus = s(args.focus);
+
+    const TONE: Record<string, "ok" | "warn" | "danger" | "brand"> = {
+      ok: "ok",
+      atencion: "warn",
+      critico: "danger",
+      sin_datos: "brand",
+    };
+
+    const kpis = secciones.slice(0, 8).map((r) => ({
+      label: s(r.titulo),
+      value: s(r.valor),
+      hint: s(r.hint) || null,
+      pct: r.pct == null ? null : num(r.pct),
+      tone: TONE[s(r.estado)] ?? "brand",
+      url: s(r.url) || null,
+      actionLabel: "Ver módulo",
+    }));
+
+    // Charts chart-ready desde las filas de sección (composición de ingresos +
+    // m² disponibles por unidad). Los datos vienen calculados por las tools.
+    const charts: NonNullable<CopilotVisual["charts"]> = [];
+    const fact = secciones.find((r) => s(r.seccion) === "facturacion");
+    if (Array.isArray(fact?.chart_labels) && Array.isArray(fact?.chart_values)) {
+      charts.push({
+        type: "donut",
+        title: "Ingresos por categoría (último mes)",
+        labels: (fact.chart_labels as unknown[]).map(s),
+        values: (fact.chart_values as unknown[]).map(num),
+        unit: "ARS",
+      });
+    }
+    const vaca = secciones.find((r) => s(r.seccion) === "vacancia");
+    if (Array.isArray(vaca?.chart_labels) && Array.isArray(vaca?.chart_values)) {
+      charts.push({
+        type: "bar",
+        title: "m² disponibles por unidad de negocio",
+        labels: (vaca.chart_labels as unknown[]).map(s),
+        values: (vaca.chart_values as unknown[]).map(num),
+        unit: "m² disponibles",
+      });
+    }
+
+    // Recomendaciones accionables: primero las acciones de los riesgos top,
+    // después las oportunidades — cada una con su evidencia (nunca sin ella).
+    const insights: string[] = [];
+    riesgos.slice(0, 4).forEach((r, i) => {
+      insights.push(`Recomendación ${i + 1} — ${s(r.accion)} (${s(r.evidencia)}).`);
+    });
+    for (const o of oportunidades.slice(0, 3)) {
+      insights.push(`Oportunidad — ${s(o.titulo)}: ${s(o.accion)} (${s(o.evidencia)}).`);
+    }
+
+    const criticos = secciones.filter((r) => s(r.estado) === "critico").length;
+    return {
+      kind: "report",
+      title:
+        focus === "riesgos"
+          ? "Riesgos priorizados · Nexus"
+          : focus === "prioridades"
+            ? "Prioridades de gestión · Resumen ejecutivo Nexus"
+            : focus === "oportunidades"
+              ? "Oportunidades · Resumen ejecutivo Nexus"
+              : "Resumen ejecutivo · Nexus",
+      period: "estado actual · facturación del último mes cerrado",
+      kpis,
+      table:
+        riesgos.length > 0
+          ? {
+              columns: ["#", "Riesgo", "Área", "Impacto", "Urgencia", "Acción recomendada"],
+              rows: riesgos.map((r, i) => [
+                String(i + 1),
+                s(r.titulo),
+                s(r.area),
+                s(r.impacto) === "alto" ? "🔴 alto" : s(r.impacto) === "medio" ? "🟡 medio" : "🟢 bajo",
+                s(r.urgencia),
+                s(r.accion),
+              ]),
+              rowLinks: riesgos.map((r) =>
+                s(r.url) ? { url: s(r.url), label: "Ver" } : null
+              ),
+            }
+          : null,
+      chart: charts[0] ?? null,
+      charts: charts.slice(1),
+      insights,
+      warnings: [
+        ...(criticos > 0
+          ? [`${criticos} área(s) en estado crítico — revisar la tabla de riesgos.`]
+          : []),
+        ...brechas.map((b) => s(b.detalle)),
+      ],
+    };
+  },
+
+  // ── Slice A (aceptación 2026-07-07): matriz de cobertura del Copilot ───────
+  coverage_overview: (rows) => {
+    if (rows.length === 0) return null;
+    const conectados = rows.filter((r) => s(r.estado) === "conectado");
+    const brechas = rows.filter((r) => s(r.estado) === "brecha");
+    const badge = (e: string) =>
+      e === "conectado" ? "🟢 conectado" : e === "parcial" ? "🟡 parcial" : "🔴 brecha";
+    return {
+      kind: "report",
+      title: "Cobertura del Copilot por módulo",
+      period: "estado actual del catálogo de fuentes",
+      kpis: [
+        { label: "Módulos conectados", value: String(conectados.length), hint: "con fuente real consultable", tone: "ok" },
+        ...(brechas.length > 0
+          ? [{ label: "Brechas declaradas", value: String(brechas.length), hint: "sin fuente conectada", tone: "danger" as const }]
+          : []),
+      ],
+      table: {
+        columns: ["Módulo", "Estado", "Fuente"],
+        rows: rows.map((r) => [s(r.modulo), badge(s(r.estado)), s(r.fuente)]),
+        rowLinks: rows.map((r) =>
+          s(r.ruta) ? { url: s(r.ruta), label: "Abrir" } : null
+        ),
+      },
+      chart: null,
+      insights: [],
+      warnings: brechas.map((b) => s(b.detalle)),
+    };
+  },
+
   // ── Búsqueda documental: PRINCIPAL única + relacionados separados ──────────
   docs_browse: (rows) => {
     if (rows.length === 0) return null;

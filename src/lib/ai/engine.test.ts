@@ -86,6 +86,57 @@ describe("flujo completo en demo mode (provider mock + fixtures)", () => {
     }
   });
 
+  // ── Copiloto de gestión (paradigma 2026-07-07): preguntas GERENCIALES ──────
+  // El estándar: no "esto es lo que encontré" sino un informe multi-dominio con
+  // tablero ejecutivo, riesgos, recomendaciones, fuentes y brechas explícitas.
+  const GERENCIALES = [
+    "Si mañana tengo una reunión de dirección, preparame el resumen ejecutivo de Nexus con KPIs, alertas, gráficos, riesgos, oportunidades y recomendaciones concretas basadas solo en datos de Nexus.",
+    "Haceme un informe ejecutivo de situación de Nexus usando facturación, tesorería, contratos, compliance, vacancia y operación.",
+    "Decime cuáles son los 10 riesgos más importantes que hoy aparecen en Nexus, ordenados por impacto y urgencia.",
+    "Qué debería mirar primero hoy?",
+    "Preparame un tablero para reunión de dirección.",
+  ];
+
+  it("las 5 preguntas gerenciales → answered con brief multi-dominio, tablero y citas", async () => {
+    const { askCopilot } = await loadEngine();
+    for (const q of GERENCIALES) {
+      const res = await askCopilot(baseReq(q));
+      expect(res.outcome, q).toBe("answered");
+      expect(res.answer, q).toMatch(/\[S\d+\]/);
+      // La evidencia viene del management brief (capa de gestión), no de una
+      // búsqueda simple.
+      expect(
+        res.sources.some((s) => s.tool === "management_brief"),
+        `${q} → esperaba fuentes del management_brief`
+      ).toBe(true);
+      expect(
+        res.sources.some((s) => s.tool === "search_knowledge"),
+        `${q} → NO debe caer en search_knowledge`
+      ).toBe(false);
+      // Tablero ejecutivo determinístico presente.
+      expect(res.visual, q).toBeTruthy();
+      expect(res.visual!.kpis!.length, q).toBeGreaterThanOrEqual(4);
+    }
+  });
+
+  it("el tablero del resumen ejecutivo trae riesgos (tabla), recomendaciones y brechas", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq(GERENCIALES[0]));
+    expect(res.outcome).toBe("answered");
+    const v = res.visual!;
+    expect(v.table!.columns.join(" ")).toMatch(/Riesgo/);
+    expect((v.insights ?? []).join(" ").toLowerCase()).toMatch(/recomendaci/);
+    // Fase 6: las brechas se declaran (caja chica sin fuente conectada).
+    expect((v.warnings ?? []).join(" ").toLowerCase()).toContain("caja chica");
+  });
+
+  it("pregunta de riesgos → fuentes de riesgo citables priorizadas", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq(GERENCIALES[2]));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.some((s) => s.entityType === "brief_riesgo")).toBe(true);
+  });
+
   it("pregunta vacía/mínima → NO_EVIDENCE exacto", async () => {
     const { askCopilot, NO_EVIDENCE } = await loadEngine();
     const res = await askCopilot(baseReq("?"));

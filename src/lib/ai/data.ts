@@ -37,19 +37,55 @@ export interface ToolExecution {
   visual: CopilotVisual | null;
 }
 
+/** Filas crudas de una tool (validando args), SIN mapear a chunks. Reutilizado
+ *  por executeTool y por la capa de gestión (management-brief), que compone
+ *  varios dominios: la paridad demo/real y el RLS viven acá, una sola vez. */
+export async function fetchToolRows(call: ToolCall): Promise<Array<Record<string, unknown>>> {
+  const args = validateToolCall(call);
+  return fetchRowsValidated(call.tool, args);
+}
+
 /** Ejecuta una tool y devuelve chunks SIN sourceId (los asigna el engine) +
  *  el tablero visual determinístico si la tool tiene adaptador (visuals.ts). */
 export async function executeTool(call: ToolCall): Promise<ToolExecution> {
   const args = validateToolCall(call);
   const spec = TOOLS[call.tool];
+  const rows = await fetchRowsValidated(call.tool, args);
+
+  const chunks = rows.slice(0, MAX_CHUNKS_PER_TOOL).map((row) => ({
+    tool: call.tool,
+    ...spec.rowToChunk(row),
+  }));
+  // Tablero visual determinístico (estándar 2026-07-07): mismo dataset que los
+  // chunks, calculado en código — nunca por el modelo.
+  const visual = TOOL_VISUALS[call.tool]?.(rows, args) ?? null;
+  return { chunks, visual };
+}
+
+async function fetchRowsValidated(
+  tool: ToolName,
+  args: Record<string, unknown>
+): Promise<Array<Record<string, unknown>>> {
+  const spec = TOOLS[tool];
 
   let rows: Array<Record<string, unknown>>;
-  if (spec.resolve) {
+  if (spec.orchestrate) {
+    // Copiloto de gestión (2026-07-07): tool ORQUESTADORA — compone otras tools
+    // del catálogo (cada sub-tool resuelve su propio demo/real y RLS). Corre
+    // ANTES del branch isMock: la paridad demo/real es de las sub-tools, no de
+    // un fixture propio. Errores → [] (mismo contrato honesto que fetchRows).
+    try {
+      rows = await spec.orchestrate(args);
+    } catch (err) {
+      console.error(`[ai/data] orchestrate ${tool} error:`, err);
+      rows = [];
+    }
+  } else if (spec.resolve) {
     // fix/f5-2: tool LOCAL (p.ej. organigrama) — datos estáticos del repo, sin DB
     // ni service_role. Idéntico en demo y real. Corre ANTES del branch isMock/RPC.
     rows = spec.resolve(args);
   } else if (isMock()) {
-    rows = MOCK_TOOL_ROWS[call.tool] ?? [];
+    rows = MOCK_TOOL_ROWS[tool] ?? [];
     // Paridad demo/real (smoke humano): las RPC reales respetan p_limit; los
     // fixtures también deben respetarlo para que "singular → top 1" sea real
     // en demo y en tests (limit=1 ⇒ UNA fila, no el set completo).
@@ -60,16 +96,16 @@ export async function executeTool(call: ToolCall): Promise<ToolExecution> {
     try {
       rows = await spec.fetchRows(args);
     } catch (err) {
-      console.error(`[ai/data] fetchRows ${call.tool} error:`, err);
+      console.error(`[ai/data] fetchRows ${tool} error:`, err);
       rows = [];
     }
   } else {
     const supabase = createClient();
-    if (!supabase) return { chunks: [], visual: null };
+    if (!supabase) return [];
     const { data, error } = await supabase.rpc(spec.rpc!, spec.toRpcArgs(args));
     if (error) {
       console.error(`[ai/data] rpc ${spec.rpc} error:`, error.message);
-      return { chunks: [], visual: null };
+      return [];
     }
     rows = Array.isArray(data) ? (data as Array<Record<string, unknown>>) : [];
     // smoke 2026-07-07: enriquecimiento read-only post-RPC (p.ej. URL real de
@@ -78,17 +114,9 @@ export async function executeTool(call: ToolCall): Promise<ToolExecution> {
       try {
         rows = await spec.enrich(rows, supabase);
       } catch (err) {
-        console.error(`[ai/data] enrich ${call.tool} error:`, err);
+        console.error(`[ai/data] enrich ${tool} error:`, err);
       }
     }
   }
-
-  const chunks = rows.slice(0, MAX_CHUNKS_PER_TOOL).map((row) => ({
-    tool: call.tool,
-    ...spec.rowToChunk(row),
-  }));
-  // Tablero visual determinístico (estándar 2026-07-07): mismo dataset que los
-  // chunks, calculado en código — nunca por el modelo.
-  const visual = TOOL_VISUALS[call.tool]?.(rows, args) ?? null;
-  return { chunks, visual };
+  return rows;
 }
