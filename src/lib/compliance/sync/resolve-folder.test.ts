@@ -15,7 +15,10 @@ import { resolveComplianceFolder } from "./resolve-folder";
 
 const findFolderByPathMock = vi.mocked(findFolderByPath);
 
-const ROOT_VIEJO = "1RBxm-gW08y4in9ZB11WvRB-c9r73jgX1";
+// Id claramente FALSO (mismo formato que un folder id de Drive): el fixture no
+// necesita el id real, y el secrets scanning de Netlify falla el build si el
+// valor de GOOGLE_DRIVE_ROOT_FOLDER_ID aparece en el repo (Preview #45).
+const ROOT_VIEJO = "1TEST-FAKE-ROOT-FOLDER-ID-0000000";
 const CARPETA_NUEVA = "1saWQiEW6oH2dYBOToe3adgkLPpDIHtEW";
 
 beforeEach(() => {
