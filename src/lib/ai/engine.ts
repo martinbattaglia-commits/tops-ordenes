@@ -115,13 +115,26 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
       ingest(await executeTool({ tool: "general_context", args: { tema: intent.tema } }));
       toolsUsed.push("general_context");
     } else if (intent.tipo === "company_institutional") {
-      ingest(
-        await executeTool({
-          tool: "coverage_overview",
-          args: { query: "institucional web servicios propuesta" },
-        })
-      );
-      toolsUsed.push("coverage_overview");
+      // Capa 2: primero la Knowledge Base institucional (Drive→Nexus, mig 0185).
+      // Si NO hay documentos ingestados (RPC/fixture vacío, o migración sin
+      // aplicar), se cae a la brecha ESPECÍFICA (coverage) — nunca a
+      // search_knowledge genérico ni a "no encontré registros en Nexus".
+      const kb = await executeTool({
+        tool: "company_knowledge_search",
+        args: { query: question.slice(0, 200) },
+      });
+      if (kb.chunks.length > 0) {
+        ingest(kb);
+        toolsUsed.push("company_knowledge_search");
+      } else {
+        ingest(
+          await executeTool({
+            tool: "coverage_overview",
+            args: { query: "institucional web servicios propuesta" },
+          })
+        );
+        toolsUsed.push("coverage_overview");
+      }
     } else if (intent.tipo === "internal_research") {
       ingest(
         await executeTool({

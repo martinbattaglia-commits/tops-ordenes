@@ -55,6 +55,12 @@ export const TOOL_NAMES = [
   // fecha/hora del servidor + limitaciones honestas de actualidad (dólar,
   // noticias, clima, inflación) mientras no haya fuente externa conectada.
   "general_context",
+  // C1 · Capa 2 (pirámide institucional 2026-07-07): conocimiento institucional
+  // de Logística TOPS (servicios, propuesta de valor, web/landings, dossiers,
+  // código de ética, identidad) ingerido desde la Knowledge Base de Drive →
+  // tabla company_knowledge_documents (migración 0185, INVOKER/RLS). Separada
+  // del spine operativo: no mezcla institucional con datos vivos.
+  "company_knowledge_search",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

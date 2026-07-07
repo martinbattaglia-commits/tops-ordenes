@@ -867,6 +867,59 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       url: null,
     }),
   },
+  // ── C1 · Capa 2 (2026-07-07): conocimiento institucional de Logística TOPS ──
+  // Lee la Knowledge Base institucional (company_knowledge_documents, mig 0185,
+  // SECURITY INVOKER → RLS). SOLO documentos VIGENTES e ingeribles (la RPC
+  // excluye NO_INGESTAR/HISTORICO/BORRADOR/REEMPLAZADO). Si la migración 0185 no
+  // está aplicada o no hay documentos, la RPC devuelve [] y el engine declara la
+  // brecha específica (nunca inventa). Cita el documento/URL institucional real.
+  company_knowledge_search: {
+    rpc: "ai_company_knowledge_search",
+    description:
+      "CONOCIMIENTO INSTITUCIONAL de Logística TOPS (Capa 2): servicios ofrecidos, propuesta de valor, forma de trabajo como operador 3PL, unidades de negocio (ANMAT/productos regulados, Cargas Generales), sitio web oficial y landings, dossiers, argumentarios, código de ética e identidad corporativa — ingerido desde la Knowledge Base de Drive. `query` = tema/servicio buscado; `unidad` filtra por unidad de negocio. USALA para '¿qué servicios ofrece Logística TOPS?', '¿qué ofrece para ANMAT/regulados?', '¿cómo trabaja TOPS como 3PL?', '¿cuál es la propuesta de valor?', '¿qué dice la web sobre depósitos ANMAT?', '¿qué es TOPS Nexus/Connect?'. Devuelve SOLO documentos institucionales VIGENTES (nunca borradores, versiones históricas ni marcados NO_INGESTAR). Si no hay documentos ingestados, el sistema declara la brecha: NUNCA inventes servicios, sedes ni propuestas.",
+    schema: z.object({
+      query: z.string().max(200).optional(),
+      unidad: z
+        .enum(["anmat", "cargas_generales", "corporativo", "regulados", "nexus"])
+        .optional(),
+      capa: z.enum(["institucional", "research"]).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({
+      p_query: a.query ?? null,
+      p_unidad: a.unidad ?? null,
+      p_capa: a.capa ?? "institucional",
+      p_limit: a.limit ?? 8,
+    }),
+    // Demo/tests: espeja el WHERE de la RPC (solo VIGENTE + ingestable + capa +
+    // unidad + match de query). El estado se filtra acá igual que en SQL: así el
+    // examen valida que NO_INGESTAR/HISTORICO nunca salen y VIGENTE tiene prioridad.
+    demoFilter: (rows, a) => {
+      const capa = String(a.capa ?? "institucional");
+      const unidad = a.unidad ? String(a.unidad) : null;
+      const q = s(a.query).toLowerCase().trim();
+      const tokens = q.split(/[^a-z0-9áéíóúñ]+/i).filter((t) => t.length >= 3);
+      return rows.filter((r) => {
+        if (s(r.estado) !== "VIGENTE") return false; // excluye NO_INGESTAR/HISTORICO/BORRADOR/REEMPLAZADO
+        if (r.ingestable === false) return false;
+        if (s(r.capa) && s(r.capa) !== capa) return false;
+        if (unidad && s(r.business_unit).toLowerCase() !== unidad) return false;
+        if (tokens.length === 0) return true;
+        const hay = `${s(r.title)} ${s(r.summary)} ${s(r.business_unit)} ${s(r.source_type)}`.toLowerCase();
+        return tokens.some((t) => hay.includes(t));
+      });
+    },
+    rowToChunk: (r) => ({
+      entityType: "institucional",
+      entityId: s(r.title),
+      publicId: sn(r.source_type),
+      title: s(r.title) || "Documento institucional",
+      excerpt: `[institucional · ${s(r.business_unit) || "TOPS"}] ${s(r.summary) || s(r.detalle)}`,
+      date: sn(r.fecha_captura),
+      // Link REAL al documento (Drive) o URL institucional; nunca inventado.
+      url: sn(r.url),
+    }),
+  },
   // ── Slice A (aceptación 2026-07-07): cobertura del propio Copilot ───────────
   // Tool LOCAL (datos del repo): qué módulos tienen fuente conectada, con qué
   // tool/RPC responde cada uno, y qué dominios son BRECHA declarada (WMS/stock,
@@ -1073,6 +1126,16 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
       enum: ["fecha", "hora", "dolar", "noticias", "clima", "inflacion", "normativa"],
       description: "fecha/hora del servidor, o el tema de actualidad sin fuente conectada",
     },
+    limit: jsLimit,
+  }),
+  company_knowledge_search: js({
+    query: { type: "string", description: "Tema/servicio institucional buscado (español)" },
+    unidad: {
+      type: "string",
+      enum: ["anmat", "cargas_generales", "corporativo", "regulados", "nexus"],
+      description: "Unidad de negocio para acotar",
+    },
+    capa: { type: "string", enum: ["institucional", "research"] },
     limit: jsLimit,
   }),
 };
