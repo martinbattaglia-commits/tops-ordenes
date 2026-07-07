@@ -52,6 +52,7 @@ export function entityUrl(entityType: string, publicId: string | null): string |
   // fix/f5-2 · analytics: agregados → módulo que muestra el detalle.
   if (entityType === "billing_periodo") return "/billing";
   if (entityType === "bank_balance") return "/tesoreria/bancos";
+  if (entityType === "customer_revenue") return "/billing";
   return null;
 }
 
@@ -551,6 +552,26 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
           : entityUrl("supplier_invoice", null),
     }),
   },
+  // ── smoke humano 2026-07-06: facturación agrupada POR CLIENTE ───────────────
+  customer_revenue_overview: {
+    rpc: "ai_customer_revenue_overview",
+    description:
+      "FACTURACIÓN POR CLIENTE (agregado de facturas emitidas AUTORIZADAS, sin anuladas), ordenada de mayor a menor. periodo: todo | mes_actual | ultimo_mes. limit=1 para '¿cuál fue EL cliente que más facturó?' (singular = UNA entidad); limit>1 para rankings. USALA para 'cliente que más facturó', 'mayor facturación', 'ranking de clientes por facturación'. El total ya viene sumado: no lo calcules vos. NO uses search_knowledge para esto.",
+    schema: z.object({
+      periodo: z.enum(["todo", "mes_actual", "ultimo_mes"]).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({ p_periodo: a.periodo ?? "todo", p_limit: a.limit ?? 10 }),
+    rowToChunk: (r) => ({
+      entityType: "customer_revenue",
+      entityId: s(r.cliente),
+      publicId: sn(r.cliente),
+      title: `${s(r.cliente)} · facturación`,
+      excerpt: s(r.detalle),
+      date: null,
+      url: entityUrl("customer_revenue", null),
+    }),
+  },
   // ── fix/f5-2 · navegación: mapa de secciones de Nexus (tool LOCAL) ──────────
   nexus_sections_overview: {
     resolve: (a) => resolveNexusSections(a),
@@ -684,6 +705,10 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   supplier_spend_overview: js({
     base: { type: "string", enum: ["gasto", "compromiso"] },
     periodo: { type: "string", enum: ["todo", "mes_actual", "ultimo_mes", "ultimos_30_dias"] },
+    limit: jsLimit,
+  }),
+  customer_revenue_overview: js({
+    periodo: { type: "string", enum: ["todo", "mes_actual", "ultimo_mes"] },
     limit: jsLimit,
   }),
   nexus_sections_overview: js({

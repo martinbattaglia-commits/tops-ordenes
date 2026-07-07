@@ -262,6 +262,24 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
       detalle: "Banco Galicia · Cuenta corriente · saldo ARS 12,000,000.00 (derivado de movimientos)",
     },
   ],
+  customer_revenue_overview: [
+    {
+      cliente: "Cliente Demo SA",
+      total: "85000000.00",
+      cantidad: 12,
+      periodo: "todo",
+      detalle:
+        "Facturación por cliente · Cliente Demo SA · ARS 85,000,000.00 · 12 facturas autorizadas · período: todo",
+    },
+    {
+      cliente: "Distribuidora Ficticia SRL",
+      total: "41000000.00",
+      cantidad: 6,
+      periodo: "todo",
+      detalle:
+        "Facturación por cliente · Distribuidora Ficticia SRL · ARS 41,000,000.00 · 6 facturas autorizadas · período: todo",
+    },
+  ],
   supplier_spend_overview: [
     {
       proveedor: "Mobiliarios Demo SA",

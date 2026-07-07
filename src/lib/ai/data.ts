@@ -44,6 +44,10 @@ export async function executeTool(
     rows = spec.resolve(args);
   } else if (isMock()) {
     rows = MOCK_TOOL_ROWS[call.tool] ?? [];
+    // Paridad demo/real (smoke humano): las RPC reales respetan p_limit; los
+    // fixtures también deben respetarlo para que "singular → top 1" sea real
+    // en demo y en tests (limit=1 ⇒ UNA fila, no el set completo).
+    if (typeof args.limit === "number") rows = rows.slice(0, args.limit);
   } else {
     const supabase = createClient();
     if (!supabase) return [];

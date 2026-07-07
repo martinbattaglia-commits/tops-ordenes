@@ -280,6 +280,132 @@ describe("Navegación · '¿dónde veo X?' responde con la sección real (fix/f5
   });
 });
 
+describe("Intención de negocio · singular=top-1 vs ranking (smoke humano 2026-07-06)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'¿Cuál es el proveedor que gastó más el mes pasado?' → UNA sola fuente supplier_spend", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál es el proveedor que gastó más el mes pasado?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBe(1); // singular → top 1, no listado de 8
+    expect(res.sources[0].entityType).toBe("supplier_spend");
+  });
+
+  it("'La respuesta es única… el proveedor que INSUMIÓ más el mes pasado' → supplier_spend top-1, NO catálogo", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("La respuesta es única, decime solo el proveedor que insumió más el mes pasado.")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("supplier_spend"); // NUNCA 'supplier' (catálogo)
+    expect(res.sources.length).toBe(1);
+  });
+
+  it("typo 'probador' en contexto de gasto → igual rutea a supplier_spend (no vacío)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("¿Cuál es el probador que más gastó en el transcurso del mes pasado?")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("supplier_spend");
+  });
+
+  it("'ranking de proveedores por gasto' → VARIAS fuentes (ranking pedido)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Hazme un ranking de proveedores en base a los consumos"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBeGreaterThan(1);
+    expect(res.sources[0].entityType).toBe("supplier_spend");
+  });
+});
+
+describe("Documento específico → docs_browse, NO compliance_pending (smoke humano)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'¿Me das la plancheta de habilitación de Luján 3159?' → docs_browse con keyword de sede", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Me das la plancheta de habilitación de Luján 3159?"));
+    expect(res.outcome).toBe("answered");
+    // La tool correcta es la búsqueda documental, no la lista de vencidos.
+    expect(res.sources[0].tool).toBe("docs_browse");
+  });
+
+  it("'¿Qué documentos de compliance están pendientes?' → sigue en compliance_pending (regresión)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué documentos de compliance están pendientes?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].tool).toBe("compliance_pending");
+  });
+});
+
+describe("Cliente que más facturó · customer_revenue_overview (smoke humano)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'¿Cuál fue el cliente que más facturó?' → top-1 con fuente /billing (no vacío)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál fue el cliente que más facturó?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBe(1);
+    expect(res.sources[0].entityType).toBe("customer_revenue");
+    expect(res.sources[0].url).toBe("/billing");
+  });
+
+  it("'Ranking de clientes por facturación' → varias fuentes", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Ranking de clientes por facturación"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBeGreaterThan(1);
+    expect(res.sources[0].entityType).toBe("customer_revenue");
+  });
+
+  it("'¿Cuántos facturó este mes?' (sin 'se') → billing_summary (widening aprobado)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuántos facturó este mes?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("billing_periodo");
+  });
+
+  it("clientes piloto (TEST/QA en el nombre) computan NORMAL: sin filtro por nombre (decisión Dirección 2026-07-07)", async () => {
+    // CLIENTE TEST QA TOPS es un cliente VÁLIDO de la etapa piloto. Si la base dice
+    // que es el que más facturó, el Copilot lo responde. Solo excluyen los campos
+    // estructurados (anulada / estado_arca), NUNCA el nombre. Este test blinda esa
+    // decisión: un filtro anti-QA por nombre rompe la suite.
+    vi.doMock("./mock", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./mock")>();
+      return {
+        ...actual,
+        MOCK_TOOL_ROWS: {
+          ...actual.MOCK_TOOL_ROWS,
+          customer_revenue_overview: [
+            {
+              cliente: "CLIENTE TEST QA TOPS",
+              total: "69213815.00",
+              cantidad: 7,
+              periodo: "todo",
+              detalle:
+                "Facturación por cliente · CLIENTE TEST QA TOPS · ARS 69,213,815.00 · 7 facturas autorizadas · período: todo",
+            },
+            {
+              cliente: "Cliente Real Menor SA",
+              total: "1000000.00",
+              cantidad: 1,
+              periodo: "todo",
+              detalle: "Facturación por cliente · Cliente Real Menor SA · ARS 1,000,000.00",
+            },
+          ],
+        },
+      };
+    });
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál fue el cliente que más facturó?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBe(1); // singular → top 1
+    expect(res.sources[0].title).toContain("CLIENTE TEST QA TOPS"); // el top real, sin censura
+    expect(res.answer).toContain("CLIENTE TEST QA TOPS");
+    vi.doUnmock("./mock");
+  });
+});
+
 describe("P1b · resiliencia: un tool-call con args inválidos no rompe el turno (fix/f5-2)", () => {
   beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
 

@@ -30,6 +30,8 @@ export const TOOL_NAMES = [
   "billing_summary",
   "bank_balances_overview",
   "supplier_spend_overview",
+  // smoke humano 2026-07-06: facturación agrupada POR CLIENTE (top-1 y ranking).
+  "customer_revenue_overview",
   // fix/f5-2 · navegación: catálogo de secciones de Nexus (tool LOCAL).
   "nexus_sections_overview",
 ] as const;

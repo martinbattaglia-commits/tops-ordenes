@@ -43,15 +43,57 @@ function pickTools(question: string): ToolCall[] {
     calls.push({ tool: "nexus_sections_overview", args: { query: question.slice(0, 200) } });
     return calls;
   }
-  // fix/f5-2 · ANALYTICS: totales/saldos/rankings van a tools agregadas (SQL calcula).
-  if (/cuanto (se )?factur|cuanto facturamos|facturacion (total|mensual|del mes)/.test(q)) {
+  // ── Capa de INTENCIÓN de negocio (smoke humano 2026-07-06) ──────────────────
+  // singular ("cuál es EL proveedor que más…") = top-1 · ranking/listado = top-N.
+  const wantsRanking = /ranking|top \d+|listame|lista de|mostrame todos|todos los/.test(q);
+  const singular =
+    !wantsRanking &&
+    /cual (es|fue) (el|la)\b|quien (es|fue) el\b|la respuesta es unica|un solo|decime solo|solo el|el que mas|la que mas/.test(
+      q
+    );
+  // "mes pasado" = mes calendario anterior (hallazgo smoke: no se interpretaba).
+  const periodo = /mes pasado|ultimo mes|pasado mes/.test(q)
+    ? "ultimo_mes"
+    : /este mes|mes actual/.test(q)
+      ? "mes_actual"
+      : /30 dias/.test(q)
+        ? "ultimos_30_dias"
+        : "todo";
+
+  // Documento ESPECÍFICO → docs_browse, NUNCA compliance_pending (hallazgo smoke:
+  // "plancheta de habilitación de Luján 3159" devolvía la lista de vencidos).
+  // Keyword para el título: la SEDE si aparece; si no, el tipo de documento.
+  const sede = q.match(/lujan|magaldi|3159|1765/)?.[0];
+  const docWord = q.match(/plancheta|plano\b|certificado|poliza|habilitacion/)?.[0];
+  const retrievalVerb = /dame|me das|me podrias|pasame|traeme|busca|conseguime|quiero|necesito/.test(q);
+  if (docWord && (retrievalVerb || sede) && !/pendiente|vencid|por vencer/.test(q)) {
+    calls.push({ tool: "docs_browse", args: { tipo: "compliance", query: sede ?? docWord } });
+    return calls;
+  }
+
+  // Facturación POR CLIENTE (top-1 o ranking) — antes que el total y que facturas.
+  if (/cliente/.test(q) && /factur|ingres|venta/.test(q)) {
     calls.push({
-      tool: "billing_summary",
-      args: { mode: /este mes|mes actual/.test(q) ? "mes_actual" : "ultimo_mes" },
+      tool: "customer_revenue_overview",
+      args: {
+        periodo: periodo === "ultimos_30_dias" ? "todo" : periodo,
+        ...(singular ? { limit: 1 } : {}),
+      },
     });
     return calls;
   }
-  if (/santander|galicia|saldo|plata hay|cuanta plata/.test(q) && !/proveedor/.test(q)) {
+
+  // Total facturado por período (suma).
+  if (/cuantos? (se )?factur|cuanto facturamos|facturacion (total|mensual|del mes)/.test(q)) {
+    calls.push({
+      tool: "billing_summary",
+      args: { mode: periodo === "mes_actual" ? "mes_actual" : "ultimo_mes" },
+    });
+    return calls;
+  }
+
+  // Saldos bancarios.
+  if (/santander|galicia|saldo|plata hay|cuanta plata/.test(q) && !/proveedor|probador/.test(q)) {
     const bank = q.match(/santander|galicia|caja/)?.[0];
     calls.push({
       tool: "bank_balances_overview",
@@ -59,19 +101,18 @@ function pickTools(question: string): ToolCall[] {
     });
     return calls;
   }
+
+  // Gasto/presupuesto por proveedor. Tolerancia de typo: "probador" en contexto de
+  // gasto = proveedor (hallazgo smoke). "insumió/consume" = contexto de gasto.
   if (
-    /proveedor/.test(q) &&
-    /presupuesto|gast|consume|mayor|mas caro|ranking|mas plata/.test(q)
+    /proveedor|probador/.test(q) &&
+    /presupuesto|gast|consum|insumi|mayor|mas caro|ranking|mas plata/.test(q)
   ) {
     const base = /presupuesto|comprom/.test(q) ? "compromiso" : "gasto";
-    const periodo = /este mes|mes actual/.test(q)
-      ? "mes_actual"
-      : /ultimo mes/.test(q)
-        ? "ultimo_mes"
-        : /30 dias/.test(q)
-          ? "ultimos_30_dias"
-          : "todo";
-    calls.push({ tool: "supplier_spend_overview", args: { base, periodo } });
+    calls.push({
+      tool: "supplier_spend_overview",
+      args: { base, periodo, ...(singular ? { limit: 1 } : {}) },
+    });
     return calls;
   }
   if (/incident/.test(q)) {

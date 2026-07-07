@@ -291,7 +291,7 @@ describe("deep-links resuelven a rutas reales del App Router (anti-404)", () => 
     !!url && existsSync(join(APP, ...url.replace(/^\//, "").split("/"), "page.tsx"));
 
   it("cada entity_type conocido mapea a una page.tsx existente (no 404)", () => {
-    const cases: Array<[string, string]> = [
+    const cases: Array<[string, string | null]> = [
       ["connect_incident", "INC-2026-0001"],
       ["connect_task", "TSK-2026-0002"],
       ["compliance_documento", "MAG-04#abc"],
@@ -302,6 +302,9 @@ describe("deep-links resuelven a rutas reales del App Router (anti-404)", () => 
       ["purchase_order", "OC-2026-0371"],
       ["supplier", "PROV#abc"],
       ["organization_member", "org-pres"],
+      ["customer_revenue", null],
+      ["billing_periodo", "2026-06"],
+      ["bank_balance", "Banco Santander"],
     ];
     for (const [et, pid] of cases) {
       const url = entityUrl(et, pid);
@@ -535,6 +538,42 @@ describe("analytics · billing_summary / bank_balances / supplier_spend", () => 
         expect(spec.rpc!.toLowerCase()).not.toContain(verb);
       }
     }
+  });
+});
+
+// ── Cliente que más facturó (smoke humano): facturación agrupada por cliente ──
+describe("customer_revenue_overview · facturación por cliente", () => {
+  it("defaults + mapeo de args", () => {
+    expect(TOOLS.customer_revenue_overview.toRpcArgs({})).toEqual({
+      p_periodo: "todo",
+      p_limit: 10,
+    });
+    expect(
+      TOOLS.customer_revenue_overview.toRpcArgs({ periodo: "ultimo_mes", limit: 1 })
+    ).toEqual({ p_periodo: "ultimo_mes", p_limit: 1 });
+  });
+
+  it("rowToChunk: cliente con fuente /billing", () => {
+    const chunk = TOOLS.customer_revenue_overview.rowToChunk({
+      cliente: "Cliente Demo SA",
+      total: "85000000.00",
+      cantidad: 12,
+      periodo: "todo",
+      detalle: "Facturación por cliente · Cliente Demo SA · ARS 85,000,000.00 · 12 facturas",
+    });
+    expect(chunk.entityType).toBe("customer_revenue");
+    expect(chunk.url).toBe("/billing");
+    expect(chunk.title.toLowerCase()).toContain("cliente demo");
+  });
+
+  it("es ai_* read-only (allowlist/denylist) y entityUrl resuelve /billing", () => {
+    const spec = TOOLS.customer_revenue_overview;
+    expect(spec.rpc!.startsWith("ai_")).toBe(true);
+    for (const verb of WRITE_VERBS_DENYLIST) {
+      expect("customer_revenue_overview").not.toContain(verb);
+      expect(spec.rpc!.toLowerCase()).not.toContain(verb);
+    }
+    expect(entityUrl("customer_revenue", null)).toBe("/billing");
   });
 });
 

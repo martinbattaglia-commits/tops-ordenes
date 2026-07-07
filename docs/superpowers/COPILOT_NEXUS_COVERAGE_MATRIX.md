@@ -67,6 +67,35 @@ Leyenda estado: ✅ cubierto · 🟡 parcial · 👻 invisible (UI existe, Copil
 | ¿Cuánto hay en caja chica? | 👻 empty | 👻 **brecha registrada** (v_cash_box_resumen) |
 | Pipeline / oportunidades comerciales | 👻 empty | 👻 **brecha registrada** (CRM/Clientify cache) |
 
+## Addendum 2026-07-07 · Hallazgos del SMOKE HUMANO (los tests verdes no alcanzaron)
+
+El smoke humano en :3040 falló en 3 casos que los tests no cubrían. Se agregó una
+**capa de intención de negocio** (singular=top-1 vs ranking=top-N · período "mes
+pasado" · tolerancia de typos en contexto · documento-específico vs lista-de-pendientes):
+
+| Caso real (auditoría ai_messages) | Tool ANTES | Tool AHORA | Estado |
+|---|---|---|---|
+| "¿Cuál es el proveedor que gastó más el mes pasado?" | supplier_spend con 8 filas (ranking) y período 'todo' | supplier_spend **limit=1, periodo=ultimo_mes** | ✅ código |
+| "…el proveedor que **insumió** más…" | suppliers_overview (catálogo) ❌ | supplier_spend top-1 ("insumi/consum" = contexto gasto) | ✅ código |
+| "el **probador** que más gastó" (typo) | search_knowledge → vacío ❌ | supplier_spend (typo tolerado en contexto de gasto) | ✅ código |
+| "me das la **plancheta de habilitación de Luján 3159**" | compliance_pending (lista de vencidos → VTO MAYO/Incendio) ❌ | **docs_browse** query="lujan" (documento específico) | ✅ código |
+| "¿Cuál fue el **cliente que más facturó**?" | search_knowledge → vacío ❌ (sin tool) | **customer_revenue_overview** top-1 → /billing | ✅ código · **requiere aplicar 0183** |
+| "Ranking de clientes por facturación" | vacío ❌ | customer_revenue_overview top-N | ídem |
+| "¿Quién es Martin Rinas?" (persona fuera del organigrama institucional) | vacío genérico | — | 👻 **brecha registrada**: personas = perfiles/RRHH, decisión de producto (PII) |
+| Límite 40/día del piloto alcanzado durante el smoke | — | — | ⚠️ en preview se sube por env `AI_LIMIT_REQUESTS_PER_DAY`; para prod existe `ai_budget_overrides` (mig 0180) |
+
+**Decisión de producto (Dirección 2026-07-07) — datos piloto:** los clientes/proveedores
+de la etapa piloto (p.ej. `CLIENTE TEST QA TOPS`) son **válidos** y computan normal en
+todas las métricas. Prohibido filtrar por nombre (TEST/QA/PILOTO); solo excluyen campos
+estructurados (`anulada`, `estado_arca`, o un futuro `is_demo`). Test de blindaje en
+`engine.test.ts` ("clientes piloto computan NORMAL").
+
+Nueva fila de cobertura:
+
+| Módulo | Ruta UI | Nav | Fuente real | Tool Copilot | Entity type → chip | Estado | Fix |
+|---|---|---|---|---|---|---|---|
+| **Facturación por cliente (top/ranking)** | /billing | ✔ | customer_invoices agrupado por cliente | **customer_revenue_overview (nuevo)** | customer_revenue → /billing | ✅ (código) | **mig 0183 entregada, NO aplicada** |
+
 ## Criterio de arquitectura aplicado (y a aplicar en próximas fases)
 1. **Datos en DB** → RPC `SECURITY INVOKER` + tool (RLS del caller; migración aditiva con rollback, aplicada solo con OK).
 2. **Datos estáticos en frontend** → módulo compartido en `src/lib/` consumido por UI y Copilot (patrón `orgchart.ts` → `org-source.ts`; `nexus-sections.ts` como catálogo).
