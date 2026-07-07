@@ -38,6 +38,42 @@ function pickTools(question: string): ToolCall[] {
     }
     return calls;
   }
+  // fix/f5-2 · NAVEGACIÓN primero: "¿dónde veo X?" pide el mapa, no los datos de X.
+  if (/que secciones|que modulos|donde (veo|encuentro|esta|estan|miro)|como (llego|entro|accedo)/.test(q)) {
+    calls.push({ tool: "nexus_sections_overview", args: { query: question.slice(0, 200) } });
+    return calls;
+  }
+  // fix/f5-2 · ANALYTICS: totales/saldos/rankings van a tools agregadas (SQL calcula).
+  if (/cuanto (se )?factur|cuanto facturamos|facturacion (total|mensual|del mes)/.test(q)) {
+    calls.push({
+      tool: "billing_summary",
+      args: { mode: /este mes|mes actual/.test(q) ? "mes_actual" : "ultimo_mes" },
+    });
+    return calls;
+  }
+  if (/santander|galicia|saldo|plata hay|cuanta plata/.test(q) && !/proveedor/.test(q)) {
+    const bank = q.match(/santander|galicia|caja/)?.[0];
+    calls.push({
+      tool: "bank_balances_overview",
+      args: bank ? { query: bank } : {},
+    });
+    return calls;
+  }
+  if (
+    /proveedor/.test(q) &&
+    /presupuesto|gast|consume|mayor|mas caro|ranking|mas plata/.test(q)
+  ) {
+    const base = /presupuesto|comprom/.test(q) ? "compromiso" : "gasto";
+    const periodo = /este mes|mes actual/.test(q)
+      ? "mes_actual"
+      : /ultimo mes/.test(q)
+        ? "ultimo_mes"
+        : /30 dias/.test(q)
+          ? "ultimos_30_dias"
+          : "todo";
+    calls.push({ tool: "supplier_spend_overview", args: { base, periodo } });
+    return calls;
+  }
   if (/incident/.test(q)) {
     const severidades = /critic/.test(q) ? ["critica"] : undefined;
     const estados = /(abiert|pendient|activ)/.test(q)
@@ -119,6 +155,22 @@ function pickTools(question: string): ToolCall[] {
   }
   if (/workflow|trabad|estancad/.test(q)) {
     calls.push({ tool: "workflows_stuck", args: {} });
+    return calls;
+  }
+  // fix/f5-2: organigrama — quién es X / a cargo de / roles / estructura.
+  if (
+    /organigrama|presidente|vicepresidente|director|gerente|gerencia|quien (es|esta|maneja|dirige|lidera)|a cargo|jerarquia|estructura|autoridades|quien manda|responsable de/.test(
+      q
+    )
+  ) {
+    // extrae el término de rol/área para filtrar (comercial, operaciones, etc.).
+    const roleMatch = q.match(
+      /(presidente|vicepresidente|director|gerente|comercial|operaciones|administracion|facturaci|mantenimiento|seguridad|legal|contable)/
+    );
+    calls.push({
+      tool: "organization_overview",
+      args: roleMatch ? { query: roleMatch[1] } : {},
+    });
     return calls;
   }
   if (/cliente/.test(q) && /problema|critic|riesgo/.test(q)) {

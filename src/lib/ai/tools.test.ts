@@ -25,17 +25,30 @@ describe("catálogo cerrado read-only", () => {
     for (const [name, spec] of Object.entries(TOOLS)) {
       for (const verb of WRITE_VERBS_DENYLIST) {
         expect(name.toLowerCase()).not.toContain(verb);
-        expect(spec.rpc.toLowerCase()).not.toContain(verb);
+        expect((spec.rpc ?? "").toLowerCase()).not.toContain(verb);
       }
     }
   });
 
   it("solo invoca RPCs del namespace ai_* o connect_search (allowlist)", () => {
     for (const spec of Object.values(TOOLS)) {
+      // Tools LOCALES (resolve) leen datos estáticos del repo (p.ej. organigrama):
+      // no tocan DB ni RPC → quedan fuera de la allowlist de RPC.
+      if (spec.resolve) {
+        expect(spec.rpc).toBeUndefined();
+        continue;
+      }
       expect(
-        spec.rpc.startsWith("ai_") || spec.rpc === "connect_search"
+        spec.rpc!.startsWith("ai_") || spec.rpc === "connect_search"
       ).toBe(true);
     }
+  });
+
+  it("las tools locales (resolve) NO usan service_role ni tocan Supabase", () => {
+    // El test estructural 'sin service_role' cubre todo src/lib/ai; acá afirmamos
+    // además que la tool local expone un resolver puro (datos del repo).
+    expect(typeof TOOLS.organization_overview.resolve).toBe("function");
+    expect(TOOLS.organization_overview.rpc).toBeUndefined();
   });
 });
 
@@ -146,6 +159,7 @@ describe("entityUrl — deep-links (F5.1-b.0 · D6 / A5)", () => {
     expect(entityUrl("contract", "X")).toBe("/comercial/contratos");
   });
   it("compliance_documento/caso → /anmat (Compliance Cockpit; /compliance NO existe → 404)", () => {
+    // Fix source-link (fix/f5-2): el módulo Compliance vive en /anmat, no en /compliance.
     expect(entityUrl("compliance_documento", "MAG-04#abc")).toBe("/anmat");
     expect(entityUrl("compliance_caso", "CASO-1")).toBe("/anmat");
   });
@@ -154,9 +168,9 @@ describe("entityUrl — deep-links (F5.1-b.0 · D6 / A5)", () => {
     expect(entityUrl("connect_task", "TSK-2026-0002")).toBe("/connect/tareas");
   });
   it("entity_type CONOCIDO sin public_id → ruta del MÓDULO (chip clickeable, no 404)", () => {
-    // Regresión chips: ai_compliance_pending devuelve ref=null en prod (15/15
-    // documentos) → exigir publicId dejaba url=null → chip sin link. Todos los
-    // deep-links actuales son a nivel MÓDULO: el entityType alcanza.
+    // Regresión chips (fix/f5-2): ai_compliance_pending devuelve ref=null en prod
+    // (15/15 documentos) → exigir publicId dejaba url=null → chip sin link. Todos
+    // los deep-links actuales son a nivel MÓDULO: el entityType alcanza.
     expect(entityUrl("contrato", null)).toBe("/comercial/contratos");
     expect(entityUrl("compliance_documento", null)).toBe("/anmat");
     expect(entityUrl("compliance_caso", null)).toBe("/anmat");
@@ -170,6 +184,7 @@ describe("entityUrl — deep-links (F5.1-b.0 · D6 / A5)", () => {
   it("entity_type DESCONOCIDO → null (nunca inventa URL; el chip queda sin link)", () => {
     expect(entityUrl("cliente", "x")).toBeNull();
     expect(entityUrl("cliente", null)).toBeNull();
+    expect(entityUrl("banco", null)).toBeNull();
   });
   it("compliance_pending con ref NULL (caso real prod) → chip con url /anmat", () => {
     const chunk = TOOLS.compliance_pending.rowToChunk({
@@ -238,7 +253,7 @@ describe("F5.1-b.0.1 · tools documentales nuevas", () => {
   it("las 2 tools nuevas usan RPC ai_* de solo lectura (allowlist/denylist)", () => {
     for (const name of ["contracts_overview", "docs_browse"] as const) {
       const spec = TOOLS[name];
-      expect(spec.rpc.startsWith("ai_")).toBe(true);
+      expect(spec.rpc!.startsWith("ai_")).toBe(true);
       for (const verb of WRITE_VERBS_DENYLIST) {
         expect(name).not.toContain(verb);
         expect(spec.rpc).not.toContain(verb);
@@ -265,6 +280,47 @@ describe("P2 · deep-links de facturas/OC/proveedores (entityUrl)", () => {
     for (const t of ["customer_invoice", "supplier_invoice", "purchase_order", "supplier"]) {
       expect(METADATA_CARD_ENTITY_TYPES.has(t)).toBe(false);
     }
+  });
+});
+
+// ── Anti-404 (fix/f5-2): todo deep-link debe resolver a una page.tsx REAL. Este
+// test habría atrapado el bug de compliance → /compliance (ruta inexistente). ─────
+describe("deep-links resuelven a rutas reales del App Router (anti-404)", () => {
+  const APP = join(process.cwd(), "src", "app", "(app)");
+  const routeFileExists = (url: string | null): boolean =>
+    !!url && existsSync(join(APP, ...url.replace(/^\//, "").split("/"), "page.tsx"));
+
+  it("cada entity_type conocido mapea a una page.tsx existente (no 404)", () => {
+    const cases: Array<[string, string]> = [
+      ["connect_incident", "INC-2026-0001"],
+      ["connect_task", "TSK-2026-0002"],
+      ["compliance_documento", "MAG-04#abc"],
+      ["compliance_caso", "CASO-1"],
+      ["contrato", "CTR#abc"],
+      ["customer_invoice", "A 2-21"],
+      ["supplier_invoice", "FC 00345"],
+      ["purchase_order", "OC-2026-0371"],
+      ["supplier", "PROV#abc"],
+      ["organization_member", "org-pres"],
+    ];
+    for (const [et, pid] of cases) {
+      const url = entityUrl(et, pid);
+      expect(url, `${et} sin URL`).not.toBeNull();
+      expect(routeFileExists(url), `${et} → ${url} no existe como page.tsx`).toBe(true);
+    }
+  });
+
+  it("URLs hardcodeadas en tools resuelven a rutas reales (compliance_pending)", () => {
+    // compliance_pending es la tool que responde "documentos de compliance pendientes":
+    // su chip debe ir a una ruta real (era /compliance = 404).
+    const chunk = TOOLS.compliance_pending.rowToChunk({
+      kind: "documento",
+      ref: "MAG-04",
+      titulo: "Habilitación municipal",
+      estado: "por_vencer",
+    });
+    expect(chunk.entityType).toBe("compliance_documento");
+    expect(routeFileExists(chunk.url), `compliance_pending → ${chunk.url}`).toBe(true);
   });
 });
 
@@ -372,6 +428,153 @@ describe("P2 · suppliers_overview", () => {
   });
 });
 
+// ── Organigrama (fix/f5-2): cobertura del módulo institucional ───────────────
+describe("organization_overview · organigrama institucional", () => {
+  it("es una tool LOCAL (resolve desde orgchart.ts, sin RPC)", () => {
+    expect(typeof TOOLS.organization_overview.resolve).toBe("function");
+    expect(TOOLS.organization_overview.rpc).toBeUndefined();
+    // el resolver responde al presidente
+    const rows = TOOLS.organization_overview.resolve!({ query: "presidente" });
+    expect(rows.some((r) => /battaglia/i.test(String(r.name)))).toBe(true);
+  });
+
+  it("toRpcArgs pasa query/limit (aunque no haya RPC, mantiene contrato)", () => {
+    expect(TOOLS.organization_overview.toRpcArgs({})).toEqual({ query: null, limit: 30 });
+    expect(TOOLS.organization_overview.toRpcArgs({ query: "comercial", limit: 5 })).toEqual({
+      query: "comercial",
+      limit: 5,
+    });
+  });
+
+  it("rowToChunk: miembro con fuente /organigrama, sin PII", () => {
+    const chunk = TOOLS.organization_overview.rowToChunk({
+      name: "Martín F. Battaglia",
+      role: "Presidente · CEO",
+      area: "Dirección",
+      detail: "Estrategia · Finanzas",
+    });
+    expect(chunk.entityType).toBe("organization_member");
+    expect(chunk.url).toBe("/organigrama");
+    expect(chunk.title).toContain("Battaglia");
+    expect(chunk.excerpt.toLowerCase()).toContain("presidente");
+    expect(chunk.excerpt).not.toMatch(/@/); // sin emails
+  });
+
+  it("entityUrl(organization_member) → /organigrama incluso sin public_id", () => {
+    expect(entityUrl("organization_member", null)).toBe("/organigrama");
+    expect(entityUrl("organigrama", "x")).toBe("/organigrama");
+  });
+});
+
+// ── Analytics (fix/f5-2): agregados determinísticos — SQL calcula, el modelo narra ─
+describe("analytics · billing_summary / bank_balances / supplier_spend", () => {
+  it("billing_summary: defaults + entityType billing_periodo → /billing", () => {
+    expect(TOOLS.billing_summary.toRpcArgs({})).toEqual({ p_mode: "ultimo_mes", p_meses: 3 });
+    const chunk = TOOLS.billing_summary.rowToChunk({
+      periodo: "2026-06",
+      total: "126229317.50",
+      cantidad: 18,
+      desde: "2026-06-01",
+      hasta: "2026-06-30",
+      detalle: "Facturación 2026-06 · ARS 126,229,317.50 · 18 facturas",
+    });
+    expect(chunk.entityType).toBe("billing_periodo");
+    expect(chunk.url).toBe("/billing");
+    expect(chunk.title).toContain("2026-06");
+  });
+
+  it("bank_balances_overview: defaults + entityType bank_balance → /tesoreria/bancos", () => {
+    expect(TOOLS.bank_balances_overview.toRpcArgs({})).toEqual({ p_query: null, p_limit: 15 });
+    expect(TOOLS.bank_balances_overview.toRpcArgs({ query: "santander" })).toEqual({
+      p_query: "santander",
+      p_limit: 15,
+    });
+    const chunk = TOOLS.bank_balances_overview.rowToChunk({
+      bank_name: "Banco Ficticio",
+      account_name: "Cta corriente",
+      balance: "56751532.00",
+      detalle: "Banco Ficticio · saldo ARS 56,751,532.00",
+    });
+    expect(chunk.entityType).toBe("bank_balance");
+    expect(chunk.url).toBe("/tesoreria/bancos");
+  });
+
+  it("supplier_spend_overview: defaults + url según base (gasto→facturas, compromiso→ordenes)", () => {
+    expect(TOOLS.supplier_spend_overview.toRpcArgs({})).toEqual({
+      p_base: "gasto",
+      p_periodo: "todo",
+      p_limit: 10,
+    });
+    const gasto = TOOLS.supplier_spend_overview.rowToChunk({
+      proveedor: "Proveedor Ficticio SA",
+      total: "11000000.00",
+      cantidad: 2,
+      periodo: "todo",
+      base: "gasto",
+      detalle: "Gasto · Proveedor Ficticio SA · ARS 11,000,000.00 · 2 facturas",
+    });
+    expect(gasto.entityType).toBe("supplier_spend");
+    expect(gasto.url).toBe("/compras/facturas");
+    const compromiso = TOOLS.supplier_spend_overview.rowToChunk({
+      proveedor: "Proveedor Ficticio SA",
+      total: "579870471.00",
+      cantidad: 3,
+      periodo: "todo",
+      base: "compromiso",
+      detalle: "Compromiso · OC firmadas",
+    });
+    expect(compromiso.url).toBe("/compras/ordenes");
+  });
+
+  it("las 3 tools analíticas son ai_* read-only (allowlist/denylist)", () => {
+    for (const name of ["billing_summary", "bank_balances_overview", "supplier_spend_overview"] as const) {
+      const spec = TOOLS[name];
+      expect(spec.rpc!.startsWith("ai_")).toBe(true);
+      for (const verb of WRITE_VERBS_DENYLIST) {
+        expect(name.toLowerCase()).not.toContain(verb);
+        expect(spec.rpc!.toLowerCase()).not.toContain(verb);
+      }
+    }
+  });
+});
+
+// ── Catálogo de secciones de Nexus (fix/f5-2): navegación consultable ─────────
+describe("nexus_sections_overview · catálogo de secciones", () => {
+  it("es tool LOCAL (resolve, sin RPC) y encuentra secciones por palabra clave", () => {
+    expect(typeof TOOLS.nexus_sections_overview.resolve).toBe("function");
+    expect(TOOLS.nexus_sections_overview.rpc).toBeUndefined();
+    const oc = TOOLS.nexus_sections_overview.resolve!({ query: "ordenes de compra" });
+    expect(oc.length).toBeGreaterThan(0);
+    expect(String(oc[0].route)).toBe("/compras/ordenes");
+    const track = TOOLS.nexus_sections_overview.resolve!({ query: "tracking" });
+    expect(track.some((r) => String(r.route).includes("tracking"))).toBe(true);
+  });
+
+  it("sin query devuelve el mapa de secciones (varias)", () => {
+    expect(TOOLS.nexus_sections_overview.resolve!({}).length).toBeGreaterThan(10);
+  });
+
+  it("rowToChunk: usa la ruta de la fila (cada sección linkea a SU página real)", () => {
+    const chunk = TOOLS.nexus_sections_overview.rowToChunk({
+      label: "Órdenes de compra",
+      section: "Compras · Proveedores",
+      route: "/compras/ordenes",
+      detalle: "Sección Compras · Órdenes de compra",
+    });
+    expect(chunk.entityType).toBe("nexus_section");
+    expect(chunk.url).toBe("/compras/ordenes");
+  });
+
+  it("anti-404: TODAS las rutas del catálogo resuelven a una page.tsx real", () => {
+    const APP = join(process.cwd(), "src", "app", "(app)");
+    for (const row of TOOLS.nexus_sections_overview.resolve!({ limit: 50 })) {
+      const url = String(row.route);
+      const ok = existsSync(join(APP, ...url.replace(/^\//, "").split("/"), "page.tsx"));
+      expect(ok, `sección '${row.label}' → ${url} no existe como page.tsx`).toBe(true);
+    }
+  });
+});
+
 describe("P2 · las 4 tools nuevas son ai_* read-only", () => {
   it("allowlist ai_* + denylist de verbos de escritura", () => {
     for (const name of [
@@ -381,49 +584,11 @@ describe("P2 · las 4 tools nuevas son ai_* read-only", () => {
       "suppliers_overview",
     ] as const) {
       const spec = TOOLS[name];
-      expect(spec.rpc.startsWith("ai_")).toBe(true);
+      expect(spec.rpc!.startsWith("ai_")).toBe(true);
       for (const verb of WRITE_VERBS_DENYLIST) {
         expect(name.toLowerCase()).not.toContain(verb);
-        expect(spec.rpc.toLowerCase()).not.toContain(verb);
+        expect(spec.rpc!.toLowerCase()).not.toContain(verb);
       }
     }
-  });
-});
-
-// ── Anti-404 (fix/f5-2): todo deep-link debe resolver a una page.tsx REAL. Este
-// test habría atrapado el bug de compliance → /compliance (ruta inexistente). ─────
-describe("deep-links resuelven a rutas reales del App Router (anti-404)", () => {
-  const APP = join(process.cwd(), "src", "app", "(app)");
-  const routeFileExists = (url: string | null): boolean =>
-    !!url && existsSync(join(APP, ...url.replace(/^\//, "").split("/"), "page.tsx"));
-
-  it("cada entity_type conocido mapea a una page.tsx existente (no 404)", () => {
-    const cases: Array<[string, string | null]> = [
-      ["connect_incident", "INC-2026-0001"],
-      ["connect_task", "TSK-2026-0002"],
-      ["compliance_documento", null],
-      ["compliance_caso", "CASO-1"],
-      ["contrato", null],
-      ["customer_invoice", "A 2-21"],
-      ["supplier_invoice", null],
-      ["purchase_order", "OC-2026-0371"],
-      ["supplier", null],
-    ];
-    for (const [et, pid] of cases) {
-      const url = entityUrl(et, pid);
-      expect(url, `${et} sin URL`).not.toBeNull();
-      expect(routeFileExists(url), `${et} → ${url} no existe como page.tsx`).toBe(true);
-    }
-  });
-
-  it("URLs de tools resuelven a rutas reales (compliance_pending)", () => {
-    const chunk = TOOLS.compliance_pending.rowToChunk({
-      kind: "documento",
-      ref: "MAG-04",
-      titulo: "Habilitación municipal",
-      estado: "por_vencer",
-    });
-    expect(chunk.entityType).toBe("compliance_documento");
-    expect(routeFileExists(chunk.url), `compliance_pending → ${chunk.url}`).toBe(true);
   });
 });

@@ -24,6 +24,14 @@ export const TOOL_NAMES = [
   "supplier_invoices_overview",
   "purchase_orders_overview",
   "suppliers_overview",
+  // fix/f5-2: organigrama institucional (tool LOCAL, lee src/lib/orgchart.ts; sin DB).
+  "organization_overview",
+  // fix/f5-2 · analytics: agregados determinísticos (SQL calcula; el modelo narra).
+  "billing_summary",
+  "bank_balances_overview",
+  "supplier_spend_overview",
+  // fix/f5-2 · navegación: catálogo de secciones de Nexus (tool LOCAL).
+  "nexus_sections_overview",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

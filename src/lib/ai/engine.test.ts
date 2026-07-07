@@ -190,6 +190,96 @@ describe("P2 · dominios financieros ahora responden (fix/f5-2)", () => {
   });
 });
 
+describe("Organigrama · el Copilot ahora responde jerarquía (fix/f5-2)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'¿quién es el presidente?' → answered, cita al presidente con fuente /organigrama", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Quién es el presidente de Logística TOPS?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.answer).toMatch(/Battaglia/);
+    expect(res.answer).toMatch(/\[S\d+\]/);
+    expect(res.sources[0].entityType).toBe("organization_member");
+    expect(res.sources[0].url).toBe("/organigrama");
+  });
+
+  it("vicepresidente / comercial / operaciones / organigrama → answered (no empty state)", async () => {
+    const { askCopilot } = await loadEngine();
+    for (const q of [
+      "¿Quién es el vicepresidente?",
+      "¿Quién está a cargo de comercial?",
+      "¿Quién está a cargo de operaciones?",
+      "Mostrame el organigrama de Logística TOPS",
+    ]) {
+      const res = await askCopilot(baseReq(q));
+      expect(res.outcome, q).toBe("answered");
+      expect(res.sources.length, q).toBeGreaterThan(0);
+    }
+  });
+
+  it("no expone emails en la respuesta del organigrama (PII)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Mostrame el organigrama de Logística TOPS"));
+    expect(res.answer).not.toMatch(/@logisticatops\.com/i);
+  });
+});
+
+describe("Analytics · totales/saldos/rankings responden con agregado, no listado (fix/f5-2)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'¿Cuánto se facturó el último mes?' → answered con billing_periodo → /billing", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuánto se facturó el último mes?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("billing_periodo");
+    expect(res.sources[0].url).toBe("/billing");
+  });
+
+  it("'¿Cuánta plata hay en el banco Santander?' → answered con bank_balance → /tesoreria/bancos", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuánta plata hay en el banco Santander?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("bank_balance");
+    expect(res.sources[0].url).toBe("/tesoreria/bancos");
+  });
+
+  it("'¿Cuál es el proveedor que más consume presupuesto?' → supplier_spend, NO catálogo", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál es el proveedor que más consume presupuesto?"));
+    expect(res.outcome).toBe("answered");
+    // La pregunta pide agregación: la fuente debe ser supplier_spend, no 'supplier'.
+    expect(res.sources[0].entityType).toBe("supplier_spend");
+  });
+
+  it("routing regression: catálogo vs agregado no se pisan", async () => {
+    const { askCopilot } = await loadEngine();
+    const cat = await askCopilot(baseReq("¿Cuál fue el último proveedor cargado?"));
+    expect(cat.sources[0].entityType).toBe("supplier"); // catálogo sigue en suppliers_overview
+    const fact = await askCopilot(baseReq("¿Cuál fue la última factura emitida?"));
+    expect(fact.sources[0].entityType).toBe("customer_invoice"); // P2 intacto
+  });
+});
+
+describe("Navegación · '¿dónde veo X?' responde con la sección real (fix/f5-2)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'¿Dónde veo las órdenes de compra?' → nexus_section → /compras/ordenes", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Dónde veo las órdenes de compra?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("nexus_section");
+    expect(res.sources[0].url).toBe("/compras/ordenes");
+  });
+
+  it("'¿Qué secciones tiene Nexus?' → answered con varias secciones", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué secciones tiene Nexus?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBeGreaterThan(3);
+    expect(res.sources.every((s) => s.entityType === "nexus_section")).toBe(true);
+  });
+});
+
 describe("P1b · resiliencia: un tool-call con args inválidos no rompe el turno (fix/f5-2)", () => {
   beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
 

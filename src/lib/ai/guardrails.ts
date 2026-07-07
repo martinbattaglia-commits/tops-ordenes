@@ -172,6 +172,14 @@ const EMPTY_MESSAGE_BY_TOOL: Record<string, string> = {
   ops_digest: "No encontré actividad operativa en Nexus para el período consultado.",
   my_agenda:
     "No tenés incidentes, tareas ni notificaciones pendientes asignadas en Nexus.",
+  // fix/f5-2 · analytics + navegación: vacío honesto y ESPECÍFICO (no el genérico).
+  billing_summary: "No encontré facturación registrada en Nexus para ese período.",
+  bank_balances_overview:
+    "No encontré saldos bancarios cargados en Tesorería de Nexus para esa consulta.",
+  supplier_spend_overview:
+    "No encontré gasto ni presupuesto de proveedores registrado en Nexus para ese período.",
+  nexus_sections_overview: "No encontré una sección de Nexus que coincida con tu consulta.",
+  organization_overview: "No encontré ese cargo o persona en el organigrama de Nexus.",
 };
 
 /** Mensaje genérico (dominios mixtos, sin tools o tool sin mapa): honesto, no el

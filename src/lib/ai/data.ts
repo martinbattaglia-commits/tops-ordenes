@@ -38,12 +38,16 @@ export async function executeTool(
   const spec = TOOLS[call.tool];
 
   let rows: Array<Record<string, unknown>>;
-  if (isMock()) {
+  if (spec.resolve) {
+    // fix/f5-2: tool LOCAL (p.ej. organigrama) — datos estáticos del repo, sin DB
+    // ni service_role. Idéntico en demo y real. Corre ANTES del branch isMock/RPC.
+    rows = spec.resolve(args);
+  } else if (isMock()) {
     rows = MOCK_TOOL_ROWS[call.tool] ?? [];
   } else {
     const supabase = createClient();
     if (!supabase) return [];
-    const { data, error } = await supabase.rpc(spec.rpc, spec.toRpcArgs(args));
+    const { data, error } = await supabase.rpc(spec.rpc!, spec.toRpcArgs(args));
     if (error) {
       console.error(`[ai/data] rpc ${spec.rpc} error:`, error.message);
       return [];

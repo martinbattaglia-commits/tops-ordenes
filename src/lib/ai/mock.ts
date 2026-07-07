@@ -5,7 +5,9 @@ import type { ToolName } from "./types";
 
 type Row = Record<string, unknown>;
 
-export const MOCK_TOOL_ROWS: Record<ToolName, Row[]> = {
+// Partial: las tools LOCALES (resolve, p.ej. organization_overview) no leen de acá
+// —resuelven datos estáticos del repo—, así que no necesitan fixture de demo.
+export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
   search_knowledge: [
     {
       entity_type: "connect_incident",
@@ -232,6 +234,51 @@ export const MOCK_TOOL_ROWS: Record<ToolName, Row[]> = {
       razon: "Insumos Demo SA",
       categoria: "insumos",
       detalle: "Proveedor · categoría insumos · activo",
+    },
+  ],
+  // fix/f5-2 · analytics (ficticio).
+  billing_summary: [
+    {
+      periodo: "2026-06",
+      total: "12500000.00",
+      cantidad: 9,
+      desde: "2026-06-01",
+      hasta: "2026-06-30",
+      detalle:
+        "Facturación 2026-06 · total ARS 12,500,000.00 · 9 facturas autorizadas · del 2026-06-01 al 2026-06-30",
+    },
+  ],
+  bank_balances_overview: [
+    {
+      bank_name: "Banco Santander",
+      account_name: "Cuenta corriente",
+      balance: "45000000.00",
+      detalle: "Banco Santander · Cuenta corriente · saldo ARS 45,000,000.00 (derivado de movimientos)",
+    },
+    {
+      bank_name: "Banco Galicia",
+      account_name: "Cuenta corriente",
+      balance: "12000000.00",
+      detalle: "Banco Galicia · Cuenta corriente · saldo ARS 12,000,000.00 (derivado de movimientos)",
+    },
+  ],
+  supplier_spend_overview: [
+    {
+      proveedor: "Mobiliarios Demo SA",
+      total: "580000000.00",
+      cantidad: 3,
+      periodo: "todo",
+      base: "compromiso",
+      detalle:
+        "Presupuesto comprometido · Mobiliarios Demo SA · ARS 580,000,000.00 · 3 OC firmadas · período: todo",
+    },
+    {
+      proveedor: "Insumos Demo SA",
+      total: "1670000.00",
+      cantidad: 1,
+      periodo: "todo",
+      base: "compromiso",
+      detalle: "Presupuesto comprometido · Insumos Demo SA · ARS 1,670,000.00 · 1 OC firmada",
     },
   ],
 };

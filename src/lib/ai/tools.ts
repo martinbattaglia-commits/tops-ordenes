@@ -6,6 +6,8 @@
 // el test tools.test.ts lo verifica contra una denylist de verbos.
 
 import { z } from "zod";
+import { resolveNexusSections } from "./nexus-sections";
+import { resolveOrgChart } from "./org-source";
 import type { SourceChunk, ToolName } from "./types";
 
 // P1b (fix/f5-2): `limit` es un TOPE DE RESULTADOS, no un argumento semántico de
@@ -27,11 +29,15 @@ const limit = z
  *  (regresión real: ai_compliance_pending → 15/15 documentos con ref null en prod).
  *  Tipo desconocido → null (la UI muestra la cita sin link; nunca inventamos URLs). */
 export function entityUrl(entityType: string, publicId: string | null): string | null {
+  // fix/f5-2: organigrama = módulo institucional (sin id por miembro).
+  if (entityType === "organization_member" || entityType === "organigrama")
+    return "/organigrama";
   if (publicId?.startsWith("INC-") || entityType.includes("incident"))
     return "/connect/incidentes";
   if (publicId?.startsWith("TSK-") || entityType.includes("task")) return "/connect/tareas";
   // El módulo Compliance vive en /anmat ("Compliance Cockpit"). NO existe ruta
-  // /compliance → los chips de compliance_documento/compliance_caso daban 404.
+  // /compliance → los chips de compliance_documento/compliance_caso daban 404
+  // (fix source-link fix/f5-2). Deep-link al módulo, no al binario de Drive.
   if (entityType.includes("compliance")) return "/anmat";
   // F5.1-b.0 (D6): fichas de contrato → módulo Comercial. El deep-link lleva al
   // módulo (no al binario de Drive): la cita es a la FICHA de metadata, no al PDF.
@@ -43,6 +49,9 @@ export function entityUrl(entityType: string, publicId: string | null): string |
   if (entityType === "supplier_invoice") return "/compras/facturas";
   if (entityType === "purchase_order") return "/compras/ordenes";
   if (entityType === "supplier" || entityType === "vendor") return "/compras/proveedores";
+  // fix/f5-2 · analytics: agregados → módulo que muestra el detalle.
+  if (entityType === "billing_periodo") return "/billing";
+  if (entityType === "bank_balance") return "/tesoreria/bancos";
   return null;
 }
 
@@ -51,7 +60,12 @@ const s = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : 
 const sn = (v: unknown): string | null => (v == null || v === "" ? null : String(v));
 
 export interface ToolSpec {
-  rpc: string;
+  /** RPC de lectura (ai_* o connect_search). Ausente en tools LOCALES (ver `resolve`). */
+  rpc?: string;
+  /** fix/f5-2: tool LOCAL — resuelve filas desde datos estáticos del repo (p.ej.
+   *  organigrama), sin DB/RPC/service_role. Si está presente, `executeTool` la usa
+   *  y NO llama a Supabase. Los args ya vienen validados por el schema zod. */
+  resolve?: (args: Record<string, unknown>) => RawRow[];
   description: string;
   schema: z.ZodType<Record<string, unknown> | object>;
   toRpcArgs(args: Record<string, unknown>): Record<string, unknown>;
@@ -237,8 +251,8 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
         r.detalle ? ` · ${s(r.detalle)}` : ""
       }`,
       date: sn(r.fecha_clave),
-      // Fuente única de deep-links: entityUrl → /anmat. Antes hardcodeaba
-      // /compliance (404). ref puede venir null (prod): el link es a nivel módulo.
+      // Fuente única de deep-links (fix/f5-2): entityUrl → /anmat. Antes hardcodeaba
+      // /compliance (404). compliance_documento y compliance_caso resuelven a /anmat.
       url: entityUrl(`compliance_${s(r.kind)}`, sn(r.ref)),
     }),
   },
@@ -451,6 +465,110 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       url: entityUrl("supplier", sn(r.public_id)),
     }),
   },
+  // ── fix/f5-2: organigrama institucional (tool LOCAL, sin DB) ────────────────
+  // Lee src/lib/orgchart.ts (misma fuente que /organigrama). NO expone email ni
+  // equity. Cierra el hueco "¿quién es el presidente/vice/comercial…?".
+  organization_overview: {
+    resolve: (a) => resolveOrgChart(a),
+    description:
+      "Organigrama institucional de Logística TOPS / Verotin S.A. (jerarquía, cargos y personas: presidencia, vicepresidencia, dirección de operaciones, gerencia comercial/administración, áreas, encargados y asesores). `query` filtra por cargo, área o nombre (p.ej. 'presidente', 'comercial', 'operaciones'). USALA para 'quién es el presidente/vicepresidente', 'quién está a cargo de X', 'mostrame el organigrama'. NO devuelve emails ni datos de contacto.",
+    schema: z.object({ query: z.string().max(120).optional(), limit }),
+    toRpcArgs: (a) => ({ query: a.query ?? null, limit: a.limit ?? 30 }),
+    rowToChunk: (r) => ({
+      entityType: "organization_member",
+      entityId: s(r.name),
+      publicId: null,
+      title: `${s(r.name)} · ${s(r.role)}`,
+      excerpt: `${s(r.role)}${r.area ? ` · Área: ${s(r.area)}` : ""}${
+        r.detail ? ` · ${s(r.detail)}` : ""
+      }`,
+      date: null,
+      url: entityUrl("organization_member", null),
+    }),
+  },
+  // ── fix/f5-2 · analytics: SQL calcula (sumas/saldos/rankings), el modelo narra ─
+  billing_summary: {
+    rpc: "ai_billing_summary",
+    description:
+      "TOTAL FACTURADO por período (agregado de facturas emitidas AUTORIZADAS, sin anuladas). mode: ultimo_mes (mes calendario cerrado; si no tiene datos cae al último mes CON datos y el período lo dice) | mes_actual | ultimos_meses (los últimos `meses` con datos). USALA para '¿cuánto se facturó el último mes/este mes/en junio?', 'facturación total/mensual'. NUNCA sumes facturas vos: este total ya viene calculado.",
+    schema: z.object({
+      mode: z.enum(["ultimo_mes", "mes_actual", "ultimos_meses"]).optional(),
+      meses: z.number().int().min(1).max(12).optional(),
+    }),
+    toRpcArgs: (a) => ({ p_mode: a.mode ?? "ultimo_mes", p_meses: a.meses ?? 3 }),
+    rowToChunk: (r) => ({
+      entityType: "billing_periodo",
+      entityId: s(r.periodo),
+      publicId: sn(r.periodo),
+      title: `Facturación ${s(r.periodo)}`,
+      excerpt: s(r.detalle),
+      date: sn(r.hasta) ?? sn(r.desde),
+      url: entityUrl("billing_periodo", null),
+    }),
+  },
+  bank_balances_overview: {
+    rpc: "ai_bank_balances_overview",
+    description:
+      "SALDOS BANCARIOS y de caja de Tesorería (saldo actual derivado de movimientos). `query` filtra por banco/cuenta (p.ej. 'santander', 'galicia', 'caja'). USALA para '¿cuánta plata hay en el banco X?', '¿cuál es el saldo del Santander?', 'saldos de bancos'. El saldo ya viene calculado: no lo derives vos.",
+    schema: z.object({ query: z.string().max(120).optional(), limit }),
+    toRpcArgs: (a) => ({ p_query: a.query ?? null, p_limit: a.limit ?? 15 }),
+    rowToChunk: (r) => ({
+      entityType: "bank_balance",
+      entityId: s(r.bank_name),
+      publicId: sn(r.bank_name),
+      title: `${s(r.bank_name)}${r.account_name ? ` · ${s(r.account_name)}` : ""}`,
+      excerpt: s(r.detalle),
+      date: null,
+      url: entityUrl("bank_balance", null),
+    }),
+  },
+  supplier_spend_overview: {
+    rpc: "ai_supplier_spend_overview",
+    description:
+      "RANKING de proveedores por monto agregado. base: gasto (facturas de proveedor, sin anuladas) | compromiso (órdenes de compra firmadas/activas = presupuesto comprometido). periodo: todo | mes_actual | ultimo_mes | ultimos_30_dias. USALA para '¿cuál es el proveedor que más consume presupuesto?' (base=compromiso), '¿en qué proveedor gastamos más?' (base=gasto), 'ranking de proveedores por gasto'. Devuelve proveedor+monto ordenado: NO respondas estas preguntas con el catálogo de proveedores.",
+    schema: z.object({
+      base: z.enum(["gasto", "compromiso"]).optional(),
+      periodo: z.enum(["todo", "mes_actual", "ultimo_mes", "ultimos_30_dias"]).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({
+      p_base: a.base ?? "gasto",
+      p_periodo: a.periodo ?? "todo",
+      p_limit: a.limit ?? 10,
+    }),
+    rowToChunk: (r) => ({
+      entityType: "supplier_spend",
+      entityId: s(r.proveedor),
+      publicId: sn(r.proveedor),
+      title: `${s(r.proveedor)} · ${s(r.base) === "compromiso" ? "presupuesto comprometido" : "gasto"}`,
+      excerpt: s(r.detalle),
+      date: null,
+      // Deep-link según la base del cálculo: gasto → facturas de proveedor;
+      // compromiso → órdenes de compra (criterio pedido por Dirección).
+      url:
+        s(r.base) === "compromiso"
+          ? entityUrl("purchase_order", null)
+          : entityUrl("supplier_invoice", null),
+    }),
+  },
+  // ── fix/f5-2 · navegación: mapa de secciones de Nexus (tool LOCAL) ──────────
+  nexus_sections_overview: {
+    resolve: (a) => resolveNexusSections(a),
+    description:
+      "Mapa de SECCIONES de Nexus (navegación): qué módulos existen y su ruta. `query` = la sección buscada ('órdenes de compra', 'proveedores', 'compliance', 'tracking'). USALA para '¿qué secciones tiene Nexus?', '¿dónde veo X?', '¿cómo llego a Y?'. NO devuelve datos de negocio, solo el mapa del sistema con el link a cada sección.",
+    schema: z.object({ query: z.string().max(200).optional(), limit }),
+    toRpcArgs: (a) => ({ query: a.query ?? null, limit: a.limit ?? 30 }),
+    rowToChunk: (r) => ({
+      entityType: "nexus_section",
+      entityId: s(r.route),
+      publicId: null,
+      title: `${s(r.label)} (${s(r.section)})`,
+      excerpt: `Sección de Nexus · ${s(r.section)} · ${s(r.label)} · ruta ${s(r.route)}`,
+      date: null,
+      // Cada sección linkea a SU ruta real (verificada por test anti-404).
+      url: s(r.route) || null,
+    }),
+  },
 };
 
 // ── JSON Schemas del catálogo (formato Anthropic Messages API tools) ─────────
@@ -549,6 +667,27 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   }),
   suppliers_overview: js({
     query: { type: "string", description: "Filtro por razón social o categoría del proveedor" },
+    limit: jsLimit,
+  }),
+  organization_overview: js({
+    query: { type: "string", description: "Filtro por cargo, área o nombre (p.ej. 'presidente')" },
+    limit: jsLimit,
+  }),
+  billing_summary: js({
+    mode: { type: "string", enum: ["ultimo_mes", "mes_actual", "ultimos_meses"] },
+    meses: { type: "integer", minimum: 1, maximum: 12 },
+  }),
+  bank_balances_overview: js({
+    query: { type: "string", description: "Banco/cuenta (p.ej. 'santander', 'galicia', 'caja')" },
+    limit: jsLimit,
+  }),
+  supplier_spend_overview: js({
+    base: { type: "string", enum: ["gasto", "compromiso"] },
+    periodo: { type: "string", enum: ["todo", "mes_actual", "ultimo_mes", "ultimos_30_dias"] },
+    limit: jsLimit,
+  }),
+  nexus_sections_overview: js({
+    query: { type: "string", description: "Sección buscada (p.ej. 'órdenes de compra', 'compliance')" },
     limit: jsLimit,
   }),
 };

@@ -74,11 +74,11 @@ describe("F5.1-b.0.1.1 · ruteo a docs_browse — vocabulario (proxy; ruteo real
 
 describe("F5.1-b.0.1 · las tools nuevas quedan bajo el guard (defensa metadata-vs-contenido)", () => {
   it("contracts_overview → ficha 'contrato'", () => {
-    const chunk = TOOLS.contracts_overview.rowToChunk(MOCK_TOOL_ROWS.contracts_overview[0]);
+    const chunk = TOOLS.contracts_overview.rowToChunk(MOCK_TOOL_ROWS.contracts_overview![0]);
     expect(METADATA_CARD_ENTITY_TYPES.has(chunk.entityType)).toBe(true);
   });
   it("docs_browse → ficha documental (compliance/contrato)", () => {
-    const chunk = TOOLS.docs_browse.rowToChunk(MOCK_TOOL_ROWS.docs_browse[0]);
+    const chunk = TOOLS.docs_browse.rowToChunk(MOCK_TOOL_ROWS.docs_browse![0]);
     expect(METADATA_CARD_ENTITY_TYPES.has(chunk.entityType)).toBe(true);
   });
 });
