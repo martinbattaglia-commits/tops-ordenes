@@ -34,6 +34,9 @@ export const TOOL_NAMES = [
   "customer_revenue_overview",
   // estándar gerencial 2026-07-07: ingresos por CATEGORÍA (ANMAT/Cargas/Sin clasificar).
   "revenue_by_category_report",
+  // smoke 2026-07-07: vacancia/capacidad/cubículos — misma fuente que el dashboard
+  // (motor corporate-capacity + CommittedSnapshot del CRM; sin migración).
+  "vacancy_overview",
   // fix/f5-2 · navegación: catálogo de secciones de Nexus (tool LOCAL).
   "nexus_sections_overview",
 ] as const;
@@ -104,11 +107,74 @@ export type CopilotOutcome =
   | "killed"
   | "denied";
 
+// ── Capa visual ejecutiva (estándar 2026-07-07) ──────────────────────────────
+// Payload DETERMINÍSTICO construido por adaptadores tool→tablero (visuals.ts) a
+// partir de las filas de la tool. El modelo NUNCA genera estos números: solo
+// narra. La UI renderiza KPIs/tabla/chart; si no hay adaptador, respuesta
+// compacta de texto (visual = null). Chart-ready por contrato.
+
+export interface CopilotVisualKpi {
+  label: string;
+  value: string;
+  hint?: string | null;
+  /** 0-100: renderiza barra de progreso bajo el valor (estándar visual Nexus). */
+  pct?: number | null;
+  /** Tono semántico de la card (colores de estado estilo Cockpit/Compliance). */
+  tone?: "brand" | "ok" | "warn" | "danger" | null;
+  /** Acción INLINE de la card: ruta interna o URL externa real (p.ej. Drive). */
+  url?: string | null;
+  actionLabel?: string | null;
+}
+
+export interface CopilotVisualRowLink {
+  url: string;
+  label: string;
+  /** Naturaleza de la acción (honestidad documental, smoke 2026-07-07):
+   *  drive/folder = documento o carpeta REAL; crm = ficha; fallback = navegación
+   *  al módulo — la UI la atenúa y NUNCA la presenta como fuente documental. */
+  kind?: "drive" | "folder" | "crm" | "fallback";
+}
+
+export interface CopilotVisualTable {
+  columns: string[];
+  rows: string[][];
+  /** Fuente INLINE por fila (alineado con `rows`); null = fila sin link. */
+  rowLinks?: Array<CopilotVisualRowLink | null>;
+}
+
+export interface CopilotVisualChart {
+  type: "donut" | "bar";
+  labels: string[];
+  /** Valores numéricos crudos (misma unidad), para render y para chart-ready. */
+  values: number[];
+  unit?: string | null;
+  /** Título del gráfico cuando el tablero tiene más de uno (p.ej. "Por estado"). */
+  title?: string | null;
+}
+
+export interface CopilotVisual {
+  kind: "report" | "ranking" | "kpi" | "document";
+  title: string;
+  period?: string | null;
+  kpis?: CopilotVisualKpi[];
+  table?: CopilotVisualTable | null;
+  chart?: CopilotVisualChart | null;
+  /** Gráficos ADICIONALES al principal (dashboard multi-chart, p.ej. contratos:
+   *  donut por tipo + barras por estado + disponibilidad documental). */
+  charts?: CopilotVisualChart[];
+  /** Insight ejecutivo calculado desde los datos (1-2 frases, determinístico). */
+  insights?: string[];
+  /** Brechas visibles (p.ej. 'Sin clasificar'): nunca se esconden. */
+  warnings?: string[];
+}
+
 export interface CopilotAnswer {
   outcome: CopilotOutcome;
   answer: string;
   /** Solo las fuentes efectivamente citadas en la respuesta. */
   sources: SourceChunk[];
+  /** Tablero ejecutivo determinístico (null = respuesta compacta de texto). */
+  visual?: CopilotVisual | null;
   /** Id del mensaje assistant auditado (para feedback); null en demo/mock. */
   messageId: string | null;
   sessionId: string;

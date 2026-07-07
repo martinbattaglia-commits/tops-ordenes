@@ -130,16 +130,43 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
     },
   ],
   contracts_overview: [
+    // Paridad demo/real (smoke 2026-07-07): la primera fila es la firmada más
+    // reciente (la RPC ordena firmados_recientes por firma desc) y las tres filas
+    // cubren la escalera documental completa: archivo Drive / carpeta / sin vínculo.
+    {
+      public_id: "CTR-2026-001",
+      razon_social: "Distribuidora Ficticia SRL",
+      tipo: "ANMAT",
+      estado: "vigente",
+      fecha_firma: "2026-05-21",
+      fecha_inicio: "2026-06-01",
+      fecha_fin: "2028-05-31",
+      dias_para_vencer: 694,
+      detalle: "Contrato · ANMAT · estado vigente · firmado 2026-05-21 · vence 2028-05-31",
+      file_url: "https://drive.google.com/file/d/demo-contrato-001/view",
+    },
     {
       public_id: "CTR-2024-014",
-      razon_social: "Distribuidora Ficticia SRL",
-      tipo: "locacion",
+      razon_social: "Logística Ejemplo SA",
+      tipo: "Cargas Generales",
       estado: "vigente",
       fecha_firma: "2024-03-10",
       fecha_inicio: "2024-04-01",
       fecha_fin: "2026-09-30",
       dias_para_vencer: 89,
-      detalle: "Contrato · locacion · estado vigente · firmado 2024-03-10 · vence 2026-09-30",
+      detalle: "Contrato · Cargas Generales · estado vigente · firmado 2024-03-10 · vence 2026-09-30",
+      folder_url: "https://drive.google.com/drive/folders/demo-carpeta-014",
+    },
+    {
+      public_id: "CTR-2023-007",
+      razon_social: "Depósitos Modelo SRL",
+      tipo: "ANMAT",
+      estado: "vigente",
+      fecha_firma: "2023-11-02",
+      fecha_inicio: "2023-12-01",
+      fecha_fin: "2027-03-01",
+      dias_para_vencer: 237,
+      detalle: "Contrato · ANMAT · estado vigente · firmado 2023-11-02 · vence 2027-03-01",
     },
   ],
   docs_browse: [
@@ -152,6 +179,8 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
         "[ficha metadata] documento compliance cumplimiento · Habilitación municipal Magaldi · Habilitaciones · vencimiento vence 2026-08-15",
       status: null,
       entity_date: "2026-08-15T03:00:00Z",
+      // demo del enrichment de Drive (ficticio).
+      source_url: "https://drive.google.com/file/d/demo-file-id/view",
     },
   ],
   clients_health: [
@@ -278,6 +307,36 @@ export const MOCK_TOOL_ROWS: Partial<Record<ToolName, Row[]>> = {
       periodo: "todo",
       detalle:
         "Facturación por cliente · Distribuidora Ficticia SRL · ARS 41,000,000.00 · 6 facturas autorizadas · período: todo",
+    },
+  ],
+  vacancy_overview: [
+    {
+      alcance: "Corporativo",
+      capacidad_m2: 10000,
+      ocupado_m2: 6300,
+      disponible_m2: 3700,
+      vacancia_pct: 37,
+      cubiculos_total: 26,
+      cubiculos_disponibles: 9,
+      cubiculos_alquilados: 17,
+      detalle:
+        "Capacidad corporativa · comercializable 10000 m² · ocupado 6300 m² · disponible 3700 m² · vacancia 37% · cubículos ANMAT: 17 alquilados de 26 (9 disponibles)",
+    },
+    {
+      alcance: "ANMAT",
+      capacidad_m2: 5200,
+      ocupado_m2: 4000,
+      disponible_m2: 1200,
+      vacancia_pct: 23.1,
+      detalle: "ANMAT · capacidad 5200 m² · disponible 1200 m² · vacancia 23.1%",
+    },
+    {
+      alcance: "Cargas Generales",
+      capacidad_m2: 3800,
+      ocupado_m2: 1700,
+      disponible_m2: 2100,
+      vacancia_pct: 55.3,
+      detalle: "Cargas Generales · capacidad 3800 m² · disponible 2100 m² · vacancia 55.3%",
     },
   ],
   revenue_by_category_report: [

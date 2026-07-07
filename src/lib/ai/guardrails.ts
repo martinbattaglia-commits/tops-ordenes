@@ -246,6 +246,8 @@ const CONTENT_TERMS = [
   // F5.1-b.0.1.1 (hardening tras revisión adversarial): verbos de contenido/interpretación
   // por paráfrasis natural que evadían el guard cuando el objeto era "archivo".
   "menciona", "se refiere",
+  // smoke 2026-07-07: interpretación condicional/consecuencias = contenido.
+  "incumpl", "que pasa si", "segun la plancheta", "segun el plano",
   "monto del", "plazo del", "vigencia del contrato", "que penaliza", "leeme el", "leer el",
   // English
   "summariz", "what does it say", "what says", "the terms", "obligations", "coverage",
@@ -256,7 +258,7 @@ const CONTENT_TERMS = [
 // Verbos AMBIGUOS: sólo cuentan como contenido si el objeto es un documento SINGULAR.
 const AMBIGUOUS_CONTENT_VERBS = ["resum", "detall", "explic", "desarroll", "profundiz"];
 const SINGULAR_DOC_OBJECT =
-  /\b(el|la|este|esta|ese|esa|del|de la|dicho|dicha|un|una|mi|su)\s+(contrato|documento|poliza|acuerdo|convenio|expediente|certificado|habilitacion|informe|adenda|anexo|reclamo|archivo)\b/;
+  /\b(el|la|este|esta|ese|esa|del|de la|dicho|dicha|un|una|mi|su)\s+(contrato|documento|poliza|acuerdo|convenio|expediente|certificado|habilitacion|informe|adenda|anexo|reclamo|archivo|plancheta|plano)\b/;
 
 // Señales FUERTES de intención METADATA (listado / existencia / vencimiento / campo
 // proyectado poco co-optable). NO se incluyen interrogativos genéricos (cual/cuant/
@@ -270,6 +272,13 @@ const METADATA_INTENT_TERMS = [
   // degradaba aunque docs_browse lo encontrara (hallazgo smoke). El vocabulario de CONTENIDO
   // mantiene prioridad → "dame el RESUMEN / lo que DICE el archivo" sigue degradando.
   "dame", "damelo", "pasame", "traeme", "conseguime", "podrias dar", "me das",
+  // smoke 2026-07-07 (4 preguntas reales degradadas): más verbos de RECUPERACIÓN,
+  // tipos documentales de plano ('plancheta'/'plano') y la SEDE como señal de
+  // recuperación de un documento puntual. El vocabulario de CONTENIDO mantiene
+  // prioridad: 'resumime la plancheta' / 'qué dice la habilitación' siguen degradando.
+  "puedes dar", "podes dar", "puedo ver", "me consigues",
+  "plancheta", "plano de", "plano ",
+  "lujan", "magaldi", "3159", "1765",
   " hay", "hay ", "existe", "que documento", "que contrato",
   "documentos", "contratos", "fichas", "polizas", "expedientes", "certificados", "habilitaciones",
   // F5.1-b.0.1.1: "archivos" (PLURAL = listado) como intención metadata. A PROPÓSITO no

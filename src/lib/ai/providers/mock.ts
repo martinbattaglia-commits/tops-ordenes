@@ -23,7 +23,9 @@ function norm(text: string): string {
 
 const PUBLIC_ID_RE = /\b(INC|TSK)-\d{4}-\d{4}\b/i;
 
-function pickTools(question: string): ToolCall[] {
+/** Exportada para el test de cobertura del catálogo de sugerencias (command
+ *  center): ninguna sugerencia principal puede caer en el default genérico. */
+export function pickTools(question: string): ToolCall[] {
   const q = norm(question);
   const calls: ToolCall[] = [];
   const id = question.match(PUBLIC_ID_RE)?.[0]?.toUpperCase();
@@ -71,6 +73,34 @@ function pickTools(question: string): ToolCall[] {
     return calls;
   }
 
+  // VACANCIA / CAPACIDAD / CUBÍCULOS (smoke 2026-07-07): métricas del motor
+  // corporativo — misma fuente que el dashboard de Vacancia.
+  if (
+    /vacancia|capacidad comercializable|cubiculo|metros cuadrados|m2 (disponibles|libres|ocupados)|superficie disponible|cuantos m2|ocupacion (fisica|corporativa|del deposito)/.test(
+      q
+    )
+  ) {
+    // Intención puntual (número primero): foco + categoría si la pregunta lo pide.
+    const focus = /cubiculo/.test(q)
+      ? "cubiculos"
+      : /vacancia|porcentaje/.test(q)
+        ? "vacancia"
+        : /disponible|libre|metros cuadrados|m2/.test(q)
+          ? "disponible"
+          : undefined;
+    const categoria = /cargas generales/.test(q)
+      ? "general"
+      : /anmat/.test(q) && focus !== "cubiculos"
+        ? "anmat"
+        : /oficina/.test(q)
+          ? "oficina"
+          : undefined;
+    calls.push({
+      tool: "vacancy_overview",
+      args: { ...(focus ? { focus } : {}), ...(categoria ? { categoria } : {}) },
+    });
+    return calls;
+  }
   // REPORTE por CATEGORÍA (estándar gerencial): porcentajes/distribución/ANMAT vs
   // Cargas de ingresos → tool de reporte, nunca search_knowledge ni el total plano.
   if (
@@ -157,12 +187,43 @@ function pickTools(question: string): ToolCall[] {
     return calls;
   }
   if (/contrato/.test(q)) {
+    // Tipo explícito → filtro real del RPC (enum en prod: 'ANMAT' | 'Cargas Generales').
+    const tipo = /anmat/.test(q)
+      ? "ANMAT"
+      : /cargas? generales?/.test(q)
+        ? "Cargas Generales"
+        : undefined;
+    // SINGULAR (smoke 2026-07-07): "el último contrato (firmado)" pide UNA entidad.
+    // La RPC ya ordena firmados_recientes por fecha_firma desc → limit=1 devuelve
+    // EL último sin migración. "últimos contratos" (plural) NO matchea.
+    if (/ultim[oa] contrato/.test(q)) {
+      calls.push({
+        tool: "contracts_overview",
+        args: { mode: "firmados_recientes", limit: 1, ...(tipo ? { query: tipo } : {}) },
+      });
+      return calls;
+    }
     const mode = /vencer|vencimiento/.test(q)
       ? "por_vencer"
       : /firmad|firmo|firma/.test(q)
         ? "firmados_recientes"
-        : "todos";
-    calls.push({ tool: "contracts_overview", args: { mode } });
+        : /vigente/.test(q)
+          ? "vigentes"
+          : "todos";
+    calls.push({
+      tool: "contracts_overview",
+      args: {
+        mode,
+        ...(tipo ? { query: tipo } : {}),
+        // El KPI de "último mes" SOLO si el usuario acotó el período (honestidad:
+        // "contratos firmados" a secas no debe responder "Firmados último mes: 0").
+        ...(mode === "firmados_recientes" && periodo === "ultimo_mes"
+          ? { periodo: "ultimo_mes" }
+          : {}),
+        // Dashboard: listar el máximo de la tool; el adaptador avisa si tocó el cap.
+        ...(mode === "vigentes" || mode === "todos" ? { limit: 50 } : {}),
+      },
+    });
     return calls;
   }
   // P2 (fix/f5-2): facturas / órdenes de compra / proveedores. "factura de

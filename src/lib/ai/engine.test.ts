@@ -464,6 +464,141 @@ describe("Reportes gerenciales · ingresos por categoría (caso testigo ANMAT/Ca
   });
 });
 
+describe("Capa visual · el engine adjunta un tablero DETERMINÍSTICO (estándar 2026-07-07)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("pregunta testigo → visual kind 'report' con KPIs, tabla, donut y warning Sin clasificar", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("Reporte de ingresos por categoría del último mes: % ANMAT y % cargas generales")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.visual).toBeTruthy();
+    expect(res.visual!.kind).toBe("report");
+    expect(res.visual!.chart!.type).toBe("donut");
+    expect(res.visual!.chart!.labels).toContain("ANMAT");
+    expect(res.visual!.kpis!.length).toBeGreaterThanOrEqual(2);
+    expect(res.visual!.warnings!.join(" ").toLowerCase()).toContain("sin clasificar");
+  });
+
+  it("'Ranking de clientes por facturación' → visual ranking con barras", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Ranking de clientes por facturación"));
+    expect(res.visual!.kind).toBe("ranking");
+    expect(res.visual!.chart!.type).toBe("bar");
+    expect(res.visual!.table!.rows.length).toBeGreaterThan(1);
+  });
+
+  it("'¿Cuál fue el cliente que más facturó?' → visual kpi COMPACTO (singular)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál fue el cliente que más facturó?"));
+    expect(res.visual!.kind).toBe("kpi");
+  });
+
+  it("'¿Cuánta plata hay en el banco Santander?' → visual con KPI de saldo", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuánta plata hay en el banco Santander?"));
+    expect(res.visual).toBeTruthy();
+    expect(res.visual!.kpis!.length).toBeGreaterThan(0);
+  });
+
+  it("preguntas simples (presidente) → SIN tablero (respuesta compacta, visual null)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Quién es el presidente de Logística TOPS?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.visual ?? null).toBeNull();
+  });
+
+  it("no_evidence → nunca hay tablero (no se maquilla el vacío)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("que saldo tiene la cuenta de marte?"));
+    if (res.outcome !== "answered") expect(res.visual ?? null).toBeNull();
+  });
+});
+
+describe("Vacancia / capacidad / cubículos · smoke 2026-07-07 (fuente = motor corporativo)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'¿Qué porcentaje de vacancia tenemos en la actualidad?' → vacancy_overview con KPI, no vacío", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué porcentaje de vacancia tenemos en la actualidad?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].entityType).toBe("vacancy_metric");
+    expect(res.sources[0].url).toBe("/comercial/dashboard-vacancia");
+    expect(res.visual).toBeTruthy();
+    expect(res.visual!.kpis!.some((k) => k.label.toLowerCase().includes("vacancia"))).toBe(true);
+  });
+
+  it("'¿Cuántos metros cuadrados tenemos disponibles para cargas generales?' → responde m² por categoría", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("¿Cuántos metros cuadrados tenemos disponibles para cargas generales?")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.some((s) => s.entityType === "vacancy_metric")).toBe(true);
+    expect(res.answer.toLowerCase()).toContain("cargas generales");
+  });
+
+  it("'¿Cuántos cubículos de ANMAT están alquilados en la actualidad?' → responde con la métrica real", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("¿Cuántos cubículos de ANMAT están alquilados en la actualidad?")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.some((s) => s.entityType === "vacancy_metric")).toBe(true);
+  });
+
+  it("guard fix: 'plancheta de Habilitacion de Lujan 3159' → answered vía docs_browse (ya no degrada)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("plancheta de Habilitacion de Lujan 3159"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources[0].tool).toBe("docs_browse");
+  });
+});
+
+describe("Contratos · intención SINGULAR + período honesto (smoke humano 2026-07-07)", () => {
+  beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
+
+  it("'Me podrías dar el último contrato firmado?' → UNA sola fuente + card única (no tabla de 30)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Me podrías dar el último contrato firmado?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBe(1); // singular = UNA entidad principal
+    expect(res.sources[0].tool).toBe("contracts_overview");
+    expect(res.visual?.kind).toBe("document");
+    // nunca el KPI de mes calendario cuando el usuario no acotó período
+    const labels = (res.visual?.kpis ?? []).map((k) => k.label.toLowerCase()).join(" ");
+    expect(labels).not.toContain("último mes");
+  });
+
+  it("'¿Cuál fue el último contrato ANMAT firmado?' → singular con filtro de tipo", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuál fue el último contrato ANMAT firmado?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.length).toBe(1);
+    expect(res.visual?.kind).toBe("document");
+  });
+
+  it("'¿Cuántos contratos se firmaron el último mes?' → KPI de mes calendario (el período SÍ fue pedido)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuántos contratos se firmaron el último mes?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.visual?.kpis?.[0]?.label.toLowerCase()).toContain("último mes");
+  });
+
+  it("'Mostrame los contratos vigentes' → dashboard: KPIs múltiples + donut + calidad documental", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("Mostrame los contratos vigentes"));
+    expect(res.outcome).toBe("answered");
+    expect(res.visual?.kind).toBe("report");
+    expect(res.visual?.kpis?.length).toBeGreaterThanOrEqual(4);
+    expect(res.visual?.chart?.type).toBe("donut");
+    // la brecha documental es visible: algún KPI habla de Drive/vínculo
+    const labels = (res.visual?.kpis ?? []).map((k) => k.label.toLowerCase()).join(" ");
+    expect(labels).toMatch(/drive|vínculo/);
+  });
+});
+
 describe("P1b · resiliencia: un tool-call con args inválidos no rompe el turno (fix/f5-2)", () => {
   beforeEach(() => vi.stubEnv("AI_ENABLED", "1"));
 

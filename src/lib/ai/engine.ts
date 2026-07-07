@@ -22,9 +22,11 @@ import {
 import { getProvider } from "./provider";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
 import { ToolArgsError, executeTool } from "./data";
+import { redactVisual } from "./visuals";
 import type {
   CopilotAnswer,
   CopilotRequest,
+  CopilotVisual,
   SourceChunk,
   ToolCall,
 } from "./types";
@@ -82,6 +84,7 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
   let errorDetail: string | null = null;
   let retriedCitations = false;
   let skippedToolArgs = 0; // P1b: tool-calls salteadas por args inválidos.
+  let turnVisual: CopilotVisual | null = null; // tablero determinístico del turno.
 
   try {
     const maxRounds = env.ai.limits.toolRoundsPerRequest;
@@ -127,7 +130,10 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
             throw toolErr;
           }
           toolsUsed.push(call.tool);
-          for (const partial of results) {
+          // Capa visual (estándar 2026-07-07): primer tablero determinístico del
+          // turno (la primera tool analítica con datos define el dashboard).
+          if (!turnVisual && results.visual) turnVisual = results.visual;
+          for (const partial of results.chunks) {
             chunks.push({
               ...partial,
               sourceId: `S${chunks.length + 1}`,
@@ -248,5 +254,14 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
     costEstimate: usage.costUsd || null,
   });
 
-  return { sessionId: req.sessionId, messageId, outcome, answer, sources: citedSources };
+  return {
+    sessionId: req.sessionId,
+    messageId,
+    outcome,
+    answer,
+    sources: citedSources,
+    // Tablero visual SOLO con respuesta sustanciada: nunca se maquilla un vacío
+    // ni una degradación del guard con un dashboard. Strings redactados (PII).
+    visual: outcome === "answered" && turnVisual ? redactVisual(turnVisual, redactPii) : null,
+  };
 }

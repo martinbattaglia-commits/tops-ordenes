@@ -6,6 +6,13 @@
 // el test tools.test.ts lo verifica contra una denylist de verbos.
 
 import { z } from "zod";
+import { getCommittedSnapshot } from "@/lib/comercial/committed-capacity";
+import {
+  CAPACITY_CATEGORIES,
+  CATEGORY_LABEL,
+  getCorporateCapacity,
+  getCorporateVacancySummary,
+} from "@/lib/wms/corporate-capacity";
 import { resolveNexusSections } from "./nexus-sections";
 import { resolveOrgChart } from "./org-source";
 import type { SourceChunk, ToolName } from "./types";
@@ -54,6 +61,7 @@ export function entityUrl(entityType: string, publicId: string | null): string |
   if (entityType === "bank_balance") return "/tesoreria/bancos";
   if (entityType === "customer_revenue") return "/billing";
   if (entityType === "revenue_categoria") return "/billing";
+  if (entityType === "vacancy_metric") return "/comercial/dashboard-vacancia";
   return null;
 }
 
@@ -68,6 +76,17 @@ export interface ToolSpec {
    *  organigrama), sin DB/RPC/service_role. Si está presente, `executeTool` la usa
    *  y NO llama a Supabase. Los args ya vienen validados por el schema zod. */
   resolve?: (args: Record<string, unknown>) => RawRow[];
+  /** smoke 2026-07-07: tool de FUENTE COMPARTIDA — usa la MISMA lib server-side
+   *  que la UI (p.ej. motor de capacidad + snapshot CRM vía cliente de sesión/RLS).
+   *  Sin RPC propia y sin duplicar cálculo. En demo se usan los fixtures. */
+  fetchRows?: (args: Record<string, unknown>) => Promise<RawRow[]>;
+  /** smoke 2026-07-07 (links reales): enriquecimiento read-only POST-RPC con el
+   *  cliente de SESIÓN (RLS) — p.ej. traer la URL de Drive de compliance_documents/
+   *  contract_documents para las fichas devueltas. Errores → filas sin enriquecer. */
+  enrich?: (
+    rows: RawRow[],
+    supabase: NonNullable<ReturnType<typeof import("@/lib/supabase/server").createClient>>
+  ) => Promise<RawRow[]>;
   description: string;
   schema: z.ZodType<Record<string, unknown> | object>;
   toRpcArgs(args: Record<string, unknown>): Record<string, unknown>;
@@ -264,13 +283,16 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
   contracts_overview: {
     rpc: "ai_contracts_overview",
     description:
-      "Contratos comerciales (metadata, NO el texto del contrato) por mode: por_vencer | vencidos | vigentes | firmados_recientes | todos. Devuelve razón social, tipo, estado, fecha de firma y fecha de fin. El filtro `query` matchea razón social, tipo (p.ej. 'ANMAT') o id. USALA para toda pregunta de vencimiento, vigencia o firma de CONTRATOS (compliance_pending no cubre contratos).",
+      "Contratos comerciales (metadata, NO el texto del contrato) por mode: por_vencer | vencidos | vigentes | firmados_recientes | todos. Devuelve razón social, tipo, estado, fecha de firma y fecha de fin. El filtro `query` matchea razón social, tipo (p.ej. 'ANMAT') o id. Para '¿cuál fue el ÚLTIMO contrato firmado?' (singular) usá mode=firmados_recientes con limit=1 (ordena por firma descendente). Pasá periodo='ultimo_mes' SOLO si el usuario acotó explícitamente al último mes. USALA para toda pregunta de vencimiento, vigencia o firma de CONTRATOS (compliance_pending no cubre contratos).",
     schema: z.object({
       mode: z
         .enum(["por_vencer", "vencidos", "vigentes", "firmados_recientes", "todos"])
         .optional(),
       dias: z.number().int().min(1).max(365).optional(),
       query: z.string().max(120).optional(),
+      // Hint de intención para el adaptador visual (NO viaja al RPC): el usuario
+      // acotó explícitamente al último mes calendario (smoke 2026-07-07).
+      periodo: z.enum(["ultimo_mes"]).optional(),
       limit,
     }),
     toRpcArgs: (a) => ({
@@ -279,6 +301,47 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       p_query: a.query ?? null,
       p_limit: a.limit ?? 30,
     }),
+    // smoke 2026-07-07: link al CONTRATO REAL por fila. Escalera: archivo
+    // (contract_documents.url, el más reciente) → carpeta Drive del contrato
+    // (drive_folder_id) → módulo. Lectura con cliente de SESIÓN (RLS staff).
+    enrich: async (rows, supabase) => {
+      const pids = rows.map((r) => s(r.public_id)).filter(Boolean);
+      if (pids.length === 0) return rows;
+      const { data: contracts, error } = await supabase
+        .from("contracts")
+        .select("id, public_id, drive_folder_id")
+        .in("public_id", pids);
+      if (error || !contracts) return rows;
+      const byPid = new Map(
+        (contracts as Array<{ id: string; public_id: string; drive_folder_id: string | null }>).map(
+          (c) => [String(c.public_id), c]
+        )
+      );
+      const ids = [...byPid.values()].map((c) => c.id);
+      const fileByContract = new Map<string, string>();
+      if (ids.length > 0) {
+        const { data: docs } = await supabase
+          .from("contract_documents")
+          .select("contract_id, url, drive_modified_at")
+          .in("contract_id", ids)
+          .not("url", "is", null)
+          .order("drive_modified_at", { ascending: false });
+        for (const d of (docs ?? []) as Array<{ contract_id: string; url: string | null }>) {
+          const k = String(d.contract_id);
+          if (!fileByContract.has(k) && d.url) fileByContract.set(k, d.url);
+        }
+      }
+      return rows.map((r) => {
+        const c = byPid.get(s(r.public_id));
+        return {
+          ...r,
+          file_url: c ? (fileByContract.get(String(c.id)) ?? null) : null,
+          folder_url: c?.drive_folder_id
+            ? `https://drive.google.com/drive/folders/${c.drive_folder_id}`
+            : null,
+        };
+      });
+    },
     rowToChunk: (r) => ({
       entityType: "contrato",
       entityId: s(r.public_id),
@@ -305,6 +368,31 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       p_query: a.query ?? null,
       p_limit: a.limit ?? 30,
     }),
+    // smoke 2026-07-07: link REAL al documento. entity_id de la ficha = id de
+    // compliance_documents/contract_documents (proyección 0176), que tienen
+    // `url` (webViewLink de Drive). Lectura con el cliente de SESIÓN (RLS).
+    enrich: async (rows, supabase) => {
+      const byTable: Record<string, string[]> = {
+        compliance_documents: [],
+        contract_documents: [],
+      };
+      for (const r of rows) {
+        const id = s(r.entity_id);
+        if (!id) continue;
+        if (s(r.entity_type).startsWith("compliance")) byTable.compliance_documents.push(id);
+        else byTable.contract_documents.push(id);
+      }
+      const urls = new Map<string, string>();
+      for (const [table, ids] of Object.entries(byTable)) {
+        if (ids.length === 0) continue;
+        const { data, error } = await supabase.from(table).select("id, url").in("id", ids);
+        if (error || !data) continue;
+        for (const d of data as Array<{ id: string; url: string | null }>) {
+          if (d.url) urls.set(String(d.id), d.url);
+        }
+      }
+      return rows.map((r) => ({ ...r, source_url: urls.get(s(r.entity_id)) ?? null }));
+    },
     rowToChunk: (r) => ({
       entityType: s(r.entity_type),
       entityId: s(r.entity_id),
@@ -597,6 +685,63 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       url: entityUrl("revenue_categoria", null),
     }),
   },
+  // ── smoke 2026-07-07: vacancia / capacidad / cubículos (FUENTE COMPARTIDA) ──
+  // MISMA fuente que /comercial/dashboard-vacancia: motor puro corporate-capacity
+  // (Twins Luján 3159 + Magaldi 1765) + CommittedSnapshot de crm_opportunities
+  // (cliente de sesión → RLS). Sin RPC nueva, sin duplicar cálculo, sin números
+  // hardcodeados: si el Twin o el CRM cambian, la UI y el Copilot cambian juntos.
+  vacancy_overview: {
+    fetchRows: async () => {
+      const snapshot = await getCommittedSnapshot();
+      const s = getCorporateVacancySummary(snapshot);
+      const c = getCorporateCapacity(snapshot);
+      const alquilados = c.cubiculos.total - c.cubiculos.available;
+      const rows: Record<string, string | number>[] = [
+        {
+          alcance: "Corporativo",
+          capacidad_m2: s.comercializableM2,
+          ocupado_m2: s.ocupadoM2,
+          disponible_m2: s.disponibleM2,
+          vacancia_pct: s.vacanciaPct,
+          cubiculos_total: c.cubiculos.total,
+          cubiculos_disponibles: c.cubiculos.available,
+          cubiculos_alquilados: alquilados,
+          detalle:
+            `Capacidad corporativa · comercializable ${s.comercializableM2} m² · ocupado ${s.ocupadoM2} m² · disponible ${s.disponibleM2} m² · vacancia ${s.vacanciaPct}%` +
+            ` · cubículos ANMAT: ${alquilados} alquilados de ${c.cubiculos.total} (${c.cubiculos.available} disponibles)`,
+        },
+        ...CAPACITY_CATEGORIES.map((k) => {
+          const cat = s.byCategory[k];
+          return {
+            alcance: CATEGORY_LABEL[k],
+            capacidad_m2: cat.capacityM2,
+            ocupado_m2: Math.round((cat.capacityM2 - cat.availableM2) * 10) / 10,
+            disponible_m2: cat.availableM2,
+            vacancia_pct: cat.vacanciaPct,
+            detalle: `${CATEGORY_LABEL[k]} · capacidad ${cat.capacityM2} m² · disponible ${cat.availableM2} m² · vacancia ${cat.vacanciaPct}%`,
+          };
+        }),
+      ];
+      return rows;
+    },
+    description:
+      "CAPACIDAD y VACANCIA corporativa (misma fuente que el dashboard de Vacancia): m² comercializables, ocupados y DISPONIBLES — total y por unidad de negocio (ANMAT / Cargas Generales / Oficinas) — más CUBÍCULOS ANMAT (alquilados/disponibles/total). USALA para '¿qué % de vacancia tenemos?', '¿cuántos m² disponibles hay (para cargas generales/ANMAT)?', '¿cuántos cubículos ANMAT están alquilados?', 'capacidad comercializable'. Los números ya vienen calculados del motor corporativo.",
+    schema: z.object({
+      focus: z.enum(["cubiculos", "vacancia", "disponible"]).optional(),
+      categoria: z.enum(["anmat", "general", "oficina"]).optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({ p_limit: a.limit ?? 10 }),
+    rowToChunk: (r) => ({
+      entityType: "vacancy_metric",
+      entityId: s(r.alcance),
+      publicId: sn(r.alcance),
+      title: `Capacidad · ${s(r.alcance)}`,
+      excerpt: s(r.detalle),
+      date: null,
+      url: entityUrl("vacancy_metric", null),
+    }),
+  },
   // ── fix/f5-2 · navegación: mapa de secciones de Nexus (tool LOCAL) ──────────
   nexus_sections_overview: {
     resolve: (a) => resolveNexusSections(a),
@@ -683,6 +828,11 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
     },
     dias: { type: "integer", minimum: 1, maximum: 365 },
     query: { type: "string", description: "Filtro por razón social, tipo (p.ej. ANMAT) o public_id" },
+    periodo: {
+      type: "string",
+      enum: ["ultimo_mes"],
+      description: "SOLO si el usuario acotó explícitamente al último mes calendario",
+    },
     limit: jsLimit,
   }),
   docs_browse: js({
@@ -738,6 +888,11 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   }),
   revenue_by_category_report: js({
     periodo: { type: "string", enum: ["ultimo_mes", "mes_actual", "todo"] },
+    limit: jsLimit,
+  }),
+  vacancy_overview: js({
+    focus: { type: "string", enum: ["cubiculos", "vacancia", "disponible"], description: "Qué número pidió el usuario (número primero)" },
+    categoria: { type: "string", enum: ["anmat", "general", "oficina"] },
     limit: jsLimit,
   }),
   nexus_sections_overview: js({

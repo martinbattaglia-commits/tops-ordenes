@@ -387,6 +387,34 @@ describe("F5.1-b.0.1.2 · verbos de RECUPERACIÓN de archivo = metadata; conteni
   });
 });
 
+describe("smoke 2026-07-07 · pedidos documentales REALES no degradan (vocabulario de recuperación)", () => {
+  const cmp = { entityType: "compliance_documento" as const };
+
+  it("las 4 preguntas reales del smoke (auditadas en ai_messages) → metadata, NO degradan", () => {
+    // Estas 4 fueron degradadas por el guard con 'riesgo metadata-vs-contenido'
+    // pese a que docs_browse las resolvió bien. Gap de vocabulario: 'me PUEDES dar'
+    // (estaba 'me podrías dar'), 'plancheta'/'plano' y la SEDE como intención de
+    // recuperación. El vocabulario de CONTENIDO mantiene prioridad (abajo).
+    const reales = [
+      "Me puedes dar la Habilitacion de Lujan?",
+      "Me puedes dar la Habilitacion de la CD que queda en avenida Pedro Lujan 3159",
+      "me puedes dar la platita de Habilitacion de Lujan 3159",
+      "plancheta de Habilitacion de Lujan 3159",
+    ];
+    for (const q of reales) expect(isMetadataContentRisk(q, [cmp]), q).toBe(false);
+  });
+
+  it("NO debilita el guard: contenido sobre la plancheta/habilitación sigue degradando", () => {
+    const degradan = [
+      "resumime la plancheta de Lujan",
+      "qué dice la habilitación de Lujan 3159",
+      "quién firma la habilitación municipal",
+      "según la plancheta de Magaldi, ¿qué pasa si incumplo?",
+    ];
+    for (const q of degradan) expect(isMetadataContentRisk(q, [cmp]), q).toBe(true);
+  });
+});
+
 describe("F5.1-b.0.1.1 · isEmptyAnswer", () => {
   it("vacío / whitespace = true; con texto = false", () => {
     expect(isEmptyAnswer("")).toBe(true);
