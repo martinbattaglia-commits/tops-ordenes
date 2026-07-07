@@ -58,7 +58,9 @@ const DOMAINS: Domain[] = [
       { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
       { href: "/organigrama", label: "Organigrama", icon: "building", gate: "sistema" },
       { href: "/analytics", label: "Analytics Ejecutivo", icon: "report", exec: true },
-      { href: "/manual-nexus/index.html", label: "Manual de usuario", icon: "book", badge: "Docs", external: true, exec: true },
+      // El manual es material de ayuda para TODOS los usuarios (decisión 2026-07-07):
+      // sin gate exec — justamente los roles operativos son quienes más lo necesitan.
+      { href: "/manual-nexus/index.html", label: "Manual de usuario", icon: "book", badge: "Docs", external: true },
     ],
   },
   {
