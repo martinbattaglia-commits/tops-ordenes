@@ -110,6 +110,13 @@ export class GeminiProvider implements AiProvider {
 
   private buildUserText(req: ProviderTurnRequest): string {
     const parts = [`Pregunta del usuario: ${req.question}`];
+    if (req.intent === "general_static") {
+      // Pirámide (2026-07-07): clasificado en CÓDIGO como conocimiento general.
+      parts.push(
+        "MODO CONOCIMIENTO GENERAL (clasificado por el sistema): esta pregunta NO es sobre datos internos de Nexus. Respondé como asistente de IA general, con una explicación clara y breve, empezando con 'Conocimiento general:' y sin citar fuentes [S#] de Nexus ni invocar funciones. No inventes datos actuales (cotizaciones, noticias, normativa vigente): si la pregunta los requiere, decilo."
+      );
+      return parts.join("\n\n");
+    }
     if (req.chunks.length > 0) {
       const { context } = buildContext(req.chunks, env.ai.limits.maxContextChars);
       parts.push(

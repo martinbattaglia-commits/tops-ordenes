@@ -466,6 +466,12 @@ function compose(question: string, chunks: SourceChunk[]): string {
   // Brief de gestión: composición ejecutiva propia (nunca el listado genérico).
   const briefChunks = chunks.filter((c) => c.tool === "management_brief");
   if (briefChunks.length > 0) return composeBrief(briefChunks);
+  // Pirámide (2026-07-07): contexto general puro (fecha/hora o limitación de
+  // actualidad) → respuesta directa citada, sin el envoltorio "esto encontré".
+  const generales = chunks.filter((c) => c.tool === "general_context");
+  if (generales.length > 0 && generales.length === chunks.length) {
+    return generales.map((c) => `${c.excerpt} [${c.sourceId}]`).join("\n");
+  }
   const relevant = filterByPersonName(question, chunks).slice(0, 8);
   if (relevant.length === 0) return NO_EVIDENCE;
   const intro = `Esto es lo que encuentro en Nexus (${relevant.length} fuente${
@@ -485,6 +491,17 @@ export class MockProvider implements AiProvider {
   readonly model = "mock-deterministic-v1";
 
   async plan(req: ProviderTurnRequest): Promise<ProviderTurnResponse> {
+    // Pirámide (2026-07-07): la pregunta fue clasificada en CÓDIGO como
+    // conocimiento general estático — en demo se responde con un placeholder
+    // declarado (sin inventar contenido); en producción Gemini da la
+    // explicación real como asistente general. Nunca se consulta Nexus.
+    if (req.intent === "general_static") {
+      return {
+        kind: "final",
+        answer:
+          "Conocimiento general (modo demo): esta pregunta no es sobre datos de Nexus, así que no se consultó la base interna. En producción, el proveedor de IA responde esta explicación como asistente de conocimiento general y lo aclara.",
+      };
+    }
     // Harness de test (F5.1-b.0.1.1): sentinela que fuerza un 'final' VACÍO para
     // verificar que el engine NO deja pasar 'answered' vacío. No matchea preguntas reales.
     if (norm(req.question).includes("__force_empty_answer__")) {

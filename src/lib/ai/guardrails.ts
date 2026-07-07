@@ -190,6 +190,8 @@ const EMPTY_MESSAGE_BY_TOOL: Record<string, string> = {
     "No encontré esa capacidad en la matriz de cobertura del Copilot.",
   spend_comparison_report:
     "No encontré datos suficientes en Nexus para armar esa comparación de compras/liquidez.",
+  general_context:
+    "No pude resolver ese contexto general con las fuentes disponibles del servidor.",
 };
 
 /** Mensaje genérico (dominios mixtos, sin tools o tool sin mapa): honesto, no el

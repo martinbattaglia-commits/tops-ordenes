@@ -51,6 +51,10 @@ export const TOOL_NAMES = [
   // sobre RPCs existentes): gasto vs compromiso · variación m/m de proveedores ·
   // saldo vs compromisos. Sin RPC nueva, sin migración.
   "spend_comparison_report",
+  // Pirámide de conocimiento (2026-07-07): contexto GENERAL (tool LOCAL) —
+  // fecha/hora del servidor + limitaciones honestas de actualidad (dólar,
+  // noticias, clima, inflación) mientras no haya fuente externa conectada.
+  "general_context",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -92,6 +96,11 @@ export interface ProviderTurnRequest {
   maxRounds: number;
   /** true si el turno anterior citó fuentes inválidas (único reintento). */
   retryAfterInvalidCitations?: boolean;
+  /** Pirámide de conocimiento (2026-07-07): la pregunta fue clasificada como
+   *  CONOCIMIENTO GENERAL estático — el provider responde como asistente de IA
+   *  general (sin tools de Nexus, con la aclaración de que es conocimiento
+   *  general), en vez de la política Nexus-only. Decidido en CÓDIGO. */
+  intent?: "general_static";
 }
 
 /** Consumo reportado por el provider en un turno (solo providers reales). */

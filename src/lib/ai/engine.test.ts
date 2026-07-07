@@ -185,6 +185,84 @@ describe("flujo completo en demo mode (provider mock + fixtures)", () => {
     expect(res.sources.map((s) => s.excerpt).join(" ")).toMatch(/27\.6|mes anterior/);
   });
 
+  // ── Pirámide de conocimiento (2026-07-07): el Copilot fuera de Nexus ───────
+  // Sonda FASE 1: "¿qué día es hoy?" respondía con eventos de tareas y "¿qué es
+  // ANMAT?" con incidentes. Estos tests fijan el contrato de las capas.
+  it("'¿Qué día es hoy?' → fecha del servidor citada; nunca eventos de Nexus", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué día es hoy?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.answer).toMatch(/Hoy es/i);
+    expect(res.answer).toMatch(/\[S\d+\]/);
+    expect(res.sources.every((s) => s.tool === "general_context")).toBe(true);
+    expect(res.answer).not.toContain("No encontré registros en Nexus");
+  });
+
+  it("'¿Qué hora es?' → hora del servidor con su origen declarado", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué hora es?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.answer.toLowerCase()).toMatch(/hora de argentina|reloj del servidor/);
+  });
+
+  it("'¿Qué es ANMAT?' → conocimiento general, jamás el fallback Nexus", async () => {
+    const { askCopilot, NO_EVIDENCE } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué es ANMAT?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.answer).not.toBe(NO_EVIDENCE);
+    expect(res.answer).not.toContain("No encontré registros en Nexus");
+    expect(res.answer.toLowerCase()).toContain("conocimiento general");
+    // No consultó la base interna para una pregunta que no es de Nexus.
+    expect(res.sources.filter((s) => s.tool === "search_knowledge")).toEqual([]);
+  });
+
+  it("'¿Cuánto cotiza el dólar?' → limitación específica, sin inventar ni fallback Nexus", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuánto cotiza el dólar?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.answer.toLowerCase()).toMatch(/fuente externa/);
+    expect(res.answer).not.toMatch(/\$ ?\d|ARS \d|\d+ pesos/);
+    expect(res.sources.every((s) => s.tool === "general_context")).toBe(true);
+  });
+
+  it("'noticias del día' → limitación de news provider, sin inventar titulares", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Cuáles son las noticias más importantes del día?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.answer.toLowerCase()).toMatch(/fuente externa|tiempo real/);
+    expect(res.sources.some((s) => s.tool === "search_knowledge")).toBe(false);
+  });
+
+  it("mixed: facturación en USD → dato Nexus + brecha FX declarada, sin inventar dólar", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("Con el dólar actual, ¿cuánto representa la facturación del último mes en USD?")
+    );
+    expect(res.outcome).toBe("answered");
+    const tools = new Set(res.sources.map((s) => s.tool));
+    expect(tools.has("billing_summary"), "parte Nexus").toBe(true);
+    expect(tools.has("general_context"), "brecha FX declarada").toBe(true);
+    expect(res.answer).toMatch(/\[S\d+\]/);
+  });
+
+  it("institucional: servicios de TOPS → brecha institucional específica (no incidentes)", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(baseReq("¿Qué servicios ofrece Logística TOPS?"));
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.some((s) => s.tool === "coverage_overview")).toBe(true);
+    expect(res.answer.toLowerCase()).toMatch(/institucional|web/);
+  });
+
+  it("investigación interna: capacitación ANMAT → brecha NotebookLM declarada", async () => {
+    const { askCopilot } = await loadEngine();
+    const res = await askCopilot(
+      baseReq("Armame una capacitación sobre almacenamiento regulado ANMAT")
+    );
+    expect(res.outcome).toBe("answered");
+    expect(res.sources.some((s) => s.tool === "coverage_overview")).toBe(true);
+    expect(res.answer.toLowerCase()).toMatch(/notebooklm|investigaci|capacitaci/);
+  });
+
   it("pregunta vacía/mínima → NO_EVIDENCE exacto", async () => {
     const { askCopilot, NO_EVIDENCE } = await loadEngine();
     const res = await askCopilot(baseReq("?"));

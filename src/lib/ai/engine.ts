@@ -22,6 +22,7 @@ import {
 import { getProvider } from "./provider";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
 import { ToolArgsError, executeTool } from "./data";
+import { classifyCopilotIntent } from "./intent-classifier";
 import { detectManagementIntent } from "./management-brief";
 import { redactVisual } from "./visuals";
 import type {
@@ -104,13 +105,55 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
   };
 
   try {
+    // ── Pirámide de conocimiento (2026-07-07) ────────────────────────────────
+    // La CAPA se decide en CÓDIGO antes que nada: Nexus (default) → contexto
+    // general/actualidad → institucional/investigación (brechas declaradas) →
+    // mixto. Una pregunta que NO es de Nexus jamás cae en search_knowledge ni
+    // responde "no encontré registros en Nexus".
+    const intent = classifyCopilotIntent(question);
+    if (intent.tipo === "general_current") {
+      ingest(await executeTool({ tool: "general_context", args: { tema: intent.tema } }));
+      toolsUsed.push("general_context");
+    } else if (intent.tipo === "company_institutional") {
+      ingest(
+        await executeTool({
+          tool: "coverage_overview",
+          args: { query: "institucional web servicios propuesta" },
+        })
+      );
+      toolsUsed.push("coverage_overview");
+    } else if (intent.tipo === "internal_research") {
+      ingest(
+        await executeTool({
+          tool: "coverage_overview",
+          args: { query: "notebooklm investigaciones capacitaciones" },
+        })
+      );
+      toolsUsed.push("coverage_overview");
+    } else if (intent.tipo === "mixed_nexus_external") {
+      // Parte Nexus (determinística) + brecha externa declarada, en un turno.
+      ingest(await executeTool({ tool: "billing_summary", args: { mode: "ultimo_mes" } }));
+      toolsUsed.push("billing_summary");
+      if (/anmat|categor/i.test(question)) {
+        ingest(
+          await executeTool({
+            tool: "revenue_by_category_report",
+            args: { periodo: "ultimo_mes" },
+          })
+        );
+        toolsUsed.push("revenue_by_category_report");
+      }
+      ingest(await executeTool({ tool: "general_context", args: { tema: "dolar" } }));
+      toolsUsed.push("general_context");
+    }
+
     // ── Copiloto de gestión (paradigma 2026-07-07) ──────────────────────────
     // La intención GERENCIAL se detecta en CÓDIGO (no en prompt): el engine
     // ejecuta el management brief ANTES del provider, que recibe la evidencia
     // multi-dominio ya compuesta (secciones+riesgos+oportunidades+brechas) y el
     // tablero ejecutivo determinístico. El modelo narra y puede pedir tools
     // adicionales si le falta un dato puntual. No depende del ruteo del modelo.
-    const gerencial = detectManagementIntent(question);
+    const gerencial = intent.tipo === "nexus_internal" ? detectManagementIntent(question) : null;
     if (gerencial) {
       ingest(
         await executeTool({ tool: "management_brief", args: { focus: gerencial.focus } })
@@ -130,6 +173,11 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
         round,
         maxRounds,
         retryAfterInvalidCitations: retriedCitations,
+        // Pirámide: conocimiento general estático → el provider responde como
+        // asistente general (decidido en código, no por el modelo). El rescate
+        // determinístico de arriba cubre general_current/mixed si el modelo no
+        // cita la evidencia ya inyectada.
+        intent: intent.tipo === "general_static" ? "general_static" : undefined,
       });
       if (res.usage) {
         usage.inputTokens += res.usage.inputTokens;
@@ -230,6 +278,23 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
       outcome = "no_evidence";
       errorDetail = "riesgo metadata-vs-contenido (b.0 no proyecta el texto del documento)";
     }
+  }
+
+  // Pirámide de conocimiento · rescate NO-Nexus (review adversarial 2026-07-07):
+  // una pregunta que NO es de Nexus (fecha/hora, actualidad, mixta) pre-ingesta
+  // chunks de general_context con la respuesta honesta (fecha, o la limitación
+  // "requiere fuente externa"). Si el modelo no la cita y el guard degradó a la
+  // frase de la regla 2 ("No tengo evidencia suficiente EN NEXUS…"), esa frase
+  // es EXACTAMENTE la prohibida para preguntas no-Nexus. Se compone de forma
+  // determinística desde TODOS los chunks del turno (incluye la parte Nexus de
+  // las mixtas + la brecha externa), nada inventado. Solo dispara cuando hubo
+  // general_context (intent no-Nexus): jamás toca el flujo Nexus puro.
+  if (outcome !== "answered" && chunks.some((c) => c.tool === "general_context")) {
+    answer = chunks.map((c) => `${c.title}: ${c.excerpt} [${c.sourceId}]`).join("\n");
+    outcome = "answered";
+    errorDetail = errorDetail
+      ? `${errorDetail}; general_context_rescue`
+      : "general_context_rescue";
   }
 
   // P1a (fix/f5-2): distinguir "la tool corrió y devolvió 0 filas" (heladera vacía)

@@ -271,3 +271,60 @@ Preguntas PARTIAL→PASS por Slice B: 2-3, 2-4, 3-1, 3-4, 3-5, 3-7, 4-4, 5-1, 9-
 
 Nota de proceso: los tests de los fixes post-review se escribieron antes que las correcciones pero su fase RED no se verificó corriendo la suite en el estado intermedio (desvío puntual del ciclo estricto RED→GREEN, declarado); cada test ancla comportamiento nuevo inexistente antes del fix.
 
+
+---
+
+# ADDENDUM 2 · Pirámide de conocimiento (mismo día, 2026-07-07)
+
+**Base:** commit `b54b180` (Slice A) + Slice B + Pirámide, todo **sin commit** salvo Slice A.
+
+## Concepto
+
+El Copilot dejó de ser "sabio adentro de Nexus, amnésico afuera". Clasificador de intención determinístico (`intent-classifier.ts`) que decide la CAPA antes del motor, con prioridad estricta y default fail-safe `nexus_internal`:
+
+| Capa | Intent | Comportamiento |
+|---|---|---|
+| 1. Nexus | `nexus_internal` (default) | tools + citas + dashboard (sin cambios) |
+| 2. Institucional TOPS | `company_institutional` | brecha declarada (ingesta web pendiente — Slice C) |
+| 3. Investigación/NotebookLM | `internal_research` | brecha declarada (conector pendiente — Slice C) |
+| 4a. General estático | `general_static` | el provider responde como asistente general (prompt v19), sin tocar Nexus |
+| 4b. Actualidad | `general_current` (fecha/hora/dólar/noticias/clima/inflación/normativa) | `general_context`: fecha/hora del servidor (zona Argentina fija) o limitación honesta — nunca inventa |
+| Mixto | `mixed_nexus_external` | parte Nexus citada + brecha FX declarada, sin calcular sin el dato externo |
+
+## Auditoría FASE 1 (comportamiento previo)
+
+Sonda determinística: "¿qué día es hoy?" respondía con eventos de tareas; "¿qué es ANMAT?", "¿cuánto cotiza el dólar?", "¿qué servicios ofrece TOPS?" → todas caían en `search_knowledge` devolviendo incidentes irrelevantes. La frase "No encontré registros en Nexus" para preguntas no-Nexus era el fallback. NotebookLM: sin MCP disponible en el runtime de la app (verificado). Web/grounding: no conectado.
+
+## Qué se implementó (local, TDD, sin migración, sin writes)
+
+- `intent-classifier.ts` (6 tipos, veto global de dato interno, patrones anclados).
+- `general-source.ts` (tool local `general_context`): fecha/hora zona `America/Argentina/Buenos_Aires`; limitación honesta para dólar/noticias/clima/inflación/normativa.
+- 3 filas de brecha nuevas en la matriz de cobertura (institucional, NotebookLM, actualidad externa).
+- Engine: ruteo por capa en código + **rescate determinístico** (una pregunta no-Nexus jamás termina en la frase "no hay evidencia en Nexus").
+- Provider (mock + Gemini): modo `general_static` marcado desde el código; prompt v19 con la política de pirámide.
+
+## Revisión adversarial (18 agentes, 3 dimensiones) → 6 hallazgos confirmados, TODOS corregidos
+
+1. 🔴 (ALTA) "¿Cuál es la diferencia entre Magaldi y Luján en compliance?" / "contratos ANMAT y Cargas" desviaba datos internos a conocimiento general. **Fix:** `ENTITY_DIFF` — comparaciones de entidades concretas → Nexus.
+2. 🔴 (ALTA) verbos plurales/impersonales ("gastamos", "se factura") no vetaban. **Fix:** veto ampliado.
+3. 🔴 (ALTA) substrings sin anclar: "¿a qué hora es la reunión de dirección?" → hora del servidor. **Fix:** patrones anclados al foco + veto global antes de las ramas general.
+4. 🟡 (MEDIA) normativa específica ("disposición 3827/2018 vigente") → Gemini podía inventarla. **Fix:** tema `normativa` → limitación de fuente oficial.
+5. 🟡 (MEDIA) fecha/hora dependía del TZ del runtime (Netlify = UTC → +3h). **Fix:** zona Argentina fija.
+6. 🟡 (MEDIA) el guard de citas, intent-blind, degradaba preguntas no-Nexus a la frase Nexus prohibida. **Fix:** rescate determinístico en el engine.
+
+Los 6 verificados en browser (`/copilot`): "diferencia entre contratos ANMAT y Cargas" → cartera de contratos; "a qué hora es la reunión" → brief (no reloj); fecha → "hora de Argentina"; normativa → limitación honesta; "qué es lo que más gastamos" → nexus_internal (ya no Gemini).
+
+## Validación
+
+962 tests verdes (39 nuevos de la pirámide, RED→GREEN), typecheck 0, lint 0. **Batería de aceptación v9: 104/104 answered, 0 fallbacks a search, ruteo idéntico a v8 en las 104 preguntas** (cero regresión sobre el trabajo de gestión). El score de aceptación se mantiene en **87/100** (la pirámide no apuntaba a las 104 preguntas internas sino a las de contexto externo, que no están en el manual).
+
+## Pendiente (Slice C — requiere OK, integraciones)
+
+- Capa 2: ingesta del contenido institucional (logisticatops.com + landings) — URLs a confirmar, requiere migración.
+- Capa 3: conector NotebookLM o export→Drive→ingesta.
+- Capa 4b: proveedor real de FX/noticias/clima o Gemini con grounding para responder actualidad (hoy: limitación honesta).
+- Smoke con Gemini real (todo lo anterior valida con mock determinístico; la narrativa general la da Gemini en prod).
+
+## Confirmación de reglas duras (Pirámide)
+
+✅ No push · no merge · no deploy · no Netlify · cero migraciones · cero Supabase writes · sin backfill/reprojection · sin tocar auth/login/middleware · **sin tocar UDIE** · sin service_role · sin hardcodear cotizaciones/noticias · **no inventa datos actuales** · **frenado antes de commit**.

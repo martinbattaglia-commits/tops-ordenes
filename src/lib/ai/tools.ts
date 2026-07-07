@@ -14,6 +14,7 @@ import {
   getCorporateVacancySummary,
 } from "@/lib/wms/corporate-capacity";
 import { resolveCopilotCoverage } from "./coverage-source";
+import { resolveGeneralContext } from "./general-source";
 import { resolveNexusSections } from "./nexus-sections";
 import { resolveOrgChart } from "./org-source";
 import type { SourceChunk, ToolName } from "./types";
@@ -837,6 +838,35 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       url: sn(r.url),
     }),
   },
+  // ── Pirámide de conocimiento (2026-07-07): contexto GENERAL (tool LOCAL) ────
+  // Fecha/hora del reloj del servidor + limitaciones HONESTAS de actualidad
+  // (dólar/noticias/clima/inflación sin fuente externa conectada). Cero red,
+  // cero DB, cero invención. Nunca "no encontré registros en Nexus" para
+  // preguntas que no son de Nexus.
+  general_context: {
+    resolve: (a) => resolveGeneralContext(a),
+    description:
+      "CONTEXTO GENERAL fuera de Nexus: tema=fecha|hora responde la fecha/hora del SERVIDOR (con zona horaria declarada). tema=dolar|noticias|clima|inflacion devuelve la LIMITACIÓN honesta: esas consultas requieren una fuente externa en tiempo real que aún no está conectada (se indica qué integración la resolvería) — NUNCA inventes cotizaciones, titulares ni índices, y NUNCA respondas esas preguntas con datos de Nexus. USALA para '¿qué día es hoy?', '¿qué hora es?', '¿cuánto cotiza el dólar?', '¿qué noticias hay?', '¿cómo está el clima?', '¿cuál es la inflación?'.",
+    schema: z.object({
+      tema: z
+        .enum(["fecha", "hora", "dolar", "noticias", "clima", "inflacion", "normativa"])
+        .optional(),
+      limit,
+    }),
+    toRpcArgs: (a) => ({ tema: a.tema ?? "fecha", limit: a.limit ?? 5 }),
+    rowToChunk: (r) => ({
+      entityType: "general_context",
+      entityId: `${s(r.kind)}:${s(r.tema)}`,
+      publicId: null,
+      title:
+        s(r.kind) === "fecha"
+          ? "Fecha y hora del servidor"
+          : `Actualidad externa · ${s(r.tema)} (fuente no conectada)`,
+      excerpt: s(r.detalle),
+      date: null,
+      url: null,
+    }),
+  },
   // ── Slice A (aceptación 2026-07-07): cobertura del propio Copilot ───────────
   // Tool LOCAL (datos del repo): qué módulos tienen fuente conectada, con qué
   // tool/RPC responde cada uno, y qué dominios son BRECHA declarada (WMS/stock,
@@ -1034,6 +1064,14 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
       type: "string",
       enum: ["gasto_vs_compromiso", "periodo_anterior", "saldo_vs_compromisos"],
       description: "Qué comparación pidió el usuario",
+    },
+    limit: jsLimit,
+  }),
+  general_context: js({
+    tema: {
+      type: "string",
+      enum: ["fecha", "hora", "dolar", "noticias", "clima", "inflacion", "normativa"],
+      description: "fecha/hora del servidor, o el tema de actualidad sin fuente conectada",
     },
     limit: jsLimit,
   }),
