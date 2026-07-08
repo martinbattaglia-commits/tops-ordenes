@@ -7,6 +7,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TOOLS } from "./tools";
+import { classifyCopilotIntent } from "./intent-classifier";
+import { TOOL_VISUALS } from "./visuals";
 
 const SESSION = "11111111-1111-4111-8111-111111111111";
 
@@ -164,5 +166,66 @@ describe("C1 · regresión de capas (no romper Nexus / general / brief)", () => 
     );
     expect(res.outcome).toBe("answered");
     expect(res.sources.some((s) => s.tool === "management_brief")).toBe(true);
+  });
+});
+
+// ── Fix B (post-smoke 2026-07-07): ruteo institucional de productos/unidades ──
+describe("C1 fix · ruteo: productos/unidades TOPS → company_institutional", () => {
+  it("'¿Qué es TOPS Nexus?' → company_institutional (NO nexus_internal por el veto)", () => {
+    expect(classifyCopilotIntent("¿Qué es TOPS Nexus?").tipo).toBe("company_institutional");
+  });
+  it("'¿Qué es TOPS Connect?' → company_institutional (NO general_static)", () => {
+    expect(classifyCopilotIntent("¿Qué es TOPS Connect?").tipo).toBe("company_institutional");
+  });
+  it("'¿Qué diferencia hay entre ANMAT y Cargas Generales?' → company_institutional", () => {
+    expect(classifyCopilotIntent("¿Qué diferencia hay entre ANMAT y Cargas Generales?").tipo).toBe(
+      "company_institutional"
+    );
+  });
+  it("'¿Dónde opera Logística TOPS?' → company_institutional", () => {
+    expect(classifyCopilotIntent("¿Dónde opera Logística TOPS?").tipo).toBe("company_institutional");
+  });
+  // Regresiones: no romper el ruteo existente.
+  it("regresión: '¿Qué es ANMAT?' sigue general_static (el organismo, no TOPS)", () => {
+    expect(classifyCopilotIntent("¿Qué es ANMAT?").tipo).toBe("general_static");
+  });
+  it("regresión: '¿cuánto facturamos este mes?' sigue nexus_internal (veto)", () => {
+    expect(classifyCopilotIntent("¿cuánto facturamos este mes?").tipo).toBe("nexus_internal");
+  });
+  it("regresión: 'diferencia entre gasto y presupuesto' NO es institucional", () => {
+    expect(
+      classifyCopilotIntent("¿cuál es la diferencia entre gasto y presupuesto?").tipo
+    ).not.toBe("company_institutional");
+  });
+});
+
+// ── Capa visual institucional v2 (UX 2026-07-07: ejecutivo, cards por área, ────
+//    NO tabla documental al inicio; fuentes van a la sección colapsable) ────────
+describe("C1 · capa visual de company_knowledge_search (cards por unidad, sin tabla)", () => {
+  const rows = [
+    { title: "Depósito habilitado ANMAT en Barracas (sitio)", business_unit: "REGULADOS", source_type: "SITE_COMPLETO", url: "https://logisticatops.com/anmat", estado: "VIGENTE", summary: "Depósito habilitado audit-ready, cubículos llave en mano, documentación para el RNE del cliente." },
+    { title: "Cargas Generales — Almacenamiento 3PL", business_unit: "CARGAS_GENERALES", source_type: "SITE_COMPLETO", url: "https://cargasgenerales.logisticatops.com", estado: "VIGENTE", summary: "Almacenamiento de cargas generales, racks, WMS." },
+    { title: "Carpeta institucional", business_unit: "CORPORATIVO", source_type: "DOSSIER", url: "", estado: "VIGENTE", summary: "Dossier institucional 2026." },
+  ];
+  it("existe adaptador visual para company_knowledge_search", () => {
+    expect(TOOL_VISUALS.company_knowledge_search).toBeDefined();
+  });
+  it("produce cards por UNIDAD de negocio (link real) y SIN tabla documental al inicio (#4)", () => {
+    const v = TOOL_VISUALS.company_knowledge_search!(rows, {});
+    expect(v).not.toBeNull();
+    expect(v!.table).toBeNull(); // no big table at start
+    expect(v!.kpis!.length).toBeGreaterThanOrEqual(2);
+    expect(v!.kpis!.some((k) => k.url === "https://logisticatops.com/anmat")).toBe(true); // link REAL
+  });
+  it("no inventa links: unidad sin URL → card sin url", () => {
+    const v = TOOL_VISUALS.company_knowledge_search!(rows, {});
+    expect(v!.kpis!.some((k) => !k.url)).toBe(true); // la card CORPORATIVO (dossier) no tiene URL
+  });
+  it("una card por unidad (no una por documento): máximo 4 cards", () => {
+    const v = TOOL_VISUALS.company_knowledge_search!(rows, {});
+    expect(v!.kpis!.length).toBeLessThanOrEqual(4);
+  });
+  it("sin filas → sin tablero (null; no se maquilla el vacío)", () => {
+    expect(TOOL_VISUALS.company_knowledge_search!([], {})).toBeNull();
   });
 });

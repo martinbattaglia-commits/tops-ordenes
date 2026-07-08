@@ -101,6 +101,24 @@ export function classifyCopilotIntent(question: string): CopilotIntent {
     return { tipo: "internal_research" };
   }
 
+  // ── company_institutional (C1 · post-smoke 2026-07-07): PRODUCTOS de TOPS
+  // (TOPS Nexus/Connect), UBICACIÓN/infraestructura y COMPARACIÓN de unidades de
+  // negocio (ANMAT vs cargas generales). Va ANTES del veto —que capturaría
+  // 'nexus'— para que "¿qué es TOPS Nexus?" no caiga en datos internos y termine
+  // en "no encontré registros en Nexus" (hallazgo del smoke institucional).
+  if (
+    /\btops (nexus|connect)\b/.test(q) ||
+    /\bque (es|son)\b[^?]*\b(tops )?(nexus|connect)\b/.test(q) ||
+    /\bdonde (opera|operan|esta|estan|queda|quedan|trabaja)\b[^?]*\b(tops|logistica)\b/.test(q) ||
+    // 'diferencia entre ANMAT y cargas generales' = concepto institucional; PERO
+    // si nombra una ENTIDAD/dato interno ('diferencia entre los CONTRATOS ANMAT…')
+    // es comparación de datos → NO institucional (review A del clasificador).
+    (/\bdiferencia\b[^?]*\b(anmat|cargas generales|regulad|3pl)\b/.test(q) && !ENTITY_DIFF.test(q)) ||
+    /\bque (ofrece|hace|brinda)\b[^?]*\btops\b[^?]*\b(anmat|cargas generales|regulad|3pl)\b/.test(q)
+  ) {
+    return { tipo: "company_institutional" };
+  }
+
   // ── VETO GLOBAL: cualquier marcador de dato interno → Nexus (fail-safe) ─────
   // Va ANTES de las ramas general_*: "¿a qué hora es la reunión de dirección?",
   // "¿qué día de la semana facturamos más?", "¿qué es lo que más gastamos?" son

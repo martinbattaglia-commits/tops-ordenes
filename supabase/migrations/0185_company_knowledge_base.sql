@@ -152,7 +152,9 @@ language sql stable security invoker set search_path = public, pg_temp as $$
     d.url,
     d.estado,
     d.fecha_captura,
-    public.ai_docs_redact(coalesce(d.summary, '')) as summary,
+    -- Fix A (post-smoke): exponer el CONTENIDO rico (dirección, servicios, RNE…),
+    -- no solo el resumen de 1 frase; fallback a summary. Redactado y acotado.
+    public.ai_docs_redact(left(coalesce(nullif(btrim(d.content), ''), d.summary, ''), 2000)) as summary,
     public.ai_docs_redact(concat_ws(' · ',
       'Institucional',
       d.business_unit,
