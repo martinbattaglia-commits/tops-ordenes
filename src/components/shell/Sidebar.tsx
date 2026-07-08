@@ -172,6 +172,7 @@ const DOMAINS: Domain[] = [
       { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
       { href: "/settings/users", label: "Usuarios", icon: "users" },
       { href: "/settings/centros-costo", label: "Centros de costo", icon: "tag-alt" },
+      { href: "/settings/plan-de-cuentas", label: "Plan de cuentas", icon: "report" },
       { href: "/settings/tracking", label: "Tracking", icon: "truck" },
       { href: "/templates", label: "Plantillas OS", icon: "mail" },
       { href: "/sistema/comunicados", label: "Comunicados", icon: "megaphone" },

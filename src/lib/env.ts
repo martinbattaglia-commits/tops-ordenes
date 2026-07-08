@@ -166,6 +166,25 @@ export const env = {
       (arcaCertPath && arcaKeyPath) || (arcaCertPem && arcaKeyPem)
     ),
   },
+  fx: {
+    /**
+     * Cotización del dólar Banco Nación (venta) para el KPI del Cockpit.
+     * Fuente primaria: criptoya `bancostodos` → clave `bna` (ask=venta, bid=compra),
+     * dato específico de Banco Nación. Fallback: dolarapi `oficial` (minorista = BNA).
+     * Ambas solo-lectura y JSON público; configurables por si el endpoint cambia.
+     * NUNCA se hardcodea una cotización: si ambas fallan la UI muestra "No disponible".
+     */
+    bna: {
+      primaryUrl:
+        process.env.FX_BNA_PRIMARY_URL?.trim() || "https://criptoya.com/api/bancostodos",
+      fallbackUrl:
+        process.env.FX_BNA_FALLBACK_URL?.trim() || "https://dolarapi.com/v1/dolares/oficial",
+      /** Cada cuánto se refresca la cotización (segundos). Default 600 = 10 min. */
+      revalidateSeconds: Number(process.env.FX_BNA_REVALIDATE_SECONDS) || 600,
+      /** Timeout por request a la fuente externa (ms). Corto para no colgar el SSR. */
+      timeoutMs: Number(process.env.FX_BNA_TIMEOUT_MS) || 4000,
+    },
+  },
   openai: {
     /** API key para OCR/extracción de documentos (facturas proveedor, etc.). */
     apiKey: process.env.OPENAI_API_KEY?.trim() ?? "",

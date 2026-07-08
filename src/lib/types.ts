@@ -41,6 +41,15 @@ export interface Client {
   email: string | null;
   tags: string[];
   created_at: string;
+  // Campos fiscales/operativos (migs 0004/0011) — opcionales en TS (no en todos los mocks).
+  condicion_iva?: import("./invoicing/types").CondicionIva | null;
+  tipo_doc?: number | null;
+  localidad?: string | null;
+  deposito_asignado?: Depot | null;
+  activo?: boolean | null;
+  updated_at?: string | null;
+  /** Imputación contable por defecto (código de chart_of_accounts, mig 0121). */
+  cuenta_contable?: string | null;
 }
 
 export interface ServiceCatalogItem {

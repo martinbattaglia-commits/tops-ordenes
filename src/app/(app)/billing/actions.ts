@@ -17,6 +17,15 @@ import {
 import { esRectificativo, notaCreditoPara } from "@/lib/invoicing/calc";
 import { ALICUOTAS_VALIDAS } from "@/lib/arca/types";
 import type { CustomerInvoice } from "@/lib/invoicing/types";
+import { chequearMiPyMEPreEmision } from "@/lib/fiscal/mipyme/guard";
+
+/** Total bruto estimado (con IVA) de un set de renglones, para el umbral MiPyME. */
+function totalBrutoItems(items: { cantidad: number; precio_unitario: number; alicuota_iva: number }[]): number {
+  return items.reduce(
+    (a, it) => a + it.cantidad * it.precio_unitario * (1 + it.alicuota_iva / 100),
+    0
+  );
+}
 
 /** Contexto de auditoría: usuario autenticado + IP. */
 async function auditContext(): Promise<{ userId: string | null; ip: string | null }> {
@@ -150,6 +159,16 @@ export async function emitInvoiceAction(
     const msg = parsed.error.issues.slice(0, 3).map((i) => i.message).join(" · ");
     return { ok: false, error: msg };
   }
+
+  // Req. 3 — validación automática MiPyME antes de emitir (bloquea común si
+  // corresponde FCE). Desactivada por defecto hasta confirmación de la Contadora.
+  const mipyme = await chequearMiPyMEPreEmision({
+    clientId: parsed.data.client_id ?? null,
+    montoTotal: totalBrutoItems(parsed.data.items),
+    esComprobanteFCE: false,
+  });
+  if (mipyme.bloquear) return { ok: false, error: mipyme.motivo };
+
   try {
     const ctx = await auditContext();
     // Sin cast: el schema ya no descarta campos del dominio que acepta.
@@ -251,6 +270,14 @@ export async function emitFromClientOrdersAction(
     const periodo = new Date().toISOString().slice(0, 7);
     const items = orders.flatMap(buildOrderItems);
     const observ = buildInvoiceObserv(orders);
+
+    // Req. 3 — validación automática MiPyME antes de emitir (consolidado).
+    const mipyme = await chequearMiPyMEPreEmision({
+      clientId: client.id,
+      montoTotal: totalBrutoItems(items),
+      esComprobanteFCE: false,
+    });
+    if (mipyme.bloquear) return { ok: false, error: mipyme.motivo };
 
     const input: EmitInvoiceInput = {
       client_id: client.id,

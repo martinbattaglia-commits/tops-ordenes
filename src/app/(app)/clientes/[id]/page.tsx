@@ -2,6 +2,10 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import { getClienteFicha } from "@/lib/legajo/data";
+import { listChartOfAccounts, getAccountByCode } from "@/lib/erp/accounting-data";
+import type { ChartAccount } from "@/lib/erp/types";
+import { ClienteFiscalEditor } from "@/components/comercial/ClienteFiscalEditor";
+import type { CondicionIva } from "@/lib/invoicing/types";
 
 export const metadata = { title: "Ficha de cliente" };
 export const dynamic = "force-dynamic";
@@ -28,6 +32,17 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
     );
   }
   const { cliente: c, facturas, saldo } = ficha;
+  let accounts: ChartAccount[] = [];
+  try {
+    accounts = await listChartOfAccounts({ types: ["ingreso"], postableOnly: true });
+    if (c.cuenta_contable && !accounts.some((a) => a.code === c.cuenta_contable)) {
+      const saved = await getAccountByCode(c.cuenta_contable);
+      if (saved) accounts = [saved, ...accounts];
+    }
+  } catch {
+    accounts = [];
+  }
+  const condicionIva = (c.condicion_iva ?? "RESPONSABLE_INSCRIPTO") as CondicionIva;
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1200px] mx-auto">
@@ -55,6 +70,13 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
           <Field label="Tags" value={(c.tags ?? []).join(" · ")} />
         </div>
       </section>
+
+      {/* Fiscal & contable (Contadora) */}
+      <ClienteFiscalEditor
+        clientId={c.id}
+        accounts={accounts}
+        initial={{ condicion_iva: condicionIva, cuenta_contable: c.cuenta_contable ?? "" }}
+      />
 
       {/* Finanzas (real, por client_id) */}
       <section className="card p-5">

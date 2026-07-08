@@ -141,6 +141,45 @@ export async function getContact(id: number): Promise<ClientifyContact> {
   return fetchClientify<ClientifyContact>(`contacts/${id}/`);
 }
 
+/** Payload para crear un contacto en Clientify. Solo los campos que usamos en Prospección. */
+export interface CreateContactPayload {
+  first_name: string;
+  last_name?: string;
+  title?: string;
+  company_name?: string;
+  emails?: Array<{ type: number; email: string }>;
+  phones?: Array<{ type: number; phone: string }>;
+  taxpayer_identification_number?: string;
+  channel?: string;
+  contact_source?: string;
+  medium?: string;
+}
+
+/**
+ * POST /contacts/ — crea un contacto en Clientify.
+ * Retorna el recurso creado con su `id` y `url` asignados por el CRM.
+ */
+export async function postContact(payload: CreateContactPayload): Promise<ClientifyContact> {
+  return fetchClientify<ClientifyContact>("contacts/", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+/**
+ * Busca un contacto por email en Clientify.
+ * Retorna el primer match o `null` si no existe.
+ * Usa el param `query` (CRM-C4) que Clientify acepta para búsqueda full-text.
+ */
+export async function searchContactByEmail(email: string): Promise<ClientifyContact | null> {
+  const result = await listContacts({ search: email, page_size: 5 });
+  // Clientify hace fuzzy match en `query`; filtramos exacto por email para evitar falsos positivos.
+  const match = result.results.find((c) =>
+    c.emails.some((e) => e.email.toLowerCase() === email.toLowerCase())
+  );
+  return match ?? null;
+}
+
 // ------------------------------------------------------------------
 // PUBLIC API — Companies
 // ------------------------------------------------------------------

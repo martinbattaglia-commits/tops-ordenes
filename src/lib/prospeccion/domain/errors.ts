@@ -11,7 +11,9 @@ export type DomainErrorCode =
   | "INVALID_PROSPECT_ID"
   | "MISSING_IDENTITY"
   | "ILLEGAL_TRANSITION"
-  | "INGEST_FAILED"; // falla de infraestructura al persistir (adapter) — superficie uniforme en Result
+  | "INGEST_FAILED"   // falla de infraestructura al persistir (adapter) — superficie uniforme en Result
+  | "EXPORT_FAILED"   // falla de exportación a CRM externo (F2 Clientify export)
+  | "NOT_FOUND";      // entidad no encontrada en la capa de persistencia
 
 export interface DomainError {
   readonly code: DomainErrorCode;

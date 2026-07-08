@@ -2,8 +2,8 @@
 
 ## Bounded Context inicial: Prospección Inteligente
 
-> **Versión:** `1.0.1` (v1.0 cerrada 2026-06-25 + correcciones del F0 Code Review Board: EVT-4 correlation/causation en la RPC, alineación de nombre de evento)
-> **Estado:** **GO (Arquitectónico, ratificado por Dirección) + DDL validado contra motor Postgres real (Pre-G5: PASS, 4/4 fases · 20/20 checks · 0 errores). Fase documental CONCLUIDA. Blueprint v1.0 cerrado. F0 HABILITADO — pendiente la autorización de inicio formal de Dirección.**
+> **Versión:** `1.1.0` (v1.0.1 + cierre formal F2 en producción 2026-06-29)
+> **Estado:** **F0 ✅ EN PROD (db4fefb) · F1 ✅ EN PROD (db4fefb) · F2 ✅ EN PROD (b1ea521, 2026-06-29) — E2E validado, exportación Clientify operativa, `prospeccion_export_log` con trazabilidad completa. F3 = BACKLOG (ver `docs/prospeccion/F3-MEJORAS-FUTURAS.md`).**
 > **Trayectoria:** ARB 7.44/10 → correcciones C-1..C-6 → F0-PRE Blueprint Reconciliation (5 críticos + 7 PARCIAL) → Blueprint Build System (BB-1..7) → Consistency Index **96.4/100 (GO)** → **DDL Validation Pre-G5 PASS** → **v1.0 cerrada**.
 > **Autoridad:** Martín Battaglia (Presidencia · Logística TOPS / VEROTIN S.A.)
 > **Fecha:** 2026-06-25
@@ -18,8 +18,8 @@
 |---|---|
 | **Título** | Constitución Arquitectónica — Plataforma Comercial de Nexus |
 | **Subtítulo** | Bounded Context inicial: Prospección Inteligente (`prospeccion`) |
-| **Versión** | **1.0** (cerrada oficialmente 2026-06-25) |
-| **Estado** | **GO (ratificado) + DDL validado Pre-G5 (PASS)** — Consistency Index 96.4/100, 18/18 relaciones CONSISTENTE, linter 26/26; DDL compila/ejecuta/rollback contra motor real. Fase documental CONCLUIDA · F0 HABILITADO · pendiente autorización de inicio de Dirección. |
+| **Versión** | **1.1.0** (F2 CERRADA EN PRODUCCIÓN 2026-06-29) |
+| **Estado** | **F0 ✅ · F1 ✅ · F2 ✅ EN PRODUCCIÓN** — commit `b1ea521`, E2E validado, `prospeccion_export_log` trazabilidad completa. F3 = BACKLOG. |
 | **ARB Date** | 2026-06-25 \| ARB 7.44 → F0-PRE → Consistency 96.4 (GO) → **DDL Validation PASS → v1.0 cerrada** |
 | **Autoridad** | Martín Battaglia |
 | **Fecha** | 2026-06-25 |

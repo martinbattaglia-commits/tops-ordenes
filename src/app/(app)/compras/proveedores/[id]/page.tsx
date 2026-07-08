@@ -2,6 +2,9 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import { getProveedorFicha } from "@/lib/legajo/data";
+import { listChartOfAccounts, getAccountByCode } from "@/lib/erp/accounting-data";
+import type { ChartAccount } from "@/lib/erp/types";
+import { ProveedorFiscalEditor } from "@/components/compras/ProveedorFiscalEditor";
 
 export const metadata = { title: "Ficha de proveedor" };
 export const dynamic = "force-dynamic";
@@ -28,6 +31,18 @@ export default async function ProveedorFichaPage({ params }: { params: { id: str
     );
   }
   const { proveedor: p, ocs, facturas, saldo } = ficha;
+  let accounts: ChartAccount[] = [];
+  try {
+    accounts = await listChartOfAccounts({ types: ["gasto"], postableOnly: true });
+    // Asegura que la cuenta ya imputada (aunque sea de otro tipo o inactiva) esté
+    // en la lista, para resolver su nombre y no blanquearla en el editor.
+    if (p.cuenta_contable && !accounts.some((a) => a.code === p.cuenta_contable)) {
+      const saved = await getAccountByCode(p.cuenta_contable);
+      if (saved) accounts = [saved, ...accounts];
+    }
+  } catch {
+    accounts = [];
+  }
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1200px] mx-auto">
@@ -52,6 +67,17 @@ export default async function ProveedorFichaPage({ params }: { params: { id: str
           <Field label="Tags" value={(p.tags ?? []).join(" · ")} />
         </div>
       </section>
+
+      {/* Fiscal & contable (Contadora) */}
+      <ProveedorFiscalEditor
+        vendorId={p.id}
+        accounts={accounts}
+        initial={{
+          cond_iva: p.cond_iva ?? "",
+          concepto_ganancias: p.concepto_ganancias ?? "",
+          cuenta_contable: p.cuenta_contable ?? "",
+        }}
+      />
 
       {/* Compras (OCs por vendor_id) */}
       <section className="card p-5">
