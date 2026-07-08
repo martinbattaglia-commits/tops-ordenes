@@ -42,7 +42,10 @@ describe("catálogo de sugerencias · estructura", () => {
       expect(s.color, s.id).toMatch(/^#([0-9a-f]{6})$/i);
       expect(s.description.length, s.id).toBeGreaterThan(10);
       expect(s.prompts.length, s.id).toBeGreaterThanOrEqual(3);
-      expect(s.prompts.length, s.id).toBeLessThanOrEqual(5);
+      // Comercial · CRM (id 'contratos') admite hasta 7: 3 reportes comerciales
+      // (pipeline/prioritarios/reactivación) + 4 de contratos. El resto, 3–5.
+      const maxPrompts = s.id === "contratos" ? 7 : 5;
+      expect(s.prompts.length, s.id).toBeLessThanOrEqual(maxPrompts);
       for (const p of s.prompts) {
         expect(p.prompt.trim().length, `${s.id}/${p.id}`).toBeGreaterThan(8);
         expect(p.label.trim().length, `${s.id}/${p.id}`).toBeGreaterThan(3);
@@ -144,5 +147,49 @@ describe("Manual Nexus · Ayuda Interna", () => {
       /manual de usuario/i.test(p.prompt)
     ).length;
     expect(citan).toBeGreaterThanOrEqual(6);
+  });
+});
+
+// ── Comercial · CRM · reportes comerciales avanzados (2026-07-08) ─────────────
+describe("Comercial · CRM · pipeline / prospectos / reactivación", () => {
+  const crm = COPILOT_SUGGESTION_SECTIONS.find((s) => s.id === "contratos")!;
+
+  it("la sección CRM se titula 'Comercial · CRM' y sigue supported", () => {
+    expect(crm).toBeDefined();
+    expect(crm.title).toBe("Comercial · CRM");
+    expect(crm.coverage).toBe("supported");
+  });
+
+  it("agrega las 3 recomendaciones comerciales SIN borrar las de contratos", () => {
+    const ids = crm.prompts.map((p) => p.id);
+    for (const id of ["pipeline-inteligente", "prospectos-prioritarios", "reactivacion-comercial"]) {
+      expect(ids, `falta ${id}`).toContain(id);
+    }
+    for (const id of ["renovaciones", "riesgo-contractual", "vs-operacion", "impacto-venc"]) {
+      expect(ids, `se borró la recomendación existente ${id}`).toContain(id);
+    }
+    const byId = (id: string) => crm.prompts.find((p) => p.id === id)!;
+    expect(byId("pipeline-inteligente").label).toBe("Pipeline inteligente");
+    expect(byId("prospectos-prioritarios").label).toBe("Prospectos prioritarios");
+    expect(byId("reactivacion-comercial").label).toBe("Reactivación comercial");
+  });
+
+  it("cada comercial es un reporte ejecutivo (prompt largo + metadata + tool real, no default)", () => {
+    for (const id of ["pipeline-inteligente", "prospectos-prioritarios", "reactivacion-comercial"]) {
+      const p = crm.prompts.find((x) => x.id === id)!;
+      expect(p.coverage, id).toBe("supported");
+      expect(p.label.length, `${id} label ≤32`).toBeLessThanOrEqual(32);
+      expect(p.prompt.length, `${id} prompt ≥80`).toBeGreaterThanOrEqual(80);
+      expect(p.decisionGoal?.trim().length, `${id} decisionGoal`).toBeTruthy();
+      expect(p.sources?.length, `${id} sources`).toBeTruthy();
+      expect(p.visuals?.length, `${id} visuals`).toBeTruthy();
+      expect(p.fallback?.trim().length, `${id} fallback`).toBeTruthy();
+      const calls = pickTools(p.prompt);
+      const generic =
+        calls.length === 1 &&
+        calls[0].tool === "search_knowledge" &&
+        String(calls[0].args.query ?? "").length > 40;
+      expect(generic, `${id} cae en el default genérico`).toBe(false);
+    }
   });
 });

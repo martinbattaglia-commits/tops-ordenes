@@ -370,12 +370,77 @@ export const COPILOT_SUGGESTION_SECTIONS: CopilotSuggestionSection[] = [
   },
   {
     id: "contratos",
-    title: "Contratos · CRM",
-    icon: "📄",
+    title: "Comercial · CRM",
+    icon: "📈",
     color: "#eab308",
-    description: "Renovaciones, riesgo contractual, contrato vs operación e impacto.",
+    description:
+      "Pipeline de prospectos, priorización comercial y reactivación de oportunidades, más contratos (renovaciones, riesgo y vencimientos).",
     coverage: "supported",
     prompts: [
+      {
+        id: "pipeline-inteligente",
+        label: "Pipeline inteligente",
+        prompt:
+          "Armá un informe ejecutivo del pipeline comercial de clientes potenciales. Cruzá prospectos, estado del CRM, origen del lead, actividad reciente, recorrido comercial, cotizaciones, servicios de interés, probabilidad de conversión, urgencia, potencial económico y próxima acción recomendada. Separá los prospectos por etapa del embudo: nuevo, contactado, calificado, recorrido realizado, cotizado, negociación, dormido y perdido. Mostrá KPIs, embudo de conversión, ranking de oportunidades y recomendaciones concretas para Comercial.",
+        coverage: "supported",
+        decisionGoal: "Qué prospectos atender primero y qué acción comercial corresponde tomar.",
+        sources: ["CRM / prospectos", "cotizaciones", "actividad reciente", "servicios de interés"],
+        visuals: [
+          "KPI total de prospectos",
+          "KPI prospectos calientes",
+          "embudo de conversión",
+          "ranking de oportunidades",
+          "cards de próximos pasos",
+        ],
+        fallback:
+          "Si faltan estados del pipeline u origen del lead, se declara la brecha y qué integrar (CRM/Clientify).",
+      },
+      {
+        id: "prospectos-prioritarios",
+        label: "Prospectos prioritarios",
+        prompt:
+          "Identificá los clientes potenciales con mayor potencial de revenue para Logística TOPS. Cruzá información del CRM, tipo de servicio buscado, unidad de negocio probable —ANMAT, Cargas Generales, oficinas u otros—, superficie requerida, capacidad disponible, urgencia, probabilidad de cierre, ticket potencial, compatibilidad operativa y riesgo comercial. Armá un ranking priorizado con justificación, valor estimado, acción recomendada y responsable sugerido.",
+        coverage: "supported",
+        decisionGoal: "Dónde enfocar la energía comercial esta semana (Dirección y Comercial).",
+        sources: [
+          "CRM / prospectos",
+          "servicio buscado",
+          "vacancia / capacidad",
+          "unidad de negocio (ANMAT / Cargas Generales)",
+        ],
+        visuals: [
+          "ranking top 10 prospectos",
+          "score comercial",
+          "revenue potencial estimado",
+          "semáforo de prioridad",
+          "gráfico por unidad de negocio",
+        ],
+        fallback:
+          "Si falta el potencial económico o la unidad de negocio, se estima con lo disponible y se marca el dato faltante.",
+      },
+      {
+        id: "reactivacion-comercial",
+        label: "Reactivación comercial",
+        prompt:
+          "Detectá oportunidades comerciales dormidas, frías o perdidas que convenga reactivar. Analizá prospectos sin actividad reciente, leads que pidieron cotización y no avanzaron, clientes potenciales con recorrido realizado, oportunidades vencidas, propuestas no respondidas y prospectos compatibles con capacidad disponible actual. Priorizá por probabilidad de recuperación, valor potencial, tiempo desde último contacto, motivo probable de enfriamiento y acción recomendada. Proponé un plan de reactivación comercial con mensajes sugeridos y próximos pasos.",
+        coverage: "supported",
+        decisionGoal: "Qué oportunidades dormidas reactivar y con qué mensaje.",
+        sources: [
+          "CRM / prospectos",
+          "cotizaciones sin avance",
+          "actividad / último contacto",
+          "vacancia / capacidad disponible",
+        ],
+        visuals: [
+          "KPI oportunidades dormidas",
+          "KPI valor potencial recuperable",
+          "ranking de reactivación",
+          "tabla último contacto / motivo / acción",
+          "cards con mensajes sugeridos",
+        ],
+        fallback:
+          "Si falta historial de contacto, se declara la brecha y qué registrar para mejorar el informe.",
+      },
       {
         id: "renovaciones",
         label: "Renovaciones prioritarias",
