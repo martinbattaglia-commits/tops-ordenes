@@ -141,3 +141,65 @@ describe("classifyCopilotIntent · capas de la pirámide", () => {
     }
   });
 });
+
+// ── Ampliación general estático/actualidad (2026-07-08) ─────────────────────
+// El Copilot estaba demasiado restringido: conceptos generales con formas más
+// allá de "qué es" caían en el DEFAULT nexus_internal → "no encontré". Se amplía
+// general_static (con guarda de posesivos) y general_current (dólar BNA, deportes,
+// política/economía). Sin romper el veto de datos internos.
+describe("classifyCopilotIntent · general ampliado (2026-07-08)", () => {
+  it("general_static: conceptos con formas más allá de 'qué es'", () => {
+    for (const q of [
+      "¿Qué riesgos tiene una operación logística?",
+      "¿Qué métricas mira un gerente de depósito?",
+      "¿Cómo funciona el cross docking?",
+      "¿Para qué sirve un WMS?",
+      "¿Cuáles son las ventajas de un operador 3PL?",
+      "¿Qué tipos de almacenamiento existen?",
+    ]) {
+      expect(classifyCopilotIntent(q).tipo, q).toBe("general_static");
+    }
+  });
+
+  it("general_static NO hijackea datos internos con posesivos/1ª persona", () => {
+    for (const q of [
+      "¿Qué riesgos tiene nuestra operación?",
+      "¿Qué métricas tenemos en el depósito?",
+      "¿Qué riesgos tiene nuestro depósito de Magaldi?",
+    ]) {
+      expect(classifyCopilotIntent(q).tipo, q).toBe("nexus_internal");
+    }
+  });
+
+  it("general_current dólar: variantes Banco Nación / BNA / oficial venta", () => {
+    for (const q of [
+      "¿Cuánto está el dólar hoy?",
+      "Dólar Banco Nación venta",
+      "Cotización dólar BNA",
+      "USD/ARS Banco Nación",
+      "Dólar oficial venta",
+    ]) {
+      const r = classifyCopilotIntent(q);
+      expect(r.tipo, q).toBe("general_current");
+      if (r.tipo === "general_current") expect(r.tema, q).toBe("dolar");
+    }
+  });
+
+  it("general_current deportes: resultados en tiempo real", () => {
+    for (const q of ["¿Cómo salió Argentina vs Egipto?", "¿Cómo salió la selección?", "¿Quién ganó el partido?"]) {
+      const r = classifyCopilotIntent(q);
+      expect(r.tipo, q).toBe("general_current");
+      if (r.tipo === "general_current") expect(r.tema, q).toBe("deportes");
+    }
+  });
+
+  it("general_current noticias/política/economía: variantes ampliadas", () => {
+    for (const q of [
+      "¿Qué pasó hoy en política argentina?",
+      "¿Qué noticias económicas importantes hay esta semana?",
+      "¿Hay novedades recientes de ANMAT?",
+    ]) {
+      expect(classifyCopilotIntent(q).tipo, q).toBe("general_current");
+    }
+  });
+});

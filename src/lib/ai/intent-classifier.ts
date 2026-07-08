@@ -21,6 +21,7 @@ export type TemaActual =
   | "hora"
   | "dolar"
   | "noticias"
+  | "deportes"
   | "clima"
   | "inflacion"
   | "normativa";
@@ -172,10 +173,27 @@ export function classifyCopilotIntent(question: string): CopilotIntent {
     return { tipo: "general_current", tema: "hora" };
   }
   // ── general_current: requieren fuente externa en tiempo real ───────────────
-  if (/cotiza el dolar|cotizacion del dolar|precio del dolar|dolar (oficial|blue|mep|hoy)|cuanto (esta|cotiza|vale) el dolar/.test(q)) {
+  if (
+    /cotiza el dolar|cotizacion (del )?dolar|precio del dolar|dolar (oficial|blue|mep|hoy|banco nacion|bna)|cuanto (esta|cotiza|vale) el dolar|usd\s*\/?\s*ars|dolar oficial venta/.test(
+      q
+    )
+  ) {
     return { tipo: "general_current", tema: "dolar" };
   }
-  if (/noticias? (mas )?(importantes|relevantes|del dia)|que paso hoy en (argentina|el pais|el mundo|la economia)|ultimas noticias/.test(q)) {
+  // deportes: resultados en tiempo real. ANCLADO a entidades deportivas para no
+  // capturar preguntas de negocio ("¿quién ganó la licitación?" NO es deportes).
+  if (
+    /\b(argentina|river|boca|la seleccion|el seleccionado)\b[^?]*\b(vs|contra)\b|como (salio|sale|va|quedo|termino|le fue a) (argentina|river|boca|la seleccion|el equipo|el partido|el seleccionado)|resultado del partido|quien (gano|va ganando) (el partido|el mundial|la copa|la champions|argentina|boca|river|la seleccion)|partido de (argentina|futbol|hoy)/.test(
+      q
+    )
+  ) {
+    return { tipo: "general_current", tema: "deportes" };
+  }
+  if (
+    /noticias?\b[^?]*(importantes|relevantes|del dia|de hoy|de la semana|economic)|que paso (hoy|esta semana|ayer|recientemente)\b[^?]*\b(argentina|el pais|el mundo|la economia|politica|el gobierno)|politica argentina|ultimas noticias|actualidad (politica|economica)|(novedades|noticias) (recientes|ultimas|de hoy)\b[^?]*\b(anmat|arca|afip|sector|industria|mercado|regulaci|normativ)/.test(
+      q
+    )
+  ) {
     return { tipo: "general_current", tema: "noticias" };
   }
   // "clima" anclado al meteorológico: "clima laboral" ya lo vetó NEXUS_VETO si
@@ -193,7 +211,19 @@ export function classifyCopilotIntent(question: string): CopilotIntent {
   const q2 = q.trim();
   const openerConcepto = /^¿?\s*(que es|que significa|que quiere decir|explicame que es|que es un[ao]?|como se calcula)\b/;
   const openerDiferencia = /^¿?\s*(cual es la diferencia entre|que diferencia hay entre|diferencia entre)\b/;
-  if (openerConcepto.test(q2) || (openerDiferencia.test(q2) && !ENTITY_DIFF.test(q))) {
+  // Ampliación 2026-07-08: conceptos generales con formas MÁS ALLÁ de "qué es"
+  // (qué riesgos/métricas/tipos/… tiene, cómo funciona, para qué sirve, cuáles
+  // son…). Antes caían en el DEFAULT nexus_internal → "no encontré". GUARDA
+  // `posesivoNexus`: si hay marca de pertenencia / 1ª persona (nuestra operación,
+  // tenemos…) es de Nexus. El veto de entidades (Magaldi/Santander/…) ya corrió.
+  const conceptoGeneral =
+    /^¿?\s*(que (riesgos|ventajas|desventajas|beneficios|metricas|kpis|indicadores|tipos|clases|caracteristicas|factores|elementos|componentes|requisitos|pasos|fases|etapas|funciones|objetivos|habilidades)\b[^?]{0,40}\b(tiene|tienen|hay|existen|mira|miran|debe|deberia|maneja|son|se usan|se necesitan)|como funciona|para que sirve|cuales son (las|los|sus) (ventajas|desventajas|beneficios|riesgos|tipos|clases|caracteristicas|factores|elementos|componentes|requisitos|pasos|fases|etapas|funciones|objetivos|metricas|kpis|indicadores|principales|mejores practicas)|que hace un[ao]?\b|que mira un[ao]?\b|en que consiste|que rol (tiene|cumple|juega))\b/;
+  const posesivoNexus = /nuestr|\btenemos\b|\btengo\b|del deposito|de la empresa|\ben tops\b|\ben nexus\b/;
+  if (
+    openerConcepto.test(q2) ||
+    (openerDiferencia.test(q2) && !ENTITY_DIFF.test(q)) ||
+    (conceptoGeneral.test(q2) && !posesivoNexus.test(q))
+  ) {
     return { tipo: "general_static" };
   }
 

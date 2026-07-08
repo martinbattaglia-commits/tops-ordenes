@@ -895,10 +895,10 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
   general_context: {
     resolve: (a) => resolveGeneralContext(a),
     description:
-      "CONTEXTO GENERAL fuera de Nexus: tema=fecha|hora responde la fecha/hora del SERVIDOR (con zona horaria declarada). tema=dolar|noticias|clima|inflacion devuelve la LIMITACIÓN honesta: esas consultas requieren una fuente externa en tiempo real que aún no está conectada (se indica qué integración la resolvería) — NUNCA inventes cotizaciones, titulares ni índices, y NUNCA respondas esas preguntas con datos de Nexus. USALA para '¿qué día es hoy?', '¿qué hora es?', '¿cuánto cotiza el dólar?', '¿qué noticias hay?', '¿cómo está el clima?', '¿cuál es la inflación?'.",
+      "CONTEXTO GENERAL fuera de Nexus: tema=fecha|hora responde la fecha/hora del SERVIDOR (con zona horaria declarada). tema=dolar|noticias|deportes|clima|inflacion devuelve la LIMITACIÓN honesta: esas consultas requieren una fuente externa en tiempo real que aún no está conectada (se indica qué integración la resolvería) — NUNCA inventes cotizaciones, titulares, resultados deportivos ni índices, y NUNCA respondas esas preguntas con datos de Nexus. USALA para '¿qué día es hoy?', '¿qué hora es?', '¿cuánto cotiza el dólar?', '¿qué noticias hay?', '¿cómo salió el partido?', '¿cómo está el clima?', '¿cuál es la inflación?'.",
     schema: z.object({
       tema: z
-        .enum(["fecha", "hora", "dolar", "noticias", "clima", "inflacion", "normativa"])
+        .enum(["fecha", "hora", "dolar", "noticias", "deportes", "clima", "inflacion", "normativa"])
         .optional(),
       limit,
     }),
@@ -1172,7 +1172,7 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   general_context: js({
     tema: {
       type: "string",
-      enum: ["fecha", "hora", "dolar", "noticias", "clima", "inflacion", "normativa"],
+      enum: ["fecha", "hora", "dolar", "noticias", "deportes", "clima", "inflacion", "normativa"],
       description: "fecha/hora del servidor, o el tema de actualidad sin fuente conectada",
     },
     limit: jsLimit,

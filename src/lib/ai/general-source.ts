@@ -26,11 +26,16 @@ const AR_TZ = "America/Argentina/Buenos_Aires";
 const LIMITACIONES: Record<string, { que: string; integracion: string }> = {
   dolar: {
     que: "una cotización del dólar en tiempo real",
-    integracion: "un proveedor de tipo de cambio (p.ej. BCRA / API de cotizaciones) o Gemini con grounding",
+    integracion:
+      "el tool interno fx_bna_quote (dólar Banco Nación venta — follow-up de este release, aún no conectado) o un proveedor de tipo de cambio (BCRA / API de cotizaciones) o Gemini con grounding",
   },
   noticias: {
     que: "noticias en tiempo real",
     integracion: "un proveedor de noticias o Gemini con grounding/búsqueda",
+  },
+  deportes: {
+    que: "resultados deportivos en tiempo real",
+    integracion: "un proveedor de deportes o Gemini con grounding/búsqueda",
   },
   clima: {
     que: "el pronóstico del tiempo en tiempo real",
