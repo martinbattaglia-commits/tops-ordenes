@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   COPILOT_SUGGESTION_SECTIONS,
+  getManualNexusSection,
   getPrincipalSections,
 } from "./copilot-suggestions";
 import { pickTools } from "./providers/mock";
@@ -88,5 +89,60 @@ describe("catálogo de sugerencias · COBERTURA GARANTIZADA (anti-frustración)"
         );
       }
     }
+  });
+});
+
+// ── Reportes ejecutivos (2026-07-07) · el Copilot no es un buscador ───────────
+// Regla de producto: las sugerencias principales dejan de ser consultas triviales
+// ("Saldo en Santander") y pasan a ser REPORTES EJECUTIVOS: chip corto + prompt
+// elaborado que dispara un informe con KPIs/gráficos/decisión. Cada una declara
+// además su objetivo de decisión, fuentes, visuales esperados y fallback.
+describe("catálogo de sugerencias · REPORTES EJECUTIVOS", () => {
+  it("chip corto (≤32) + prompt elaborado (≥80) — label para el botón, prompt para el informe", () => {
+    for (const s of getPrincipalSections()) {
+      for (const p of s.prompts) {
+        expect(p.label.length, `${s.id}/${p.id}: chip largo ("${p.label}")`).toBeLessThanOrEqual(32);
+        expect(
+          p.prompt.length,
+          `${s.id}/${p.id}: prompt trivial, no dispara un informe ejecutivo`
+        ).toBeGreaterThanOrEqual(80);
+      }
+    }
+  });
+
+  it("cada reporte declara objetivo de decisión, fuentes, visuales y fallback", () => {
+    for (const s of getPrincipalSections()) {
+      for (const p of s.prompts) {
+        expect(p.decisionGoal?.trim().length, `${s.id}/${p.id}: sin objetivo de decisión`).toBeTruthy();
+        expect(p.sources?.length, `${s.id}/${p.id}: sin fuentes esperadas`).toBeTruthy();
+        expect(p.visuals?.length, `${s.id}/${p.id}: sin visuales esperados`).toBeTruthy();
+        expect(p.fallback?.trim().length, `${s.id}/${p.id}: sin fallback de datos faltantes`).toBeTruthy();
+      }
+    }
+  });
+});
+
+// ── Manual Nexus · Ayuda Interna (preview, 2026-07-08) ───────────────────────
+describe("Manual Nexus · Ayuda Interna", () => {
+  it("existe con 10 sugerencias 'preview'; chip corto + prompt elaborado", () => {
+    const s = getManualNexusSection();
+    expect(s.id).toBe("manual_nexus");
+    expect(s.coverage).toBe("preview");
+    expect(s.prompts).toHaveLength(10);
+    for (const p of s.prompts) {
+      expect(p.coverage, p.id).toBe("preview");
+      expect(p.label.length, `${p.id}: chip largo`).toBeLessThanOrEqual(32);
+      expect(p.prompt.length, `${p.id}: prompt trivial`).toBeGreaterThanOrEqual(60);
+    }
+  });
+  it("NO se filtra en las principales (no toca el gate de routing ni la regla 3–5)", () => {
+    expect(getPrincipalSections().some((s) => s.id === "manual_nexus")).toBe(false);
+    expect(COPILOT_SUGGESTION_SECTIONS.some((s) => s.id === "manual_nexus")).toBe(false);
+  });
+  it("son de AYUDA INTERNA: citan el Manual de Usuario (no reporte gerencial)", () => {
+    const citan = getManualNexusSection().prompts.filter((p) =>
+      /manual de usuario/i.test(p.prompt)
+    ).length;
+    expect(citan).toBeGreaterThanOrEqual(6);
   });
 });
