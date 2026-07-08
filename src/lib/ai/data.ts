@@ -123,5 +123,15 @@ async function fetchRowsValidated(
       }
     }
   }
+  // FIX Drive Docs Fase 2 (2026-07-08): re-ranking consciente de la intención
+  // (p.ej. plancheta/habilitación → PDF antes que CAD). Corre en demo y real,
+  // sobre las filas ya resueltas/enriquecidas. READ-ONLY (reordena, no muta).
+  if (spec.rank) {
+    try {
+      rows = spec.rank(rows, args);
+    } catch (err) {
+      console.error(`[ai/data] rank ${tool} error:`, err);
+    }
+  }
   return rows;
 }

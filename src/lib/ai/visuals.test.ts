@@ -178,7 +178,7 @@ describe("documentos · acción 'Abrir documento' con URL real de Drive (enrichm
       { query: "lujan" }
     );
     expect(conUrl!.kpis![0].url).toContain("drive.google.com");
-    expect(conUrl!.kpis![0].actionLabel!.toLowerCase()).toContain("abrir documento");
+    expect(conUrl!.kpis![0].actionLabel!.toLowerCase()).toContain("drive");
     const sinUrl = TOOL_VISUALS.docs_browse!(
       [{ entity_type: "compliance_documento", title: "Doc X", entity_date: null, excerpt: "x" }],
       { query: "x" }

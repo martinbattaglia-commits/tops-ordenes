@@ -127,14 +127,42 @@ export function pickTools(question: string): ToolCall[] {
         ? "ultimos_30_dias"
         : "todo";
 
-  // Documento ESPECÍFICO → docs_browse, NUNCA compliance_pending (hallazgo smoke:
-  // "plancheta de habilitación de Luján 3159" devolvía la lista de vencidos).
-  // Keyword para el título: la SEDE si aparece; si no, el tipo de documento.
-  const sede = q.match(/lujan|magaldi|3159|1765/)?.[0];
-  const docWord = q.match(/plancheta|plano\b|certificado|poliza|habilitacion/)?.[0];
-  const retrievalVerb = /dame|me das|me podrias|pasame|traeme|busca|conseguime|quiero|necesito/.test(q);
-  if (docWord && (retrievalVerb || sede) && !/pendiente|vencid|por vencer/.test(q)) {
-    calls.push({ tool: "docs_browse", args: { tipo: "compliance", query: sede ?? docWord } });
+  // Documento ESPECÍFICO → docs_browse, NUNCA compliance_pending. FIX Drive Docs
+  // (2026-07-08): detectar TIPO documental canónico + SEDE y armar una query
+  // PRECISA "tipo sede" — el AND del websearch_to_tsquery del RPC apunta al doc
+  // correcto, en vez de pasar SOLO la sede (devolvía 128 docs por fecha y
+  // sepultaba la plancheta). Alias: plancheta/habilitante → habilitacion; se
+  // reconocen planos (plural), evacuación, incendio, ventilación; pedro → lujan,
+  // agustin → magaldi, 3159 → lujan, 1765 → magaldi.
+  const sede = q.match(/lujan|magaldi|pedro|agustin|3159|1765/)?.[0];
+  const docKind = /planchet|habilitac|habilitante/.test(q)
+    ? "habilitacion"
+    : /evacuaci/.test(q)
+      ? "evacuacion"
+      : /incendio/.test(q)
+        ? "incendio"
+        : /ventilaci/.test(q)
+          ? "ventilacion"
+          : /\bplanos?\b/.test(q)
+            ? "plano"
+            : /certificad/.test(q)
+              ? "certificado"
+              : /poliza/.test(q)
+                ? "poliza"
+                : null;
+  const retrievalVerb =
+    /dame|me das|me podrias|pasame|traeme|busca|conseguime|quiero|necesito|mostrame|abri|abrime|abrir|donde (esta|queda|encuentro)/.test(
+      q
+    );
+  if (docKind && (retrievalVerb || sede) && !/pendiente|vencid|por vencer/.test(q)) {
+    const sedeKw =
+      sede === "3159" || sede === "pedro"
+        ? "lujan"
+        : sede === "1765" || sede === "agustin"
+          ? "magaldi"
+          : sede;
+    const query = [docKind, sedeKw].filter(Boolean).join(" ");
+    calls.push({ tool: "docs_browse", args: { tipo: "compliance", query } });
     return calls;
   }
 

@@ -97,6 +97,10 @@ export interface ToolSpec {
     rows: RawRow[],
     supabase: NonNullable<ReturnType<typeof import("@/lib/supabase/server").createClient>>
   ) => Promise<RawRow[]>;
+  /** FIX Drive Docs Fase 2 (2026-07-08): re-ranking POST-fetch consciente de los
+   *  args (p.ej. plancheta/habilitación → PDF visible antes que CAD .dwg/.dwf).
+   *  Corre en demo y real; READ-ONLY (solo reordena, no muta ni consulta la DB). */
+  rank?: (rows: RawRow[], args: Record<string, unknown>) => RawRow[];
   description: string;
   schema: z.ZodType<Record<string, unknown> | object>;
   toRpcArgs(args: Record<string, unknown>): Record<string, unknown>;
@@ -367,7 +371,7 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
   docs_browse: {
     rpc: "ai_docs_browse",
     description:
-      "USALA para LISTAR, BUSCAR o PEDIR archivos/documentos/fichas ya cargados (compliance o contratos): 'cuáles son los archivos de compliance', 'buscame/dame/pasame el archivo de X', 'qué archivos/documentos hay de MAGALDI', 'listá documentos de compliance', y '¿cuándo vence <un documento puntual>?'. tipo = compliance | contrato. query = 1-2 PALABRAS CLAVE del tema/entidad que aparezcan en el TÍTULO (p.ej. 'residuos', 'ambiental', 'plancheta', 'lujan', 'habilitacion'), NO la frase completa; si no hay resultados, reintentá con otra palabra clave. Devuelve la FICHA de metadata (título/categoría/fechas), NO el contenido interno del documento; para resumir/cláusulas/qué dice, NO la uses.",
+      "USALA para LISTAR, BUSCAR o PEDIR archivos/documentos/fichas ya cargados (compliance o contratos) — 'buscame/dame/pasame el archivo de X': planchetas, habilitaciones, planos (de incendio / evacuación / ventilación mecánica), certificados, pólizas, residuos, impacto ambiental. Ej.: 'plancheta de habilitación de Luján', 'planos de Magaldi', 'plano de incendio de Magaldi', 'documentación habilitante de Pedro de Luján 3159', 'archivo de residuos ambiental de Magaldi'. tipo = compliance | contrato. query = 2 PALABRAS CLAVE: el TIPO de documento + la SEDE — p.ej. 'habilitacion lujan', 'plancheta magaldi', 'incendio magaldi', 'evacuacion lujan', 'ventilacion magaldi' (sedes: Magaldi 1765 y Pedro de Luján 3159). NO pases la frase completa; si no hay resultados, reintentá con otra palabra clave. Devuelve la FICHA con el LINK REAL de Drive del documento (aunque el PDF sea escaneado). NO devuelve el texto interno del PDF; para resumir/cláusulas/qué dice, NO la uses.",
     schema: z.object({
       tipo: z.enum(["compliance", "contrato"]).optional(),
       query: z.string().max(120).optional(),
@@ -382,27 +386,72 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
     // compliance_documents/contract_documents (proyección 0176), que tienen
     // `url` (webViewLink de Drive). Lectura con el cliente de SESIÓN (RLS).
     enrich: async (rows, supabase) => {
-      const byTable: Record<string, string[]> = {
-        compliance_documents: [],
-        contract_documents: [],
-      };
+      const compIds: string[] = [];
+      const ctrIds: string[] = [];
       for (const r of rows) {
         const id = s(r.entity_id);
         if (!id) continue;
-        if (s(r.entity_type).startsWith("compliance")) byTable.compliance_documents.push(id);
-        else byTable.contract_documents.push(id);
+        (s(r.entity_type).startsWith("compliance") ? compIds : ctrIds).push(id);
       }
-      const urls = new Map<string, string>();
-      for (const [table, ids] of Object.entries(byTable)) {
-        if (ids.length === 0) continue;
-        const { data, error } = await supabase.from(table).select("id, url").in("id", ids);
-        if (error || !data) continue;
-        for (const d of data as Array<{ id: string; url: string | null }>) {
-          if (d.url) urls.set(String(d.id), d.url);
-        }
+      const meta = new Map<string, { url: string | null; sede: string | null; tipo: string | null }>();
+      // compliance_documents trae sede + tipo_doc → card documental completa
+      // (título / sede / tipo / fecha / Abrir en Drive). FIX Drive Docs 2026-07-08.
+      if (compIds.length > 0) {
+        const { data } = await supabase
+          .from("compliance_documents")
+          .select("id, url, sede, tipo_doc")
+          .in("id", compIds);
+        for (const d of (data ?? []) as Array<{
+          id: string;
+          url: string | null;
+          sede: string | null;
+          tipo_doc: string | null;
+        }>)
+          meta.set(String(d.id), { url: d.url, sede: d.sede, tipo: d.tipo_doc });
       }
-      return rows.map((r) => ({ ...r, source_url: urls.get(s(r.entity_id)) ?? null }));
+      if (ctrIds.length > 0) {
+        const { data } = await supabase.from("contract_documents").select("id, url").in("id", ctrIds);
+        for (const d of (data ?? []) as Array<{ id: string; url: string | null }>)
+          meta.set(String(d.id), { url: d.url, sede: null, tipo: null });
+      }
+      return rows.map((r) => {
+        const m = meta.get(s(r.entity_id));
+        return {
+          ...r,
+          source_url: m?.url ?? null,
+          source_sede: m?.sede ?? null,
+          source_tipo: m?.tipo ?? null,
+        };
+      });
     },
+    // FIX Drive Docs Fase 2 (2026-07-08): si el usuario pide PLANCHETA o
+    // HABILITACIÓN, el PDF/plancheta visible le gana al CAD (.dwg/.dwf) — la RPC
+    // ordena por ts_rank/fecha y devolvía primero un .dwg. NO toca planos técnicos
+    // (incendio/evacuación/ventilación), donde el CAD sí puede ser el principal.
+    // Read-only: reordena estable (empate = orden de la RPC).
+    rank: (rows, args) => {
+      const q = s(args.query).toLowerCase();
+      if (!/planchet|habilitac/.test(q)) return rows;
+      const isCad = (t: string) => /\.(dwg|dwf|dxf)$/i.test(t.trim());
+      const isPdf = (t: string) => /\.pdf$/i.test(t.trim());
+      const score = (r: RawRow): number => {
+        const t = s(r.title);
+        let sc = 0;
+        if (/plancheta/i.test(t)) sc += 100; // "PLANCHETA DE HABILITACIÓN…" primero
+        if (isPdf(t)) sc += 40; // PDF visible por el usuario
+        if (/certificad/i.test(t) || s(r.source_tipo).toLowerCase() === "certificado") sc += 20;
+        if (/habilitac/i.test(t)) sc += 10;
+        if (isCad(t)) sc -= 50; // CAD técnico: recién después
+        return sc;
+      };
+      return rows
+        .map((r, i) => ({ r, i, sc: score(r) }))
+        .sort((a, b) => b.sc - a.sc || a.i - b.i)
+        .map((x) => x.r);
+    },
+    // FIX Drive Docs 2026-07-08: la cita abre el PDF REAL de Drive (source_url del
+    // enrich); solo si no hay link, cae a la ficha del módulo (nunca /anmat a secas
+    // cuando existe el documento).
     rowToChunk: (r) => ({
       entityType: s(r.entity_type),
       entityId: s(r.entity_id),
@@ -410,7 +459,7 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       title: s(r.title) || s(r.entity_type),
       excerpt: s(r.excerpt),
       date: sn(r.entity_date),
-      url: entityUrl(s(r.entity_type), sn(r.public_id)),
+      url: s(r.source_url) || entityUrl(s(r.entity_type), sn(r.public_id)),
     }),
   },
   clients_health: {

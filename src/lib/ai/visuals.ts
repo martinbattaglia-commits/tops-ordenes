@@ -1239,47 +1239,124 @@ export const TOOL_VISUALS: Partial<
   },
 
   // ── Búsqueda documental: PRINCIPAL única + relacionados separados ──────────
+  // FIX Drive Docs 2026-07-08: card documental — título + SEDE (código) + TIPO +
+  // fecha + "Abrir en Drive" (link REAL del PDF, aunque sea escaneado). Los
+  // candidatos van en tabla compacta con su sede y su link de Drive.
   docs_browse: (rows) => {
     if (rows.length === 0) return null;
+    const SEDE_LABEL: Record<string, string> = {
+      MAGALDI: "Magaldi 1765",
+      MAGALDI_1765: "Magaldi 1765",
+      LUJAN: "Pedro de Luján 3159",
+      PEDRO_LUJAN_3159: "Pedro de Luján 3159",
+    };
+    const sedeLabel = (v: unknown): string | null => {
+      const raw = s(v);
+      return raw ? (SEDE_LABEL[raw.toUpperCase()] ?? raw) : null;
+    };
     const principal = rows[0];
     const relacionados = rows.slice(1, 8);
+    const pSede = sedeLabel(principal.source_sede);
+    const pTipo = s(principal.source_tipo) || null;
+    const pFecha = principal.entity_date ? s(principal.entity_date).slice(0, 10) : null;
+    const hasUrl = !!s(principal.source_url);
     return {
       kind: "document",
-      title: "Búsqueda documental",
-      period: null,
+      title: "Documentación · Drive",
+      period: [pSede, pTipo].filter(Boolean).join(" · ") || null,
       kpis: [
         {
-          label: "Mejor coincidencia",
+          label: "Documento",
           value: s(principal.title),
-          hint: principal.entity_date ? `fecha clave: ${s(principal.entity_date).slice(0, 10)}` : null,
-          // Acción REAL: si el enrichment trajo la URL de Drive, abrir el
-          // documento; si no, fallback explícito a la ficha (nunca fingir).
+          hint: [pSede, pTipo, pFecha ? `fecha: ${pFecha}` : null].filter(Boolean).join(" · ") || null,
+          // Acción REAL: si el enrichment trajo la URL de Drive, abrir el PDF; si
+          // no, fallback explícito a la ficha del módulo (nunca fingir un link).
           url: s(principal.source_url) || "/anmat",
-          actionLabel: s(principal.source_url)
-            ? "Abrir documento (Drive)"
-            : "Ver ficha (solo metadata disponible)",
+          actionLabel: hasUrl ? "Abrir en Drive ↗" : "Ver ficha (solo metadata)",
+          tone: "brand",
         },
       ],
       table:
         relacionados.length > 0
           ? {
-              columns: ["Documentos relacionados", "Fecha"],
-              rows: relacionados.map((r) => [s(r.title), s(r.entity_date).slice(0, 10) || "—"]),
+              columns: ["Documento", "Sede", "Fecha"],
+              rows: relacionados.map((r) => [
+                s(r.title),
+                sedeLabel(r.source_sede) ?? "—",
+                s(r.entity_date).slice(0, 10) || "—",
+              ]),
               rowLinks: relacionados.map((r) =>
                 s(r.source_url)
-                  ? { url: s(r.source_url), label: "Drive" }
-                  : { url: "/anmat", label: "Ficha" }
+                  ? { url: s(r.source_url), label: "Drive", kind: "drive" as const }
+                  : { url: "/anmat", label: "Ficha", kind: "fallback" as const }
               ),
             }
           : null,
       chart: null,
       insights: [],
-      warnings:
-        relacionados.length > 0
-          ? [
-              `Se muestran además ${relacionados.length} documentos relacionados — verificá que la mejor coincidencia sea el documento pedido.`,
-            ]
-          : [],
+      warnings: [
+        ...(hasUrl
+          ? []
+          : ["La mejor coincidencia no tiene link de Drive vinculado: se cita por ficha de metadata."]),
+        ...(relacionados.length > 0
+          ? [`${relacionados.length} documento(s) relacionado(s) — verificá que la mejor coincidencia sea el pedido.`]
+          : []),
+      ],
+    };
+  },
+
+  // ── C1 · Conocimiento institucional v2 (UX ejecutivo 2026-07-07 · round UI) ──
+  // NO es un bloque documental: una CARD por UNIDAD de negocio cubierta (área →
+  // qué ofrece → link a la fuente), como un dashboard. La tabla de documentos se
+  // ELIMINA del tablero (peso documental); la trazabilidad va a la sección de
+  // fuentes colapsable del render. Links SOLO reales (área sin URL → card sin
+  // acción). Sin filas → sin tablero (no se maquilla el vacío).
+  company_knowledge_search: (rows) => {
+    if (rows.length === 0) return null;
+    const UNIT_LABEL: Record<string, string> = {
+      ANMAT: "ANMAT / RNE",
+      REGULADOS: "Productos regulados",
+      CARGAS_GENERALES: "Cargas Generales",
+      CORPORATIVO: "Institucional · 3PL",
+      NEXUS: "TOPS Nexus / Connect",
+      OTRO: "Institucional",
+    };
+    const UNIT_TONE: Record<string, "brand" | "ok" | "warn"> = {
+      ANMAT: "warn",
+      REGULADOS: "warn",
+      CARGAS_GENERALES: "brand",
+      CORPORATIVO: "ok",
+      NEXUS: "brand",
+      OTRO: "ok",
+    };
+    const seen = new Set<string>();
+    const cards: NonNullable<CopilotVisual["kpis"]> = [];
+    for (const r of rows) {
+      const u = s(r.business_unit) || "OTRO";
+      if (seen.has(u)) continue;
+      seen.add(u);
+      const snip = s(r.summary).replace(/\s+/g, " ").trim();
+      cards.push({
+        label: "Área institucional",
+        value: UNIT_LABEL[u] ?? u,
+        hint: snip ? (snip.length > 140 ? snip.slice(0, 140) + "…" : snip) : null,
+        url: s(r.url) || null,
+        actionLabel: s(r.url) ? "Ver fuente ↗" : null,
+        tone: UNIT_TONE[u] ?? "brand",
+      });
+      if (cards.length >= 4) break;
+    }
+    return {
+      kind: "document",
+      title: "Conocimiento institucional · Logística TOPS",
+      period: `${rows.length} fuente${rows.length === 1 ? "" : "s"} · ${cards.length} área${
+        cards.length === 1 ? "" : "s"
+      }`,
+      kpis: cards,
+      table: null,
+      chart: null,
+      insights: [],
+      warnings: [],
     };
   },
 };
