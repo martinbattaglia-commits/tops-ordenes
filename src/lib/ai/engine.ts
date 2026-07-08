@@ -135,6 +135,26 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
         );
         toolsUsed.push("coverage_overview");
       }
+    } else if (intent.tipo === "manual_nexus") {
+      // Capa Manual Nexus / Ayuda Interna (C1.5): el Manual de Usuario (capa
+      // manual_nexus, Drive→KB, mig 0186). Si NO hay documentos (sin ingerir),
+      // brecha ESPECÍFICA — nunca search_knowledge genérico ni "no encontré".
+      const man = await executeTool({
+        tool: "company_knowledge_search",
+        args: { query: question.slice(0, 200), capa: "manual_nexus" },
+      });
+      if (man.chunks.length > 0) {
+        ingest(man);
+        toolsUsed.push("company_knowledge_search");
+      } else {
+        ingest(
+          await executeTool({
+            tool: "coverage_overview",
+            args: { query: "manual nexus ayuda interna modulos roles flujos" },
+          })
+        );
+        toolsUsed.push("coverage_overview");
+      }
     } else if (intent.tipo === "internal_research") {
       ingest(
         await executeTool({

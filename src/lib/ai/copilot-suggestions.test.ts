@@ -124,13 +124,13 @@ describe("catálogo de sugerencias · REPORTES EJECUTIVOS", () => {
 
 // ── Manual Nexus · Ayuda Interna (preview, 2026-07-08) ───────────────────────
 describe("Manual Nexus · Ayuda Interna", () => {
-  it("existe con 10 sugerencias 'preview'; chip corto + prompt elaborado", () => {
+  it("existe con 10 sugerencias 'supported' (C1.5); chip corto + prompt elaborado", () => {
     const s = getManualNexusSection();
     expect(s.id).toBe("manual_nexus");
-    expect(s.coverage).toBe("preview");
+    expect(s.coverage).toBe("supported");
     expect(s.prompts).toHaveLength(10);
     for (const p of s.prompts) {
-      expect(p.coverage, p.id).toBe("preview");
+      expect(p.coverage, p.id).toBe("supported");
       expect(p.label.length, `${p.id}: chip largo`).toBeLessThanOrEqual(32);
       expect(p.prompt.length, `${p.id}: prompt trivial`).toBeGreaterThanOrEqual(60);
     }

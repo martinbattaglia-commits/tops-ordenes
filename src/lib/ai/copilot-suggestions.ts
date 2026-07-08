@@ -615,22 +615,22 @@ export function getPrincipalSections(): CopilotSuggestionSection[] {
 // ── Manual Nexus · Ayuda Interna (2026-07-08) ────────────────────────────────
 // Sección de ayuda interna/capacitación: cómo usar Nexus, operar módulos, seguir
 // flujos y qué hace cada rol. Vive APARTE de COPILOT_SUGGESTION_SECTIONS (no es
-// una sección de datos: no aplica el gate de routing ni la regla 3–5). Hoy en
-// 'preview' porque el Manual Nexus está en Drive pero aún NO ingerido (C1.5); al
-// ejecutarse muestra una brecha honesta. Cuando C1.5 cierre: coverage →
-// 'supported' + rutear a company_knowledge_search con capa 'manual_nexus'.
+// una sección de datos: no aplica el gate de routing ni la regla 3–5). C1.5
+// CERRADO (2026-07-08): coverage 'supported' — el click rutea a la capa
+// manual_nexus (17 docs del Manual ingeridos, mig 0186 aplicada) vía el intent
+// manual_nexus del clasificador → company_knowledge_search(capa='manual_nexus').
 export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
   id: "manual_nexus",
   title: "Manual Nexus · Ayuda Interna",
   icon: "📖",
   color: "#6366f1",
   description: "Guías de uso, flujos, módulos, roles y pasos operativos del sistema.",
-  coverage: "preview",
+  coverage: "supported",
   prompts: [
     {
       id: "crear-oc",
       label: "Crear Orden de Compra",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Cómo dar de alta una Orden de Compra, paso a paso.",
       prompt:
         "Explicame paso a paso cómo crear una Orden de Compra en Nexus usando el Manual de Usuario. Indicá el módulo correspondiente, el flujo recomendado, campos importantes, permisos necesarios, errores comunes y dónde consultar la fuente.",
@@ -638,7 +638,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "crear-os",
       label: "Crear Orden de Servicio",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Cómo crear y seguir una Orden de Servicio.",
       prompt:
         "Explicame paso a paso cómo crear o gestionar una Orden de Servicio en Nexus usando el Manual de Usuario. Indicá qué módulo se usa, qué datos se cargan, qué áreas intervienen, cómo se sigue el estado y qué recomendaciones operativas debo tener en cuenta.",
@@ -646,7 +646,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "facturar-servicio",
       label: "Facturar un servicio",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Cómo facturar un servicio desde Nexus.",
       prompt:
         "Explicame cómo usar el módulo de Facturación en Nexus para facturar un servicio. Indicá el flujo recomendado, relación con clientes, órdenes o servicios si aplica, validaciones previas, permisos necesarios y errores frecuentes.",
@@ -654,7 +654,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "usar-wms",
       label: "Usar WMS / Depósito",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Para qué sirve el WMS y qué mirar primero.",
       prompt:
         "Explicame cómo usar el módulo WMS / Depósito de Nexus. Detallá para qué sirve, qué operaciones permite, qué información muestra, cómo se relaciona con posiciones, stock, movimientos o capacidad, y qué debe mirar primero un usuario operativo.",
@@ -662,7 +662,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "compliance-cockpit",
       label: "Compliance Cockpit",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Dónde está y cómo se controla el compliance.",
       prompt:
         "Explicame dónde encuentro Compliance Cockpit, para qué sirve, qué documentos o vencimientos permite controlar, qué roles deberían usarlo y cómo interpretar sus alertas.",
@@ -670,7 +670,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "permisos-rol",
       label: "Permisos por rol",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Qué ve y qué hace cada rol en Nexus.",
       prompt:
         "Mostrame qué puede ver y hacer cada rol de usuario en Nexus según el Manual de Usuario. Armá una tabla clara por rol, módulos visibles, permisos principales y recomendaciones de uso.",
@@ -678,7 +678,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "orden-lectura",
       label: "Orden recomendado de lectura",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Por dónde empezar a aprender Nexus por rol.",
       prompt:
         "Indicame cuál es el orden recomendado para leer o aprender Nexus según el Manual de Usuario. Separalo por rol si existe información disponible: dirección, operaciones, comercial, depósito, administración, auditor.",
@@ -686,7 +686,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "reportar-error",
       label: "Reportar un error",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Cómo reportar un error o pedir soporte interno.",
       prompt:
         "Explicame cómo reportar un error o pedir soporte interno en Nexus según el Manual de Usuario. Indicá pasos, canales, información que debería incluir el usuario y buenas prácticas.",
@@ -694,7 +694,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "mapa-modulos",
       label: "Mapa de módulos Nexus",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "Cómo se conectan los módulos y qué decide cada uno.",
       prompt:
         "Explicame cómo se conectan los módulos de Nexus. Armá un mapa simple de módulos, áreas responsables, decisiones que permite tomar cada módulo y relaciones entre ellos.",
@@ -702,7 +702,7 @@ export const MANUAL_NEXUS_HELP: CopilotSuggestionSection = {
     {
       id: "flujo-operativo",
       label: "Flujo completo operativo",
-      coverage: "preview",
+      coverage: "supported",
       decisionGoal: "El recorrido de punta a punta dentro de Nexus.",
       prompt:
         "Explicame un flujo operativo completo dentro de Nexus, desde la necesidad o solicitud inicial hasta la operación, documentación, facturación y seguimiento. Usá el Manual de Usuario como fuente.",

@@ -31,6 +31,7 @@ export type CopilotIntent =
   | { tipo: "general_current"; tema: TemaActual }
   | { tipo: "company_institutional" }
   | { tipo: "internal_research" }
+  | { tipo: "manual_nexus" }
   | { tipo: "mixed_nexus_external"; tema: "dolar" };
 
 const norm = (text: string): string =>
@@ -117,6 +118,30 @@ export function classifyCopilotIntent(question: string): CopilotIntent {
     /\bque (ofrece|hace|brinda)\b[^?]*\btops\b[^?]*\b(anmat|cargas generales|regulad|3pl)\b/.test(q)
   ) {
     return { tipo: "company_institutional" };
+  }
+
+  // ── manual_nexus (C1.5 · Ayuda Interna): CÓMO USAR Nexus — operar módulos,
+  // crear OC/OS, facturar, roles/permisos, flujos, mapa de módulos, reportar un
+  // error. Va ANTES del veto (que capturaría 'nexus') para que "¿qué módulos tiene
+  // Nexus?" / "¿cómo se conectan los módulos?" respondan DESDE el Manual, no con
+  // datos internos. Distingue AYUDA/HOW-TO de DATO: "cómo USO facturación" (manual)
+  // vs "cuánto facturamos" (Nexus); "dónde encuentro Compliance Cockpit" (manual)
+  // vs "dónde veo las OC" (navegación).
+  if (
+    /\bcomo (creo|crear|hago|hacer|genero|generar|cargo|cargar|uso|usar|utilizo|reporto|reportar|accedo|acceder|se (usa|crea|hace|genera|carga|reporta|conectan?|integran?))\b/.test(q) ||
+    /\bcomo (se )?(conectan|integran) (los )?modulos\b/.test(q) ||
+    /\bque modulos (tiene|hay|incluye|existen)\b/.test(q) ||
+    /\bque (es|son|hace|hacen|incluye) (el |la |los )?(modulo|wms|deposito|cockpit ejecutivo|comercial( y crm)?|crm|compliance( cockpit)?|facturaci|pedidos|tesoreri|rrhh|recursos humanos)\b/.test(q) ||
+    /\bdonde (encuentro|esta|queda|veo|accedo a) (el |la )?(modulo|compliance cockpit|cockpit ejecutivo|wms|deposito)\b/.test(q) ||
+    /\bpara que sirve (el |la )?(modulo|wms|cockpit|compliance)/.test(q) ||
+    /\bque (puede ver|permisos tiene|ve) (un |el |cada )?(usuario|rol|operaciones|comercial|deposito|auditor|administracion|director)\b/.test(q) ||
+    /\bpermisos (por|de|de cada|del) rol\b/.test(q) ||
+    /\borden (recomendad[ao] )?de lectura\b/.test(q) ||
+    /\bmanual (de usuario|de nexus|nexus)\b/.test(q) ||
+    /\bayuda interna\b/.test(q) ||
+    /\bcomo me muevo (por|en) nexus\b/.test(q)
+  ) {
+    return { tipo: "manual_nexus" };
   }
 
   // ── VETO GLOBAL: cualquier marcador de dato interno → Nexus (fail-safe) ─────

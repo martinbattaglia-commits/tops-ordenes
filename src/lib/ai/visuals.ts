@@ -1313,6 +1313,31 @@ export const TOOL_VISUALS: Partial<
   // acción). Sin filas → sin tablero (no se maquilla el vacío).
   company_knowledge_search: (rows) => {
     if (rows.length === 0) return null;
+    // C1.5 · Ayuda Interna: si las fuentes son del Manual (SISTEMA_NEXUS), la card
+    // es por SECCIÓN/MÓDULO del manual con "Abrir en Drive" — no el marco institucional.
+    if (rows.some((r) => s(r.business_unit) === "SISTEMA_NEXUS")) {
+      const cards: NonNullable<CopilotVisual["kpis"]> = rows.slice(0, 4).map((r) => {
+        const snip = s(r.summary).replace(/\s+/g, " ").trim();
+        return {
+          label: "Manual Nexus",
+          value: s(r.title).replace(/^manual tops nexus\s*[—·-]\s*/i, "") || "Sección del Manual",
+          hint: snip ? (snip.length > 140 ? snip.slice(0, 140) + "…" : snip) : null,
+          url: s(r.url) || null,
+          actionLabel: s(r.url) ? "Abrir en Drive ↗" : null,
+          tone: "brand" as const,
+        };
+      });
+      return {
+        kind: "document",
+        title: "Manual Nexus · Ayuda Interna",
+        period: `${rows.length} sección${rows.length === 1 ? "" : "es"} del Manual de Usuario`,
+        kpis: cards,
+        table: null,
+        chart: null,
+        insights: [],
+        warnings: [],
+      };
+    }
     const UNIT_LABEL: Record<string, string> = {
       ANMAT: "ANMAT / RNE",
       REGULADOS: "Productos regulados",

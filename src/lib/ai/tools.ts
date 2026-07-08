@@ -931,7 +931,7 @@ export const TOOLS: Record<ToolName, ToolSpec> = {
       unidad: z
         .enum(["anmat", "cargas_generales", "corporativo", "regulados", "nexus"])
         .optional(),
-      capa: z.enum(["institucional", "research"]).optional(),
+      capa: z.enum(["institucional", "research", "manual_nexus"]).optional(),
       limit,
     }),
     toRpcArgs: (a) => ({
