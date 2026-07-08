@@ -21,6 +21,10 @@ describe("C1.5 · routing de ayuda interna → manual_nexus", () => {
     "¿Qué hace Comercial y CRM?",
     "¿Qué permisos tiene cada rol?",
     "¿Cómo se conectan los módulos de Nexus?",
+    // Imperativos cortos de los chips (si el usuario tipea el label):
+    "Crear Orden de Servicio",
+    "Crear Orden de Compra",
+    "Facturar un servicio",
   ];
   for (const q of manual) {
     it(`"${q}" → manual_nexus`, () => {

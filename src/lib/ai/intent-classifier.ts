@@ -139,7 +139,13 @@ export function classifyCopilotIntent(question: string): CopilotIntent {
     /\borden (recomendad[ao] )?de lectura\b/.test(q) ||
     /\bmanual (de usuario|de nexus|nexus)\b/.test(q) ||
     /\bayuda interna\b/.test(q) ||
-    /\bcomo me muevo (por|en) nexus\b/.test(q)
+    /\bcomo me muevo (por|en) nexus\b/.test(q) ||
+    // Imperativos cortos de los chips de Ayuda Interna ("Crear Orden de Compra/
+    // Servicio", "Facturar un servicio"): son HOW-TO del manual, no acciones de
+    // datos (el Copilot es read-only). "cuál fue la última OC" no matchea (no hay
+    // verbo crear/facturar-un-servicio).
+    /\b(crear|crea|generar|genero|dar de alta|nueva|nuevo)\b[^?]*\borden de (compra|servicio|servicios)\b/.test(q) ||
+    /\bfacturar un servicio\b/.test(q)
   ) {
     return { tipo: "manual_nexus" };
   }
