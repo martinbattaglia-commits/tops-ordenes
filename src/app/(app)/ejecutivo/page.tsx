@@ -8,6 +8,8 @@ import { getBootContext } from "@/lib/rbac/boot-permissions";
 import { env } from "@/lib/env";
 import { ws } from "@/lib/google/workspace";
 import { getAnnouncements, type Announcement } from "@/lib/ejecutivo/announcements";
+import { getBnaDollar, type FxQuote } from "@/lib/fx/bna-dollar";
+import { DollarQuoteCard } from "@/components/dashboard/DollarQuoteCard";
 import { ORG, PRODUCT } from "@/lib/org";
 
 export const metadata = { title: "Cockpit ejecutivo" };
@@ -40,16 +42,6 @@ function daypartFor(hour: number): Daypart {
   if (hour >= 6 && hour < 13) return "manana";
   if (hour >= 13 && hour < 20) return "tarde";
   return "noche";
-}
-
-function fechaLargaAr(): string {
-  const s = new Intl.DateTimeFormat("es-AR", {
-    timeZone: "America/Argentina/Buenos_Aires",
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(new Date());
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function firstNameOf(user: User | null): string {
@@ -90,11 +82,12 @@ const MODULES: { href: string; icon: IconName; title: string; sub: string; enabl
 export default async function CockpitPage() {
   // getBootContext está cacheado por request (lo resuelve el layout): reutilizarlo
   // para el saludo no agrega round trips.
-  const [cc, canExec, boot, announcements] = await Promise.all([
+  const [cc, canExec, boot, announcements, dolar] = await Promise.all([
     getCommandCenter(),
     canViewExecutiveFinancialBlocks(),
     getBootContext(),
     getAnnouncements(),
+    getBnaDollar(),
   ]);
   // Visibilidad condicional (mismo Cockpit, sin split): se ocultan bloques
   // financieros/ejecutivos a quien no tenga permiso ejecutivo.
@@ -106,7 +99,7 @@ export default async function CockpitPage() {
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1400px] mx-auto">
       {/* BLOQUE 0 — Bienvenida contextual (saludo cálido al aterrizar) */}
-      <WelcomeBanner firstName={firstName} part={daypart} dateLabel={fechaLargaAr()} />
+      <WelcomeBanner firstName={firstName} part={daypart} dolar={dolar} />
 
       {/* Título de página — sólo accesibilidad/SEO. El liderazgo visual lo toman
           la bienvenida y el Command Center; el header presidencial se retiró. */}
@@ -149,7 +142,7 @@ export default async function CockpitPage() {
   );
 }
 
-function WelcomeBanner({ firstName, part, dateLabel }: { firstName: string; part: Daypart; dateLabel: string }) {
+function WelcomeBanner({ firstName, part, dolar }: { firstName: string; part: Daypart; dolar: FxQuote }) {
   const g = GREETINGS[part];
   return (
     <section className="nx-surface card relative overflow-hidden">
@@ -170,10 +163,16 @@ function WelcomeBanner({ firstName, part, dateLabel }: { firstName: string; part
           </p>
           <p className="text-sm text-fg-muted mt-0.5">{g.wish}</p>
         </div>
-        <div className="ml-auto self-start hidden md:flex flex-col items-end text-right shrink-0">
-          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-muted">{PRODUCT.edition}</span>
-          <span className="text-sm font-semibold text-fg-secondary mt-1">{dateLabel}</span>
-        </div>
+        <DollarQuoteCard
+          className="ml-auto self-center hidden md:block w-[210px] shrink-0"
+          sell={dolar.sell}
+          buy={dolar.buy}
+          source={dolar.source}
+          pair={dolar.pair}
+          updatedAt={dolar.updatedAt}
+          stale={dolar.stale}
+          status={dolar.status}
+        />
       </div>
     </section>
   );
