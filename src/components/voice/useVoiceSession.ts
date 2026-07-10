@@ -99,7 +99,15 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
       if (s === "idle" || s === "error") {
         if (sessionRef.current === session) {
           sessionRef.current = null;
-          session.dispose();
+          // El dispose se DIFIERE a un microtask. Hacerlo sincrónicamente
+          // dentro de esta emisión vaciaría el Set de listeners a mitad de
+          // iteración: el waiter de releaseActive() (suscripto después de
+          // este listener) nunca dispararía y la cola de adquisición
+          // quedaría bloqueada para siempre; y el emit("error") que sigue
+          // al state:"error" de fail() ya no llegaría al hook (mensaje de
+          // error perdido). Un microtask después, ambas emisiones síncronas
+          // ya terminaron; dispose() sigue siendo idempotente.
+          queueMicrotask(() => session.dispose());
           setLevel(0);
           setPartial("");
           setMeterActive(false);
