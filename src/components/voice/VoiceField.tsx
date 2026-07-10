@@ -49,6 +49,10 @@ export function VoiceField({ children, className = "" }: VoiceFieldProps) {
 
   const child = children as ReactElement<{
     className?: string;
+    // `ref` vive en este TIPO solo para que cloneElement acepte la config
+    // (su parámetro es Partial<P> y debe incluirlo). El VALOR real se lee
+    // del elemento, no de props — en React 18 `ref` no viaja dentro de props.
+    ref?: Ref<Editable>;
     onKeyDown?: (ev: KeyboardEvent<Editable>) => void;
     onBlur?: (ev: FocusEvent<Editable>) => void;
   }>;
@@ -59,28 +63,25 @@ export function VoiceField({ children, className = "" }: VoiceFieldProps) {
   // Leerlo de child.props devolvería undefined y se perdería el ref del consumidor.
   const childRef = (child as unknown as { ref?: Ref<Editable> }).ref;
 
-  const enhanced = cloneElement(
-    child,
-    {
-      ref: mergeRefs(childRef, elRef),
-      className: `${child.props.className ?? ""} pr-10`.trim(),
-      onKeyDown: (ev: KeyboardEvent<Editable>) => {
-        // Escape = Cancelar. Siempre. En toda la plataforma. Ver spec §6.1.
-        if (ev.key === "Escape" && voice.state === "listening") {
-          ev.preventDefault();
-          ev.stopPropagation();
-          voice.cancel();
-          return;
-        }
-        child.props.onKeyDown?.(ev);
-      },
-      onBlur: (ev: FocusEvent<Editable>) => {
-        // Perder el foco FINALIZA: conserva el texto. No es una cancelación.
-        if (voice.state === "listening") void voice.stop();
-        child.props.onBlur?.(ev);
-      },
-    } as any
-  );
+  const enhanced = cloneElement(child, {
+    ref: mergeRefs(childRef, elRef),
+    className: `${child.props.className ?? ""} pr-10`.trim(),
+    onKeyDown: (ev: KeyboardEvent<Editable>) => {
+      // Escape = Cancelar. Siempre. En toda la plataforma. Ver spec §6.1.
+      if (ev.key === "Escape" && voice.state === "listening") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        voice.cancel();
+        return;
+      }
+      child.props.onKeyDown?.(ev);
+    },
+    onBlur: (ev: FocusEvent<Editable>) => {
+      // Perder el foco FINALIZA: conserva el texto. No es una cancelación.
+      if (voice.state === "listening") void voice.stop();
+      child.props.onBlur?.(ev);
+    },
+  });
 
   return (
     <div className={`relative ${className}`}>
