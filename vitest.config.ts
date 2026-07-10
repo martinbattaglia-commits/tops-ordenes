@@ -27,6 +27,7 @@ export default defineConfig({
       "src/lib/fiscal/**/*.test.ts",
       "src/lib/compras/**/*.test.ts",
       "src/lib/ai/**/*.test.ts",
+      "src/lib/voice/**/*.test.ts",
     ],
     environment: "node",
   },
