@@ -1868,8 +1868,11 @@ function defaultRequestStream(engine: VoiceEngine): StreamRequester {
 export function createVoiceSession(
   opts: CreateVoiceSessionOptions = {},
 ): VoiceSession {
-  const engine = opts.engine ?? resolveEngine();
-  if (!engine) throw new VoiceEngineUnavailableError();
+  // La variable intermedia es necesaria: el narrowing de un const NO se
+  // propaga a las declaraciones `function` hoisted de más abajo (TS18047).
+  const engineOrNull = opts.engine ?? resolveEngine();
+  if (!engineOrNull) throw new VoiceEngineUnavailableError();
+  const engine: VoiceEngine = engineOrNull;
 
   const locale = opts.locale ?? DEFAULT_LOCALE;
   const maxDurationMs = opts.maxDurationMs ?? DEFAULT_MAX_DURATION_MS;
@@ -1974,7 +1977,18 @@ export function createVoiceSession(
     segments = [];
 
     // Los permisos los pide la SESIÓN, antes de que el motor exista.
-    stream = await requestStream();
+    // Un requestStream INYECTADO (tests, futuros providers) lanza errores
+    // crudos: la sesión los traduce acá con la misma política que
+    // defaultRequestStream — permiso denegado y motor-que-exige-stream son
+    // fatales; el resto continúa sin medidor.
+    try {
+      stream = await requestStream();
+    } catch (raw) {
+      const err = toVoiceError(raw);
+      if (err instanceof VoicePermissionDeniedError) throw err;
+      if (engine.capabilities.requiresMediaStream) throw err;
+      // El motor no necesita el stream: continúa sin él.
+    }
 
     go({ type: "START" });
 
