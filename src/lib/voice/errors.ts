@@ -71,7 +71,32 @@ const MESSAGES: Record<string, string> = {
   recognition: "No pudimos procesar el audio. Probá de nuevo.",
 };
 
-/** Traduce un error del motor a la taxonomía de Nexus Voice. */
+/**
+ * ¿Esta señal del motor es un aborto que pedimos nosotros?
+ *
+ * `cancel()` llama a `engine.abort()`, y los motores responden emitiendo lo que
+ * parece un error. NO lo es: la cancelación del usuario no forma parte de la
+ * taxonomía, por definición del diseño (spec §6.1 y §11).
+ *
+ * Vive acá, y no dentro de cada motor, para que un motor futuro (OpenAI, Azure,
+ * propio) tenga UN solo lugar al que preguntarle, en vez de tener que acordarse
+ * de comparar strings por su cuenta. El invariante deja de depender de que cada
+ * implementación lo respete de memoria.
+ */
+export function isAbortError(raw: unknown): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  if ("error" in raw && (raw as { error: unknown }).error === "aborted") return true;
+  if ("name" in raw && (raw as { name: unknown }).name === "AbortError") return true;
+  return false;
+}
+
+/**
+ * Traduce un error del motor a la taxonomía de Nexus Voice.
+ *
+ * NUNCA la invoques con un aborto intencional: filtralo antes con
+ * `isAbortError()`. Si un aborto llega hasta acá, se clasifica como
+ * `VoiceRecognitionError` y el usuario que solo canceló ve un error espurio.
+ */
 export function toVoiceError(raw: unknown): VoiceError {
   if (raw instanceof VoiceError) return raw;
 
