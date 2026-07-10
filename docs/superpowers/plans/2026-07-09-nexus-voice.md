@@ -548,6 +548,28 @@ describe("normalize", () => {
     expect(normalize("pesan 3.5 kg")).toBe("Pesan 3.5 kg");
   });
 
+  it("NO capitaliza cuando el dictado empieza con un número", () => {
+    // En un ERP de logística se dicta la cantidad primero. Si el prefijo de la
+    // mayúscula inicial se comiera los dígitos, "12 pallets" sería "12 Pallets".
+    expect(normalize("12 pallets al depósito")).toBe("12 pallets al depósito");
+    expect(normalize("3.5 kg pesan")).toBe("3.5 kg pesan");
+    expect(normalize("35kg de mercadería")).toBe("35kg de mercadería");
+    expect(normalize("1000 unidades ANMAT")).toBe("1000 unidades ANMAT");
+  });
+
+  it("sí capitaliza después de un signo de apertura", () => {
+    expect(normalize("¿sí? claro")).toBe("¿Sí? Claro");
+    expect(normalize("(nota importante")).toBe("(Nota importante");
+  });
+
+  it("capitaliza después de un salto de párrafo", () => {
+    expect(normalize("fin.\n\nnueva sección")).toBe("Fin.\n\nNueva sección");
+  });
+
+  it("normaliza CRLF a LF", () => {
+    expect(normalize("uno\r\ndos")).toBe("Uno\ndos");
+  });
+
   it("preserva los saltos de línea y colapsa los espacios que los rodean", () => {
     expect(normalize("hola \n mundo")).toBe("Hola\nmundo");
     expect(normalize("uno\n\n\n\ndos")).toBe("Uno\n\ndos");
@@ -597,7 +619,13 @@ export function normalize(input: string): string {
   if (out.length === 0) return "";
 
   // Mayúscula inicial.
-  out = out.replace(/^(\P{L}*)(\p{L})/u, (_m, prefix: string, letter: string) =>
+  //
+  // El prefijo salta signos de apertura y espacios (`¿`, `¡`, `(`, comillas)
+  // pero se DETIENE ante un dígito. Si aceptara cualquier no-letra (`\P{L}`),
+  // "12 pallets al depósito" se convertiría en "12 Pallets al depósito": en un
+  // ERP de logística el dictado arranca con la cantidad, y ese es el caso
+  // normal, no el borde.
+  out = out.replace(/^([^\p{L}\p{N}]*)(\p{L})/u, (_m, prefix: string, letter: string) =>
     prefix + letter.toLocaleUpperCase("es"),
   );
 
