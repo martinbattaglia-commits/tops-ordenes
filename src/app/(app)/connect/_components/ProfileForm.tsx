@@ -5,6 +5,7 @@
 
 import { useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import {
   type UserProfile,
   type PresenceStatus,
@@ -174,13 +175,15 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
           {/* (4) Firma + tema */}
           <label className="block text-xs font-medium text-fg-secondary">
             Firma
-            <textarea
-              value={signature}
-              onChange={(e) => setSignature(e.target.value)}
-              rows={3}
-              placeholder="Tu firma para mensajes y notificaciones…"
-              className="mt-1 w-full resize-y rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
-            />
+            <VoiceField>
+              <textarea
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                rows={3}
+                placeholder="Tu firma para mensajes y notificaciones…"
+                className="mt-1 w-full resize-y rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
+              />
+            </VoiceField>
           </label>
 
           <label className="block text-xs font-medium text-fg-secondary">

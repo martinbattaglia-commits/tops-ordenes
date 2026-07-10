@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import {
   assignTaskAction, ensureTaskThreadAction, followTaskAction,
   setTaskDueAction, setTaskPriorityAction, setTaskStatusAction,
@@ -202,9 +203,11 @@ export function TaskActions({
               Esta tarea es el paso {task.stepNo} de un workflow: cancelarla detiene la cadena.
             </p>
           )}
-          <textarea className="input min-h-16 w-full" value={motivo} maxLength={300}
-            placeholder="Motivo breve de la cancelación (obligatorio)…"
-            onChange={(e) => setMotivo(e.target.value)} />
+          <VoiceField>
+            <textarea className="input min-h-16 w-full" value={motivo} maxLength={300}
+              placeholder="Motivo breve de la cancelación (obligatorio)…"
+              onChange={(e) => setMotivo(e.target.value)} />
+          </VoiceField>
           <button type="button" className="btn btn-danger btn-sm"
             disabled={busy || motivo.trim().length === 0}
             onClick={() => void run(() => setTaskStatusAction({ taskId: task.id, status: "cancelada", motivo }))}>

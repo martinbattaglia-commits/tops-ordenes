@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { upsertDealOverlay } from "@/lib/comercial/overlay-actions";
 import {
   getOpportunityAlert,
@@ -405,16 +406,18 @@ export function DealDetailPanel({ deal, onClose }: Props) {
                     <label htmlFor="panel-observaciones" className="block text-xs text-fg-secondary mb-1">
                       Observaciones
                     </label>
-                    <textarea
-                      id="panel-observaciones"
-                      value={observaciones}
-                      onChange={(e) => setObservaciones(e.target.value)}
-                      disabled={saving}
-                      rows={4}
-                      maxLength={2000}
-                      placeholder="Notas internas sobre la oportunidad…"
-                      className="w-full resize-y rounded-lg border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-tops-blue-700/40 disabled:opacity-60"
-                    />
+                    <VoiceField>
+                      <textarea
+                        id="panel-observaciones"
+                        value={observaciones}
+                        onChange={(e) => setObservaciones(e.target.value)}
+                        disabled={saving}
+                        rows={4}
+                        maxLength={2000}
+                        placeholder="Notas internas sobre la oportunidad…"
+                        className="w-full resize-y rounded-lg border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary placeholder:text-fg-muted focus:outline-none focus:ring-2 focus:ring-tops-blue-700/40 disabled:opacity-60"
+                      />
+                    </VoiceField>
                   </div>
 
                   <div className="flex items-center gap-2">

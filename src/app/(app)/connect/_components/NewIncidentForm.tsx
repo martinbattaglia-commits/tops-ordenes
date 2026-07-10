@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { openIncidentAction } from "@/lib/connect/adapters/driving/incident-actions";
 import {
   INCIDENT_SEVERITIES, INCIDENT_SEVERITY_LABELS, type IncidentSeverity,
@@ -96,13 +97,15 @@ export function NewIncidentForm() {
 
       <label className="flex flex-col gap-1 text-xs text-fg-muted">
         Descripción (primer mensaje del hilo; podés adjuntar fotos en el hilo después)
-        <textarea
-          className="input min-h-24"
-          value={descripcion}
-          maxLength={8000}
-          onChange={(e) => setDescripcion(e.target.value)}
-          placeholder="Qué pasó, desde cuándo, qué se ve afectado…"
-        />
+        <VoiceField>
+          <textarea
+            className="input min-h-24"
+            value={descripcion}
+            maxLength={8000}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Qué pasó, desde cuándo, qué se ve afectado…"
+          />
+        </VoiceField>
       </label>
 
       {error && <p className="text-xs text-red-400">{error}</p>}

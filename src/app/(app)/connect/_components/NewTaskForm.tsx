@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { createTaskAction } from "@/lib/connect/adapters/driving/task-actions";
 import { searchProfilesAction, type ProfileHit } from "@/lib/connect/adapters/driving/channel-actions";
 import {
@@ -84,9 +85,11 @@ export function NewTaskForm({
 
       <label className="flex flex-col gap-1 text-xs text-fg-muted">
         Descripción
-        <textarea className="input min-h-20" value={descripcion} maxLength={4000}
-          onChange={(e) => setDescripcion(e.target.value)}
-          placeholder="Qué hay que hacer, contexto, criterio de terminado…" />
+        <VoiceField>
+          <textarea className="input min-h-20" value={descripcion} maxLength={4000}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Qué hay que hacer, contexto, criterio de terminado…" />
+        </VoiceField>
       </label>
 
       <div className="flex flex-wrap gap-3">
