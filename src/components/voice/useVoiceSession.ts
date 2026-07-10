@@ -20,6 +20,8 @@ export interface VoiceSessionBinding {
   partial: string;
   error: string | null;
   enabled: boolean;
+  /** true desde el primer evento `level`: el medidor REAL está emitiendo. */
+  meterActive: boolean;
   start(): Promise<void>;
   stop(): Promise<void>;
   cancel(): void;
@@ -30,6 +32,10 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
   const [level, setLevel] = useState(0);
   const [partial, setPartial] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // ¿El medidor REAL está emitiendo? El primer evento `level` (aunque valga 0:
+  // el tick corre a cadencia de rAF también en silencio) lo confirma. El botón
+  // muestra barras reales O el pulso de degradación — nunca ambos.
+  const [meterActive, setMeterActive] = useState(false);
 
   // En el servidor no hay `window`, así que isSupported() es false. Calcularlo
   // durante el render produciría un desajuste de hidratación: el servidor
@@ -45,10 +51,14 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
   onFinalRef.current = opts.onFinal;
 
   const release = useCallback(() => {
+    // El desmontaje/limpieza descarta el dictado en curso: no existe el campo
+    // destino después de desmontar. Decisión explícita de producto (spec §12),
+    // no un bug — el desmontaje equivale a Cancelar.
     sessionRef.current?.dispose();
     sessionRef.current = null;
     setLevel(0);
     setPartial("");
+    setMeterActive(false);
   }, []);
 
   useEffect(() => release, [release]);
@@ -57,13 +67,13 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
     if (sessionRef.current) return;
     setError(null);
 
-    // Takeover: la sesión anterior finaliza con stop() y entrega su texto a
-    // SU campo original antes de ceder el micrófono. Nunca cancel(). Spec §5.
-    await NexusVoice.releaseActive();
-
+    // Takeover por la MISMA cola serializada que capture(): la sesión anterior
+    // finaliza con stop() y entrega su texto a SU campo antes de ceder el
+    // micrófono. Nunca cancel(). Dos taps rápidos en micrófonos distintos no
+    // se pisan: gana el último, sin VoiceSessionAlreadyRunningError espurio.
     let session: VoiceSession;
     try {
-      session = NexusVoice.acquire({
+      session = await NexusVoice.acquireForTakeover({
         locale: opts.locale,
         punctuationStrategy: opts.punctuationStrategy,
         autoStopOnSilenceMs: opts.autoStopOnSilenceMs,
@@ -77,7 +87,10 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
 
     sessionRef.current = session;
     session.on("state", setState);
-    session.on("level", setLevel);
+    session.on("level", (rms) => {
+      setLevel(rms);
+      setMeterActive(true);
+    });
     session.on("partial", setPartial);
     session.on("final", (text) => onFinalRef.current(text));
     session.on("error", (err) => setError(err.message));
@@ -104,5 +117,5 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
     setState("idle");
   }, [release]);
 
-  return { state, level, partial, error, enabled, start, stop, cancel };
+  return { state, level, partial, error, enabled, meterActive, start, stop, cancel };
 }

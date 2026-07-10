@@ -70,6 +70,22 @@ function acquire(opts: CreateVoiceSessionOptions = {}): VoiceSession {
   return wrapper;
 }
 
+/**
+ * Adquisición con política de takeover, sobre la MISMA cola que capture():
+ * la sesión anterior finaliza limpia (stop, jamás cancel) y recién entonces
+ * se adquiere. Es el camino para consumidores con UI propia — el hook React.
+ * Sin la cola, dos taps rápidos en micrófonos distintos se pisarían y el
+ * perdedor vería VoiceSessionAlreadyRunningError en vez del takeover.
+ */
+function acquireForTakeover(
+  opts: CreateVoiceSessionOptions = {},
+): Promise<VoiceSession> {
+  return serialize(async () => {
+    await releaseActive();
+    return acquire(opts);
+  });
+}
+
 /** Finaliza la sesión activa conservando su texto. Nunca la cancela. */
 async function releaseActive(): Promise<void> {
   const current = active;
@@ -176,6 +192,7 @@ export const NexusVoice = {
     return () => subscribers.delete(cb);
   },
   acquire,
+  acquireForTakeover,
   releaseActive,
   capture,
 };

@@ -223,6 +223,23 @@ describe("VoiceSession", () => {
     expect(engine.abortCalls).toBe(1); // fail() abortó y liberó
   });
 
+  it("dispose() durante el pedido de permisos aborta el arranque huérfano", async () => {
+    const engine = new FakeVoiceEngine();
+    let resolveStream!: (v: MediaStream | null) => void;
+    const session = createVoiceSession({
+      engine,
+      requestStream: () => new Promise((r) => (resolveStream = r)),
+    });
+
+    const starting = session.start(); // suspendido esperando el permiso
+    session.dispose(); // el dueño desaparece (desmontaje, cierre de modal)
+    resolveStream(null); // el permiso llega tarde
+    await starting;
+
+    expect(engine.started).toBe(false); // el motor JAMÁS arrancó
+    expect(session.state).toBe("idle"); // nada quedó grabando
+  });
+
   it("cancel() gana si corre mientras stop() está en vuelo: el texto se descarta", async () => {
     const { engine, session, finals } = setup();
     await session.start();

@@ -191,6 +191,16 @@ export function createVoiceSession(
       // El motor no necesita el stream: continúa sin él.
     }
 
+    // CHECKPOINT: el dueño desapareció durante el prompt de permiso
+    // (desmontaje, cierre de modal, navegación). dispose() no pudo cancelar
+    // porque el estado seguía en idle; sin este chequeo el arranque
+    // continuaría huérfano y el micrófono quedaría GRABANDO sin indicador
+    // hasta maxDurationMs (~120 s).
+    if (disposed) {
+      releaseMic();
+      return;
+    }
+
     go({ type: "START" });
 
     if (stream && opts.createMeter) {
@@ -225,6 +235,14 @@ export function createVoiceSession(
       // "listening" con el micrófono abierto y el medidor corriendo. fail()
       // libera todo, pasa a "error" y el usuario reintenta con un clic.
       fail(raw);
+      return;
+    }
+
+    // CHECKPOINT: desmontaje durante el arranque del motor. cancel() (vía
+    // dispose) ya limpió; esto evita armar timers para una sesión muerta.
+    if (disposed) {
+      engine.abort();
+      releaseMic();
       return;
     }
 

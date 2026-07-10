@@ -169,6 +169,21 @@ describe("NexusVoice.capture", () => {
     await expect(p1).resolves.toBeNull();
     await expect(p2).resolves.toBe("Gana el último");
   });
+
+  it("acquireForTakeover serializa: dos hooks concurrentes no se pisan", async () => {
+    const engineA = new FakeVoiceEngine();
+    const engineB = new FakeVoiceEngine();
+
+    const [a, b] = await Promise.all([
+      NexusVoice.acquireForTakeover({ engine: engineA }),
+      NexusVoice.acquireForTakeover({ engine: engineB }),
+    ]);
+
+    // Nadie lanzó VoiceSessionAlreadyRunningError; el último es el activo.
+    expect(NexusVoice.active).toBe(b);
+    expect(a.state).toBe("idle"); // el primero quedó dispuesto, limpio
+    b.dispose();
+  });
 });
 
 describe("NexusVoice.subscribe", () => {
