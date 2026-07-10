@@ -1,8 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createVoiceSession } from "./session";
 import { FakeVoiceEngine } from "./__fixtures__/fake-engine";
 import { VoicePermissionDeniedError } from "./errors";
 import type { VoiceState } from "./types";
+
+// Higiene: si una aserción falla antes de las restauraciones inline, los fake
+// timers o el spy de console.warn fugarían al test siguiente.
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 function setup(overrides: Parameters<typeof createVoiceSession>[0] = {}) {
   const engine = new FakeVoiceEngine();
@@ -195,5 +202,37 @@ describe("VoiceSession", () => {
     expect(engine.abortCalls).toBe(1);
     engine.emitFinal("nadie escucha");
     expect(states).toEqual(["listening", "idle"]);
+  });
+
+  it("un motor que falla al arrancar deja la sesión en error y libera todo", async () => {
+    const engine = new FakeVoiceEngine();
+    engine.start = async () => {
+      throw new Error("boom del motor");
+    };
+    const session = createVoiceSession({ engine });
+    const states: VoiceState[] = [];
+    const errors: Error[] = [];
+    session.on("state", (s) => states.push(s));
+    session.on("error", (e) => errors.push(e));
+
+    await session.start(); // no rechaza: la falla se reporta por eventos
+
+    expect(session.state).toBe("error");
+    expect(states).toEqual(["listening", "error"]);
+    expect(errors).toHaveLength(1);
+    expect(engine.abortCalls).toBe(1); // fail() abortó y liberó
+  });
+
+  it("cancel() gana si corre mientras stop() está en vuelo: el texto se descarta", async () => {
+    const { engine, session, finals } = setup();
+    await session.start();
+    engine.emitFinal("texto condenado");
+
+    const stopping = session.stop(); // en vuelo: esperando engine.stop()
+    session.cancel(); // el usuario cancela en la ventana
+    await stopping;
+
+    expect(finals).toEqual([]); // "cancelar descarta" gana
+    expect(session.state).toBe("idle");
   });
 });

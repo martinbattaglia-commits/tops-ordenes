@@ -61,6 +61,8 @@ function defaultRequestStream(engine: VoiceEngine): StreamRequester {
 export function createVoiceSession(
   opts: CreateVoiceSessionOptions = {},
 ): VoiceSession {
+  // La variable intermedia es necesaria: el narrowing de un const NO se
+  // propaga a las declaraciones `function` hoisted de más abajo (TS18047).
   const engineOrNull = opts.engine ?? resolveEngine();
   if (!engineOrNull) throw new VoiceEngineUnavailableError();
   const engine: VoiceEngine = engineOrNull;
@@ -133,14 +135,22 @@ export function createVoiceSession(
     if (settled) return;
     settled = true;
 
-    if (guardTimer) clearTimeout(guardTimer);
-    guardTimer = null;
+    // También silenceTimer: un partial/final tardío del motor durante
+    // engine.stop() pudo rearmarlo, y quedaría disparando no-ops tras idle.
+    clearTimers();
     releaseMic();
 
     const raw = segments.join(" ");
     segments = [];
 
     const text = normalize(await punctuator.apply(raw));
+
+    // Si un cancel()/dispose() se coló durante el await de un punctuator
+    // asíncrono (la estrategia "ai" futura), el texto quedó descartado y
+    // emitir acá violaría "cancelar descarta". Con los punctuators actuales
+    // (resuelven en microtask) esta ventana es inalcanzable; el guard sella
+    // el contrato contra el futuro.
+    if (state !== "processing") return;
 
     // ORDEN CONTRACTUAL: `final` primero, `idle` después. capture() depende de esto.
     if (text.length > 0) emit("final", text);
@@ -168,6 +178,10 @@ export function createVoiceSession(
     segments = [];
 
     // Los permisos los pide la SESIÓN, antes de que el motor exista.
+    // Un requestStream INYECTADO (tests, futuros providers) lanza errores
+    // crudos: la sesión los traduce acá con la misma política que
+    // defaultRequestStream — permiso denegado y motor-que-exige-stream son
+    // fatales; el resto continúa sin medidor.
     try {
       stream = await requestStream();
     } catch (raw) {
@@ -191,19 +205,28 @@ export function createVoiceSession(
       };
     }
 
-    await engine.start({
-      locale,
-      stream,
-      onPartial: (text) => {
-        emit("partial", text);
-        armSilence();
-      },
-      onFinal: (text) => {
-        if (text.trim().length > 0) segments.push(text.trim());
-        armSilence();
-      },
-      onError: fail,
-    });
+    try {
+      await engine.start({
+        locale,
+        stream,
+        onPartial: (text) => {
+          emit("partial", text);
+          armSilence();
+        },
+        onFinal: (text) => {
+          if (text.trim().length > 0) segments.push(text.trim());
+          armSilence();
+        },
+        onError: fail,
+      });
+    } catch (raw) {
+      // El motor no pudo arrancar (InvalidStateError de Chrome; auth/red de
+      // un motor de nube futuro). Sin esto la sesión quedaría colgada en
+      // "listening" con el micrófono abierto y el medidor corriendo. fail()
+      // libera todo, pasa a "error" y el usuario reintenta con un clic.
+      fail(raw);
+      return;
+    }
 
     maxTimer = setTimeout(() => void stop(), maxDurationMs);
     armSilence();
