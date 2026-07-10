@@ -646,7 +646,7 @@ export function normalize(input: string): string {
 - [ ] **Step 4: Verificar que pasa**
 
 Run: `npx vitest run src/lib/voice/normalize.test.ts`
-Expected: PASS — 7 tests.
+Expected: PASS — 11 tests.
 
 > Si `normalize("¿sí? claro")` falla, revisá que el `\P{L}*` de la mayúscula inicial
 > deje pasar el `¿` antes de capitalizar la `s`.
@@ -817,7 +817,7 @@ export function planInsertion(
 - [ ] **Step 4: Verificar que pasa**
 
 Run: `npx vitest run src/lib/voice/insert.test.ts`
-Expected: PASS — 8 tests.
+Expected: PASS — 10 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -2367,7 +2367,7 @@ export const NexusVoice = {
 - [ ] **Step 4: Verificar que pasa**
 
 Run: `npx vitest run src/lib/voice/nexus-voice.test.ts`
-Expected: PASS — 8 tests.
+Expected: PASS — 9 tests.
 
 Run: `npm test && npm run typecheck`
 Expected: todo verde.
