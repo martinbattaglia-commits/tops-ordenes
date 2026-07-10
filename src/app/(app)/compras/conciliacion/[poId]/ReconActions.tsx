@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ReconRecord } from "@/lib/recon/types";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 
 interface Props {
   recon: ReconRecord;
@@ -98,13 +99,15 @@ export function ReconActions({ recon, poId, canApprove = false }: Props) {
           </button>
           {rejectOpen && (
             <div className="space-y-2">
-              <textarea
-                rows={3}
-                placeholder="Motivo del rechazo (obligatorio, mínimo 5 caracteres)…"
-                value={rejectText}
-                onChange={e => setRejectText(e.target.value)}
-                className="w-full input text-sm"
-              />
+              <VoiceField>
+                <textarea
+                  rows={3}
+                  placeholder="Motivo del rechazo (obligatorio, mínimo 5 caracteres)…"
+                  value={rejectText}
+                  onChange={e => setRejectText(e.target.value)}
+                  className="w-full input text-sm"
+                />
+              </VoiceField>
               <button
                 disabled={!!loading || rejectText.trim().length < 5}
                 onClick={async () => {
@@ -133,13 +136,15 @@ export function ReconActions({ recon, poId, canApprove = false }: Props) {
       </button>
       {noteOpen && (
         <div className="space-y-2">
-          <textarea
-            rows={2}
-            placeholder="Nota…"
-            value={noteText}
-            onChange={e => setNoteText(e.target.value)}
-            className="w-full input text-sm"
-          />
+          <VoiceField>
+            <textarea
+              rows={2}
+              placeholder="Nota…"
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              className="w-full input text-sm"
+            />
+          </VoiceField>
           <button
             disabled={!!loading || !noteText.trim()}
             onClick={async () => {
