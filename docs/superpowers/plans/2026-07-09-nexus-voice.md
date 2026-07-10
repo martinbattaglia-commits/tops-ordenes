@@ -68,11 +68,12 @@ Modificados: `vitest.config.ts`, `src/app/globals.css`, `src/components/shell/Sh
 - Create: `src/lib/voice/errors.ts`
 - Create: `src/lib/voice/machine.ts`
 - Test: `src/lib/voice/machine.test.ts`
+- Test: `src/lib/voice/errors.test.ts`
 - Modify: `vitest.config.ts:29` (agregar el patrón de `voice`)
 
 **Interfaces:**
 - Consumes: nada.
-- Produces: `VoiceState`, `VoiceAction`, `transition()`, `VoiceError` + subclases, `VoiceEngine`, `VoiceEngineCapabilities`, `VoiceEngineStartContext`, `VoiceSession`, `VoiceSessionOptions`, `VoiceSessionEvents`, `VoiceMeter`, `VoiceMeterFactory`, `PunctuationStrategy`, `Punctuator`.
+- Produces: `VoiceState`, `VoiceAction`, `transition()`, `VoiceError` + subclases, `isAbortError()`, `toVoiceError()`, `VoiceEngine`, `VoiceEngineCapabilities`, `VoiceEngineStartContext`, `VoiceSession`, `VoiceSessionOptions`, `VoiceSessionEvents`, `VoiceMeter`, `VoiceMeterFactory`, `PunctuationStrategy`, `Punctuator`.
 
 - [ ] **Step 1: Registrar los tests de voice en Vitest**
 
@@ -320,7 +321,32 @@ const MESSAGES: Record<string, string> = {
   recognition: "No pudimos procesar el audio. Probá de nuevo.",
 };
 
-/** Traduce un error del motor a la taxonomía de Nexus Voice. */
+/**
+ * ¿Esta señal del motor es un aborto que pedimos nosotros?
+ *
+ * `cancel()` llama a `engine.abort()`, y los motores responden emitiendo lo que
+ * parece un error. NO lo es: la cancelación del usuario no forma parte de la
+ * taxonomía, por definición del diseño (spec §6.1 y §11).
+ *
+ * Vive acá, y no dentro de cada motor, para que un motor futuro (OpenAI, Azure,
+ * propio) tenga UN solo lugar al que preguntarle, en vez de tener que acordarse
+ * de comparar strings por su cuenta. El invariante deja de depender de que cada
+ * implementación lo respete de memoria.
+ */
+export function isAbortError(raw: unknown): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  if ("error" in raw && (raw as { error: unknown }).error === "aborted") return true;
+  if ("name" in raw && (raw as { name: unknown }).name === "AbortError") return true;
+  return false;
+}
+
+/**
+ * Traduce un error del motor a la taxonomía de Nexus Voice.
+ *
+ * NUNCA la invoques con un aborto intencional: filtralo antes con
+ * `isAbortError()`. Si un aborto llega hasta acá, se clasifica como
+ * `VoiceRecognitionError` y el usuario que solo canceló ve un error espurio.
+ */
 export function toVoiceError(raw: unknown): VoiceError {
   if (raw instanceof VoiceError) return raw;
 
@@ -350,6 +376,81 @@ export function toVoiceError(raw: unknown): VoiceError {
   }
   return new VoiceRecognitionError("recognition", MESSAGES["recognition"]!, raw);
 }
+```
+
+- [ ] **Step 5b: Escribir `errors.test.ts`**
+
+El invariante "cancelar nunca es un error" tiene que estar cubierto por un test, no
+sostenido por la memoria de quien escriba el próximo motor.
+
+```ts
+import { describe, expect, it } from "vitest";
+import {
+  isAbortError,
+  toVoiceError,
+  VoiceError,
+  VoicePermissionDeniedError,
+  VoiceRecognitionError,
+} from "./errors";
+
+describe("isAbortError", () => {
+  it("reconoce el aborto de Web Speech", () => {
+    expect(isAbortError({ error: "aborted" })).toBe(true);
+  });
+
+  it("reconoce el AbortError del DOM", () => {
+    expect(isAbortError({ name: "AbortError" })).toBe(true);
+  });
+
+  it("no confunde un error real con un aborto", () => {
+    expect(isAbortError({ error: "network" })).toBe(false);
+    expect(isAbortError({ error: "no-speech" })).toBe(false);
+    expect(isAbortError({ name: "NotAllowedError" })).toBe(false);
+  });
+
+  it("tolera entradas basura", () => {
+    expect(isAbortError(null)).toBe(false);
+    expect(isAbortError(undefined)).toBe(false);
+    expect(isAbortError("aborted")).toBe(false);
+    expect(isAbortError(42)).toBe(false);
+  });
+});
+
+describe("toVoiceError", () => {
+  it("mapea el permiso denegado", () => {
+    expect(toVoiceError({ name: "NotAllowedError" })).toBeInstanceOf(
+      VoicePermissionDeniedError,
+    );
+    expect(toVoiceError({ error: "not-allowed" })).toBeInstanceOf(
+      VoicePermissionDeniedError,
+    );
+  });
+
+  it("mapea los errores del reconocedor con su código", () => {
+    expect(toVoiceError({ error: "network" })).toMatchObject({ code: "network" });
+    expect(toVoiceError({ error: "no-speech" })).toMatchObject({ code: "no-speech" });
+    expect(toVoiceError({ error: "audio-capture" })).toMatchObject({
+      code: "no-microphone",
+    });
+  });
+
+  it("cae en 'recognition' ante algo desconocido", () => {
+    expect(toVoiceError(new Error("qué sé yo"))).toMatchObject({ code: "recognition" });
+  });
+
+  it("devuelve tal cual un VoiceError que ya lo era", () => {
+    const original = new VoicePermissionDeniedError();
+    expect(toVoiceError(original)).toBe(original);
+  });
+
+  it("preserva instanceof en las subclases (target ES2022)", () => {
+    const err = new VoiceRecognitionError("network", "x");
+    expect(err).toBeInstanceOf(VoiceRecognitionError);
+    expect(err).toBeInstanceOf(VoiceError);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("VoiceRecognitionError");
+  });
+});
 ```
 
 - [ ] **Step 6: Escribir `machine.ts`**
@@ -1025,7 +1126,7 @@ git commit -m "feat(voice): resolver de habilitación por fuentes (composición 
 - Create: `src/lib/voice/__fixtures__/fake-engine.ts`
 
 **Interfaces:**
-- Consumes: `VoiceEngine`, `VoiceEngineStartContext`, `VoiceEngineCapabilities` (Task 1); `toVoiceError` (Task 1).
+- Consumes: `VoiceEngine`, `VoiceEngineStartContext`, `VoiceEngineCapabilities` (Task 1); `isAbortError` (Task 1). El motor **no** traduce errores: pasa el crudo y la sesión lo mapea con `toVoiceError()`.
 - Produces: `createWebSpeechEngine(): VoiceEngine`, `resolveEngine(): VoiceEngine | null`, `isVoiceSupported(): boolean`, `FakeVoiceEngine` (clase con `emitPartial(text: string)`, `emitFinal(text: string)`, `emitError(raw: unknown)`, `started: boolean`, `stopCalls: number`, `abortCalls: number`, `stopHangs: boolean`).
 
 > No hay tests unitarios de `web-speech.ts`: depende del navegador y no hay jsdom.
@@ -1034,7 +1135,7 @@ git commit -m "feat(voice): resolver de habilitación por fuentes (composición 
 - [ ] **Step 1: Implementar `web-speech.ts`**
 
 ```ts
-import { toVoiceError } from "../errors";
+import { isAbortError } from "../errors";
 import type { VoiceEngine, VoiceEngineStartContext } from "../types";
 
 /** Las tipificaciones de SpeechRecognition no están en lib.dom de TS 5.6. */
@@ -1113,18 +1214,11 @@ export function createWebSpeechEngine(): VoiceEngine {
       };
 
       rec.onerror = (raw) => {
-        const err = toVoiceError(raw);
-        // "aborted" es una cancelación nuestra, no un error del usuario.
-        if (
-          typeof raw === "object" &&
-          raw !== null &&
-          "error" in raw &&
-          (raw as { error: unknown }).error === "aborted"
-        ) {
-          return;
-        }
+        // Un aborto es una cancelación NUESTRA, no un error del usuario.
+        // El invariante vive en errors.ts, no replicado en cada motor.
+        if (isAbortError(raw)) return;
         wantsToListen = false;
-        ctx.onError(err);
+        ctx.onError(raw); // la sesión lo traduce con toVoiceError()
       };
 
       rec.onend = () => {
