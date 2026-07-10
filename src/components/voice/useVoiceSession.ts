@@ -86,7 +86,26 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
     }
 
     sessionRef.current = session;
-    session.on("state", setState);
+    session.on("state", (s) => {
+      setState(s);
+      // RECONCILIACIÓN: la sesión puede terminar por caminos AJENOS al hook —
+      // error del motor en vuelo (no-speech, red), o takeover de otro campo
+      // (releaseActive la finaliza por fuera). Sin esto, sessionRef quedaría
+      // apuntando a una sesión muerta y el próximo clic chocaría con el guard
+      // de start(): micrófono muerto hasta remontar el componente.
+      // dispose() es idempotente: si el hook (stop/cancel) o el takeover ya
+      // dispusieron, es un no-op; si nadie lo hizo (error del motor), libera
+      // `active` en la fachada. El mensaje de error queda visible.
+      if (s === "idle" || s === "error") {
+        if (sessionRef.current === session) {
+          sessionRef.current = null;
+          session.dispose();
+          setLevel(0);
+          setPartial("");
+          setMeterActive(false);
+        }
+      }
+    });
     session.on("level", (rms) => {
       setLevel(rms);
       setMeterActive(true);
