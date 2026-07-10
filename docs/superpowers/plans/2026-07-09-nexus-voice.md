@@ -2169,7 +2169,7 @@ git commit -m "feat(voice): VoiceSession — estados, permisos, cancelación, ti
 Crear `src/lib/voice/nexus-voice.test.ts`:
 
 ```ts
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NexusVoice } from "./nexus-voice";
 import { FakeVoiceEngine } from "./__fixtures__/fake-engine";
 import { VoiceSessionAlreadyRunningError } from "./errors";
@@ -2286,6 +2286,60 @@ describe("NexusVoice.capture", () => {
 
     await expect(promise).resolves.toBeNull();
   });
+
+  it("un signal ya abortado resuelve null sin abrir el micrófono", async () => {
+    const engine = new FakeVoiceEngine();
+    const controller = new AbortController();
+    controller.abort(); // ANTES de llamar
+
+    await expect(
+      NexusVoice.capture({ engine, headless: true, signal: controller.signal }),
+    ).resolves.toBeNull();
+    expect(engine.started).toBe(false); // nunca arrancó nada
+  });
+
+  it("el takeover espera a una sesión en processing: su dueño no pierde el texto", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const oldEngine = new FakeVoiceEngine();
+    oldEngine.stopHangs = true; // su stop() nunca resuelve: queda en processing
+    const previous = NexusVoice.acquire({ engine: oldEngine, processingGuardMs: 30 });
+    const rescued: string[] = [];
+    previous.on("final", (t) => rescued.push(t));
+
+    await previous.start();
+    oldEngine.emitFinal("texto en vuelo");
+    void previous.stop(); // processing: el settle espera al guard
+
+    const newEngine = new FakeVoiceEngine();
+    const promise = NexusVoice.capture({ engine: newEngine, headless: true });
+
+    // El takeover NO dispone a la anterior: espera. El guard (30 ms) la
+    // asienta CON su texto, recién entonces el takeover procede.
+    await new Promise((r) => setTimeout(r, 80));
+    expect(rescued).toEqual(["Texto en vuelo"]);
+
+    newEngine.emitFinal("texto nuevo");
+    await NexusVoice.active!.stop();
+    await expect(promise).resolves.toBe("Texto nuevo");
+    warn.mockRestore();
+  });
+
+  it("dos captures concurrentes no se pisan: el último gana sin excepción espuria", async () => {
+    const engineA = new FakeVoiceEngine();
+    const engineB = new FakeVoiceEngine();
+
+    const p1 = NexusVoice.capture({ engine: engineA, headless: true });
+    const p2 = NexusVoice.capture({ engine: engineB, headless: true });
+    await flush();
+
+    // La cola serializó: A arrancó primero, B la finalizó limpia (sin texto →
+    // null) y tomó el micrófono. Nadie recibió VoiceSessionAlreadyRunningError.
+    engineB.emitFinal("gana el último");
+    await NexusVoice.active!.stop();
+
+    await expect(p1).resolves.toBeNull();
+    await expect(p2).resolves.toBe("Gana el último");
+  });
 });
 
 describe("NexusVoice.subscribe", () => {
@@ -2352,6 +2406,21 @@ let active: VoiceSession | null = null;
 let presented: VoiceSession | null = null;
 const subscribers = new Set<(session: VoiceSession | null) => void>();
 
+/**
+ * Cola de adquisición: vuelve atómico el tramo chequear-liberar-adquirir-arrancar
+ * de capture(). Sin ella, dos takeovers concurrentes (dos taps rápidos de
+ * micrófono) se pisan: uno cancela a la sesión previa (texto perdido) y el otro
+ * lanza VoiceSessionAlreadyRunningError pese a haber pedido takeover. Con la
+ * cola, el último gana y nada se pierde.
+ */
+let acquireQueue: Promise<unknown> = Promise.resolve();
+
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const next = acquireQueue.then(fn, fn);
+  acquireQueue = next.catch(() => {});
+  return next;
+}
+
 function present(session: VoiceSession | null): void {
   presented = session;
   for (const cb of subscribers) cb(session);
@@ -2391,7 +2460,28 @@ function acquire(opts: CreateVoiceSessionOptions = {}): VoiceSession {
 async function releaseActive(): Promise<void> {
   const current = active;
   if (!current) return;
-  if (current.state === "listening") await current.stop();
+
+  if (current.state === "listening") {
+    await current.stop();
+  } else if (current.state === "processing") {
+    // Su propio stop() está en vuelo (auto-stop, maxDurationMs, o su dueño
+    // apretó Finalizar). dispose() acá cancelaría el settle() en vuelo y el
+    // dueño anterior PERDERÍA su texto. Se espera el cierre — espera acotada:
+    // el guard de processing (3 s) garantiza que este estado siempre termina.
+    await new Promise<void>((resolve) => {
+      const off = current.on("state", (s) => {
+        if (s === "idle" || s === "error") {
+          off();
+          resolve();
+        }
+      });
+      // Por si transicionó entre el chequeo y la suscripción:
+      if (current.state !== "processing") {
+        off();
+        resolve();
+      }
+    });
+  }
   current.dispose();
 }
 
@@ -2400,34 +2490,50 @@ async function capture(opts: CaptureOptions = {}): Promise<string | null> {
     throw new VoiceEngineUnavailableError();
   }
 
-  if (active) {
-    if (opts.conflict === "reject") throw new VoiceSessionAlreadyRunningError();
-    await releaseActive();
-  }
+  // Un signal que ya venía abortado: el listener "abort" nunca dispararía y
+  // el micrófono quedaría abierto hasta maxDurationMs (~120 s).
+  if (opts.signal?.aborted) return null;
 
-  const session = acquire(opts);
+  // start() vive DENTRO de la sección crítica: si quedara afuera, un takeover
+  // concurrente podría disponer una sesión adquirida pero aún no arrancada, y
+  // su capture() colgaría para siempre (los listeners se registran después).
+  const session = await serialize(async () => {
+    if (active) {
+      if (opts.conflict === "reject") throw new VoiceSessionAlreadyRunningError();
+      await releaseActive();
+    }
+    const s = acquire(opts);
+    try {
+      await s.start();
+    } catch (raw) {
+      s.dispose();
+      throw raw;
+    }
+    return s;
+  });
+
   if (!opts.headless) present(session);
 
   try {
     return await new Promise<string | null>((resolve, reject) => {
       let result: string | null = null;
-      let started = false;
 
       // `final` se emite ANTES de la transición a idle (contrato de VoiceSession).
       session.on("final", (text) => {
         result = text;
       });
       session.on("error", reject);
+      // La sesión ya está en "listening" (arrancó en la sección crítica): el
+      // próximo "idle" solo puede venir de settle o cancel.
       session.on("state", (state) => {
-        if (state === "listening") started = true;
-        else if (state === "idle" && started) resolve(result);
+        if (state === "idle") resolve(result);
       });
 
       opts.signal?.addEventListener("abort", () => session.cancel(), {
         once: true,
       });
-
-      session.start().catch(reject);
+      // Ventana entre el chequeo temprano y esta suscripción:
+      if (opts.signal?.aborted) session.cancel();
     });
   } finally {
     session.dispose();
@@ -2464,7 +2570,7 @@ export const NexusVoice = {
 - [ ] **Step 4: Verificar que pasa**
 
 Run: `npx vitest run src/lib/voice/nexus-voice.test.ts`
-Expected: PASS — 9 tests.
+Expected: PASS — 12 tests.
 
 Run: `npm test && npm run typecheck`
 Expected: todo verde.
