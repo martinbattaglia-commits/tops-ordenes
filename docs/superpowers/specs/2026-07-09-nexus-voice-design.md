@@ -529,7 +529,9 @@ Ninguna excepción cruda es visible para el usuario.
 
 - **Iniciar:** clic en el micrófono, `Enter` o `Espacio`.
 - **Finalizar** (conserva): clic en el micrófono, blur del campo, `maxDurationMs`.
-- **Cancelar** (descarta): `Escape`.
+- **Cancelar** (descarta): `Escape`, **y el desmontaje del componente** (cierre de
+  modal, navegación). Decisión explícita de producto: tras desmontar no existe el
+  campo destino — insertar sería escribir a la nada. No es un bug.
 
 ### Modo Global
 

@@ -1816,6 +1816,23 @@ describe("VoiceSession", () => {
     expect(engine.abortCalls).toBe(1); // fail() abortó y liberó
   });
 
+  it("dispose() durante el pedido de permisos aborta el arranque huérfano", async () => {
+    const engine = new FakeVoiceEngine();
+    let resolveStream!: (v: MediaStream | null) => void;
+    const session = createVoiceSession({
+      engine,
+      requestStream: () => new Promise((r) => (resolveStream = r)),
+    });
+
+    const starting = session.start(); // suspendido esperando el permiso
+    session.dispose(); // el dueño desaparece (desmontaje, cierre de modal)
+    resolveStream(null); // el permiso llega tarde
+    await starting;
+
+    expect(engine.started).toBe(false); // el motor JAMÁS arrancó
+    expect(session.state).toBe("idle"); // nada quedó grabando
+  });
+
   it("cancel() gana si corre mientras stop() está en vuelo: el texto se descarta", async () => {
     const { engine, session, finals } = setup();
     await session.start();
@@ -2037,6 +2054,16 @@ export function createVoiceSession(
       // El motor no necesita el stream: continúa sin él.
     }
 
+    // CHECKPOINT: el dueño desapareció durante el prompt de permiso
+    // (desmontaje, cierre de modal, navegación). dispose() no pudo cancelar
+    // porque el estado seguía en idle; sin este chequeo el arranque
+    // continuaría huérfano y el micrófono quedaría GRABANDO sin indicador
+    // hasta maxDurationMs (~120 s).
+    if (disposed) {
+      releaseMic();
+      return;
+    }
+
     go({ type: "START" });
 
     if (stream && opts.createMeter) {
@@ -2071,6 +2098,14 @@ export function createVoiceSession(
       // "listening" con el micrófono abierto y el medidor corriendo. fail()
       // libera todo, pasa a "error" y el usuario reintenta con un clic.
       fail(raw);
+      return;
+    }
+
+    // CHECKPOINT: desmontaje durante el arranque del motor. cancel() (vía
+    // dispose) ya limpió; esto evita armar timers para una sesión muerta.
+    if (disposed) {
+      engine.abort();
+      releaseMic();
       return;
     }
 
@@ -2130,7 +2165,7 @@ export function createVoiceSession(
 - [ ] **Step 4: Verificar que pasa**
 
 Run: `npx vitest run src/lib/voice/session.test.ts`
-Expected: PASS — 14 tests.
+Expected: PASS — 15 tests.
 
 > `dispose()` llama `cancel()` **antes** de marcar `disposed`, para que la transición
 > a `idle` todavía se emita. El test "dispose() libera todo" verifica exactamente eso.
@@ -2340,6 +2375,21 @@ describe("NexusVoice.capture", () => {
     await expect(p1).resolves.toBeNull();
     await expect(p2).resolves.toBe("Gana el último");
   });
+
+  it("acquireForTakeover serializa: dos hooks concurrentes no se pisan", async () => {
+    const engineA = new FakeVoiceEngine();
+    const engineB = new FakeVoiceEngine();
+
+    const [a, b] = await Promise.all([
+      NexusVoice.acquireForTakeover({ engine: engineA }),
+      NexusVoice.acquireForTakeover({ engine: engineB }),
+    ]);
+
+    // Nadie lanzó VoiceSessionAlreadyRunningError; el último es el activo.
+    expect(NexusVoice.active).toBe(b);
+    expect(a.state).toBe("idle"); // el primero quedó dispuesto, limpio
+    b.dispose();
+  });
 });
 
 describe("NexusVoice.subscribe", () => {
@@ -2456,6 +2506,22 @@ function acquire(opts: CreateVoiceSessionOptions = {}): VoiceSession {
   return wrapper;
 }
 
+/**
+ * Adquisición con política de takeover, sobre la MISMA cola que capture():
+ * la sesión anterior finaliza limpia (stop, jamás cancel) y recién entonces
+ * se adquiere. Es el camino para consumidores con UI propia — el hook React.
+ * Sin la cola, dos taps rápidos en micrófonos distintos se pisarían y el
+ * perdedor vería VoiceSessionAlreadyRunningError en vez del takeover.
+ */
+function acquireForTakeover(
+  opts: CreateVoiceSessionOptions = {},
+): Promise<VoiceSession> {
+  return serialize(async () => {
+    await releaseActive();
+    return acquire(opts);
+  });
+}
+
 /** Finaliza la sesión activa conservando su texto. Nunca la cancela. */
 async function releaseActive(): Promise<void> {
   const current = active;
@@ -2562,6 +2628,7 @@ export const NexusVoice = {
     return () => subscribers.delete(cb);
   },
   acquire,
+  acquireForTakeover,
   releaseActive,
   capture,
 };
@@ -2570,7 +2637,7 @@ export const NexusVoice = {
 - [ ] **Step 4: Verificar que pasa**
 
 Run: `npx vitest run src/lib/voice/nexus-voice.test.ts`
-Expected: PASS — 12 tests.
+Expected: PASS — 13 tests.
 
 Run: `npm test && npm run typecheck`
 Expected: todo verde.
@@ -2620,6 +2687,8 @@ export interface VoiceSessionBinding {
   partial: string;
   error: string | null;
   enabled: boolean;
+  /** true desde el primer evento `level`: el medidor REAL está emitiendo. */
+  meterActive: boolean;
   start(): Promise<void>;
   stop(): Promise<void>;
   cancel(): void;
@@ -2630,6 +2699,10 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
   const [level, setLevel] = useState(0);
   const [partial, setPartial] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // ¿El medidor REAL está emitiendo? El primer evento `level` (aunque valga 0:
+  // el tick corre a cadencia de rAF también en silencio) lo confirma. El botón
+  // muestra barras reales O el pulso de degradación — nunca ambos.
+  const [meterActive, setMeterActive] = useState(false);
 
   // En el servidor no hay `window`, así que isSupported() es false. Calcularlo
   // durante el render produciría un desajuste de hidratación: el servidor
@@ -2645,10 +2718,14 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
   onFinalRef.current = opts.onFinal;
 
   const release = useCallback(() => {
+    // El desmontaje/limpieza descarta el dictado en curso: no existe el campo
+    // destino después de desmontar. Decisión explícita de producto (spec §12),
+    // no un bug — el desmontaje equivale a Cancelar.
     sessionRef.current?.dispose();
     sessionRef.current = null;
     setLevel(0);
     setPartial("");
+    setMeterActive(false);
   }, []);
 
   useEffect(() => release, [release]);
@@ -2657,13 +2734,13 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
     if (sessionRef.current) return;
     setError(null);
 
-    // Takeover: la sesión anterior finaliza con stop() y entrega su texto a
-    // SU campo original antes de ceder el micrófono. Nunca cancel(). Spec §5.
-    await NexusVoice.releaseActive();
-
+    // Takeover por la MISMA cola serializada que capture(): la sesión anterior
+    // finaliza con stop() y entrega su texto a SU campo antes de ceder el
+    // micrófono. Nunca cancel(). Dos taps rápidos en micrófonos distintos no
+    // se pisan: gana el último, sin VoiceSessionAlreadyRunningError espurio.
     let session: VoiceSession;
     try {
-      session = NexusVoice.acquire({
+      session = await NexusVoice.acquireForTakeover({
         locale: opts.locale,
         punctuationStrategy: opts.punctuationStrategy,
         autoStopOnSilenceMs: opts.autoStopOnSilenceMs,
@@ -2677,7 +2754,10 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
 
     sessionRef.current = session;
     session.on("state", setState);
-    session.on("level", setLevel);
+    session.on("level", (rms) => {
+      setLevel(rms);
+      setMeterActive(true);
+    });
     session.on("partial", setPartial);
     session.on("final", (text) => onFinalRef.current(text));
     session.on("error", (err) => setError(err.message));
@@ -2704,9 +2784,13 @@ export function useVoiceSession(opts: UseVoiceSessionOptions): VoiceSessionBindi
     setState("idle");
   }, [release]);
 
-  return { state, level, partial, error, enabled, start, stop, cancel };
+  return { state, level, partial, error, enabled, meterActive, start, stop, cancel };
 }
 ```
+
+> Ojo con una confusión posible: `acquireForTakeover` solo ADQUIERE (liberando
+> a la anterior por la cola); no arranca nada. El `session.start()` del hook,
+> con su try/catch, sigue siendo necesario tal como está.
 
 - [ ] **Step 2: Implementar `VoiceMicButton.tsx`**
 
@@ -2735,6 +2819,8 @@ export interface VoiceMicButtonProps {
   state: VoiceState;
   level: number;
   error: string | null;
+  /** true = el medidor real emite; el botón muestra barras. false = pulso. */
+  meterActive: boolean;
   onStart(): void;
   onStop(): void;
   className?: string;
@@ -2744,6 +2830,7 @@ export function VoiceMicButton({
   state,
   level,
   error,
+  meterActive,
   onStart,
   onStop,
   className = "",
@@ -2765,12 +2852,14 @@ export function VoiceMicButton({
         title={error ?? LABELS[state]}
         className={`nx-voice-mic inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md
           text-fg-muted transition-colors hover:text-fg-primary disabled:opacity-50
-          ${listening ? "nx-voice-mic--live text-tops-red" : ""}
+          ${listening && !meterActive ? "nx-voice-mic--live" : ""}
+          ${listening ? "text-tops-red" : ""}
           ${state === "error" ? "text-status-warning" : ""} ${className}`}
       >
         {processing ? (
           <span className="nx-voice-spinner h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent" />
-        ) : listening ? (
+        ) : listening && meterActive ? (
+          // Barras REALES: solo cuando el medidor emite. Nunca simuladas.
           <span className="flex items-end gap-[2px]" aria-hidden>
             {BARS.map((weight, i) => (
               <span
@@ -2781,6 +2870,7 @@ export function VoiceMicButton({
             ))}
           </span>
         ) : (
+          // Idle, error, o listening sin medidor (degradación: ícono con pulso).
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden>
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
             <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" strokeLinecap="round" />
@@ -2789,7 +2879,7 @@ export function VoiceMicButton({
       </button>
 
       <span className="sr-only" aria-live="polite">
-        {ANNOUNCE[state]}
+        {state === "error" && error ? error : ANNOUNCE[state]}
       </span>
     </>
   );
@@ -2950,6 +3040,7 @@ export function VoiceField({ children, className = "" }: VoiceFieldProps) {
           state={voice.state}
           level={voice.level}
           error={voice.error}
+          meterActive={voice.meterActive}
           onStart={() => void voice.start()}
           onStop={() => void voice.stop()}
         />
