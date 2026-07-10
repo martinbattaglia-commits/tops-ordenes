@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NexusVoice } from "./nexus-voice";
 import { FakeVoiceEngine } from "./__fixtures__/fake-engine";
 import { VoiceSessionAlreadyRunningError } from "./errors";
@@ -114,6 +114,60 @@ describe("NexusVoice.capture", () => {
     controller.abort();
 
     await expect(promise).resolves.toBeNull();
+  });
+
+  it("un signal ya abortado resuelve null sin abrir el micrófono", async () => {
+    const engine = new FakeVoiceEngine();
+    const controller = new AbortController();
+    controller.abort(); // ANTES de llamar
+
+    await expect(
+      NexusVoice.capture({ engine, headless: true, signal: controller.signal }),
+    ).resolves.toBeNull();
+    expect(engine.started).toBe(false); // nunca arrancó nada
+  });
+
+  it("el takeover espera a una sesión en processing: su dueño no pierde el texto", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const oldEngine = new FakeVoiceEngine();
+    oldEngine.stopHangs = true; // su stop() nunca resuelve: queda en processing
+    const previous = NexusVoice.acquire({ engine: oldEngine, processingGuardMs: 30 });
+    const rescued: string[] = [];
+    previous.on("final", (t) => rescued.push(t));
+
+    await previous.start();
+    oldEngine.emitFinal("texto en vuelo");
+    void previous.stop(); // processing: el settle espera al guard
+
+    const newEngine = new FakeVoiceEngine();
+    const promise = NexusVoice.capture({ engine: newEngine, headless: true });
+
+    // El takeover NO dispone a la anterior: espera. El guard (30 ms) la
+    // asienta CON su texto, recién entonces el takeover procede.
+    await new Promise((r) => setTimeout(r, 80));
+    expect(rescued).toEqual(["Texto en vuelo"]);
+
+    newEngine.emitFinal("texto nuevo");
+    await NexusVoice.active!.stop();
+    await expect(promise).resolves.toBe("Texto nuevo");
+    warn.mockRestore();
+  });
+
+  it("dos captures concurrentes no se pisan: el último gana sin excepción espuria", async () => {
+    const engineA = new FakeVoiceEngine();
+    const engineB = new FakeVoiceEngine();
+
+    const p1 = NexusVoice.capture({ engine: engineA, headless: true });
+    const p2 = NexusVoice.capture({ engine: engineB, headless: true });
+    await flush();
+
+    // La cola serializó: A arrancó primero, B la finalizó limpia (sin texto →
+    // null) y tomó el micrófono. Nadie recibió VoiceSessionAlreadyRunningError.
+    engineB.emitFinal("gana el último");
+    await NexusVoice.active!.stop();
+
+    await expect(p1).resolves.toBeNull();
+    await expect(p2).resolves.toBe("Gana el último");
   });
 });
 

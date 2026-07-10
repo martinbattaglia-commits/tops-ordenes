@@ -20,6 +20,21 @@ let active: VoiceSession | null = null;
 let presented: VoiceSession | null = null;
 const subscribers = new Set<(session: VoiceSession | null) => void>();
 
+/**
+ * Cola de adquisición: vuelve atómico el tramo chequear-liberar-adquirir-arrancar
+ * de capture(). Sin ella, dos takeovers concurrentes (dos taps rápidos de
+ * micrófono) se pisan: uno cancela a la sesión previa (texto perdido) y el otro
+ * lanza VoiceSessionAlreadyRunningError pese a haber pedido takeover. Con la
+ * cola, el último gana y nada se pierde.
+ */
+let acquireQueue: Promise<unknown> = Promise.resolve();
+
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const next = acquireQueue.then(fn, fn);
+  acquireQueue = next.catch(() => {});
+  return next;
+}
+
 function present(session: VoiceSession | null): void {
   presented = session;
   for (const cb of subscribers) cb(session);
@@ -59,7 +74,28 @@ function acquire(opts: CreateVoiceSessionOptions = {}): VoiceSession {
 async function releaseActive(): Promise<void> {
   const current = active;
   if (!current) return;
-  if (current.state === "listening") await current.stop();
+
+  if (current.state === "listening") {
+    await current.stop();
+  } else if (current.state === "processing") {
+    // Su propio stop() está en vuelo (auto-stop, maxDurationMs, o su dueño
+    // apretó Finalizar). dispose() acá cancelaría el settle() en vuelo y el
+    // dueño anterior PERDERÍA su texto. Se espera el cierre — espera acotada:
+    // el guard de processing (3 s) garantiza que este estado siempre termina.
+    await new Promise<void>((resolve) => {
+      const off = current.on("state", (s) => {
+        if (s === "idle" || s === "error") {
+          off();
+          resolve();
+        }
+      });
+      // Por si transicionó entre el chequeo y la suscripción:
+      if (current.state !== "processing") {
+        off();
+        resolve();
+      }
+    });
+  }
   current.dispose();
 }
 
@@ -68,34 +104,50 @@ async function capture(opts: CaptureOptions = {}): Promise<string | null> {
     throw new VoiceEngineUnavailableError();
   }
 
-  if (active) {
-    if (opts.conflict === "reject") throw new VoiceSessionAlreadyRunningError();
-    await releaseActive();
-  }
+  // Un signal que ya venía abortado: el listener "abort" nunca dispararía y
+  // el micrófono quedaría abierto hasta maxDurationMs (~120 s).
+  if (opts.signal?.aborted) return null;
 
-  const session = acquire(opts);
+  // start() vive DENTRO de la sección crítica: si quedara afuera, un takeover
+  // concurrente podría disponer una sesión adquirida pero aún no arrancada, y
+  // su capture() colgaría para siempre (los listeners se registran después).
+  const session = await serialize(async () => {
+    if (active) {
+      if (opts.conflict === "reject") throw new VoiceSessionAlreadyRunningError();
+      await releaseActive();
+    }
+    const s = acquire(opts);
+    try {
+      await s.start();
+    } catch (raw) {
+      s.dispose();
+      throw raw;
+    }
+    return s;
+  });
+
   if (!opts.headless) present(session);
 
   try {
     return await new Promise<string | null>((resolve, reject) => {
       let result: string | null = null;
-      let started = false;
 
       // `final` se emite ANTES de la transición a idle (contrato de VoiceSession).
       session.on("final", (text) => {
         result = text;
       });
       session.on("error", reject);
+      // La sesión ya está en "listening" (arrancó en la sección crítica): el
+      // próximo "idle" solo puede venir de settle o cancel.
       session.on("state", (state) => {
-        if (state === "listening") started = true;
-        else if (state === "idle" && started) resolve(result);
+        if (state === "idle") resolve(result);
       });
 
       opts.signal?.addEventListener("abort", () => session.cancel(), {
         once: true,
       });
-
-      session.start().catch(reject);
+      // Ventana entre el chequeo temprano y esta suscripción:
+      if (opts.signal?.aborted) session.cancel();
     });
   } finally {
     session.dispose();
