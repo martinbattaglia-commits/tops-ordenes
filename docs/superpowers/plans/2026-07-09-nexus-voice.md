@@ -2420,7 +2420,7 @@ export function VoiceMicButton({
         className={`nx-voice-mic inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md
           text-fg-muted transition-colors hover:text-fg-primary disabled:opacity-50
           ${listening ? "nx-voice-mic--live text-tops-red" : ""}
-          ${state === "error" ? "text-status-warn" : ""} ${className}`}
+          ${state === "error" ? "text-status-warning" : ""} ${className}`}
       >
         {processing ? (
           <span className="nx-voice-spinner h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent" />
@@ -2485,8 +2485,9 @@ Al final de `src/app/globals.css`:
 Run: `npm run typecheck`
 Expected: sin errores.
 
-> Si `text-status-warn` no existe en el tema, usá `text-tops-red`. Verificá con:
-> `grep -n "status-warn" src/app/globals.css tailwind.config.ts`
+> La clase es `text-status-warning` (definida en `tailwind.config.ts`, 79 usos en el repo).
+> `text-status-warn` **no existe**: Tailwind la ignoraría en silencio y el estado de error
+> quedaría del mismo color que el estado normal.
 
 - [ ] **Step 5: Commit**
 
@@ -2791,10 +2792,31 @@ Expected: todo verde.
 
 - [ ] **Step 5: Commit**
 
+Enumerá los archivos, uno por uno. **No uses `git add src/app src/components`**: arrastraría
+cualquier archivo tocado por accidente y rompe la trazabilidad del commit.
+
 ```bash
-git add src/app src/components
+git add \
+  "src/app/(app)/orders/new/NewOrderWizard.tsx" \
+  "src/components/comercial/tablero/DealDetailPanel.tsx" \
+  "src/app/(app)/connect/_components/NewIncidentForm.tsx" \
+  "src/app/(app)/connect/_components/IncidentActions.tsx" \
+  "src/app/(app)/connect/_components/NewTaskForm.tsx" \
+  "src/app/(app)/connect/_components/TaskActions.tsx" \
+  "src/app/(app)/connect/_components/ThreadView.tsx" \
+  "src/app/(app)/connect/_components/ProfileForm.tsx" \
+  "src/app/(app)/compras/conciliacion/[poId]/ReconActions.tsx" \
+  "src/app/(app)/compras/facturas/nueva/NuevaFacturaForm.tsx" \
+  "src/app/(app)/compras/nueva/NewPoWizard.tsx" \
+  "src/app/(app)/clients/ClientsView.tsx" \
+  "src/app/(app)/settings/fiscal/FiscalConfigForm.tsx"
+
+git status --short   # confirmá que no quedó nada sin intención
 git commit -m "feat(voice): dictado en los textareas de texto libre"
 ```
+
+> `settings/roles/new/page.tsx` no aparece en la lista a propósito: el Step 1 determina si
+> es Server Component. Si lo es, queda fuera de alcance y no se toca.
 
 ---
 
@@ -2928,14 +2950,9 @@ import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
 
 Run: `npm run dev`
 
-Abrir cualquier página de la app en Chrome y, en la consola del navegador:
-
-```js
-const { NexusVoice } = await import("/_next/static/chunks/...");
-```
-
-Como el import dinámico del bundle es frágil, verificá en cambio con un botón temporal.
-Agregá esto **de forma transitoria** en `src/app/(app)/copilot/page.tsx` y borralo después:
+`NexusVoice` no es alcanzable desde la consola del navegador: vive dentro de un chunk de
+Next con nombre generado. Verificá con un botón temporal. Agregá esto **de forma
+transitoria** en `src/app/(app)/copilot/page.tsx` y borralo antes de commitear:
 
 ```tsx
 <button type="button" onClick={async () => {
