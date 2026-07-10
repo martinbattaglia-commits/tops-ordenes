@@ -1436,7 +1436,8 @@ import type { VoiceMeter } from "./types";
  * al usuario que el micrófono capta su voz incluso cuando no capta nada, que es
  * exactamente el problema que el medidor existe para resolver. Ver spec §10.
  *
- * Si AudioContext no está disponible, devuelve null y la sesión degrada a pulso.
+ * Si AudioContext no está disponible, el medidor devuelto es inerte (nunca
+ * emite nivel) y la UI degrada a pulso. La transcripción no se ve afectada.
  */
 export const createAnalyserMeter = (stream: MediaStream): VoiceMeter => {
   const AudioCtor =
@@ -1452,6 +1453,11 @@ export const createAnalyserMeter = (stream: MediaStream): VoiceMeter => {
 
   if (AudioCtor) {
     ctx = new AudioCtor();
+    // Política de autoplay (Safari sobre todo): el contexto puede nacer
+    // "suspended" y entonces getFloatTimeDomainData devuelve ceros ETERNOS —
+    // el medidor mostraría silencio mientras el usuario habla, el falso
+    // negativo exacto que existe para evitar. resume() es fire-and-forget.
+    if (ctx.state === "suspended") void ctx.resume();
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 512;
@@ -1534,7 +1540,15 @@ export function insertAtCursor(el: EditableElement, text: string): void {
   // React re-renderiza tras el evento y puede reposicionar el caret al final.
   // El microtask lo coloca después de ese re-render.
   queueMicrotask(() => {
-    if (el.isConnected) el.setSelectionRange(caretStart, caretEnd);
+    if (!el.isConnected) return;
+    try {
+      el.setSelectionRange(caretStart, caretEnd);
+    } catch {
+      // Los <input> sin selección (email, number, date…) lanzan
+      // InvalidStateError. El texto ya se insertó bien; solo se omite el
+      // reposicionamiento del caret. El alcance v1 excluye esos tipos, pero
+      // esta guarda evita que un mal uso futuro explote dentro de un microtask.
+    }
   });
 }
 ```
