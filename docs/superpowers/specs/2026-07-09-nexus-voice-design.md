@@ -374,8 +374,30 @@ y en `resolvePunctuator()`; solicitarla en v1 lanza un `Error` común de configu
 —no un `VoiceError`—, porque es un error del programador, no del usuario, y nunca debe
 llegar a la interfaz.
 
-> **Nota honesta:** con Web Speech API y sin pasar por un LLM, la puntuación automática
-> real no existe. `"ai"` es el único camino hacia ella, y por eso queda modelada.
+### 7.1 La ausencia de puntuación automática es una decisión de producto
+
+**Esto no es una limitación accidental de la implementación. Es una decisión deliberada,
+tomada con conocimiento de la alternativa y de su costo.**
+
+Con Web Speech API y sin pasar por un LLM, la puntuación automática real no existe.
+`"ai"` es el único camino hacia ella. Se evaluó y se descartó para v1: incorporar un LLM
+únicamente para puntuar agregaría complejidad, latencia y costo por dictado a un servicio
+cuyo objetivo es ser confiable, reutilizable y desacoplado.
+
+**El objetivo de Nexus Voice v1 es resolver la captura de voz.** La mejora lingüística del
+texto es una capacidad distinta, y se considerará en versiones posteriores.
+
+En consecuencia:
+
+- `"none"` es el **comportamiento oficial de v1**.
+- `"commands"` se implementa **solo** para comandos inequívocos multi-palabra.
+- `"provider"` queda preparada para motores con puntuación nativa.
+- `"ai"` queda **modelada como extensión futura y fuera del criterio de aceptación de
+  v1**.
+
+Quien lea este documento dentro de un año no debe concluir que la puntuación "quedó
+pendiente por falta de tiempo". Se decidió no hacerla, y esta sección es el registro de
+esa decisión.
 
 ---
 
@@ -601,7 +623,7 @@ campos, `Escape` durante `listening`, y Firefox (el micrófono no debe aparecer)
 | `number`, `date`, `checkbox`, `button`, `submit` | Dictar por voz no tiene sentido |
 | Primitivo React `<Input>` / `<Textarea>` y migración de ~30 campos | Refactor transversal; multiplica el riesgo de regresión sin servir al objetivo |
 | Editor enriquecido | No existe en el sistema |
-| `punctuationStrategy: "ai"` | Ranura preparada; requiere ruta de servidor |
+| `punctuationStrategy: "ai"` | **Decisión deliberada de producto**, no limitación técnica — ver §7.1 |
 | Feature flag Nivel 2 (org / rol / usuario) | Arquitectura preparada; sin implementar |
 | Text-to-Speech, wake word, conversación continua, streaming parcial insertado, multi-idioma, comandos de voz de acción | Habilitados por el diseño; fuera de v1 |
 | Auto-corte por silencio como mecanismo principal | `autoStopOnSilenceMs` existe, **desactivado por defecto** |
