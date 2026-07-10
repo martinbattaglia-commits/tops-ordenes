@@ -5,7 +5,8 @@ import type { VoiceMeter } from "./types";
  * al usuario que el micrófono capta su voz incluso cuando no capta nada, que es
  * exactamente el problema que el medidor existe para resolver. Ver spec §10.
  *
- * Si AudioContext no está disponible, devuelve null y la sesión degrada a pulso.
+ * Si AudioContext no está disponible, el medidor devuelto es inerte (nunca
+ * emite nivel) y la UI degrada a pulso. La transcripción no se ve afectada.
  */
 export const createAnalyserMeter = (stream: MediaStream): VoiceMeter => {
   const AudioCtor =
@@ -21,6 +22,11 @@ export const createAnalyserMeter = (stream: MediaStream): VoiceMeter => {
 
   if (AudioCtor) {
     ctx = new AudioCtor();
+    // Política de autoplay (Safari sobre todo): el contexto puede nacer
+    // "suspended" y entonces getFloatTimeDomainData devuelve ceros ETERNOS —
+    // el medidor mostraría silencio mientras el usuario habla, el falso
+    // negativo exacto que existe para evitar. resume() es fire-and-forget.
+    if (ctx.state === "suspended") void ctx.resume();
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 512;

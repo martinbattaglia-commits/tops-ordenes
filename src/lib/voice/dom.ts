@@ -42,6 +42,14 @@ export function insertAtCursor(el: EditableElement, text: string): void {
   // React re-renderiza tras el evento y puede reposicionar el caret al final.
   // El microtask lo coloca después de ese re-render.
   queueMicrotask(() => {
-    if (el.isConnected) el.setSelectionRange(caretStart, caretEnd);
+    if (!el.isConnected) return;
+    try {
+      el.setSelectionRange(caretStart, caretEnd);
+    } catch {
+      // Los <input> sin selección (email, number, date…) lanzan
+      // InvalidStateError. El texto ya se insertó bien; solo se omite el
+      // reposicionamiento del caret. El alcance v1 excluye esos tipos, pero
+      // esta guarda evita que un mal uso futuro explote dentro de un microtask.
+    }
   });
 }
