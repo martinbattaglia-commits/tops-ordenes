@@ -1591,11 +1591,18 @@ El corazón. Administra estados, permisos, cancelación, timeouts, medidor, even
 Crear `src/lib/voice/session.test.ts`:
 
 ```ts
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createVoiceSession } from "./session";
 import { FakeVoiceEngine } from "./__fixtures__/fake-engine";
 import { VoicePermissionDeniedError } from "./errors";
 import type { VoiceState } from "./types";
+
+// Higiene: si una aserción falla antes de las restauraciones inline, los fake
+// timers o el spy de console.warn fugarían al test siguiente.
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 function setup(overrides: Parameters<typeof createVoiceSession>[0] = {}) {
   const engine = new FakeVoiceEngine();
@@ -1789,6 +1796,38 @@ describe("VoiceSession", () => {
     engine.emitFinal("nadie escucha");
     expect(states).toEqual(["listening", "idle"]);
   });
+
+  it("un motor que falla al arrancar deja la sesión en error y libera todo", async () => {
+    const engine = new FakeVoiceEngine();
+    engine.start = async () => {
+      throw new Error("boom del motor");
+    };
+    const session = createVoiceSession({ engine });
+    const states: VoiceState[] = [];
+    const errors: Error[] = [];
+    session.on("state", (s) => states.push(s));
+    session.on("error", (e) => errors.push(e));
+
+    await session.start(); // no rechaza: la falla se reporta por eventos
+
+    expect(session.state).toBe("error");
+    expect(states).toEqual(["listening", "error"]);
+    expect(errors).toHaveLength(1);
+    expect(engine.abortCalls).toBe(1); // fail() abortó y liberó
+  });
+
+  it("cancel() gana si corre mientras stop() está en vuelo: el texto se descarta", async () => {
+    const { engine, session, finals } = setup();
+    await session.start();
+    engine.emitFinal("texto condenado");
+
+    const stopping = session.stop(); // en vuelo: esperando engine.stop()
+    session.cancel(); // el usuario cancela en la ventana
+    await stopping;
+
+    expect(finals).toEqual([]); // "cancelar descarta" gana
+    expect(session.state).toBe("idle");
+  });
 });
 ```
 
@@ -1942,14 +1981,22 @@ export function createVoiceSession(
     if (settled) return;
     settled = true;
 
-    if (guardTimer) clearTimeout(guardTimer);
-    guardTimer = null;
+    // También silenceTimer: un partial/final tardío del motor durante
+    // engine.stop() pudo rearmarlo, y quedaría disparando no-ops tras idle.
+    clearTimers();
     releaseMic();
 
     const raw = segments.join(" ");
     segments = [];
 
     const text = normalize(await punctuator.apply(raw));
+
+    // Si un cancel()/dispose() se coló durante el await de un punctuator
+    // asíncrono (la estrategia "ai" futura), el texto quedó descartado y
+    // emitir acá violaría "cancelar descarta". Con los punctuators actuales
+    // (resuelven en microtask) esta ventana es inalcanzable; el guard sella
+    // el contrato contra el futuro.
+    if (state !== "processing") return;
 
     // ORDEN CONTRACTUAL: `final` primero, `idle` después. capture() depende de esto.
     if (text.length > 0) emit("final", text);
@@ -2004,19 +2051,28 @@ export function createVoiceSession(
       };
     }
 
-    await engine.start({
-      locale,
-      stream,
-      onPartial: (text) => {
-        emit("partial", text);
-        armSilence();
-      },
-      onFinal: (text) => {
-        if (text.trim().length > 0) segments.push(text.trim());
-        armSilence();
-      },
-      onError: fail,
-    });
+    try {
+      await engine.start({
+        locale,
+        stream,
+        onPartial: (text) => {
+          emit("partial", text);
+          armSilence();
+        },
+        onFinal: (text) => {
+          if (text.trim().length > 0) segments.push(text.trim());
+          armSilence();
+        },
+        onError: fail,
+      });
+    } catch (raw) {
+      // El motor no pudo arrancar (InvalidStateError de Chrome; auth/red de
+      // un motor de nube futuro). Sin esto la sesión quedaría colgada en
+      // "listening" con el micrófono abierto y el medidor corriendo. fail()
+      // libera todo, pasa a "error" y el usuario reintenta con un clic.
+      fail(raw);
+      return;
+    }
 
     maxTimer = setTimeout(() => void stop(), maxDurationMs);
     armSilence();
@@ -2074,7 +2130,7 @@ export function createVoiceSession(
 - [ ] **Step 4: Verificar que pasa**
 
 Run: `npx vitest run src/lib/voice/session.test.ts`
-Expected: PASS — 12 tests.
+Expected: PASS — 14 tests.
 
 > `dispose()` llama `cancel()` **antes** de marcar `disposed`, para que la transición
 > a `idle` todavía se emita. El test "dispose() libera todo" verifica exactamente eso.
