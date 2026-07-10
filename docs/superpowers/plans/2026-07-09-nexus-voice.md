@@ -668,7 +668,7 @@ git commit -m "feat(voice): normalización determinística del transcripto"
 
 **Interfaces:**
 - Consumes: nada.
-- Produces: `planInsertion(value: string, selStart: number, selEnd: number, text: string): { value: string; caret: number }`.
+- Produces: `planInsertion(value: string, selStart: number, selEnd: number, text: string): InsertionResult`, con `InsertionResult = { value: string; caretStart: number; caretEnd: number }`. En una inserción, `caretStart === caretEnd` (caret colapsado al final de lo insertado). En un no-op con selección activa, se devuelven `selStart`/`selEnd` intactos: la selección del usuario es **representable**, no un acuerdo tácito entre callers.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -678,72 +678,77 @@ Crear `src/lib/voice/insert.test.ts`:
 import { describe, expect, it } from "vitest";
 import { planInsertion } from "./insert";
 
+/** Atajo para el caso común: inserción con caret colapsado al final. */
+const at = (value: string, caret: number) => ({
+  value,
+  caretStart: caret,
+  caretEnd: caret,
+});
+
 describe("planInsertion", () => {
   it("inserta en el caret agregando un espacio separador", () => {
-    expect(planInsertion("Hola Juan,", 10, 10, "¿Cómo estás?")).toEqual({
-      value: "Hola Juan, ¿Cómo estás?",
-      caret: 23,
-    });
+    expect(planInsertion("Hola Juan,", 10, 10, "¿Cómo estás?")).toEqual(
+      at("Hola Juan, ¿Cómo estás?", 23),
+    );
   });
 
   it("reemplaza la selección cuando selStart !== selEnd", () => {
-    expect(planInsertion("uno dos tres", 4, 7, "cuatro")).toEqual({
-      value: "uno cuatro tres",
-      caret: 10,
-    });
+    expect(planInsertion("uno dos tres", 4, 7, "cuatro")).toEqual(
+      at("uno cuatro tres", 10),
+    );
   });
 
   it("no antepone espacio si el texto empieza con puntuación", () => {
-    expect(planInsertion("hola", 4, 4, ", mundo")).toEqual({
-      value: "hola, mundo",
-      caret: 11,
-    });
+    expect(planInsertion("hola", 4, 4, ", mundo")).toEqual(at("hola, mundo", 11));
   });
 
   it("no antepone espacio después de un carácter de apertura", () => {
-    expect(planInsertion("(", 1, 1, "nota")).toEqual({
-      value: "(nota",
-      caret: 5,
-    });
-    expect(planInsertion("dice: ", 6, 6, "sí")).toEqual({
-      value: "dice: sí",
-      caret: 8,
-    });
+    expect(planInsertion("(", 1, 1, "nota")).toEqual(at("(nota", 5));
+    expect(planInsertion("dice: ", 6, 6, "sí")).toEqual(at("dice: sí", 8));
+  });
+
+  it("SÍ antepone espacio después de dos puntos secos", () => {
+    // ":" es puntuación de cierre, no de apertura: "Notas:" + dictado debe dar
+    // "Notas: hola", nunca "Notas:hola".
+    expect(planInsertion("Notas:", 6, 6, "hola")).toEqual(at("Notas: hola", 11));
   });
 
   it("no antepone espacio en un campo vacío", () => {
-    expect(planInsertion("", 0, 0, "primero")).toEqual({
-      value: "primero",
-      caret: 7,
-    });
+    expect(planInsertion("", 0, 0, "primero")).toEqual(at("primero", 7));
   });
 
   it("agrega un espacio posterior si lo que sigue es una palabra", () => {
-    expect(planInsertion("ab cd", 3, 3, "X")).toEqual({
-      value: "ab X cd",
-      caret: 5,
-    });
+    expect(planInsertion("ab cd", 3, 3, "X")).toEqual(at("ab X cd", 5));
   });
 
   it("no agrega espacio posterior antes de puntuación", () => {
-    expect(planInsertion("hola .", 5, 5, "Juan")).toEqual({
-      value: "hola Juan.",
-      caret: 9,
+    expect(planInsertion("hola .", 5, 5, "Juan")).toEqual(at("hola Juan.", 9));
+  });
+
+  it("ignora un texto vacío o de solo espacios, preservando el caret", () => {
+    expect(planInsertion("hola", 2, 2, "   ")).toEqual({
+      value: "hola",
+      caretStart: 2,
+      caretEnd: 2,
     });
   });
 
-  it("ignora un texto vacío o de solo espacios", () => {
-    expect(planInsertion("hola", 2, 2, "   ")).toEqual({
-      value: "hola",
-      caret: 2,
+  it("un no-op con selección activa PRESERVA la selección", () => {
+    // Si el dictado vino vacío, el usuario no pierde lo que tenía seleccionado.
+    expect(planInsertion("uno dos tres", 4, 7, "  ")).toEqual({
+      value: "uno dos tres",
+      caretStart: 4,
+      caretEnd: 7,
     });
   });
 });
 ```
 
-> El último caso de "espacio posterior" merece una lectura atenta: `"hola ."` con el
-> caret en 5 deja `after = "."`, que es puntuación, así que no se agrega espacio de cola.
-> El espacio que ya existía en la posición 4 hace de separador delantero.
+> El caso de `"hola ."` merece una lectura atenta: con el caret en 5, `after = "."`
+> es puntuación, así que no se agrega espacio de cola, y el espacio que ya existía en
+> la posición 4 hace de separador delantero — por eso el caret final es 9, no 10.
+> Y el último caso es el motivo de la interfaz `{caretStart, caretEnd}`: un no-op con
+> selección activa la devuelve intacta, para que ningún caller pueda colapsarla.
 
 - [ ] **Step 2: Verificar que falla**
 
@@ -757,11 +762,18 @@ Crear `src/lib/voice/insert.ts`:
 ```ts
 export interface InsertionResult {
   value: string;
-  caret: number;
+  /** En una inserción, caretStart === caretEnd (caret colapsado al final). */
+  caretStart: number;
+  /** En un no-op con selección activa, [caretStart, caretEnd] la preservan. */
+  caretEnd: number;
 }
 
-/** Caracteres tras los cuales NO se antepone un espacio separador. */
-const OPENERS = new Set(["", " ", "\t", "\n", "(", "[", "¿", "¡", '"', "'", ":"]);
+/**
+ * Caracteres tras los cuales NO se antepone un espacio separador.
+ * ":" NO está acá a propósito: es puntuación de cierre. "Notas:" + dictado
+ * debe dar "Notas: hola", nunca "Notas:hola".
+ */
+const OPENERS = new Set(["", " ", "\t", "\n", "(", "[", "¿", "¡", '"', "'"]);
 
 /** Caracteres antes de los cuales NO se agrega un espacio de cola. */
 const CLOSERS = new Set([",", ".", ";", ":", "!", "?", ")", "]", "\n", " ", "\t"]);
@@ -769,6 +781,10 @@ const CLOSERS = new Set([",", ".", ";", ":", "!", "?", ")", "]", "\n", " ", "\t"
 /**
  * Calcula el resultado de insertar `text` en un campo, sin tocar el DOM.
  * Si hay una selección activa, la reemplaza. Si no, inserta en el caret.
+ *
+ * Precondición: 0 <= selStart <= selEnd <= value.length — exactamente lo que
+ * entregan selectionStart/selectionEnd de un <input>/<textarea> reales. La
+ * función no sanea índices inventados.
  */
 export function planInsertion(
   value: string,
@@ -777,7 +793,10 @@ export function planInsertion(
   text: string,
 ): InsertionResult {
   const trimmed = text.trim();
-  if (trimmed.length === 0) return { value, caret: selStart };
+  // No-op: nada que insertar. La selección del usuario se preserva tal cual.
+  if (trimmed.length === 0) {
+    return { value, caretStart: selStart, caretEnd: selEnd };
+  }
 
   const before = value.slice(0, selStart);
   const after = value.slice(selEnd);
@@ -790,10 +809,8 @@ export function planInsertion(
   const trail = nextChar.length > 0 && !CLOSERS.has(nextChar) ? " " : "";
 
   const inserted = lead + trimmed + trail;
-  return {
-    value: before + inserted + after,
-    caret: before.length + inserted.length,
-  };
+  const caret = before.length + inserted.length;
+  return { value: before + inserted + after, caretStart: caret, caretEnd: caret };
 }
 ```
 
@@ -1493,7 +1510,9 @@ export function insertAtCursor(el: EditableElement, text: string): void {
   const selStart = el.selectionStart ?? el.value.length;
   const selEnd = el.selectionEnd ?? el.value.length;
 
-  const { value, caret } = planInsertion(el.value, selStart, selEnd, text);
+  const { value, caretStart, caretEnd } = planInsertion(el.value, selStart, selEnd, text);
+  // No-op real: sin cambio de valor no se despacha evento ni se toca la
+  // selección — el usuario conserva exactamente lo que tenía.
   if (value === el.value) return;
 
   setNativeValue(el, value);
@@ -1502,7 +1521,7 @@ export function insertAtCursor(el: EditableElement, text: string): void {
   // React re-renderiza tras el evento y puede reposicionar el caret al final.
   // El microtask lo coloca después de ese re-render.
   queueMicrotask(() => {
-    if (el.isConnected) el.setSelectionRange(caret, caret);
+    if (el.isConnected) el.setSelectionRange(caretStart, caretEnd);
   });
 }
 ```
