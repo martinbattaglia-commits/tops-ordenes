@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isAbortError, toVoiceError, VoiceRecognitionError } from "./errors";
+import {
+  isAbortError,
+  toVoiceError,
+  VoiceError,
+  VoicePermissionDeniedError,
+  VoiceRecognitionError,
+} from "./errors";
 
 describe("isAbortError", () => {
   it("detecta { error: 'aborted' }", () => {
@@ -51,5 +57,41 @@ describe("isAbortError", () => {
     const result = toVoiceError(abort);
     expect(result).toBeInstanceOf(VoiceRecognitionError);
     expect(result.code).toBe("recognition");
+  });
+});
+
+describe("toVoiceError", () => {
+  it("mapea el permiso denegado", () => {
+    expect(toVoiceError({ name: "NotAllowedError" })).toBeInstanceOf(
+      VoicePermissionDeniedError,
+    );
+    expect(toVoiceError({ error: "not-allowed" })).toBeInstanceOf(
+      VoicePermissionDeniedError,
+    );
+  });
+
+  it("mapea los errores del reconocedor con su código", () => {
+    expect(toVoiceError({ error: "network" })).toMatchObject({ code: "network" });
+    expect(toVoiceError({ error: "no-speech" })).toMatchObject({ code: "no-speech" });
+    expect(toVoiceError({ error: "audio-capture" })).toMatchObject({
+      code: "no-microphone",
+    });
+  });
+
+  it("cae en 'recognition' ante algo desconocido", () => {
+    expect(toVoiceError(new Error("qué sé yo"))).toMatchObject({ code: "recognition" });
+  });
+
+  it("devuelve tal cual un VoiceError que ya lo era", () => {
+    const original = new VoicePermissionDeniedError();
+    expect(toVoiceError(original)).toBe(original);
+  });
+
+  it("preserva instanceof en las subclases (target ES2022)", () => {
+    const err = new VoiceRecognitionError("network", "x");
+    expect(err).toBeInstanceOf(VoiceRecognitionError);
+    expect(err).toBeInstanceOf(VoiceError);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe("VoiceRecognitionError");
   });
 });
