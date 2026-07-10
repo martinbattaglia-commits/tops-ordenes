@@ -25,7 +25,13 @@ export function normalize(input: string): string {
   if (out.length === 0) return "";
 
   // Mayúscula inicial.
-  out = out.replace(/^(\P{L}*)(\p{L})/u, (_m, prefix: string, letter: string) =>
+  //
+  // El prefijo salta signos de apertura y espacios (`¿`, `¡`, `(`, comillas)
+  // pero se DETIENE ante un dígito. Si aceptara cualquier no-letra (`\P{L}`),
+  // "12 pallets al depósito" se convertiría en "12 Pallets al depósito": en un
+  // ERP de logística el dictado arranca con la cantidad, y ese es el caso
+  // normal, no el borde.
+  out = out.replace(/^([^\p{L}\p{N}]*)(\p{L})/u, (_m, prefix: string, letter: string) =>
     prefix + letter.toLocaleUpperCase("es"),
   );
 
