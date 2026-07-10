@@ -1270,7 +1270,20 @@ export function createWebSpeechEngine(): VoiceEngine {
 
       rec.onend = () => {
         if (wantsToListen) {
-          rec.start(); // reinicio transparente: la sesión sigue en "listening"
+          // Chrome a veces lanza InvalidStateError si start() corre demasiado
+          // pronto dentro del propio onend (quirk documentado). Sin este catch,
+          // wantsToListen quedaría en true con un reconocedor roto y un stop()
+          // posterior colgaría su Promise para siempre. El dictado debe morir
+          // avisando — el usuario reintenta con un clic — no colgar en silencio.
+          try {
+            rec.start(); // reinicio transparente: la sesión sigue en "listening"
+          } catch (raw) {
+            wantsToListen = false;
+            recognition = null;
+            stopped?.(); // defensivo: no debería haber stop() pendiente acá
+            stopped = null;
+            ctx.onError(raw); // crudo; la sesión lo traduce y muestra el mensaje
+          }
           return;
         }
         stopped?.();
