@@ -40,6 +40,8 @@ describe("normalize", () => {
   it("sí capitaliza después de un signo de apertura", () => {
     expect(normalize("¿sí? claro")).toBe("¿Sí? Claro");
     expect(normalize("(nota importante")).toBe("(Nota importante");
+    expect(normalize('"urgente" dijo el cliente')).toBe('"Urgente" dijo el cliente');
+    expect(normalize("“urgente” dijo el cliente")).toBe("“Urgente” dijo el cliente");
   });
 
   it("capitaliza después de un salto de párrafo", () => {
