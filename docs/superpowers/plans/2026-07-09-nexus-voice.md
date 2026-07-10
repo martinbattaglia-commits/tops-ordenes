@@ -3000,6 +3000,10 @@ export function VoiceField({ children, className = "" }: VoiceFieldProps) {
 
   const child = children as ReactElement<{
     className?: string;
+    // `ref` vive en este TIPO solo para que cloneElement acepte la config
+    // (su parámetro es Partial<P> y debe incluirlo). El VALOR real se lee
+    // del elemento, no de props — en React 18 `ref` no viaja dentro de props.
+    ref?: Ref<Editable>;
     onKeyDown?: (ev: KeyboardEvent<Editable>) => void;
     onBlur?: (ev: FocusEvent<Editable>) => void;
   }>;
