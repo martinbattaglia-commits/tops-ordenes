@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { cn, fmtCuit, isValidCuit } from "@/lib/utils";
 import type { Client } from "@/lib/types";
 import { createClient, fetchClients, refreshFromClientify, type NewClientInput } from "./actions";
@@ -605,13 +606,15 @@ function NewClientModal({
             </ModalField>
 
             <ModalField label="Observaciones">
-              <textarea
-                className="textarea"
-                rows={2}
-                value={form.observ}
-                onChange={(e) => setForm((f) => ({ ...f, observ: e.target.value }))}
-                placeholder="Notas internas, condiciones de pago, etc."
-              />
+              <VoiceField>
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={form.observ}
+                  onChange={(e) => setForm((f) => ({ ...f, observ: e.target.value }))}
+                  placeholder="Notas internas, condiciones de pago, etc."
+                />
+              </VoiceField>
             </ModalField>
 
             {error && (

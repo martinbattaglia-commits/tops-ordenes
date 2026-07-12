@@ -22,6 +22,7 @@ import {
 import type { CopilotAnswer, CopilotVisual, SourceChunk } from "@/lib/ai/types";
 import { askCopilotAction, copilotFeedbackAction } from "./actions";
 import { CopilotThinkingLoader } from "./CopilotThinkingLoader";
+import { VoiceField } from "@/components/voice/VoiceField";
 
 // Loader consciente del tipo de consulta (round loader 2026-07-08): las
 // ejecutivas/complejas muestran el subtítulo de cruce multi-dominio; el resto,
@@ -1110,14 +1111,16 @@ export function CopilotChat({ demo }: { demo: boolean }) {
         }}
       >
         <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={(ev) => setInput(ev.target.value)}
-            placeholder="Preguntá por facturación, compliance, proveedores, vacancia, contratos…"
-            maxLength={2000}
-            className="min-w-0 flex-1 rounded-md border border-stroke-soft bg-bg-surface-alt px-3 py-2 text-xs text-fg-primary placeholder:text-fg-muted focus:outline-none"
-            aria-label="Pregunta al Copilot"
-          />
+          <VoiceField className="min-w-0 flex-1">
+            <input
+              value={input}
+              onChange={(ev) => setInput(ev.target.value)}
+              placeholder="Preguntá por facturación, compliance, proveedores, vacancia, contratos…"
+              maxLength={2000}
+              className="w-full rounded-md border border-stroke-soft bg-bg-surface-alt px-3 py-2 text-xs text-fg-primary placeholder:text-fg-muted focus:outline-none"
+              aria-label="Pregunta al Copilot"
+            />
+          </VoiceField>
           <button
             type="submit"
             disabled={pending || input.trim().length === 0}

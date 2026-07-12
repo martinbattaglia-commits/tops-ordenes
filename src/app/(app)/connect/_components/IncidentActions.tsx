@@ -8,6 +8,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import {
   assignIncidentAction, resolveIncidentAction, setIncidentSeverityAction, setIncidentStatusAction,
 } from "@/lib/connect/adapters/driving/incident-actions";
@@ -169,13 +170,15 @@ export function IncidentActions({
 
       {resolving && (
         <div className="card space-y-2 p-3">
-          <textarea
-            className="input min-h-20 w-full"
-            value={resolution}
-            maxLength={2000}
-            placeholder="Qué se hizo para resolver el incidente (obligatorio)…"
-            onChange={(e) => setResolution(e.target.value)}
-          />
+          <VoiceField>
+            <textarea
+              className="input min-h-20 w-full"
+              value={resolution}
+              maxLength={2000}
+              placeholder="Qué se hizo para resolver el incidente (obligatorio)…"
+              onChange={(e) => setResolution(e.target.value)}
+            />
+          </VoiceField>
           <button type="button" className="btn btn-primary btn-sm"
             disabled={busy || resolution.trim().length === 0}
             onClick={() => void run(() => resolveIncidentAction({ incidentId: incident.id, resolution }))}>

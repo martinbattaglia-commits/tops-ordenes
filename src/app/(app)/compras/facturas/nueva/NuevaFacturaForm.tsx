@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { fmtCurrency } from "@/lib/utils";
 import { SUPPLIER_COMPROBANTE_LABEL, SUPPLIER_COMPROBANTE_VALUES } from "@/lib/erp/types";
 import {
@@ -806,7 +807,9 @@ export function NuevaFacturaForm({
 
         <div>
           <label className="field-label block mb-1.5">Observaciones</label>
-          <textarea className="input min-h-[72px]" value={observ} onChange={(e) => setObserv(e.target.value)} placeholder="Detalle, referencia de OC, etc." />
+          <VoiceField>
+            <textarea className="input min-h-[72px]" value={observ} onChange={(e) => setObserv(e.target.value)} placeholder="Detalle, referencia de OC, etc." />
+          </VoiceField>
         </div>
 
         {/* ---------- Retención de Ganancias ---------- */}

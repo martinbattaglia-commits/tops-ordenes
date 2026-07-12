@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { cn } from "@/lib/utils";
 import { useRealtimeTable } from "@/lib/supabase/realtime";
 import type { Message } from "@/lib/connect/types";
@@ -301,43 +302,45 @@ export function ThreadView({
             </div>
           )}
           <div className="flex items-end gap-2">
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              aria-label="Escribir mensaje"
-              onChange={(e) => {
-                setDraft(e.target.value);
-                updateMentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length);
-              }}
-              // Recalcula el token @ también cuando el caret se mueve sin tipear
-              // (flechas/click) — revisión adversarial: evita dropdown/Enter stale.
-              onSelect={(e) => {
-                const t = e.currentTarget;
-                updateMentionQuery(t.value, t.selectionStart ?? t.value.length);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Escape" && mentionQuery !== null) {
-                  e.preventDefault();
-                  setMentionQuery(null);
-                  return;
-                }
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (mentionQuery !== null && candidates.length > 0) {
-                    // Si el caret ya no está sobre un token @, cae a enviar (sin Enter fantasma).
-                    if (pickMention(candidates[0])) return;
+            <VoiceField>
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                aria-label="Escribir mensaje"
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  updateMentionQuery(e.target.value, e.target.selectionStart ?? e.target.value.length);
+                }}
+                // Recalcula el token @ también cuando el caret se mueve sin tipear
+                // (flechas/click) — revisión adversarial: evita dropdown/Enter stale.
+                onSelect={(e) => {
+                  const t = e.currentTarget;
+                  updateMentionQuery(t.value, t.selectionStart ?? t.value.length);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && mentionQuery !== null) {
+                    e.preventDefault();
+                    setMentionQuery(null);
+                    return;
                   }
-                  void send();
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (mentionQuery !== null && candidates.length > 0) {
+                      // Si el caret ya no está sobre un token @, cae a enviar (sin Enter fantasma).
+                      if (pickMention(candidates[0])) return;
+                    }
+                    void send();
+                  }
+                }}
+                placeholder={
+                  mentionables.length > 0
+                    ? "Escribí un mensaje…  (@ menciona · Enter envía · Shift+Enter salto)"
+                    : "Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
                 }
-              }}
-              placeholder={
-                mentionables.length > 0
-                  ? "Escribí un mensaje…  (@ menciona · Enter envía · Shift+Enter salto)"
-                  : "Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
-              }
-              rows={1}
-              className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
-            />
+                rows={1}
+                className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
+              />
+            </VoiceField>
             <button
               type="button"
               onClick={() => void send()}

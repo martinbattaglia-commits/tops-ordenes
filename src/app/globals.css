@@ -1012,3 +1012,27 @@
   background: #22c55e;
   animation: nexus-live-breathe 2400ms var(--nx-ease-out) infinite;
 }
+
+/* ---- Nexus Voice ---------------------------------------------------- */
+@keyframes nx-voice-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+@keyframes nx-voice-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Pulso cuando el medidor real no está disponible (getUserMedia falló). */
+.nx-voice-mic--live {
+  animation: nx-voice-pulse 1.2s ease-in-out infinite;
+}
+.nx-voice-spinner {
+  animation: nx-voice-spin 0.7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-voice-mic--live,
+  .nx-voice-spinner {
+    animation: none;
+  }
+}

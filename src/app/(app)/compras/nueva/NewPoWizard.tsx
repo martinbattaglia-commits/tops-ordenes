@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { SignaturePad, type SignaturePadHandle } from "@/components/compras/SignaturePad";
 import { PdfPreview } from "@/components/compras/PdfPreview";
 import {
@@ -887,13 +888,15 @@ function ProductsStep({
       </div>
 
       <Field label="Observaciones para el proveedor">
-        <textarea
-          rows={3}
-          className="textarea"
-          placeholder="Coordinación de entrega, certificados requeridos, ANMAT, etc."
-          value={draft.observ}
-          onChange={(e) => setDraft((d) => ({ ...d, observ: e.target.value }))}
-        />
+        <VoiceField>
+          <textarea
+            rows={3}
+            className="textarea"
+            placeholder="Coordinación de entrega, certificados requeridos, ANMAT, etc."
+            value={draft.observ}
+            onChange={(e) => setDraft((d) => ({ ...d, observ: e.target.value }))}
+          />
+        </VoiceField>
       </Field>
 
       {/* Smart suggestion */}

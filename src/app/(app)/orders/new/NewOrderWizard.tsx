@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { cn, fmtCurrency, isValidCuit, sha256, URGENT_SERVICE_SLUG } from "@/lib/utils";
 import { createOrder } from "./actions";
 import type { Client, Operator, ServiceCatalogItem } from "@/lib/types";
@@ -997,13 +998,15 @@ function StepServicio({
 
       <div className="mt-4">
         <Field label="Observaciones">
-          <textarea
-            className="textarea"
-            rows={3}
-            value={data.observ}
-            onChange={(e) => update({ observ: e.target.value })}
-            placeholder="Detalles adicionales del servicio prestado…"
-          />
+          <VoiceField>
+            <textarea
+              className="textarea"
+              rows={3}
+              value={data.observ}
+              onChange={(e) => update({ observ: e.target.value })}
+              placeholder="Detalles adicionales del servicio prestado…"
+            />
+          </VoiceField>
         </Field>
       </div>
 

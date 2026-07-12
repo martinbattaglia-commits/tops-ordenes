@@ -6,6 +6,7 @@ import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import MobileBottomNav from "./MobileBottomNav";
 import MobileDrawer from "./MobileDrawer";
+import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
 
 interface ShellProps {
   user: { name: string; role: string; avatar: string };
@@ -38,6 +39,7 @@ export default function Shell({ user, canViewExecutive, canViewSistema, canViewR
         <Topbar onMenuClick={() => setDrawerOpen(true)} />
         <main className="flex-1 min-h-0 scroll-area pb-[calc(80px+var(--safe-bottom))] lg:pb-0 nx-page-fade">
           {children}
+          <VoiceOverlay />
         </main>
         <div className="lg:hidden">
           <MobileBottomNav />
