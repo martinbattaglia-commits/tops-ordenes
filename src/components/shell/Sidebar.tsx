@@ -22,8 +22,8 @@ interface NavItem {
   badge?: string;
   /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
   exec?: boolean;
-  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view) · "copilot" (piloto AI). */
-  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot";
+  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view) · "copilot" (piloto AI) · "contabilidad" (contabilidad.view). */
+  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad";
   /** Abre el link en nueva pestaña (para assets estáticos o recursos externos). */
   external?: boolean;
 }
@@ -32,8 +32,8 @@ interface Domain {
   id: string;
   label: string;
   items: NavItem[];
-  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge" / "connect"). */
-  gate?: "sistema" | "knowledge" | "connect";
+  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge" / "connect" / "contabilidad"). */
+  gate?: "sistema" | "knowledge" | "connect" | "contabilidad";
 }
 
 /**
@@ -172,6 +172,21 @@ const DOMAINS: Domain[] = [
     ],
   },
   {
+    // Módulo Contable F6 — piloto en modo SIMULATION (dry-run permanente).
+    // Visible solo con contabilidad.view; cada página re-valida el permiso.
+    id: "contabilidad",
+    label: "Contabilidad",
+    gate: "contabilidad",
+    items: [
+      { href: "/contabilidad", label: "Dashboard contable", icon: "dashboard", badge: "Simulación" },
+      { href: "/contabilidad/libro-diario", label: "Libro Diario", icon: "report" },
+      { href: "/contabilidad/mayor", label: "Libro Mayor", icon: "book" },
+      { href: "/contabilidad/sumas-y-saldos", label: "Sumas y Saldos", icon: "calculator" },
+      { href: "/contabilidad/comprobantes-sin-asiento", label: "Comprob. sin asiento", icon: "clock" },
+      { href: "/contabilidad/conciliacion-iva", label: "Conciliación IVA", icon: "check-circle" },
+    ],
+  },
+  {
     id: "rrhh",
     label: "Recursos Humanos",
     items: [
@@ -222,6 +237,8 @@ interface Props {
   canViewConnect?: boolean;
   /** ¿Mostrar Nexus Copilot? (piloto cerrado: membresía en ai_pilot_users) — default: NO. */
   canViewCopilot?: boolean;
+  /** ¿Mostrar Contabilidad (requiere contabilidad.view)? (default: sí). */
+  canViewContabilidad?: boolean;
   onNavigate?: () => void;
 }
 
@@ -233,10 +250,11 @@ export default function Sidebar({
   canViewKnowledge = true,
   canViewConnect = true,
   canViewCopilot = false, // piloto cerrado: por defecto NO se muestra (fail-closed en display)
+  canViewContabilidad = true,
   onNavigate,
 }: Props) {
   // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
-  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot") =>
+  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad") =>
     !gate ||
     (gate === "sistema"
       ? canViewSistema
@@ -246,7 +264,9 @@ export default function Sidebar({
           ? canViewConnect
           : gate === "copilot"
             ? canViewCopilot
-            : canViewKnowledge);
+            : gate === "contabilidad"
+              ? canViewContabilidad
+              : canViewKnowledge);
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -261,6 +281,7 @@ export default function Sidebar({
       "/compras/ordenes",
       "/compras/facturas",
       "/compras/libro-iva",
+      "/contabilidad",
       "/clients",
       "/reports",
       "/billing",
