@@ -17,6 +17,8 @@ export function humanizeRpcError(message = ""): string {
   if (m.includes("BANK_INACTIVE")) return "La cuenta bancaria está inactiva.";
   if (m.includes("BANK_INVALID")) return "La cuenta bancaria es inválida.";
   if (m.includes("SAME_ACCOUNT")) return "La transferencia requiere cuentas de origen y destino distintas.";
+  if (m.includes("OPMOV_CONCEPT_REQUIRED")) return "El concepto del movimiento es obligatorio.";
+  if (m.includes("OPMOV_DIRECTION_INVALID")) return "Indicá si el movimiento es un ingreso o un egreso.";
   if (m.includes("NOT_FOUND_OR_ALREADY_VOID")) return "El comprobante no existe o ya está anulado.";
   if (m.includes("VOID_REQUIRES_REASON")) return "La anulación requiere un motivo.";
   if (m.includes("INVALID_TARGET_TYPE")) return "Tipo de anulación inválido.";

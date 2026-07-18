@@ -11,8 +11,50 @@ export type ReceiptMethod = (typeof RECEIPT_METHOD_VALUES)[number];
 export const PAYMENT_METHOD_VALUES = ["transferencia", "cheque", "echeq"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHOD_VALUES)[number];
 
-export const MOVEMENT_TYPE_VALUES = ["cobranza", "pago_proveedor", "transferencia", "ajuste"] as const;
+export const MOVEMENT_TYPE_VALUES = ["cobranza", "pago_proveedor", "transferencia", "ajuste", "movimiento_operativo"] as const;
 export type MovementType = (typeof MOVEMENT_TYPE_VALUES)[number];
+
+/** Etiquetas legibles del tipo de movimiento (historial). */
+export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
+  cobranza: "Cobranza",
+  pago_proveedor: "Pago a proveedor",
+  transferencia: "Transferencia",
+  ajuste: "Ajuste (baseline)",
+  movimiento_operativo: "Movimiento operativo",
+};
+
+// ── Movimientos Operativos (ERP-A · operatoria diaria) ──────────────────────
+// Categoría con identidad propia. 'regularizacion' reemplaza al antiguo ajuste
+// operativo; la palabra "ajuste" queda reservada a la baseline. Las transferencias
+// NO están acá: usan el flujo de Transferencias. Espeja treasury_operational_category_t.
+export const OPERATIONAL_CATEGORY_VALUES = [
+  "adelanto_director",
+  "adelanto_efectivo",
+  "reintegro",
+  "regularizacion",
+  "gasto_operativo",
+  "otro",
+] as const;
+export type OperationalCategory = (typeof OPERATIONAL_CATEGORY_VALUES)[number];
+
+export const OPERATIONAL_CATEGORY_LABELS: Record<OperationalCategory, string> = {
+  adelanto_director: "Adelanto al Director",
+  adelanto_efectivo: "Adelanto en efectivo",
+  reintegro: "Reintegro",
+  regularizacion: "Regularización de Tesorería",
+  gasto_operativo: "Gasto operativo",
+  otro: "Otro movimiento operativo",
+};
+
+/** Dirección sugerida por categoría (pre-fill de UI; la RPC valida). */
+export const OPERATIONAL_CATEGORY_DIRECTION: Record<OperationalCategory, Direction | null> = {
+  adelanto_director: "egreso",
+  adelanto_efectivo: "egreso",
+  reintegro: "ingreso",
+  regularizacion: null, // explícita
+  gasto_operativo: "egreso",
+  otro: null, // explícita
+};
 
 export const DIRECTION_VALUES = ["ingreso", "egreso"] as const;
 export type Direction = (typeof DIRECTION_VALUES)[number];
@@ -62,6 +104,7 @@ export interface TreasuryMovement {
   reference_id: string | null;
   transfer_group_id: string | null;
   status: MovementStatus;
+  operational_category: OperationalCategory | null;
   created_at: string;
 }
 

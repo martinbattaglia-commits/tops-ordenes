@@ -55,7 +55,7 @@ export async function listMovements(opts?: {
   let qb = supabase
     .from("treasury_movements")
     .select(
-      "id,public_id,date,type,direction,bank_account_id,amount,description,reference_type,reference_id,transfer_group_id,status,created_at"
+      "id,public_id,date,type,direction,bank_account_id,amount,description,reference_type,reference_id,transfer_group_id,status,operational_category,created_at"
     );
   if (opts?.bankAccountId) qb = qb.eq("bank_account_id", opts.bankAccountId);
   if (opts?.status) qb = qb.eq("status", opts.status);

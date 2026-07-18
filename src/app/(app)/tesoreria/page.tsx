@@ -74,9 +74,11 @@ export default async function TesoreriaOverviewPage() {
           </table>
         </div>
 
-        <div className="flex gap-3 mt-6">
-          <Link href="/tesoreria/cobranzas" className="btn btn-primary btn-sm"><Icon name="download" size={14} /> Cobranzas</Link>
-          <Link href="/tesoreria/pagos" className="btn btn-primary btn-sm"><Icon name="cart" size={14} /> Pagos</Link>
+        <div className="flex flex-wrap gap-3 mt-6">
+          <Link href="/tesoreria/pagos" className="btn btn-primary btn-sm"><Icon name="cart" size={14} /> Registrar pago a proveedor</Link>
+          <Link href="/tesoreria/operativo" className="btn btn-primary btn-sm"><Icon name="plus" size={14} /> Registrar movimiento operativo</Link>
+          <Link href="/tesoreria/movimientos" className="btn btn-sm">Historial de movimientos</Link>
+          <Link href="/tesoreria/cobranzas" className="btn btn-sm"><Icon name="download" size={14} /> Cobranzas</Link>
           <Link href="/tesoreria/flujo-fondos" className="btn btn-sm"><Icon name="trend-up" size={14} /> Flujo de fondos</Link>
         </div>
       </div>

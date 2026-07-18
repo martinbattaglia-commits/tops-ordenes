@@ -15,6 +15,7 @@ import {
   RegisterReceiptSchema,
   RegisterPaymentSchema,
   RegisterTransferSchema,
+  RegisterOperationalMovementSchema,
   VoidMovementSchema,
 } from "./validation";
 import { humanizeRpcError } from "./errors";
@@ -25,8 +26,10 @@ function firstIssue(message?: string): string {
 }
 
 function revalidateTreasury(): void {
-  // Ruta de UI futura (ERP-A4). Hoy es inofensivo.
+  // Overview + libro único + alta operativa (saldos y estado se derivan server-side).
   revalidatePath("/tesoreria");
+  revalidatePath("/tesoreria/movimientos");
+  revalidatePath("/tesoreria/operativo");
 }
 
 export async function registerReceiptAction(input: unknown): Promise<ActionResult> {
@@ -89,6 +92,25 @@ export async function registerTransferAction(input: unknown): Promise<ActionResu
   if (error) return { ok: false, message: humanizeRpcError(error.message) };
   revalidateTreasury();
   return { ok: true, message: "Transferencia registrada.", data };
+}
+
+export async function registerOperationalMovementAction(input: unknown): Promise<ActionResult> {
+  const parsed = RegisterOperationalMovementSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: firstIssue(parsed.error.issues[0]?.message) };
+  const supabase = createClient();
+  if (!supabase) return { ok: false, message: "Servicio no disponible." };
+  const p = parsed.data;
+  const { data, error } = await supabase.rpc("tesoreria_register_operational_movement", {
+    p_date: p.date,
+    p_category: p.category,
+    p_direction: p.direction,
+    p_bank_account_id: p.bank_account_id,
+    p_amount: Number(p.amount),
+    p_concept: p.concept,
+  });
+  if (error) return { ok: false, message: humanizeRpcError(error.message) };
+  revalidateTreasury();
+  return { ok: true, message: "Movimiento operativo registrado.", data };
 }
 
 export async function voidMovementAction(input: unknown): Promise<ActionResult> {
