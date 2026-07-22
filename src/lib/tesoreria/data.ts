@@ -50,6 +50,8 @@ export async function getBankBalances(): Promise<BankBalance[]> {
 export async function listMovements(opts?: {
   bankAccountId?: string;
   status?: string;
+  /** Filtro por tipo de movimiento (columna `type`). El filtrado vive en la query, no en TS. */
+  type?: string;
   limit?: number;
 }): Promise<TreasuryMovement[]> {
   const supabase = createClient();
@@ -61,6 +63,7 @@ export async function listMovements(opts?: {
     );
   if (opts?.bankAccountId) qb = qb.eq("bank_account_id", opts.bankAccountId);
   if (opts?.status) qb = qb.eq("status", opts.status);
+  if (opts?.type) qb = qb.eq("type", opts.type);
   const { data, error } = await qb
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })

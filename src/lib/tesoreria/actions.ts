@@ -29,7 +29,7 @@ function revalidateTreasury(): void {
   // Overview + libro único + alta operativa (saldos y estado se derivan server-side).
   revalidatePath("/tesoreria");
   revalidatePath("/tesoreria/movimientos");
-  revalidatePath("/tesoreria/operativo");
+  revalidatePath("/tesoreria/bancos");
 }
 
 export async function registerReceiptAction(input: unknown): Promise<ActionResult> {
