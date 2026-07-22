@@ -13,6 +13,8 @@ import { createClient } from "@/lib/supabase/server";
 import type {
   BankAccount,
   BankBalance,
+  Beneficiary,
+  OperationalMovement,
   TreasuryMovement,
   CustomerOpenItem,
   SupplierOpenItem,
@@ -55,7 +57,7 @@ export async function listMovements(opts?: {
   let qb = supabase
     .from("treasury_movements")
     .select(
-      "id,public_id,date,type,direction,bank_account_id,amount,description,reference_type,reference_id,transfer_group_id,status,operational_category,created_at"
+      "id,public_id,date,type,direction,bank_account_id,amount,description,reference_type,reference_id,transfer_group_id,status,operational_category,beneficiary_id,created_at"
     );
   if (opts?.bankAccountId) qb = qb.eq("bank_account_id", opts.bankAccountId);
   if (opts?.status) qb = qb.eq("status", opts.status);
@@ -65,6 +67,36 @@ export async function listMovements(opts?: {
     .limit(opts?.limit ?? 100);
   if (error) throw error;
   return (data ?? []) as TreasuryMovement[];
+}
+
+/**
+ * Movimientos operativos con el beneficiario ya resuelto (vista 0194).
+ * La vista es `security_invoker` ⇒ la RLS de treasury_movements sigue aplicando.
+ */
+export async function listOperationalMovements(limit = 20): Promise<OperationalMovement[]> {
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("treasury_operational_movements")
+    .select("*")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []) as OperationalMovement[];
+}
+
+/** Catálogo de beneficiarios activos (selector formal de T-004). */
+export async function listBeneficiaries(): Promise<Beneficiary[]> {
+  const supabase = createClient();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("treasury_beneficiaries")
+    .select("id,full_name,kind,document_id,active")
+    .eq("active", true)
+    .order("full_name", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as Beneficiary[];
 }
 
 export async function listCustomerOpenItems(clientId?: string): Promise<CustomerOpenItem[]> {

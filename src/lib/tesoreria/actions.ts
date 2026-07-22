@@ -107,6 +107,12 @@ export async function registerOperationalMovementAction(input: unknown): Promise
     p_bank_account_id: p.bank_account_id,
     p_amount: Number(p.amount),
     p_concept: p.concept,
+    // Beneficiario: id existente O alta implícita por nombre. La RPC resuelve
+    // select-or-create en una sola transacción (sin huérfanos si el alta falla).
+    p_beneficiary_id: p.beneficiary_id ?? null,
+    p_beneficiary_name: p.beneficiary_name?.trim() || null,
+    p_beneficiary_kind: p.beneficiary_kind ?? "tercero",
+    p_beneficiary_document: p.beneficiary_document?.trim() || null,
   });
   if (error) return { ok: false, message: humanizeRpcError(error.message) };
   revalidateTreasury();

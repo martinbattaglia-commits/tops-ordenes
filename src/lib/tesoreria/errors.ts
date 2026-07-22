@@ -19,6 +19,9 @@ export function humanizeRpcError(message = ""): string {
   if (m.includes("SAME_ACCOUNT")) return "La transferencia requiere cuentas de origen y destino distintas.";
   if (m.includes("OPMOV_CONCEPT_REQUIRED")) return "El concepto del movimiento es obligatorio.";
   if (m.includes("OPMOV_DIRECTION_INVALID")) return "Indicá si el movimiento es un ingreso o un egreso.";
+  if (m.includes("BENEFICIARY_REQUIRED")) return "Esta categoría exige identificar al beneficiario.";
+  if (m.includes("BENEFICIARY_INACTIVE")) return "El beneficiario está dado de baja.";
+  if (m.includes("BENEFICIARY_INVALID")) return "El beneficiario seleccionado no existe.";
   if (m.includes("NOT_FOUND_OR_ALREADY_VOID")) return "El comprobante no existe o ya está anulado.";
   if (m.includes("VOID_REQUIRES_REASON")) return "La anulación requiere un motivo.";
   if (m.includes("INVALID_TARGET_TYPE")) return "Tipo de anulación inválido.";
