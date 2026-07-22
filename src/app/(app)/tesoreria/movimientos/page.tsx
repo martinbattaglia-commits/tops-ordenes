@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { StatusPill } from "@/components/tesoreria/ui";
 import { AnularButton } from "@/components/tesoreria/AnularButton";
 import { MovimientoOperativoForm } from "@/components/tesoreria/MovimientoOperativoForm";
@@ -22,19 +23,20 @@ export const dynamic = "force-dynamic";
 export default async function MovimientosPage({
   searchParams,
 }: {
-  searchParams?: { tipo?: string };
+  searchParams?: { tipo?: string; q?: string };
 }) {
-  // El filtro viaja por querystring (form GET nativo, sin cliente) y se aplica en
-  // la query, no en TS. `todos` = sin filtro.
+  // Filtro y búsqueda viajan por querystring (form GET nativo, sin cliente) y se
+  // aplican en la query, no en TS. `todos` = sin filtro.
   const tipoParam = searchParams?.tipo;
   const tipo =
     tipoParam && (MOVEMENT_TYPE_VALUES as readonly string[]).includes(tipoParam)
       ? tipoParam
       : undefined;
+  const q = searchParams?.q?.trim() || undefined;
 
   try {
     const [movements, accounts, beneficiaries] = await Promise.all([
-      listMovements({ limit: 200, type: tipo }),
+      listMovements({ limit: 200, type: tipo, search: q }),
       listBankAccounts(),
       listBeneficiaries(),
     ]);
@@ -73,17 +75,23 @@ export default async function MovimientosPage({
         <div className="card p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h3 className="font-semibold">Historial de movimientos</h3>
-            {/* Filtro por tipo — form GET nativo, sin JS de cliente. */}
-            <form method="GET" className="flex items-center gap-2">
+            {/* Filtro y búsqueda — form GET nativo, sin JS de cliente. */}
+            <form method="GET" className="flex flex-wrap items-center gap-2">
+              <label htmlFor="q" className="sr-only">
+                Buscar por comprobante o concepto
+              </label>
+              <input
+                id="q"
+                name="q"
+                type="search"
+                defaultValue={q ?? ""}
+                placeholder="Buscar comprobante o concepto…"
+                className="input"
+              />
               <label htmlFor="tipo" className="text-sm text-fg-muted">
                 Tipo
               </label>
-              <select
-                id="tipo"
-                name="tipo"
-                defaultValue={tipo ?? ""}
-                className="input"
-              >
+              <select id="tipo" name="tipo" defaultValue={tipo ?? ""} className="input">
                 <option value="">Todos</option>
                 {MOVEMENT_TYPE_VALUES.map((t) => (
                   <option key={t} value={t}>
@@ -92,8 +100,13 @@ export default async function MovimientosPage({
                 ))}
               </select>
               <button type="submit" className="btn btn-sm">
-                Filtrar
+                Aplicar
               </button>
+              {(tipo || q) && (
+                <Link href="/tesoreria/movimientos" className="btn btn-sm">
+                  Limpiar
+                </Link>
+              )}
             </form>
           </div>
 
@@ -114,7 +127,7 @@ export default async function MovimientosPage({
               {movements.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-4 text-fg-muted">
-                    {tipo ? "Sin movimientos de este tipo." : "Sin movimientos."}
+                    {tipo || q ? "Sin movimientos para ese criterio." : "Sin movimientos."}
                   </td>
                 </tr>
               )}

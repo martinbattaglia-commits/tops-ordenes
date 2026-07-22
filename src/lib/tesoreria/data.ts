@@ -52,6 +52,8 @@ export async function listMovements(opts?: {
   status?: string;
   /** Filtro por tipo de movimiento (columna `type`). El filtrado vive en la query, no en TS. */
   type?: string;
+  /** Búsqueda libre por comprobante (`public_id`) o concepto (`description`). */
+  search?: string;
   limit?: number;
 }): Promise<TreasuryMovement[]> {
   const supabase = createClient();
@@ -64,6 +66,12 @@ export async function listMovements(opts?: {
   if (opts?.bankAccountId) qb = qb.eq("bank_account_id", opts.bankAccountId);
   if (opts?.status) qb = qb.eq("status", opts.status);
   if (opts?.type) qb = qb.eq("type", opts.type);
+  if (opts?.search) {
+    // La coma y el paréntesis son separadores de la gramática `or` de PostgREST:
+    // se descartan del término para que la búsqueda no pueda alterar el filtro.
+    const q = opts.search.replace(/[(),*]/g, " ").trim();
+    if (q) qb = qb.or(`public_id.ilike.%${q}%,description.ilike.%${q}%`);
+  }
   const { data, error } = await qb
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })

@@ -64,9 +64,11 @@ export default async function TesoreriaOverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {banks.map((b) => (
+              {/* Decisión 2 (Dirección 2026-07-22): la Caja deja de mostrarse en la
+                  interfaz de Tesorería. La cuenta permanece en la base, sólo se oculta. */}
+              {banks.filter((b) => !b.is_system).map((b) => (
                 <tr key={b.bank_account_id} className="border-t">
-                  <td className="py-2">{b.bank_name} · {b.account_name}{b.is_system ? " (CAJA)" : ""}</td>
+                  <td className="py-2">{b.bank_name} · {b.account_name}</td>
                   <td className="py-2 text-right tabular">{fmtCurrency(b.balance)}</td>
                 </tr>
               ))}

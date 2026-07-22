@@ -8,12 +8,25 @@ import type { BankBalance } from "@/lib/tesoreria/types";
 export const metadata = { title: "Bancos · Tesorería" };
 export const dynamic = "force-dynamic";
 
-/** Agrupación de cuentas → entidad navegable (mismo criterio que la ficha [slug]). */
+/**
+ * Agrupación de cuentas → entidad navegable (mismo criterio que la ficha [slug]).
+ *
+ * Resolución de Dirección (2026-07-22), Decisión 2: Bancos tiene una única
+ * responsabilidad —administrar cuentas bancarias— y no se mezcla con Caja Chica.
+ * La tarjeta "Caja Efectivo" deja de mostrarse; la cuenta permanece en la base
+ * (`is_system = true`) y NO se elimina. Por eso el consolidado excluye las cuentas
+ * de sistema: no puede totalizar lo que no muestra.
+ *
+ * Decisión 3: la cuenta en dólares queda diferida hasta que exista soporte
+ * multimoneda. No agregar tarjetas USD acá hasta entonces.
+ */
 const ENTIDADES = [
   { slug: "galicia", label: "Banco Galicia", text: "text-tops-blue-700", border: "border-tops-blue-700", match: (b: BankBalance) => b.bank_name.toLowerCase().includes("galicia") },
   { slug: "santander", label: "Banco Santander", text: "text-tops-red", border: "border-tops-red", match: (b: BankBalance) => b.bank_name.toLowerCase().includes("santander") },
-  { slug: "caja", label: "Caja Efectivo", text: "text-status-success", border: "border-status-success", match: (b: BankBalance) => b.is_system || b.bank_name.toLowerCase().includes("caja") },
 ] as const;
+
+/** Cuentas bancarias visibles: excluye las cuentas de sistema (Caja). */
+const esCuentaBancaria = (b: BankBalance) => !b.is_system;
 
 function BankKpi({ href, label, value, text, border }: { href: string; label: string; value: number; text: string; border: string }) {
   return (
@@ -33,7 +46,9 @@ function BankKpi({ href, label, value, text, border }: { href: string; label: st
 export default async function BancosPage() {
   try {
     const [balances, accounts] = await Promise.all([getBankBalances(), listBankAccounts()]);
-    const total = balances.reduce((s, b) => s + Number(b.balance), 0); // roll-up server-side (D1)
+    // Roll-up server-side (D1) acotado a cuentas bancarias: la Caja no se muestra
+    // y por lo tanto tampoco se totaliza.
+    const total = balances.filter(esCuentaBancaria).reduce((s, b) => s + Number(b.balance), 0);
     const sum = (m: (b: BankBalance) => boolean) => balances.filter(m).reduce((s, b) => s + Number(b.balance), 0);
 
     return (
@@ -56,7 +71,7 @@ export default async function BancosPage() {
             <div className="text-3xl font-bold tabular -tracking-[0.01em] text-fg-brand">
               <CountUp to={total} format="currency" />
             </div>
-            <div className="text-[11px] text-fg-muted mt-1">Total de todas las cuentas</div>
+            <div className="text-[11px] text-fg-muted mt-1">Total de las cuentas bancarias</div>
           </div>
         </div>
 
