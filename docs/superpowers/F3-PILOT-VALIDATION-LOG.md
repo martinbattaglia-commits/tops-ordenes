@@ -1,0 +1,206 @@
+# F3 · Pilot Validation Log — Nexus Link
+
+> Registro de evidencias de la validación piloto de Nexus Link F3 en producción (`nexus.logisticatops.com`, commit `88add4b`).
+> **Pasada #1 — 2026-07-01 (técnica NO destructiva; sin datos creados).**
+> Referencias: `F3-PILOT-VALIDATION-RUNBOOK.md`, `F3-2B-PROD-DEPLOY-REPORT.md`.
+
+---
+
+## Pasada #1 — Validación técnica no destructiva (read-only)
+
+**Ejecutor:** sesión asistida (curl + Supabase read-only + navegación autenticada read-only de `martin@logisticatops.com`). **Sin** envío de mensajes / creación de canales / edición de perfiles.
+
+### Etapa 1 — Pre-flight
+| # | Chequeo | Resultado | PASS |
+|---|---|---|---|
+| 1 | Prod en `88add4b` | `/api/version` = 88add4b, env=production | ✅ |
+| 2 | `/api/version` responde | HTTP 200 | ✅ |
+| 3 | `/login` responde | HTTP 200 | ✅ |
+| 4 | `/connect` responde | 307 → /login (sin auth) | ✅ |
+| 5 | Sin 5xx | 0 respuestas 5xx (18 rutas) | ✅ |
+| 6 | RBAC sin cambios | idéntico (director_ops 70 … cliente_b2b 1) | ✅ |
+| 7 | Usuarios habilitados = 7 | total 10 / con rol 7 / sin rol 3 | ✅ |
+| 8 | Usuarios sin rol | 3 (ver hallazgo H-1) | ⚠️ |
+| 9 | Externos sin acceso | ver hallazgo H-1 (RBAC dormido) | ⚠️ |
+| 10 | Git sin cambios pendientes | HEAD `a0f28f6`, tree limpio | ✅ |
+
+### Etapa 2 — Rutas (fail-closed sin auth)
+| Ruta | HTTP sin auth | Redirect | PASS |
+|---|---|---|---|
+| `/connect` | 307 | /login?from=%2Fconnect | ✅ |
+| `/connect/canales` | 307 | /login | ✅ |
+| `/connect/notificaciones` | 307 | /login | ✅ |
+| `/connect/buscar?q=magaldi` | 307 | /login?q=magaldi&from=… | ✅ |
+| `/connect/actividad` | 307 | /login | ✅ |
+| `/connect/perfil` | 307 | /login | ✅ |
+| `/connect/favoritos` | 307 | /login | ✅ |
+| `/ejecutivo` `/dashboard` `/orders` `/compras` `/anmat` `/wms` `/tesoreria` `/rrhh` | 307 | /login | ✅ |
+| `/api/today` | 401 | — | ✅ |
+
+**Render autenticado (read-only, sesión `martin@logisticatops.com`):** `/connect` (Inicio, datos reales de timeline), `/connect/canales` (empty-state), `/dashboard` (cockpit completo) → renderizan al 100%. Consola: 0 errores propios de Nexus Link; 2 errores de shell (hydration #425/#422, deuda A). Red: `/rest/v1/notifications` → 200 ×3, token → 200; **0 5xx**.
+*(Pendiente pasada autenticada de `/connect/{notificaciones,buscar,actividad,perfil,favoritos}` — se cubren en la ejecución con usuarios reales.)*
+
+### Etapa 3 — Matriz de usuarios (estado actual en prod)
+**Con rol RBAC (7 usuarios; joseluis y mariela tienen 2 roles):**
+| Email | Rol(es) RBAC | connect.view | edit esperado |
+|---|---|---|---|
+| joseluis@logisticatops.com | director_ops + rrhh_admin | sí | full + rrhh.edit |
+| mariela@sullivancamejo.com.ar *(dominio externo)* | director_ops + rrhh_admin | sí | full + rrhh.edit |
+| cynthia@logisticatops.com | gerencia | sí | sí |
+| martinrinas@logisticatops.com | gerencia | sí | sí |
+| ruth@logisticatops.com | gerencia | sí | sí |
+| despachos-lujan@logisticatops.com | jefe_deposito | sí | sí (acotado) |
+| despachos-magaldi@logisticatops.com | jefe_deposito | sí | sí (acotado) |
+
+**Sin rol RBAC (3):**
+| Email | profile.role (legacy) | Acceso hoy (RBAC dormido) |
+|---|---|---|
+| martin@logisticatops.com | admin | Accede (bootstrap fail-open + admin) |
+| martin.battaglia@logisticatops.com | operaciones | Accede (bootstrap fail-open) |
+| martinferbat@gmail.com *(gmail)* | operaciones | Accede (bootstrap fail-open) |
+
+**connect.view por rol (RBAC):** admin/director_ops = connect.* completo; gerencia/jefe_deposito/operaciones/compliance/comercial = create+edit+view; rrhh_admin/seguridad = create+view. **→ Los 7 usuarios del piloto tienen acceso propio a Nexus Link (no dependen del bypass).**
+
+---
+
+## Hallazgos (clasificación Etapa 6)
+
+| ID | Hallazgo | Severidad | ¿Del deploy? | Acción |
+|---|---|---|---|---|
+| **H-1** | **RBAC en modo dormido/anti-lockout** (`RBAC_ENFORCE`≠"1") → usuarios SIN rol reciben acceso permisivo (fail-open) **por diseño**. Confirmado: `martin@` (sin rol RBAC) accede a `/connect`. | **Alta (decisión)** | **No** — estado pre-existente documentado (auditoría 2026-06-28) | Dirección decide si activa `RBAC_ENFORCE=1` (tras confirmar que todos los legítimos tienen rol) antes del rollout amplio. **No modificable en esta ventana.** |
+| **H-2** | Hydration mismatch del shell (React #425/#422) | Baja (cosmético) | No (deuda A) | Fix futuro |
+| **H-3** | `seguridad → knowledge.edit` (RBAC) | Baja (deuda B) | No | Decisión Dirección |
+| **H-4** | `mariela@sullivancamejo.com.ar` (dominio externo) con `director_ops+rrhh_admin` | Observación | No | Confirmar que es acceso intencional (contadora externa) |
+| **H-5** | `martinferbat@gmail.com` (gmail) como usuario sin rol con acceso permisivo | Observación | No | Cuenta personal de Martín; revisar en decisión de H-1 |
+
+**0 hallazgos CRÍTICOS del deploy. Ninguno detiene el piloto.**
+
+---
+
+## Etapa 4 — Pruebas funcionales autorizables (PREPARADAS, NO ejecutadas)
+
+> Requieren autorización explícita posterior. Ejecutar con los usuarios reales en ventana de piloto.
+
+| Prueba | Dato que crea | Identificación | Limpieza / conservación | Riesgo | Criterio de éxito |
+|---|---|---|---|---|---|
+| Crear conversación de prueba | 1 fila `connect_conversations` (+owner) | título `[PRUEBA-F3]` | Conservar o archivar; borrable por admin | Bajo (interno) | Se crea, aparece en bandeja, visible solo a participantes |
+| Enviar mensaje de prueba (DM) | filas `connect_messages` | prefijo `[PRUEBA]` | Conservar; sin PII real | Bajo | Entregado + realtime al receptor; markRead OK |
+| Crear canal de prueba | 1 fila `connect_channels` `#piloto-f3` | slug `piloto-f3` | Archivar al cerrar piloto | Bajo | Canal creado; unión pública fail-closed (no-miembro no modera) |
+| Modificar perfil | update `profiles`/perfil connect | campo con sufijo `(prueba)` | Revertir al valor original | Bajo | Guarda y refleja; sin romper otros datos |
+| Marcar favorito | fila favoritos | conversación de prueba | Desmarcar al finalizar | Muy bajo | Aparece en `/connect/favoritos` |
+| Probar notificación | evento que notifica | asociado a prueba | Se autolimpia | Bajo | Notificación aparece (realtime/polling) |
+| Realtime entre 2 usuarios | mensajes en vivo | sesión A↔B `[PRUEBA]` | Conservar | Bajo | Mensaje de A aparece en B sin refrescar |
+
+---
+
+## Estado de cierre (parcial, tras pasada #1)
+- Bloque técnico: **verde** (prod 88add4b, 0 5xx, fail-closed sin-auth OK, Nexus Link operativo, 7 usuarios provisionados).
+- **Punto de decisión para cierre:** H-1 (RBAC dormido) — el criterio "usuarios sin rol/externos sin acceso" NO se cumple mientras `RBAC_ENFORCE`≠1. Es estado por diseño, no defecto; requiere decisión de Dirección.
+- Próximo: ejecutar pruebas funcionales (Etapa 4) con los 7 usuarios, previa autorización.
+
+---
+
+## Pasada #2 — Piloto funcional autorizado (2026-07-01)
+
+### Decisión de Dirección registrada
+- **H-1 aceptado como deuda temporal (Opción A + D)**: RBAC dormido/anti-lockout se mantiene durante el piloto interno; **NO se activa `RBAC_ENFORCE=1`**, no se seedean roles, no se tocan env vars. H-1 = deuda técnica **preexistente y global** del ERP (no defecto de Nexus Link), a resolver como workstream separado **antes** de habilitar clientes/proveedores/externos o exposición mayor. Detalle: `F3-H1-RBAC-DECISION-PACK.md`.
+- **Autorizadas** pruebas funcionales con alcance interno, mínima mutación, convención `[PRUEBA-F3]`.
+
+### Restricción de ejecución (por qué el asistente NO mutó)
+- **No hay sesión disponible** de ninguno de los 7 usuarios del piloto; la única sesión activa es `martin@logisticatops.com` = **usuario SIN rol** → por scope de Dirección, *"usuarios sin rol solo como observación documental"* + *"no suplantar usuarios / no pedir contraseñas / no resetear credenciales"* + *"si no hay sesión disponible, preparar checklist para validación manual"*.
+- **Decisión:** el asistente **NO ejecuta mutaciones**. **Datos creados por el asistente: NINGUNO.** Se entrega el paquete de validación manual (abajo) para ejecución por cada usuario en su propia sesión.
+
+### Observación documental (read-only, sesión `martin@`, sin mutar)
+- `/connect` (Inicio), `/connect/canales`, `/dashboard` renderizan al 100% con datos reales (timeline). 7 rutas `/connect` fail-closed sin auth. 0 5xx. Consola: solo hydration del shell (#425/#422, deuda A). `martin@` accede por RBAC dormido (H-1, aceptado).
+
+---
+
+## Paquete de validación manual — a ejecutar por cada uno de los 7 usuarios
+
+> Cada usuario abre `https://nexus.logisticatops.com` en su navegador (DevTools → Console + Network abiertos) y ejecuta en SU propia sesión. Prefijo obligatorio `[PRUEBA-F3]` en todo dato. No usar datos sensibles ni clientes reales. Ante 500/502, error crítico de consola, pérdida de acceso, falla de login o datos corruptos → **DETENER y reportar** (no improvisar fixes).
+
+**Usuarios objetivo (7):** joseluis@ (director_ops+rrhh_admin) · mariela@sullivancamejo.com.ar (director_ops+rrhh_admin) · cynthia@ · martinrinas@ · ruth@ (gerencia) · despachos-lujan@ · despachos-magaldi@ (jefe_deposito).
+
+| # | Prueba | Pasos | Esperado | PASS/FAIL | Evidencia | Dato creado |
+|---|---|---|---|---|---|---|
+| V1 | Login | Iniciar sesión | Acceso OK, sin error | | screenshot | — |
+| V2 | Acceso `/connect` | Abrir Inicio | "Hola, <usuario>" + Actividad/Notif/Favoritos/Canales | | screenshot | — |
+| V3 | Conversación | Crear/abrir conversación, enviar mensaje `[PRUEBA-F3] ping <inicial>` | Persiste + se lee + sin error | | screenshot | mensaje `[PRUEBA-F3]` |
+| V4 | Lectura/markRead | Abrir el hilo, marcar leído | Estado leído correcto, sin duplicados | | screenshot | — |
+| V5 | Canal (si rol permite) | Crear canal `[PRUEBA-F3]-<inicial>` | Canal creado, visible, uno mismo como miembro; **no invitar externos** | | screenshot | canal `[PRUEBA-F3]` |
+| V6 | Búsqueda | `/connect/buscar?q=[PRUEBA-F3]` | Devuelve el contenido de prueba; FTS no rompe | | screenshot | — |
+| V7 | Notificaciones | Abrir `/connect/notificaciones` | Lista/estado correcto; sin spam | | screenshot | — |
+| V8 | Actividad | Abrir `/connect/actividad` | Feed con datos, sin error | | screenshot | — |
+| V9 | Perfil (lectura) | Abrir `/connect/perfil` | Datos correctos. *Si se cambia una preferencia: anotar valor previo y restaurarlo.* | | screenshot | — (o revertido) |
+| V10 | Favoritos | Marcar favorito de prueba, luego desmarcar | Aparece/desaparece en `/connect/favoritos` | | screenshot | favorito (revertido) |
+| V11 | Realtime (2 sesiones) | Si hay 2 usuarios simultáneos: A envía `[PRUEBA-F3]`, B observa | Aparece en vivo sin refrescar. *Si no hay 2 sesiones → PENDIENTE manual.* | | screenshot | mensaje `[PRUEBA-F3]` |
+| V12 | RBAC | Confirmar acceso acorde al rol; no intentar acciones fuera de permiso | Acceso esperado; sin fail-open indebido | | nota | — |
+
+**Criterios de parada:** 500/502 · error crítico de consola · pérdida de acceso general · falla de login · datos corruptos · problema grave de permisos · regresión en módulos existentes → DETENER + reportar.
+
+**Limpieza:** los `[PRUEBA-F3]` (mensajes/canales) pueden **archivarse** por el propio usuario (RPC `connect_archive_conversation` / `connect_delete_message` disponibles vía UI); si no hay acción segura, **dejar identificados con `[PRUEBA-F3]`** y documentar cuáles quedaron. **No ejecutar deletes directos en DB** sin autorización explícita.
+
+---
+
+## Estado de cierre (tras Pasada #2)
+- **Capas técnicas: VERDES** (deploy sano 88add4b, 0 5xx, fail-closed sin-auth OK, Nexus Link operativo, 7 usuarios con `connect.view` propio, RBAC intacto). **0 hallazgos críticos.**
+- **Validación funcional user-driven: PENDIENTE de ejecución manual** por los 7 usuarios (el asistente no dispone de sus sesiones; no suplanta). Paquete entregado arriba.
+- **Datos de prueba en producción: NINGUNO creado por el asistente.**
+- **Deudas no bloqueantes vigentes:** H-1 (aceptada A+D), A (hydration shell), B (`seguridad→knowledge.edit`), H-4 (mariela@ dominio externo), H-5 (martinferbat@ gmail).
+- **Recomendación de cierre:** ver §Entregable 10 (informe inline). En tanto no aparezcan críticos en la ejecución manual, el rumbo es **B (aprobado con observaciones no bloqueantes)**.
+
+---
+
+## Pasada #2b — Smoke funcional excepcional (sesión `martin@`, autorizado por Dirección)
+
+> Excepción puntual autorizada para validar el **write-path técnico** en la única sesión disponible (`martin@`, sin rol; NO reemplaza la validación manual de los 7). Fecha/hora: **2026-07-01 ~02:27–02:40 UTC**. Convención `[PRUEBA-F3]`.
+
+### Datos creados (y estado final)
+| Dato | Identificación | Estado final |
+|---|---|---|
+| Canal privado | `[PRUEBA-F3] Canal piloto` (slug `prueba-f3-canal-piloto`, CTX-2026-000001, conv `5114d6b4-…`) | **ARCHIVADO** (`archived_at=2026-07-01T02:39:42Z`, reversible) |
+| Mensaje | `[PRUEBA-F3] Mensaje de validación` (1 fila DB, íntegro) | Dentro del canal archivado |
+
+**Datos que quedaron en producción:** 1 canal privado archivado + 1 mensaje, ambos `[PRUEBA-F3]`, reversibles (desarchivar). No se ejecutaron deletes por SQL.
+
+### Resultados por prueba
+| # | Prueba | Resultado | Evidencia |
+|---|---|---|---|
+| V1/V2 | Acceso `/connect` (+Inicio) | ✅ PASS (render OK, red 0 5xx, solo hydration shell) | snapshot/red |
+| V5 | Crear canal (privado) | ✅ PASS — `POST /connect/canales → 200`, owner=martin@, renderiza | screenshot |
+| V3 | Enviar mensaje | ✅ PASS — persiste, **1 fila en DB** (íntegro), 0 5xx | screenshot + SQL count=1 |
+| — | Archivar canal | ✅ PASS — `archived_at` seteado (write-path archivar OK) | SQL |
+| V6 | **Búsqueda** | 🔴 **FAIL — BUG CONFIRMADO** (ver F-SEARCH) | screenshots + error SQL |
+| V10 | Favoritos | ⚠️ INCONCLUSO — toggle ⭐ no expuesto en bandeja/hilo/header probados (`connect_participants.is_favorite` existe); pendiente manual en la superficie correcta | — |
+| V7/V8 | Notificaciones/Actividad | ✅ vistas renderizan (Inicio: "Sin pendientes" + Actividad con timeline real); generación de evento por creación no verificada específicamente | snapshot |
+| V11 | Realtime | ⏸️ PENDIENTE — sin 2ª sesión disponible | — |
+
+### Hallazgo nuevo
+| ID | Hallazgo | Severidad | ¿Del deploy/F3? |
+|---|---|---|---|
+| **F-SEARCH** | **Búsqueda global de Nexus Link ROTA.** `connect_search(text,int)` lanza `ERROR 42702: column reference "conversation_id" is ambiguous` (colisión entre la columna OUT `conversation_id` del `RETURNS TABLE` y `select conversation_id from my_convs`) → **siempre falla para cualquier usuario**; la UI **enmascara la excepción como "Sin resultados"**. Confirmado vía llamada directa a la RPC. **NO** es lag de indexación, tokenización del guion, ni artefacto de `martin@` sin rol (la data existe, el FTS matchea `true`, la membresía es correcta, `has_permission` pasó). Degrada con gracia (sin 5xx/crash/pérdida de datos). | **Alta** | **Sí — F3/RC1.4 (mig 0153 `connect_search`)** |
+| F-SEARCH-2 (colateral) | La UI de búsqueda **traga la excepción** de la RPC y muestra "Sin resultados" en vez de un estado de error → oculta el fallo real. | Media | Sí |
+| F-DUP-RENDER | Mensaje se renderiza 2× de forma **optimista transitoria**; reconcilia a 1 tras reload (DB=1 fila). Sin impacto de datos. | Baja | Sí (UI) |
+
+**Fix sugerido F-SEARCH (NO aplicado):** calificar la columna del subquery, p.ej. `select mc.conversation_id from my_convs mc` (o renombrar la columna OUT / usar alias), en las 4 ramas del `connect_search`. Requiere migración → workstream separado, fuera de esta ventana.
+
+### Clasificación del smoke
+- **Write-path técnico: ✅ FUNCIONAL** (crear canal, enviar mensaje, persistir, archivar — todo OK, data íntegra, 0 5xx).
+- **Pero** se confirmó **F-SEARCH (Alta)**: la búsqueda global está rota. Degrada con gracia (no crítica de parada), pero es un **defecto real de F3** que Dirección debe ponderar para el cierre.
+- **Resultado del smoke: B — aprobado con observaciones** (write-path OK; búsqueda rota como observación de alta prioridad a corregir).
+
+### Decisión Dirección + Hotfix preparado (2026-07-01)
+- **Dirección NO acepta F-SEARCH como deuda:** la búsqueda es funcionalidad central → **debe corregirse antes del cierre formal de F3** (deploy NO se revierte; Nexus Link queda publicado; F3 NO cerrada hasta corregir/validar `connect_search`).
+- **Hotfix preparado (NO aplicado):** migración `supabase/migrations/0156_fix_connect_search_ambiguous_conversation_id.sql` (`CREATE OR REPLACE`, califica las 4 subqueries `mc.conversation_id`; firma/lógica/grants/SECDEF intactos). Plan completo: `F3-FSEARCH-HOTFIX-PLAN.md`. Validado read-only (SELECT standalone devuelve el mensaje `[PRUEBA-F3]`). **Pendiente autorización de Dirección para aplicar `0156` a prod.**
+- **`0156` APLICADA a prod (2026-07-01, `apply_migration` success, `schema_migrations` 20260701025846).** Bug #1 (`42702`) corregido y verificado (firma/SECDEF/owner/grants preservados). **PERO el smoke reveló un SEGUNDO bug pre-existente F-SEARCH-2:** `ERROR 0A000 invalid UNION ORDER BY` (el `order by sort_rank, occurred_at` del UNION referencia variables OUT). Estaba enmascarado por el `42702`. **Búsqueda sigue rota.** No se improvisó fix ni rollback (rollback reintroduce #1 sin arreglar nada). **`0157` PREPARADA** (`supabase/migrations/0157_fix_connect_search_union_order_by.sql`, ORDER BY posicional `order by 10,9`, validado read-only: devuelve el mensaje). **Pendiente autorización para aplicar `0157`.** Detalle: `F3-FSEARCH-HOTFIX-EXECUTION-LOG.md`. Commit local NO creado (smoke aún no pasa). F4 bloqueada.
+- **✅ F-SEARCH RESUELTO (2026-07-01):** `0157` APLICADA a prod (`apply_migration` success, `schema_migrations`). Checkpoints OK (ORDER BY posicional; firma/SECDEF/owner/grants preservados). **Smoke RPC:** `mensaje`/`validación`/`PRUEBA-F3` → devuelven el mensaje `[PRUEBA-F3]`; sin `42702`/`0A000`. **Smoke UI:** `/connect/buscar?q=mensaje` → "1 resultado" visible, 0 errores consola, 0 5xx. **Búsqueda global de Nexus Link OPERATIVA (RPC+UI).** Rollback no requerido. Commit local `fix(db): repair Nexus Link search RPC` (docs+migraciones 0156/0157, sin push).
+- **Paquete de validación manual de los 7 usuarios preparado:** `F3-PILOT-MANUAL-VALIDATION-PACK.md` (objetivo, reglas, V1–V12, PASS/FAIL, criterios de parada, tabla de registro, mensaje listo para enviar, checklist de cierre). **Último paso antes del cierre formal de F3.** F4 bloqueada.
+- **🔴 DEFECTS DE PILOTO (2026-07-01, diagnóstico read-only):** la validación manual reveló 4 defects reales en Nexus Link — **DEFECT-1** notificaciones rompe (error boundary; colisión de canal realtime `notifications` entre `NotificationsBell` y `NotificationCenter`, `realtime.ts:31` nombre determinístico) = **Alto/Crítico, BLOQUEA F3**; **DEFECT-2** miembros muestran UUID (`channel-data.ts:41` `name:null`, sin join a `profiles_public`) = **Alto, BLOQUEA**; **DEFECT-3** agregar miembro exige UUID (por diseño "fase posterior", sin RPC de búsqueda) = Media (workaround: canales públicos); **DEFECT-4** "Datos inválidos" genérico (`channel-actions.ts:51` zod uuid) = Baja. **Fix = frontend (A/B/C) → requiere DEPLOY** (DEFECT-1/2/4 sin migración; DEFECT-3 propio = RPC nueva). Triage+plan: `F3-PILOT-DEFECTS-TRIAGE.md`. **NO implementado, prod intacta `88add4b`. F3 NO se cierra hasta resolver/aceptar. F4 bloqueada.**
+- **🛠️ HOTFIX A+B+C+D IMPLEMENTADO LOCAL (2026-07-01, autorizado — sin deploy/commit todavía):** A) `realtime.ts` canal único por instancia (`useId`) · B) `channel-data.ts`+`ChannelView.tsx` identidad humana vía `profiles_public` (nunca UUID principal) · C/DEFECT-4) mensajes claros en add-member · D) mig `0158_connect_member_profile_search` (RPC `connect_search_profiles` staff interno gated, validada read-only, NO aplicada) + `searchProfilesAction` + componente `MemberSearch` (autocomplete debounce+race-guard). **QA local: typecheck0/lint0/tests378/build OK.** Plan: `F3-PILOT-DEFECTS-HOTFIX-PLAN.md`. Producción intacta `88add4b`, `0158` NO aplicada, cambios sin commitear. Pendiente: revisión adversarial + autorización de ventana (commit → aplicar 0158 → deploy controlado). F4 bloqueada.
+- **✅ Revisión adversarial (Code Reviewer) hecha:** 1 blocker de seguridad **RESUELTO** — la RPC devolvía `email` a roles no-admin (viola PII lockdown mig `0040`) → corregido (Fix A: RPC no devuelve email, solo id+full_name; busca por email sin enumerarlo) + hardening escape LIKE. Resto verificado limpio (realtime, sin ambigüedad clase-0156, filtro excluye externos, grants, race-guard). **Re-QA post-fix: typecheck0/lint0/tests378/build OK.** Hotfix LISTO. Prod intacta `88add4b`, `0158` NO aplicada, sin commitear. F4 bloqueada.
+- **✅✅ HOTFIX APLICADO Y PUBLICADO EN PROD (2026-07-01, ventana autorizada):** commit `6131248` → `0158` aplicada → draft OK → **deploy PROD `6a4495b871ec7a0dfd2490bf` (`/api/version`=`6131248`)**. Smoke PROD autenticado: DEFECT-1 notificaciones renderizan sin error boundary (0 errores consola) · DEFECT-2 miembros muestran nombre (martin@…, Ruth Carrasquero), no UUID · DEFECT-3 autocomplete por nombre/email sin exponer email + add end-to-end + **sin auto-add** · DEFECT-4 mensajes claros · búsqueda 0156/0157 sin regresión · 0 5xx · **rollback NO requerido**. Migs prod: 0156/0157/0158. Detalle: `F3-PILOT-DEFECTS-HOTFIX-EXECUTION-LOG.md`. **Los 4 defects bloqueantes RESUELTOS → F3 lista para validación manual de los 7 usuarios. F4 BLOQUEADA.**
+- **🟡 DEFECT-5 (2026-07-01, diagnóstico read-only): mensajes duplicados = VISUAL/FRONTEND TRANSITORIO, NO DB.** `connect_messages` tiene **1 fila por mensaje** (client_msg_id únicos); en carga fresca aparecen 1 vez → **se resuelve al recargar**. Causa: `ThreadView.tsx` no reconcilia el **eco realtime** con el **optimista** por `client_msg_id` (dedup por id/seq no matchea mientras `status="sending"`) → doble burbuja en vivo. Composer sin doble-submit (guard OK). **Severidad Medio** (transitorio, sin corrupción; afecta UX de chat en vivo del piloto). Fix = `ThreadView` reconciliar por client_msg_id (frontend, sin migración, requiere deploy). **NO implementado, prod intacta `6131248`. Triage: `F3-PILOT-DEFECTS-TRIAGE.md §DEFECT-5`. F4 bloqueada.**
+- **🛠️ DEFECT-6 + DEFECT-7 IMPLEMENTADOS LOCAL (2026-07-01, autorizados por Dirección — sin deploy/aplicar/commit-remoto):** worktree aislado `tops-ordenes-hotfix-defects-6-7` @ base `be405ba`, branch `hotfix/connect-archive-rename-defects-6-7`. **DEFECT-6** (archivar no se refleja): mig `0159` expone `archived_at` en `v_connect_channels`; `listChannels`/`listInbox` filtran archivados; `getChannelBySlug` (incluye archivados → vista read-only por URL); `ChannelView` redirige a `/connect/canales` tras archivar + badge/banner + composer deshabilitado; `ThreadView` prop `readOnly`. **DEFECT-7** (rename cambia tema, no nombre): mig `0159` RPC nueva `connect_set_title` (SECDEF, `search_path` fijo, gate owner/moderator/admin **NULL-safe** `is distinct from`, valida no-vacío/trim/`left(120)`, bloquea archivados, **solo `title`, nunca `slug`/`topic`**) + `SetTitleUseCase`/`setTitleAction` + edición de nombre en `ChannelView` (separada de tema). Núcleo por TDD (+4 tests). **QA local: typecheck0/lint0/tests382/build OK.** Validación SQL estática OK (vista sin redefinición post-0145 → `CREATE OR REPLACE` compatible; `archived_at` + índice parcial; slug único → `maybeSingle` seguro). **Revisión adversarial (Code Reviewer): GO** — 5 restricciones duras limpias, gate NULL-safe confirmado como endurecimiento; 0 bloqueantes de código. Residuales documentados: **R-1** deploy-ordering (aplicar `0159` ANTES del deploy — si no, directorio/canal-por-slug quedan vacíos, degrada con gracia sin 5xx; sidebar/Home/favoritos no afectados) = **condición GO/NO-GO**; **R-3** envío server-side a archivado no bloqueado (UI-only; `connect_post_message` sin guarda — follow-up, fuera de alcance); **R-2** notificaciones de archivados (otro módulo — follow-up 1 línea). Plan: `F3-DEFECT6-7-HOTFIX-PLAN.md`. Smoke plan preparado para la ventana (no ejecutable acá: dev→Supabase prod y requiere `0159` aplicada). **Commit local `fix(connect): repair channel archive and rename flows` (código + `0159` + docs, sin push). Prod intacta `be405ba`, `0159` NO aplicada. F4 BLOQUEADA.**
+- **🛠️ DEFECT-8/9/10 IMPLEMENTADOS LOCAL (2026-07-01, autorizados por Dirección — sin deploy/push/merge/migración).** Worktree aislado `tops-ordenes-admin-surface-8-10` @ base `18f3ae6` (= prod), branch `hotfix/connect-admin-surface-defects-8-10`. **Causa raíz común:** la UI de admin vivía solo en `ChannelView` (`/connect/canales/[slug]`) con gate que ignoraba `is_admin`; el sidebar enruta a `/connect/c/[id]` (solo `ThreadView`, sin controles); los grupos (slug=null) sin superficie. **Fix (frontend, SIN migración):** (1) `canAdminister(myRole,isAdmin)=isAdmin||canModerate(role)` (`domain/channel.ts`, +3 tests TDD); (2) **`ConversationAdmin.tsx`** nuevo = superficie de admin **compartida** channel+group (extraída del member view de `ChannelView`, opera por conversationId, gate `canAdminister`, `archiveRedirectTo` param, prop `links`); `ChannelView` delega (conserva ramas join/archivado) + recibe `isAdmin`; (3) `c/[conversationId]/page.tsx` renderiza `ConversationAdmin` para channel/group (otras kinds intactas); (4) `canales/[slug]/page.tsx` pasa `isAdmin=getProfileRole()==='admin'`; (5) banner archivado de `ThreadView` genérico. **QA: typecheck0/lint0/tests385/build OK.** **Revisión adversarial (workflow 3 dim + verificación): GO** — 0 bloqueantes; constraint "ningún control admin se filtra a no-autorizados" verificada firme en todas las affordances; 3 hallazgos BAJO/CONFIRMED (F-2 banner "canal"→"conversación" **corregido**; F-1 sin botón "Unirme" en `/c/[id]` para no-miembro no-admin de canal público = residual UX, no regresión, no fuga; F-3 hilo vacío para admin no-miembro por RLS de `connect_messages` sin fallback `is_admin` = residual, arreglo requiere migración RLS = fuera de alcance). **Commit local `fix(connect): expose channel administration from conversation view` (código + tests + docs, sin migración/package/logs, sin push).** Plan: `F3-DEFECT8-10-HOTFIX-PLAN.md`. Smoke UI autenticada = Martín. **Prod intacta `18f3ae6`. F4 BLOQUEADA.**
+- **✅✅ DEFECT-8/9/10 DESPLEGADO EN PROD (2026-07-01, ventana autorizada).** Frontend puro, **SIN migración**. Pre-flight OK (prod `18f3ae6` sana, `0159` sigue aplicada, worktree `a6c23f9` limpio sin package/migración, Node v22.23.1, Netlify auth OK). Deploy controlado draft-first desde `deploy-f3-nexus-clean` NO-worktree @ `a6c23f9`: DRAFT `6a45817a2599675689109206` (smoke `/api/version`=`a6c23f9`, 0 5xx) → **PROD `6a45820a7b7b7de8d59c6160`** (`/api/version`=`a6c23f9` env=production, **0 5xx / 10 rutas**). **Rollback NO requerido** (point `6a457264c194441f9a79c62f`). **⏳ PENDIENTE: smoke UI autenticada (controles de admin desde sidebar canales/grupos, gating de permisos, rename/archivado) = Martín — DEFECT-8/9/10 es frontend puro, sin comportamiento de capa de datos que validar por SQL.** Migs prod inalteradas (0156/0157/0158/0159). Detalle: `F3-DEFECT8-10-HOTFIX-EXECUTION-LOG.md`. **Sin push/merge. F4 BLOQUEADA.**
+- **🏁🏁 F3 (NEXUS LINK) FORMALMENTE CERRADA — APROBADA POR DIRECCIÓN (2026-07-01).** Validación manual autenticada con **varios usuarios: PASS**. Nexus Link funciona correctamente en prod. **Producción en `a6c23f9`** (deploy `6a45820a7b7b7de8d59c6160`), 0 5xx, rollback NO requerido. **Todos los defects del piloto resueltos y desplegados:** F-SEARCH (0156/0157) + DEFECT-1..4 (`6131248`) + DEFECT-5 (`be405ba`) + DEFECT-6/7 (`18f3ae6`, mig `0159`) + DEFECT-8/9/10 (`a6c23f9`). Criterios K1–K11 ✅; Dirección D1–D8 ✅ (D7 cierre aprobado, D8 F4 autorizada). Deudas no bloqueantes aceptadas (A hydration, B knowledge.edit, H-1 RBAC dormido, R-2/R-3, F-1/F-3). Migs prod: `0156/0157/0158/0159`. Reporte: `F3-FINAL-CLOSURE-REPORT.md`; checklist `F3-CLOSURE-CRITERIA-AND-CHECKLIST.md §6`. **✅ F3 CERRADA. F4 ABIERTA SOLO EN PLANIFICACIÓN** (`F4-KICKOFF-SCOPE-PLAN.md`); sin desarrollo hasta Master Plan aprobado. Commit docs-only local `docs: close F3 Nexus Link pilot` (sin push/merge).

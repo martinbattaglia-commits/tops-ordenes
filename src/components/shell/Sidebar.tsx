@@ -22,8 +22,8 @@ interface NavItem {
   badge?: string;
   /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
   exec?: boolean;
-  /** Gate RBAC: "sistema" (requiere sistema.view) · "rrhhDocs" (requiere rrhh.documentacion.view). */
-  gate?: "sistema" | "rrhhDocs";
+  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view) · "copilot" (piloto AI) · "contabilidad" (contabilidad.view). */
+  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad";
   /** Abre el link en nueva pestaña (para assets estáticos o recursos externos). */
   external?: boolean;
 }
@@ -32,8 +32,8 @@ interface Domain {
   id: string;
   label: string;
   items: NavItem[];
-  /** Gate RBAC de todo el dominio (ej. "sistema"). */
-  gate?: "sistema";
+  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge" / "connect" / "contabilidad"). */
+  gate?: "sistema" | "knowledge" | "connect" | "contabilidad";
 }
 
 /**
@@ -45,6 +45,9 @@ const DOMAINS: Domain[] = [
     id: "cockpit",
     label: "Cockpit",
     items: [
+      // Nexus Copilot — piloto cerrado F5.2-lite: visible sólo para ai_pilot_users
+      // (gate "copilot"). Los no-pilotos no lo ven; /copilot aplica el kill-switch AI_ENABLED.
+      { href: "/copilot", label: "Nexus Copilot", icon: "sparkle", gate: "copilot", badge: "Piloto" },
       // Cockpit único. Los ítems ejecutivos/financieros (`exec:true`) se ocultan a
       // los roles sin permiso ejecutivo (Comercial, Finanzas, encargados de depósito),
       // que ven sólo los accesos operativos (Vacancia, Google, CCTV, Tracking, Organigrama).
@@ -55,7 +58,23 @@ const DOMAINS: Domain[] = [
       { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
       { href: "/organigrama", label: "Organigrama", icon: "building", gate: "sistema" },
       { href: "/analytics", label: "Analytics Ejecutivo", icon: "report", exec: true },
-      { href: "/manual-nexus/index.html", label: "Manual de usuario", icon: "book", badge: "Docs", external: true, exec: true },
+      // El manual es material de ayuda para TODOS los usuarios (decisión 2026-07-07):
+      // sin gate exec — justamente los roles operativos son quienes más lo necesitan.
+      { href: "/manual-nexus/index.html", label: "Manual de usuario", icon: "book", badge: "Docs", external: true },
+    ],
+  },
+  {
+    id: "connect",
+    label: "Nexus Link",
+    gate: "connect",
+    items: [
+      { href: "/connect", label: "Inicio", icon: "home", badge: "Nuevo" },
+      { href: "/connect/actividad", label: "Actividad", icon: "activity" },
+      { href: "/connect/notificaciones", label: "Notificaciones", icon: "bell" },
+      { href: "/connect/buscar", label: "Búsqueda", icon: "search" },
+      { href: "/connect/canales", label: "Canales", icon: "megaphone" },
+      { href: "/connect/incidentes", label: "Incidentes", icon: "bolt" },
+      { href: "/connect/tareas", label: "Tareas", icon: "check" },
     ],
   },
   {
@@ -153,6 +172,21 @@ const DOMAINS: Domain[] = [
     ],
   },
   {
+    // Módulo Contable F6 — piloto en modo SIMULATION (dry-run permanente).
+    // Visible solo con contabilidad.view; cada página re-valida el permiso.
+    id: "contabilidad",
+    label: "Contabilidad",
+    gate: "contabilidad",
+    items: [
+      { href: "/contabilidad", label: "Dashboard contable", icon: "dashboard", badge: "Simulación" },
+      { href: "/contabilidad/libro-diario", label: "Libro Diario", icon: "report" },
+      { href: "/contabilidad/mayor", label: "Libro Mayor", icon: "book" },
+      { href: "/contabilidad/sumas-y-saldos", label: "Sumas y Saldos", icon: "calculator" },
+      { href: "/contabilidad/comprobantes-sin-asiento", label: "Comprob. sin asiento", icon: "clock" },
+      { href: "/contabilidad/conciliacion-iva", label: "Conciliación IVA", icon: "check-circle" },
+    ],
+  },
+  {
     id: "rrhh",
     label: "Recursos Humanos",
     items: [
@@ -172,10 +206,19 @@ const DOMAINS: Domain[] = [
       { href: "/settings/roles", label: "Roles & permisos", icon: "shield" },
       { href: "/settings/users", label: "Usuarios", icon: "users" },
       { href: "/settings/centros-costo", label: "Centros de costo", icon: "tag-alt" },
+      { href: "/settings/plan-de-cuentas", label: "Plan de cuentas", icon: "report" },
       { href: "/settings/tracking", label: "Tracking", icon: "truck" },
       { href: "/templates", label: "Plantillas OS", icon: "mail" },
       { href: "/sistema/comunicados", label: "Comunicados", icon: "megaphone" },
       { href: "/settings", label: "Configuración", icon: "gear" },
+    ],
+  },
+  {
+    id: "conocimiento",
+    label: "Conocimiento",
+    gate: "knowledge",
+    items: [
+      { href: "/knowledge/admin", label: "Panel del Knowledge Engine", icon: "dashboard" },
     ],
   },
 ];
@@ -188,6 +231,14 @@ interface Props {
   canViewSistema?: boolean;
   /** ¿Mostrar RRHH → Documentación (requiere rrhh.documentacion.view)? (default: sí). */
   canViewRrhhDocs?: boolean;
+  /** ¿Mostrar Conocimiento → Panel (requiere knowledge.admin)? (default: sí). */
+  canViewKnowledge?: boolean;
+  /** ¿Mostrar Nexus Link → Conversaciones (requiere connect.view)? (default: sí). */
+  canViewConnect?: boolean;
+  /** ¿Mostrar Nexus Copilot? (piloto cerrado: membresía en ai_pilot_users) — default: NO. */
+  canViewCopilot?: boolean;
+  /** ¿Mostrar Contabilidad (requiere contabilidad.view)? (default: sí). */
+  canViewContabilidad?: boolean;
   onNavigate?: () => void;
 }
 
@@ -196,16 +247,32 @@ export default function Sidebar({
   canViewExecutive = true,
   canViewSistema = true,
   canViewRrhhDocs = true,
+  canViewKnowledge = true,
+  canViewConnect = true,
+  canViewCopilot = false, // piloto cerrado: por defecto NO se muestra (fail-closed en display)
+  canViewContabilidad = true,
   onNavigate,
 }: Props) {
   // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
-  const gateAllowed = (gate?: "sistema" | "rrhhDocs") =>
-    !gate || (gate === "sistema" ? canViewSistema : canViewRrhhDocs);
+  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad") =>
+    !gate ||
+    (gate === "sistema"
+      ? canViewSistema
+      : gate === "rrhhDocs"
+        ? canViewRrhhDocs
+        : gate === "connect"
+          ? canViewConnect
+          : gate === "copilot"
+            ? canViewCopilot
+            : gate === "contabilidad"
+              ? canViewContabilidad
+              : canViewKnowledge);
   const pathname = usePathname();
 
   const isActive = (href: string) => {
     // Rutas exactas (no usar prefix match — evita colisiones tipo /compras y /compras/ordenes)
     const exact = new Set([
+      "/connect",
       "/ejecutivo",
       "/analytics",
       "/dashboard",
@@ -214,6 +281,7 @@ export default function Sidebar({
       "/compras/ordenes",
       "/compras/facturas",
       "/compras/libro-iva",
+      "/contabilidad",
       "/clients",
       "/reports",
       "/billing",

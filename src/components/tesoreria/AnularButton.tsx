@@ -2,10 +2,12 @@
 
 /** Anular movimiento (ERP-A4). RPC-First: solo voidMovementAction. */
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { voidMovementAction } from "@/lib/tesoreria/actions";
 import type { VoidTarget } from "@/lib/tesoreria/types";
 
 export function AnularButton({ targetType, targetId }: { targetType: VoidTarget; targetId: string }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [pending, start] = useTransition();
@@ -18,6 +20,7 @@ export function AnularButton({ targetType, targetId }: { targetType: VoidTarget;
       if (r.ok) {
         setOpen(false);
         setReason("");
+        router.refresh();
       } else {
         setMsg(r.message);
       }

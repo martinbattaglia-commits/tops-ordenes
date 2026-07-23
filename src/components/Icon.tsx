@@ -72,7 +72,12 @@ export type IconName =
   | "sun"
   | "moon"
   | "megaphone"
-  | "book";
+  | "book"
+  | "chat"
+  | "star"
+  | "home"
+  | "activity"
+  | "inbox";
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, "stroke"> {
   name: IconName;
@@ -111,10 +116,43 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
           <path d="M9 9h6M9 13h6M9 17h4" />
         </svg>
       );
+    case "chat":
+      return (
+        <svg {...common}>
+          <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 3v-4.2A7.5 7.5 0 0 1 11.5 4h1A7.5 7.5 0 0 1 20 11.5Z" />
+          <path d="M9 10.5h6M9 13.5h4" />
+        </svg>
+      );
     case "plus":
       return (
         <svg {...common}>
           <path d="M12 5v14M5 12h14" />
+        </svg>
+      );
+    case "star":
+      return (
+        <svg {...common}>
+          <path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />
+        </svg>
+      );
+    case "home":
+      return (
+        <svg {...common}>
+          <path d="M4 11.5 12 4l8 7.5" />
+          <path d="M6 10v9h12v-9" />
+        </svg>
+      );
+    case "activity":
+      return (
+        <svg {...common}>
+          <path d="M3 12h4l2.5-7 5 14 2.5-7H21" />
+        </svg>
+      );
+    case "inbox":
+      return (
+        <svg {...common}>
+          <path d="M4 13 6 5h12l2 8v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />
+          <path d="M4 13h4l2 3h4l2-3h4" />
         </svg>
       );
     case "contract":

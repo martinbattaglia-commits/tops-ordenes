@@ -3,6 +3,7 @@ import Link from "next/link";
 import QRCode from "qrcode";
 import { Icon } from "@/components/Icon";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import { getOrder } from "@/lib/data/orders";
 import { env } from "@/lib/env";
 import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
@@ -41,7 +42,8 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
         </Link>
         <span className="text-fg-muted text-xs">/</span>
         <span className="text-xs text-fg-secondary font-mono">{order.public_id}</span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <EntityConversationButton entityType="orders" entityId={order.id} />
           <OrderActions order={order} publicUrl={publicUrl} />
         </div>
       </div>

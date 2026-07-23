@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeTable } from "@/lib/supabase/realtime";
+import { hrefFor } from "@/lib/notifications/href";
 import { relTime } from "@/lib/utils";
 
 interface Notification {
@@ -26,9 +27,13 @@ export function NotificationsBell() {
   const load = async () => {
     const supabase = createClient();
     if (!supabase) return;
+    // F4.1C: la campana respeta el snooze (mismo criterio que el Centro, D-F41-10):
+    // una notificación pospuesta no se lista ni cuenta en el badge hasta su remind_at.
+    const nowIso = new Date().toISOString();
     const { data, error } = await supabase
       .from("notifications")
       .select("*")
+      .or(`remind_at.is.null,remind_at.lte.${nowIso}`)
       .order("created_at", { ascending: false })
       .limit(15);
     if (!error && data) {
@@ -101,6 +106,13 @@ export function NotificationsBell() {
                 <NotificationRow key={n.id} n={n} onClose={() => setOpen(false)} />
               ))}
             </div>
+            <Link
+              href="/connect/notificaciones"
+              onClick={() => setOpen(false)}
+              className="block border-t border-stroke-soft bg-neutral-50 px-3 py-2 text-center text-[11px] font-semibold text-fg-link hover:underline"
+            >
+              Ver todo el centro de notificaciones
+            </Link>
           </div>
         </>
       )}
@@ -109,8 +121,9 @@ export function NotificationsBell() {
 }
 
 function NotificationRow({ n, onClose }: { n: Notification; onClose: () => void }) {
-  const href =
-    n.entity === "orders" && n.entity_id ? `/orders/${n.entity_id}` : "#";
+  // F4.1B: ruteo unificado con el Centro (hrefFor) — una mención/DM navega al hilo,
+  // no a "#" (hasta F3 solo orders tenía destino).
+  const href = hrefFor(n.entity, n.entity_id);
   const isUnread = !n.read_at;
   return (
     <Link

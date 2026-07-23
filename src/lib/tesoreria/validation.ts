@@ -7,7 +7,14 @@
  * imprecisión de punto flotante; las RPC los castean a numeric.
  */
 import { z } from "zod";
-import { RECEIPT_METHOD_VALUES, PAYMENT_METHOD_VALUES, VOID_TARGET_VALUES } from "./types";
+import {
+  RECEIPT_METHOD_VALUES,
+  PAYMENT_METHOD_VALUES,
+  VOID_TARGET_VALUES,
+  OPERATIONAL_CATEGORY_VALUES,
+  BENEFICIARY_KIND_VALUES,
+  DIRECTION_VALUES,
+} from "./types";
 
 const MONEY = z.string().regex(/^\d+(\.\d{1,2})?$/, "Importe inválido (hasta 2 decimales)");
 const UUID = z.string().uuid("Identificador inválido");
@@ -64,3 +71,40 @@ export const VoidMovementSchema = z.object({
   reason: z.string().trim().min(1, "El motivo es obligatorio").max(300),
 });
 export type VoidMovementInput = z.infer<typeof VoidMovementSchema>;
+
+/**
+ * Movimiento Operativo de Tesorería (operatoria diaria, sin proveedor, una sola cuenta).
+ * Solo valida forma; las reglas financieras (banco activo, ARS, saldo, guarda de
+ * inserción, append-only) viven en tesoreria_register_operational_movement.
+ * Las transferencias entre cuentas usan el flujo de Transferencias (no acá).
+ */
+/**
+ * Movimiento operativo (T-004). El beneficiario admite DOS formas excluyentes:
+ *   • `beneficiary_id`   → se elige uno existente del catálogo;
+ *   • `beneficiary_name` → alta implícita (la RPC hace select-or-create atómico).
+ *
+ * La OBLIGATORIEDAD por categoría NO se valida acá: vive en la RPC y en el
+ * constraint `treasury_movements_beneficiary_required_ck` (0194). Este schema
+ * solo valida forma/tipos, como el resto del archivo.
+ */
+export const RegisterOperationalMovementSchema = z
+  .object({
+    date: DATE,
+    category: z.enum(OPERATIONAL_CATEGORY_VALUES as unknown as [string, ...string[]]),
+    direction: z.enum(DIRECTION_VALUES as unknown as [string, ...string[]]),
+    bank_account_id: UUID,
+    amount: MONEY,
+    concept: z.string().trim().min(1, "El concepto es obligatorio").max(200),
+    beneficiary_id: UUID.optional().nullable(),
+    beneficiary_name: z.string().trim().max(160).optional().nullable(),
+    beneficiary_kind: z
+      .enum(BENEFICIARY_KIND_VALUES as unknown as [string, ...string[]])
+      .optional()
+      .nullable(),
+    beneficiary_document: z.string().trim().max(20).optional().nullable(),
+  })
+  .refine((v) => !(v.beneficiary_id && v.beneficiary_name?.trim()), {
+    message: "Elegí un beneficiario existente o creá uno nuevo, no ambos.",
+    path: ["beneficiary_id"],
+  });
+export type RegisterOperationalMovementInput = z.infer<typeof RegisterOperationalMovementSchema>;

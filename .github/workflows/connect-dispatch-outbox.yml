@@ -13,7 +13,7 @@ name: Connect · Dispatch Outbox (cada 10 min)
 #
 # Secrets requeridos (ya configurados — los usan los 5 workflows existentes):
 #   - CRON_SECRET : mismo valor que la env var CRON_SECRET en Netlify.
-#   - APP_URL     : (opcional) base URL del deploy; default https://nexus.logisticatops.com
+#   - APP_URL     : (opcional) base URL del deploy; default https://tops-ordenes.netlify.app
 #
 # El endpoint es fail-closed estricto (503 sin secret / 401 Bearer inválido) y
 # procesa en lotes con lease + backoff (F4.1A). `partial` = quedó backlog para
@@ -42,7 +42,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          BASE="${APP_URL:-https://nexus.logisticatops.com}"
+          BASE="${APP_URL:-https://tops-ordenes.netlify.app}"
           echo "POST $BASE/api/connect/cron/dispatch-outbox"
           code=$(curl -sS --max-time 90 -o /tmp/resp.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${CRON_SECRET}" \
@@ -61,9 +61,7 @@ jobs:
             echo "::error::$dead evento(s) a dead-letter en esta corrida. Revisar connect_worker_runs/last_error."
             exit 1
           fi
-          if [ "$backlog" != "0" ]; then
-            echo "::notice::Backlog remanente: $backlog evento(s); continúa en la próxima corrida."
-          fi
+          [ "$backlog" != "0" ] && echo "::notice::Backlog remanente: $backlog evento(s); continúa en la próxima corrida."
           case "$status" in
             ok)      echo "Corrida OK." ;;
             partial) echo "::warning::Errores por-evento (quedaron en retry/backoff). Revisar reporte arriba." ;;

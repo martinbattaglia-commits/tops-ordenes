@@ -11,8 +11,94 @@ export type ReceiptMethod = (typeof RECEIPT_METHOD_VALUES)[number];
 export const PAYMENT_METHOD_VALUES = ["transferencia", "cheque", "echeq"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHOD_VALUES)[number];
 
-export const MOVEMENT_TYPE_VALUES = ["cobranza", "pago_proveedor", "transferencia", "ajuste"] as const;
+export const MOVEMENT_TYPE_VALUES = ["cobranza", "pago_proveedor", "transferencia", "ajuste", "movimiento_operativo"] as const;
 export type MovementType = (typeof MOVEMENT_TYPE_VALUES)[number];
+
+/** Etiquetas legibles del tipo de movimiento (historial). */
+export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
+  cobranza: "Cobranza",
+  pago_proveedor: "Pago a proveedor",
+  transferencia: "Transferencia",
+  ajuste: "Ajuste (baseline)",
+  movimiento_operativo: "Movimiento operativo",
+};
+
+// ── Movimientos Operativos (ERP-A · operatoria diaria) ──────────────────────
+// Categoría con identidad propia. 'regularizacion' reemplaza al antiguo ajuste
+// operativo; la palabra "ajuste" queda reservada a la baseline. Las transferencias
+// NO están acá: usan el flujo de Transferencias. Espeja treasury_operational_category_t.
+export const OPERATIONAL_CATEGORY_VALUES = [
+  "honorarios",
+  "adelanto_sueldo",
+  "adelanto_director",
+  "adelanto_efectivo",
+  "reintegro",
+  "regularizacion",
+  "gasto_operativo",
+  "otro",
+] as const;
+export type OperationalCategory = (typeof OPERATIONAL_CATEGORY_VALUES)[number];
+
+export const OPERATIONAL_CATEGORY_LABELS: Record<OperationalCategory, string> = {
+  honorarios: "Honorarios",
+  adelanto_sueldo: "Adelanto de sueldo",
+  adelanto_director: "Adelanto al Director",
+  adelanto_efectivo: "Adelanto en efectivo",
+  reintegro: "Reintegro",
+  regularizacion: "Regularización de Tesorería",
+  gasto_operativo: "Gasto operativo",
+  otro: "Otro movimiento operativo",
+};
+
+/** Dirección sugerida por categoría (pre-fill de UI; la RPC valida). */
+export const OPERATIONAL_CATEGORY_DIRECTION: Record<OperationalCategory, Direction | null> = {
+  honorarios: "egreso",
+  adelanto_sueldo: "egreso",
+  adelanto_director: "egreso",
+  adelanto_efectivo: "egreso",
+  reintegro: "ingreso",
+  regularizacion: null, // explícita
+  gasto_operativo: "egreso",
+  otro: null, // explícita
+};
+
+/**
+ * Categorías que EXIGEN identificar al beneficiario. Espeja exactamente el
+ * constraint `treasury_movements_beneficiary_required_ck` y la guarda
+ * BENEFICIARY_REQUIRED de la RPC (0194). Es un espejo para que la UI avise
+ * ANTES de ir al servidor — la regla dura vive en la base, no acá.
+ */
+export const OPERATIONAL_CATEGORY_REQUIRES_BENEFICIARY: Record<OperationalCategory, boolean> = {
+  honorarios: true,
+  adelanto_sueldo: true,
+  adelanto_director: true,
+  adelanto_efectivo: true,
+  reintegro: true,
+  regularizacion: false,
+  gasto_operativo: false,
+  otro: false,
+};
+
+// ── Beneficiarios (catálogo propio de Tesorería · 0194) ────────────────────
+// NO es `vendors` (un director no es proveedor) ni `rrhh_empleados` (su RLS
+// exige 'rrhh.view', que el operador de Tesorería no tiene).
+export const BENEFICIARY_KIND_VALUES = ["empleado", "director", "profesional", "tercero"] as const;
+export type BeneficiaryKind = (typeof BENEFICIARY_KIND_VALUES)[number];
+
+export const BENEFICIARY_KIND_LABELS: Record<BeneficiaryKind, string> = {
+  empleado: "Empleado",
+  director: "Director",
+  profesional: "Profesional / honorarios",
+  tercero: "Tercero",
+};
+
+export interface Beneficiary {
+  id: string;
+  full_name: string;
+  kind: BeneficiaryKind;
+  document_id: string | null;
+  active: boolean;
+}
 
 export const DIRECTION_VALUES = ["ingreso", "egreso"] as const;
 export type Direction = (typeof DIRECTION_VALUES)[number];
@@ -62,6 +148,29 @@ export interface TreasuryMovement {
   reference_id: string | null;
   transfer_group_id: string | null;
   status: MovementStatus;
+  operational_category: OperationalCategory | null;
+  beneficiary_id: string | null;
+  created_at: string;
+}
+
+/**
+ * treasury_operational_movements (vista `security_invoker`, 0194) — movimientos
+ * operativos con el beneficiario ya resuelto. La UI no arma el join a mano.
+ */
+export interface OperationalMovement {
+  id: string;
+  public_id: string;
+  date: string;
+  direction: Direction;
+  bank_account_id: string;
+  amount: number;
+  description: string | null;
+  operational_category: OperationalCategory;
+  status: MovementStatus;
+  beneficiary_id: string | null;
+  beneficiary_name: string | null;
+  beneficiary_kind: BeneficiaryKind | null;
+  beneficiary_document: string | null;
   created_at: string;
 }
 

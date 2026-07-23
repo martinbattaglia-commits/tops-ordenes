@@ -105,11 +105,13 @@ export async function sendOneOrderEmail(opts: {
 
 function renderOrderHtml(order: Order, publicUrl: string, pdfUrl?: string): string {
   const depotLabel: Record<Depot, string> = { MAGALDI: "Magaldi · CABA", LUJAN: "Luján · BsAs" };
-  const total = new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(order.total);
+  const ars = (n: number) =>
+    new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
+  // order.total es NETO; IVA estimado al 21% (la facturación fiscal corre por ARCA).
+  const ivaMonto = Math.round(order.total * 0.21);
+  const subtotal = ars(order.total);
+  const ivaTxt = ars(ivaMonto);
+  const total = ars(order.total + ivaMonto);
 
   return `<!doctype html>
 <html lang="es">
@@ -130,7 +132,9 @@ function renderOrderHtml(order: Order, publicUrl: string, pdfUrl?: string): stri
       <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
         <tr><td style="padding:8px 0;color:#5a6577;">Fecha</td><td style="padding:8px 0;text-align:right;font-weight:600;">${new Date(order.date).toLocaleDateString("es-AR")}</td></tr>
         <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Depósito</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${depotLabel[order.depot]}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Total estimado</td><td style="padding:8px 0;text-align:right;font-weight:700;border-top:1px solid #eef1f6;color:#050555;font-size:16px;">${total} + IVA</td></tr>
+        <tr><td style="padding:8px 0;color:#5a6577;border-top:2px solid #050555;">Subtotal neto</td><td style="padding:8px 0;text-align:right;border-top:2px solid #050555;">${subtotal}</td></tr>
+        <tr><td style="padding:4px 0;color:#5a6577;">IVA (21%)</td><td style="padding:4px 0;text-align:right;">${ivaTxt}</td></tr>
+        <tr><td style="padding:6px 0;color:#5a6577;font-weight:700;border-top:1px solid #eef1f6;">Total</td><td style="padding:6px 0;text-align:right;font-weight:700;border-top:1px solid #eef1f6;color:#050555;font-size:16px;">${total}</td></tr>
       </table>
       <div style="text-align:center;margin:24px 0;">
         <a href="${publicUrl}" style="display:inline-block;background:#C90812;color:white;padding:12px 28px;border-radius:6px;font-weight:700;text-decoration:none;font-size:14px;letter-spacing:0.04em;">Ver comprobante online →</a>

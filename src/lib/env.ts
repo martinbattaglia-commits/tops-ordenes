@@ -81,6 +81,59 @@ export const env = {
     webhookSecret: process.env.CLIENTIFY_WEBHOOK_SECRET?.trim() ?? "",
     webhookConfigured: Boolean(process.env.CLIENTIFY_WEBHOOK_SECRET?.trim()),
   },
+  ai: {
+    /**
+     * F5.2-lite — Kill-switch global del Copilot. FAIL-CLOSED: ausente o
+     * distinto de "1" → el Copilot no existe (ni UI ni server action).
+     * Lección del patrón CRON_SECRET: nunca fail-open.
+     */
+    enabled: process.env.AI_ENABLED === "1",
+    /**
+     * Provider del modelo (decisión Dirección 2026-07-03: **Gemini es el
+     * proveedor principal previsto**). 'mock' (default) = determinista, sin
+     * red, sin secretos. La activación real requiere ventana aprobada:
+     * AI_ENABLED=1 + AI_PROVIDER=gemini + key en Netlify.
+     */
+    provider: (process.env.AI_PROVIDER?.trim() || "mock") as
+      | "mock"
+      | "gemini"
+      | "anthropic"
+      | "openai",
+    /**
+     * Modelo del provider real. Sin AI_MODEL explícito, el default depende
+     * del provider (gemini → gemini-2.5-pro; anthropic → claude-opus-4-8).
+     * Confirmar el model id vigente en la ventana de activación.
+     */
+    model:
+      process.env.AI_MODEL?.trim() ||
+      ((process.env.AI_PROVIDER?.trim() || "mock") === "anthropic"
+        ? "claude-opus-4-8"
+        : "gemini-2.5-pro"),
+    /**
+     * API key Gemini (proveedor PRINCIPAL) — primaria AI_GEMINI_API_KEY,
+     * fallback GEMINI_API_KEY (ambas cargadas por Dirección en Netlify con
+     * el mismo valor). SOLO backend; jamás en repo ni en logs (G9).
+     */
+    geminiApiKey:
+      process.env.AI_GEMINI_API_KEY?.trim() ||
+      process.env.GEMINI_API_KEY?.trim() ||
+      "",
+    /** API key Anthropic (proveedor SECUNDARIO, no preferido) — solo backend. */
+    anthropicApiKey: process.env.AI_ANTHROPIC_API_KEY?.trim() ?? "",
+    /** Límites duros del piloto (D-F5-8). Ajustables por env, defaults en código. */
+    limits: {
+      requestsPerDay:
+        Number(process.env.AI_DAILY_LIMIT) ||
+        Number(process.env.AI_LIMIT_REQUESTS_PER_DAY) ||
+        40,
+      toolRoundsPerRequest: Number(process.env.AI_LIMIT_TOOL_ROUNDS) || 4,
+      maxOutputTokens: Number(process.env.AI_LIMIT_OUTPUT_TOKENS) || 4000,
+      maxContextChars: Number(process.env.AI_LIMIT_CONTEXT_CHARS) || 24000,
+      maxTurnsPerSession: Number(process.env.AI_LIMIT_TURNS) || 10,
+      /** Tope mensual global en USD (suma cost_estimate de ai_messages). */
+      monthlyBudgetUsd: Number(process.env.AI_MONTHLY_BUDGET_USD) || 100,
+    },
+  },
   whatsapp: {
     provider: (process.env.WHATSAPP_PROVIDER ?? "meta") as "meta" | "twilio" | "none",
     metaToken: process.env.META_WA_TOKEN?.trim() ?? "",
@@ -174,13 +227,21 @@ export const env = {
     configured: Boolean(process.env.OPENAI_API_KEY?.trim()),
   },
   google: {
-    /** JSON de la Service Account de Drive (línea única). Compartida como lector. */
+    /**
+     * JSON de la Service Account de Drive (línea única). SOLO presente en dev local.
+     * En producción la credencial vive en Netlify Blobs (capa CredentialProvider);
+     * el cliente la carga vía `@/lib/credentials`, no desde esta env var.
+     */
     serviceAccountJson: process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() ?? "",
     /** Carpeta raíz a la que está acotada la SA (scope). */
     driveRootFolderId: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim() ?? "",
-    /** True si la integración Drive corporativa está disponible. */
+    /**
+     * True si la integración Drive corporativa está disponible. Reconoce ambas
+     * fuentes de credencial: el JSON en env (dev) o el email proyectado
+     * `GOOGLE_SA_EMAIL` que acompaña a la credencial en Blobs (producción).
+     */
     configured: Boolean(
-      process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() &&
+      (process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || process.env.GOOGLE_SA_EMAIL?.trim()) &&
         process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID?.trim(),
     ),
   },
@@ -236,8 +297,17 @@ export const env = {
     /** True si el job puede correr (fileId presente + Drive corporativo configurado). */
     configured: Boolean(
       process.env.CAJA_CHICA_DRIVE_FILE_ID?.trim() &&
-        process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim(),
+        (process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || process.env.GOOGLE_SA_EMAIL?.trim()),
     ),
+    /**
+     * KILL-SWITCH del espejo de Drive (CCN-001B · F4). Google Sheets dejó de ser
+     * el sistema operativo de Caja Chica: Nexus es la fuente de verdad.
+     *
+     * FAIL-CLOSED: apagado salvo que se setee explícitamente
+     * CAJA_CHICA_SYNC_ENABLED=1. Protege incluso ante un `workflow_dispatch`
+     * manual del cron ya desactivado. Reactivar es una decisión de Dirección.
+     */
+    syncEnabled: process.env.CAJA_CHICA_SYNC_ENABLED?.trim() === "1",
   },
   cron: {
     /** Secreto Bearer que exigen los endpoints de jobs (sync diario, etc.). */

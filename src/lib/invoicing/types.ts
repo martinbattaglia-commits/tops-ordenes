@@ -13,6 +13,18 @@ export type CondicionIva =
   | "NO_RESPONSABLE"
   | "NO_CATEGORIZADO";
 
+/** Etiqueta legible de la categoría fiscal (condición frente al IVA). */
+export const CONDICION_IVA_LABEL: Record<CondicionIva, string> = {
+  RESPONSABLE_INSCRIPTO: "Responsable Inscripto",
+  MONOTRIBUTO: "Monotributo",
+  EXENTO: "Exento",
+  CONSUMIDOR_FINAL: "Consumidor Final",
+  NO_RESPONSABLE: "No Responsable",
+  NO_CATEGORIZADO: "No Categorizado",
+};
+
+export const CONDICION_IVA_VALUES = Object.keys(CONDICION_IVA_LABEL) as CondicionIva[];
+
 export type ComprobanteTipo =
   | "FACTURA_A"
   | "NOTA_DEBITO_A"

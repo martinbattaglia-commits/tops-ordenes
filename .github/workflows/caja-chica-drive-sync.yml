@@ -16,13 +16,25 @@ name: Caja Chica · Drive Sync (diario 21:05 ART)
 # de Drive ya compartida sobre la planilla). La sync corre en el servidor (Netlify);
 # este workflow sólo la dispara.
 
+# ⛔ DADO DE BAJA — CCN-001B · F4 (Dirección, 2026-07-22).
+# Google Sheets dejó de ser el sistema operativo de Caja Chica: la fuente de
+# verdad es Nexus ERP (módulo nativo). La planilla queda SOLO como respaldo
+# histórico y consulta. El cron diario queda desactivado.
+#
+# Defensa en profundidad: además de este cron apagado, el endpoint
+# /api/tesoreria/caja-chica/sync responde 410 Gone salvo que Dirección
+# reactive con CAJA_CHICA_SYNC_ENABLED=1, y las tablas cash_box_* quedan
+# congeladas en la base (sólo SELECT).
+#
+# Para reactivar (requiere decisión de Dirección): descomentar el bloque
+# `schedule` y setear CAJA_CHICA_SYNC_ENABLED=1 en Netlify.
 on:
-  schedule:
-    - cron: "5 0 * * *" # 00:05 UTC = 21:05 ART, diario
+  # schedule:
+  #   - cron: "5 0 * * *" # 00:05 UTC = 21:05 ART, diario — DESACTIVADO (F4)
   workflow_dispatch:
     inputs:
       dry:
-        description: "Dry-run (1 = recorre y reporta sin escribir; 0 = sync real). El cron programado siempre corre real."
+        description: "Dry-run (1 = recorre y reporta sin escribir; 0 = sync real). NOTA: el endpoint responde 410 salvo CAJA_CHICA_SYNC_ENABLED=1."
         default: "1"
         required: false
 

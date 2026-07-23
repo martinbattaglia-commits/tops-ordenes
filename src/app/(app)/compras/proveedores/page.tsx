@@ -2,6 +2,8 @@ import Link from "next/link";
 import { listVendors } from "@/lib/compras/data";
 import { fmtCurrency, fmtCuit, fmtDate, truncate } from "@/lib/compras/format";
 import { NuevoProveedorButton } from "@/components/compras/NuevoProveedorButton";
+import { listChartOfAccounts } from "@/lib/erp/accounting-data";
+import type { ChartAccount } from "@/lib/erp/types";
 
 export const metadata = { title: "Compras · Proveedores" };
 export const dynamic = "force-dynamic";
@@ -9,6 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function VendorsPage() {
   const vendors = await listVendors();
   const totalYtd = vendors.reduce((a, v) => a + (v.ytd_spend ?? 0), 0);
+  // Cuentas de gasto/costo para imputación de compras (degrada a [] si no hay catálogo).
+  let accounts: ChartAccount[] = [];
+  try {
+    accounts = await listChartOfAccounts({ types: ["gasto"], postableOnly: true });
+  } catch {
+    accounts = [];
+  }
 
   return (
     <div className="p-4 md:p-7 lg:p-8 nx-page-fade">
@@ -21,7 +30,7 @@ export default async function VendorsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <NuevoProveedorButton />
+          <NuevoProveedorButton accounts={accounts} />
         </div>
       </div>
 

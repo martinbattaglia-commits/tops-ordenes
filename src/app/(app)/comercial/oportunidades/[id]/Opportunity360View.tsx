@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
+import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import { CaptureEmbed } from "./CaptureEmbed";
 import {
   advanceStage, reserveCapacity, completeOnboarding,
@@ -187,6 +188,7 @@ export function Opportunity360View({ full, source = "local", unitData, prefill =
             <button onClick={() => window.print()} className="btn btn-ghost btn-sm" aria-label="PDF">
               <Icon name="file-pdf" size={13} /> PDF
             </button>
+            <EntityConversationButton entityType="crm_opportunities" entityId={o.id} />
           </div>
         </div>
 

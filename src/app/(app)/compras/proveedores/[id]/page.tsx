@@ -2,6 +2,10 @@ import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import { getProveedorFicha } from "@/lib/legajo/data";
+import { listChartOfAccounts, getAccountByCode } from "@/lib/erp/accounting-data";
+import type { ChartAccount } from "@/lib/erp/types";
+import { ProveedorFiscalEditor } from "@/components/compras/ProveedorFiscalEditor";
+import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 
 export const metadata = { title: "Ficha de proveedor" };
 export const dynamic = "force-dynamic";
@@ -28,13 +32,28 @@ export default async function ProveedorFichaPage({ params }: { params: { id: str
     );
   }
   const { proveedor: p, ocs, facturas, saldo } = ficha;
+  let accounts: ChartAccount[] = [];
+  try {
+    accounts = await listChartOfAccounts({ types: ["gasto"], postableOnly: true });
+    // Asegura que la cuenta ya imputada (aunque sea de otro tipo o inactiva) esté
+    // en la lista, para resolver su nombre y no blanquearla en el editor.
+    if (p.cuenta_contable && !accounts.some((a) => a.code === p.cuenta_contable)) {
+      const saved = await getAccountByCode(p.cuenta_contable);
+      if (saved) accounts = [saved, ...accounts];
+    }
+  } catch {
+    accounts = [];
+  }
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1200px] mx-auto">
-      <div>
-        <Link href="/compras/proveedores" className="text-[11px] text-fg-link hover:underline">← Proveedores</Link>
-        <h1 className="page-title mt-1">{p.razon}</h1>
-        <p className="page-subtitle">Legajo digital de proveedor · CUIT {p.cuit ?? "—"}{p.categoria ? ` · ${p.categoria}` : ""}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/compras/proveedores" className="text-[11px] text-fg-link hover:underline">← Proveedores</Link>
+          <h1 className="page-title mt-1">{p.razon}</h1>
+          <p className="page-subtitle">Legajo digital de proveedor · CUIT {p.cuit ?? "—"}{p.categoria ? ` · ${p.categoria}` : ""}</p>
+        </div>
+        <EntityConversationButton entityType="vendors" entityId={p.id} />
       </div>
 
       {/* General */}
@@ -52,6 +71,17 @@ export default async function ProveedorFichaPage({ params }: { params: { id: str
           <Field label="Tags" value={(p.tags ?? []).join(" · ")} />
         </div>
       </section>
+
+      {/* Fiscal & contable (Contadora) */}
+      <ProveedorFiscalEditor
+        vendorId={p.id}
+        accounts={accounts}
+        initial={{
+          cond_iva: p.cond_iva ?? "",
+          concepto_ganancias: p.concepto_ganancias ?? "",
+          cuenta_contable: p.cuenta_contable ?? "",
+        }}
+      />
 
       {/* Compras (OCs por vendor_id) */}
       <section className="card p-5">

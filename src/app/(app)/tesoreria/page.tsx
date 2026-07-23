@@ -64,9 +64,11 @@ export default async function TesoreriaOverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {banks.map((b) => (
+              {/* Decisión 2 (Dirección 2026-07-22): la Caja deja de mostrarse en la
+                  interfaz de Tesorería. La cuenta permanece en la base, sólo se oculta. */}
+              {banks.filter((b) => !b.is_system).map((b) => (
                 <tr key={b.bank_account_id} className="border-t">
-                  <td className="py-2">{b.bank_name} · {b.account_name}{b.is_system ? " (CAJA)" : ""}</td>
+                  <td className="py-2">{b.bank_name} · {b.account_name}</td>
                   <td className="py-2 text-right tabular">{fmtCurrency(b.balance)}</td>
                 </tr>
               ))}
@@ -74,9 +76,11 @@ export default async function TesoreriaOverviewPage() {
           </table>
         </div>
 
-        <div className="flex gap-3 mt-6">
-          <Link href="/tesoreria/cobranzas" className="btn btn-primary btn-sm"><Icon name="download" size={14} /> Cobranzas</Link>
-          <Link href="/tesoreria/pagos" className="btn btn-primary btn-sm"><Icon name="cart" size={14} /> Pagos</Link>
+        <div className="flex flex-wrap gap-3 mt-6">
+          <Link href="/tesoreria/pagos" className="btn btn-primary btn-sm"><Icon name="cart" size={14} /> Registrar pago a proveedor</Link>
+          <Link href="/tesoreria/movimientos" className="btn btn-primary btn-sm"><Icon name="plus" size={14} /> Registrar movimiento operativo</Link>
+          <Link href="/tesoreria/movimientos" className="btn btn-sm">Historial de movimientos</Link>
+          <Link href="/tesoreria/cobranzas" className="btn btn-sm"><Icon name="download" size={14} /> Cobranzas</Link>
           <Link href="/tesoreria/flujo-fondos" className="btn btn-sm"><Icon name="trend-up" size={14} /> Flujo de fondos</Link>
         </div>
       </div>

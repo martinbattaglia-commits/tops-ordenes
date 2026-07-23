@@ -59,6 +59,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       canViewExecutive={perms.exec}
       canViewSistema={perms.sistema}
       canViewRrhhDocs={perms.rrhhDocs}
+      canViewKnowledge={perms.knowledge}
+      canViewConnect={perms.connect}
+      canViewCopilot={perms.copilot}
+      canViewContabilidad={perms.contabilidad}
     >
       {children}
     </Shell>

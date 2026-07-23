@@ -14,6 +14,7 @@ import {
 } from "@/lib/compras/format";
 import { ORG } from "@/lib/org";
 import { PO_EVENT_LABEL } from "@/lib/types-po";
+import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import { OrderDetailTabs } from "./OrderDetailTabs";
 
 interface PageProps {
@@ -64,6 +65,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
           </p>
         </div>
         <div className="flex gap-2">
+          <EntityConversationButton entityType="purchase_orders" entityId={po.id} />
           <a
             href={`/api/compras/${po.public_id}/pdf`}
             target="_blank"

@@ -7,6 +7,7 @@ import { env } from "@/lib/env";
 import { dataUrlToBytes, isUrgentOrder } from "@/lib/utils";
 import { sendOneOrderEmail } from "@/lib/email";
 import { orderEmailPlan, dedupeOrderEmails, renderRoleHtml } from "@/lib/order-email";
+import { emailFailureNotification } from "@/lib/email-failure";
 import { buildOrderPdf } from "@/lib/pdf/build";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { CreateOrderSchema, formatZodIssues, type CreateOrderInput } from "@/lib/validation/order";
@@ -307,6 +308,21 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
           sent_at: res.ok ? new Date().toISOString() : null,
         })
         .eq("id", row.id);
+      if (!res.ok) {
+        // F4.4-E3: fin del silent failure — aviso interno a admin (best-effort,
+        // sin PII: ni dirección ni cuerpo; solo orden + rol + error recortado).
+        const { error: notifErr } = await admin.from("notifications").insert(
+          emailFailureNotification({
+            orderId: ord.id,
+            publicId: ord.public_id,
+            tag: item.tag,
+            providerError: res.error,
+          }),
+        );
+        if (notifErr) {
+          console.error("[createOrder] aviso de email fallido no insertado", notifErr.message);
+        }
+      }
     }
   } catch (e) {
     console.error("[createOrder] order notifications failed (non-blocking)", e);

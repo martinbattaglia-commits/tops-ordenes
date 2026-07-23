@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { checkOutboundAllowed } from "./sandbox";
 import type {
   WhatsappResult,
   SendTemplateInput,
@@ -57,6 +58,24 @@ async function callMeta(path: string, body: unknown): Promise<WhatsappResult> {
       status: 503,
       provider: "meta",
     };
+  }
+
+  // F4.4-E3 (fix adversarial): el sandbox se aplica en el CHOKE POINT — todo
+  // egress real pasa por acá (incluido el sendText directo de compras/OC, que
+  // no pasa por /api/whatsapp/send). Con WHATSAPP_SANDBOX != "0", destino
+  // fuera de WHATSAPP_SANDBOX_ALLOWLIST ⇒ no sale nada (D-F44-3).
+  const to = (body as { to?: unknown } | null)?.to;
+  if (typeof to === "string" || typeof to === "number") {
+    const decision = checkOutboundAllowed(String(to));
+    if (!decision.allowed) {
+      return {
+        ok: false,
+        error:
+          "Sandbox WhatsApp activo: destino fuera de WHATSAPP_SANDBOX_ALLOWLIST (D-F44-3; sin envíos productivos en F4.4)",
+        status: 403,
+        provider: "meta",
+      };
+    }
   }
 
   const res = await fetch(`${GRAPH}/${path}`, {

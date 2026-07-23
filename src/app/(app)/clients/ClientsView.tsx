@@ -3,15 +3,20 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import { cn, fmtCuit, isValidCuit } from "@/lib/utils";
 import type { Client } from "@/lib/types";
 import { createClient, fetchClients, refreshFromClientify, type NewClientInput } from "./actions";
+import { AccountPicker } from "@/components/erp/AccountPicker";
+import { CONDICION_IVA_LABEL, CONDICION_IVA_VALUES } from "@/lib/invoicing/types";
+import type { ChartAccount } from "@/lib/erp/types";
 
 interface Props {
   initialRows: Client[];
   initialSource: string;
   initialWarning?: string;
   clientifyConfigured: boolean;
+  accounts?: ChartAccount[];
 }
 
 interface Toast {
@@ -25,6 +30,7 @@ export default function ClientsView({
   initialSource,
   initialWarning,
   clientifyConfigured,
+  accounts = [],
 }: Props) {
   const [rows, setRows] = useState<Client[]>(initialRows);
   const [source, setSource] = useState<string>(initialSource);
@@ -314,6 +320,7 @@ export default function ClientsView({
         <NewClientModal
           onClose={() => setShowModal(false)}
           onCreated={handleCreated}
+          accounts={accounts}
         />
       )}
 
@@ -344,9 +351,11 @@ export default function ClientsView({
 function NewClientModal({
   onClose,
   onCreated,
+  accounts,
 }: {
   onClose: () => void;
   onCreated: (c: Client, source: string) => void;
+  accounts: ChartAccount[];
 }) {
   const [form, setForm] = useState<NewClientInput>({
     razon: "",
@@ -357,6 +366,8 @@ function NewClientModal({
     tags: [],
     depot: "",
     observ: "",
+    condicion_iva: "RESPONSABLE_INSCRIPTO",
+    cuenta_contable: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -522,6 +533,27 @@ function NewClientModal({
               </div>
             </ModalField>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ModalField label="Categoría fiscal (IVA)" help="Define el tipo de comprobante a emitir">
+                <select
+                  className="input"
+                  value={form.condicion_iva}
+                  onChange={(e) => setForm((f) => ({ ...f, condicion_iva: e.target.value as NewClientInput["condicion_iva"] }))}
+                >
+                  {CONDICION_IVA_VALUES.map((o) => (
+                    <option key={o} value={o}>{CONDICION_IVA_LABEL[o]}</option>
+                  ))}
+                </select>
+              </ModalField>
+              <ModalField label="Cuenta contable" help="Plan de Cuentas — imputación de ventas">
+                <AccountPicker
+                  accounts={accounts}
+                  value={form.cuenta_contable ?? ""}
+                  onChange={(c) => setForm((f) => ({ ...f, cuenta_contable: c }))}
+                />
+              </ModalField>
+            </div>
+
             <ModalField label="Tags" help="Sirven para clasificar y filtrar">
               <div className="chip-group flex flex-wrap gap-1.5">
                 {["ANMAT", "OFICINAS", "CARGAS GENERALES", "TRANSPORTE"].map((t) => {
@@ -574,13 +606,15 @@ function NewClientModal({
             </ModalField>
 
             <ModalField label="Observaciones">
-              <textarea
-                className="textarea"
-                rows={2}
-                value={form.observ}
-                onChange={(e) => setForm((f) => ({ ...f, observ: e.target.value }))}
-                placeholder="Notas internas, condiciones de pago, etc."
-              />
+              <VoiceField>
+                <textarea
+                  className="textarea"
+                  rows={2}
+                  value={form.observ}
+                  onChange={(e) => setForm((f) => ({ ...f, observ: e.target.value }))}
+                  placeholder="Notas internas, condiciones de pago, etc."
+                />
+              </VoiceField>
             </ModalField>
 
             {error && (

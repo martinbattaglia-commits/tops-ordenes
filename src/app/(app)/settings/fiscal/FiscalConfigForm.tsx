@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import type { FiscalConfig, PuntoVenta } from "@/lib/invoicing/types";
 import { updateFiscalConfig } from "./actions";
 
@@ -163,11 +164,13 @@ export function FiscalConfigForm({ config, puntosVenta, canEdit, arcaConfigured 
         </div>
 
         <Field label="Pie legal del comprobante">
-          <textarea
-            name="pie_legal"
-            className="input min-h-[72px]"
-            defaultValue={config.pie_legal ?? ""}
-          />
+          <VoiceField>
+            <textarea
+              name="pie_legal"
+              className="input min-h-[72px]"
+              defaultValue={config.pie_legal ?? ""}
+            />
+          </VoiceField>
         </Field>
       </fieldset>
 

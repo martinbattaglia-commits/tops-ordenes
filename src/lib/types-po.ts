@@ -44,11 +44,44 @@ export interface Vendor {
   created_at: string;
   /** Inicial visual ("P" para Pallets Sur). */
   avatar?: string;
+  // Campos fiscales (migración 0100). Opcionales en TS: pueden no estar en mocks.
+  concepto_ganancias?: VendorConceptoGanancias | null;
+  exento_ganancias?: boolean | null;
+  cert_exclusion_hasta?: string | null;
+  /** Categoría fiscal frente al IVA (texto): RI | Monotributista | Exento | … */
+  cond_iva?: string | null;
+  // Imputación contable (migración 0121). Código de chart_of_accounts.
+  cuenta_contable?: string | null;
   // joins de vendor_stats
   oc_count?: number;
   ytd_spend?: number;
   last_oc_at?: string | null;
 }
+
+/** Concepto habitual de retención de Ganancias del proveedor (mig 0100, CHECK). */
+export type VendorConceptoGanancias =
+  | "honorarios"
+  | "mercaderias"
+  | "servicios"
+  | "alquileres"
+  | "excluido";
+
+export const VENDOR_CONCEPTO_GANANCIAS_LABEL: Record<VendorConceptoGanancias, string> = {
+  honorarios: "Honorarios",
+  mercaderias: "Mercaderías",
+  servicios: "Servicios",
+  alquileres: "Alquileres",
+  excluido: "Excluido",
+};
+
+/** Condición frente al IVA para legajos (texto libre acotado, compat. con cond_iva). */
+export const COND_IVA_VENDOR_OPTIONS = [
+  "RI",
+  "Monotributista",
+  "Exento",
+  "No Responsable",
+  "Consumidor Final",
+] as const;
 
 export interface Product {
   id: string;

@@ -36,6 +36,15 @@ export interface BootPermissions {
   sistema: boolean;
   /** RRHH → Documentación (rrhh.documentacion.view). */
   rrhhDocs: boolean;
+  /** Conocimiento → Panel administrativo (knowledge.admin). */
+  knowledge: boolean;
+  /** Nexus Link → Conversaciones (connect.view). */
+  connect: boolean;
+  /** Visibilidad del ítem "Nexus Copilot" = membresía en ai_pilot_users (kill-switch
+   *  AI_ENABLED se aplica al ENTRAR a /copilot, no al mostrar el ítem). Indep. del RBAC. */
+  copilot: boolean;
+  /** Módulo Contabilidad F6 (contabilidad.view). */
+  contabilidad: boolean;
 }
 
 export interface BootContext {
@@ -44,8 +53,8 @@ export interface BootContext {
   perms: BootPermissions;
 }
 
-const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true };
-const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false };
+const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true, copilot: true, contabilidad: true };
+const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false, copilot: false, contabilidad: false };
 
 /** Presupuesto máximo de awaits del boot (F2). */
 const BOOT_BUDGET_MS = 3000;
@@ -85,24 +94,31 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
   const user = await getSessionUser();
   if (!user) return CLOSED; // espejo: checkPermission 401 / canAccess false
 
-  // ¿Tiene roles asignados? (Estrategia B: count propio, RLS self)
-  const { count, error: countErr } = await supabase
-    .from("user_roles")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
+  // VISIBILIDAD del ítem "Nexus Copilot" en el sidebar = membresía en ai_pilot_users.
+  // NO se acopla a AI_ENABLED: ese env var es de contexto `production` únicamente, así
+  // que en deploy-preview/branch-deploy sería false y el ítem nunca se podría testear en
+  // un DRAFT. El KILL-SWITCH AI_ENABLED se sigue aplicando en `/copilot` (checkGate,
+  // gate.ts): si está apagado, el piloto ve el ítem pero al entrar recibe "desactivado".
+  // Fail-closed para no-pilotos. Independiente del RBAC de roles (un piloto sin roles
+  // igual debe verlo). Se consulta EN PARALELO con el count de roles (sin latencia extra).
+  const [{ count, error: countErr }, pilot] = await Promise.all([
+    supabase.from("user_roles").select("*", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase.from("ai_pilot_users").select("user_id").eq("user_id", user.id).maybeSingle(),
+  ]);
+  const copilot = !pilot.error && !!pilot.data;
 
   if (countErr) {
     // Espejo exacto de la asimetría previa:
     //   checkPermission: error de count → fail-closed (exec=false)
     //   canAccess: error → count null → bootstrap → !enforce
     const open = !env.rbac.enforce;
-    return { exec: false, sistema: open, rrhhDocs: open };
+    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot, contabilidad: open };
   }
 
   if ((count ?? 0) === 0) {
     // Bootstrap per-user (no asignado): permitir salvo RBAC_ENFORCE=1.
     const open = !env.rbac.enforce;
-    return { exec: open, sistema: open, rrhhDocs: open };
+    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot, contabilidad: open };
   }
 
   // Asignado → enforcement real con UNA query anidada (set completo de slugs).
@@ -110,7 +126,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     .from("user_roles")
     .select("role:roles(role_permissions(permission:permissions(slug)))")
     .eq("user_id", user.id);
-  if (qErr) return CLOSED; // espejo: checkPermission query-failed → 403 · RPC error → false
+  if (qErr) return { ...CLOSED, copilot }; // espejo: checkPermission query-failed → 403 · RPC error → false
 
   type RowShape = {
     role?: { role_permissions?: Array<{ permission?: { slug: string } }> };
@@ -130,6 +146,10 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     exec: slugs.has("cockpit.view"),
     sistema: slugs.has("sistema.view") || isLegacyAdmin,
     rrhhDocs: slugs.has("rrhh.documentacion.view") || isLegacyAdmin,
+    knowledge: slugs.has("knowledge.admin") || isLegacyAdmin,
+    connect: slugs.has("connect.view") || isLegacyAdmin,
+    copilot,
+    contabilidad: slugs.has("contabilidad.view") || isLegacyAdmin,
   };
 });
 

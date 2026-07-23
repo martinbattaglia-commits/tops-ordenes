@@ -21,6 +21,14 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
+# ---- F4.1A (D-F41-9): scheduling del worker de connect_outbox -------------
+# Registro DECLARATIVO del schedule (hallazgo de la ventana F4.1: el config
+# in-source de netlify/functions/connect-dispatch-outbox.mts no quedó
+# registrado en deploys manuales CLI con el plugin Next — 3 ticks perdidos).
+# La función solo corre en el deploy PUBLICADO de producción.
+[functions."connect-dispatch-outbox"]
+  schedule = "*/5 * * * *"
+
 # ---- PWA: el SW debe responderse SIEMPRE fresco -------------------------
 [[headers]]
   for = "/sw.js"

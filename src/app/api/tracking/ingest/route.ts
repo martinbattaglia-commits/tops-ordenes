@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { getProvider, DEFAULT_PROVIDER_ID } from "@/lib/tracking/provider";
+import { timingSafeStringEqual } from "@/lib/cron-auth";
 import { createSupabasePersistence } from "@/lib/tracking/persistence/supabase";
 import { createTrackingEngine } from "@/lib/tracking/engine";
 
@@ -79,7 +80,9 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   const get = (key: string): string | null =>
     params.get(key) ?? body.get(key) ?? null;
 
-  if (get("token") !== token) {
+  // F4.4-E2: comparación timing-safe (antes `!==`). El fail-closed ya existía
+  // (503 sin TRACKING_INGEST_TOKEN, arriba).
+  if (!timingSafeStringEqual(get("token") ?? "", token)) {
     return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
   }
 
