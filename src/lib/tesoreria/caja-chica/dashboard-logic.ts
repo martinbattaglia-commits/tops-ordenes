@@ -1,8 +1,11 @@
-// Lógica PURA del dashboard de Caja Chica (sin IO ni React): agregaciones para
-// los gráficos, filtros de la tabla y tono del banner de conciliación.
+// Lógica PURA del histórico de planilla de Caja Chica (sin IO ni React):
+// agregaciones para los gráficos y filtros de la tabla legada.
 // Separada para poder unit-testearla.
+//
+// El módulo NATIVO usa `native-logic.ts`; esto sólo alimenta la solapa
+// «Histórico (planilla)», de sólo lectura.
 
-import type { MovRow, ResumenRow } from "./data";
+import type { MovRow } from "./data";
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -73,16 +76,6 @@ export function filterMovimientos(movs: MovRow[], f: MovFilters): MovRow[] {
   });
 }
 
-export type ConciliacionTone = "ok" | "warn" | "error";
-
-/** Tono del banner: error > warning > conciliado. */
-export function conciliacionTone(resumen: ResumenRow | null): ConciliacionTone {
-  if (!resumen) return "warn";
-  if (resumen.last_status === "error") return "error";
-  const warn =
-    (resumen.last_warnings ?? 0) > 0 ||
-    Number(resumen.saldo_delta ?? 0) !== 0 ||
-    resumen.saldo_source === "calc_fallback" ||
-    resumen.last_status === "partial";
-  return warn ? "warn" : "ok";
-}
+// El tono del banner de conciliación se eliminó junto con el ConciliacionBanner
+// (Dirección 2026-07-22): al dejar de ser un espejo de Drive, Caja Chica no
+// concilia contra la planilla. La pantalla arranca en el encabezado y los KPIs.

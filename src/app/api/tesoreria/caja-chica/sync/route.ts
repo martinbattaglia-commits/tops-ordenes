@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runCajaChicaSync } from "@/lib/tesoreria/caja-chica/sync";
 import { pickPrimary } from "@/lib/tesoreria/caja-chica/sync-engine";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,25 @@ export const maxDuration = 60;
  * Códigos: 503/401 auth · 400 período inválido · 200 reporte · 502 error.
  */
 async function handle(req: Request): Promise<Response> {
+  // KILL-SWITCH (CCN-001B · F4): Google Sheets dejó de ser el sistema operativo
+  // de Caja Chica. El espejo queda dado de baja de forma definitiva; la planilla
+  // sólo se conserva como respaldo histórico. FAIL-CLOSED: 410 salvo que
+  // Dirección reactive explícitamente con CAJA_CHICA_SYNC_ENABLED=1.
+  // Se evalúa ANTES de la auth para que ni un workflow_dispatch con Bearer válido
+  // pueda reescribir el período.
+  if (!env.cajaChica.syncEnabled) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "GONE: la sincronización con Google Drive fue dada de baja (CCN-001B · F4).",
+        detail:
+          "Caja Chica es un módulo nativo de Nexus ERP; la planilla es sólo respaldo histórico. " +
+          "Reactivar requiere decisión de Dirección (CAJA_CHICA_SYNC_ENABLED=1).",
+      },
+      { status: 410 },
+    );
+  }
+
   const denied = requireCronAuth(req);
   if (denied) return denied;
 

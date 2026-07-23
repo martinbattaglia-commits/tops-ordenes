@@ -4,6 +4,14 @@ import type { CajaChicaSyncReport } from "@/lib/tesoreria/caja-chica/types";
 // Mockeamos el wiring para no cargar Drive/Supabase en el test de la route.
 vi.mock("@/lib/tesoreria/caja-chica/sync", () => ({ runCajaChicaSync: vi.fn() }));
 
+// `env` se evalúa al importar el módulo ⇒ para poder alternar el kill-switch
+// (CCN-001B F4) se mockea con un objeto mutable. `cron-auth` lee
+// process.env.CRON_SECRET directo, así que no se ve afectado por este mock.
+// vi.hoisted: `vi.mock` se iza al tope del archivo, así que el objeto debe
+// existir antes que él (si no: "Cannot access 'envMock' before initialization").
+const envMock = vi.hoisted(() => ({ cajaChica: { syncEnabled: true } }));
+vi.mock("@/lib/env", () => ({ env: envMock }));
+
 import { runCajaChicaSync } from "@/lib/tesoreria/caja-chica/sync";
 import { GET, POST } from "./route";
 
@@ -30,6 +38,43 @@ const req = (qs = "", headers: Record<string, string> = { authorization: "Bearer
 beforeEach(() => {
   runMock.mockReset();
   process.env.CRON_SECRET = "s3cr3t";
+  // Los casos de abajo prueban el camino HABILITADO; la baja se prueba aparte.
+  envMock.cajaChica.syncEnabled = true;
+});
+
+// CCN-001B · F4: Google Sheets dejó de ser el sistema operativo de Caja Chica.
+// El espejo queda dado de baja: 410 Gone salvo reactivación explícita.
+describe("kill-switch del espejo (CCN-001B F4)", () => {
+  it("410 Gone cuando el sync está dado de baja (default)", async () => {
+    envMock.cajaChica.syncEnabled = false;
+    const res = await POST(req());
+    expect(res.status).toBe(410);
+    const j = await res.json();
+    expect(j.success).toBe(false);
+    expect(j.error).toContain("GONE");
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("410 aun con Bearer válido: se evalúa ANTES de la auth", async () => {
+    envMock.cajaChica.syncEnabled = false;
+    const res = await POST(req("", { authorization: "Bearer s3cr3t" }));
+    expect(res.status).toBe(410);
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("410 también por GET y con ?dry=1 (ningún camino reescribe el período)", async () => {
+    envMock.cajaChica.syncEnabled = false;
+    expect((await GET(req("?dry=1"))).status).toBe(410);
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("reactivable sólo por decisión de Dirección (syncEnabled=1)", async () => {
+    envMock.cajaChica.syncEnabled = true;
+    runMock.mockResolvedValue(baseReport);
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    expect(runMock).toHaveBeenCalled();
+  });
 });
 
 describe("route /api/tesoreria/caja-chica/sync", () => {

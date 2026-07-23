@@ -299,6 +299,15 @@ export const env = {
       process.env.CAJA_CHICA_DRIVE_FILE_ID?.trim() &&
         (process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || process.env.GOOGLE_SA_EMAIL?.trim()),
     ),
+    /**
+     * KILL-SWITCH del espejo de Drive (CCN-001B · F4). Google Sheets dejó de ser
+     * el sistema operativo de Caja Chica: Nexus es la fuente de verdad.
+     *
+     * FAIL-CLOSED: apagado salvo que se setee explícitamente
+     * CAJA_CHICA_SYNC_ENABLED=1. Protege incluso ante un `workflow_dispatch`
+     * manual del cron ya desactivado. Reactivar es una decisión de Dirección.
+     */
+    syncEnabled: process.env.CAJA_CHICA_SYNC_ENABLED?.trim() === "1",
   },
   cron: {
     /** Secreto Bearer que exigen los endpoints de jobs (sync diario, etc.). */

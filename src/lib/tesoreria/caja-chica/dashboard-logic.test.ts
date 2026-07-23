@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { monthlyGasto, categoriaDistribution, distinctCategorias, filterMovimientos, conciliacionTone } from "./dashboard-logic";
-import type { MovRow, ResumenRow } from "./data";
+import { monthlyGasto, categoriaDistribution, distinctCategorias, filterMovimientos } from "./dashboard-logic";
+import type { MovRow } from "./data";
 
 const mov = (o: Partial<MovRow>): MovRow => ({
   id: o.id ?? "x", periodo: 2026, direction: o.direction ?? "gasto", tx_date: o.tx_date === undefined ? "2026-01-15" : o.tx_date,
@@ -55,17 +55,7 @@ describe("filterMovimientos", () => {
   it("combinado", () => expect(filterMovimientos(data, { categoria: "Comida", desde: "2026-02-01" }).map((r) => r.id)).toEqual(["3"]));
 });
 
-describe("conciliacionTone", () => {
-  const base: ResumenRow = {
-    periodo: 2026, total_acreditado: 0, total_gasto: 0, movimientos: 1, saldo_calculado: 0,
-    saldo_excel: 100, saldo_delta: 0, saldo_source: "label", ultimo_snapshot: "2026-06-23",
-    last_run_id: "r1", last_status: "completed", last_warnings: 0, ultima_sync: "2026-06-23T00:05Z",
-  };
-  it("conciliado (delta 0, sin warnings, completed)", () => expect(conciliacionTone(base)).toBe("ok"));
-  it("warning si hay warnings", () => expect(conciliacionTone({ ...base, last_warnings: 1 })).toBe("warn"));
-  it("warning si delta ≠ 0", () => expect(conciliacionTone({ ...base, saldo_delta: 5 })).toBe("warn"));
-  it("warning si saldo_source calc_fallback", () => expect(conciliacionTone({ ...base, saldo_source: "calc_fallback" })).toBe("warn"));
-  it("warning si status partial", () => expect(conciliacionTone({ ...base, last_status: "partial" })).toBe("warn"));
-  it("error si status error", () => expect(conciliacionTone({ ...base, last_status: "error" })).toBe("error"));
-  it("sin resumen → warn", () => expect(conciliacionTone(null)).toBe("warn"));
-});
+// Los tests de `conciliacionTone` se eliminaron con la función: el
+// ConciliacionBanner se dio de baja (Dirección 2026-07-22) al dejar Caja Chica
+// de ser un espejo de la planilla. La cobertura del módulo nativo vive en
+// `native-logic.test.ts`.
