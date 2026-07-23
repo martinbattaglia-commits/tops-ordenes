@@ -3,8 +3,9 @@
  * build, dejando registro en el log de Netlify (o de la terminal en deploy CLI).
  * Garantiza que ningún build de producción quede sin trazabilidad visible.
  *
- * No escribe archivos ni inyecta nada: la inyección de NEXT_PUBLIC_* la hace
- * next.config.mjs usando la MISMA fuente (scripts/version-info.mjs).
+ * No escribe archivos ni inyecta nada: la inyección de las variables server-only
+ * BUILD_* (sin prefijo NEXT_PUBLIC_) la hace next.config.mjs usando la MISMA
+ * fuente (scripts/version-info.mjs).
  */
 import { getBuildVersion } from "./version-info.mjs";
 

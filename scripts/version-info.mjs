@@ -1,10 +1,11 @@
 /**
  * Fuente ÚNICA de la información de versión/build. La consumen:
- *   - next.config.mjs  → inyecta NEXT_PUBLIC_* en el bundle (build time)
+ *   - next.config.mjs  → inyecta variables server-only BUILD_* (sin prefijo
+ *     NEXT_PUBLIC_: no viajan al bundle de cliente) en build time
  *   - scripts/gen-version.mjs → log de trazabilidad antes del build/deploy
  *
  * Orden de resolución (robusto para local, Netlify CLI y Netlify git build):
- *   1. Variables de entorno ya presentes (NEXT_PUBLIC_*, y las que Netlify
+ *   1. Variables de entorno ya presentes (BUILD_*, y las que Netlify
  *      define en builds git: COMMIT_REF / BRANCH / HEAD / CONTEXT).
  *   2. git local (rev-parse).
  *   3. Fallback explícito ("unknown" / "local-<ts>") — nunca rompe el build.

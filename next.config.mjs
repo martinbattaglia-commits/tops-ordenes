@@ -1,7 +1,8 @@
 import { getBuildVersion } from "./scripts/version-info.mjs";
 
 // Trazabilidad de despliegue: se computa una sola vez al cargar la config y se
-// inyecta en el bundle como NEXT_PUBLIC_*. Ver scripts/version-info.mjs.
+// inyecta como variables server-only BUILD_* (sin prefijo NEXT_PUBLIC_: no
+// viajan al bundle de cliente). Ver scripts/version-info.mjs.
 const BUILD = getBuildVersion();
 
 /** @type {import('next').NextConfig} */
@@ -19,8 +20,10 @@ const nextConfig = {
     BUILD_ID: BUILD.buildId,
     BUILD_CONTEXT: BUILD.environment,
   },
-  // buildId determinístico = SHA corto → el buildId servido en /_next/static/
-  // queda atado al commit (trazable también desde el artefacto publicado).
+  // buildId determinístico = SHA corto → queda embebido en el artefacto
+  // (.next/BUILD_ID) y visible en Administración → Versión y trazabilidad.
+  // Nota App Router: NO aparece en las rutas públicas de /_next/static/
+  // (verificación externa: /api/version — ver docs/runbooks/RELEASE.md).
   generateBuildId: () => BUILD.buildId,
   images: {
     formats: ["image/avif", "image/webp"],
