@@ -296,7 +296,7 @@ export function ThreadView({
       </div>
 
       {readOnly ? (
-        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt/50 px-4 py-3 text-center text-[12px] text-fg-muted">
+        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt/50 px-4 py-3 text-center text-xs text-fg-muted">
           <Icon name="folder" size={13} className="text-fg-muted" />
           Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.
         </div>
@@ -317,10 +317,10 @@ export function ThreadView({
                   onClick={() => pickMention(c)}
                   className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-bg-surface-alt"
                 >
-                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-bg-surface-alt text-[9px] font-bold text-fg-secondary">
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-bg-surface-alt text-[10px] font-bold text-fg-secondary">
                     {c.name.slice(0, 2).toUpperCase()}
                   </span>
-                  <span className="truncate text-[12px] text-fg-primary">{c.name}</span>
+                  <span className="truncate text-xs text-fg-primary">{c.name}</span>
                 </button>
               ))}
             </div>
@@ -374,7 +374,7 @@ export function ThreadView({
               type="button"
               onClick={() => void send()}
               disabled={!draft.trim() || sending}
-              className="btn btn-primary btn-sm shrink-0"
+              className="btn btn-nexus btn-sm shrink-0"
               aria-label="Enviar mensaje"
             >
               <Icon name="send" size={15} />

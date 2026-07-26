@@ -139,7 +139,7 @@ export function NewTaskForm({
       {error && <p className="text-xs text-red-400">{error}</p>}
 
       <div className="flex items-center gap-2">
-        <button type="button" className="btn btn-primary btn-sm"
+        <button type="button" className="btn btn-nexus btn-sm"
           disabled={busy || titulo.trim().length === 0}
           onClick={() => void submit()}>
           <Icon name="check" size={14} /> {busy ? "Creando…" : "Crear tarea"}

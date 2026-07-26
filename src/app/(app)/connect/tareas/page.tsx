@@ -64,7 +64,7 @@ export default async function TasksPage({
             Trabajo asignable entre personas y áreas. La fecha límite es informativa.
           </p>
         </div>
-        <Link href="/connect/tareas/nueva" className="btn btn-primary btn-sm">
+        <Link href="/connect/tareas/nueva" className="btn btn-nexus btn-sm">
           <Icon name="plus" size={14} /> Nueva tarea
         </Link>
       </header>

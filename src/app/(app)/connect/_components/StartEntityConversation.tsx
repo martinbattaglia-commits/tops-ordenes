@@ -33,7 +33,7 @@ export function StartEntityConversation({ entityType, entityId }: { entityType: 
         Esta entidad todavía no tiene una conversación contextual. Iniciá una para coordinar y dejar
         traza vinculada a la entidad (aparece en su Entity360).
       </p>
-      <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void start()}>
+      <button type="button" className="btn btn-nexus btn-sm" disabled={busy} onClick={() => void start()}>
         <Icon name="plus" size={14} /> Iniciar conversación
       </button>
       {err && <p className="text-xs text-tops-red">{err}</p>}

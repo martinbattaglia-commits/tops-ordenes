@@ -92,7 +92,7 @@ export default async function IncidentDetailPage({
         </div>
 
         {incident.resolucionText && (
-          <div className="mt-2 rounded-md bg-emerald-400/10 px-3 py-2 text-xs text-emerald-400">
+          <div className="mt-2 rounded-md bg-emerald-400/10 px-3 py-2 text-xs text-emerald-500">
             <span className="font-semibold">Resolución:</span> {incident.resolucionText}
           </div>
         )}

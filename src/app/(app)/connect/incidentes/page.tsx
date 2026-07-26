@@ -61,7 +61,7 @@ export default async function IncidentsPage({
               <Icon name="check" size={13} /> Ver archivo
             </Link>
           )}
-          <Link href="/connect/incidentes/nuevo" className="btn btn-primary btn-sm">
+          <Link href="/connect/incidentes/nuevo" className="btn btn-nexus btn-sm">
             <Icon name="plus" size={14} /> Reportar incidente
           </Link>
         </div>

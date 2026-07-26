@@ -56,7 +56,7 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
         {/* UX-002c.3: acciones que navegan/crean en rojo TOPS para contraste (Dirección). */}
         <button
           type="button"
-          className="btn btn-sm border-transparent bg-tops-red text-white hover:bg-tops-red/90"
+          className="btn btn-nexus btn-sm"
           onClick={() => setCreating((s) => !s)}
         >
           <Icon name="plus" size={14} /> Crear
@@ -64,8 +64,9 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
       </div>
 
       {creating && (
-        <div className="card mb-4 p-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+        <div className="card mb-4 p-5">
+          {/* UX-005 (B1): más respiración entre campos; el botón Crear es el protagonista. */}
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-xs text-fg-secondary">
               Nombre
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Operaciones Magaldi"
@@ -97,10 +98,10 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
               </>
             )}
           </div>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-4 flex items-center gap-2">
             <button
               type="button"
-              className="btn btn-sm border-transparent bg-tops-red text-white hover:bg-tops-red/90"
+              className="btn btn-nexus"
               disabled={busy || !name.trim()}
               onClick={() => void create()}
             >
@@ -116,7 +117,7 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
       <div className="space-y-2">
         {channels.length === 0 && <p className="text-sm text-fg-muted">No hay canales todavía.</p>}
         {channels.map((c) => (
-          <div key={c.id} className="card flex items-center justify-between gap-3 p-3">
+          <div key={c.id} className="card card-lift flex items-center justify-between gap-3 p-3">
             <div className="flex min-w-0 items-start gap-2.5">
               <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
                 <Icon name="megaphone" size={16} className="text-fg-secondary" />
@@ -126,19 +127,19 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
                   <span className="truncate text-sm font-semibold text-fg-primary">{c.title ?? `#${c.slug}`}</span>
                   <span className="chip text-[10px]">{c.visibility === "public" ? "Público" : "Privado"}</span>
                 </div>
-                <p className="truncate text-[12px] text-fg-muted">{c.topic ?? `#${c.slug ?? ""}`}</p>
+                <p className="truncate text-xs text-fg-muted">{c.topic ?? `#${c.slug ?? ""}`}</p>
               </div>
             </div>
             <div className="shrink-0">
               {c.isMember ? (
                 <Link
                   href={`/connect/canales/${c.slug}`}
-                  className="btn btn-sm border-transparent bg-tops-red text-white hover:bg-tops-red/90"
+                  className="btn btn-nexus btn-sm"
                 >
                   Abrir
                 </Link>
               ) : c.visibility === "public" ? (
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void join(c)}>
+                <button type="button" className="btn btn-nexus btn-sm" disabled={busy} onClick={() => void join(c)}>
                   <Icon name="plus" size={13} /> Unirme
                 </button>
               ) : (

@@ -39,7 +39,7 @@ export function EntityContextPanel({
             {events.map((e) => (
               <li key={e.eventId} className="relative">
                 <span className="absolute -left-[17px] top-1 h-2 w-2 rounded-full bg-tops-red" />
-                <div className="text-[12px] font-medium leading-snug text-fg-primary">{e.summary ?? e.eventType}</div>
+                <div className="text-xs font-medium leading-snug text-fg-primary">{e.summary ?? e.eventType}</div>
                 <div className="text-[10px] text-fg-muted">
                   {e.actorLabel ?? "—"} ·{" "}
                   {new Date(e.occurredAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}

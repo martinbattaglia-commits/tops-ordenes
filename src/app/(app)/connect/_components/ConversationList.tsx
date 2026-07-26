@@ -10,18 +10,15 @@ import { timeAgo } from "@/lib/connect/format";
 import {
   listArchivedInboxAction, archiveInboxItemAction,
 } from "@/lib/connect/adapters/driving/inbox-actions";
+import { KIND_COLOR } from "@/lib/connect/theme";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const KIND_ICON: Record<ConversationKind, IconName> = {
   dm: "user", group: "users", channel: "megaphone", erp: "database",
   incident: "shield", whatsapp: "whatsapp", ai: "sparkle",
 };
 
-// UX-002c/004 (resolución final de Dirección): TODOS los íconos de la bandeja en rojo
-// TOPS — identidad única del módulo. Excepciones futuras: WhatsApp verde, IA violeta.
-const KIND_COLOR: Record<ConversationKind, string> = {
-  dm: "text-tops-red", group: "text-tops-red", channel: "text-tops-red", erp: "text-tops-red",
-  incident: "text-tops-red", whatsapp: "text-emerald-500", ai: "text-violet-400",
-};
+// UX-005: la paleta canónica vive en connect/theme.ts (KIND_COLOR importado).
 
 /**
  * UX-002b (Dirección, smoke 07-26): los hilos de entidad guardan el título como
@@ -128,7 +125,7 @@ export function ConversationList({
               type="button"
               onClick={onCollapse}
               title="Ocultar bandeja"
-              className="grid h-6 w-6 place-items-center rounded transition-colors hover:bg-bg-surface-alt"
+              className="focus-nexus grid h-6 w-6 place-items-center rounded transition-colors hover:bg-bg-surface-alt"
             >
               <Icon name="chevron-right" size={14} className="text-fg-muted" />
             </button>
@@ -153,7 +150,7 @@ export function ConversationList({
           aria-selected={!isArchive}
           onClick={() => setTab("activos")}
           className={cn(
-            "flex-1 border-b-2 px-3 py-2 text-[11px] font-semibold transition-colors",
+            "focus-nexus flex-1 border-b-2 px-3 py-2 text-[11px] font-semibold transition-colors",
             !isArchive
               ? "border-tops-red text-fg-primary"
               : "border-transparent text-fg-muted hover:text-fg-secondary",
@@ -167,7 +164,7 @@ export function ConversationList({
           aria-selected={isArchive}
           onClick={openArchive}
           className={cn(
-            "flex-1 border-b-2 px-3 py-2 text-[11px] font-semibold transition-colors",
+            "focus-nexus flex-1 border-b-2 px-3 py-2 text-[11px] font-semibold transition-colors",
             isArchive
               ? "border-tops-red text-fg-primary"
               : "border-transparent text-fg-muted hover:text-fg-secondary",
@@ -185,9 +182,18 @@ export function ConversationList({
           <p className="px-4 py-6 text-center text-xs text-fg-muted">{archiveError}</p>
         )}
         {!loading && !archiveError && visible.length === 0 && (
-          <p className="px-4 py-6 text-center text-xs text-fg-muted">
-            {isArchive ? "Sin conversaciones archivadas." : "Sin conversaciones todavía."}
-          </p>
+          <EmptyState
+            size="sm"
+            icon={isArchive ? "folder" : "chat"}
+            title={
+              q
+                ? "Sin resultados"
+                : isArchive
+                  ? "Sin conversaciones archivadas"
+                  : "Sin conversaciones todavía"
+            }
+            hint={q ? "Probá con otro nombre o número." : undefined}
+          />
         )}
         {rowError && (
           <p className="border-b border-stroke-soft/50 px-4 py-2 text-[11px] text-tops-red">{rowError}</p>
@@ -224,7 +230,7 @@ export function ConversationList({
                         e.stopPropagation();
                         void archiveItem(it.conversationId);
                       }}
-                      className="shrink-0 text-[11px] font-semibold text-amber-400 transition-colors hover:text-amber-300 disabled:opacity-50"
+                      className="focus-nexus shrink-0 rounded text-[11px] font-semibold text-amber-400 transition-colors hover:text-amber-300 disabled:opacity-50"
                     >
                       {busyId === it.conversationId ? "Archivando…" : "Archivar"}
                     </button>

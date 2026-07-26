@@ -113,7 +113,7 @@ export function NewIncidentForm() {
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="btn btn-primary btn-sm"
+          className="btn btn-nexus btn-sm"
           disabled={busy || titulo.trim().length === 0}
           onClick={() => void submit()}
         >

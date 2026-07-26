@@ -106,14 +106,14 @@ export function IncidentActions({
           </button>
         ))}
         {actions.includes("resolve") && (
-          <button type="button" className="btn btn-primary btn-sm" disabled={busy}
+          <button type="button" className="btn btn-nexus btn-sm" disabled={busy}
             onClick={() => { setResolving((s) => !s); setAssigning(false); }}>
             <Icon name="check-circle" size={13} /> Resolver
           </button>
         )}
         {(["close", "reopen"] as const).filter((a) => actions.includes(a)).map((a) => (
           <button key={a} type="button"
-            className={a === "close" ? "btn btn-primary btn-sm" : "btn btn-ghost btn-sm"}
+            className={a === "close" ? "btn btn-nexus btn-sm" : "btn btn-ghost btn-sm"}
             disabled={busy} onClick={() => transition(a)}>
             <Icon name={TRANSITION_LABELS[a]!.icon} size={13} /> {TRANSITION_LABELS[a]!.label}
           </button>
@@ -179,7 +179,7 @@ export function IncidentActions({
               onChange={(e) => setResolution(e.target.value)}
             />
           </VoiceField>
-          <button type="button" className="btn btn-primary btn-sm"
+          <button type="button" className="btn btn-nexus btn-sm"
             disabled={busy || resolution.trim().length === 0}
             onClick={() => void run(() => resolveIncidentAction({ incidentId: incident.id, resolution }))}>
             <Icon name="check-circle" size={13} /> Confirmar resolución
