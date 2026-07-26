@@ -86,7 +86,48 @@ export async function listInbox(opts: { archived?: boolean } = {}): Promise<Inbo
     console.error("[connect/listInbox] query error:", error.message);
     return [];
   }
-  return (data ?? []).map((row) => mapInbox(row as InboxRow));
+  const items = (data ?? []).map((row) => mapInbox(row as InboxRow));
+  return withDmNames(supabase, items);
+}
+
+/**
+ * UX-002c: los DM guardan title NULL — la bandeja debe mostrar el nombre de la
+ * contraparte. Nombres vía profiles_public (lockdown 0040 / lección I-1), misma
+ * técnica que tasks/incidents-data. Best-effort: si algo falla, queda el fallback.
+ */
+async function withDmNames(
+  supabase: NonNullable<ReturnType<typeof createClient>>,
+  items: InboxItem[],
+): Promise<InboxItem[]> {
+  const dmIds = items.filter((i) => i.kind === "dm" && !i.title).map((i) => i.conversationId);
+  if (dmIds.length === 0) return items;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return items;
+  const { data: parts, error } = await supabase
+    .from("connect_participants")
+    .select("conversation_id, profile_id")
+    .in("conversation_id", dmIds)
+    .neq("profile_id", user.id);
+  if (error || !parts) return items;
+  const otherByConv = new Map<string, string>();
+  for (const p of parts as Array<{ conversation_id: string; profile_id: string }>) {
+    if (!otherByConv.has(p.conversation_id)) otherByConv.set(p.conversation_id, p.profile_id);
+  }
+  const profileIds = Array.from(new Set(otherByConv.values()));
+  if (profileIds.length === 0) return items;
+  const { data: profs } = await supabase
+    .from("profiles_public")
+    .select("id, full_name")
+    .in("id", profileIds);
+  const names = new Map(
+    ((profs ?? []) as Array<{ id: string; full_name: string | null }>)
+      .map((p) => [p.id, (p.full_name ?? "").trim()]),
+  );
+  return items.map((i) => {
+    const other = otherByConv.get(i.conversationId);
+    const name = other ? names.get(other) : undefined;
+    return name ? { ...i, title: name } : i;
+  });
 }
 
 /** Una conversación por id (para el header del hilo). */

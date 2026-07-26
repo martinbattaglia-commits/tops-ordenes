@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 import type { InboxItem, ConversationKind } from "@/lib/connect/types";
 import { timeAgo } from "@/lib/connect/format";
-import { listArchivedInboxAction } from "@/lib/connect/adapters/driving/inbox-actions";
+import {
+  listArchivedInboxAction, archiveInboxItemAction,
+} from "@/lib/connect/adapters/driving/inbox-actions";
 
 const KIND_ICON: Record<ConversationKind, IconName> = {
   dm: "user", group: "users", channel: "megaphone", erp: "database",
@@ -19,14 +21,17 @@ const KIND_ICON: Record<ConversationKind, IconName> = {
  * "TSK-2026-0017 — texto". En la bandeja va el nombre humano PRIMERO, el ícono
  * según tipo (tarea/avería) y el número reducido a 4 dígitos al extremo derecho.
  */
-function displayParts(it: InboxItem): { title: string; num: string | null; icon: IconName } {
+function displayParts(it: InboxItem): {
+  title: string; num: string | null; icon: IconName; entity: boolean;
+} {
   const raw = it.title ?? (it.slug ? `#${it.slug}` : "Conversación");
   const m = raw.match(/^(TSK|INC)-\d{4}-(\d+)\s*—\s*(.+)$/);
-  if (!m) return { title: raw, num: null, icon: KIND_ICON[it.kind] };
+  if (!m) return { title: raw, num: null, icon: KIND_ICON[it.kind], entity: false };
   return {
     title: m[3],
     num: m[2].padStart(4, "0").slice(-4),
     icon: m[1] === "TSK" ? "check-circle" : "bolt",
+    entity: true,
   };
 }
 
@@ -34,12 +39,17 @@ type InboxTab = "activos" | "archivo";
 
 export function ConversationList({ items }: { items: InboxItem[] }) {
   const pathname = usePathname();
+  const router = useRouter();
   // UX-002: Activos llega server-rendered del layout (sin cambios); Archivo se
   // fetchea UNA vez, recién al primer click — costo cero para el caso común.
   const [tab, setTab] = useState<InboxTab>("activos");
   const [archived, setArchived] = useState<InboxItem[] | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // UX-002c: archivado directo desde la fila — oculta al instante, el server confirma.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<string | null>(null);
 
   async function openArchive() {
     setTab("archivo");
@@ -57,8 +67,24 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
     }
   }
 
+  async function archiveItem(conversationId: string) {
+    setBusyId(conversationId);
+    setRowError(null);
+    const r = await archiveInboxItemAction({ conversationId });
+    setBusyId(null);
+    if (!r.ok) {
+      setRowError(r.message);
+      return;
+    }
+    setHiddenIds((prev) => new Set(prev).add(conversationId));
+    setArchived(null); // el Archivo se refetchea al próximo click, ya con este ítem
+    router.refresh();
+  }
+
   const isArchive = tab === "archivo";
-  const visible = isArchive ? (archived ?? []) : items;
+  const visible = isArchive
+    ? (archived ?? [])
+    : items.filter((it) => !hiddenIds.has(it.conversationId));
 
   return (
     <>
@@ -113,6 +139,9 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
             {isArchive ? "Sin conversaciones archivadas." : "Sin conversaciones todavía."}
           </p>
         )}
+        {rowError && (
+          <p className="border-b border-stroke-soft/50 px-4 py-2 text-[11px] text-tops-red">{rowError}</p>
+        )}
         {(!isArchive || (!loading && !archiveError)) && visible.map((it) => {
           const href = `/connect/c/${it.conversationId}`;
           const active = pathname === href;
@@ -122,39 +151,55 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
               key={it.conversationId}
               href={href}
               className={cn(
-                "flex items-start gap-2.5 border-b border-stroke-soft/50 px-3 py-2.5 transition-colors",
+                "flex items-start gap-2.5 border-b border-stroke-soft/50 py-2.5 pl-3 pr-1.5 transition-colors",
                 active ? "bg-bg-surface-alt" : "hover:bg-bg-surface-alt",
               )}
             >
               <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
-                <Icon name={d.icon} size={15} className="text-fg-secondary" />
+                {/* UX-002c: tareas/incidencias en rojo TOPS para detección inmediata. */}
+                <Icon name={d.icon} size={15} className={d.entity ? "text-tops-red" : "text-fg-secondary"} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-semibold text-fg-primary">
-                    {d.title}
-                  </span>
-                  {d.num && (
-                    <span className="shrink-0 font-mono text-[10px] text-fg-muted">— {d.num}</span>
+                <span className="block truncate text-[13px] font-semibold text-fg-primary">
+                  {d.title}
+                </span>
+                <div className="mt-0.5 flex items-center gap-2">
+                  {!isArchive && (
+                    <button
+                      type="button"
+                      disabled={busyId === it.conversationId}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void archiveItem(it.conversationId);
+                      }}
+                      className="shrink-0 text-[11px] font-semibold text-fg-muted transition-colors hover:text-tops-red disabled:opacity-50"
+                    >
+                      {busyId === it.conversationId ? "Archivando…" : "Archivar"}
+                    </button>
+                  )}
+                  {it.topic && (
+                    <span className="truncate text-[11px] text-fg-muted">{it.topic}</span>
                   )}
                 </div>
-                <div className="mt-0.5 flex items-center justify-between gap-2">
-                  <span className="truncate text-[11px] text-fg-muted">{it.topic ?? ""}</span>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    <span className="text-[10px] text-fg-muted">{timeAgo(it.lastMessageAt)}</span>
-                    {isArchive ? (
-                      <span className="rounded-full bg-bg-surface-alt px-1.5 text-[10px] text-fg-muted">
-                        Archivado
-                      </span>
-                    ) : (
-                      it.unreadCount > 0 && (
-                        <span className="rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
-                          {it.unreadCount}
-                        </span>
-                      )
-                    )}
+              </div>
+              {/* UX-002c: columna nº/hora propia, pegada al borde derecho de la fila. */}
+              <div className="mt-0.5 flex shrink-0 flex-col items-end gap-0.5 text-right">
+                {d.num && (
+                  <span className="font-mono text-[10px] text-fg-muted">— {d.num}</span>
+                )}
+                <span className="text-[10px] text-fg-muted">{timeAgo(it.lastMessageAt)}</span>
+                {isArchive ? (
+                  <span className="rounded-full bg-bg-surface-alt px-1.5 text-[10px] text-fg-muted">
+                    Archivado
                   </span>
-                </div>
+                ) : (
+                  it.unreadCount > 0 && (
+                    <span className="rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
+                      {it.unreadCount}
+                    </span>
+                  )
+                )}
               </div>
             </Link>
           );
