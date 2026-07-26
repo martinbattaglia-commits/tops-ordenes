@@ -16,22 +16,29 @@ const KIND_ICON: Record<ConversationKind, IconName> = {
   incident: "shield", whatsapp: "whatsapp", ai: "sparkle",
 };
 
+// UX-002c: código de color de la bandeja — rojo = trabajo operativo (tarea/avería);
+// azul = comunicación (personas/grupos/canales/ERP); verde = WhatsApp; violeta = IA.
+const KIND_COLOR: Record<ConversationKind, string> = {
+  dm: "text-fg-link", group: "text-fg-link", channel: "text-fg-link", erp: "text-fg-link",
+  incident: "text-tops-red", whatsapp: "text-emerald-500", ai: "text-violet-400",
+};
+
 /**
  * UX-002b (Dirección, smoke 07-26): los hilos de entidad guardan el título como
  * "TSK-2026-0017 — texto". En la bandeja va el nombre humano PRIMERO, el ícono
  * según tipo (tarea/avería) y el número reducido a 4 dígitos al extremo derecho.
  */
 function displayParts(it: InboxItem): {
-  title: string; num: string | null; icon: IconName; entity: boolean;
+  title: string; num: string | null; icon: IconName; color: string;
 } {
   const raw = it.title ?? (it.slug ? `#${it.slug}` : "Conversación");
   const m = raw.match(/^(TSK|INC)-\d{4}-(\d+)\s*—\s*(.+)$/);
-  if (!m) return { title: raw, num: null, icon: KIND_ICON[it.kind], entity: false };
+  if (!m) return { title: raw, num: null, icon: KIND_ICON[it.kind], color: KIND_COLOR[it.kind] };
   return {
     title: m[3],
     num: m[2].padStart(4, "0").slice(-4),
     icon: m[1] === "TSK" ? "check-circle" : "bolt",
-    entity: true,
+    color: "text-tops-red",
   };
 }
 
@@ -156,8 +163,8 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
               )}
             >
               <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
-                {/* UX-002c: tareas/incidencias en rojo TOPS para detección inmediata. */}
-                <Icon name={d.icon} size={15} className={d.entity ? "text-tops-red" : "text-fg-secondary"} />
+                {/* UX-002c: código de color por tipo — nada queda en gris neutro. */}
+                <Icon name={d.icon} size={15} className={d.color} />
               </div>
               <div className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-semibold text-fg-primary">
@@ -173,7 +180,7 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
                         e.stopPropagation();
                         void archiveItem(it.conversationId);
                       }}
-                      className="shrink-0 text-[11px] font-semibold text-fg-muted transition-colors hover:text-tops-red disabled:opacity-50"
+                      className="shrink-0 text-[11px] font-semibold text-amber-400 transition-colors hover:text-amber-300 disabled:opacity-50"
                     >
                       {busyId === it.conversationId ? "Archivando…" : "Archivar"}
                     </button>
