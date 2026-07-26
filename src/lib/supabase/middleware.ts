@@ -91,6 +91,13 @@ export async function updateSession(request: NextRequest) {
     // Hallazgo del smoke DRAFT de la ventana F4.1: sin esta línea el middleware devolvía 401
     // incluso con Bearer válido (mismo patrón que los 5 crons de arriba).
     pathname === "/api/connect/cron/dispatch-outbox" ||
+    // Worker de drenado de knowledge_events (F0.5.2/E2.1): el cron de GH Actions
+    // (knowledge-drain.yml, */5) postea con `Authorization: Bearer CRON_SECRET` sin
+    // cookie; la auth se valida DENTRO del handler vía requireCronAuth (503 sin secret /
+    // 401 mismatch, timing-safe). Sólo la ruta exacta. Expediente KDW-001: sin esta línea
+    // el middleware devolvía 401 "Auth required" antes de llegar al handler — mismo
+    // patrón que dispatch-outbox y que los 5 crons de arriba.
+    pathname === "/api/knowledge/drain" ||
     pathname.startsWith("/compras/validar") ||
     // Trazabilidad de despliegue: sólo metadata de build (commit/branch/fecha/buildId/entorno),
     // sin datos sensibles. Pública para verificar deploys y monitoreo externo. La misma info

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { drainKnowledge } from "@/lib/knowledge/drain";
+import { requireCronAuth } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,18 +12,17 @@ export const maxDuration = 60;
  * F0.5.2 / E2.1 — Worker de drenado de la cola de Knowledge (eventos `pending`/`failed`).
  * Pensado para cron cada 5 min — ver .github/workflows/knowledge-drain.yml.
  *
- * Fail-closed: si CRON_SECRET está seteado, exige `Authorization: Bearer <secret>`.
+ * Auth (KDW-001): FAIL-CLOSED ESTRICTO vía requireCronAuth() — el guard canónico
+ * de los demás endpoints de cron del ERP. Sin CRON_SECRET → 503 (misconfig visible,
+ * nunca queda abierto); Authorization ausente o Bearer incorrecto → 401 (timing-safe).
+ * Reemplaza el patrón fail-open `if (secret) { ... }` (hallazgo #1 de la auditoría de
+ * permisos 2026-06-28), que dejaba el endpoint ABIERTO si la env var faltaba.
  * `?dry=1` solo cuenta los eventos due (no reclama, no procesa).
- * Códigos: 401 auth · 200 ok/partial · 502 error.
+ * Códigos: 503 misconfig · 401 auth · 200 ok/partial · 502 error.
  */
 async function handle(req: Request): Promise<Response> {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization") || "";
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-    }
-  }
+  const denied = requireCronAuth(req);
+  if (denied) return denied;
 
   const url = new URL(req.url);
   const dry = url.searchParams.get("dry") === "1";
