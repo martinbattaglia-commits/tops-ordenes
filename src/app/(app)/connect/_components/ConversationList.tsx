@@ -1,19 +1,48 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 import type { InboxItem, ConversationKind } from "@/lib/connect/types";
 import { timeAgo } from "@/lib/connect/format";
+import { listArchivedInboxAction } from "@/lib/connect/adapters/driving/inbox-actions";
 
 const KIND_ICON: Record<ConversationKind, IconName> = {
   dm: "user", group: "users", channel: "megaphone", erp: "database",
   incident: "shield", whatsapp: "whatsapp", ai: "sparkle",
 };
 
+type InboxTab = "activos" | "archivo";
+
 export function ConversationList({ items }: { items: InboxItem[] }) {
   const pathname = usePathname();
+  // UX-002: Activos llega server-rendered del layout (sin cambios); Archivo se
+  // fetchea UNA vez, recién al primer click — costo cero para el caso común.
+  const [tab, setTab] = useState<InboxTab>("activos");
+  const [archived, setArchived] = useState<InboxItem[] | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function openArchive() {
+    setTab("archivo");
+    if (archived !== null || loading) return;
+    setLoading(true);
+    setArchiveError(null);
+    try {
+      const res = await listArchivedInboxAction();
+      if (res.ok) setArchived(res.items);
+      else setArchiveError(res.message);
+    } catch {
+      setArchiveError("No se pudo cargar el archivo.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const isArchive = tab === "archivo";
+  const visible = isArchive ? (archived ?? []) : items;
 
   return (
     <>
@@ -22,14 +51,53 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
           <Icon name="chat" size={18} className="text-tops-red" />
           <h1 className="text-sm font-bold text-fg-primary">Nexus Link</h1>
         </div>
-        <span className="text-[11px] text-fg-muted">{items.length}</span>
+        <span className="text-[11px] text-fg-muted">{visible.length}</span>
+      </div>
+
+      <div className="flex border-b border-stroke-soft" role="tablist" aria-label="Bandeja">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isArchive}
+          onClick={() => setTab("activos")}
+          className={cn(
+            "flex-1 border-b-2 px-3 py-2 text-[11px] font-semibold transition-colors",
+            !isArchive
+              ? "border-tops-red text-fg-primary"
+              : "border-transparent text-fg-muted hover:text-fg-secondary",
+          )}
+        >
+          Activos
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isArchive}
+          onClick={openArchive}
+          className={cn(
+            "flex-1 border-b-2 px-3 py-2 text-[11px] font-semibold transition-colors",
+            isArchive
+              ? "border-tops-red text-fg-primary"
+              : "border-transparent text-fg-muted hover:text-fg-secondary",
+          )}
+        >
+          Archivo
+        </button>
       </div>
 
       <nav className="flex-1 overflow-y-auto">
-        {items.length === 0 && (
-          <p className="px-4 py-6 text-center text-xs text-fg-muted">Sin conversaciones todavía.</p>
+        {isArchive && loading && (
+          <p className="px-4 py-6 text-center text-xs text-fg-muted">Cargando archivo…</p>
         )}
-        {items.map((it) => {
+        {isArchive && archiveError && !loading && (
+          <p className="px-4 py-6 text-center text-xs text-fg-muted">{archiveError}</p>
+        )}
+        {!loading && !archiveError && visible.length === 0 && (
+          <p className="px-4 py-6 text-center text-xs text-fg-muted">
+            {isArchive ? "Sin conversaciones archivadas." : "Sin conversaciones todavía."}
+          </p>
+        )}
+        {(!isArchive || (!loading && !archiveError)) && visible.map((it) => {
           const href = `/connect/c/${it.conversationId}`;
           const active = pathname === href;
           return (
@@ -53,10 +121,16 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
                 </div>
                 <div className="mt-0.5 flex items-center justify-between gap-2">
                   <span className="truncate text-[11px] text-fg-muted">{it.topic ?? ""}</span>
-                  {it.unreadCount > 0 && (
-                    <span className="shrink-0 rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
-                      {it.unreadCount}
+                  {isArchive ? (
+                    <span className="shrink-0 rounded-full bg-bg-surface-alt px-1.5 text-[10px] text-fg-muted">
+                      Archivado
                     </span>
+                  ) : (
+                    it.unreadCount > 0 && (
+                      <span className="shrink-0 rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
+                        {it.unreadCount}
+                      </span>
+                    )
                   )}
                 </div>
               </div>

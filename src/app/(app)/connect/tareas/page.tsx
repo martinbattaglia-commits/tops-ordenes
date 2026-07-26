@@ -25,6 +25,8 @@ const VIEWS: Array<{ id: TaskView; label: string }> = [
   { id: "mias", label: "Mías" },
   { id: "creadas", label: "Creadas por mí" },
   { id: "vacantes", label: "Vacantes" },
+  // UX-002: histórico (completadas + canceladas) separado de lo accionable.
+  { id: "cerradas", label: "Cerradas" },
   { id: "todas", label: "Todas" },
 ];
 

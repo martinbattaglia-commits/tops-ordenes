@@ -61,19 +61,27 @@ export const CHANNEL_VIEW_COLS =
 
 // ───────────────────────── Lecturas ─────────────────────────
 
-/** Bandeja unificada: mis conversaciones ordenadas por último mensaje. */
-export async function listInbox(): Promise<InboxItem[]> {
-  if (isMock()) return mockInbox();
+/**
+ * Bandeja unificada: mis conversaciones ordenadas por último mensaje.
+ * UX-002: `archived` invierte el único predicado de estado (`archived_at`) sobre
+ * la MISMA vista security_invoker — misma membresía, misma RLS, sin superficie nueva.
+ */
+export async function listInbox(opts: { archived?: boolean } = {}): Promise<InboxItem[]> {
+  const archived = opts.archived ?? false;
+  if (isMock()) return mockInbox().filter((i) => (i.archivedAt != null) === archived);
   const supabase = createClient();
-  if (!supabase) return mockInbox();
-  const { data, error } = await supabase
+  if (!supabase) return mockInbox().filter((i) => (i.archivedAt != null) === archived);
+  let query = supabase
     .from("v_connect_inbox")
     .select(
       "conversation_id, context_id, kind, title, slug, topic, last_message_at, last_message_seq, last_read_seq, unread_count, is_favorite, muted_until, archived_at",
-    )
-    // DEFECT-6 (piloto F3): la bandeja/sidebar activa excluye conversaciones archivadas.
-    .is("archived_at", null)
-    .order("last_message_at", { ascending: false, nullsFirst: false });
+    );
+  // DEFECT-6 (piloto F3): la bandeja activa excluye archivadas; UX-002 agrega la inversa.
+  query = archived ? query.not("archived_at", "is", null) : query.is("archived_at", null);
+  const { data, error } = await query.order("last_message_at", {
+    ascending: false,
+    nullsFirst: false,
+  });
   if (error) {
     console.error("[connect/listInbox] query error:", error.message);
     return [];
