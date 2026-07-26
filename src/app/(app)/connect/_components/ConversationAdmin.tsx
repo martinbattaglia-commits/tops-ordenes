@@ -13,7 +13,7 @@ import type { ConversationKind, ConversationLink, MemberRole, Message } from "@/
 import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
 import { canAdminister, canManageRoles } from "@/lib/connect/domain/channel";
 import {
-  setTitleAction, setTopicAction, archiveConversationAction,
+  setTitleAction, setTopicAction, archiveConversationAction, unarchiveConversationAction,
   addMemberAction, removeMemberAction, setMemberRoleAction, unpinMessageAction,
 } from "@/lib/connect/adapters/driving/channel-actions";
 import { ThreadView } from "./ThreadView";
@@ -173,6 +173,17 @@ export function ConversationAdmin({
           {canAdminActive && (
             <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => void archive()}>
               <Icon name="folder" size={14} /> Archivar
+            </button>
+          )}
+          {/* H1 (D3): reversa visible — vuelve el hilo a Activos (RPC 0206 re-valida). */}
+          {archived && canAdminister(myRole, isAdmin) && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={busy}
+              onClick={() => void run(() => unarchiveConversationAction({ conversationId }))}
+            >
+              <Icon name="folder" size={14} /> Desarchivar
             </button>
           )}
         </div>
