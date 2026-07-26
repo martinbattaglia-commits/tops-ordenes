@@ -149,9 +149,9 @@ export function ConversationAdmin({
               </button>
             </div>
           ) : (
-            <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-fg-muted">
-              <span className="font-mono">{contextId}</span>
-              {topic ? <span>· {topic}</span> : <span className="italic">sin tema</span>}
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-fg-muted" title={contextId}>
+              {/* UX-003: el tema encabeza; el context_id técnico queda en el tooltip. */}
+              {topic ? <span>{topic}</span> : <span className="italic">sin tema</span>}
               {canAdminActive && (
                 <button type="button" className="text-fg-link hover:underline" title="Editar tema" onClick={() => { setTopicDraft(topic ?? ""); setEditingTopic(true); }}>
                   editar tema

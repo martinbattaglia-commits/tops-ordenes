@@ -109,10 +109,11 @@ export default async function IncidentsPage({
                   <tr key={i.id} className="border-b border-stroke-soft last:border-0 hover:bg-bg-surface-alt">
                     <td className="px-3 py-2">
                       <Link href={`/connect/incidentes/${i.id}`} className="group flex min-w-0 flex-col">
-                        <span className="font-mono text-[10px] text-fg-link">{i.publicId}</span>
+                        {/* UX-003: nombre humano primero; ID técnico como dato secundario. */}
                         <span className="truncate font-semibold text-fg-primary group-hover:underline">
-                          {i.titulo}
+                          {i.titulo || i.publicId}
                         </span>
+                        <span className="font-mono text-[10px] text-fg-muted">{i.publicId}</span>
                       </Link>
                     </td>
                     <td className="px-3 py-2"><SeverityChip severidad={i.severidad} /></td>

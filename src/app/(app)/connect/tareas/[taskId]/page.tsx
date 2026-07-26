@@ -66,7 +66,8 @@ export default async function TaskDetailPage({
               <Link href="/connect/tareas" className="btn btn-ghost btn-sm" aria-label="Volver a tareas">
                 <Icon name="arrow-left" size={14} />
               </Link>
-              <span className="font-mono text-[11px] text-fg-link">{task.publicId}</span>
+              {/* UX-003: el título encabeza; el ID pasa a subtítulo discreto. */}
+              <h1 className="truncate text-sm font-bold text-fg-primary">{task.titulo || task.publicId}</h1>
               <TaskPriorityChip prioridad={task.prioridad} />
               <TaskStatusChip estado={task.estado} />
               {isOverdue(task, nowIso) && <OverdueChip />}
@@ -74,7 +75,7 @@ export default async function TaskDetailPage({
                 <span className="chip text-[10px]">Workflow · paso {task.stepNo}</span>
               )}
             </div>
-            <h1 className="mt-1 truncate text-sm font-bold text-fg-primary">{task.titulo}</h1>
+            <div className="mt-1 font-mono text-[11px] text-fg-muted">{task.publicId}</div>
             {task.descripcion && (
               <p className="mt-1 max-w-2xl whitespace-pre-wrap text-xs text-fg-muted">{task.descripcion}</p>
             )}

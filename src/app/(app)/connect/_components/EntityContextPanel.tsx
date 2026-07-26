@@ -23,7 +23,12 @@ export function EntityContextPanel({
             <Icon name="arrow-up-right" size={12} /> Entidad
           </Link>
         </div>
-        {contextId && <p className="mt-0.5 font-mono text-[10px] text-fg-muted">{contextId}</p>}
+        {/* UX-003: el context_id técnico sale de la vista; queda disponible en tooltip. */}
+        {contextId && (
+          <p className="mt-0.5 truncate text-[10px] text-fg-muted" title={contextId}>
+            Conversación vinculada a la entidad
+          </p>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto p-3">
         <div className="eyebrow-tiny mb-2">Timeline (Knowledge)</div>
@@ -39,7 +44,8 @@ export function EntityContextPanel({
                   {e.actorLabel ?? "—"} ·{" "}
                   {new Date(e.occurredAt).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                 </div>
-                <div className="font-mono text-[9px] text-fg-muted">{e.eventType}</div>
+                {/* UX-003: se elimina la línea font-mono con el eventType técnico —
+                    cuando no hay summary, la línea principal ya lo muestra. */}
               </li>
             ))}
           </ol>

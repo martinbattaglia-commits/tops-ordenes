@@ -107,9 +107,12 @@ export default async function ConnectThreadPage({
               </span>
             )}
           </div>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-fg-muted">
-            {conversation.contextId}
-            {conversation.topic ? ` · ${conversation.topic}` : ""}
+          {/* UX-003: línea humana (tema); el context_id técnico pasa a tooltip. */}
+          <p
+            className="mt-0.5 truncate text-[11px] text-fg-muted"
+            title={conversation.contextId ?? undefined}
+          >
+            {conversation.topic ?? "Sin tema"}
           </p>
         </div>
         {links.length > 0 && (
