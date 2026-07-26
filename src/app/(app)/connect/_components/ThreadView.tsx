@@ -326,7 +326,12 @@ export function ThreadView({
             </div>
           )}
           <div className="flex items-end gap-2">
-            <VoiceField>
+            {/* VOICE-002 (root cause): el wrapper de VoiceField DEBE acotarse en la
+                fila flex — su propio docstring prescribe "flex-1 min-w-0". Sin esto,
+                el preview del parcial de dictado (p.truncate) no tiene ancho límite
+                y se extiende invadiendo el layout. El textarea pasa a w-full porque
+                el flex item ahora es el wrapper. */}
+            <VoiceField className="min-w-0 flex-1">
               <textarea
                 ref={textareaRef}
                 value={draft}
@@ -362,7 +367,7 @@ export function ThreadView({
                     : "Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
                 }
                 rows={1}
-                className="max-h-32 min-h-[2.25rem] flex-1 resize-none overflow-y-auto rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
+                className="max-h-32 min-h-[2.25rem] w-full resize-none overflow-y-auto rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
               />
             </VoiceField>
             <button
