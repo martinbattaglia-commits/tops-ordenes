@@ -242,6 +242,18 @@ export function ThreadView({
           <p className="m-auto text-xs text-fg-muted">Todavía no hay mensajes. Escribí el primero.</p>
         )}
         {messages.map((m) => {
+          // UX-1a: los eventos de sistema (p. ej. "X agregó a Y") se renderizan como
+          // línea centrada y discreta — trazabilidad en el hilo, sin burbuja de autor.
+          if (m.kind === "system") {
+            return (
+              <div key={m.id} className="flex justify-center">
+                <span className="max-w-[85%] rounded-full bg-bg-surface-alt px-3 py-1 text-center text-[11px] text-fg-muted">
+                  {messageDisplayBody(m)}
+                  <span className="ml-1.5 text-[10px] opacity-70">{timeHM(m.createdAt)}</span>
+                </span>
+              </div>
+            );
+          }
           const own = !!currentUserId && m.authorProfileId === currentUserId;
           return (
             <div key={m.id} className={cn("flex", own ? "justify-end" : "justify-start")}>
