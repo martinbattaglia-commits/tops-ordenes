@@ -14,6 +14,22 @@ const KIND_ICON: Record<ConversationKind, IconName> = {
   incident: "shield", whatsapp: "whatsapp", ai: "sparkle",
 };
 
+/**
+ * UX-002b (Dirección, smoke 07-26): los hilos de entidad guardan el título como
+ * "TSK-2026-0017 — texto". En la bandeja va el nombre humano PRIMERO, el ícono
+ * según tipo (tarea/avería) y el número reducido a 4 dígitos al extremo derecho.
+ */
+function displayParts(it: InboxItem): { title: string; num: string | null; icon: IconName } {
+  const raw = it.title ?? (it.slug ? `#${it.slug}` : "Conversación");
+  const m = raw.match(/^(TSK|INC)-\d{4}-(\d+)\s*—\s*(.+)$/);
+  if (!m) return { title: raw, num: null, icon: KIND_ICON[it.kind] };
+  return {
+    title: m[3],
+    num: m[2].padStart(4, "0").slice(-4),
+    icon: m[1] === "TSK" ? "check-circle" : "bolt",
+  };
+}
+
 type InboxTab = "activos" | "archivo";
 
 export function ConversationList({ items }: { items: InboxItem[] }) {
@@ -100,6 +116,7 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
         {(!isArchive || (!loading && !archiveError)) && visible.map((it) => {
           const href = `/connect/c/${it.conversationId}`;
           const active = pathname === href;
+          const d = displayParts(it);
           return (
             <Link
               key={it.conversationId}
@@ -110,28 +127,33 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
               )}
             >
               <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
-                <Icon name={KIND_ICON[it.kind]} size={15} className="text-fg-secondary" />
+                <Icon name={d.icon} size={15} className="text-fg-secondary" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-[13px] font-semibold text-fg-primary">
-                    {it.title ?? (it.slug ? `#${it.slug}` : "Conversación")}
+                    {d.title}
                   </span>
-                  <span className="shrink-0 text-[10px] text-fg-muted">{timeAgo(it.lastMessageAt)}</span>
+                  {d.num && (
+                    <span className="shrink-0 font-mono text-[10px] text-fg-muted">— {d.num}</span>
+                  )}
                 </div>
                 <div className="mt-0.5 flex items-center justify-between gap-2">
                   <span className="truncate text-[11px] text-fg-muted">{it.topic ?? ""}</span>
-                  {isArchive ? (
-                    <span className="shrink-0 rounded-full bg-bg-surface-alt px-1.5 text-[10px] text-fg-muted">
-                      Archivado
-                    </span>
-                  ) : (
-                    it.unreadCount > 0 && (
-                      <span className="shrink-0 rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
-                        {it.unreadCount}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <span className="text-[10px] text-fg-muted">{timeAgo(it.lastMessageAt)}</span>
+                    {isArchive ? (
+                      <span className="rounded-full bg-bg-surface-alt px-1.5 text-[10px] text-fg-muted">
+                        Archivado
                       </span>
-                    )
-                  )}
+                    ) : (
+                      it.unreadCount > 0 && (
+                        <span className="rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
+                          {it.unreadCount}
+                        </span>
+                      )
+                    )}
+                  </span>
                 </div>
               </div>
             </Link>
