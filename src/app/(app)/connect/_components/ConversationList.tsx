@@ -44,9 +44,19 @@ function displayParts(it: InboxItem): {
 
 type InboxTab = "activos" | "archivo";
 
-export function ConversationList({ items }: { items: InboxItem[] }) {
+export function ConversationList({
+  items, onCollapse, onNavigate,
+}: {
+  items: InboxItem[];
+  /** UX-004: colapsa el panel derecho (o cierra el drawer en mobile). */
+  onCollapse?: () => void;
+  /** UX-004: en el drawer mobile, navegar cierra la bandeja. */
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const router = useRouter();
+  // UX-004: buscador client-side sobre la pestaña visible (sin backend).
+  const [query, setQuery] = useState("");
   // UX-002: Activos llega server-rendered del layout (sin cambios); Archivo se
   // fetchea UNA vez, recién al primer click — costo cero para el caso común.
   const [tab, setTab] = useState<InboxTab>("activos");
@@ -89,9 +99,20 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
   }
 
   const isArchive = tab === "archivo";
-  const visible = isArchive
+  const base = isArchive
     ? (archived ?? [])
     : items.filter((it) => !hiddenIds.has(it.conversationId));
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? base.filter((it) => {
+        const d = displayParts(it);
+        return (
+          d.title.toLowerCase().includes(q) ||
+          (d.num ?? "").includes(q) ||
+          (it.topic ?? "").toLowerCase().includes(q)
+        );
+      })
+    : base;
 
   return (
     <>
@@ -100,7 +121,29 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
           <Icon name="chat" size={18} className="text-tops-red" />
           <h1 className="text-sm font-bold text-fg-primary">Nexus Link</h1>
         </div>
-        <span className="text-[11px] text-fg-muted">{visible.length}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-fg-muted">{visible.length}</span>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={onCollapse}
+              title="Ocultar bandeja"
+              className="grid h-6 w-6 place-items-center rounded transition-colors hover:bg-bg-surface-alt"
+            >
+              <Icon name="chevron-right" size={14} className="text-fg-muted" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* UX-004: buscador client-side (filtra la pestaña visible, sin backend). */}
+      <div className="border-b border-stroke-soft px-3 py-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar conversación…"
+          className="input w-full text-xs"
+        />
       </div>
 
       <div className="flex border-b border-stroke-soft" role="tablist" aria-label="Bandeja">
@@ -157,6 +200,7 @@ export function ConversationList({ items }: { items: InboxItem[] }) {
             <Link
               key={it.conversationId}
               href={href}
+              onClick={onNavigate}
               className={cn(
                 "flex items-start gap-2.5 border-b border-stroke-soft/50 py-2.5 pl-3 pr-1.5 transition-colors",
                 active ? "bg-bg-surface-alt" : "hover:bg-bg-surface-alt",
