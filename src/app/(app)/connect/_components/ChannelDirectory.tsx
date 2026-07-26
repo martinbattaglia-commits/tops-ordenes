@@ -53,7 +53,12 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
           <h1 className="page-title">Canales</h1>
           <p className="page-subtitle">Descubrí y unite a canales públicos, o creá un canal/grupo.</p>
         </div>
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => setCreating((s) => !s)}>
+        {/* UX-002c.3: acciones que navegan/crean en rojo TOPS para contraste (Dirección). */}
+        <button
+          type="button"
+          className="btn btn-sm border-transparent bg-tops-red text-white hover:bg-tops-red/90"
+          onClick={() => setCreating((s) => !s)}
+        >
           <Icon name="plus" size={14} /> Crear
         </button>
       </div>
@@ -93,7 +98,12 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
             )}
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <button type="button" className="btn btn-primary btn-sm" disabled={busy || !name.trim()} onClick={() => void create()}>
+            <button
+              type="button"
+              className="btn btn-sm border-transparent bg-tops-red text-white hover:bg-tops-red/90"
+              disabled={busy || !name.trim()}
+              onClick={() => void create()}
+            >
               Crear {kind === "channel" ? "canal" : "grupo"}
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setCreating(false)}>Cancelar</button>
@@ -121,7 +131,12 @@ export function ChannelDirectory({ channels }: { channels: ChannelItem[] }) {
             </div>
             <div className="shrink-0">
               {c.isMember ? (
-                <Link href={`/connect/canales/${c.slug}`} className="btn btn-ghost btn-sm">Abrir</Link>
+                <Link
+                  href={`/connect/canales/${c.slug}`}
+                  className="btn btn-sm border-transparent bg-tops-red text-white hover:bg-tops-red/90"
+                >
+                  Abrir
+                </Link>
               ) : c.visibility === "public" ? (
                 <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => void join(c)}>
                   <Icon name="plus" size={13} /> Unirme
