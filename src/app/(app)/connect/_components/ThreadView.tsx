@@ -107,6 +107,18 @@ export function ThreadView({
 
   useEffect(() => scrollToEnd(), [messages.length, scrollToEnd]);
 
+  // VOICE-002: autosize del composer. `draft` es la única fuente de cambios del
+  // contenido (tipeo, dictado —insertAtCursor despacha `input` real→onChange—,
+  // menciones y envío), así que un solo efecto cubre todos los caminos. Crece
+  // hasta el tope de la className (max-h-32 = 128px) y de ahí en más el scroll
+  // interno (overflow-y-auto) toma el control. Nunca línea infinita.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+  }, [draft]);
+
   // markRead: SOLO cuando el último seq REAL avanza (dedup por ref → sin RPC redundante en cada
   // append/re-render). Idempotente en DB (greatest); no-op en demo (createClient null).
   useEffect(() => {
@@ -350,7 +362,7 @@ export function ThreadView({
                     : "Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
                 }
                 rows={1}
-                className="max-h-32 min-h-[2.25rem] flex-1 resize-none rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
+                className="max-h-32 min-h-[2.25rem] flex-1 resize-none overflow-y-auto rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
               />
             </VoiceField>
             <button
