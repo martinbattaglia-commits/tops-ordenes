@@ -16,10 +16,11 @@ const KIND_ICON: Record<ConversationKind, IconName> = {
   incident: "shield", whatsapp: "whatsapp", ai: "sparkle",
 };
 
-// UX-002c: código de color de la bandeja — rojo = trabajo operativo (tarea/avería);
-// azul = comunicación (personas/grupos/canales/ERP); verde = WhatsApp; violeta = IA.
+// UX-002c/004: código de color de la bandeja — rojo = trabajo operativo (tarea/avería);
+// ámbar = comunicación (personas/grupos/canales/ERP), a juego con la acción Archivar;
+// verde = WhatsApp; violeta = IA.
 const KIND_COLOR: Record<ConversationKind, string> = {
-  dm: "text-fg-link", group: "text-fg-link", channel: "text-fg-link", erp: "text-fg-link",
+  dm: "text-amber-400", group: "text-amber-400", channel: "text-amber-400", erp: "text-amber-400",
   incident: "text-tops-red", whatsapp: "text-emerald-500", ai: "text-violet-400",
 };
 
