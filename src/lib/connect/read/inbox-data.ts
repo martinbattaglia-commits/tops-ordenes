@@ -178,7 +178,63 @@ export async function listMessages(
     return [];
   }
   // De desc (keyset) a asc (render del hilo).
-  return (data ?? []).map((row) => mapMessage(row as MessageRow)).reverse();
+  const items = (data ?? []).map((row) => mapMessage(row as MessageRow)).reverse();
+  return withAuthorNames(supabase, conversationId, items);
+}
+
+/**
+ * WA-002 F1a: puebla `authorName` (el campo ya existía en el tipo y ThreadView ya lo
+ * renderiza — nunca se llenaba). Autores con perfil → profiles_public; autores externos
+ * (participant_type 'whatsapp') → external_ref.display_name. Best-effort: ante error,
+ * los mensajes salen sin nombre (comportamiento previo).
+ */
+async function withAuthorNames(
+  supabase: NonNullable<ReturnType<typeof createClient>>,
+  conversationId: string,
+  items: Message[],
+): Promise<Message[]> {
+  if (items.length === 0) return items;
+  const { data: parts, error } = await supabase
+    .from("connect_participants")
+    .select("id, profile_id, external_ref")
+    .eq("conversation_id", conversationId);
+  if (error || !parts) return items;
+  const rows = parts as Array<{
+    id: string; profile_id: string | null;
+    external_ref: { display_name?: string; author?: string } | null;
+  }>;
+  const nameByPart = new Map<string, string>();
+  const profileIds: string[] = [];
+  for (const p of rows) {
+    const ext = (p.external_ref?.display_name ?? p.external_ref?.author ?? "").trim();
+    if (ext) nameByPart.set(p.id, ext);
+    else if (p.profile_id) profileIds.push(p.profile_id);
+  }
+  const nameByProfile = new Map<string, string>();
+  if (profileIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles_public")
+      .select("id, full_name")
+      .in("id", profileIds);
+    for (const p of ((profs ?? []) as Array<{ id: string; full_name: string | null }>)) {
+      const n = (p.full_name ?? "").trim();
+      if (n) nameByProfile.set(p.id, n);
+    }
+  }
+  const partProfile = new Map(rows.map((p) => [p.id, p.profile_id] as const));
+  return items.map((m) => {
+    if (m.authorName) return m;
+    let name: string | undefined;
+    if (m.authorParticipantId) {
+      name = nameByPart.get(m.authorParticipantId);
+      if (!name) {
+        const pid = partProfile.get(m.authorParticipantId);
+        if (pid) name = nameByProfile.get(pid);
+      }
+    }
+    if (!name && m.authorProfileId) name = nameByProfile.get(m.authorProfileId);
+    return name ? { ...m, authorName: name } : m;
+  });
 }
 
 /** Canales visibles (públicos o donde soy miembro). */
