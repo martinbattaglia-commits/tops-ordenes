@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { dispatchConnectOutbox } from "@/lib/connect/worker/dispatch";
 import { automationProcessor } from "@/lib/connect/worker/automations";
+import { emailNotificationProcessor } from "@/lib/connect/worker/email-notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,10 +54,18 @@ async function handle(req: Request): Promise<Response> {
       },
       automationProcessor,
     );
+    // LINK-NOTIFY-001 F1: tercer procesador — email para lo que requiere acción.
+    // Kill-switch NOTIFY_EMAIL_ENABLED; en dry no envía (sólo el drenado es dry-aware,
+    // el email directamente no corre para no generar efectos en un dry-run).
+    const email = dry
+      ? { enabled: false, candidates: 0, sent: 0, errors: 0, skippedAllowlist: 0, skippedClaimed: 0 }
+      : await emailNotificationProcessor();
+
     const httpStatus = s.status === "error" ? 502 : 200;
     return NextResponse.json(
       {
         success: s.status !== "error",
+        email,
         status: s.status,
         dry: s.dry,
         claimed: s.claimed,
