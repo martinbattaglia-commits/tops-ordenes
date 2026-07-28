@@ -40,6 +40,9 @@ export async function registrarCajaMovimientoAction(input: unknown): Promise<Act
     p_concept: p.concept,
     p_responsable_id: p.responsable_id,
     p_observations: p.observations?.trim() || null,
+    // CCN-002: la RPC resuelve la cuenta por (account_type='caja', currency) y
+    // re-valida en la base; la moneda nunca viaja implícita.
+    p_currency: p.currency,
   });
   if (error) return { ok: false, message: humanizeCajaError(error.message) };
   revalidateCaja();

@@ -21,6 +21,7 @@ const mov = (o: Partial<CajaMovRow>): CajaMovRow => ({
   responsable_id: o.responsable_id ?? "r1",
   responsable: o.responsable ?? "R. Núñez",
   observaciones: o.observaciones ?? null,
+  currency: o.currency ?? "ARS",
 });
 
 describe("filterCajaMovimientos", () => {
