@@ -200,6 +200,11 @@ export function ThreadView({
         redacted: false,
         createdAt: (row.created_at as string) ?? new Date().toISOString(),
         clientMsgId: (row.client_msg_id as string) ?? undefined,
+        // Fix realtime (28-07): el mensaje EN VIVO llega sin authorName (el canal no pasa
+        // por el read-layer) — se resuelve contra los miembros ya presentes en memoria.
+        authorName:
+          mentionables.find((p) => p.profileId === ((row.author_profile_id as string) ?? ""))
+            ?.name ?? null,
       };
       setMessages((prev) => {
         // Ya tenemos el mensaje real (por id) o su seq real ya reconciliado → no-op (idempotente).
