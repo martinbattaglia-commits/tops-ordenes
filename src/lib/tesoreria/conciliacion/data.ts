@@ -5,11 +5,13 @@
  * `treasury_movements` → candidatos del motor y rehidrata el resultado para el
  * dashboard. La escritura vive en las RPC (`actions.ts`), nunca acá.
  *
- * NOTA: las tablas/columnas (bank_*, treasury_movements.reconciled_at) provienen
- * de las migraciones 0078-0080 (DISEÑO, aún NO aplicadas). El código compila
- * contra el esquema diseñado; correrá una vez aplicadas en producción.
+ * NOTA de linaje (E0 · TREAS-RECON-001): el esquema bank_* fue aplicado a
+ * mano en prod (≤2026-07-13) y quedó documentado en la migración as-built
+ * `0211_bank_recon_baseline_asbuilt.sql`; las exclusiones y RPC de cierre
+ * llegan con `0212_bank_recon_exclusions_close_rpcs.sql`.
  */
 import { createClient } from "@/lib/supabase/server";
+import { excluirMovimientos, listActiveExclusionIds } from "./exclusions";
 import type { MovimientoNexus } from "./matching";
 import { reconstruirResultado, type LineRow, type MatchRow } from "./ingest";
 import { dashboard, type DashboardConciliacion } from "./dashboard";
@@ -27,7 +29,9 @@ export interface BankStatementMeta {
   created_at: string;
 }
 
-/** Candidatos a conciliar: movimientos confirmados y NO conciliados de la cuenta/período. */
+/** Candidatos a conciliar: movimientos confirmados y NO conciliados de la
+ *  cuenta/período, MENOS las exclusiones gobernadas (0212). El filtro va en
+ *  el ORIGEN: ninguna capa del motor (exacto/aprox/IA/N:M) ve un excluido. */
 export async function listCandidateMovements(
   bankAccountId: string,
   from: string,
@@ -35,16 +39,20 @@ export async function listCandidateMovements(
 ): Promise<MovimientoNexus[]> {
   const supabase = createClient();
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("treasury_movements")
-    .select("id,date,direction,amount,description")
-    .eq("bank_account_id", bankAccountId)
-    .eq("status", "confirmado")
-    .is("reconciled_at", null)
-    .gte("date", from)
-    .lte("date", to);
-  if (error) throw error;
-  return (data ?? []).map((m: { id: string; date: string; direction: string; amount: number; description: string | null }) => ({
+  const [candidatos, excluidos] = await Promise.all([
+    supabase
+      .from("treasury_movements")
+      .select("id,date,direction,amount,description")
+      .eq("bank_account_id", bankAccountId)
+      .eq("status", "confirmado")
+      .is("reconciled_at", null)
+      .gte("date", from)
+      .lte("date", to),
+    listActiveExclusionIds(),
+  ]);
+  if (candidatos.error) throw candidatos.error;
+  const filas = (candidatos.data ?? []) as { id: string; date: string; direction: string; amount: number; description: string | null }[];
+  return excluirMovimientos(filas, excluidos).map((m: { id: string; date: string; direction: string; amount: number; description: string | null }) => ({
     id: m.id,
     fecha: m.date,
     importe: cents(m.amount),
@@ -167,4 +175,67 @@ export async function getStatementResult(statementId: string): Promise<{
     movimientosUsados: movById.size,
   };
   return { matches: rec.matches, movimientos: rec.movimientos, metrics: dashboard({ matches: rec.matches, resumen }, 0) };
+}
+
+// ── Cierre del extracto (E2 · TREAS-RECON-001) ────────────────────────────
+
+export interface LineaAbierta {
+  id: string;
+  fecha: string;
+  descripcion: string;
+  importe: number; // pesos
+  direction: "ingreso" | "egreso";
+}
+
+export interface ClosureTargets {
+  bankAccountId: string;
+  /** Líneas sistémicas pendientes de registrar por lote (D7). */
+  sistemicos: number;
+  /** ¿El batch sistémico ya fue registrado? (idempotencia visible en UI). */
+  batchRegistrado: boolean;
+  /** Líneas sin contraparte que admiten ajuste por diferencia. */
+  lineasAbiertas: LineaAbierta[];
+}
+
+/** Objetivos de cierre de un statement: sistémicos por lote + líneas abiertas. */
+export async function getClosureTargets(statementId: string): Promise<ClosureTargets | null> {
+  const supabase = createClient();
+  if (!supabase) return null;
+
+  const { data: stmts, error: e1 } = await supabase
+    .from("bank_statements")
+    .select("id,bank_account_id")
+    .eq("id", statementId)
+    .limit(1);
+  if (e1) throw e1;
+  const stmt = (stmts ?? [])[0];
+  if (!stmt) return null;
+
+  const { data: lines, error: e2 } = await supabase
+    .from("bank_statement_lines")
+    .select("id,fecha,descripcion,importe,direction,match_status")
+    .eq("statement_id", statementId)
+    .order("line_no", { ascending: true });
+  if (e2) throw e2;
+
+  const filas = (lines ?? []) as (LineaAbierta & { match_status: string })[];
+
+  // Idempotencia visible: el batch se detecta por su movimiento de referencia.
+  const { data: batch, error: e3 } = await supabase
+    .from("treasury_movements")
+    .select("id")
+    .eq("reference_type", "recon_systemic_batch")
+    .eq("reference_id", statementId)
+    .eq("status", "confirmado")
+    .limit(1);
+  if (e3) throw e3;
+
+  return {
+    bankAccountId: (stmt as { bank_account_id: string }).bank_account_id,
+    sistemicos: filas.filter((l) => l.match_status === "sistemico").length,
+    batchRegistrado: (batch ?? []).length > 0,
+    lineasAbiertas: filas
+      .filter((l) => l.match_status === "no_conciliado")
+      .map(({ id, fecha, descripcion, importe, direction }) => ({ id, fecha, descripcion, importe, direction })),
+  };
 }
