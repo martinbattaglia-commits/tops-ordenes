@@ -12,6 +12,24 @@ import {
 import { timeHM } from "@/lib/connect/format";
 import { postMessageAction } from "@/lib/connect/adapters/driving/message-actions";
 import { markReadAction } from "@/lib/connect/adapters/driving/read-actions";
+import { createClient } from "@/lib/supabase/client";
+import { useAudioRecorder } from "@/lib/connect/audio/recorder";
+import {
+  prepareAudioUploadAction, finalizeAudioMessageAction,
+} from "@/lib/connect/adapters/driving/audio-actions";
+import { AudioPlayer } from "./AudioPlayer";
+
+/** D1 (LINK-MEDIA-001): ícono propio del MENSAJE de voz — distinto del Voice Command. */
+function MicIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10v1a7 7 0 0 0 14 0v-1" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+    </svg>
+  );
+}
 
 interface UiMessage extends Message {
   status?: "sending" | "failed";
@@ -72,6 +90,38 @@ export function ThreadView({
   const [messages, setMessages] = useState<UiMessage[]>(initialMessages);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  // LINK-MEDIA-001: grabación de mensajes de voz (D1: circuito separado del Voice Command).
+  const recorder = useAudioRecorder();
+  const [audioBusy, setAudioBusy] = useState(false);
+  const [audioErr, setAudioErr] = useState<string | null>(null);
+
+  async function sendAudio() {
+    if (!recorder.blob || audioBusy) return;
+    setAudioBusy(true);
+    setAudioErr(null);
+    try {
+      const prep = await prepareAudioUploadAction({ conversationId });
+      if (!prep.ok) { setAudioErr(prep.message); return; }
+      const sb = createClient();
+      if (!sb) { setAudioErr("Demo: audio no disponible."); return; }
+      const { error: upErr } = await sb.storage
+        .from("connect-files")
+        .uploadToSignedUrl(prep.path, prep.token, recorder.blob, {
+          contentType: recorder.blob.type || "application/octet-stream",
+        });
+      if (upErr) { setAudioErr(`Subida: ${upErr.message}`); return; }
+      const fin = await finalizeAudioMessageAction({
+        conversationId,
+        path: prep.path,
+        durationMs: Math.max(1, recorder.durationMs),
+        clientMsgId: crypto.randomUUID(),
+      });
+      if (!fin.ok) { setAudioErr(fin.message); return; }
+      recorder.reset(); // el mensaje llega por realtime (insert de connect_messages)
+    } finally {
+      setAudioBusy(false);
+    }
+  }
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [picks, setPicks] = useState<MentionPick[]>([]);
   const endRef = useRef<HTMLDivElement>(null);
@@ -280,9 +330,14 @@ export function ThreadView({
                 {!own && m.authorName && (
                   <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">{m.authorName}</div>
                 )}
-                <div className="whitespace-pre-wrap break-words">
-                  {renderWithMentions(messageDisplayBody(m), mentionNames)}
-                </div>
+                {/* LINK-MEDIA-001: mensajes de audio → reproductor único (URL firmada on-demand). */}
+                {m.kind === "audio" ? (
+                  <AudioPlayer messageId={m.id} />
+                ) : (
+                  <div className="whitespace-pre-wrap break-words">
+                    {renderWithMentions(messageDisplayBody(m), mentionNames)}
+                  </div>
+                )}
                 <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
                   {m.status === "sending" && <span>enviando…</span>}
                   {m.status === "failed" && <span className="text-tops-red">no se pudo enviar</span>}
@@ -370,6 +425,19 @@ export function ThreadView({
                 className="max-h-32 min-h-[2.25rem] w-full resize-none overflow-y-auto rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
               />
             </VoiceField>
+            {/* D1: botón de MENSAJE de voz — separado del Voice Command, sin desplazar el envío. */}
+            {recorder.state !== "recording" && recorder.state !== "preview" && (
+              <button
+                type="button"
+                onClick={() => void recorder.start()}
+                disabled={sending || audioBusy}
+                className="focus-nexus grid h-8 w-8 shrink-0 place-items-center rounded-full border border-stroke-soft text-fg-secondary transition-colors hover:border-tops-red hover:text-tops-red"
+                title="Mensaje de voz"
+                aria-label="Grabar mensaje de voz"
+              >
+                <MicIcon size={15} />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void send()}
@@ -380,6 +448,37 @@ export function ThreadView({
               <Icon name="send" size={15} />
             </button>
           </div>
+          {/* LINK-MEDIA-001: barra de grabación/preview (reemplaza visualmente al flujo de texto). */}
+          {recorder.state === "recording" && (
+            <div className="mt-2 flex items-center gap-3 rounded-lg border border-tops-red/40 bg-tops-red/5 px-3 py-2">
+              <span className="flex items-center gap-2 text-xs font-semibold text-tops-red">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-tops-red" />
+                Grabando · {Math.floor(recorder.durationMs / 60000)}:{String(Math.floor((recorder.durationMs % 60000) / 1000)).padStart(2, "0")}
+              </span>
+              <span className="flex-1" />
+              <button type="button" className="btn btn-ghost btn-sm text-xs" onClick={recorder.cancel}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-nexus btn-sm text-xs" onClick={recorder.stop}>
+                Detener
+              </button>
+            </div>
+          )}
+          {recorder.state === "preview" && recorder.blob && (
+            <div className="mt-2 flex items-center gap-3 rounded-lg border border-stroke-soft bg-bg-surface px-3 py-2">
+              <AudioPlayer src={URL.createObjectURL(recorder.blob)} compact />
+              <span className="flex-1" />
+              <button type="button" className="btn btn-ghost btn-sm text-xs" disabled={audioBusy} onClick={recorder.cancel}>
+                Cancelar
+              </button>
+              <button type="button" className="btn btn-nexus btn-sm text-xs" disabled={audioBusy} onClick={() => void sendAudio()}>
+                {audioBusy ? "Enviando…" : "Enviar audio"}
+              </button>
+            </div>
+          )}
+          {(recorder.error || audioErr) && (
+            <p className="mt-1 text-[11px] text-tops-red">{recorder.error ?? audioErr}</p>
+          )}
         </div>
       )}
     </>

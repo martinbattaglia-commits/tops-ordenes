@@ -6,7 +6,7 @@
 // ───────────────────────── Enums (1:1 con 0143_connect_schema) ─────────────────────────
 export type ConversationKind = "dm" | "group" | "channel" | "erp" | "incident" | "whatsapp" | "ai";
 export type MemberRole = "owner" | "moderator" | "member" | "guest";
-export type MessageKind = "text" | "system" | "ai" | "file" | "call_link" | "whatsapp";
+export type MessageKind = "text" | "system" | "ai" | "file" | "call_link" | "whatsapp" | "audio";
 export type ParticipantType = "staff" | "client" | "provider" | "ai" | "system" | "whatsapp";
 
 /** Vocabulario de entidades ERP vinculables (CHECK de connect_conversation_links, 0143). */
