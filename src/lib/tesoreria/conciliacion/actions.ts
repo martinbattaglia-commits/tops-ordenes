@@ -6,7 +6,9 @@
  * autorización (rol con `tesoreria.conciliacion.approve`), el LOCK y el append-
  * only viven en la RPC. NUNCA se registra solo: cada acción es un click humano.
  *
- * NOTA: las RPC provienen de 0078 (DISEÑO, aún NO aplicadas).
+ * Linaje (E0/E2 · TREAS-RECON-001): `ingest`/`accept`/`reject` existen en prod
+ * desde una aplicación manual, documentada en la baseline as-built 0211;
+ * `accept_systemic_batch` y `create_adjustment` llegan con 0212.
  */
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
@@ -26,11 +28,21 @@ async function callRpc(fn: string, args: Record<string, unknown>, okMsg: string)
   return { ok: true, message: okMsg, data };
 }
 
-/** Aceptar la sugerencia de un match → enlaza el movimiento (LOCK) · no crea asiento. */
+/** Aceptar la sugerencia de un match → enlaza TODOS los movimientos del match
+ *  (1:1 y N:M, atómico) · no crea asiento. La RPC devuelve
+ *  `{movimientos_sellados, imputado}`: se informa al usuario cuántos
+ *  movimientos quedaron conciliados, sin ocultar los participantes. */
 export async function aceptarMatchAction(matchId: unknown): Promise<ActionResult> {
   const p = Uuid.safeParse(matchId);
   if (!p.success) return { ok: false, message: "Match inválido." };
-  return callRpc("tesoreria_recon_accept", { p_match_id: p.data }, "Conciliación confirmada.");
+  const r = await callRpc("tesoreria_recon_accept", { p_match_id: p.data }, "Conciliación confirmada.");
+  if (!r.ok) return r;
+  const d = r.data as { movimientos_sellados?: number } | null;
+  const n = d?.movimientos_sellados ?? 0;
+  return {
+    ...r,
+    message: n > 1 ? `Conciliación confirmada · ${n} movimientos enlazados.` : "Conciliación confirmada.",
+  };
 }
 
 /** Rechazar la sugerencia de un match. */
