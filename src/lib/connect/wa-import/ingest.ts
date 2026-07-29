@@ -38,6 +38,13 @@ export interface WaIngestResult {
 
 const BATCH = 400;
 
+/**
+ * Número del canal comercial histórico de TOPS (+54 9 11 2531-6740). NUNCA puede ser
+ * la contraparte: si se usara como identidad del hilo, TODOS los chats importados
+ * colisionarían en una sola conversación (context_id compartido).
+ */
+const TOPS_CHANNEL_E164 = "+5491125316740";
+
 export function normalizePhoneE164(input: string): string | null {
   const digits = input.replace(/[^\d+]/g, "");
   if (!/^\+\d{8,15}$/.test(digits)) return null;
@@ -56,6 +63,13 @@ export async function ingestWaExport(input: WaIngestInput): Promise<WaIngestResu
 
   const phone = normalizePhoneE164(input.counterpartPhone);
   if (!phone) return { ok: false, message: "Teléfono inválido: usar formato +549… (E164)." };
+  if (phone === TOPS_CHANNEL_E164) {
+    return {
+      ok: false,
+      message:
+        "Ese es el número del canal de TOPS, no de la contraparte. Poné el teléfono del cliente/proveedor: identifica el hilo.",
+    };
+  }
   const displayName = input.displayName.trim();
   if (!displayName) return { ok: false, message: "Falta el nombre visible." };
 
@@ -173,14 +187,34 @@ export async function ingestWaExport(input: WaIngestInput): Promise<WaIngestResu
     };
   });
 
-  let inserted = 0;
-  for (let i = 0; i < rows.length; i += BATCH) {
-    const chunk = rows.slice(i, i + BATCH);
+  // Idempotencia: el índice único de external_msg_id es PARCIAL (0143: WHERE ... IS NOT NULL),
+  // y PostgREST no puede usarlo para ON CONFLICT. Se filtra contra lo ya presente y se insertan
+  // sólo los nuevos; el índice sigue siendo la red de seguridad ante una carrera (23505).
+  const ids = rows.map((r) => r.external_msg_id);
+  const alreadyIngested = new Set<string>();
+  for (let i = 0; i < ids.length; i += BATCH) {
     const { data, error } = await supabase
       .from("connect_messages")
-      .upsert(chunk, { onConflict: "external_msg_id", ignoreDuplicates: true })
-      .select("id");
-    if (error) return { ok: false, message: `mensajes (lote ${i / BATCH + 1}): ${error.message}` };
+      .select("external_msg_id")
+      .eq("conversation_id", conversationId)
+      .in("external_msg_id", ids.slice(i, i + BATCH));
+    if (error) return { ok: false, message: `verificación de duplicados: ${error.message}` };
+    for (const r of (data ?? []) as Array<{ external_msg_id: string | null }>) {
+      if (r.external_msg_id) alreadyIngested.add(r.external_msg_id);
+    }
+  }
+  const pending = rows.filter((r) => !alreadyIngested.has(r.external_msg_id));
+
+  let inserted = 0;
+  for (let i = 0; i < pending.length; i += BATCH) {
+    const chunk = pending.slice(i, i + BATCH);
+    const { data, error } = await supabase.from("connect_messages").insert(chunk).select("id");
+    if (error) {
+      if (error.message.includes("duplicate") || error.message.includes("23505")) {
+        return { ok: false, message: "Importación concurrente detectada. Reintentá en unos segundos." };
+      }
+      return { ok: false, message: `mensajes (lote ${i / BATCH + 1}): ${error.message}` };
+    }
     inserted += (data ?? []).length;
   }
 

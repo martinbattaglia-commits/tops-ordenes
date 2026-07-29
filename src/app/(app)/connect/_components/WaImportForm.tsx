@@ -40,9 +40,22 @@ export function WaImportForm() {
       setRaw(text);
       setFileName(file.name);
       setPreview(r.preview);
-      const top = r.preview.authors[0]?.name ?? "";
-      setCounterpartAuthor(top);
-      setDisplayName(top);
+      // El nombre del export ("Chat de WhatsApp con X.txt" / "WhatsApp Chat with X.txt")
+      // identifica a LA CONTRAPARTE. Sin esto el default caía en el autor más hablador,
+      // que suele ser TOPS — y el hilo se identificaría con NUESTRO número.
+      const m = file.name.match(/(?:chat de whatsapp con|whatsapp chat with)\s+(.+?)\.txt$/i);
+      const hint = m?.[1]?.trim().toLowerCase();
+      const authors = r.preview.authors;
+      const guess =
+        (hint && authors.find((a) => {
+          const n = a.name.toLowerCase();
+          return n === hint || n.includes(hint) || hint.includes(n);
+        })?.name) ??
+        // Sin pista: el autor con MENOS mensajes suele ser la contraparte antes que nosotros.
+        authors[authors.length - 1]?.name ??
+        "";
+      setCounterpartAuthor(guess);
+      setDisplayName(guess);
       setStep("confirm");
     } finally {
       setBusy(false);
@@ -108,7 +121,7 @@ export function WaImportForm() {
         </div>
 
         <label className="block text-xs text-fg-secondary">
-          ¿Quién es la contraparte? (el otro lado del chat)
+          ¿Quién es la contraparte? — el CLIENTE/PROVEEDOR, no TOPS
           <select value={counterpartAuthor} onChange={(e) => setCounterpartAuthor(e.target.value)} className="input mt-1 w-full text-xs">
             {preview.authors.map((a) => (
               <option key={a.name} value={a.name}>{a.name} · {a.count} mensajes</option>
@@ -117,8 +130,12 @@ export function WaImportForm() {
         </label>
 
         <label className="block text-xs text-fg-secondary">
-          Teléfono de la contraparte (E164)
+          Teléfono DE LA CONTRAPARTE (E164) — no el número de TOPS
           <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+5491122334455" className="input mt-1 w-full text-xs" />
+          <span className="mt-1 block text-[10px] text-fg-muted">
+            Identifica el hilo: cada contraparte tiene el suyo. Si ponés el número de TOPS,
+            todos los chats terminarían en la misma conversación.
+          </span>
         </label>
 
         <label className="block text-xs text-fg-secondary">
