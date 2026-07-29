@@ -37,6 +37,8 @@ export interface WaIngestResult {
 }
 
 const BATCH = 400;
+/** Tamaño de página al leer los external_msg_id ya ingestados (respuesta, no URI). */
+const PAGE = 1000;
 
 /**
  * Número del canal comercial histórico de TOPS (+54 9 11 2531-6740). NUNCA puede ser
@@ -190,18 +192,21 @@ export async function ingestWaExport(input: WaIngestInput): Promise<WaIngestResu
   // Idempotencia: el índice único de external_msg_id es PARCIAL (0143: WHERE ... IS NOT NULL),
   // y PostgREST no puede usarlo para ON CONFLICT. Se filtra contra lo ya presente y se insertan
   // sólo los nuevos; el índice sigue siendo la red de seguridad ante una carrera (23505).
-  const ids = rows.map((r) => r.external_msg_id);
+  // Se listan los IDs YA presentes en la conversación paginando la RESPUESTA. No se envían
+  // los hashes en la petición: un `.in()` con cientos de sha256 (64 chars c/u) desborda el
+  // largo del URI y PostgREST responde 400 (falló con un export de 591 mensajes).
   const alreadyIngested = new Set<string>();
-  for (let i = 0; i < ids.length; i += BATCH) {
+  for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from("connect_messages")
       .select("external_msg_id")
       .eq("conversation_id", conversationId)
-      .in("external_msg_id", ids.slice(i, i + BATCH));
+      .not("external_msg_id", "is", null)
+      .range(from, from + PAGE - 1);
     if (error) return { ok: false, message: `verificación de duplicados: ${error.message}` };
-    for (const r of (data ?? []) as Array<{ external_msg_id: string | null }>) {
-      if (r.external_msg_id) alreadyIngested.add(r.external_msg_id);
-    }
+    const page = (data ?? []) as Array<{ external_msg_id: string | null }>;
+    for (const r of page) if (r.external_msg_id) alreadyIngested.add(r.external_msg_id);
+    if (page.length < PAGE) break;
   }
   const pending = rows.filter((r) => !alreadyIngested.has(r.external_msg_id));
 
