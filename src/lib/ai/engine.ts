@@ -26,6 +26,7 @@ import { classifyCopilotIntent } from "./intent-classifier";
 import { detectManagementIntent } from "./management-brief";
 import { redactVisual } from "./visuals";
 import type {
+  AiProvider,
   CopilotAnswer,
   CopilotRequest,
   CopilotVisual,
@@ -383,5 +384,130 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
     // Tablero visual SOLO con respuesta sustanciada: nunca se maquilla un vacío
     // ni una degradación del guard con un dashboard. Strings redactados (PII).
     visual: outcome === "answered" && turnVisual ? redactVisual(turnVisual, redactPii) : null,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LINK-WA-002 · FASE 2 (IA Copiloto) — ANÁLISIS ESTRUCTURADO GOBERNADO.
+//
+// Segundo TIPO DE SALIDA del engine, NO un camino paralelo: vive en este mismo
+// archivo y atraviesa exactamente los mismos guards que askCopilot, en el mismo
+// orden fail-closed (kill-switch → sesión/piloto → presupuesto mensual → diario
+// → generación → auditoría). La diferencia con askCopilot es sólo la FORMA de la
+// salida: aquí se pide un objeto estructurado en vez de prosa con citas [S#].
+//
+// Por qué el generador se inyecta: el MockProvider del Copilot es un *planner
+// conversacional* (elige tools y compone prosa citando [S#]); no puede emitir
+// JSON de análisis. El generador estructurado se pasa como callback —en E1 el
+// mock determinista, en E2 el provider real vía getProvider()— pero el GOBIERNO
+// (kill-switch, presupuesto, auditoría, costo) es el de este engine, único.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface StructuredRunRequest {
+  /** Prompt ya construido: evidencia delimitada y PII redactada por el caller. */
+  prompt: string;
+  /** Etiqueta de auditoría (p. ej. "wa_analysis"). */
+  kind: string;
+  /** Contexto de entidad para auditoría (p. ej. "connect_conversation:<uuid>"). */
+  entityContext?: string | null;
+  /** Generador de la salida cruda. Recibe el prompt y el provider del entorno. */
+  generate: (prompt: string, provider: AiProvider) => Promise<string>;
+}
+
+export type StructuredRunResult =
+  | { ok: true; raw: string; provider: string; model: string; costUsd: number; latencyMs: number; userId: string | null }
+  | { ok: false; outcome: "killed" | "denied" | "budget" | "error"; message: string };
+
+export async function runStructuredAnalysis(
+  req: StructuredRunRequest,
+): Promise<StructuredRunResult> {
+  const startedAt = Date.now();
+  const sessionId = `structured:${req.kind}`;
+  const auditBase = {
+    sessionId,
+    channel: "panel" as const,
+    entityContext: req.entityContext ?? null,
+    toolsUsed: [] as string[],
+    citedSources: [] as SourceChunk[],
+  };
+
+  // 1. Kill-switch + sesión + gate de piloto (fail-closed) — ANTES del provider.
+  const gate = await checkGate();
+  if (!gate.ok) {
+    // El corte se audita igual que en askCopilot (D-F5-7: es una decisión).
+    await logInteraction(null, {
+      ...auditBase,
+      question: `[${req.kind}] análisis estructurado`,
+      answer: gate.message,
+      provider: env.ai.provider,
+      model: "n/a",
+      latencyMs: Date.now() - startedAt,
+      outcome: gate.outcome,
+      errorDetail: null,
+    });
+    return { ok: false, outcome: gate.outcome, message: gate.message };
+  }
+  const supabase = gate.demo ? null : createClient();
+
+  // 2. Presupuesto: mensual global en USD y diario por usuario (mismo orden).
+  const monthly = await checkMonthlyBudget(supabase);
+  const budget = monthly.allowed ? await checkBudget(supabase, gate.userId) : monthly;
+  if (!budget.allowed) {
+    const reason = budget.reason ?? "Presupuesto agotado.";
+    await logInteraction(supabase, {
+      ...auditBase,
+      question: `[${req.kind}] análisis estructurado`,
+      answer: reason,
+      provider: env.ai.provider,
+      model: "n/a",
+      latencyMs: Date.now() - startedAt,
+      outcome: "budget",
+      errorDetail: null,
+    });
+    return { ok: false, outcome: "budget", message: reason };
+  }
+
+  // 3. Generación — el provider del entorno lo resuelve el engine, no el caller.
+  const provider = getProvider();
+  let raw: string;
+  try {
+    raw = await req.generate(req.prompt, provider);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    await logInteraction(supabase, {
+      ...auditBase,
+      question: `[${req.kind}] análisis estructurado`,
+      answer: "El proveedor de IA no pudo completar el análisis.",
+      provider: provider.name,
+      model: provider.model,
+      latencyMs: Date.now() - startedAt,
+      outcome: "error",
+      errorDetail: detail,
+    });
+    return { ok: false, outcome: "error", message: "El proveedor de IA no pudo completar el análisis." };
+  }
+
+  // 4. Auditoría de la ejecución (redactada; el prompt no se persiste crudo).
+  const latencyMs = Date.now() - startedAt;
+  await logInteraction(supabase, {
+    ...auditBase,
+    question: `[${req.kind}] análisis estructurado`,
+    answer: redactPii(raw).slice(0, 4000),
+    provider: provider.name,
+    model: provider.model,
+    latencyMs,
+    outcome: "answered",
+    errorDetail: null,
+    costEstimate: 0, // mock: costo cero. Con provider real lo reporta usage.
+  });
+
+  return {
+    ok: true,
+    raw,
+    provider: provider.name,
+    model: provider.model,
+    costUsd: 0,
+    latencyMs,
+    userId: gate.demo ? null : gate.userId,
   };
 }
