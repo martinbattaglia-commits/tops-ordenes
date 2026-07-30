@@ -39,17 +39,33 @@ describe("A1 · ventana completa cuando el hilo entra", () => {
   });
 });
 
-describe("A2 · límite de CANTIDAD (120 mensajes)", () => {
-  it("recorta a 120 conservando los MÁS RECIENTES", () => {
+describe("A2 · límite de CANTIDAD: es un TECHO, hoy inalcanzable", () => {
+  it("🔴 el tope de 120 mensajes ya NO puede activarse: manda siempre el de tokens", () => {
+    // C-4 · Al contabilizar el `responseSchema` que viaja en el pedido, la reserva de
+    // andamiaje subió y los caracteres admitidos bajaron a ~10.485. Sólo los
+    // ENCABEZADOS de evidencia de 120 mensajes cuestan 120 × 90 = 10.800 caracteres
+    // ⇒ ni con cuerpos VACÍOS entran 120. El tope sigue evaluándose, pero no puede
+    // ser el que corte. Queda asentado acá para que nadie lea «120» como una promesa.
+    const soloEncabezados = CONTEXT_LIMITS.maxMessages * PER_MESSAGE_OVERHEAD_CHARS;
+    const admitidos = (CONTEXT_LIMITS.maxInputTokens - PROMPT_SCAFFOLD_TOKENS) * CHARS_PER_TOKEN;
+    expect(soloEncabezados).toBeGreaterThan(admitidos);
+
+    const vacios = Array.from({ length: 200 }, (_, i) => ({ ...msg(i), body: "" }));
+    const w = buildWindow(vacios);
+    expect(w.reason).toBe("tokens");
+    expect(w.included.length).toBeLessThan(CONTEXT_LIMITS.maxMessages);
+  });
+
+  it("recorta conservando los MÁS RECIENTES, y el tope de cantidad se puede inyectar", () => {
     const t = thread(200, 5);
-    const w = buildWindow(t);
-    expect(w.included).toHaveLength(CONTEXT_LIMITS.maxMessages);
-    expect(w.omitted).toBe(80);
+    const w = buildWindow(t, { maxMessages: 40 });
+    expect(w.included).toHaveLength(40);
+    expect(w.omitted).toBe(160);
     expect(w.total).toBe(200);
     expect(w.reason).toBe("cantidad");
     // La cola: el último mensaje del hilo SIEMPRE está.
     expect(w.included[w.included.length - 1].id).toBe(t[199].id);
-    expect(w.included[0].id).toBe(t[80].id);
+    expect(w.included[0].id).toBe(t[160].id);
   });
 });
 
@@ -95,7 +111,10 @@ describe("A4 · límite de TOKENS de entrada (8.000)", () => {
 
 describe("A5 · los cuatro límites son SIMULTÁNEOS, no alternativos", () => {
   it("el primero que se alcanza es el que manda, y queda nombrado", () => {
-    expect(buildWindow(thread(500, 5)).reason).toBe("cantidad");      // muchos y cortos
+    // C-4: con la reserva del esquema contabilizada, incluso «muchos y cortos» cortan
+    // por TOKENS — el encabezado de evidencia por mensaje ya consume el presupuesto.
+    expect(buildWindow(thread(500, 5)).reason).toBe("tokens");         // muchos y cortos
+    expect(buildWindow(thread(500, 5), { maxMessages: 30 }).reason).toBe("cantidad");
     const grande = buildWindow(thread(500, 2000));
     expect(["caracteres", "tokens"]).toContain(grande.reason);         // pocos y enormes
   });
@@ -106,9 +125,12 @@ describe("A6 · NADA se recorta en silencio", () => {
     const w = buildWindow(thread(200, 5));
     const d = describeWindow(w);
     expect(d).toContain("TRUNCADA");
-    expect(d).toContain("120");
+    // Las cifras se leen de la ventana, no se fijan a mano: así el test no miente
+    // cuando la reserva de andamiaje cambia.
+    expect(d).toContain(String(w.included.length));
     expect(d).toContain("200");
-    expect(d).toContain("80");
+    expect(d).toContain(String(w.omitted));
+    expect(w.included.length + w.omitted).toBe(200);
   });
 
   it("truncated y reason son consistentes entre sí", () => {
@@ -158,7 +180,8 @@ describe("A8 · H5 — el total es el del HILO, no el del recorte de la consulta
   it("120 traídos de un hilo de 500 ⇒ TRUNCADA, no «completa»", () => {
     const w = buildWindow(thread(120, 5), {}, 500);
     expect(w.total).toBe(500);
-    expect(w.omitted).toBe(380);
+    expect(w.omitted).toBe(500 - w.included.length);
+    expect(w.included.length).toBeLessThan(120);   // C-4: corta por tokens antes
     expect(w.truncated).toBe(true);
     expect(describeWindow(w)).toContain("TRUNCADA");
     expect(describeWindow(w)).toContain("500");

@@ -18,6 +18,7 @@
 // cronológico, la fecha, el autor y el message_id se preservan intactos.
 
 import type { WaMessageInput } from "./prompt";
+import { WA_ANALYSIS_RESPONSE_SCHEMA } from "./schema";
 
 export const CONTEXT_LIMITS = {
   maxMessages: 120,
@@ -69,8 +70,31 @@ export const CHARS_PER_TOKEN = 1.6;
  *  test, en lugar de vivir en un comentario. */
 export const CHARS_PER_TOKEN_MEDIDO_WHATSAPP = 1.62;
 
-/** Costo fijo del andamiaje del prompt (system + esquema), medido sobre el prompt real. */
-export const PROMPT_SCAFFOLD_TOKENS = 530;
+/** Caracteres por token del JSON del esquema. El JSON en inglés con mucha puntuación
+ *  tokeniza MUCHO mejor que el español conversacional; 3.0 es conservador a propósito
+ *  (sobreestima tokens, nunca los subestima). */
+export const CHARS_PER_TOKEN_JSON = 3.0;
+
+/** Costo fijo del andamiaje textual del prompt (system + instrucciones), medido sobre
+ *  el prompt real. En la 3ª corrida el andamiaje real fue ≈111 tokens, así que 530 ya
+ *  era generoso. */
+export const PROMPT_SCAFFOLD_BASE_TOKENS = 530;
+
+/** C-4 · El `responseSchema` nativo VIAJA en el pedido y el proveedor lo cobra como
+ *  entrada. Medido: el esquema pesa ~2,7 KB ⇒ ~900 tokens. Sin contabilizarlo, la
+ *  misma ventana de la 3ª corrida habría costado ~8.232 tokens: **102,9 % del tope
+ *  autorizado de 8.000**, y la corrida habría vuelto `conforme = false` por un exceso
+ *  que introdujimos nosotros al imponer el contrato.
+ *
+ *  🔑 Se DERIVA del esquema real, no se escribe a mano: si el contrato crece, la
+ *  reserva crece y la ventana se achica sola. Un número fijo acá quedaría
+ *  desactualizado en el primer cambio del contrato, en silencio. */
+export const RESPONSE_SCHEMA_TOKENS = Math.ceil(
+  JSON.stringify(WA_ANALYSIS_RESPONSE_SCHEMA).length / CHARS_PER_TOKEN_JSON,
+);
+
+/** Todo lo que ocupa entrada sin ser conversación. */
+export const PROMPT_SCAFFOLD_TOKENS = PROMPT_SCAFFOLD_BASE_TOKENS + RESPONSE_SCHEMA_TOKENS;
 
 export type TruncationReason = "cantidad" | "caracteres" | "tokens";
 

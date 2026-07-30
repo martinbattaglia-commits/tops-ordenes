@@ -84,9 +84,12 @@ describe("D-1 · la constante está calibrada sobre la medición, no sobre prosa
 });
 
 describe("D-1 · el tope de entrada AHORA se respeta, con números", () => {
-  it("la guarda no puede admitir más de 11.952 caracteres por el tope de tokens", () => {
-    expect(CHARS_MAX_POR_TOKENS).toBe(11_952);
-    // 11.952 exactos son admisibles; un carácter más excede.
+  it("la guarda no puede admitir más caracteres que los que el tope paga", () => {
+    // C-4 · la reserva ya contabiliza el `responseSchema` que viaja en el pedido
+    // (530 base + ~917 del esquema = 1447) ⇒ 10.484,8 caracteres, no los 11.952 de
+    // cuando el esquema no se enviaba.
+    expect(CHARS_MAX_POR_TOKENS).toBeCloseTo(10_484.8, 1);
+    // El tope exacto es admisible; un carácter más excede.
     expect(estimateTokens(CHARS_MAX_POR_TOKENS)).toBe(TOPE);
     expect(estimateTokens(CHARS_MAX_POR_TOKENS + 1)).toBeGreaterThan(TOPE);
   });
@@ -94,7 +97,7 @@ describe("D-1 · el tope de entrada AHORA se respeta, con números", () => {
   it("🔑 el peor caso admisible NO excede el tope, ni en el modelo pesimista", () => {
     expect(cobroEsperado(CHARS_MAX_POR_TOKENS)).toBeLessThanOrEqual(TOPE);
     expect(cobroPesimista(CHARS_MAX_POR_TOKENS)).toBeLessThanOrEqual(TOPE);
-    // Margen que queda: ~8 % en el modelo esperado, ~1 % en el pesimista.
+    // Margen que queda: ~6 % en el modelo esperado, ~1 % en el pesimista.
     expect(cobroEsperado(CHARS_MAX_POR_TOKENS) / TOPE).toBeLessThan(0.95);
   });
 
@@ -127,15 +130,16 @@ describe("D-1 · la cantidad efectiva de mensajes baja, y se DECLARA", () => {
     const w = buildWindow(corpus(600));
     expect(w.reason).toBe("tokens");
     expect(w.included.length).toBeLessThan(CONTEXT_LIMITS.maxMessages);
-    // El de caracteres queda holgado: 11.952 < 24.000. No es letra muerta —sigue
+    // El de caracteres queda holgado: ~10.485 < 24.000. No es letra muerta —sigue
     // aplicándose— pero ya no es el que decide.
     expect(w.chars).toBeLessThan(CONTEXT_LIMITS.maxChars);
   });
 
-  it("en la densidad medida entran ~81 mensajes en vez de 120", () => {
+  it("en la densidad medida entran ~71 mensajes, no 120", () => {
     // 17.541 caracteres / 120 mensajes = 146,2 por mensaje (con encabezado).
+    // Eran 81 antes de C-4; contabilizar el esquema los baja a 71.
     const densidadMedida = MEDICION.chars / 120;
-    expect(Math.floor(CHARS_MAX_POR_TOKENS / densidadMedida)).toBe(81);
+    expect(Math.floor(CHARS_MAX_POR_TOKENS / densidadMedida)).toBe(71);
   });
 
   it("🔑 recortar más NO es recortar en silencio: el relato lo dice con cifras", () => {

@@ -56,21 +56,33 @@ export const SYSTEM_PROMPT = [
   "5. Vos NO ejecutás nada: sólo proponés. Un humano confirma cada acción.",
 ].join("\n");
 
+/** C-2 · Un enum se describe como UNA cadena con alternativas, nunca como un array
+ *  JSON. La versión anterior renderizaba `"clase": ["comercial","operativo",…]` —el
+ *  array literal— y bajo un encabezado que decía «claves exactas» un modelo podía
+ *  concluir, con razón, que el valor ERA ese array. Peor: el prompt era inconsistente
+ *  consigo mismo, porque `prioridad` sí usaba la forma `"a|b|c"`, que es inequívoca.
+ *  Eso fue el fallo de la 3ª corrida real. */
+const unoDe = (valores: readonly string[]): string => `"${valores.join(" | ")}"`;
+
 export function buildAnalysisPrompt(messages: WaMessageInput[]): string {
   const evidence = messages.map(renderMessage).join("\n");
   return [
     "Analizá la siguiente conversación y devolvé SOLO el JSON del esquema.",
     "",
+    "ENUMERACIONES: en los campos «clase», «tipo», «accion» y «prioridad» tenés que",
+    "elegir EXACTAMENTE UNO de los valores separados por «|», copiado tal cual.",
+    "NUNCA un array. NUNCA un valor que no esté en la lista. NUNCA otra capitalización.",
+    "",
     "ESQUEMA (claves exactas):",
     "{",
-    `  "clasificacion": { "clase": ${JSON.stringify(WA_CLASSES)}, "confidence": 0..1,`,
+    `  "clasificacion": { "clase": ${unoDe(WA_CLASSES)}, "confidence": 0..1,`,
     '    "citations": [{"messageId": "uuid"}], "rationale": "texto breve" },',
-    `  "hallazgos": [{ "tipo": ${JSON.stringify(WA_FINDINGS)}, "resumen": "texto",`,
+    `  "hallazgos": [{ "tipo": ${unoDe(WA_FINDINGS)}, "resumen": "texto",`,
     '    "confidence": 0..1, "citations": [{"messageId": "uuid"}] }],',
-    `  "acciones": [{ "accion": ${JSON.stringify(WA_ACTIONS)}, "titulo": "texto",`,
+    `  "acciones": [{ "accion": ${unoDe(WA_ACTIONS)}, "titulo": "texto",`,
     '    "detalle": "texto", "entidades": { "empresa": "...", "persona": "...", "servicio": "...",',
     '    "deposito": "...", "fecha": "...", "compromiso": "...", "responsableSugerido": "...",',
-    '    "prioridad": "baja|media|alta|urgente" }, "confidence": 0..1,',
+    `    "prioridad": ${unoDe(["baja", "media", "alta", "urgente"])} }, "confidence": 0..1,`,
     '    "citations": [{"messageId": "uuid"}] }]',
     "}",
     "",

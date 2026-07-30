@@ -5,7 +5,7 @@ import { runStructuredAnalysis } from "../engine";
 import { buildAnalysisPrompt, SYSTEM_PROMPT, type WaMessageInput } from "./prompt";
 import { buildWindow, describeWindow, CONTEXT_LIMITS } from "./window";
 import { mockAnalyzeRawWithProse } from "./mock-analyzer";
-import { parseAnalysis, type WaAnalysis } from "./schema";
+import { parseAnalysis, WA_ANALYSIS_RESPONSE_SCHEMA, type WaAnalysis } from "./schema";
 import { redactPii } from "../guardrails";
 import { createHash } from "node:crypto";
 
@@ -332,7 +332,9 @@ async function ejecutarCorrida(c: {
       // ese caso el costo es no verificable. El cast anterior lo declaraba no
       // nullable, así que TypeScript no habría protegido una regresión a `?? 0`.
       const g = provider as {
-        generateJson?: (o: { system: string; prompt: string; maxOutputTokens: number }) => Promise<{
+        generateJson?: (o: {
+          system: string; prompt: string; maxOutputTokens: number; responseSchema?: unknown;
+        }) => Promise<{
           text: string;
           finishReason: string | null;
           usage: { inputTokens: number; outputTokens: number; costUsd: number } | null;
@@ -343,6 +345,9 @@ async function ejecutarCorrida(c: {
           system: SYSTEM_PROMPT,
           prompt: builtPrompt,
           maxOutputTokens: CONTEXT_LIMITS.maxOutputTokens,
+          // C-1 · el contrato se IMPONE en la generación. Derivado del mismo esquema
+          // Zod que valida a la vuelta: una definición, dos usos.
+          responseSchema: WA_ANALYSIS_RESPONSE_SCHEMA,
         });
         return { raw: out.text, usage: out.usage, finishReason: out.finishReason };
       }

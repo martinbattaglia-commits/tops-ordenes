@@ -255,6 +255,10 @@ export class GeminiProvider implements AiProvider {
     system: string;
     prompt: string;
     maxOutputTokens: number;
+    /** C-1 · Esquema NATIVO del proveedor, derivado del contrato de Zod. Sin esto,
+     *  `responseMimeType` sólo garantiza que la salida PARSEE, no que CUMPLA: fue el
+     *  fallo de la 3ª corrida real —JSON válido con un enum fuera de catálogo—. */
+    responseSchema?: unknown;
   }): Promise<{ text: string; finishReason: string | null; usage: ProviderUsage | null }> {
     const key = this.assertEnabled();
     const body = {
@@ -264,6 +268,9 @@ export class GeminiProvider implements AiProvider {
         maxOutputTokens: opts.maxOutputTokens,
         temperature: 0.1,
         responseMimeType: "application/json",
+        // El esquema viaja SÓLO si el llamador lo provee: el provider no impone una
+        // forma propia, así el contrato sigue viviendo en un único lugar.
+        ...(opts.responseSchema ? { responseSchema: opts.responseSchema } : {}),
         // 🔑 Gemini 2.5 razona por defecto y sus *thoughts* consumen el MISMO
         // presupuesto que la salida. Con 2.000 tokens el modelo agotó el cupo
         // pensando y devolvió texto vacío con finishReason=MAX_TOKENS: eso fue
