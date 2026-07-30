@@ -65,7 +65,7 @@ describe("R1 · el estado refleja el ENTORNO, no una constante", () => {
   it("los topes de la ventana viajan a la UI y son los de E1.1", async () => {
     const { getAiRuntimeStatus } = await loadStatus();
     expect(getAiRuntimeStatus()).toMatchObject({
-      maxMessages: 120, maxChars: 24_000, maxInputTokens: 8_000, maxOutputTokens: 2_000,
+      maxMessages: 120, maxChars: 24_000, maxInputTokens: 8_000, maxOutputTokens: 6_000,
     });
   });
 });
@@ -139,6 +139,23 @@ describe("R3 · la UI no puede volver a anunciar un provider fijo", () => {
     const v = visible(INBOX);
     expect(v).toContain("ai: AiRuntimeStatus");
     expect(v).not.toContain('from "@/lib/env"');
+  });
+
+  // D-1 · el tope de mensajes dejó de ser alcanzable en hilos densos: con la
+  // constante calibrada sobre la medición real, el tope de TOKENS muerde antes
+  // (11.952 caracteres ≈ 81 mensajes en la densidad medida, no 120). Anunciar
+  // «hasta 120» sin más convertía un techo en una promesa.
+  //
+  // ⚠️ Es un grep sobre el texto visible, y un grep no protege conducta: alcanza
+  // reescribir la frase para eludirlo. Lo que de verdad protege es que las cifras
+  // vengan de `ai` y que la frase NOMBRE el tope que decide. Eso es lo que se mide.
+  it("el inbox no promete un cupo fijo de mensajes: nombra el tope que decide", () => {
+    const v = visible(INBOX);
+    expect(v).not.toMatch(/hasta \{ai\.maxMessages\} mensajes por corrida/);
+    expect(v).toContain("ai.maxInputTokens.toLocaleString");
+    // La advertencia previa a gastar y el reporte posterior deben coexistir.
+    expect(v).toMatch(/menos si primero/);
+    expect(v).toContain("Ventana truncada por");
   });
 
   it("la página NO pasa el objeto env completo al cliente", () => {

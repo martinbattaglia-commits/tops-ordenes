@@ -21,6 +21,7 @@ import {
   validateCitations,
 } from "./guardrails";
 import { getProvider } from "./provider";
+import { CONTEXT_LIMITS } from "./wa-analysis/window";
 import { SYSTEM_PROMPT } from "./prompts/system.v1";
 import { ToolArgsError, executeTool } from "./data";
 import { classifyCopilotIntent } from "./intent-classifier";
@@ -435,6 +436,17 @@ export interface StructuredRunRequest {
 /** Economía y trazas de la corrida. `costUsd === null` significa NO VERIFICABLE:
  *  el proveedor no informó `usage`. Nunca se estima un costo inventado. */
 export interface StructuredRunEconomics {
+  /** D-3: desglose informado por el proveedor. Es dato DIAGNÓSTICO, no el registro
+   *  económico: ese lo deriva la base de `ai_messages`. */
+  usageBreakdown?: {
+    promptTokens: number; candidatesTokens: number;
+    thoughtsTokens: number; totalTokens: number;
+  } | null;
+  /** D-1: false cuando un tope AUTORIZADO se excedió de verdad. La estimación
+   *  previa podía mentir; esto compara contra lo que el proveedor cobró. */
+  conforme: boolean;
+  /** Qué tope se excedió y por cuánto. null si la corrida fue conforme. */
+  deviation: string | null;
   provider: string;
   model: string | null;
   inputTokens: number | null;
@@ -462,6 +474,27 @@ export type StructuredRunResult =
       detail: string | null;
       userId: string | null;
     } & StructuredRunEconomics);
+
+/** D-1 · ¿la corrida respetó el tope AUTORIZADO de entrada?
+ *
+ *  Se compara contra lo que el proveedor COBRÓ, no contra la estimación. Si no hay
+ *  `usage` no se puede afirmar nada: se declara conforme por ausencia de evidencia
+ *  en contra, y eso queda dicho en el motivo. */
+function evaluarConformidad(inputTokensReales: number | null): {
+  conforme: boolean; deviation: string | null;
+} {
+  const tope = CONTEXT_LIMITS.maxInputTokens;
+  if (inputTokensReales === null) return { conforme: true, deviation: null };
+  if (inputTokensReales <= tope) return { conforme: true, deviation: null };
+  const pct = ((inputTokensReales / tope) * 100).toFixed(1);
+  return {
+    conforme: false,
+    deviation:
+      `context_limit_exceeded: el proveedor contabilizó ${inputTokensReales} tokens de ` +
+      `entrada contra un tope autorizado de ${tope} (${pct} %). La estimación de la ` +
+      `ventana subestimó el costo real de tokenización.`,
+  };
+}
 
 export async function runStructuredAnalysis(
   req: StructuredRunRequest,
@@ -497,6 +530,7 @@ export async function runStructuredAnalysis(
       ok: false, outcome: gate.outcome, message: gate.message, detail: null,
       userId: null, provider: env.ai.provider, model: null,
       inputTokens: null, outputTokens: null, costUsd: null,
+      usageBreakdown: null, conforme: true, deviation: null,
       finishReason: null, errorCode: gate.outcome, audited: false,
       latencyMs: Date.now() - startedAt,
     };
@@ -522,6 +556,7 @@ export async function runStructuredAnalysis(
       ok: false, outcome: "budget", message: reason, detail: null,
       userId: gate.userId, provider: env.ai.provider, model: null,
       inputTokens: null, outputTokens: null, costUsd: null,
+      usageBreakdown: null, conforme: true, deviation: null,
       finishReason: null, errorCode: "budget", audited: false,
       latencyMs: Date.now() - startedAt,
     };
@@ -545,6 +580,8 @@ export async function runStructuredAnalysis(
     const detail = redactPii(err?.message ?? String(e)).slice(0, 2000);
     const u = err?.usage ?? null;
     const eco = {
+      ...evaluarConformidad(u?.inputTokens ?? null),
+      usageBreakdown: u?.breakdown ?? null,
       provider: provider.name,
       model: provider.model,
       inputTokens: u?.inputTokens ?? null,
@@ -578,9 +615,16 @@ export async function runStructuredAnalysis(
   // ninguna red, su costo es 0 medido—; para un provider real significa NO
   // VERIFICABLE (null). Nunca se estima un costo inventado.
   const esMock = provider.name === "mock";
+  // D-1 · POSTCHECK DE CONFORMIDAD. La guarda de contexto trabaja con una
+  // ESTIMACIÓN; el proveedor cobra por tokens reales. Cuando la estimación
+  // subestima —pasó: 5.147 declarados contra 10.835 cobrados— el tope autorizado
+  // se excede y antes nada lo detectaba. Esto lo compara contra lo cobrado.
+  const conformidad = evaluarConformidad(usage?.inputTokens ?? null);
   const ecoOk = {
+    ...conformidad,
     provider: provider.name,
     model: provider.model,
+    usageBreakdown: usage?.breakdown ?? null,
     inputTokens: usage?.inputTokens ?? (esMock ? 0 : null),
     outputTokens: usage?.outputTokens ?? (esMock ? 0 : null),
     costUsd: usage?.costUsd ?? (esMock ? 0 : null),

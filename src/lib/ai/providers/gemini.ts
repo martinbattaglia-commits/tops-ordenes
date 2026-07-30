@@ -93,6 +93,9 @@ interface GeminiResponse {
     /** Gemini 2.5 factura el razonamiento a tarifa de SALIDA y lo reporta
      *  aparte: si no se suma, el costo auditado queda subestimado. */
     thoughtsTokenCount?: number;
+    /** Total informado por el proveedor. Puede diferir de la suma si el modelo
+     *  contabiliza algo que no expone por separado: se registra tal cual. */
+    totalTokenCount?: number;
   };
 }
 
@@ -307,6 +310,17 @@ export class GeminiProvider implements AiProvider {
           inputTokens,
           outputTokens,
           costUsd: estimateGeminiCostUsd(this.model, inputTokens, outputTokens),
+          // D-3: desglose explícito. Sin `thoughtsTokens` por separado era
+          // imposible AFIRMAR si el razonamiento estaba apagado; sólo se podía
+          // inferir del hecho de que el texto volviera vacío o incompleto.
+          breakdown: {
+            promptTokens: um?.promptTokenCount ?? 0,
+            candidatesTokens: um?.candidatesTokenCount ?? 0,
+            thoughtsTokens: um?.thoughtsTokenCount ?? 0,
+            // `totalTokenCount` del proveedor si lo informa; si no, la suma.
+            totalTokens: um?.totalTokenCount
+              ?? ((um?.promptTokenCount ?? 0) + (um?.candidatesTokenCount ?? 0) + (um?.thoughtsTokenCount ?? 0)),
+          },
         }
       : null;
     // Bloqueo por safety: se distingue del «JSON inválido» y CONSERVA el usage,

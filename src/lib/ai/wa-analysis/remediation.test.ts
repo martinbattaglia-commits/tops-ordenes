@@ -613,3 +613,217 @@ describe("R16 · B3 · el cierre fallido se REPORTA (comportamiento, no grep)", 
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R17 · D-1 postcheck de conformidad y D-3 desglose de usage.
+//
+// La 2ª corrida real excedió el tope de entrada (10.835 contra 8.000) y nada lo
+// detectó: la guarda trabaja con una ESTIMACIÓN y el proveedor cobra por tokens
+// reales. Y `outputTokens` sumaba candidates + thoughts, así que era imposible
+// AFIRMAR si el razonamiento estaba apagado.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("R17 · D-1 · conformidad medida contra lo COBRADO", () => {
+  it("input real por encima del tope ⇒ conforme=false con el motivo y los números", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => ({
+        raw: '{"ok":1}',
+        usage: { inputTokens: 10_835, outputTokens: 1_990, costUsd: 0.008226 },
+      }),
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error("el provider respondió");
+    expect(r.conforme).toBe(false);
+    expect(r.deviation).toContain("context_limit_exceeded");
+    expect(r.deviation).toContain("10835");
+    expect(r.deviation).toContain("8000");
+  });
+
+  it("input dentro del tope ⇒ conforme=true sin desviación", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => ({
+        raw: '{"ok":1}', usage: { inputTokens: 7_900, outputTokens: 3_000, costUsd: 0.01 },
+      }),
+    });
+    if (!r.ok) throw new Error("esperaba éxito");
+    expect(r.conforme).toBe(true);
+    expect(r.deviation).toBeNull();
+  });
+
+  it("sin usage NO se declara incumplimiento: no hay evidencia en contra", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => ({ raw: '{"ok":1}', usage: null }),
+    });
+    if (!r.ok) throw new Error("esperaba éxito");
+    expect(r.conforme).toBe(true);
+    expect(r.deviation).toBeNull();
+  });
+
+  it("la conformidad también se evalúa en el camino de ERROR", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => {
+        throw Object.assign(new Error("Gemini cortó la salida por el tope de 6000 tokens"), {
+          code: "max_tokens", finishReason: "MAX_TOKENS",
+          usage: { inputTokens: 12_000, outputTokens: 6_000, costUsd: 0.0186 },
+        });
+      },
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error("esperaba fallo");
+    expect(r.conforme).toBe(false);
+    expect(r.deviation).toContain("12000");
+  });
+});
+
+describe("R17 · D-3 · el desglose viaja y se distingue del registro económico", () => {
+  it("candidates y thoughts quedan SEPARADOS, no sumados en un solo número", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => ({
+        raw: '{"ok":1}',
+        usage: {
+          inputTokens: 5_000, outputTokens: 2_000, costUsd: 0.0065,
+          breakdown: { promptTokens: 5_000, candidatesTokens: 1_400, thoughtsTokens: 600, totalTokens: 7_000 },
+        },
+      }),
+    });
+    if (!r.ok) throw new Error("esperaba éxito");
+    expect(r.usageBreakdown).toEqual({
+      promptTokens: 5_000, candidatesTokens: 1_400, thoughtsTokens: 600, totalTokens: 7_000,
+    });
+    // Con el desglose ya se puede AFIRMAR si el razonamiento consumió cupo.
+    expect(r.usageBreakdown!.thoughtsTokens).toBe(600);
+    expect(r.usageBreakdown!.candidatesTokens + r.usageBreakdown!.thoughtsTokens).toBe(r.outputTokens);
+  });
+
+  it("thoughts en 0 permite afirmar que el razonamiento está apagado", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => ({
+        raw: '{"ok":1}',
+        usage: {
+          inputTokens: 100, outputTokens: 50, costUsd: 0.0001,
+          breakdown: { promptTokens: 100, candidatesTokens: 50, thoughtsTokens: 0, totalTokens: 150 },
+        },
+      }),
+    });
+    if (!r.ok) throw new Error("esperaba éxito");
+    expect(r.usageBreakdown!.thoughtsTokens).toBe(0);
+  });
+
+  it("el desglose también se conserva cuando el provider FALLA", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => {
+        throw Object.assign(new Error("cortado"), {
+          code: "max_tokens",
+          usage: {
+            inputTokens: 5_000, outputTokens: 6_000, costUsd: 0.0165,
+            breakdown: { promptTokens: 5_000, candidatesTokens: 5_800, thoughtsTokens: 200, totalTokens: 11_000 },
+          },
+        });
+      },
+    });
+    if (r.ok) throw new Error("esperaba fallo");
+    expect(r.usageBreakdown!.candidatesTokens).toBe(5_800);
+  });
+
+  it("sin usage el desglose es null, no un objeto de ceros", async () => {
+    const r = await runStructuredAnalysis({
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
+      generate: async () => ({ raw: "{}", usage: null }),
+    });
+    if (!r.ok) throw new Error("esperaba éxito");
+    expect(r.usageBreakdown).toBeNull();
+  });
+});
+
+describe("R17 · D-3 · la migración 0218 separa diagnóstico de economía", () => {
+  const MIG = readFileSync(join(process.cwd(), "supabase/migrations/0218_ai_usage_breakdown.sql"), "utf8");
+  const ANA = readFileSync(join(process.cwd(), "src/lib/ai/wa-analysis/analyze.ts"), "utf8");
+
+  it("el desglose exige las cuatro claves o ninguna: media verdad no diagnostica", () => {
+    expect(MIG).toContain("ai_analysis_runs_provider_usage_forma");
+    for (const k of ["promptTokens", "candidatesTokens", "thoughtsTokens", "totalTokens"]) {
+      expect(MIG).toContain(k);
+    }
+  });
+
+  it("una corrida no conforme DEBE explicar por qué", () => {
+    expect(MIG).toContain("ai_analysis_runs_deviation_explicada");
+    expect(MIG).toMatch(/check \(conforme or deviation is not null\)/);
+  });
+
+  it("la economía SIGUE derivándose de ai_messages: el cliente no la declara", () => {
+    expect(MIG).toContain("from public.ai_messages m");
+    expect(MIG).toContain("audited       = v_audited");
+    expect(ANA).not.toContain("p_audited:");
+    expect(ANA).not.toContain("p_cost_usd:");
+  });
+
+  it("se retira la firma vieja del RPC para que no exista una vía sin conformidad", () => {
+    expect(MIG).toMatch(/drop function if exists public\.ai_finalize_analysis_run\(\s*\n?\s*uuid, text, text, text, int, int, text, text, text, timestamptz, timestamptz\)/);
+  });
+
+  it("las corridas históricas NO se declaran en falta retroactivamente", () => {
+    expect(MIG).toMatch(/conforme\s+boolean not null default true/);
+    expect(MIG).toContain("no se las declara en falta");
+  });
+
+  it("la reconciliación informa las no conformes y el peso del razonamiento", () => {
+    expect(MIG).toContain("corridas_no_conformes");
+    expect(MIG).toContain("tokens_de_razonamiento");
+  });
+
+  // ── Hallazgos de la revisión adversarial de 0218 ──────────────────────────
+
+  it("🔑 la vista sólo AGREGA columnas al final: `create or replace` no admite otra cosa", () => {
+    // La primera versión de 0218 insertaba `corridas_no_conformes` en el medio.
+    // PostgreSQL habría abortado el Gate con «cannot change name of view column»:
+    // un fallo de aplicación, no un test rojo. Este test modela la regla del motor.
+    const MIG_0217 = readFileSync(
+      join(process.cwd(), "supabase/migrations/0217_ai_run_lifecycle.sql"), "utf8");
+    const columnas = (sql: string): string[] => {
+      const cuerpo = sql.slice(sql.indexOf("v_ai_spend_reconciliation"));
+      const select = cuerpo.slice(cuerpo.indexOf("select"), cuerpo.indexOf("from public.ai_analysis_runs"));
+      return [...select.matchAll(/\bas\s+([a-z_]+)\s*,?\s*$/gm)].map((m) => m[1]);
+    };
+    const previas = columnas(MIG_0217);
+    const nuevas = columnas(MIG);
+    expect(previas.length).toBe(7);
+    // Prefijo IDÉNTICO, mismo orden. Lo nuevo va después.
+    expect(nuevas.slice(0, previas.length)).toEqual(previas);
+    expect(nuevas.length).toBeGreaterThan(previas.length);
+  });
+
+  it("🔑 la conformidad la DERIVA la base y sólo puede endurecer lo del cliente", () => {
+    // Sin esto, `conforme = coalesce(p_conforme, true)` era fail-open: un cliente
+    // que omitiera el parámetro declaraba conforme una corrida que excedió el tope.
+    // Es la misma familia de defecto que la auditoría fail-open de los dos smokes.
+    expect(MIG).toMatch(/if v_audited and v_tokens_in > c_max_input_tokens then/);
+    expect(MIG).toMatch(/v_conforme := false;/);
+    expect(MIG).toContain("conforme      = v_conforme");
+    // El cliente puede declarar FALSO (ve el tope de salida, que la base no ve).
+    expect(MIG).toMatch(/v_conforme\s+:= coalesce\(p_conforme, true\);/);
+  });
+
+  it("el tope del SQL y el del código son el mismo número", async () => {
+    const { CONTEXT_LIMITS } = await import("./window");
+    const m = MIG.match(/c_max_input_tokens constant int := (\d+);/);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBe(CONTEXT_LIMITS.maxInputTokens);
+  });
+
+  it("una no conformidad sin motivo se REGISTRA, no aborta el cierre", () => {
+    // Abortar dejaría la corrida `en_curso` y perdería la economía de algo ya pagado.
+    expect(MIG).toContain("no conforme sin motivo declarado por el llamador");
+  });
+
+  it("el rollback de la vista usa `drop view`: replace no puede QUITAR columnas", () => {
+    expect(MIG).toMatch(/drop view if exists public\.v_ai_spend_reconciliation;/);
+  });
+});

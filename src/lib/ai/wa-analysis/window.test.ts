@@ -87,9 +87,9 @@ describe("A4 · límite de TOKENS de entrada (8.000)", () => {
     }
   });
 
-  it("el tope de SALIDA viaja en la ventana (2.000)", () => {
-    expect(buildWindow(thread(3)).maxOutputTokens).toBe(2000);
-    expect(CONTEXT_LIMITS.maxOutputTokens).toBe(2000);
+  it("el tope de SALIDA viaja en la ventana (6.000 tras D-2)", () => {
+    expect(buildWindow(thread(3)).maxOutputTokens).toBe(6000);
+    expect(CONTEXT_LIMITS.maxOutputTokens).toBe(6000);
   });
 });
 

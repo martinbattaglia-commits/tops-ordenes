@@ -53,6 +53,8 @@ export interface AnalyzeResult {
     provider: string; model: string | null;
     inputTokens: number | null; outputTokens: number | null;
     costUsd: number | null; audited: boolean;
+    usageBreakdown?: { promptTokens: number; candidatesTokens: number; thoughtsTokens: number; totalTokens: number } | null;
+    conforme?: boolean; deviation?: string | null;
   };
   analysis?: WaAnalysis;
   /** E1.1 guarda A: qué entró, qué quedó afuera y por qué. Nunca un recorte silencioso. */
@@ -113,7 +115,13 @@ export async function finalizeRun(a: {
   supabase: { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }> } | null;
   runId: string;
   outcome: AnalyzeOutcome;
-  economics: { provider: string; model: string | null; inputTokens: number | null; outputTokens: number | null; costUsd: number | null; audited: boolean };
+  economics: {
+    provider: string; model: string | null;
+    inputTokens: number | null; outputTokens: number | null;
+    costUsd: number | null; audited: boolean;
+    usageBreakdown?: { promptTokens: number; candidatesTokens: number; thoughtsTokens: number; totalTokens: number } | null;
+    conforme?: boolean; deviation?: string | null;
+  };
   detail: string;
   finishReason: string | null;
   errorCode: string | null;
@@ -136,6 +144,10 @@ export async function finalizeRun(a: {
     p_finish_reason: a.finishReason,
     p_error_code: a.errorCode,
     p_detail: a.detail,
+    // D-3 diagnóstico y D-1 conformidad. La economía sigue derivándose en la base.
+    p_provider_usage: a.economics.usageBreakdown ?? null,
+    p_conforme: a.economics.conforme ?? true,
+    p_deviation: a.economics.deviation ?? null,
     p_window_from: a.win.included[0]?.createdAt ?? null,
     p_window_to: a.win.included[a.win.included.length - 1]?.createdAt ?? null,
   });
@@ -344,6 +356,8 @@ async function ejecutarCorrida(c: {
     provider: run.provider, model: run.model,
     inputTokens: run.inputTokens, outputTokens: run.outputTokens,
     costUsd: run.costUsd, audited: run.audited,
+    usageBreakdown: run.usageBreakdown ?? null,
+    conforme: run.conforme, deviation: run.deviation,
   };
   const ventana = describeWindow(win);
 

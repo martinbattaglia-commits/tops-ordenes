@@ -1,8 +1,13 @@
 // LINK-WA-002 · E1.1 · Guarda A — CONTEXTO. Módulo PURO (sin IO).
 //
 // Los cuatro límites se aplican SIMULTÁNEAMENTE (resolución de Dirección):
-//   · 120 mensajes           · 24.000 caracteres
-//   · 8.000 tokens de entrada estimados   · 2.000 tokens de salida (tope del pedido)
+//   · 120 mensajes máximo    · 24.000 caracteres
+//   · 8.000 tokens de entrada estimados   · 6.000 tokens de salida (tope del pedido)
+//
+// «120 máximo» y no «120 fijos»: con la constante calibrada sobre la medición real
+// (1.6), el tope que suele morder primero es el de TOKENS, así que la cantidad
+// efectiva de mensajes es normalmente MENOR a 120. Esa es la consecuencia buscada
+// de respetar el tope de entrada, no un defecto.
 //
 // Regla inviolable: **no cortar mensajes silenciosamente**. Un mensaje entra
 // completo o no entra; cuando algo queda afuera, la ventana lo REPORTA con
@@ -18,14 +23,51 @@ export const CONTEXT_LIMITS = {
   maxMessages: 120,
   maxChars: 24_000,
   maxInputTokens: 8_000,
-  maxOutputTokens: 2_000,
+  // D-2: 6.000. Con 2.000 el JSON de 120 mensajes se cortaba en 1.990 —medido—:
+  // el contrato pide clasificación + hallazgos + acciones, cada uno con citas.
+  maxOutputTokens: 6_000,
 } as const;
 
 /** Overhead real del render de evidencia por mensaje: `[msg:<uuid>] (<iso>) <autor>: `. */
 export const PER_MESSAGE_OVERHEAD_CHARS = 90;
 
-/** Caracteres por token en español (conservador: sobreestima tokens, nunca subestima costo). */
-export const CHARS_PER_TOKEN = 3.8;
+/** Caracteres por token.
+ *
+ *  🔴 CORREGIDO tras MEDIR una corrida real. El valor anterior era 3.8 y estaba
+ *  documentado como «conservador: sobreestima tokens, nunca subestima costo».
+ *  Era falso: SUBESTIMÓ 2,35 veces. La ventana declaró ~5.147 tokens de entrada y
+ *  el proveedor cobró 10.835 sobre los mismos 17.541 caracteres, o sea **1,62
+ *  caracteres por token** — WhatsApp en español con acentos, emojis y
+ *  abreviaturas tokeniza mucho peor que la prosa administrativa de la que salió
+ *  aquella constante. El tope autorizado de 8.000 tokens se excedió (135,4 %) sin
+ *  que nada lo detectara.
+ *
+ *  ✅ Valor vigente por resolución de Dirección (D-1): **1.6**.
+ *  Es apenas MÁS estricto que la tasa medida (1,619), así que la estimación queda
+ *  del lado seguro. Aritmética del tope, para que no haya que confiar en la palabra:
+ *
+ *    caracteres admitidos = (8.000 − 530) × 1.6 = 11.952
+ *    cobro real esperado  = 11.952 / 1,619      =  7.383 tokens  (92 % del tope)
+ *    cobro pesimista      = 11.952 / 1,62 + 530 =  7.909 tokens  (99 % del tope)
+ *
+ *  El escenario pesimista cuenta el andamiaje DOS veces (una dentro de la tasa
+ *  agregada y otra en `PROMPT_SCAFFOLD_TOKENS`) y aun así no excede 8.000. Un valor
+ *  intermedio como 2.2 NO cumplía: admitía 16.434 caracteres ≈ 10.681 tokens reales,
+ *  el 133 % del tope.
+ *
+ *  Contrapartida aceptada: en un hilo denso como el medido —146,2 caracteres por
+ *  mensaje contando el encabezado de evidencia— entran ~81 mensajes en vez de 120.
+ *  Menos contexto, pero el tope autorizado se respeta de verdad.
+ *
+ *  Esta constante NO reemplaza al postcheck de conformidad: si un corpus tokeniza
+ *  peor que el medido, el exceso lo detecta la comparación contra lo COBRADO. La
+ *  estimación evita el exceso; el postcheck lo delata si igual ocurre. */
+export const CHARS_PER_TOKEN = 1.6;
+
+/** Tasa MEDIDA en el corpus real de WhatsApp (17.541 caracteres → 10.835 tokens).
+ *  Se expone para que la brecha entre lo estimado y lo real sea verificable en un
+ *  test, en lugar de vivir en un comentario. */
+export const CHARS_PER_TOKEN_MEDIDO_WHATSAPP = 1.62;
 
 /** Costo fijo del andamiaje del prompt (system + esquema), medido sobre el prompt real. */
 export const PROMPT_SCAFFOLD_TOKENS = 530;

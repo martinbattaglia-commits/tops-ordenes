@@ -139,8 +139,15 @@ export function SuggestionsInbox({
       {/* Analizar un hilo — acción HUMANA explícita */}
       <div className="card p-4">
         <p className="text-sm font-semibold text-fg-primary">Analizar una conversación</p>
+        {/* D-1: el tope de mensajes es un TECHO, no una promesa. Con la constante
+            de tokens calibrada sobre la medición real, en hilos densos entran menos
+            —el tope de entrada muerde antes—. Decirlo acá y no sólo después de la
+            corrida: el operador decide antes de gastar. */}
         <p className="mt-1 text-xs text-fg-muted">
-          Se analizan hasta {ai.maxMessages} mensajes por corrida, los más recientes.
+          Se analizan los mensajes más recientes: hasta {ai.maxMessages}, y menos si primero
+          se alcanza el tope de {ai.maxInputTokens.toLocaleString("es-AR")} tokens de entrada
+          —lo habitual en hilos largos—. Cada corrida informa cuántos entraron y cuántos
+          quedaron fuera.
         </p>
         <div className="mt-3 space-y-1.5">
           {threads.length === 0 && <p className="text-xs text-fg-muted">No hay hilos de WhatsApp importados.</p>}
