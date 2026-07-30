@@ -26,6 +26,12 @@ vi.mock("../budget", () => ({
 }));
 vi.mock("../audit", () => ({
   logInteraction: (sb: unknown, p: Record<string, unknown>) => logInteraction(sb, p),
+  // El camino estructurado usa la variante con resultado EXPLÍCITO: la auditoría
+  // económica es fail-closed, así que el engine necesita saber si persistió.
+  logInteractionResult: async (sb: unknown, p: Record<string, unknown>) => {
+    await logInteraction(sb, p);
+    return { ok: true, messageId: "msg-id", persisted: true };
+  },
   sha256: (s: string) => s,
 }));
 vi.mock("../provider", () => ({ getProvider: () => getProvider() }));
@@ -43,6 +49,9 @@ vi.mock("@/lib/env", () => ({
 import { runStructuredAnalysis } from "../engine";
 
 const MOCK_PROVIDER = { name: "mock", model: "mock-1", plan: vi.fn() };
+// El engine exige un UUID por corrida: es la clave que une ai_analysis_runs con
+// ai_messages. Un string cualquiera lo rechaza el RPC (fue el defecto real).
+const RUN_ID = "11111111-2222-4333-8444-555555555555";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -55,7 +64,7 @@ beforeEach(() => {
 describe("E1 · el mock ATRAVIESA engine.ts (embudo único)", () => {
   it("ejecuta el generador y devuelve la salida cruda con provider del entorno", async () => {
     const generate = vi.fn(async () => ({ raw: '{"ok":true}' }));
-    const r = await runStructuredAnalysis({ prompt: "P", kind: "wa_analysis", generate });
+    const r = await runStructuredAnalysis({ runId: RUN_ID, prompt: "P", kind: "wa_analysis", generate });
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.raw).toBe('{"ok":true}');
@@ -73,7 +82,7 @@ describe("E1 · el mock ATRAVIESA engine.ts (embudo único)", () => {
     checkMonthlyBudget.mockImplementation(async () => { order.push("mensual"); return { allowed: true }; });
     checkBudget.mockImplementation(async () => { order.push("diario"); return { allowed: true }; });
     getProvider.mockImplementation(() => { order.push("provider"); return MOCK_PROVIDER; });
-    await runStructuredAnalysis({ prompt: "P", kind: "wa_analysis", generate: async () => ({ raw: "{}" }) });
+    await runStructuredAnalysis({ runId: RUN_ID, prompt: "P", kind: "wa_analysis", generate: async () => ({ raw: "{}" }) });
     expect(order).toEqual(["gate", "mensual", "diario", "provider"]);
   });
 });
@@ -82,7 +91,7 @@ describe("E1 · kill-switch bloquea ANTES del provider", () => {
   it("AI_ENABLED apagado ⇒ killed, sin tocar provider ni generador", async () => {
     checkGate.mockResolvedValue({ ok: false, outcome: "killed", message: "desactivado" });
     const generate = vi.fn(async () => ({ raw: "{}" }));
-    const r = await runStructuredAnalysis({ prompt: "P", kind: "wa_analysis", generate });
+    const r = await runStructuredAnalysis({ runId: RUN_ID, prompt: "P", kind: "wa_analysis", generate });
     expect(r).toMatchObject({ ok: false, outcome: "killed" });
     expect(generate).not.toHaveBeenCalled();
     expect(getProvider).not.toHaveBeenCalled();
@@ -96,7 +105,7 @@ describe("E1 · usuario sin permiso", () => {
   it("fuera del piloto ⇒ denied, auditado, sin provider", async () => {
     checkGate.mockResolvedValue({ ok: false, outcome: "denied", message: "piloto cerrado" });
     const generate = vi.fn(async () => ({ raw: "{}" }));
-    const r = await runStructuredAnalysis({ prompt: "P", kind: "wa_analysis", generate });
+    const r = await runStructuredAnalysis({ runId: RUN_ID, prompt: "P", kind: "wa_analysis", generate });
     expect(r).toMatchObject({ ok: false, outcome: "denied" });
     expect(generate).not.toHaveBeenCalled();
     expect(logInteraction.mock.calls[0][1]).toMatchObject({ outcome: "denied" });
@@ -107,7 +116,7 @@ describe("E1 · presupuesto", () => {
   it("tope MENSUAL agotado ⇒ budget, sin generar", async () => {
     checkMonthlyBudget.mockResolvedValue({ allowed: false, reason: "El presupuesto mensual de IA (USD 20) está agotado." });
     const generate = vi.fn(async () => ({ raw: "{}" }));
-    const r = await runStructuredAnalysis({ prompt: "P", kind: "wa_analysis", generate });
+    const r = await runStructuredAnalysis({ runId: RUN_ID, prompt: "P", kind: "wa_analysis", generate });
     expect(r).toMatchObject({ ok: false, outcome: "budget" });
     expect(r.ok === false && r.message).toContain("mensual");
     expect(generate).not.toHaveBeenCalled();
@@ -117,14 +126,14 @@ describe("E1 · presupuesto", () => {
   it("tope DIARIO agotado ⇒ budget, sin generar", async () => {
     checkBudget.mockResolvedValue({ allowed: false, reason: "Presupuesto diario agotado." });
     const generate = vi.fn(async () => ({ raw: "{}" }));
-    const r = await runStructuredAnalysis({ prompt: "P", kind: "wa_analysis", generate });
+    const r = await runStructuredAnalysis({ runId: RUN_ID, prompt: "P", kind: "wa_analysis", generate });
     expect(r).toMatchObject({ ok: false, outcome: "budget" });
     expect(generate).not.toHaveBeenCalled();
   });
 
   it("el diario NO se consulta si el mensual ya cortó (orden correcto)", async () => {
     checkMonthlyBudget.mockResolvedValue({ allowed: false, reason: "mensual agotado" });
-    await runStructuredAnalysis({ prompt: "P", kind: "wa_analysis", generate: async () => ({ raw: "{}" }) });
+    await runStructuredAnalysis({ runId: RUN_ID, prompt: "P", kind: "wa_analysis", generate: async () => ({ raw: "{}" }) });
     expect(checkBudget).not.toHaveBeenCalled();
   });
 });
@@ -132,7 +141,7 @@ describe("E1 · presupuesto", () => {
 describe("E1 · provider caído", () => {
   it("excepción del generador ⇒ error GOBERNADO (no excepción hacia afuera)", async () => {
     const r = await runStructuredAnalysis({
-      prompt: "P", kind: "wa_analysis",
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
       generate: async () => { throw new Error("ECONNRESET del provider"); },
     });
     expect(r).toMatchObject({ ok: false, outcome: "error" });
@@ -146,7 +155,7 @@ describe("E1 · provider caído", () => {
   it("provider distinto de mock ⇒ el generador de E1 lo rechaza y el engine lo gobierna", async () => {
     getProvider.mockReturnValue({ name: "anthropic", model: "claude", plan: vi.fn() });
     const r = await runStructuredAnalysis({
-      prompt: "P", kind: "wa_analysis",
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
       generate: async (_p, provider) => {
         if (provider.name !== "mock") throw new Error("E1 sólo admite provider mock");
         return { raw: "{}" };
@@ -159,7 +168,7 @@ describe("E1 · provider caído", () => {
 describe("E1 · auditoría de la ejecución mock", () => {
   it("registra provider, modelo, costo cero y outcome answered", async () => {
     await runStructuredAnalysis({
-      prompt: "P", kind: "wa_analysis",
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
       entityContext: "connect_conversation:abc",
       generate: async () => ({ raw: '{"clasificacion":"x"}' }),
     });
@@ -174,7 +183,7 @@ describe("E1 · auditoría de la ejecución mock", () => {
 
   it("la salida auditada pasa por redacción de PII", async () => {
     await runStructuredAnalysis({
-      prompt: "P", kind: "wa_analysis",
+      runId: RUN_ID, prompt: "P", kind: "wa_analysis",
       generate: async () => ({ raw: "CUIT 30-71234567-8 y mail juan@empresa.com" }),
     });
     const answer = String((logInteraction.mock.calls[0][1]).answer);

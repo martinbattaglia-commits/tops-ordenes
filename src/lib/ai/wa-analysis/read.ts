@@ -26,6 +26,19 @@ export interface RunRow {
   messagesAnalyzed: number;
   suggestionsEmitted: number;
   provider: string;
+  /** Modelo efectivo. Antes quedaba NULL en los errores: se perdía justo cuando
+   *  más importaba saber contra qué modelo se falló. */
+  model: string | null;
+  /** Relato de la ventana y del motivo de corte. Se expone al operador: la promesa
+   *  de «ningún recorte silencioso» se cumplía en la base pero NO para la persona
+   *  que decide, que es quien la necesitaba. */
+  detail: string | null;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  /** Costo REAL. null = no verificable (el proveedor no informó usage). */
+  costUsd: number | null;
+  /** false = el costo NO entró en el agregado mensual: corrida no contabilizada. */
+  audited: boolean;
   createdAt: string;
 }
 
@@ -67,7 +80,7 @@ export async function listRuns(limit = 20): Promise<RunRow[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("ai_analysis_runs")
-    .select("id, conversation_id, outcome, messages_analyzed, suggestions_emitted, provider, created_at")
+    .select("id, conversation_id, outcome, messages_analyzed, suggestions_emitted, provider, model, detail, tokens_in, tokens_out, cost_usd, audited, created_at")
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error || !data) return [];
@@ -88,6 +101,12 @@ export async function listRuns(limit = 20): Promise<RunRow[]> {
     messagesAnalyzed: Number(r.messages_analyzed ?? 0),
     suggestionsEmitted: Number(r.suggestions_emitted ?? 0),
     provider: r.provider as string,
+    model: (r.model as string | null) ?? null,
+    detail: (r.detail as string | null) ?? null,
+    tokensIn: r.tokens_in === null || r.tokens_in === undefined ? null : Number(r.tokens_in),
+    tokensOut: r.tokens_out === null || r.tokens_out === undefined ? null : Number(r.tokens_out),
+    costUsd: r.cost_usd === null || r.cost_usd === undefined ? null : Number(r.cost_usd),
+    audited: Boolean(r.audited),
     createdAt: r.created_at as string,
   }));
 }

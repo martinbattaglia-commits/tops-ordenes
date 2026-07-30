@@ -26,7 +26,17 @@ async function requireAdmin(): Promise<AdminGuard> {
 }
 
 export type AnalyzeActionResult =
-  | { ok: true; runId: string; analyzed: number; emitted: number }
+  | {
+      ok: true; runId: string; analyzed: number; emitted: number;
+      /** La ventana viaja al operador: total, analizados, omitidos, caracteres,
+       *  tokens y motivo del corte. Sin esto el humano nunca sabía que quedaron
+       *  471 de 591 mensajes afuera. */
+      window?: { total: number; included: number; omitted: number; chars: number;
+                 estimatedInputTokens: number; truncated: boolean;
+                 reason: string | null; detail: string };
+      economics?: { provider: string; model: string | null; inputTokens: number | null;
+                    outputTokens: number | null; costUsd: number | null; audited: boolean };
+    }
   | { ok: false; message: string };
 
 /** Dispara el análisis de un hilo. Acción HUMANA explícita — nunca automática. */
@@ -38,7 +48,10 @@ export async function analyzeConversationAction(raw: unknown): Promise<AnalyzeAc
   const r = await analyzeConversation(p.data.conversationId);
   if (!r.ok) return { ok: false, message: r.message ?? "El análisis no produjo resultados." };
   revalidatePath("/connect/ia-sugerencias");
-  return { ok: true, runId: r.runId!, analyzed: r.analyzed ?? 0, emitted: r.emitted ?? 0 };
+  return {
+    ok: true, runId: r.runId!, analyzed: r.analyzed ?? 0, emitted: r.emitted ?? 0,
+    window: r.window, economics: r.economics,
+  };
 }
 
 export type DecisionResult = { ok: true } | { ok: false; message: string };

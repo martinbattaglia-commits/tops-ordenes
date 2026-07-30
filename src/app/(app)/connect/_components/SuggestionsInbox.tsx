@@ -68,7 +68,27 @@ export function SuggestionsInbox({
     const r = await analyzeConversationAction({ conversationId });
     setBusy(null);
     if (!r.ok) { setErr(r.message); return; }
-    setMsg(`Análisis completo: ${r.analyzed} mensajes → ${r.emitted} sugerencias.`);
+    // El operador tiene que ver QUÉ se analizó y qué quedó afuera. Antes esta
+    // información existía sólo en la base: la promesa de «ningún recorte
+    // silencioso» se cumplía para la auditoría y no para quien decide.
+    const w = r.window;
+    const eco = r.economics;
+    const partes = [`Análisis completo: ${r.analyzed} mensajes → ${r.emitted} sugerencias.`];
+    if (w) {
+      partes.push(
+        w.truncated
+          ? `Ventana truncada por ${w.reason}: ${w.included} de ${w.total} mensajes · ${w.omitted} quedaron fuera · ${w.chars.toLocaleString("es-AR")} caracteres · ~${w.estimatedInputTokens.toLocaleString("es-AR")} tokens de entrada.`
+          : `Ventana completa: ${w.included} mensajes · ${w.chars.toLocaleString("es-AR")} caracteres · ~${w.estimatedInputTokens.toLocaleString("es-AR")} tokens.`,
+      );
+    }
+    if (eco) {
+      partes.push(
+        eco.costUsd === null
+          ? `${eco.provider}${eco.model ? " · " + eco.model : ""} · costo no verificable.`
+          : `${eco.provider}${eco.model ? " · " + eco.model : ""} · ${eco.inputTokens ?? "?"}/${eco.outputTokens ?? "?"} tokens · USD ${eco.costUsd.toFixed(6)}${eco.audited ? "" : " · ⚠️ NO contabilizado"}.`,
+      );
+    }
+    setMsg(partes.join(" "));
   }
 
   async function decide(id: string, status: SuggestionRow["status"]) {

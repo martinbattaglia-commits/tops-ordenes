@@ -89,12 +89,12 @@ describe("G3 · usage REAL ⇒ costo medido", () => {
     const out = await p.generateJson({ system: "S", prompt: "P", maxOutputTokens: 2000 });
 
     expect(out.text).toBe('{"ok":1}');
-    expect(out.usage.inputTokens).toBe(8000);
-    expect(out.usage.outputTokens).toBe(2000);
+    expect(out.usage!.inputTokens).toBe(8000);
+    expect(out.usage!.outputTokens).toBe(2000);
     // Flash: 0,3 / 2,5 USD por millón ⇒ el techo por corrida autorizado por Dirección.
     const esperado = (8000 * 0.3 + 2000 * 2.5) / 1_000_000;
-    expect(out.usage.costUsd).toBeCloseTo(esperado, 10);
-    expect(out.usage.costUsd).toBeCloseTo(0.0074, 6);
+    expect(out.usage!.costUsd).toBeCloseTo(esperado, 10);
+    expect(out.usage!.costUsd).toBeCloseTo(0.0074, 6);
   });
 
   it("el techo por corrida (8.000 in / 2.000 out) cuesta menos de un centavo con Flash", () => {
@@ -133,8 +133,9 @@ describe("G4 · errores del proveedor no filtran secretos", () => {
     const p = await freshProvider();
     const out = await p.generateJson({ system: "S", prompt: "P", maxOutputTokens: 100 });
     expect(out.text).toBe("");
-    expect(out.usage.inputTokens).toBe(0);
-    expect(out.usage.costUsd).toBe(0);
+    // Sin `usageMetadata` el costo es NO VERIFICABLE (null), no «cero verificado».
+    // Registrar 0 para una llamada facturada era una mentira invisible.
+    expect(out.usage).toBeNull();
   });
 });
 
@@ -155,8 +156,8 @@ describe("G5 · H6 — los thinking tokens se facturan como salida y se cuentan"
     }) as unknown as Response) as unknown as typeof fetch;
     const p = await freshProvider();
     const out = await p.generateJson({ system: "S", prompt: "P", maxOutputTokens: 2000 });
-    expect(out.usage.outputTokens).toBe(1000); // 400 visibles + 600 de razonamiento
-    expect(out.usage.costUsd).toBeCloseTo((1000 * 0.3 + 1000 * 2.5) / 1_000_000, 10);
+    expect(out.usage!.outputTokens).toBe(1000); // 400 visibles + 600 de razonamiento
+    expect(out.usage!.costUsd).toBeCloseTo((1000 * 0.3 + 1000 * 2.5) / 1_000_000, 10);
   });
 });
 

@@ -98,6 +98,25 @@ interface GeminiResponse {
 
 export class GeminiProviderDisabledError extends Error {}
 
+/** Error del camino ESTRUCTURADO que conserva lo que el proveedor ya cobró.
+ *
+ *  Gemini factura los tokens de entrada y los de razonamiento aunque no devuelva
+ *  texto útil. Un `Error` plano tiraba ese `usage` a la basura, así que el costo
+ *  cobrado quedaba sin registrar: eso ya ocurrió una vez y no se pudo cuantificar.
+ *  `usage` es `null` sólo cuando el proveedor realmente no lo informó — y en ese
+ *  caso el costo se declara NO VERIFICABLE, nunca se estima. */
+export class GeminiStructuredError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly usage: ProviderUsage | null,
+    readonly finishReason: string | null,
+  ) {
+    super(message);
+    this.name = "GeminiStructuredError";
+  }
+}
+
 export class GeminiProvider implements AiProvider {
   readonly name = "gemini";
   readonly model = env.ai.model;
@@ -233,7 +252,7 @@ export class GeminiProvider implements AiProvider {
     system: string;
     prompt: string;
     maxOutputTokens: number;
-  }): Promise<{ text: string; finishReason: string | null; usage: ProviderUsage }> {
+  }): Promise<{ text: string; finishReason: string | null; usage: ProviderUsage | null }> {
     const key = this.assertEnabled();
     const body = {
       systemInstruction: { parts: [{ text: opts.system }] },
@@ -242,6 +261,13 @@ export class GeminiProvider implements AiProvider {
         maxOutputTokens: opts.maxOutputTokens,
         temperature: 0.1,
         responseMimeType: "application/json",
+        // 🔑 Gemini 2.5 razona por defecto y sus *thoughts* consumen el MISMO
+        // presupuesto que la salida. Con 2.000 tokens el modelo agotó el cupo
+        // pensando y devolvió texto vacío con finishReason=MAX_TOKENS: eso fue
+        // el fallo del primer smoke. El análisis necesita JSON, no cadena de
+        // razonamiento, así que se apaga. Sólo acá: el Copilot conversacional
+        // usa `plan()` y no se toca.
+        thinkingConfig: { thinkingBudget: 0 },
       },
     };
     const res = await fetch(`${API_BASE}/${this.model}:generateContent`, {
@@ -251,20 +277,45 @@ export class GeminiProvider implements AiProvider {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
-      // Nunca loguear la key ni el body.
-      throw new Error(`Gemini API error: HTTP ${res.status}`);
+      // Nunca loguear la key ni el body. Sin respuesta no hay usage: el costo
+      // queda declarado NO VERIFICABLE, no estimado.
+      throw new GeminiStructuredError(
+        `Gemini API error: HTTP ${res.status}`,
+        `http_${res.status}`,
+        null,
+        null,
+      );
     }
     const data = (await res.json()) as GeminiResponse;
     // Bloqueo por safety: se distingue del "JSON inválido" para que la
     // auditoría diga la verdad sobre por qué no hubo salida.
     const blocked = data.promptFeedback?.blockReason;
-    if (blocked) throw new Error(`Gemini bloqueó el pedido: ${blocked}`);
-    const inputTokens = data.usageMetadata?.promptTokenCount ?? 0;
+    // 🔴 Si el proveedor NO informó `usageMetadata`, el costo es NO VERIFICABLE.
+    // Antes se usaba `?? 0`, así que una llamada realmente facturada quedaba
+    // registrada como «costo cero verificado»: una mentira, y encima invisible
+    // para la reconciliación.
+    const um = data.usageMetadata;
+    const hayUsage = um != null
+      && (um.promptTokenCount != null || um.candidatesTokenCount != null);
+    const inputTokens = um?.promptTokenCount ?? 0;
     // El razonamiento se factura como salida: se suma o el costo miente.
     const outputTokens =
-      (data.usageMetadata?.candidatesTokenCount ?? 0) +
-      (data.usageMetadata?.thoughtsTokenCount ?? 0);
+      (um?.candidatesTokenCount ?? 0) + (um?.thoughtsTokenCount ?? 0);
     const finishReason = data.candidates?.[0]?.finishReason ?? null;
+    const usage: ProviderUsage | null = hayUsage
+      ? {
+          inputTokens,
+          outputTokens,
+          costUsd: estimateGeminiCostUsd(this.model, inputTokens, outputTokens),
+        }
+      : null;
+    // Bloqueo por safety: se distingue del «JSON inválido» y CONSERVA el usage,
+    // porque el pedido ya se facturó.
+    if (blocked) {
+      throw new GeminiStructuredError(
+        `Gemini bloqueó el pedido: ${blocked}`, `blocked_${blocked}`, usage, finishReason,
+      );
+    }
     const text = (data.candidates?.[0]?.content?.parts ?? [])
       .filter((x) => typeof x.text === "string")
       .map((x) => x.text as string)
@@ -273,18 +324,13 @@ export class GeminiProvider implements AiProvider {
     // JSON cortado por el tope de salida: se avisa explícitamente en lugar de
     // dejar que el contrato zod lo reporte como "json_invalido" a secas.
     if (finishReason === "MAX_TOKENS" && !text.trimEnd().endsWith("}")) {
-      throw new Error(
+      throw new GeminiStructuredError(
         `Gemini cortó la salida por el tope de ${opts.maxOutputTokens} tokens (finishReason=MAX_TOKENS).`,
+        "max_tokens",
+        usage,
+        finishReason,
       );
     }
-    return {
-      text,
-      finishReason,
-      usage: {
-        inputTokens,
-        outputTokens,
-        costUsd: estimateGeminiCostUsd(this.model, inputTokens, outputTokens),
-      },
-    };
+    return { text, finishReason, usage };
   }
 }

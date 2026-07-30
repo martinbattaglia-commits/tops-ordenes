@@ -30,11 +30,24 @@ export interface AuditPayload {
   costEstimate?: number | null;
 }
 
-/** Devuelve el id del mensaje assistant auditado (para feedback) o null. */
-export async function logInteraction(
+/** Resultado EXPLÍCITO de la auditoría.
+ *
+ *  Existe porque en el camino estructurado la auditoría **es** el mecanismo de
+ *  cobro: `ai_monthly_spend()` suma `ai_messages.cost_estimate` y el tope diario
+ *  cuenta filas de `ai_messages`. Si la auditoría falla y nadie se entera, el
+ *  analizador corre sin tope efectivo — que es exactamente lo que pasó. Devolver
+ *  `null` no alcanzaba: el llamador no podía distinguir «no había cliente» de
+ *  «la base rechazó la escritura». */
+export type AuditResult =
+  | { ok: true; messageId: string | null; persisted: boolean }
+  | { ok: false; error: string };
+
+/** Auditoría con resultado explícito. La usa el camino estructurado, que NO puede
+ *  seguir adelante si el costo no quedó registrado. */
+export async function logInteractionResult(
   supabase: SupabaseClient | null,
   p: AuditPayload
-): Promise<string | null> {
+): Promise<AuditResult> {
   const messages = [
     {
       role: "user",
@@ -69,7 +82,8 @@ export async function logInteraction(
     console.info(
       `[ai/audit demo] session=${p.sessionId} outcome=${p.outcome} tools=${p.toolsUsed.join(",")} sources=${sources.length}`
     );
-    return null;
+    // Modo demo: no hay base, así que tampoco hay gasto que contabilizar.
+    return { ok: true, messageId: null, persisted: false };
   }
   const { data, error } = await supabase.rpc("ai_log_interaction", {
     p_session_id: p.sessionId,
@@ -79,11 +93,23 @@ export async function logInteraction(
     p_sources: sources,
   });
   if (error) {
-    // La auditoría fallida NO rompe la respuesta al usuario, pero queda
-    // registrada en server logs (punto de la revisión adversarial §19.7).
+    // Se registra en logs Y se devuelve al llamador. El Copilot conversacional
+    // puede seguir (su auditoría es traza); el camino estructurado NO, porque
+    // ahí la auditoría es el cobro.
     console.error("[ai/audit] ai_log_interaction error:", error.message);
-    return null;
+    return { ok: false, error: error.message };
   }
   const result = data as { last_message_id?: string } | null;
-  return result?.last_message_id ?? null;
+  return { ok: true, messageId: result?.last_message_id ?? null, persisted: true };
+}
+
+/** Firma histórica, preservada para el Copilot conversacional: devuelve el id del
+ *  mensaje assistant o null. No se cambia su comportamiento (fail-open) porque en
+ *  ese camino la auditoría es traza, no control de consumo. */
+export async function logInteraction(
+  supabase: SupabaseClient | null,
+  p: AuditPayload
+): Promise<string | null> {
+  const r = await logInteractionResult(supabase, p);
+  return r.ok ? r.messageId : null;
 }

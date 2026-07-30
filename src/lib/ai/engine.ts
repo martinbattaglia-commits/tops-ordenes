@@ -6,7 +6,7 @@
 
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import { logInteraction } from "./audit";
+import { logInteraction, logInteractionResult } from "./audit";
 import { checkBudget, checkMonthlyBudget } from "./budget";
 import { maybeRaiseBudgetAlert, alertMessage } from "./budget-alerts";
 import { checkGate } from "./gate";
@@ -406,6 +406,14 @@ export async function askCopilot(req: CopilotRequest): Promise<CopilotAnswer> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface StructuredRunRequest {
+  /** Identidad de la corrida, generada por el caller ANTES de invocar al engine.
+   *  Se usa como `session_id` de auditoría, de modo que
+   *  `ai_analysis_runs.id == ai_messages.session_id` y las dos tablas se
+   *  reconcilian por construcción. Debe ser un UUID único POR CORRIDA: un uuid
+   *  determinista compartido haría que el RPC rechace a todo usuario que no sea
+   *  el dueño de la sesión («sesión ajena») y que dos corridas concurrentes
+   *  colisionen en `unique(session_id, seq)`. */
+  runId: string;
   /** Prompt ya construido: evidencia delimitada y PII redactada por el caller. */
   prompt: string;
   /** Etiqueta de auditoría (p. ej. "wa_analysis"). */
@@ -417,23 +425,52 @@ export interface StructuredRunRequest {
   generate: (
     prompt: string,
     provider: AiProvider,
-  ) => Promise<{ raw: string; usage?: ProviderUsage }>;
+  ) => Promise<{ raw: string; usage?: ProviderUsage | null; finishReason?: string | null }>;
+  /** Validación de la salida, ANTES de auditar y de que el caller persista nada.
+   *  El orden que fijó Dirección es: proveedor → validar → auditar la economía →
+   *  persistir sugerencias → devolver éxito. */
+  validate?: (raw: string) => { ok: true } | { ok: false; reason: string };
+}
+
+/** Economía y trazas de la corrida. `costUsd === null` significa NO VERIFICABLE:
+ *  el proveedor no informó `usage`. Nunca se estima un costo inventado. */
+export interface StructuredRunEconomics {
+  provider: string;
+  model: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costUsd: number | null;
+  finishReason: string | null;
+  errorCode: string | null;
+  /** true SÓLO si el costo quedó registrado en `ai_messages` — la fuente del tope
+   *  mensual y del contador diario. */
+  audited: boolean;
+  latencyMs: number;
 }
 
 export type StructuredRunResult =
-  | {
-      ok: true; raw: string; provider: string; model: string;
-      costUsd: number; inputTokens: number; outputTokens: number;
-      latencyMs: number; userId: string | null;
+  | ({
+      ok: true; raw: string; userId: string | null;
       budgetAlert: { raised: boolean; pct: number; spentUsd: number } | null;
-    }
-  | { ok: false; outcome: "killed" | "denied" | "budget" | "error"; message: string };
+    } & StructuredRunEconomics)
+  | ({
+      ok: false;
+      outcome: "killed" | "denied" | "budget" | "error" | "invalid_output" | "audit_failure";
+      /** Mensaje GOBERNADO para el usuario: sin status, sin variables, sin PII. */
+      message: string;
+      /** Detalle técnico SANEADO para la auditoría. Nunca el prompt ni el chat. */
+      detail: string | null;
+      userId: string | null;
+    } & StructuredRunEconomics);
 
 export async function runStructuredAnalysis(
   req: StructuredRunRequest,
 ): Promise<StructuredRunResult> {
   const startedAt = Date.now();
-  const sessionId = `structured:${req.kind}`;
+  // 🔑 UUID por corrida. Antes era `structured:${kind}` —un string— y el RPC
+  // `ai_log_interaction(p_session_id uuid, …)` lo rechazaba, así que la auditoría
+  // económica NUNCA persistía y el analizador corría sin tope efectivo.
+  const sessionId = req.runId;
   const auditBase = {
     sessionId,
     channel: "panel" as const,
@@ -456,7 +493,13 @@ export async function runStructuredAnalysis(
       outcome: gate.outcome,
       errorDetail: null,
     });
-    return { ok: false, outcome: gate.outcome, message: gate.message };
+    return {
+      ok: false, outcome: gate.outcome, message: gate.message, detail: null,
+      userId: null, provider: env.ai.provider, model: null,
+      inputTokens: null, outputTokens: null, costUsd: null,
+      finishReason: null, errorCode: gate.outcome, audited: false,
+      latencyMs: Date.now() - startedAt,
+    };
   }
   const supabase = gate.demo ? null : createClient();
 
@@ -475,35 +518,107 @@ export async function runStructuredAnalysis(
       outcome: "budget",
       errorDetail: null,
     });
-    return { ok: false, outcome: "budget", message: reason };
+    return {
+      ok: false, outcome: "budget", message: reason, detail: null,
+      userId: gate.userId, provider: env.ai.provider, model: null,
+      inputTokens: null, outputTokens: null, costUsd: null,
+      finishReason: null, errorCode: "budget", audited: false,
+      latencyMs: Date.now() - startedAt,
+    };
   }
 
   // 3. Generación — el provider del entorno lo resuelve el engine, no el caller.
   const provider = getProvider();
   let raw: string;
-  let usage: ProviderUsage | undefined;
+  let usage: ProviderUsage | null | undefined;
+  let finishOk: string | null = null;
   try {
     const out = await req.generate(req.prompt, provider);
     raw = out.raw;
     usage = out.usage;
+    finishOk = (out as { finishReason?: string | null }).finishReason ?? null;
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e);
-    await logInteraction(supabase, {
+    // El proveedor pudo haber COBRADO aunque no devolviera nada útil: Gemini
+    // factura entrada y razonamiento. `GeminiStructuredError` conserva ese usage
+    // para que el costo se registre; si no lo trae, se declara no verificable.
+    const err = e as { message?: string; code?: string; usage?: ProviderUsage | null; finishReason?: string | null };
+    const detail = redactPii(err?.message ?? String(e)).slice(0, 2000);
+    const u = err?.usage ?? null;
+    const eco = {
+      provider: provider.name,
+      model: provider.model,
+      inputTokens: u?.inputTokens ?? null,
+      outputTokens: u?.outputTokens ?? null,
+      costUsd: u?.costUsd ?? null,
+      finishReason: err?.finishReason ?? null,
+      errorCode: err?.code ?? "provider_error",
+      latencyMs: Date.now() - startedAt,
+    };
+    const audit = await logInteractionResult(supabase, {
       ...auditBase,
       question: `[${req.kind}] análisis estructurado`,
       answer: "El proveedor de IA no pudo completar el análisis.",
       provider: provider.name,
       model: provider.model,
-      latencyMs: Date.now() - startedAt,
+      latencyMs: eco.latencyMs,
       outcome: "error",
       errorDetail: detail,
+      tokensIn: u?.inputTokens ?? null,
+      tokensOut: u?.outputTokens ?? null,
+      costEstimate: u?.costUsd ?? null,
     });
-    return { ok: false, outcome: "error", message: "El proveedor de IA no pudo completar el análisis." };
+    return {
+      ok: false, outcome: "error",
+      message: "El proveedor de IA no pudo completar el análisis.",
+      detail, userId: gate.userId, ...eco, audited: audit.ok && audit.persisted,
+    };
   }
 
-  // 4. Auditoría de la ejecución (redactada; el prompt no se persiste crudo).
+  // Ausencia de `usage`: para el MOCK significa costo CERO VERIFICABLE —no llama a
+  // ninguna red, su costo es 0 medido—; para un provider real significa NO
+  // VERIFICABLE (null). Nunca se estima un costo inventado.
+  const esMock = provider.name === "mock";
+  const ecoOk = {
+    provider: provider.name,
+    model: provider.model,
+    inputTokens: usage?.inputTokens ?? (esMock ? 0 : null),
+    outputTokens: usage?.outputTokens ?? (esMock ? 0 : null),
+    costUsd: usage?.costUsd ?? (esMock ? 0 : null),
+    // M3: antes se descartaba y la columna sólo se llenaba desde la excepción.
+    finishReason: finishOk,
+    errorCode: null as string | null,
+  };
+
+  // 3.b VALIDAR antes de auditar y antes de que el caller persista nada.
+  const checked = req.validate ? req.validate(raw) : ({ ok: true } as const);
+  if (!checked.ok) {
+    const detail = redactPii(checked.reason).slice(0, 2000);
+    // Se audita igual: el proveedor cobró. Sin esto el costo se perdía.
+    const audit = await logInteractionResult(supabase, {
+      ...auditBase,
+      question: `[${req.kind}] análisis estructurado`,
+      answer: "La IA devolvió una salida que no cumple el contrato.",
+      provider: provider.name, model: provider.model,
+      latencyMs: Date.now() - startedAt,
+      outcome: "error", errorDetail: `salida inválida: ${detail}`,
+      tokensIn: usage?.inputTokens ?? null,
+      tokensOut: usage?.outputTokens ?? null,
+      costEstimate: usage?.costUsd ?? null,
+    });
+    return {
+      ok: false, outcome: "invalid_output",
+      message: "La IA devolvió una salida que no cumple el contrato.",
+      detail, userId: gate.userId, ...ecoOk,
+      errorCode: "invalid_output", audited: audit.ok && audit.persisted,
+      latencyMs: Date.now() - startedAt,
+    };
+  }
+
+  // 4. Auditoría ECONÓMICA — fail-closed. Si no se pudo registrar el costo, la
+  //    corrida NO es exitosa: el tope mensual y el diario se leen de
+  //    `ai_messages`, así que una corrida sin auditar sería gasto sin control.
   const latencyMs = Date.now() - startedAt;
-  await logInteraction(supabase, {
+  const audit = await logInteractionResult(supabase, {
     ...auditBase,
     question: `[${req.kind}] análisis estructurado`,
     answer: redactPii(raw).slice(0, 4000),
@@ -513,41 +628,47 @@ export async function runStructuredAnalysis(
     outcome: "answered",
     errorDetail: null,
     // Costo REAL del provider (mock ⇒ 0; Gemini ⇒ estimateGeminiCostUsd sobre usage).
-    tokensIn: usage?.inputTokens ?? 0,
-    tokensOut: usage?.outputTokens ?? 0,
-    costEstimate: usage?.costUsd ?? 0,
+    tokensIn: ecoOk.inputTokens,
+    tokensOut: ecoOk.outputTokens,
+    costEstimate: ecoOk.costUsd,
   });
+  // 🔴 Se exige `persisted`, no sólo ausencia de error. `logInteractionResult`
+  // devuelve `{ok:true, persisted:false}` cuando no hay cliente de datos (modo
+  // demo): con credenciales reales y DEMO_MODE activo, eso habría declarado
+  // `audited=true` para una corrida SIN una sola fila en `ai_messages` — el mismo
+  // defecto original, ahora con una afirmación de auditoría falsa.
+  if (!audit.ok || !audit.persisted) {
+    return {
+      ok: false, outcome: "audit_failure",
+      message: "No se pudo registrar la auditoría del análisis. La corrida se descartó.",
+      detail: redactPii(audit.ok ? "auditoría no persistida (sin cliente de datos)" : audit.error).slice(0, 2000),
+      userId: gate.userId, ...ecoOk,
+      errorCode: "audit_failure", audited: false, latencyMs,
+    };
+  }
 
-  // E1.1 · Guarda B: alerta auditable al 70 % (una sola vez por mes y umbral).
+  // E1.1 · Guarda B: alerta al 70 %, una sola vez por mes y umbral.
   // Se evalúa DESPUÉS de auditar, para que el gasto de esta corrida ya cuente.
+  // 🔑 NO se audita con `logInteraction`: eso insertaría un par user/assistant en
+  // `ai_messages` y le consumiría al usuario una unidad de su cupo diario por un
+  // evento del SISTEMA. La constancia de la alerta vive en `ai_budget_alerts`,
+  // que es su registro propio y no se duplica (unique period+threshold).
   const alert = await maybeRaiseBudgetAlert(supabase, {
     provider: provider.name,
     model: provider.model,
     userId: gate.demo ? null : gate.userId,
   });
   if (alert.raised) {
-    await logInteraction(supabase, {
-      ...auditBase,
-      question: `[${req.kind}] alerta de presupuesto`,
-      answer: alertMessage(alert),
-      provider: provider.name,
-      model: provider.model,
-      latencyMs: 0,
-      outcome: "budget",
-      errorDetail: null,
-      costEstimate: 0,
-    });
+    console.warn(`[ai/budget] ${alertMessage(alert)}`);
   }
 
   return {
     ok: true,
     raw,
-    provider: provider.name,
-    model: provider.model,
-    costUsd: usage?.costUsd ?? 0,
-    inputTokens: usage?.inputTokens ?? 0,
-    outputTokens: usage?.outputTokens ?? 0,
+    // Constatación, no literal: llegar acá implica `audit.persisted === true`.
+    audited: audit.ok && audit.persisted,
     latencyMs,
+    ...ecoOk,
     userId: gate.demo ? null : gate.userId,
     budgetAlert: alert.raised || alert.alreadyRaised
       ? { raised: alert.raised, pct: alert.pct, spentUsd: alert.spentUsd }
