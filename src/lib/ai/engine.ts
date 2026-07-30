@@ -8,6 +8,7 @@ import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 import { logInteraction } from "./audit";
 import { checkBudget, checkMonthlyBudget } from "./budget";
+import { maybeRaiseBudgetAlert, alertMessage } from "./budget-alerts";
 import { checkGate } from "./gate";
 import {
   NO_EVIDENCE,
@@ -27,6 +28,7 @@ import { detectManagementIntent } from "./management-brief";
 import { redactVisual } from "./visuals";
 import type {
   AiProvider,
+  ProviderUsage,
   CopilotAnswer,
   CopilotRequest,
   CopilotVisual,
@@ -410,12 +412,21 @@ export interface StructuredRunRequest {
   kind: string;
   /** Contexto de entidad para auditoría (p. ej. "connect_conversation:<uuid>"). */
   entityContext?: string | null;
-  /** Generador de la salida cruda. Recibe el prompt y el provider del entorno. */
-  generate: (prompt: string, provider: AiProvider) => Promise<string>;
+  /** Generador de la salida cruda. Recibe el prompt y el provider del entorno.
+   *  Devuelve el texto y, con provider real, el `usage` para registrar COSTO REAL. */
+  generate: (
+    prompt: string,
+    provider: AiProvider,
+  ) => Promise<{ raw: string; usage?: ProviderUsage }>;
 }
 
 export type StructuredRunResult =
-  | { ok: true; raw: string; provider: string; model: string; costUsd: number; latencyMs: number; userId: string | null }
+  | {
+      ok: true; raw: string; provider: string; model: string;
+      costUsd: number; inputTokens: number; outputTokens: number;
+      latencyMs: number; userId: string | null;
+      budgetAlert: { raised: boolean; pct: number; spentUsd: number } | null;
+    }
   | { ok: false; outcome: "killed" | "denied" | "budget" | "error"; message: string };
 
 export async function runStructuredAnalysis(
@@ -470,8 +481,11 @@ export async function runStructuredAnalysis(
   // 3. Generación — el provider del entorno lo resuelve el engine, no el caller.
   const provider = getProvider();
   let raw: string;
+  let usage: ProviderUsage | undefined;
   try {
-    raw = await req.generate(req.prompt, provider);
+    const out = await req.generate(req.prompt, provider);
+    raw = out.raw;
+    usage = out.usage;
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     await logInteraction(supabase, {
@@ -498,16 +512,45 @@ export async function runStructuredAnalysis(
     latencyMs,
     outcome: "answered",
     errorDetail: null,
-    costEstimate: 0, // mock: costo cero. Con provider real lo reporta usage.
+    // Costo REAL del provider (mock ⇒ 0; Gemini ⇒ estimateGeminiCostUsd sobre usage).
+    tokensIn: usage?.inputTokens ?? 0,
+    tokensOut: usage?.outputTokens ?? 0,
+    costEstimate: usage?.costUsd ?? 0,
   });
+
+  // E1.1 · Guarda B: alerta auditable al 70 % (una sola vez por mes y umbral).
+  // Se evalúa DESPUÉS de auditar, para que el gasto de esta corrida ya cuente.
+  const alert = await maybeRaiseBudgetAlert(supabase, {
+    provider: provider.name,
+    model: provider.model,
+    userId: gate.demo ? null : gate.userId,
+  });
+  if (alert.raised) {
+    await logInteraction(supabase, {
+      ...auditBase,
+      question: `[${req.kind}] alerta de presupuesto`,
+      answer: alertMessage(alert),
+      provider: provider.name,
+      model: provider.model,
+      latencyMs: 0,
+      outcome: "budget",
+      errorDetail: null,
+      costEstimate: 0,
+    });
+  }
 
   return {
     ok: true,
     raw,
     provider: provider.name,
     model: provider.model,
-    costUsd: 0,
+    costUsd: usage?.costUsd ?? 0,
+    inputTokens: usage?.inputTokens ?? 0,
+    outputTokens: usage?.outputTokens ?? 0,
     latencyMs,
     userId: gate.demo ? null : gate.userId,
+    budgetAlert: alert.raised || alert.alreadyRaised
+      ? { raised: alert.raised, pct: alert.pct, spentUsd: alert.spentUsd }
+      : null,
   };
 }

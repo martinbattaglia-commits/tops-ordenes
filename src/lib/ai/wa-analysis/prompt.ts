@@ -30,9 +30,15 @@ export function neutralizeDelimiters(text: string): string {
     .replace(/<<<[^>]*>>>/g, "[marca-removida]");
 }
 
-/** Una línea de evidencia: id citable + autor + fecha + cuerpo saneado. */
+/** Una línea de evidencia: id citable + autor + fecha + cuerpo saneado.
+ *
+ *  ⚠️ E1.1 — el cuerpo va COMPLETO. Antes había un `.slice(0, 1500)` que
+ *  cortaba mensajes largos por la mitad SIN dejar rastro, en contradicción
+ *  directa con la regla de Dirección «no cortar mensajes silenciosamente».
+ *  El tamaño lo gobierna la ventana (window.ts), que decide por mensaje
+ *  ENTERO y reporta lo que queda afuera. */
 export function renderMessage(m: WaMessageInput): string {
-  const body = neutralizeDelimiters(redactPii(m.body ?? "")).slice(0, 1500);
+  const body = neutralizeDelimiters(redactPii(m.body ?? ""));
   return `[msg:${m.id}] (${m.createdAt}) ${m.author}: ${body}`;
 }
 

@@ -87,7 +87,13 @@ interface GeminiResponse {
     finishReason?: string;
   }>;
   promptFeedback?: { blockReason?: string };
-  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+  usageMetadata?: {
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    /** Gemini 2.5 factura el razonamiento a tarifa de SALIDA y lo reporta
+     *  aparte: si no se suma, el costo auditado queda subestimado. */
+    thoughtsTokenCount?: number;
+  };
 }
 
 export class GeminiProviderDisabledError extends Error {}
@@ -213,5 +219,72 @@ export class GeminiProvider implements AiProvider {
       .join("\n")
       .trim();
     return { kind: "final", answer, usage };
+  }
+  /**
+   * LINK-WA-002 · E1.1 — Generación ESTRUCTURADA (JSON) para el análisis de
+   * conversaciones. Camino separado del planner conversacional `plan()`:
+   *   · SIN tools (la evidencia viaja en el prompt, no se resuelve por función);
+   *   · responseMimeType JSON ⇒ el modelo devuelve un objeto, no prosa;
+   *   · maxOutputTokens acotado por el llamador (guarda de contexto E1.1);
+   *   · devuelve `usage` real ⇒ el engine registra COSTO REAL, no estimado.
+   * Fail-closed: sin key, no hay llamada de red (assertEnabled).
+   */
+  async generateJson(opts: {
+    system: string;
+    prompt: string;
+    maxOutputTokens: number;
+  }): Promise<{ text: string; finishReason: string | null; usage: ProviderUsage }> {
+    const key = this.assertEnabled();
+    const body = {
+      systemInstruction: { parts: [{ text: opts.system }] },
+      contents: [{ role: "user", parts: [{ text: opts.prompt }] }],
+      generationConfig: {
+        maxOutputTokens: opts.maxOutputTokens,
+        temperature: 0.1,
+        responseMimeType: "application/json",
+      },
+    };
+    const res = await fetch(`${API_BASE}/${this.model}:generateContent`, {
+      method: "POST",
+      headers: { "x-goog-api-key": key, "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      // Nunca loguear la key ni el body.
+      throw new Error(`Gemini API error: HTTP ${res.status}`);
+    }
+    const data = (await res.json()) as GeminiResponse;
+    // Bloqueo por safety: se distingue del "JSON inválido" para que la
+    // auditoría diga la verdad sobre por qué no hubo salida.
+    const blocked = data.promptFeedback?.blockReason;
+    if (blocked) throw new Error(`Gemini bloqueó el pedido: ${blocked}`);
+    const inputTokens = data.usageMetadata?.promptTokenCount ?? 0;
+    // El razonamiento se factura como salida: se suma o el costo miente.
+    const outputTokens =
+      (data.usageMetadata?.candidatesTokenCount ?? 0) +
+      (data.usageMetadata?.thoughtsTokenCount ?? 0);
+    const finishReason = data.candidates?.[0]?.finishReason ?? null;
+    const text = (data.candidates?.[0]?.content?.parts ?? [])
+      .filter((x) => typeof x.text === "string")
+      .map((x) => x.text as string)
+      .join("\n")
+      .trim();
+    // JSON cortado por el tope de salida: se avisa explícitamente en lugar de
+    // dejar que el contrato zod lo reporte como "json_invalido" a secas.
+    if (finishReason === "MAX_TOKENS" && !text.trimEnd().endsWith("}")) {
+      throw new Error(
+        `Gemini cortó la salida por el tope de ${opts.maxOutputTokens} tokens (finishReason=MAX_TOKENS).`,
+      );
+    }
+    return {
+      text,
+      finishReason,
+      usage: {
+        inputTokens,
+        outputTokens,
+        costUsd: estimateGeminiCostUsd(this.model, inputTokens, outputTokens),
+      },
+    };
   }
 }

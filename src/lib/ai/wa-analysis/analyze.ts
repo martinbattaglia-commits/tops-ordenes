@@ -2,7 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { runStructuredAnalysis } from "../engine";
-import { buildAnalysisPrompt, type WaMessageInput } from "./prompt";
+import { buildAnalysisPrompt, SYSTEM_PROMPT, type WaMessageInput } from "./prompt";
+import { buildWindow, describeWindow, CONTEXT_LIMITS } from "./window";
 import { mockAnalyzeRawWithProse } from "./mock-analyzer";
 import { parseAnalysis, type WaAnalysis } from "./schema";
 
@@ -24,8 +25,9 @@ import { parseAnalysis, type WaAnalysis } from "./schema";
  * la frontera: un hilo que el usuario no ve devuelve cero mensajes.
  */
 
-/** Tope duro por corrida (D2 de Dirección): máximo 120 mensajes por análisis. */
-export const WINDOW_LIMIT = 120;
+/** Tope de mensajes por corrida (D2). Los otros tres límites viven en window.ts
+ *  y se aplican SIMULTÁNEAMENTE (E1.1 guarda A). */
+export const WINDOW_LIMIT = CONTEXT_LIMITS.maxMessages;
 
 export type AnalyzeOutcome =
   | "ok" | "killed" | "denied" | "budget" | "invalid_output" | "error";
@@ -39,6 +41,12 @@ export interface AnalyzeResult {
   emitted?: number;
   costUsd?: number;
   analysis?: WaAnalysis;
+  /** E1.1 guarda A: qué entró, qué quedó afuera y por qué. Nunca un recorte silencioso. */
+  window?: {
+    included: number; omitted: number; total: number;
+    chars: number; estimatedInputTokens: number;
+    truncated: boolean; reason: string | null; detail: string;
+  };
 }
 
 interface RunLog {
@@ -51,6 +59,9 @@ interface RunLog {
   windowFrom?: string | null;
   windowTo?: string | null;
   runId?: string;
+  /** Provider y modelo REALES de la corrida (mock o gemini). */
+  provider?: string;
+  model?: string | null;
 }
 
 /** Auditoría propia del expediente (complementa la del engine). */
@@ -61,8 +72,8 @@ async function logRun(r: RunLog): Promise<void> {
     ...(r.runId ? { id: r.runId } : {}),
     conversation_id: r.conversationId,
     requested_by: r.requestedBy,
-    provider: env.ai.provider ?? "mock",
-    model: "mock-deterministic",
+    provider: r.provider ?? env.ai.provider ?? "mock",
+    model: r.model ?? null,
     messages_analyzed: r.analyzed ?? 0,
     window_from: r.windowFrom ?? null,
     window_to: r.windowTo ?? null,
@@ -82,6 +93,12 @@ export async function analyzeConversation(
   // (1) Ventana acotada (D2): los N mensajes más recientes, en orden cronológico,
   //     con fechas, autores y referencia al mensaje fuente. RLS de por medio.
   const limit = Math.min(Math.max(opts.limit ?? WINDOW_LIMIT, 1), WINDOW_LIMIT);
+  // Total REAL del hilo: sin esto, un hilo de 500 mensajes se reportaría como
+  // «ventana completa de 120» y el recorte de la consulta quedaría invisible.
+  const { count: totalInThread } = await supabase
+    .from("connect_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("conversation_id", conversationId);
   const { data: rows, error } = await supabase
     .from("connect_messages")
     .select("id, body, created_at, author_participant_id")
@@ -120,8 +137,22 @@ export async function analyzeConversation(
       body: m.body ?? "",
     }));
 
-  // (2) Prompt con evidencia delimitada y PII redactada (guardrails del módulo).
-  const prompt = buildAnalysisPrompt(messages);
+  // (2) E1.1 guarda A — CONTEXTO: los cuatro límites a la vez (120 mensajes ·
+  //     24.000 caracteres · 8.000 tokens de entrada · 2.000 de salida). Los
+  //     mensajes entran COMPLETOS; lo que queda afuera se reporta con motivo.
+  const win = buildWindow(messages, {}, totalInThread ?? messages.length);
+  const windowMeta = {
+    included: win.included.length, omitted: win.omitted, total: win.total,
+    chars: win.chars, estimatedInputTokens: win.estimatedInputTokens,
+    truncated: win.truncated, reason: win.reason, detail: describeWindow(win),
+  };
+  if (win.included.length === 0) {
+    await logRun({ conversationId, requestedBy: null, outcome: "error", detail: "ventana vacía" });
+    return { ok: false, outcome: "error", message: "No se pudo construir una ventana de análisis.", window: windowMeta };
+  }
+
+  // (3) Prompt con evidencia delimitada y PII redactada (guardrails del módulo).
+  const prompt = buildAnalysisPrompt(win.included);
 
   // (3) EMBUDO ÚNICO: kill-switch, piloto, presupuesto y auditoría los aplica el
   //     engine. En E1 el generador es el mock determinista (costo cero); en E2 se
@@ -130,34 +161,45 @@ export async function analyzeConversation(
     prompt,
     kind: "wa_analysis",
     entityContext: `connect_conversation:${conversationId}`,
-    generate: async (_p, provider) => {
-      if (provider.name !== "mock") {
-        // E1 admite exclusivamente mock (resolución): un provider pago no puede
-        // activarse por accidente. El engine audita el error como corte gobernado.
-        throw new Error(
-          `E1 sólo admite provider mock (actual: ${provider.name}). Un provider real requiere autorización de Dirección.`,
-        );
+    generate: async (builtPrompt, provider) => {
+      // mock: determinista, sin red, costo 0 (E1).
+      if (provider.name === "mock") {
+        return { raw: mockAnalyzeRawWithProse(win.included) };
       }
-      return mockAnalyzeRawWithProse(messages);
+      // Gemini (autorizado por Dirección como provider inicial): salida
+      // estructurada nativa + usage real ⇒ el engine registra COSTO REAL.
+      const g = provider as { generateJson?: (o: { system: string; prompt: string; maxOutputTokens: number }) => Promise<{ text: string; usage: { inputTokens: number; outputTokens: number; costUsd: number } }> };
+      if (typeof g.generateJson === "function") {
+        const out = await g.generateJson({
+          system: SYSTEM_PROMPT,
+          prompt: builtPrompt,
+          maxOutputTokens: CONTEXT_LIMITS.maxOutputTokens,
+        });
+        return { raw: out.text, usage: out.usage };
+      }
+      throw new Error(
+        `El provider "${provider.name}" no soporta salida estructurada. Autorizados: mock y gemini.`,
+      );
     },
   });
 
   if (!run.ok) {
     await logRun({
       conversationId, requestedBy: null, outcome: run.outcome,
-      detail: run.message, analyzed: messages.length,
+      detail: `${run.message} · ${describeWindow(win)}`, analyzed: win.included.length,
     });
-    return { ok: false, outcome: run.outcome, message: run.message };
+    return { ok: false, outcome: run.outcome, message: run.message, window: windowMeta };
   }
 
   // (4) Validación de esquema + citas dentro de la ventana. Lo inválido NO se persiste.
-  const parsed = parseAnalysis(run.raw, messages.map((m) => m.id));
+  const parsed = parseAnalysis(run.raw, win.included.map((m) => m.id));
   if (!parsed.ok) {
     await logRun({
       conversationId, requestedBy: run.userId, outcome: "invalid_output",
-      detail: parsed.reason, analyzed: messages.length,
+      detail: `${parsed.reason} · ${describeWindow(win)}`, analyzed: win.included.length,
+      provider: run.provider, model: run.model,
     });
-    return { ok: false, outcome: "invalid_output", message: `Salida inválida: ${parsed.reason}` };
+    return { ok: false, outcome: "invalid_output", message: `Salida inválida: ${parsed.reason}`, window: windowMeta };
   }
 
   // (5) Persistencia — SÓLO sugerencias. Ninguna entidad de negocio se crea acá.
@@ -186,21 +228,27 @@ export async function analyzeConversation(
   if (insErr) {
     await logRun({
       conversationId, requestedBy: run.userId, outcome: "error",
-      detail: insErr.message, analyzed: messages.length, runId,
+      detail: insErr.message, analyzed: win.included.length, runId,
+      provider: run.provider, model: run.model,
     });
     return { ok: false, outcome: "error", message: `No se pudieron guardar las sugerencias: ${insErr.message}` };
   }
 
   await logRun({
     conversationId, requestedBy: run.userId, outcome: "ok",
-    analyzed: messages.length, emitted: toInsert.length,
-    windowFrom: messages[0]?.createdAt, windowTo: messages[messages.length - 1]?.createdAt,
+    analyzed: win.included.length, emitted: toInsert.length,
+    windowFrom: win.included[0]?.createdAt,
+    windowTo: win.included[win.included.length - 1]?.createdAt,
+    // El costo queda también acá: si la auditoría de `ai_messages` fallara,
+    // el gasto de esta corrida no se pierde del expediente.
+    detail: `${describeWindow(win)} · costo USD ${(run.costUsd ?? 0).toFixed(6)}`,
+    provider: run.provider, model: run.model,
     runId,
   });
 
   return {
     ok: true, outcome: "ok", runId,
-    analyzed: messages.length, emitted: toInsert.length,
-    costUsd: run.costUsd, analysis: a,
+    analyzed: win.included.length, emitted: toInsert.length,
+    costUsd: run.costUsd, analysis: a, window: windowMeta,
   };
 }
