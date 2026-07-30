@@ -77,6 +77,9 @@ describe("R2 · al cliente NO cruza nada sensible", () => {
     expect(Object.keys(getAiRuntimeStatus()).sort()).toEqual([
       "dailyLimit", "enabled", "isMock", "maxChars", "maxInputTokens",
       "maxMessages", "maxOutputTokens", "model", "monthlyBudgetUsd", "provider",
+      // +1 en el cierre con standby: estado EFECTIVO del analizador estructurado.
+      // Es público y no secreto — la UI lo necesita para no mentir sobre la pausa.
+      "waAnalysisStandby",
     ]);
   });
 

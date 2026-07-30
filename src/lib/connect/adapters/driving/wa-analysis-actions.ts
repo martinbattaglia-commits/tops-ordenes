@@ -8,7 +8,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { analyzeConversation } from "@/lib/ai/wa-analysis/analyze";
+import { env } from "@/lib/env";
+import { analyzeConversation, WA_ANALYSIS_STANDBY_MESSAGE } from "@/lib/ai/wa-analysis/analyze";
 
 type AdminGuard = { ok: true; userId: string } | { ok: false; message: string };
 
@@ -39,8 +40,17 @@ export type AnalyzeActionResult =
     }
   | { ok: false; message: string };
 
-/** Dispara el análisis de un hilo. Acción HUMANA explícita — nunca automática. */
+/** Dispara el análisis de un hilo. Acción HUMANA explícita — nunca automática.
+ *
+ *  ⏸️ STANDBY (Dirección 2026-07-30): el corte de esta action es la SEGUNDA capa.
+ *  La primera —y la que de verdad cierra la puerta— está dentro de
+ *  `analyzeConversation`, porque es el embudo de cualquier llamador. Acá se corta
+ *  además para no pagar el `requireAdmin()` ni una consulta cuando la respuesta ya
+ *  se conoce, y para devolver el mensaje exacto que la UI muestra. */
 export async function analyzeConversationAction(raw: unknown): Promise<AnalyzeActionResult> {
+  if (!env.ai.waAnalysisEnabled) {
+    return { ok: false, message: WA_ANALYSIS_STANDBY_MESSAGE };
+  }
   const g = await requireAdmin();
   if (!g.ok) return { ok: false, message: g.message };
   const p = z.object({ conversationId: z.string().uuid() }).safeParse(raw);

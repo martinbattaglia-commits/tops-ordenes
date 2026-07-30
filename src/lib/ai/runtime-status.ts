@@ -20,8 +20,13 @@ import { CONTEXT_LIMITS } from "./wa-analysis/window";
 
 /** Lo único que la UI necesita saber. Serializable y sin secretos. */
 export interface AiRuntimeStatus {
-  /** Kill-switch: AI_ENABLED. */
+  /** Kill-switch: AI_ENABLED. Gobierna el Copilot conversacional. */
   enabled: boolean;
+  /** LINK-WA-002 · ⏸️ El analizador estructurado de WhatsApp está en PAUSA.
+   *  Es un estado distinto de `enabled`: el Copilot puede estar operativo y el
+   *  analizador pausado a la vez, que es exactamente el cierre resuelto por
+   *  Dirección. La UI lo lee de acá y NUNCA de un literal propio. */
+  waAnalysisStandby: boolean;
   /** Provider efectivo: 'mock' | 'gemini' | 'anthropic' | 'openai'. */
   provider: string;
   /** Modelo efectivo del provider. */
@@ -43,6 +48,9 @@ export function getAiRuntimeStatus(): AiRuntimeStatus {
   const provider = env.ai.provider;
   return {
     enabled: env.ai.enabled,
+    // Se informa el estado EFECTIVO, no la intención: pausado mientras el
+    // kill-switch específico no esté explícitamente habilitado.
+    waAnalysisStandby: !env.ai.waAnalysisEnabled,
     provider,
     model: env.ai.model,
     dailyLimit: env.ai.limits.requestsPerDay,

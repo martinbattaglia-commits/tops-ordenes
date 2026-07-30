@@ -178,10 +178,28 @@ async function logRun(r: RunLog): Promise<void> {
   });
 }
 
+/** Mensaje ÚNICO del standby. Se exporta para que la UI muestre exactamente esto y
+ *  no una variante escrita a mano en otro archivo. */
+export const WA_ANALYSIS_STANDBY_MESSAGE =
+  "Analizador temporalmente en pausa. No se ejecutarán nuevas corridas.";
+
 export async function analyzeConversation(
   conversationId: string,
   opts: { limit?: number } = {},
 ): Promise<AnalyzeResult> {
+  // ── STANDBY · el corte va PRIMERO, antes de cualquier otra cosa ─────────────
+  // Resolución de Dirección 2026-07-30: el analizador estructurado queda DEFERRED
+  // tras cuatro smokes reales fallidos. Este corte está ACÁ y no sólo en la server
+  // action porque es el embudo por el que pasa cualquier llamador —presente o
+  // futuro—: una ruta nueva, un cron, un script. Cortar sólo en la UI o en la
+  // action dejaría la puerta de atrás abierta.
+  //
+  // Ocurre ANTES de leer mensajes, ANTES de reclamar la corrida y ANTES de tocar el
+  // provider ⇒ cero filas nuevas, cero tokens, cero costo. No se registra una
+  // corrida «denegada»: no hubo intento de análisis que auditar.
+  if (!env.ai.waAnalysisEnabled) {
+    return { ok: false, outcome: "denied", message: WA_ANALYSIS_STANDBY_MESSAGE };
+  }
   const supabase = createClient();
   if (!supabase) return { ok: false, outcome: "error", message: "Sin cliente de datos." };
 

@@ -139,16 +139,33 @@ export function SuggestionsInbox({
       {/* Analizar un hilo — acción HUMANA explícita */}
       <div className="card p-4">
         <p className="text-sm font-semibold text-fg-primary">Analizar una conversación</p>
-        {/* D-1: el tope de mensajes es un TECHO, no una promesa. Con la constante
-            de tokens calibrada sobre la medición real, en hilos densos entran menos
-            —el tope de entrada muerde antes—. Decirlo acá y no sólo después de la
-            corrida: el operador decide antes de gastar. */}
-        <p className="mt-1 text-xs text-fg-muted">
-          Se analizan los mensajes más recientes: hasta {ai.maxMessages}, y menos si primero
-          se alcanza el tope de {ai.maxInputTokens.toLocaleString("es-AR")} tokens de entrada
-          —lo habitual en hilos largos—. Cada corrida informa cuántos entraron y cuántos
-          quedaron fuera.
-        </p>
+        {/* ⏸️ STANDBY · el estado viene del servidor (`ai.waAnalysisStandby`), nunca
+            de un literal acá: es la lección de ENV-CLIENT-001. Si alguna vez se
+            reactiva por configuración gobernada, esta pantalla lo refleja sola. */}
+        {ai.waAnalysisStandby ? (
+          <div className="mt-2 rounded border border-amber-500/40 bg-amber-400/10 p-3">
+            <p className="text-xs font-semibold text-amber-500">Analizador en pausa</p>
+            <p className="mt-1 text-xs text-fg-muted">
+              Analizador temporalmente en pausa. No se ejecutarán nuevas corridas.
+            </p>
+            <p className="mt-1 text-xs text-fg-muted">
+              Los chats históricos, la búsqueda, el importador y el historial de corridas
+              siguen disponibles. La pausa afecta sólo a la generación de nuevas
+              sugerencias.
+            </p>
+          </div>
+        ) : (
+          /* D-1: el tope de mensajes es un TECHO, no una promesa. Con la constante
+             de tokens calibrada sobre la medición real, en hilos densos entran menos
+             —el tope de entrada muerde antes—. Decirlo acá y no sólo después de la
+             corrida: el operador decide antes de gastar. */
+          <p className="mt-1 text-xs text-fg-muted">
+            Se analizan los mensajes más recientes: hasta {ai.maxMessages}, y menos si primero
+            se alcanza el tope de {ai.maxInputTokens.toLocaleString("es-AR")} tokens de entrada
+            —lo habitual en hilos largos—. Cada corrida informa cuántos entraron y cuántos
+            quedaron fuera.
+          </p>
+        )}
         <div className="mt-3 space-y-1.5">
           {threads.length === 0 && <p className="text-xs text-fg-muted">No hay hilos de WhatsApp importados.</p>}
           {threads.map((t) => (
@@ -159,10 +176,13 @@ export function SuggestionsInbox({
               <button
                 type="button"
                 className="btn btn-nexus btn-sm text-xs"
-                disabled={busy === t.id}
+                // ⏸️ En pausa el botón NO es accionable. Es la capa cosmética: el
+                // corte real está en el servidor, dentro de `analyzeConversation`.
+                disabled={ai.waAnalysisStandby || busy === t.id}
+                title={ai.waAnalysisStandby ? "Analizador en pausa" : undefined}
                 onClick={() => void runAnalysis(t.id)}
               >
-                {busy === t.id ? "Analizando…" : "Analizar"}
+                {ai.waAnalysisStandby ? "En pausa" : busy === t.id ? "Analizando…" : "Analizar"}
               </button>
             </div>
           ))}

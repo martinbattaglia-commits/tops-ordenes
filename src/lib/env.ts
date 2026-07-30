@@ -89,6 +89,23 @@ export const env = {
      */
     enabled: process.env.AI_ENABLED === "1",
     /**
+     * LINK-WA-002 · Kill-switch ESPECÍFICO del analizador estructurado de WhatsApp.
+     *
+     * STATUS: DEFERRED / STANDBY — resolución de Dirección 2026-07-30, tras cuatro
+     * smokes reales fallidos (MAX_TOKENS · context_limit_exceeded · invalid_output ·
+     * http_400). El expediente cierra con el analizador PAUSADO; se reactiva en un
+     * expediente futuro separado.
+     *
+     * 🔑 FAIL-CLOSED Y APAGADO POR DEFECTO: sólo `"1"` lo habilita. La ausencia de la
+     * variable deja el analizador en pausa, así que el standby es el estado natural
+     * del sistema y reactivarlo exige un acto explícito y gobernado.
+     *
+     * ⚠️ NO afecta al Copilot conversacional (`enabled` + `askCopilot`), ni al
+     * importador de WhatsApp, ni a los hilos históricos, ni a la auditoría, ni al
+     * presupuesto, ni al historial de corridas ya ejecutadas.
+     */
+    waAnalysisEnabled: process.env.AI_WA_ANALYSIS_ENABLED === "1",
+    /**
      * Provider del modelo (decisión Dirección 2026-07-03: **Gemini es el
      * proveedor principal previsto**). 'mock' (default) = determinista, sin
      * red, sin secretos. La activación real requiere ventana aprobada:
