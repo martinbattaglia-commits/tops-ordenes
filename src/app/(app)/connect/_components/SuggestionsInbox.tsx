@@ -1,18 +1,31 @@
 "use client";
 
-// LINK-WA-002 · FASE 2 E1 — Bandeja de revisión de sugerencias (cliente).
-// Sólo lectura + cambio de estado. «Aceptar» es conceptual en E1: no ejecuta acciones.
+// LINK-WA-002 · Bandeja de revisión de sugerencias (cliente).
+// Sólo lectura + cambio de estado. «Aceptar» deja constancia: no ejecuta acciones.
+//
+// El provider, el modelo y los topes llegan por props desde el server component
+// (`ai`), nunca de un literal ni de `env`: en el cliente `process.env.AI_PROVIDER`
+// no existe y el fallback lo haría decir «mock» siempre, aun corriendo Gemini.
 
 import { useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 import type { SuggestionRow, RunRow } from "@/lib/ai/wa-analysis/read";
+import type { AiRuntimeStatus } from "@/lib/ai/runtime-status";
 import {
   analyzeConversationAction, decideSuggestionAction,
 } from "@/lib/connect/adapters/driving/wa-analysis-actions";
 
 type Thread = { id: string; title: string | null; messages: number };
+
+/** Etiqueta del provider EFECTIVO. No inventa marcas que el entorno no declaró. */
+function providerText(ai: AiRuntimeStatus): string {
+  if (ai.isMock) return `Provider ${ai.provider} · ${ai.model}`;
+  if (ai.provider === "gemini") return `Gemini · ${ai.model}`;
+  if (ai.provider === "anthropic") return `Anthropic · ${ai.model}`;
+  return `${ai.provider} · ${ai.model}`;
+}
 
 const KIND_LABEL: Record<SuggestionRow["kind"], string> = {
   clasificacion: "Clasificación",
@@ -41,9 +54,9 @@ function detail(s: SuggestionRow): string {
 }
 
 export function SuggestionsInbox({
-  suggestions, runs, threads,
+  suggestions, runs, threads, ai,
 }: {
-  suggestions: SuggestionRow[]; runs: RunRow[]; threads: Thread[];
+  suggestions: SuggestionRow[]; runs: RunRow[]; threads: Thread[]; ai: AiRuntimeStatus;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -69,11 +82,45 @@ export function SuggestionsInbox({
 
   return (
     <div className="space-y-5">
+      {/* Estado EFECTIVO del entorno — leído del servidor, nunca un literal */}
+      <div className="card p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              ai.enabled
+                ? "bg-emerald-400/15 text-emerald-500"
+                : "bg-bg-surface-alt text-fg-muted",
+            )}
+          >
+            {ai.enabled ? "IA activa" : "IA desactivada"}
+          </span>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              ai.isMock ? "bg-amber-400/15 text-amber-500" : "bg-nexus/15 text-nexus",
+            )}
+          >
+            {ai.isMock ? "simulado" : "provider real"}
+          </span>
+          <span className="text-xs text-fg-primary">{providerText(ai)}</span>
+        </div>
+        <p className="mt-2 text-xs text-fg-muted">
+          {ai.isMock
+            ? "El análisis es determinista y no tiene costo."
+            : "Cada corrida tiene costo real, medido y auditado."}{" "}
+          Tope por corrida: {ai.maxMessages} mensajes · {ai.maxChars.toLocaleString("es-AR")} caracteres ·{" "}
+          {ai.maxInputTokens.toLocaleString("es-AR")} tokens de entrada ·{" "}
+          {ai.maxOutputTokens.toLocaleString("es-AR")} de salida. Límite diario:{" "}
+          {ai.dailyLimit} análisis. Presupuesto mensual: USD {ai.monthlyBudgetUsd}.
+        </p>
+      </div>
+
       {/* Analizar un hilo — acción HUMANA explícita */}
       <div className="card p-4">
         <p className="text-sm font-semibold text-fg-primary">Analizar una conversación</p>
         <p className="mt-1 text-xs text-fg-muted">
-          Se analizan hasta 120 mensajes por corrida. Provider mock: determinista, sin costo.
+          Se analizan hasta {ai.maxMessages} mensajes por corrida, los más recientes.
         </p>
         <div className="mt-3 space-y-1.5">
           {threads.length === 0 && <p className="text-xs text-fg-muted">No hay hilos de WhatsApp importados.</p>}
