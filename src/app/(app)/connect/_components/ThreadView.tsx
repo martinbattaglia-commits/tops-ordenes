@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/Icon";
 import { VoiceField } from "@/components/voice/VoiceField";
 import { cn } from "@/lib/utils";
@@ -9,7 +9,7 @@ import type { Message } from "@/lib/connect/types";
 import {
   messageDisplayBody, resolveMentions, type MentionPick,
 } from "@/lib/connect/domain/message";
-import { timeHM } from "@/lib/connect/format";
+import { timeHM, isNewDay, dayLabel } from "@/lib/connect/format";
 import { postMessageAction } from "@/lib/connect/adapters/driving/message-actions";
 import { markReadAction } from "@/lib/connect/adapters/driving/read-actions";
 import { createClient } from "@/lib/supabase/client";
@@ -308,22 +308,40 @@ export function ThreadView({
         {messages.length === 0 && (
           <p className="m-auto text-xs text-fg-muted">Todavía no hay mensajes. Escribí el primero.</p>
         )}
-        {messages.map((m) => {
+        {messages.map((m, i) => {
+          // LINK-WA-UX-001: separador de fecha al cambiar de día. Los hilos
+          // históricos abarcan años; sin esto un mensaje de 2021 y otro de 2026
+          // se ven idénticos. La hora de cada mensaje se conserva intacta.
+          const separator = isNewDay(m.createdAt, messages[i - 1]?.createdAt) ? (
+            <div key={`day-${m.id}`} className="flex items-center gap-2 py-1">
+              <span className="h-px flex-1 bg-stroke-soft" />
+              <span className="rounded-full bg-bg-surface-alt px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
+                {dayLabel(m.createdAt)}
+              </span>
+              <span className="h-px flex-1 bg-stroke-soft" />
+            </div>
+          ) : null;
+
           // UX-1a: los eventos de sistema (p. ej. "X agregó a Y") se renderizan como
           // línea centrada y discreta — trazabilidad en el hilo, sin burbuja de autor.
           if (m.kind === "system") {
             return (
-              <div key={m.id} className="flex justify-center">
-                <span className="max-w-[85%] rounded-full bg-bg-surface-alt px-3 py-1 text-center text-[11px] text-fg-muted">
-                  {messageDisplayBody(m)}
-                  <span className="ml-1.5 text-[10px] opacity-70">{timeHM(m.createdAt)}</span>
-                </span>
-              </div>
+              <Fragment key={m.id}>
+                {separator}
+                <div className="flex justify-center">
+                  <span className="max-w-[85%] rounded-full bg-bg-surface-alt px-3 py-1 text-center text-[11px] text-fg-muted">
+                    {messageDisplayBody(m)}
+                    <span className="ml-1.5 text-[10px] opacity-70">{timeHM(m.createdAt)}</span>
+                  </span>
+                </div>
+              </Fragment>
             );
           }
           const own = !!currentUserId && m.authorProfileId === currentUserId;
           return (
-            <div key={m.id} className={cn("flex", own ? "justify-end" : "justify-start")}>
+            <Fragment key={m.id}>
+              {separator}
+            <div className={cn("flex", own ? "justify-end" : "justify-start")}>
               <div
                 className={cn(
                   "max-w-[72%] rounded-lg px-3 py-2 text-[13px]",
@@ -350,6 +368,7 @@ export function ThreadView({
                 </div>
               </div>
             </div>
+            </Fragment>
           );
         })}
         <div ref={endRef} />
