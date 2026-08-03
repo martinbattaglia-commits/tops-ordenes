@@ -26,7 +26,9 @@ export const EXPECTED_TEST_FILES = [
   "t-a0-12-storage-stub.test.ts",
   "t-a0-13-run-report.test.ts",
   "t-a0-14-script-guards.test.ts",
+  "t-a0-15-residual-failclosed.test.ts",
+  "t-a0-16-cleanup-propagation.test.ts",
 ];
 
 /** Total exacto de casos. Se actualiza conscientemente con cada cambio. */
-export const EXPECTED_TOTAL_TESTS = 259;
+export const EXPECTED_TOTAL_TESTS = 290;

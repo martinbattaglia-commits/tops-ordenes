@@ -28,6 +28,7 @@ import {
   startEphemeralCluster,
   type EphemeralCluster,
 } from "./harness/cluster";
+import { runPendingTeardowns } from "./harness/cleanup";
 
 /** ¿El harness está usando el servidor externo de CI? */
 const IS_EXTERNAL = (process.env.P3N1A0_TEST_PG_URL ?? "").trim() !== "";
@@ -35,21 +36,9 @@ const IS_EXTERNAL = (process.env.P3N1A0_TEST_PG_URL ?? "").trim() !== "";
 const pending: EphemeralCluster[] = [];
 
 afterEach(async () => {
-  // Los fallos de cleanup NO se absorben (H-02): un teardown fallido deja
-  // proceso/directorio/base residual, y eso debe poner el caso en ROJO, no
-  // quedar oculto detrás de un estado verde. Se intentan TODOS los teardowns
-  // pendientes y después se lanzan los errores agregados.
-  const errors: string[] = [];
-  for (const c of pending.splice(0)) {
-    try {
-      await c.teardown();
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : String(e));
-    }
-  }
-  if (errors.length > 0) {
-    throw new Error(`[P3-N1A0] cleanup de T-A0-04 falló (${errors.length}): ${errors.join(" · ")}`);
-  }
+  // Los fallos de cleanup NO se absorben (H-02): usa el helper compartido, que
+  // agrega y lanza. Un teardown fallido pone el caso en ROJO.
+  await runPendingTeardowns("T-A0-04", pending);
 });
 
 /** Crea un cluster y lo registra de inmediato para su destrucción garantizada. */

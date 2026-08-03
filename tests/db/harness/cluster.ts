@@ -210,18 +210,29 @@ async function dropDatabaseVerified(adminUrl: string, dbName: string): Promise<v
  * Nunca borra el directorio mientras exista un proceso administrado vivo, y
  * nunca envía una señal sin revalidar la pertenencia (H-01).
  */
+/**
+ * Ejecutor de `pg_ctl stop`. Inyectable EXCLUSIVAMENTE para las pruebas de
+ * orden (H-01.1): un spy permite observar SI y CUÁNDO se invoca pg_ctl,
+ * relativo a la verificación de ownership, sin necesitar un postmaster real ni
+ * `initdb` — de modo que la prueba corre igual en local y en CI.
+ */
+export type PgCtlStop = (dataDir: string) => void;
+const realPgCtlStop: PgCtlStop = (dataDir) => {
+  run("pg_ctl", ["-D", dataDir, "-m", "immediate", "-w", "-t", "20", "stop"], PG_CTL_TIMEOUT_MS);
+};
+
 export async function destroyManagedCluster(
   identity: ManagedClusterIdentity,
   baseDir: string,
   inspect = inspectProcess,
+  runPgCtlStop: PgCtlStop = realPgCtlStop,
 ): Promise<void> {
   // 0) OWNERSHIP ANTES QUE NADA — incluso antes de `pg_ctl`.
   //
-  //    Hallazgo H-01 de la segunda revisión C4: `pg_ctl stop` lee
-  //    postmaster.pid y ENVÍA SEÑALES POR SÍ MISMO, de modo que una
-  //    revalidación posterior llega tarde: si el PID fue reciclado por un
-  //    proceso ajeno, pg_ctl ya le mandó SIGQUIT. Por eso acá no se ejecuta
-  //    pg_ctl ni señal alguna hasta demostrar la pertenencia.
+  //    Hallazgo H-01: `pg_ctl stop` lee postmaster.pid y ENVÍA SEÑALES POR SÍ
+  //    MISMO, de modo que una revalidación posterior llega tarde: si el PID fue
+  //    reciclado por un proceso ajeno, pg_ctl ya le mandó SIGQUIT. Por eso acá
+  //    no se ejecuta pg_ctl ni señal alguna hasta demostrar la pertenencia.
   let verdict = verifyOwnership(identity, inspect);
 
   if (!verdict.owned && !verdict.processGone) {
@@ -234,11 +245,7 @@ export async function destroyManagedCluster(
 
   if (verdict.owned) {
     // 1) Apagado ordenado, sólo con pertenencia demostrada.
-    run(
-      "pg_ctl",
-      ["-D", join(baseDir, "pgdata"), "-m", "immediate", "-w", "-t", "20", "stop"],
-      PG_CTL_TIMEOUT_MS,
-    );
+    runPgCtlStop(join(baseDir, "pgdata"));
 
     // 2) Escalada sólo mientras la pertenencia siga demostrada, revalidando
     //    antes de CADA señal.

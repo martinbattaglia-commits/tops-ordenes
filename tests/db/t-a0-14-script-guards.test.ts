@@ -11,7 +11,6 @@
  */
 
 import { describe, expect, it } from "vitest";
-// @ts-expect-error — módulo .mjs sin tipos, deliberado
 import * as mjs from "./scripts/guard.mjs";
 import {
   assertLocalMaintenanceUrl as tsMaint,

@@ -12,7 +12,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
-// @ts-expect-error — módulo .mjs sin tipos, deliberado
 import { EXPECTED_TEST_FILES, EXPECTED_TOTAL_TESTS } from "./scripts/expected-suite.mjs";
 import {
   NON_PASSING_STATUSES,
@@ -105,7 +104,7 @@ describe("T-A0-13 · reporte de corrida", () => {
   it("el total esperado está fijado y es coherente", () => {
     // Un 0 desactivaría la comprobación de total: debe ser un número real.
     expect(EXPECTED_TOTAL_TESTS).toBeGreaterThan(0);
-    expect(EXPECTED_TOTAL_TESTS).toBe(259);
+    expect(EXPECTED_TOTAL_TESTS).toBe(290);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {

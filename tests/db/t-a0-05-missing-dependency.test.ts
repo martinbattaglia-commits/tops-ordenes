@@ -19,24 +19,12 @@ import {
   loadSchema,
 } from "./harness/schema-loader";
 import { WMS_MIGRATION_MANIFEST } from "./harness/manifest";
+import { runPendingTeardowns } from "./harness/cleanup";
 
 const pending: EphemeralCluster[] = [];
 
 afterEach(async () => {
-  // Los fallos de cleanup NO se absorben (H-02): un teardown fallido deja
-  // proceso y directorio vivos, y debe poner el caso en ROJO. Se intentan
-  // todos y después se lanzan los errores agregados.
-  const errors: string[] = [];
-  for (const c of pending.splice(0)) {
-    try {
-      await c.teardown();
-    } catch (e) {
-      errors.push(e instanceof Error ? e.message : String(e));
-    }
-  }
-  if (errors.length > 0) {
-    throw new Error(`[P3-N1A0] cleanup de T-A0-05 falló (${errors.length}): ${errors.join(" · ")}`);
-  }
+  await runPendingTeardowns("T-A0-05", pending);
 });
 
 /** Manifiesto sin una migración concreta. */
