@@ -10,8 +10,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+// @ts-expect-error — módulo .mjs sin tipos, deliberado
+import { EXPECTED_TEST_FILES, EXPECTED_TOTAL_TESTS } from "./scripts/expected-suite.mjs";
 import {
   NON_PASSING_STATUSES,
   evaluateRunReport,
@@ -82,10 +84,54 @@ describe("T-A0-13 · reporte de corrida", () => {
     expect(src).toContain("process.exit(1)");
   });
 
-  it("`test:db` encadena la verificación DESPUÉS de Vitest", () => {
+  it("`test:db` prepara, corre Vitest y verifica, en ese orden", () => {
     const pkg = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8"));
     const cmd = String(pkg.scripts["test:db"]);
-    // `&&` preserva el exit code de Vitest: si falla, ni siquiera se evalúa.
-    expect(cmd).toMatch(/vitest run --config vitest\.db\.config\.ts && node tests\/db\/scripts\/assert-clean-run\.mjs/);
+    // prepare-run BORRA el reporte previo; `&&` preserva el exit code de Vitest.
+    expect(cmd).toMatch(
+      /^node tests\/db\/scripts\/prepare-run\.mjs && vitest run --config vitest\.db\.config\.ts && node tests\/db\/scripts\/assert-clean-run\.mjs && node tests\/db\/scripts\/assert-no-residual-local\.mjs$/,
+    );
+  });
+
+  // ── H-04: universo exacto y frescura del reporte ──────────────────────
+
+  it("EXPECTED_TEST_FILES coincide con los archivos reales de tests/db", () => {
+    const real = readdirSync(join(REPO_ROOT, "tests", "db"))
+      .filter((f) => f.endsWith(".test.ts"))
+      .sort();
+    expect([...EXPECTED_TEST_FILES].sort()).toEqual(real);
+  });
+
+  it("el total esperado está fijado y es coherente", () => {
+    // Un 0 desactivaría la comprobación de total: debe ser un número real.
+    expect(EXPECTED_TOTAL_TESTS).toBeGreaterThan(0);
+    expect(EXPECTED_TOTAL_TESTS).toBe(259);
+  });
+
+  it("assert-clean-run exige universo exacto, frescura y total", () => {
+    const src = readFileSync(
+      join(REPO_ROOT, "tests", "db", "scripts", "assert-clean-run.mjs"),
+      "utf8",
+    );
+    // universo
+    expect(src).toContain("EXPECTED_TEST_FILES");
+    expect(src).toContain("faltaron");
+    expect(src).toContain("sobraron");
+    // frescura
+    expect(src).toContain("STAMP_PATH");
+    expect(src).toContain("mtimeMs");
+    expect(src).toContain("obsoleto");
+    // total
+    expect(src).toContain("EXPECTED_TOTAL_TESTS");
+  });
+
+  it("prepare-run BORRA el reporte previo y sella un nonce", () => {
+    const src = readFileSync(
+      join(REPO_ROOT, "tests", "db", "scripts", "prepare-run.mjs"),
+      "utf8",
+    );
+    expect(src).toContain("rmSync(REPORT_PATH");
+    expect(src).toContain("randomBytes");
+    expect(src).toContain("t0");
   });
 });

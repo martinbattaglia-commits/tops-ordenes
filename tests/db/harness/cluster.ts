@@ -215,58 +215,66 @@ export async function destroyManagedCluster(
   baseDir: string,
   inspect = inspectProcess,
 ): Promise<void> {
-  // 1) Apagado ordenado, con timeout propio y resultado verificado.
-  const stop = run(
-    "pg_ctl",
-    ["-D", join(baseDir, "pgdata"), "-m", "immediate", "-w", "-t", "20", "stop"],
-    PG_CTL_TIMEOUT_MS,
-  );
-
-  // 2) ¿Sigue vivo y sigue siendo NUESTRO?
+  // 0) OWNERSHIP ANTES QUE NADA — incluso antes de `pg_ctl`.
+  //
+  //    Hallazgo H-01 de la segunda revisión C4: `pg_ctl stop` lee
+  //    postmaster.pid y ENVÍA SEÑALES POR SÍ MISMO, de modo que una
+  //    revalidación posterior llega tarde: si el PID fue reciclado por un
+  //    proceso ajeno, pg_ctl ya le mandó SIGQUIT. Por eso acá no se ejecuta
+  //    pg_ctl ni señal alguna hasta demostrar la pertenencia.
   let verdict = verifyOwnership(identity, inspect);
 
   if (!verdict.owned && !verdict.processGone) {
     throw new Error(
-      `[P3-N1A0] teardown ABORTADO: ${verdict.reason} ` +
-        `No se envía ninguna señal y se preserva ${baseDir} como evidencia. ` +
-        `(pg_ctl: exit=${stop.status} signal=${stop.signal} timeout=${stop.timedOut}; ` +
-        `stderr: ${stop.stderr})`,
+      `[P3-N1A0] teardown ABORTADO antes de pg_ctl: ${verdict.reason} ` +
+        `No se ejecuta pg_ctl ni se envía ninguna señal, y se preserva ` +
+        `${baseDir} como evidencia.`,
     );
   }
 
-  // 3) Escalada sólo mientras la pertenencia siga demostrada, revalidando
-  //    antes de CADA señal.
-  for (const signal of ["SIGTERM", "SIGKILL"] as const) {
-    verdict = verifyOwnership(identity, inspect);
-    if (!verdict.owned) break;
-    try {
-      process.kill(identity.pid, signal);
-    } catch {
-      break;
-    }
-    const deadline = Date.now() + 5_000;
-    while (Date.now() < deadline) {
-      if (!verifyOwnership(identity, inspect).owned) break;
-      spawnSync("sleep", ["0.1"]);
-    }
-  }
-
-  // 4) Última revalidación: no se borra el directorio con un proceso vivo.
-  verdict = verifyOwnership(identity, inspect);
   if (verdict.owned) {
-    throw new Error(
-      `[P3-N1A0] el postmaster administrado (pid ${identity.pid}) sigue vivo tras ` +
-        `SIGTERM y SIGKILL. Se preserva ${baseDir} como evidencia; no se borra ` +
-        `el directorio de un proceso vivo.`,
+    // 1) Apagado ordenado, sólo con pertenencia demostrada.
+    run(
+      "pg_ctl",
+      ["-D", join(baseDir, "pgdata"), "-m", "immediate", "-w", "-t", "20", "stop"],
+      PG_CTL_TIMEOUT_MS,
     );
-  }
-  if (!verdict.owned && !verdict.processGone) {
-    throw new Error(
-      `[P3-N1A0] identidad ambigua tras la escalada: ${verdict.reason} ` +
-        `Se preserva ${baseDir} como evidencia.`,
-    );
+
+    // 2) Escalada sólo mientras la pertenencia siga demostrada, revalidando
+    //    antes de CADA señal.
+    for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+      verdict = verifyOwnership(identity, inspect);
+      if (!verdict.owned) break;
+      try {
+        process.kill(identity.pid, signal);
+      } catch {
+        break;
+      }
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        if (!verifyOwnership(identity, inspect).owned) break;
+        spawnSync("sleep", ["0.1"]);
+      }
+    }
+
+    // 3) Última revalidación: no se borra el directorio con un proceso vivo.
+    verdict = verifyOwnership(identity, inspect);
+    if (verdict.owned) {
+      throw new Error(
+        `[P3-N1A0] el postmaster administrado (pid ${identity.pid}) sigue vivo tras ` +
+          `SIGTERM y SIGKILL. Se preserva ${baseDir} como evidencia; no se borra ` +
+          `el directorio de un proceso vivo.`,
+      );
+    }
+    if (!verdict.owned && !verdict.processGone) {
+      throw new Error(
+        `[P3-N1A0] identidad ambigua tras la escalada: ${verdict.reason} ` +
+          `Se preserva ${baseDir} como evidencia.`,
+      );
+    }
   }
 
+  // Proceso ausente y pertenencia nunca ambigua: recién ahora se borra.
   if (existsSync(baseDir)) rmSync(baseDir, { recursive: true, force: true });
 }
 
@@ -284,12 +292,21 @@ export async function startEphemeralCluster(): Promise<EphemeralCluster> {
   const dbName = makeTestDbName();
   const rollback: Array<() => Promise<void>> = [];
 
-  const unwind = async (): Promise<void> => {
+  /**
+   * Deshace los recursos adquiridos. Los fallos del propio rollback NO se
+   * absorben: se devuelven para anexarse al error original (H-02) — un
+   * rollback fallido significa que quedó un residuo y debe ser visible.
+   */
+  const unwind = async (): Promise<string[]> => {
+    const failures: string[] = [];
     for (const step of rollback.reverse()) {
-      await step().catch(() => {
-        /* rollback best-effort: el error original manda */
-      });
+      try {
+        await step();
+      } catch (re) {
+        failures.push(re instanceof Error ? re.message : String(re));
+      }
     }
+    return failures;
   };
 
   try {
@@ -322,8 +339,11 @@ export async function startEphemeralCluster(): Promise<EphemeralCluster> {
         identity: null,
         teardown: async () => {
           if (done) return;
+          // `done` se marca DESPUÉS del éxito: si el drop falla, el error se
+          // propaga y una llamada posterior puede REINTENTAR la limpieza en
+          // lugar de convertirse en un no-op que deja la base viva (H-02).
+          await dropDatabaseVerified(adminUrl, dbName);
           done = true;
-          await dropDatabaseVerified(adminUrl, dbName); // propaga fallos
         },
       };
     }
@@ -376,6 +396,7 @@ export async function startEphemeralCluster(): Promise<EphemeralCluster> {
       clusterId: `${process.pid}-${Math.random().toString(36).slice(2, 10)}`,
       pid,
       dataDir: canonicalDataDir,
+      dataDirArg: dataDir,
       executable: resolvePostgresExecutable(),
       argv: snap.argv,
       port,
@@ -407,12 +428,19 @@ export async function startEphemeralCluster(): Promise<EphemeralCluster> {
       identity,
       teardown: async () => {
         if (done) return;
+        // `done` sólo tras éxito: un fallo deja el flag en false y permite
+        // reintentar (H-02). El error se propaga siempre.
+        await destroyManagedCluster(identity, baseDir);
         done = true;
-        await destroyManagedCluster(identity, baseDir); // propaga fallos
       },
     };
   } catch (e) {
-    await unwind();
+    const rollbackFailures = await unwind();
+    if (rollbackFailures.length > 0 && e instanceof Error) {
+      e.message +=
+        `\n[P3-N1A0] además fallaron ${rollbackFailures.length} paso(s) del ` +
+        `rollback de arranque (posibles residuos): ${rollbackFailures.join(" · ")}`;
+    }
     throw e;
   }
 }

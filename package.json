@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "env:check": "node scripts/env-check.mjs",
     "test": "vitest run",
-    "test:db": "vitest run --config vitest.db.config.ts && node tests/db/scripts/assert-clean-run.mjs",
+    "test:db": "node tests/db/scripts/prepare-run.mjs && vitest run --config vitest.db.config.ts && node tests/db/scripts/assert-clean-run.mjs && node tests/db/scripts/assert-no-residual-local.mjs",
     "lint:boundaries": "node scripts/prospeccion-boundaries.mjs",
     "lint:udie-boundary": "node scripts/udie-boundary.mjs"
   },

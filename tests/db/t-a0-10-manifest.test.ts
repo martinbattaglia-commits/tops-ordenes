@@ -53,6 +53,34 @@ describe("T-A0-10 · manifiesto", () => {
     expect(unclassified).toEqual([]);
   });
 
+  // ── H-05: una migración FUTURA no puede clasificarse sola ──────────────
+
+  it("MUTANTE PERMANENTE: una migración WMS futura queda SIN CLASIFICAR", () => {
+    // La exclusión anterior era `migrationSeq(f) >= 36`, que habría absorbido
+    // en silencio a `9999_wms_required.sql`. Con exclusiones por filename
+    // exacto, una migración nueva NO está en el snapshot congelado y por tanto
+    // no queda clasificada: rompe la suite hasta una decisión consciente.
+    const futura = "9999_wms_required.sql";
+    expect(WMS_MIGRATION_MANIFEST).not.toContain(futura);
+    expect(MANIFEST_EXCLUSIONS.some((e) => e.matches(futura))).toBe(false);
+  });
+
+  it.each([
+    "0036_custody_core.sql",
+    "0126_knowledge_core.sql",
+    "0194_treasury_beneficiaries.sql",
+    "0016_tracking_foundation.sql",
+  ])("la migración existente %s SÍ está clasificada por filename exacto", (f) => {
+    expect(MANIFEST_EXCLUSIONS.some((e) => e.matches(f))).toBe(true);
+  });
+
+  it("las exclusiones NO usan un rango numérico abierto", () => {
+    // Cualquier número por encima del máximo conocido debe quedar fuera.
+    for (const f of ["0500_futura.sql", "9999_wms_required.sql", "0999_lo_que_sea.sql"]) {
+      expect(MANIFEST_EXCLUSIONS.some((e) => e.matches(f))).toBe(false);
+    }
+  });
+
   it("clasifica la migración con sufijo de letra (0061a)", () => {
     // El repositorio tiene `0061a_rrhh_modalidad_real.sql`. La validación la
     // detectó como no clasificada al construirse; el parser ahora la reconoce.

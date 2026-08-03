@@ -1,35 +1,29 @@
 /**
- * P3-N1A0 · Auditoría ESTRUCTURAL del workflow de CI (M-04).
+ * P3-N1A0 · Auditoría ESTRUCTURAL y FAIL-CLOSED del workflow de CI (H-03).
  *
- * La versión anterior hacía búsquedas de texto sobre el propio archivo y era
- * auto-referencial: para prohibir un literal, el patrón tenía que contenerlo.
- * Además sólo miraba unos pocos nombres, de modo que un paso remoto genérico
- * (`psql` contra un host externo, `curl`, un `uses:` arbitrario) pasaba.
+ * La segunda revisión C4 mostró que la versión anterior aceptaba mutaciones
+ * peligrosas con `findings=[]`: `if: false` en un step, `container` a nivel job,
+ * `env` remoto de workflow, cambio de puertos del servicio, variables extra del
+ * servicio, `working-directory` en steps, `permissions: {}`. El auditor miraba
+ * sólo lo que conocía e ignoraba lo demás.
  *
- * Ahora el YAML se PARSEA como estructura y se compara contra una ALLOWLIST
- * ESTRICTA: todo lo que no está explícitamente autorizado hace fallar la
- * auditoría. Es fail-closed: agregar un step, un `uses`, un servicio o una
- * variable exige autorizarlo en este archivo, y ese cambio queda en el diff.
+ * Ahora es una VALIDACIÓN DE ESQUEMA EXACTO: se enumeran las claves permitidas
+ * en cada nivel y CUALQUIER clave desconocida es un hallazgo. Todo lo que no
+ * está explícitamente autorizado rompe la auditoría — allowlist, no denylist.
  */
 
 import { parse } from "yaml";
 
 export const WORKFLOW_RELATIVE_PATH = ".github/workflows/p3-n1a0-db-harness.yml";
 
-/** Actions autorizadas, por referencia exacta. */
 export const ALLOWED_USES: readonly string[] = [
   "actions/checkout@v4",
   "actions/setup-node@v4",
 ];
-
-/** Imagen de servicio autorizada, exacta. */
 export const ALLOWED_SERVICE_IMAGE = "postgres:17";
-
-/** Versiones fijadas. */
 export const REQUIRED_NODE_VERSION = 22;
 export const REQUIRED_POSTGRES_MAJOR = "17";
 
-/** Nombres de step autorizados, en orden exacto. */
 export const ALLOWED_STEP_NAMES: readonly string[] = [
   "Checkout",
   "Setup Node",
@@ -38,28 +32,34 @@ export const ALLOWED_STEP_NAMES: readonly string[] = [
   "Verificar bases de test residuales",
 ];
 
-/** Comandos `run:` autorizados, normalizados (colapso de espacios + trim). */
 export const ALLOWED_RUN_COMMANDS: readonly string[] = [
   "npm ci --no-audit --no-fund",
   "npm run test:db",
   "node tests/db/scripts/assert-no-residual-databases.mjs",
 ];
 
-/** Variables de entorno autorizadas a nivel job, con su valor exacto. */
 export const ALLOWED_JOB_ENV: Readonly<Record<string, string>> = {
   P3N1A0_TEST_PG_URL: "postgresql://postgres:postgres@127.0.0.1:5432/postgres",
 };
 
-/** Permisos de GitHub autorizados. */
 export const ALLOWED_PERMISSIONS: Readonly<Record<string, string>> = {
   contents: "read",
 };
 
-/**
- * Herramientas y patrones prohibidos en cualquier `run:`. Se evalúan sobre el
- * comando normalizado, NO sobre el archivo, de modo que este módulo puede
- * nombrarlos sin auto-marcarse.
- */
+/** Puertos y env del servicio postgres, exactos. */
+export const ALLOWED_SERVICE_PORTS: readonly string[] = ["5432:5432"];
+export const ALLOWED_SERVICE_ENV: Readonly<Record<string, string>> = {
+  POSTGRES_USER: "postgres",
+  POSTGRES_PASSWORD: "postgres",
+  POSTGRES_DB: "postgres",
+};
+
+// ── Claves permitidas por nivel (allowlist estructural) ────────────────────
+const TOP_KEYS = new Set(["name", "on", "permissions", "concurrency", "jobs"]);
+const JOB_KEYS = new Set(["runs-on", "timeout-minutes", "services", "env", "steps"]);
+const STEP_KEYS = new Set(["name", "uses", "with", "run", "if"]); // `if` sólo con valor exacto
+const SERVICE_KEYS = new Set(["image", "env", "ports", "options"]);
+
 export const FORBIDDEN_RUN_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> = [
   { id: "url-postgres-literal", re: /\bpostgres(ql)?:\/\// },
   { id: "psql", re: /(^|\s|\/)psql(\s|$)/ },
@@ -79,7 +79,6 @@ export const FORBIDDEN_RUN_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
   { id: "nc", re: /(^|\s|\/)(nc|netcat)(\s|$)/ },
 ];
 
-/** Normaliza un comando: colapsa espacios y recorta. */
 export function normalizeCommand(cmd: string): string {
   return cmd.replace(/\s+/g, " ").trim();
 }
@@ -89,48 +88,48 @@ export interface AuditFinding {
   detail: string;
 }
 
-/** Recorre recursivamente el YAML buscando interpolaciones `secrets.*`. */
-function findSecretsInterpolations(node: unknown, path: string, out: AuditFinding[]): void {
+function walkForKey(node: unknown, key: string, path: string, out: AuditFinding[]): void {
+  if (Array.isArray(node)) {
+    node.forEach((v, i) => walkForKey(v, key, `${path}[${i}]`, out));
+    return;
+  }
+  if (node && typeof node === "object") {
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if (k === key) out.push({ rule: key, detail: `en ${path} (valor: ${String(v)})` });
+      walkForKey(v, key, `${path}.${k}`, out);
+    }
+  }
+}
+
+function walkForSecrets(node: unknown, path: string, out: AuditFinding[]): void {
   if (typeof node === "string") {
-    if (/\$\{\{[^}]*secrets\./.test(node)) {
-      out.push({ rule: "secrets-interpolation", detail: `en ${path}` });
-    }
+    if (/\$\{\{[^}]*secrets\./.test(node)) out.push({ rule: "secrets-interpolation", detail: `en ${path}` });
     return;
   }
   if (Array.isArray(node)) {
-    node.forEach((v, i) => findSecretsInterpolations(v, `${path}[${i}]`, out));
+    node.forEach((v, i) => walkForSecrets(v, `${path}[${i}]`, out));
     return;
   }
   if (node && typeof node === "object") {
     for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      findSecretsInterpolations(v, `${path}.${k}`, out);
+      walkForSecrets(v, `${path}.${k}`, out);
     }
   }
 }
 
-/** Recorre el YAML buscando `continue-on-error` en cualquier nivel. */
-function findContinueOnError(node: unknown, path: string, out: AuditFinding[]): void {
-  if (Array.isArray(node)) {
-    node.forEach((v, i) => findContinueOnError(v, `${path}[${i}]`, out));
-    return;
-  }
-  if (node && typeof node === "object") {
-    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
-      if (k === "continue-on-error") {
-        out.push({ rule: "continue-on-error", detail: `en ${path} (valor: ${String(v)})` });
-      }
-      findContinueOnError(v, `${path}.${k}`, out);
-    }
+/** Marca como hallazgo toda clave de `obj` que no esté en `allowed`. */
+function unknownKeys(
+  obj: Record<string, unknown> | undefined,
+  allowed: Set<string>,
+  where: string,
+  out: AuditFinding[],
+): void {
+  if (!obj || typeof obj !== "object") return;
+  for (const k of Object.keys(obj)) {
+    if (!allowed.has(k)) out.push({ rule: "unknown-key", detail: `${where}.${k} no autorizada` });
   }
 }
 
-/**
- * Audita el contenido de un workflow. Devuelve la lista de hallazgos: vacía
- * significa que el workflow está dentro del alcance autorizado.
- *
- * Función pura sobre el TEXTO del YAML: los tests pueden auditar mutantes en
- * memoria sin escribir archivos en el árbol Git.
- */
 export function auditWorkflow(yamlText: string): AuditFinding[] {
   const findings: AuditFinding[] = [];
 
@@ -144,42 +143,51 @@ export function auditWorkflow(yamlText: string): AuditFinding[] {
     return [{ rule: "yaml-shape", detail: "el documento no es un mapa YAML" }];
   }
 
-  // ── secretos y continue-on-error, en cualquier nivel ─────────────────────
-  findSecretsInterpolations(doc, "$", findings);
-  findContinueOnError(doc, "$", findings);
+  // Reglas transversales, a cualquier profundidad.
+  walkForSecrets(doc, "$", findings);
+  walkForKey(doc, "continue-on-error", "$", findings);
+  walkForKey(doc, "container", "$", findings); // ningún job/step puede usar container
+  walkForKey(doc, "working-directory", "$", findings);
+  walkForKey(doc, "defaults", "$", findings);
+  walkForKey(doc, "uses-with-token", "$", findings);
 
-  // ── permisos ─────────────────────────────────────────────────────────────
+  // ── nivel superior: sólo claves conocidas ──
+  unknownKeys(doc, TOP_KEYS, "$", findings);
+
+  // permisos: exactos
   const permissions = doc.permissions as Record<string, unknown> | undefined;
-  if (!permissions || typeof permissions !== "object") {
-    findings.push({ rule: "permissions", detail: "faltan permisos explícitos" });
+  if (!permissions || typeof permissions !== "object" || Object.keys(permissions).length === 0) {
+    findings.push({ rule: "permissions", detail: "faltan permisos explícitos (permissions vacío o ausente)" });
   } else {
-    for (const [k, v] of Object.entries(permissions)) {
-      if (ALLOWED_PERMISSIONS[k] !== String(v)) {
-        findings.push({ rule: "permissions", detail: `permiso no autorizado ${k}=${String(v)}` });
-      }
+    unknownKeys(permissions, new Set(Object.keys(ALLOWED_PERMISSIONS)), "permissions", findings);
+    for (const [k, v] of Object.entries(ALLOWED_PERMISSIONS)) {
+      if (String(permissions[k]) !== v) findings.push({ rule: "permissions", detail: `${k} debe ser ${v}` });
     }
   }
 
-  // ── disparadores: sin cron ───────────────────────────────────────────────
+  // disparadores: sin cron
   const on = doc.on as Record<string, unknown> | undefined;
   if (on && typeof on === "object" && "schedule" in on) {
     findings.push({ rule: "schedule", detail: "el workflow no debe correr por cron" });
   }
 
-  // ── jobs ─────────────────────────────────────────────────────────────────
+  // ── jobs ──
   const jobs = doc.jobs as Record<string, unknown> | undefined;
-  if (!jobs || typeof jobs !== "object") {
-    return [...findings, { rule: "jobs", detail: "no hay jobs" }];
-  }
+  if (!jobs || typeof jobs !== "object") return [...findings, { rule: "jobs", detail: "no hay jobs" }];
   const jobNames = Object.keys(jobs);
   if (jobNames.length !== 1 || jobNames[0] !== "db-harness") {
     findings.push({ rule: "jobs", detail: `jobs inesperados: ${jobNames.join(", ")}` });
   }
-
   const job = jobs["db-harness"] as Record<string, unknown> | undefined;
   if (!job) return [...findings, { rule: "jobs", detail: "falta el job db-harness" }];
 
-  // ── servicios ────────────────────────────────────────────────────────────
+  unknownKeys(job, JOB_KEYS, "job", findings);
+
+  if (job["runs-on"] !== "ubuntu-latest") {
+    findings.push({ rule: "runs-on", detail: `runs-on="${String(job["runs-on"])}" no autorizado` });
+  }
+
+  // ── servicios ──
   const services = job.services as Record<string, unknown> | undefined;
   if (!services || typeof services !== "object") {
     findings.push({ rule: "services", detail: "falta el servicio postgres" });
@@ -189,51 +197,59 @@ export function auditWorkflow(yamlText: string): AuditFinding[] {
       findings.push({ rule: "services", detail: `servicios inesperados: ${svcNames.join(", ")}` });
     }
     const pg = services.postgres as Record<string, unknown> | undefined;
-    const image = pg?.image;
-    if (image !== ALLOWED_SERVICE_IMAGE) {
-      findings.push({
-        rule: "service-image",
-        detail: `imagen "${String(image)}" ≠ "${ALLOWED_SERVICE_IMAGE}"`,
-      });
+    unknownKeys(pg, SERVICE_KEYS, "services.postgres", findings);
+    if (pg?.image !== ALLOWED_SERVICE_IMAGE) {
+      findings.push({ rule: "service-image", detail: `imagen "${String(pg?.image)}" ≠ "${ALLOWED_SERVICE_IMAGE}"` });
+    }
+    // puertos exactos
+    const ports = (pg?.ports ?? []) as unknown[];
+    const portStrs = ports.map(String).sort();
+    if (JSON.stringify(portStrs) !== JSON.stringify([...ALLOWED_SERVICE_PORTS].sort())) {
+      findings.push({ rule: "service-ports", detail: `puertos ${portStrs.join(",")} no autorizados` });
+    }
+    // env del servicio exacto
+    const svcEnv = (pg?.env ?? {}) as Record<string, unknown>;
+    unknownKeys(svcEnv, new Set(Object.keys(ALLOWED_SERVICE_ENV)), "services.postgres.env", findings);
+    for (const [k, v] of Object.entries(ALLOWED_SERVICE_ENV)) {
+      if (String(svcEnv[k]) !== v) findings.push({ rule: "service-env", detail: `${k} no autorizado` });
     }
   }
 
-  // ── env del job ──────────────────────────────────────────────────────────
+  // ── env del job: exacto ──
   const jobEnv = (job.env ?? {}) as Record<string, unknown>;
-  for (const [k, v] of Object.entries(jobEnv)) {
-    if (!(k in ALLOWED_JOB_ENV)) {
-      findings.push({ rule: "job-env", detail: `variable no autorizada: ${k}` });
-    } else if (String(v) !== ALLOWED_JOB_ENV[k]) {
-      findings.push({ rule: "job-env", detail: `valor no autorizado para ${k}` });
-    }
-  }
-  for (const k of Object.keys(ALLOWED_JOB_ENV)) {
-    if (!(k in jobEnv)) findings.push({ rule: "job-env", detail: `falta la variable ${k}` });
+  unknownKeys(jobEnv, new Set(Object.keys(ALLOWED_JOB_ENV)), "job.env", findings);
+  for (const [k, v] of Object.entries(ALLOWED_JOB_ENV)) {
+    if (String(jobEnv[k]) !== v) findings.push({ rule: "job-env", detail: `valor no autorizado para ${k}` });
   }
 
-  // ── steps ────────────────────────────────────────────────────────────────
+  // ── steps: cantidad, orden, claves y valores exactos ──
   const steps = job.steps as Array<Record<string, unknown>> | undefined;
-  if (!Array.isArray(steps)) {
-    return [...findings, { rule: "steps", detail: "el job no declara steps" }];
-  }
+  if (!Array.isArray(steps)) return [...findings, { rule: "steps", detail: "el job no declara steps" }];
 
   const names = steps.map((s) => String(s.name ?? "<sin nombre>"));
   if (names.length !== ALLOWED_STEP_NAMES.length) {
-    findings.push({
-      rule: "step-count",
-      detail: `${names.length} steps; se autorizan ${ALLOWED_STEP_NAMES.length}`,
-    });
+    findings.push({ rule: "step-count", detail: `${names.length} steps; se autorizan ${ALLOWED_STEP_NAMES.length}` });
   }
   names.forEach((n, i) => {
     if (ALLOWED_STEP_NAMES[i] !== n) {
-      findings.push({
-        rule: "step-name",
-        detail: `step ${i}: "${n}" no autorizado (se esperaba "${ALLOWED_STEP_NAMES[i] ?? "<ninguno>"}")`,
-      });
+      findings.push({ rule: "step-name", detail: `step ${i}: "${n}" no autorizado` });
     }
   });
 
   for (const [i, step] of steps.entries()) {
+    unknownKeys(step, STEP_KEYS, `step[${i}]`, findings);
+
+    // `if` sólo se admite con valores de una allowlist estricta: `true` (corre
+    // siempre) o `always()` (corre incluso tras un fallo previo, necesario para
+    // el paso de bases residuales). CUALQUIER otro valor —`false`, `success()`,
+    // una expresión— se rechaza, porque podría DESACTIVAR el step (H-03).
+    if ("if" in step) {
+      const cond = String(step.if).trim().toLowerCase();
+      if (cond !== "true" && cond !== "always()") {
+        findings.push({ rule: "step-if", detail: `step ${i}: if=${String(step.if)} no autorizado` });
+      }
+    }
+
     const uses = step.uses;
     if (uses !== undefined) {
       if (!ALLOWED_USES.includes(String(uses))) {
@@ -241,11 +257,9 @@ export function auditWorkflow(yamlText: string): AuditFinding[] {
       }
       if (String(uses).startsWith("actions/setup-node")) {
         const w = (step.with ?? {}) as Record<string, unknown>;
+        unknownKeys(w, new Set(["node-version", "cache"]), `step[${i}].with`, findings);
         if (Number(w["node-version"]) !== REQUIRED_NODE_VERSION) {
-          findings.push({
-            rule: "node-version",
-            detail: `node-version=${String(w["node-version"])} ≠ ${REQUIRED_NODE_VERSION}`,
-          });
+          findings.push({ rule: "node-version", detail: `node-version=${String(w["node-version"])} ≠ ${REQUIRED_NODE_VERSION}` });
         }
       }
     }
@@ -257,12 +271,7 @@ export function auditWorkflow(yamlText: string): AuditFinding[] {
         findings.push({ rule: "run-command", detail: `step ${i}: comando no autorizado` });
       }
       for (const { id, re } of FORBIDDEN_RUN_PATTERNS) {
-        if (re.test(cmd)) {
-          findings.push({ rule: `forbidden:${id}`, detail: `step ${i}` });
-        }
-      }
-      if (step.shell !== undefined) {
-        findings.push({ rule: "shell", detail: `step ${i}: shell explícito no autorizado` });
+        if (re.test(cmd)) findings.push({ rule: `forbidden:${id}`, detail: `step ${i}` });
       }
     }
 
@@ -271,11 +280,11 @@ export function auditWorkflow(yamlText: string): AuditFinding[] {
     }
   }
 
-  // ── PostgreSQL 17 en la imagen del servicio ──────────────────────────────
-  const pg = (job.services as Record<string, unknown> | undefined)?.postgres as
+  // ── PostgreSQL 17 en la imagen ──
+  const pg2 = (job.services as Record<string, unknown> | undefined)?.postgres as
     | Record<string, unknown>
     | undefined;
-  const tag = String(pg?.image ?? "").split(":")[1] ?? "";
+  const tag = String(pg2?.image ?? "").split(":")[1] ?? "";
   if (tag !== REQUIRED_POSTGRES_MAJOR) {
     findings.push({ rule: "postgres-major", detail: `tag "${tag}" ≠ "${REQUIRED_POSTGRES_MAJOR}"` });
   }

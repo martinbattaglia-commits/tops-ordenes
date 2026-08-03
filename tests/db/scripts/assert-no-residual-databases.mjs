@@ -1,50 +1,53 @@
 /**
  * P3-N1A0 · Verifica que la corrida no dejó bases de test residuales.
  *
- * Se ejecuta como último paso del workflow. Usa EXCLUSIVAMENTE la conexión de
- * test aprobada (`P3N1A0_TEST_PG_URL`) y revalida por su cuenta que apunte a
- * 127.0.0.1 sin query parameters: el paso corre con `if: always()`, incluso
- * cuando la suite falló, así que no puede apoyarse en que las guardas del
- * harness ya se hayan ejecutado.
- *
- * Es un script y no un `run:` con `psql` para que el auditor de T-A0-06 pueda
- * comparar el comando contra una forma exacta y corta, y para que la lógica de
- * conexión quede sujeta a las mismas reglas que el resto del harness.
+ * Último paso del workflow, con `if: always()`. La revisión C4 (MEDIUM) señaló
+ * que abría un Client con una guarda reducida y divergente de `connectGuarded`;
+ * ahora usa exactamente la MISMA guarda que el resto del harness —vía la
+ * implementación compartida `scripts/guard.mjs`, cuya paridad con `guard.ts`
+ * está probada— y el mismo version gate.
  */
 
 import { Client } from "pg";
+import {
+  assertLocalMaintenanceUrl,
+  assertNoProductionEnv,
+  parseAndCheckServerVersion,
+} from "./guard.mjs";
 
 const RAW = (process.env.P3N1A0_TEST_PG_URL ?? "").trim();
-
 if (RAW === "") {
   console.error("[P3-N1A0] P3N1A0_TEST_PG_URL no está definida.");
   process.exit(1);
 }
 
-let url;
+// La URL apunta a la base de mantenimiento `postgres`; se normaliza a ella y se
+// valida con la guarda de mantenimiento compartida.
+let maintenance;
 try {
-  url = new URL(RAW);
+  const u = new URL(RAW);
+  u.pathname = "/postgres";
+  maintenance = u.toString();
 } catch {
   console.error("[P3-N1A0] P3N1A0_TEST_PG_URL no es parseable.");
   process.exit(1);
 }
 
-if (url.hostname !== "127.0.0.1") {
-  console.error(`[P3-N1A0] destino no permitido: "${url.hostname}". Sólo 127.0.0.1.`);
-  process.exit(1);
-}
-if (url.search !== "") {
-  console.error("[P3-N1A0] la URL incluye query parameters. No se admite ninguno.");
-  process.exit(1);
-}
-if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
-  console.error(`[P3-N1A0] protocolo no admitido: ${url.protocol}`);
+try {
+  assertNoProductionEnv();
+  assertLocalMaintenanceUrl(maintenance);
+} catch (e) {
+  console.error(e.message);
   process.exit(1);
 }
 
-const client = new Client({ connectionString: RAW, connectionTimeoutMillis: 15_000 });
+const client = new Client({ connectionString: maintenance, connectionTimeoutMillis: 15_000 });
 await client.connect();
 try {
+  // Mismo version gate que el harness: no se opera sobre un PostgreSQL ≠ 17.
+  const ver = await client.query("show server_version_num");
+  parseAndCheckServerVersion(ver.rows[0]?.server_version_num);
+
   const { rows } = await client.query(
     `select coalesce(string_agg(datname, ', ' order by datname), '') as leftovers,
             count(*)::int as n
@@ -58,6 +61,9 @@ try {
     process.exit(1);
   }
   console.log("P3_N1A0_NO_RESIDUAL_DATABASES");
+} catch (e) {
+  console.error(e.message);
+  process.exit(1);
 } finally {
   await client.end();
 }

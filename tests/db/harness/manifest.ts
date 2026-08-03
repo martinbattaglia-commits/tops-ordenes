@@ -92,37 +92,192 @@ export function migrationSeq(file: string): number {
  * parte del cierre WMS, y `validateManifest()` exige que toda migración del
  * repositorio quede cubierta por alguna.
  */
+/**
+ * Snapshot CONGELADO de las migraciones excluidas del cierre WMS, tal como
+ * existían en el árbol al cerrar la segunda revisión C4.
+ *
+ * Hallazgo H-05: la exclusión anterior usaba `migrationSeq(f) >= 36`, que
+ * clasificaba AUTOMÁTICAMENTE cualquier migración futura —incluida una posible
+ * migración WMS necesaria como `9999_wms_required.sql`— sin exigir una decisión
+ * consciente. Ahora las exclusiones son por FILENAME EXACTO: una migración
+ * nueva NO figura en este set, queda "sin clasificar" y ROMPE la suite hasta
+ * que alguien decida explícitamente si va al manifiesto o a una exclusión, y
+ * ese cambio queda visible en el diff.
+ */
+const FROZEN_EXCLUDED_FILES: ReadonlySet<string> = new Set([
+  "0016_tracking_foundation.sql",
+  "0017_tracking_geofences.sql",
+  "0018_tracking_events.sql",
+  "0019_tracking_rbac_seed.sql",
+  "0036_custody_core.sql",
+  "0037_custody_storage.sql",
+  "0038_custody_evidence.sql",
+  "0039_custody_pod_reads.sql",
+  "0040_profiles_pii_lockdown.sql",
+  "0041_crm_enums.sql",
+  "0042_crm_core.sql",
+  "0043_crm_quotes_proposals.sql",
+  "0044_crm_contracts_onboarding.sql",
+  "0045_crm_sync_audit.sql",
+  "0046_crm_rbac_seed.sql",
+  "0047_crm_write_path_fns.sql",
+  "0048_crm_ingest_lead.sql",
+  "0049_crm_list_commercial_users.sql",
+  "0050_crm_promote_lead.sql",
+  "0051_crm_onboarding_autocreate.sql",
+  "0052_crm_opportunity_clientify_mirror.sql",
+  "0052_treasury_permission_module.sql",
+  "0053_crm_ingest_deal.sql",
+  "0053_treasury_core.sql",
+  "0054_treasury_functions.sql",
+  "0055_treasury_security_fix.sql",
+  "0056_ap_fiscal_detail.sql",
+  "0056_rrhh_permission_module.sql",
+  "0057_ap_workflow_permissions.sql",
+  "0057_rrhh_rbac_seed.sql",
+  "0058_ap_rpcs.sql",
+  "0058_rrhh_core.sql",
+  "0059_iva_compras_views.sql",
+  "0059_rrhh_workflows.sql",
+  "0060_rrhh_documents_storage.sql",
+  "0061_mi_espacio_permission.sql",
+  "0061a_rrhh_modalidad_real.sql",
+  "0062_rrhh_carga_inicial.sql",
+  "0063_rrhh_bancario_carga.sql",
+  "0064_rrhh_doc_class_recibo.sql",
+  "0065_compliance_core.sql",
+  "0066_crm_units.sql",
+  "0067_crm_units_seed.sql",
+  "0068_crm_reserve_units.sql",
+  "0069_crm_opportunities_deal_name.sql",
+  "0070_rbac_gerencia_finanzas.sql",
+  "0071_fiscal_hardening.sql",
+  "0072_vat_sales_fiscal_detail.sql",
+  "0073_libro_iva_ventas.sql",
+  "0074_add_operator_ruth.sql",
+  "0075_email_sends_dedup.sql",
+  "0076_crm_contracts.sql",
+  "0077_contracts_drive_sync.sql",
+  "0081_compliance_drive_sync.sql",
+  "0082_cash_box_foundation.sql",
+  "0083_cash_box_rollback.sql",
+  "0084_announcements.sql",
+  "0085_clientify_dashboard.sql",
+  "0086_mi_espacio_module_enum.sql",
+  "0087_mi_espacio_permission_and_grant.sql",
+  "0088_prospeccion_module_enum.sql",
+  "0089_prospeccion_core.sql",
+  "0091_prospeccion_rollback.sql",
+  "0092_add_deal_source.sql",
+  "0093_refresh_v_clientify_deals_enriched_deal_source.sql",
+  "0094_rpc_add_deal_source_to_cache_replace.sql",
+  "0095_add_lost_reason_to_deals.sql",
+  "0096_sync_log_observability.sql",
+  "0097_recon_schema.sql",
+  "0098_recon_rpc.sql",
+  "0099_ganancias_retencion.sql",
+  "0100_vendors_fiscal_ganancias.sql",
+  "0101_fiscal_dashboard_views.sql",
+  "0102_recon_views.sql",
+  "0103_recon_role_fix.sql",
+  "0104_recon_approve_role_fix.sql",
+  "0105_recon_approve_admin_self_approval.sql",
+  "0106_prospeccion_qualification.sql",
+  "0107_prospeccion_approval.sql",
+  "0120_chart_of_accounts_baseline.sql",
+  "0121_legajo_cuenta_contable.sql",
+  "0122_mipyme_foundation.sql",
+  "0123_comprobante_tipo_fce_enum.sql",
+  "0124_contabilidad_permissions_seed.sql",
+  "0125_knowledge_module_enum.sql",
+  "0126_knowledge_core.sql",
+  "0127_knowledge_rpc.sql",
+  "0128_knowledge_projection_triggers.sql",
+  "0129_knowledge_rbac_seed.sql",
+  "0130_knowledge_views.sql",
+  "0131_knowledge_harden_grants.sql",
+  "0132_knowledge_emit_status.sql",
+  "0133_knowledge_dispatch.sql",
+  "0134_knowledge_sentinel_fix.sql",
+  "0135_knowledge_adapter_recon.sql",
+  "0136_knowledge_adapter_po.sql",
+  "0137_knowledge_adapter_treasury.sql",
+  "0138_knowledge_adapter_custody.sql",
+  "0139_knowledge_adapter_rrhh.sql",
+  "0140_knowledge_kpis_admin.sql",
+  "0142_connect_module_enum.sql",
+  "0143_connect_schema.sql",
+  "0144_connect_rpc.sql",
+  "0145_connect_views.sql",
+  "0146_connect_rbac_seed.sql",
+  "0147_connect_notifications_ext.sql",
+  "0148_connect_storage.sql",
+  "0149_connect_knowledge_adapter.sql",
+  "0150_connect_join_channel.sql",
+  "0151_connect_moderation_failclose.sql",
+  "0152_connect_get_or_create_entity_conversation.sql",
+  "0153_connect_search.sql",
+  "0154_profile_experience.sql",
+  "0155_connect_rbac_pilot_grants.sql",
+  "0156_fix_connect_search_ambiguous_conversation_id.sql",
+  "0157_fix_connect_search_union_order_by.sql",
+  "0158_connect_member_profile_search.sql",
+  "0159_connect_archive_rename_hotfix.sql",
+  "0160_connect_outbox_worker.sql",
+  "0161_connect_mentions_fanout.sql",
+  "0162_connect_notification_actions.sql",
+  "0163_connect_archived_guards.sql",
+  "0164_connect_incidents_schema.sql",
+  "0165_connect_incidents_rpcs.sql",
+  "0166_connect_incidents_knowledge.sql",
+  "0167_connect_tasks_enums_permissions.sql",
+  "0168_connect_tasks_schema.sql",
+  "0169_connect_tasks_rpcs_workflows.sql",
+  "0170_connect_tasks_knowledge.sql",
+  "0171_wa_inbound_events.sql",
+  "0172_connect_automations_mvp.sql",
+  "0173_ai_module_enum.sql",
+  "0174_ai_core.sql",
+  "0175_ai_rbac_seed.sql",
+  "0176_knowledge_docs_projection.sql",
+  "0177_knowledge_view_pilot_grant.sql",
+  "0178_docs_retrieval_improvements.sql",
+  "0179_docs_browse_fts.sql",
+  "0180_ai_budget_overrides.sql",
+  "0181_ai_finance_overview.sql",
+  "0182_ai_analytics_overview.sql",
+  "0183_ai_customer_revenue.sql",
+  "0184_ai_revenue_by_category.sql",
+  "0185_company_knowledge_base.sql",
+  "0186_manual_nexus_kb_layer.sql",
+  "0189_treasury_operational_movement_enum.sql",
+  "0190_treasury_operational_movements.sql",
+  "0191_treasury_operational_movement_fix_reference_type.sql",
+  "0192_treasury_type_direction_add_movimiento_operativo.sql",
+  "0193_treasury_operational_category_add_honorarios_sueldo.sql",
+  "0194_treasury_beneficiaries.sql",
+]);
+
 export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
   id: string;
   matches: (file: string) => boolean;
   reason: string;
 }> = [
   {
-    id: "tracking-postgis",
-    matches: (f) => [16, 17].includes(migrationSeq(f)),
+    id: "frozen-excluded-snapshot",
+    // Filename EXACTO contra el snapshot congelado: NO es un rango. Una
+    // migración nueva no está en el set y por tanto NO queda clasificada.
+    matches: (f) => FROZEN_EXCLUDED_FILES.has(f),
     reason:
-      "0016/0017 ejecutan `create extension postgis`, no disponible en PostgreSQL " +
-      "vanilla. Pertenecen al dominio Tracking; ninguna migración del cierre WMS " +
-      "depende de ellas.",
-  },
-  {
-    id: "tracking-dependientes",
-    matches: (f) => [18, 19].includes(migrationSeq(f)),
-    reason:
-      "0018/0019 dependen de las tablas creadas por 0016/0017. Dominio Tracking, ajeno al WMS.",
-  },
-  {
-    id: "posteriores-al-cierre-wms",
-    matches: (f) => migrationSeq(f) >= 36,
-    reason:
-      "Posteriores al cierre WMS. 0036 (custody) queda excluida por su acoplamiento " +
-      "con PostGIS; ADVERTENCIA EXPLÍCITA: 0036 TAMBIÉN modifica `packing_units` y " +
-      "`shipments`, es decir, toca objetos del dominio WMS. Se excluye porque no es " +
-      "necesaria para las garantías funcionales que A0 verifica, NO porque sea ajena " +
-      "al WMS. NO debe afirmarse que ninguna migración posterior toca objetos próximos " +
-      "al WMS: 0036 lo hace. Si una prueba futura necesita custody, packing_units o " +
-      "shipments en su forma post-0036, habrá que resolver PostGIS o stubearlo, y el " +
-      "manifiesto deberá cambiar de forma visible.",
+      "Snapshot congelado de las migraciones ajenas al cierre WMS al cerrar la " +
+      "segunda revisión C4: dominio Tracking (0016-0019, PostGIS) y todo lo " +
+      "posterior a 0035 (custody, CRM, tesorería, knowledge, connect, AI, fiscal). " +
+      "0016/0017/0036/0126 además requieren PostGIS. ADVERTENCIA: 0036 (custody) " +
+      "TAMBIÉN modifica `packing_units` y `shipments`, objetos del dominio WMS; se " +
+      "excluye porque A0 no necesita su forma post-0036, NO porque sea ajena al WMS. " +
+      "NO debe afirmarse que ninguna migración posterior toca objetos del WMS: 0036 " +
+      "lo hace. Toda migración NUEVA queda fuera de este set, sin clasificar, y " +
+      "rompe la suite hasta una decisión explícita.",
   },
 ];
 

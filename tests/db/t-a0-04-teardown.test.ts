@@ -35,10 +35,20 @@ const IS_EXTERNAL = (process.env.P3N1A0_TEST_PG_URL ?? "").trim() !== "";
 const pending: EphemeralCluster[] = [];
 
 afterEach(async () => {
+  // Los fallos de cleanup NO se absorben (H-02): un teardown fallido deja
+  // proceso/directorio/base residual, y eso debe poner el caso en ROJO, no
+  // quedar oculto detrás de un estado verde. Se intentan TODOS los teardowns
+  // pendientes y después se lanzan los errores agregados.
+  const errors: string[] = [];
   for (const c of pending.splice(0)) {
-    await c.teardown().catch(() => {
-      /* el caso ya evaluó lo suyo; acá sólo garantizamos que no quede rastro */
-    });
+    try {
+      await c.teardown();
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (errors.length > 0) {
+    throw new Error(`[P3-N1A0] cleanup de T-A0-04 falló (${errors.length}): ${errors.join(" · ")}`);
   }
 });
 

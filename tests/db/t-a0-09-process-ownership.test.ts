@@ -59,6 +59,7 @@ function identityFor(pid: number, dataDir: string, port: number): ManagedCluster
     clusterId: "test-cluster",
     pid,
     dataDir,
+    dataDirArg: dataDir,
     executable: "/opt/pg/bin/postgres",
     argv: `/opt/pg/bin/postgres -D ${dataDir} -p ${port}`,
     port,

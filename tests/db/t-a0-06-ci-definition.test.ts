@@ -110,7 +110,7 @@ describe("T-A0-06 · definición de CI", () => {
     });
     const r = rules(mutated);
     expect(r).toContain("secrets-interpolation");
-    expect(r).toContain("job-env");
+    expect(r).toContain("unknown-key");
   });
 
   it("MUTANTE: imagen de servicio distinta", () => {
@@ -159,7 +159,7 @@ describe("T-A0-06 · definición de CI", () => {
       const job = jobs["db-harness"] as Record<string, unknown>;
       (job.env as Record<string, unknown>).EXTRA = "x";
     });
-    expect(rules(mutated)).toContain("job-env");
+    expect(rules(mutated)).toContain("unknown-key");
   });
 
   it("MUTANTE: destino de P3N1A0_TEST_PG_URL cambiado", () => {
@@ -193,11 +193,11 @@ describe("T-A0-06 · definición de CI", () => {
     expect(rules(mutated)).toContain("jobs");
   });
 
-  it("MUTANTE: shell explícito en un step", () => {
+  it("MUTANTE: shell explícito en un step (clave desconocida)", () => {
     const mutated = mutate((doc) => {
       steps(doc)[2].shell = "bash";
     });
-    expect(rules(mutated)).toContain("shell");
+    expect(rules(mutated)).toContain("unknown-key");
   });
 
   it("MUTANTE: comando de bases residuales alterado", () => {
@@ -205,6 +205,112 @@ describe("T-A0-06 · definición de CI", () => {
       steps(doc)[4].run = "node tests/db/scripts/assert-no-residual-databases.mjs --skip";
     });
     expect(rules(mutated)).toContain("run-command");
+  });
+
+
+  // ── MUTANTES ESTRUCTURALES nuevos (2ª C4 · H-03) ────────────────────────
+
+  it("MUTANTE: `if: false` en el step de la suite lo desactivaría", () => {
+    const mutated = mutate((doc) => {
+      steps(doc)[3].if = false;
+    });
+    expect(rules(mutated)).toContain("step-if");
+  });
+
+  it("MUTANTE: `if: false` en el control de bases residuales", () => {
+    const mutated = mutate((doc) => {
+      steps(doc)[4].if = false;
+    });
+    expect(rules(mutated)).toContain("step-if");
+  });
+
+  it("MUTANTE: `if` con expresión arbitraria (no always()) se rechaza", () => {
+    const mutated = mutate((doc) => {
+      steps(doc)[3].if = "github.actor == 'nadie'";
+    });
+    expect(rules(mutated)).toContain("step-if");
+  });
+
+  it("el `if: always()` legítimo del control residual NO se marca", () => {
+    // El workflow real lo usa; debe seguir pasando.
+    const findings = auditWorkflow(WORKFLOW_TEXT).filter((f) => f.rule === "step-if");
+    expect(findings).toEqual([]);
+  });
+
+  it("MUTANTE: `container` a nivel job", () => {
+    const mutated = mutate((doc) => {
+      const jobs = doc.jobs as Record<string, unknown>;
+      (jobs["db-harness"] as Record<string, unknown>).container = "node:22";
+    });
+    const r = rules(mutated);
+    expect(r).toContain("container");
+    expect(r).toContain("unknown-key");
+  });
+
+  it("MUTANTE: `env` remoto a nivel workflow", () => {
+    const mutated = mutate((doc) => {
+      doc.env = { EVIL: "postgres://x@remote:5432/db" };
+    });
+    expect(rules(mutated)).toContain("unknown-key");
+  });
+
+  it("MUTANTE: puertos del servicio cambiados", () => {
+    const mutated = mutate((doc) => {
+      const jobs = doc.jobs as Record<string, unknown>;
+      const svc = (jobs["db-harness"] as Record<string, unknown>).services as Record<string, unknown>;
+      (svc.postgres as Record<string, unknown>).ports = ["6543:5432"];
+    });
+    expect(rules(mutated)).toContain("service-ports");
+  });
+
+  it("MUTANTE: variable extra en el servicio", () => {
+    const mutated = mutate((doc) => {
+      const jobs = doc.jobs as Record<string, unknown>;
+      const svc = (jobs["db-harness"] as Record<string, unknown>).services as Record<string, unknown>;
+      const env = (svc.postgres as Record<string, unknown>).env as Record<string, unknown>;
+      env.EXTRA = "x";
+    });
+    expect(rules(mutated)).toContain("unknown-key");
+  });
+
+  it("MUTANTE: `working-directory` en un step", () => {
+    const mutated = mutate((doc) => {
+      steps(doc)[3]["working-directory"] = "/tmp";
+    });
+    const r = rules(mutated);
+    expect(r).toContain("working-directory");
+    expect(r).toContain("unknown-key");
+  });
+
+  it("MUTANTE: `permissions: {}` vacío", () => {
+    const mutated = mutate((doc) => {
+      doc.permissions = {};
+    });
+    expect(rules(mutated)).toContain("permissions");
+  });
+
+  it("MUTANTE: `runs-on` cambiado", () => {
+    const mutated = mutate((doc) => {
+      const jobs = doc.jobs as Record<string, unknown>;
+      (jobs["db-harness"] as Record<string, unknown>)["runs-on"] = "self-hosted";
+    });
+    expect(rules(mutated)).toContain("runs-on");
+  });
+
+  it("MUTANTE: clave desconocida a nivel job", () => {
+    const mutated = mutate((doc) => {
+      const jobs = doc.jobs as Record<string, unknown>;
+      (jobs["db-harness"] as Record<string, unknown>).strategy = { "fail-fast": false };
+    });
+    expect(rules(mutated)).toContain("unknown-key");
+  });
+
+  it("MUTANTE: `with` de setup-node con clave desconocida", () => {
+    const mutated = mutate((doc) => {
+      const s = steps(doc).find((x) => String(x.uses).startsWith("actions/setup-node"));
+      (s!.with as Record<string, unknown>)["registry-url"] = "https://evil";
+    });
+    expect(rules(mutated)).toContain("unknown-key");
   });
 
   it("un YAML inválido produce un hallazgo, no una excepción", () => {

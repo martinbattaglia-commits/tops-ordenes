@@ -34,8 +34,10 @@ export interface ManagedClusterIdentity {
   /** Identificador aleatorio del cluster administrado por esta corrida. */
   clusterId: string;
   pid: number;
-  /** Data directory canónico (realpath). */
+  /** Data directory canónico (realpath), para comparar postmaster.pid. */
   dataDir: string;
+  /** Valor EXACTO pasado como `-D` a postgres, tal como aparece en argv. */
+  dataDirArg: string;
   /** Ejecutable canónico de PostgreSQL. */
   executable: string;
   argv: string;
@@ -135,8 +137,13 @@ export function verifyOwnership(
     };
   }
 
-  // 4) argv referencia EXACTAMENTE nuestro data directory.
-  if (!snap.argv.includes(identity.dataDir)) {
+  // 4) argv referencia EXACTAMENTE el data directory tal como se pasó a
+  //    postgres. Se compara contra el valor `-D` crudo (dataDirArg): en macOS
+  //    la forma canónica (/private/var/…) difiere de la que ve argv (/var/…).
+  if (
+    !snap.argv.includes(identity.dataDirArg) &&
+    !snap.argv.includes(identity.dataDir)
+  ) {
     return {
       owned: false,
       processGone: false,
@@ -174,6 +181,7 @@ export function verifyOwnership(
   }
   const filePid = Number.parseInt((lines[0] ?? "").trim(), 10);
   const fileDataDir = (lines[1] ?? "").trim();
+  const fileStartEpoch = (lines[2] ?? "").trim();
   const filePort = Number.parseInt((lines[3] ?? "").trim(), 10);
 
   if (filePid !== identity.pid) {
@@ -196,6 +204,44 @@ export function verifyOwnership(
       processGone: false,
       reason: `postmaster.pid declara el puerto ${filePort}, no el administrado ${identity.port}.`,
     };
+  }
+
+  // 7) los SNAPSHOTS registrados al arrancar siguen describiendo este cluster.
+  //    La revisión C4 señaló que se guardaban sin compararse jamás. Se comparan
+  //    las líneas estables de postmaster.pid (pid, datadir, start-epoch, port —
+  //    la línea de estado "ready" puede cambiar legítimamente) y postmaster.opts
+  //    completo, que es inmutable durante la vida del proceso.
+  if (identity.postmasterPid !== "") {
+    const snapLines = identity.postmasterPid.split("\n");
+    const snapStable = [snapLines[0], snapLines[1], snapLines[2], snapLines[3]]
+      .map((l) => (l ?? "").trim())
+      .join("|");
+    const fileStable = [String(filePid), fileDataDir, fileStartEpoch, String(filePort)].join("|");
+    if (snapStable !== fileStable) {
+      return {
+        owned: false,
+        processGone: false,
+        reason:
+          "postmaster.pid difiere del snapshot registrado al arrancar " +
+          "(pid/datadir/start-epoch/port): el archivo fue reescrito por otro cluster.",
+      };
+    }
+  }
+  const optsFile = join(identity.dataDir, "postmaster.opts");
+  if (identity.postmasterOpts !== "") {
+    let currentOpts = "";
+    try {
+      currentOpts = existsSync(optsFile) ? readFileSync(optsFile, "utf8") : "";
+    } catch {
+      currentOpts = "";
+    }
+    if (currentOpts !== identity.postmasterOpts) {
+      return {
+        owned: false,
+        processGone: false,
+        reason: "postmaster.opts difiere del snapshot registrado: otro arranque reescribió el cluster.",
+      };
+    }
   }
 
   return { owned: true };
