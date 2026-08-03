@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit",
     "env:check": "node scripts/env-check.mjs",
     "test": "vitest run",
-    "test:db": "vitest run --config vitest.db.config.ts",
+    "test:db": "vitest run --config vitest.db.config.ts && node tests/db/scripts/assert-clean-run.mjs",
     "lint:boundaries": "node scripts/prospeccion-boundaries.mjs",
     "lint:udie-boundary": "node scripts/udie-boundary.mjs"
   },
@@ -58,7 +58,8 @@
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.2",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "yaml": "^2.9.0"
   },
   "engines": {
     "node": ">=18.18.0"

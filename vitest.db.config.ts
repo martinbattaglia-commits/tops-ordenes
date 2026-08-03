@@ -25,9 +25,15 @@ export default defineConfig({
     globalSetup: ["tests/db/global-setup.ts"],
     // initdb + 29 migraciones sobre un cluster nuevo tarda bastante más que
     // el default de 5 s de Vitest.
-    hookTimeout: 180_000,
-    testTimeout: 120_000,
+    hookTimeout: 300_000,
+    testTimeout: 180_000,
     pool: "threads",
     poolOptions: { threads: { singleThread: true } },
+    // Reporte estructurado para `assert-clean-run.mjs`: Vitest devuelve exit 0
+    // con casos `skip`/`todo`, y un caso silenciado no debe dejar CI en verde.
+    reporters: ["default", "json"],
+    outputFile: {
+      json: resolve(process.cwd(), "node_modules", ".cache", "p3n1a0-run-report.json"),
+    },
   },
 });

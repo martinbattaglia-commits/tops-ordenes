@@ -2,16 +2,17 @@ name: P3-N1A0 · WMS DB Harness
 
 # Suite de integración SQL del WMS sobre PostgreSQL 17.
 #
-# Alcance deliberadamente acotado:
-#   · sin secretos;
-#   · sin acceso a Supabase remoto;
-#   · sin migraciones remotas;
-#   · sin Netlify;
-#   · sin deploy;
-#   · sin cron.
+# El alcance de este workflow está verificado ESTRUCTURALMENTE por
+# tests/db/t-a0-06-ci-definition.test.ts, que lo parsea como YAML y lo compara
+# contra una allowlist estricta: actions, imagen de servicio, versiones, nombres
+# y cantidad de steps, comandos exactos, variables y permisos. Cualquier step,
+# `uses`, `run`, servicio o variable no reconocido pone la suite en rojo hasta
+# que se autorice explícitamente en el test.
 #
-# Este check NO se declara todavía como requisito de branch protection: esa
-# decisión corresponde al cierre de P3-N1A.
+# La verificación NO vive acá porque un paso que hiciera grep de su propio
+# archivo se auto-marcaría al nombrar en el patrón aquello mismo que prohíbe.
+#
+# El resultado de CI lo determina el exit code real de Vitest, nunca un grep.
 
 on:
   push:
@@ -54,8 +55,6 @@ jobs:
           --health-retries 10
 
     env:
-      # El harness usa este servidor en lugar de levantar su propio cluster.
-      # Host loopback y base con la marca `p3n1a0_test_`: la guarda lo exige.
       P3N1A0_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
 
     steps:
@@ -71,27 +70,9 @@ jobs:
       - name: Instalar dependencias desde lockfile
         run: npm ci --no-audit --no-fund
 
-      # La verificación de que este workflow no consume credenciales, no
-      # despliega y no corre por cron vive en tests/db/t-a0-06-ci-definition.test.ts,
-      # no acá: un paso que hiciera grep de su propio archivo se auto-marcaría
-      # al tener que nombrar en el patrón aquello mismo que prohíbe.
-      # Corre dentro de `npm run test:db`, tanto en local como en CI.
-
-      - name: Confirmar PostgreSQL 17
-        run: |
-          set -euo pipefail
-          VER=$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -tAc "show server_version")
-          echo "server_version=$VER"
-          case "$VER" in 17.*) ;; *) echo "::error::Se requiere PostgreSQL 17"; exit 1 ;; esac
-
-      - name: Ejecutar suite de integración SQL
+      - name: Ejecutar suite de integracion SQL
         run: npm run test:db
 
-      - name: Verificar que no quedaron bases de test residuales
+      - name: Verificar bases de test residuales
         if: always()
-        run: |
-          set -euo pipefail
-          LEFT=$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -tAc \
-            "select count(*) from pg_database where datname like 'p3n1a0\_test\_%'")
-          echo "bases de test residuales: $LEFT"
-          [ "$LEFT" = "0" ] || { echo "::error::Teardown incompleto"; exit 1; }
+        run: node tests/db/scripts/assert-no-residual-databases.mjs

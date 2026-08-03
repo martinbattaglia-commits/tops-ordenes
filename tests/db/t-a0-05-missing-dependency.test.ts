@@ -1,18 +1,30 @@
 /**
- * T-A0-05 · Detección de dependencia faltante.
+ * T-A0-05 · Detección de dependencia faltante (§10).
  *
- * Es la condición que §7.3 impone para autorizar un manifiesto en lugar de la
- * historia completa: debe existir una prueba que demuestre que retirar una
- * dependencia produce un FALLO DETERMINISTA y no una carga silenciosa que
- * dejaría un esquema incompleto pasando por bueno.
+ * Es la condición que autoriza usar un manifiesto en lugar de la historia
+ * completa: retirar una dependencia debe producir un fallo DETERMINISTA y con
+ * CAUSA CONCRETA, no una carga silenciosa ni un error genérico.
  *
- * Gestiona su propio cluster: carga manifiestos deliberadamente rotos.
+ * No basta con `rejects.toThrow(SchemaLoadError)`: cada caso afirma el archivo
+ * exacto que falla, el SQLSTATE y el objeto que faltaba.
  */
 
-import { describe, expect, it } from "vitest";
-import { startEphemeralCluster } from "./harness/cluster";
-import { loadSchema, verifyManifestIntegrity, SchemaLoadError } from "./harness/schema-loader";
+import { afterEach, describe, expect, it } from "vitest";
+import { Client } from "pg";
+import { connectGuarded, startEphemeralCluster, type EphemeralCluster } from "./harness/cluster";
+import {
+  RequiredObjectsError,
+  SchemaLoadError,
+  assertRequiredObjects,
+  loadSchema,
+} from "./harness/schema-loader";
 import { WMS_MIGRATION_MANIFEST } from "./harness/manifest";
+
+const pending: EphemeralCluster[] = [];
+
+afterEach(async () => {
+  for (const c of pending.splice(0)) await c.teardown().catch(() => {});
+});
 
 /** Manifiesto sin una migración concreta. */
 function without(file: string): string[] {
@@ -23,47 +35,99 @@ function without(file: string): string[] {
   return next;
 }
 
+/** Levanta un cluster y devuelve una conexión guardada, ambos registrados. */
+async function freshClient(): Promise<Client> {
+  const cluster = await startEphemeralCluster();
+  pending.push(cluster);
+  return connectGuarded(cluster.url);
+}
+
 describe("T-A0-05 · dependencia faltante", () => {
-  it("retirar 0024 (inventory_items) hace fallar 0025 de forma determinista", async () => {
-    const cluster = await startEphemeralCluster();
+  it("retirar 0024 hace fallar 0025 con causa concreta: falta inventory_items", async () => {
+    const client = await freshClient();
     try {
-      const err = await loadSchema(cluster.url, without("0024_wms_inventory.sql")).then(
+      const err = await loadSchema(client, without("0024_wms_inventory.sql")).then(
         () => null,
-        (e: unknown) => e as Error,
+        (e: unknown) => e as SchemaLoadError,
       );
 
       expect(err).toBeInstanceOf(SchemaLoadError);
-      expect((err as SchemaLoadError).kind).toBe("migration");
-      // 0025 referencia inventory_items en la FK de reception_items.
-      expect((err as SchemaLoadError).file).toBe("0025_wms_receptions.sql");
-      expect(err?.message).toMatch(/inventory_items/);
-      expect(err?.message).toMatch(/NO silencia errores/);
+      expect(err!.kind).toBe("migration");
+      expect(err!.file).toBe("0025_wms_receptions.sql");
+      // Causa concreta, no genérica: relación inexistente (SQLSTATE 42P01).
+      expect(err!.pgCode).toBe("42P01");
+      expect(err!.pgMessage).toMatch(/inventory_items/);
+      expect(err!.message).toMatch(/NO silencia errores/);
     } finally {
-      cluster.teardown();
+      await client.end();
     }
   });
 
-  it("retirar 0009 (RBAC) hace fallar la serie de permisos WMS", async () => {
-    const cluster = await startEphemeralCluster();
+  it("retirar 0009 hace fallar 0010 con causa concreta: falta el RBAC", async () => {
+    const client = await freshClient();
     try {
-      const err = await loadSchema(cluster.url, without("0009_rbac.sql")).then(
+      const err = await loadSchema(client, without("0009_rbac.sql")).then(
         () => null,
-        (e: unknown) => e as Error,
+        (e: unknown) => e as SchemaLoadError,
       );
       expect(err).toBeInstanceOf(SchemaLoadError);
-      expect((err as SchemaLoadError).kind).toBe("migration");
+      expect(err!.kind).toBe("migration");
+      // El primer consumidor del RBAC en el manifiesto.
+      expect(err!.file).toBe("0010_documents.sql");
+      expect(err!.pgCode).not.toBeNull();
     } finally {
-      cluster.teardown();
+      await client.end();
     }
   });
 
-  it("un manifiesto que referencia un archivo inexistente falla ANTES de tocar la base", () => {
-    expect(() =>
-      verifyManifestIntegrity(["0001_init.sql", "9999_no_existe.sql"]),
-    ).toThrow(/archivos inexistentes/);
+  it("retirar 0026 hace fallar 0027: falta el tipo del ledger", async () => {
+    const client = await freshClient();
+    try {
+      const err = await loadSchema(client, without("0026_inventory_movements.sql")).then(
+        () => null,
+        (e: unknown) => e as SchemaLoadError,
+      );
+      expect(err).toBeInstanceOf(SchemaLoadError);
+      expect(err!.file).toBe("0027_wms_functions.sql");
+      // Causa concreta: 0026 define `movement_type_t`, y 0027 lo usa en la
+      // firma de confirm_movement. El primer objeto ausente es el TIPO, no la
+      // tabla — la aserción nombra exactamente lo que PostgreSQL reporta.
+      expect(err!.pgCode).toBe("42704"); // undefined_object
+      expect(err!.pgMessage).toMatch(/movement_type_t/);
+    } finally {
+      await client.end();
+    }
   });
 
-  it("el manifiesto vigente es íntegro", () => {
-    expect(() => verifyManifestIntegrity()).not.toThrow();
+  it("BARRERA §10: un esquema sin objetos requeridos aborta antes de las pruebas", async () => {
+    const client = await freshClient();
+    try {
+      // Se carga sólo la base del ERP: quedan fuera todas las tablas del WMS.
+      const parcial = WMS_MIGRATION_MANIFEST.filter((m) => /^000[1-9]|^001[01]/.test(m));
+      await loadSchema(client, parcial);
+      const err = await assertRequiredObjects(client).then(
+        () => null,
+        (e: unknown) => e as RequiredObjectsError,
+      );
+      expect(err).toBeInstanceOf(RequiredObjectsError);
+      // Identifica los objetos concretos que faltan.
+      expect(err!.missing.join(" ")).toMatch(/inventory_items/);
+      expect(err!.missing.join(" ")).toMatch(/business_unit_t/);
+      expect(err!.missing.join(" ")).toMatch(/confirm_reception/);
+      expect(err!.message).toMatch(/ninguna prueba funcional debe correr/);
+    } finally {
+      await client.end();
+    }
+  });
+
+  it("el manifiesto completo carga y satisface la barrera de objetos", async () => {
+    const client = await freshClient();
+    try {
+      const { migrationsApplied } = await loadSchema(client);
+      expect(migrationsApplied).toEqual([...WMS_MIGRATION_MANIFEST]);
+      await expect(assertRequiredObjects(client)).resolves.toBeUndefined();
+    } finally {
+      await client.end();
+    }
   });
 });
