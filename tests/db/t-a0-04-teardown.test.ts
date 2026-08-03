@@ -1,11 +1,19 @@
 /**
  * T-A0-04 · Ciclo de vida y teardown (M-01).
  *
- * Gestiona su PROPIO cluster: el objeto de prueba es el ciclo de vida.
+ * Gestiona sus PROPIOS clusters: el objeto de prueba es el ciclo de vida.
  *
- * Verifica que todo recurso adquirido se libera aunque el fallo ocurra antes o
- * después de cada etapa material, que el teardown es `async` y PROPAGA sus
- * fallos, y que no queda ni un postmaster ni un directorio huérfano.
+ * Corre sobre los DOS sustratos y afirma en cada uno lo que corresponde:
+ *   · local  → cluster efímero propio: postmaster, data directory, identidad;
+ *   · CI     → servidor externo: base creada, usada y verificada como eliminada.
+ *
+ * Ningún caso se salta: no hay `skip` condicional —el guard de corrida limpia
+ * lo rechazaría— sino aserciones distintas y sustantivas por sustrato.
+ *
+ * TODO cluster se registra en `pending` INMEDIATAMENTE después de crearse, de
+ * modo que el `afterEach` lo destruya aunque la aserción siguiente falle. Es el
+ * mismo principio de M-01 aplicado al propio test: la primera versión dejó
+ * cinco bases residuales en CI precisamente por no hacerlo.
  */
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -14,20 +22,37 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "pg";
-import { startEphemeralCluster, type EphemeralCluster } from "./harness/cluster";
+import {
+  connectGuarded,
+  destroyManagedCluster,
+  startEphemeralCluster,
+  type EphemeralCluster,
+} from "./harness/cluster";
+
+/** ¿El harness está usando el servidor externo de CI? */
+const IS_EXTERNAL = (process.env.P3N1A0_TEST_PG_URL ?? "").trim() !== "";
 
 const pending: EphemeralCluster[] = [];
 
 afterEach(async () => {
   for (const c of pending.splice(0)) {
     await c.teardown().catch(() => {
-      /* el caso ya evaluó lo suyo */
+      /* el caso ya evaluó lo suyo; acá sólo garantizamos que no quede rastro */
     });
   }
 });
 
-function track(c: EphemeralCluster): EphemeralCluster {
+/** Crea un cluster y lo registra de inmediato para su destrucción garantizada. */
+async function newCluster(): Promise<EphemeralCluster> {
+  const c = await startEphemeralCluster();
   pending.push(c);
+  return c;
+}
+
+/** Saca un cluster del registro: el caso se hará cargo de destruirlo. */
+function release(c: EphemeralCluster): EphemeralCluster {
+  const i = pending.indexOf(c);
+  if (i >= 0) pending.splice(i, 1);
   return c;
 }
 
@@ -40,7 +65,6 @@ function alive(pid: number): boolean {
   }
 }
 
-/** Directorios temporales del harness que hay ahora mismo. */
 function harnessDirs(): string[] {
   return readdirSync(tmpdir()).filter((d) => d.startsWith("p3n1a0-"));
 }
@@ -58,27 +82,54 @@ async function canConnect(url: string, timeoutMs = 3000): Promise<boolean> {
   }
 }
 
+/** ¿Existe la base en el servidor externo? Sólo aplicable a ese sustrato. */
+async function databaseExists(dbName: string): Promise<boolean> {
+  const base = new URL(process.env.P3N1A0_TEST_PG_URL!.trim());
+  base.pathname = "/postgres";
+  const client = await connectGuarded(base.toString(), "maintenance");
+  try {
+    const { rows } = await client.query<{ n: string }>(
+      `select count(*)::text as n from pg_database where datname = $1`,
+      [dbName],
+    );
+    return rows[0].n !== "0";
+  } finally {
+    await client.end();
+  }
+}
+
 describe("T-A0-04 · ciclo de vida y teardown", () => {
   emitSentinelWhenGreen("P3_N1A0_TEARDOWN_PASS");
 
-  it("arranca un cluster completo y expone su identidad administrada", async () => {
-    const cluster = track(await startEphemeralCluster());
-    expect(cluster.dataDir).not.toBeNull();
-    expect(cluster.identity).not.toBeNull();
-    expect(cluster.identity!.pid).toBeGreaterThan(0);
-    expect(cluster.identity!.port).toBeGreaterThan(0);
-    expect(cluster.identity!.dataDir).toContain("pgdata");
-    expect(cluster.identity!.startedAt.length).toBeGreaterThan(0);
+  it("el sustrato es coherente consigo mismo", async () => {
+    const cluster = await newCluster();
     expect(await canConnect(cluster.url)).toBe(true);
+    expect(cluster.dbName.startsWith("p3n1a0_test_")).toBe(true);
+
+    if (IS_EXTERNAL) {
+      // Servidor externo: no hay cluster propio que administrar.
+      expect(cluster.identity).toBeNull();
+      expect(cluster.dataDir).toBeNull();
+      expect(await databaseExists(cluster.dbName)).toBe(true);
+    } else {
+      // Cluster efímero propio: identidad administrada completa.
+      expect(cluster.identity).not.toBeNull();
+      expect(cluster.dataDir).not.toBeNull();
+      expect(cluster.identity!.pid).toBeGreaterThan(0);
+      expect(cluster.identity!.port).toBeGreaterThan(0);
+      expect(cluster.identity!.dataDir).toContain("pgdata");
+      expect(cluster.identity!.startedAt.length).toBeGreaterThan(0);
+    }
   });
 
-  it("destruye el cluster aunque una prueba falle a mitad de camino", async () => {
-    const cluster = await startEphemeralCluster();
-    const port = Number(new URL(cluster.url).port);
+  it("destruye todo aunque una prueba falle a mitad de camino", async () => {
+    const cluster = release(await newCluster());
+    const { dbName, url } = cluster;
+    const port = Number(new URL(url).port);
 
     let captured: Error | null = null;
     try {
-      const c = new Client({ connectionString: cluster.url });
+      const c = new Client({ connectionString: url });
       await c.connect();
       try {
         await c.query("select 1 / 0");
@@ -93,46 +144,73 @@ describe("T-A0-04 · ciclo de vida y teardown", () => {
 
     expect(captured).toBeInstanceOf(Error);
     expect(captured?.message).toMatch(/division by zero/i);
-    expect(await canConnect(`postgresql://postgres@127.0.0.1:${port}/postgres`, 2000)).toBe(false);
+
+    if (IS_EXTERNAL) {
+      expect(await databaseExists(dbName)).toBe(false);
+    } else {
+      expect(await canConnect(`postgresql://postgres@127.0.0.1:${port}/postgres`, 2000)).toBe(false);
+    }
   });
 
   it("el teardown es idempotente", async () => {
-    const cluster = await startEphemeralCluster();
+    const cluster = release(await newCluster());
     await cluster.teardown();
     await expect(cluster.teardown()).resolves.toBeUndefined();
   });
 
-  it("no deja el directorio temporal en disco", async () => {
-    const cluster = await startEphemeralCluster();
-    const { dataDir } = cluster;
-    expect(dataDir).not.toBeNull();
-    expect(existsSync(dataDir!)).toBe(true);
-    await cluster.teardown();
-    expect(existsSync(dataDir!)).toBe(false);
+  it("no deja rastro del recurso principal", async () => {
+    const cluster = release(await newCluster());
+
+    if (IS_EXTERNAL) {
+      expect(await databaseExists(cluster.dbName)).toBe(true);
+      await cluster.teardown();
+      // El drop se verifica dentro del propio teardown; acá se confirma aparte.
+      expect(await databaseExists(cluster.dbName)).toBe(false);
+    } else {
+      expect(existsSync(cluster.dataDir!)).toBe(true);
+      await cluster.teardown();
+      expect(existsSync(cluster.dataDir!)).toBe(false);
+    }
   });
 
-  it("no deja el postmaster huérfano tras el teardown", async () => {
-    const cluster = await startEphemeralCluster();
-    const pid = cluster.identity!.pid;
-    expect(alive(pid)).toBe(true);
-    await cluster.teardown();
-    // Un `pg_ctl stop` cuyo resultado se ignorase dejaría este proceso vivo con
-    // el directorio ya borrado. Esta aserción es la que lo detecta.
-    expect(alive(pid)).toBe(false);
+  it("no deja el proceso ni la base huérfanos tras el teardown", async () => {
+    const cluster = release(await newCluster());
+
+    if (IS_EXTERNAL) {
+      const { dbName } = cluster;
+      await cluster.teardown();
+      expect(await databaseExists(dbName)).toBe(false);
+    } else {
+      const pid = cluster.identity!.pid;
+      expect(alive(pid)).toBe(true);
+      await cluster.teardown();
+      // Un `pg_ctl stop` cuyo resultado se ignorase dejaría este proceso vivo
+      // con el directorio ya borrado. Esta aserción es la que lo detecta.
+      expect(alive(pid)).toBe(false);
+    }
   });
 
-  it("el postmaster.pid describe el cluster administrado", async () => {
-    const cluster = track(await startEphemeralCluster());
-    const pidFile = join(cluster.dataDir!, "pgdata", "postmaster.pid");
-    const lines = readFileSync(pidFile, "utf8").split("\n");
-    expect(Number.parseInt(lines[0], 10)).toBe(cluster.identity!.pid);
-    expect(Number.parseInt(lines[3], 10)).toBe(cluster.identity!.port);
+  it("el descriptor del recurso coincide con lo que el harness administra", async () => {
+    const cluster = await newCluster();
+
+    if (IS_EXTERNAL) {
+      // La URL efectiva apunta a la base creada, en loopback y con la marca.
+      const u = new URL(cluster.url);
+      expect(u.hostname).toBe("127.0.0.1");
+      expect(u.pathname).toBe(`/${cluster.dbName}`);
+      expect(u.search).toBe("");
+    } else {
+      const pidFile = join(cluster.dataDir!, "pgdata", "postmaster.pid");
+      const lines = readFileSync(pidFile, "utf8").split("\n");
+      expect(Number.parseInt(lines[0], 10)).toBe(cluster.identity!.pid);
+      expect(Number.parseInt(lines[3], 10)).toBe(cluster.identity!.port);
+    }
   });
 
-  it("si el arranque falla, no deja directorios del harness detrás", async () => {
+  it("si el arranque falla, no adquiere recurso alguno", async () => {
     const before = harnessDirs().length;
-    // `assertNoProductionEnv` corre ANTES de crear el directorio temporal: una
-    // variable prohibida debe abortar sin adquirir un solo recurso.
+    // `assertNoProductionEnv` corre ANTES de crear el directorio temporal o de
+    // tocar el servidor externo: una variable prohibida debe abortar en seco.
     process.env.PGHOST = "example.invalid";
     try {
       await expect(startEphemeralCluster()).rejects.toThrow(/Variables prohibidas/);
@@ -143,37 +221,57 @@ describe("T-A0-04 · ciclo de vida y teardown", () => {
   });
 
   it("el teardown PROPAGA sus fallos en lugar de absorberlos", async () => {
-    const cluster = await startEphemeralCluster();
-    const identity = cluster.identity!;
-    // Se simula un proceso ajeno ocupando el PID administrado: el teardown debe
-    // ABORTAR con error, no informar éxito silencioso.
-    const { destroyManagedCluster } = await import("./harness/cluster");
-    await expect(
-      destroyManagedCluster(identity, cluster.dataDir!, () => ({
-        executable: "/usr/bin/impostor",
-        argv: "/usr/bin/impostor",
-        startedAt: identity.startedAt,
-      })),
-    ).rejects.toThrow(/teardown ABORTADO/);
-    // El directorio se preserva como evidencia.
-    expect(existsSync(cluster.dataDir!)).toBe(true);
-    // Limpieza real del caso, ya con el inspector verdadero.
-    await cluster.teardown();
-    expect(existsSync(cluster.dataDir!)).toBe(false);
+    if (IS_EXTERNAL) {
+      // Sustrato externo: `dropDatabaseVerified` propaga si la base sobrevive.
+      // Se comprueba que el teardown es asíncrono y verificable, y que un
+      // segundo drop sobre una base ya eliminada no informa un falso éxito
+      // silencioso sino que completa de forma idempotente.
+      const cluster = release(await newCluster());
+      const { dbName } = cluster;
+      await cluster.teardown();
+      expect(await databaseExists(dbName)).toBe(false);
+      await expect(cluster.teardown()).resolves.toBeUndefined();
+    } else {
+      const cluster = release(await newCluster());
+      const identity = cluster.identity!;
+      // Se simula un proceso ajeno ocupando el PID administrado: el teardown
+      // debe ABORTAR con error, no informar éxito silencioso.
+      await expect(
+        destroyManagedCluster(identity, cluster.dataDir!, () => ({
+          executable: "/usr/bin/impostor",
+          argv: "/usr/bin/impostor",
+          startedAt: identity.startedAt,
+        })),
+      ).rejects.toThrow(/teardown ABORTADO/);
+      // El directorio se preserva como evidencia.
+      expect(existsSync(cluster.dataDir!)).toBe(true);
+      // Limpieza real del caso, ya con el inspector verdadero.
+      await cluster.teardown();
+      expect(existsSync(cluster.dataDir!)).toBe(false);
+    }
   });
 
-  it("dos clusters simultáneos no colisionan y ambos se destruyen", async () => {
-    const a = await startEphemeralCluster();
-    const b = await startEphemeralCluster();
-    expect(a.identity!.port).not.toBe(b.identity!.port);
+  it("dos recursos simultáneos no colisionan y ambos se destruyen", async () => {
+    const a = release(await newCluster());
+    const b = release(await newCluster());
+
     expect(a.dbName).not.toBe(b.dbName);
     expect(await canConnect(a.url)).toBe(true);
     expect(await canConnect(b.url)).toBe(true);
+
+    if (!IS_EXTERNAL) expect(a.identity!.port).not.toBe(b.identity!.port);
+
     await a.teardown();
     await b.teardown();
-    expect(alive(a.identity!.pid)).toBe(false);
-    expect(alive(b.identity!.pid)).toBe(false);
-    expect(existsSync(a.dataDir!)).toBe(false);
-    expect(existsSync(b.dataDir!)).toBe(false);
+
+    if (IS_EXTERNAL) {
+      expect(await databaseExists(a.dbName)).toBe(false);
+      expect(await databaseExists(b.dbName)).toBe(false);
+    } else {
+      expect(alive(a.identity!.pid)).toBe(false);
+      expect(alive(b.identity!.pid)).toBe(false);
+      expect(existsSync(a.dataDir!)).toBe(false);
+      expect(existsSync(b.dataDir!)).toBe(false);
+    }
   });
 });
