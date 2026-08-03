@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "env:check": "node scripts/env-check.mjs",
     "test": "vitest run",
+    "test:db": "node tests/db/scripts/prepare-run.mjs && vitest run --config vitest.db.config.ts && node tests/db/scripts/assert-clean-run.mjs && node tests/db/scripts/assert-no-residual-local.mjs",
     "lint:boundaries": "node scripts/prospeccion-boundaries.mjs",
     "lint:udie-boundary": "node scripts/udie-boundary.mjs"
   },
@@ -45,6 +46,7 @@
   "devDependencies": {
     "@types/node": "^20.16.10",
     "@types/papaparse": "^5.5.2",
+    "@types/pg": "^8.11.10",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
@@ -52,10 +54,12 @@
     "eslint": "^8.57.1",
     "eslint-config-next": "14.2.18",
     "netlify-cli": "^26.0.2",
+    "pg": "^8.13.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.2",
-    "vitest": "^2.1.9"
+    "vitest": "^2.1.9",
+    "yaml": "^2.9.0"
   },
   "engines": {
     "node": ">=18.18.0"

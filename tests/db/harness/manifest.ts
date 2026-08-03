@@ -1,0 +1,434 @@
+/**
+ * P3-N1A0 · Manifiesto determinista del cierre de dependencias WMS.
+ *
+ * ─── POR QUÉ UN MANIFIESTO Y NO LA HISTORIA COMPLETA ───────────────────────
+ *
+ * La historia completa NO es reproducible sobre PostgreSQL vanilla: las
+ * migraciones 0016, 0017, 0036 y 0126 ejecutan
+ * `create extension postgis with schema extensions`, y PostGIS no está
+ * disponible en una instalación PostgreSQL 17 estándar. Exigirlo convertiría
+ * una extensión pesada en dependencia obligatoria del harness sin necesidad
+ * demostrada. Se usa entonces el manifiesto determinista autorizado, con sus
+ * cuatro condiciones: exclusiones justificadas, ninguna dependencia real
+ * omitida, manifiesto versionado, y prueba que detecta una dependencia
+ * faltante (T-A0-05).
+ *
+ * ─── LISTA EXPLÍCITA, NO RANGO ─────────────────────────────────────────────
+ *
+ * Se enumeran los archivos uno por uno a propósito. Un rango calculado en
+ * tiempo de ejecución incorporaría en silencio cualquier migración nueva.
+ * `validateManifest()` además exige que TODA migración del repositorio esté o
+ * bien en el manifiesto, o bien cubierta por una exclusión documentada: una
+ * migración nueva rompe la validación hasta que alguien decida conscientemente
+ * dónde va, y ese cambio queda visible en el diff.
+ *
+ * El manifiesto NO deriva de `supabase_migrations.schema_migrations`: ese
+ * tracker está verificado como no fiel al catálogo (no registra la serie WMS
+ * pese a estar aplicada). La única autoridad es `information_schema`/`pg_catalog`.
+ */
+
+import { readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
+
+export const MIGRATIONS_DIR = resolve(__dirname, "..", "..", "..", "supabase", "migrations");
+
+/** Cantidad esperada. Cambiarla exige tocar el manifiesto y esta constante. */
+export const EXPECTED_MANIFEST_SIZE = 29;
+
+/** Cierre de dependencias WMS, en orden de aplicación. */
+export const WMS_MIGRATION_MANIFEST: readonly string[] = [
+  // ── Base del ERP: tipos, tablas núcleo, RLS, RBAC ──
+  "0001_init.sql", // user_role_t, depot_t, profiles, clients, orders, current_role()
+  "0002_seed.sql", // catálogo de servicios base
+  "0003_storage.sql", // buckets y policies de storage
+  "0004_extended_schema.sql", // clients.deposito_asignado/activo/updated_at
+  "0005_fix_rls_recursion.sql", // current_role()/is_staff()/is_admin() SECURITY DEFINER
+  "0006_real_operators.sql",
+  "0007_extend_service_units.sql",
+  "0008_purchase_orders.sql",
+  "0009_rbac.sql", // permission_module_t, permissions, roles, has_permission()
+  "0010_documents.sql", // documents + scoping por profiles.client_id
+  "0011_arca_billing.sql", // clients.condicion_iva/tipo_doc/localidad
+  "0013_invoices_storage_isolation.sql",
+  "0014_supplier_invoices.sql",
+  "0015_supplier_invoice_attachments.sql",
+
+  // ── WMS: modelo físico, inventario, recepciones, ledger, RPC ──
+  "0020_wms_physical_model.sql", // warehouse_type_t, jerarquía de 6 niveles
+  "0021_wms_permission_module.sql", // permission_module_t += 'wms'
+  "0022_wms_rbac_seed.sql", // permisos wms.view/edit/admin
+  "0023_lujan_cubiculos.sql", // posiciones físicas de Pedro de Luján
+  "0024_wms_inventory.sql", // inventory_items, inventory_lots
+  "0025_wms_receptions.sql", // business_unit_t, receptions, CHECK ANMAT
+  "0026_inventory_movements.sql", // ledger append-only + triggers de inmutabilidad
+  "0027_wms_functions.sql", // identity_uk, lockdown RLS, confirm_reception/movement
+
+  // ── Pedidos: órdenes logísticas, reservas, picking, packing, despacho ──
+  "0029_pedidos_permission_module.sql", // permission_module_t += 'pedidos'
+  "0030_logistics_orders.sql", // logistics_orders, order_items, stock_allocations
+  "0031_pedidos_functions.sql", // allocate_order, release_allocation, cancel_order
+  "0032_wms_picking.sql",
+  "0033_wms_packing.sql",
+  "0034_wms_packing_cancel.sql",
+  "0035_wms_dispatch.sql", // shipments, confirm_dispatch, confirm_delivery, revert_dispatch
+];
+
+/**
+ * Número de secuencia de un archivo de migración (`0025_x.sql` → 25).
+ *
+ * El repositorio tiene al menos una migración con sufijo de letra
+ * (`0061a_rrhh_modalidad_real.sql`), producto de una inserción posterior en la
+ * numeración. Se acepta el sufijo para que quede correctamente clasificada;
+ * devolver NaN la habría dejado sin clasificar, que es lo que detectó la
+ * validación al construirla.
+ */
+export function migrationSeq(file: string): number {
+  const m = /^(\d{4})[a-z]?_/.exec(file);
+  return m ? Number.parseInt(m[1], 10) : Number.NaN;
+}
+
+/**
+ * Exclusiones documentadas. Cada regla explica POR QUÉ la migración no forma
+ * parte del cierre WMS, y `validateManifest()` exige que toda migración del
+ * repositorio quede cubierta por alguna.
+ */
+/**
+ * Snapshot CONGELADO de las migraciones excluidas del cierre WMS, tal como
+ * existían en el árbol al cerrar la segunda revisión C4.
+ *
+ * Hallazgo H-05: la exclusión anterior usaba `migrationSeq(f) >= 36`, que
+ * clasificaba AUTOMÁTICAMENTE cualquier migración futura —incluida una posible
+ * migración WMS necesaria como `9999_wms_required.sql`— sin exigir una decisión
+ * consciente. Ahora las exclusiones son por FILENAME EXACTO: una migración
+ * nueva NO figura en este set, queda "sin clasificar" y ROMPE la suite hasta
+ * que alguien decida explícitamente si va al manifiesto o a una exclusión, y
+ * ese cambio queda visible en el diff.
+ */
+const FROZEN_EXCLUDED_FILES: ReadonlySet<string> = new Set([
+  "0016_tracking_foundation.sql",
+  "0017_tracking_geofences.sql",
+  "0018_tracking_events.sql",
+  "0019_tracking_rbac_seed.sql",
+  "0036_custody_core.sql",
+  "0037_custody_storage.sql",
+  "0038_custody_evidence.sql",
+  "0039_custody_pod_reads.sql",
+  "0040_profiles_pii_lockdown.sql",
+  "0041_crm_enums.sql",
+  "0042_crm_core.sql",
+  "0043_crm_quotes_proposals.sql",
+  "0044_crm_contracts_onboarding.sql",
+  "0045_crm_sync_audit.sql",
+  "0046_crm_rbac_seed.sql",
+  "0047_crm_write_path_fns.sql",
+  "0048_crm_ingest_lead.sql",
+  "0049_crm_list_commercial_users.sql",
+  "0050_crm_promote_lead.sql",
+  "0051_crm_onboarding_autocreate.sql",
+  "0052_crm_opportunity_clientify_mirror.sql",
+  "0052_treasury_permission_module.sql",
+  "0053_crm_ingest_deal.sql",
+  "0053_treasury_core.sql",
+  "0054_treasury_functions.sql",
+  "0055_treasury_security_fix.sql",
+  "0056_ap_fiscal_detail.sql",
+  "0056_rrhh_permission_module.sql",
+  "0057_ap_workflow_permissions.sql",
+  "0057_rrhh_rbac_seed.sql",
+  "0058_ap_rpcs.sql",
+  "0058_rrhh_core.sql",
+  "0059_iva_compras_views.sql",
+  "0059_rrhh_workflows.sql",
+  "0060_rrhh_documents_storage.sql",
+  "0061_mi_espacio_permission.sql",
+  "0061a_rrhh_modalidad_real.sql",
+  "0062_rrhh_carga_inicial.sql",
+  "0063_rrhh_bancario_carga.sql",
+  "0064_rrhh_doc_class_recibo.sql",
+  "0065_compliance_core.sql",
+  "0066_crm_units.sql",
+  "0067_crm_units_seed.sql",
+  "0068_crm_reserve_units.sql",
+  "0069_crm_opportunities_deal_name.sql",
+  "0070_rbac_gerencia_finanzas.sql",
+  "0071_fiscal_hardening.sql",
+  "0072_vat_sales_fiscal_detail.sql",
+  "0073_libro_iva_ventas.sql",
+  "0074_add_operator_ruth.sql",
+  "0075_email_sends_dedup.sql",
+  "0076_crm_contracts.sql",
+  "0077_contracts_drive_sync.sql",
+  "0081_compliance_drive_sync.sql",
+  "0082_cash_box_foundation.sql",
+  "0083_cash_box_rollback.sql",
+  "0084_announcements.sql",
+  "0085_clientify_dashboard.sql",
+  "0086_mi_espacio_module_enum.sql",
+  "0087_mi_espacio_permission_and_grant.sql",
+  "0088_prospeccion_module_enum.sql",
+  "0089_prospeccion_core.sql",
+  "0091_prospeccion_rollback.sql",
+  "0092_add_deal_source.sql",
+  "0093_refresh_v_clientify_deals_enriched_deal_source.sql",
+  "0094_rpc_add_deal_source_to_cache_replace.sql",
+  "0095_add_lost_reason_to_deals.sql",
+  "0096_sync_log_observability.sql",
+  "0097_recon_schema.sql",
+  "0098_recon_rpc.sql",
+  "0099_ganancias_retencion.sql",
+  "0100_vendors_fiscal_ganancias.sql",
+  "0101_fiscal_dashboard_views.sql",
+  "0102_recon_views.sql",
+  "0103_recon_role_fix.sql",
+  "0104_recon_approve_role_fix.sql",
+  "0105_recon_approve_admin_self_approval.sql",
+  "0106_prospeccion_qualification.sql",
+  "0107_prospeccion_approval.sql",
+  "0120_chart_of_accounts_baseline.sql",
+  "0121_legajo_cuenta_contable.sql",
+  "0122_mipyme_foundation.sql",
+  "0123_comprobante_tipo_fce_enum.sql",
+  "0124_contabilidad_permissions_seed.sql",
+  "0125_knowledge_module_enum.sql",
+  "0126_knowledge_core.sql",
+  "0127_knowledge_rpc.sql",
+  "0128_knowledge_projection_triggers.sql",
+  "0129_knowledge_rbac_seed.sql",
+  "0130_knowledge_views.sql",
+  "0131_knowledge_harden_grants.sql",
+  "0132_knowledge_emit_status.sql",
+  "0133_knowledge_dispatch.sql",
+  "0134_knowledge_sentinel_fix.sql",
+  "0135_knowledge_adapter_recon.sql",
+  "0136_knowledge_adapter_po.sql",
+  "0137_knowledge_adapter_treasury.sql",
+  "0138_knowledge_adapter_custody.sql",
+  "0139_knowledge_adapter_rrhh.sql",
+  "0140_knowledge_kpis_admin.sql",
+  "0142_connect_module_enum.sql",
+  "0143_connect_schema.sql",
+  "0144_connect_rpc.sql",
+  "0145_connect_views.sql",
+  "0146_connect_rbac_seed.sql",
+  "0147_connect_notifications_ext.sql",
+  "0148_connect_storage.sql",
+  "0149_connect_knowledge_adapter.sql",
+  "0150_connect_join_channel.sql",
+  "0151_connect_moderation_failclose.sql",
+  "0152_connect_get_or_create_entity_conversation.sql",
+  "0153_connect_search.sql",
+  "0154_profile_experience.sql",
+  "0155_connect_rbac_pilot_grants.sql",
+  "0156_fix_connect_search_ambiguous_conversation_id.sql",
+  "0157_fix_connect_search_union_order_by.sql",
+  "0158_connect_member_profile_search.sql",
+  "0159_connect_archive_rename_hotfix.sql",
+  "0160_connect_outbox_worker.sql",
+  "0161_connect_mentions_fanout.sql",
+  "0162_connect_notification_actions.sql",
+  "0163_connect_archived_guards.sql",
+  "0164_connect_incidents_schema.sql",
+  "0165_connect_incidents_rpcs.sql",
+  "0166_connect_incidents_knowledge.sql",
+  "0167_connect_tasks_enums_permissions.sql",
+  "0168_connect_tasks_schema.sql",
+  "0169_connect_tasks_rpcs_workflows.sql",
+  "0170_connect_tasks_knowledge.sql",
+  "0171_wa_inbound_events.sql",
+  "0172_connect_automations_mvp.sql",
+  "0173_ai_module_enum.sql",
+  "0174_ai_core.sql",
+  "0175_ai_rbac_seed.sql",
+  "0176_knowledge_docs_projection.sql",
+  "0177_knowledge_view_pilot_grant.sql",
+  "0178_docs_retrieval_improvements.sql",
+  "0179_docs_browse_fts.sql",
+  "0180_ai_budget_overrides.sql",
+  "0181_ai_finance_overview.sql",
+  "0182_ai_analytics_overview.sql",
+  "0183_ai_customer_revenue.sql",
+  "0184_ai_revenue_by_category.sql",
+  "0185_company_knowledge_base.sql",
+  "0186_manual_nexus_kb_layer.sql",
+  "0189_treasury_operational_movement_enum.sql",
+  "0190_treasury_operational_movements.sql",
+  "0191_treasury_operational_movement_fix_reference_type.sql",
+  "0192_treasury_type_direction_add_movimiento_operativo.sql",
+  "0193_treasury_operational_category_add_honorarios_sueldo.sql",
+  "0194_treasury_beneficiaries.sql",
+]);
+
+export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
+  id: string;
+  matches: (file: string) => boolean;
+  reason: string;
+}> = [
+  {
+    id: "frozen-excluded-snapshot",
+    // Filename EXACTO contra el snapshot congelado: NO es un rango. Una
+    // migración nueva no está en el set y por tanto NO queda clasificada.
+    matches: (f) => FROZEN_EXCLUDED_FILES.has(f),
+    reason:
+      "Snapshot congelado de las migraciones ajenas al cierre WMS al cerrar la " +
+      "segunda revisión C4: dominio Tracking (0016-0019, PostGIS) y todo lo " +
+      "posterior a 0035 (custody, CRM, tesorería, knowledge, connect, AI, fiscal). " +
+      "0016/0017/0036/0126 además requieren PostGIS. ADVERTENCIA: 0036 (custody) " +
+      "TAMBIÉN modifica `packing_units` y `shipments`, objetos del dominio WMS; se " +
+      "excluye porque A0 no necesita su forma post-0036, NO porque sea ajena al WMS. " +
+      "NO debe afirmarse que ninguna migración posterior toca objetos del WMS: 0036 " +
+      "lo hace. Toda migración NUEVA queda fuera de este set, sin clasificar, y " +
+      "rompe la suite hasta una decisión explícita.",
+  },
+];
+
+export class ManifestIntegrityError extends Error {
+  constructor(message: string) {
+    super(`[P3-N1A0 MANIFEST] ${message}`);
+    this.name = "ManifestIntegrityError";
+  }
+}
+
+/**
+ * Validación ESTRUCTURAL: aplica a CUALQUIER manifiesto, incluidos los
+ * deliberadamente parciales que usa T-A0-05 para probar dependencias faltantes.
+ * No incluye la cobertura del repositorio, que sólo tiene sentido para el
+ * manifiesto canónico.
+ */
+export function validateManifest(
+  manifest: readonly string[] = WMS_MIGRATION_MANIFEST,
+  migrationsDir: string = MIGRATIONS_DIR,
+): void {
+  // 1) sin duplicados
+  const seen = new Set<string>();
+  const dups = manifest.filter((m) => (seen.has(m) ? true : (seen.add(m), false)));
+  if (dups.length > 0) {
+    throw new ManifestIntegrityError(`entradas duplicadas: ${[...new Set(dups)].join(", ")}`);
+  }
+
+  // 2) prefijo numérico válido y orden estrictamente creciente.
+  //    Comprobaciones PURAS antes que las de I/O: un nombre mal formado es un
+  //    error de configuración más básico que un archivo ausente.
+  let prev = -1;
+  for (const m of manifest) {
+    const seq = migrationSeq(m);
+    if (!Number.isInteger(seq)) {
+      throw new ManifestIntegrityError(`"${m}" no tiene prefijo numérico de 4 dígitos.`);
+    }
+    if (seq <= prev) {
+      throw new ManifestIntegrityError(
+        `orden no estrictamente creciente en "${m}" (${seq} <= ${prev}).`,
+      );
+    }
+    prev = seq;
+  }
+
+  // 3) archivos existentes
+  const onDisk = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
+  const onDiskSet = new Set(onDisk);
+  const missing = manifest.filter((m) => !onDiskSet.has(m));
+  if (missing.length > 0) {
+    throw new ManifestIntegrityError(
+      `referencia archivos inexistentes en supabase/migrations/: ${missing.join(", ")}`,
+    );
+  }
+
+  // 4) el orden semántico coincide con el lexicográfico de los archivos
+  const lexicographic = [...manifest].sort();
+  if (JSON.stringify(lexicographic) !== JSON.stringify([...manifest])) {
+    throw new ManifestIntegrityError(
+      "el orden del manifiesto no coincide con el orden lexicográfico de los archivos.",
+    );
+  }
+
+}
+
+/**
+ * Validación de COBERTURA del manifiesto CANÓNICO: cantidad esperada y
+ * clasificación exhaustiva de todas las migraciones del repositorio.
+ *
+ * Se separa de `validateManifest` porque estas dos reglas sólo tienen sentido
+ * para el manifiesto real: un manifiesto parcial —como el que T-A0-05 usa para
+ * probar dependencias faltantes— dejaría por definición migraciones sin
+ * clasificar, y confundir ambos casos enmascararía el fallo que esa prueba busca.
+ */
+export function validateCanonicalManifest(migrationsDir: string = MIGRATIONS_DIR): void {
+  validateManifest(WMS_MIGRATION_MANIFEST, migrationsDir);
+
+  if (WMS_MIGRATION_MANIFEST.length !== EXPECTED_MANIFEST_SIZE) {
+    throw new ManifestIntegrityError(
+      `se esperaban ${EXPECTED_MANIFEST_SIZE} migraciones, hay ${WMS_MIGRATION_MANIFEST.length}. ` +
+        `Si el cambio es intencional, actualizá EXPECTED_MANIFEST_SIZE en el mismo commit.`,
+    );
+  }
+
+  const onDisk = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
+  const inManifest = new Set(WMS_MIGRATION_MANIFEST);
+  const unclassified = onDisk.filter(
+    (f) => !inManifest.has(f) && !MANIFEST_EXCLUSIONS.some((e) => e.matches(f)),
+  );
+  if (unclassified.length > 0) {
+    throw new ManifestIntegrityError(
+      `hay migraciones sin clasificar (ni en el manifiesto ni en una exclusión ` +
+        `documentada): ${unclassified.join(", ")}. Toda migración nueva exige una ` +
+        `decisión explícita y visible en el diff.`,
+    );
+  }
+
+  for (const e of MANIFEST_EXCLUSIONS) {
+    if (!e.reason || e.reason.trim().length < 20) {
+      throw new ManifestIntegrityError(`la exclusión "${e.id}" carece de justificación.`);
+    }
+  }
+}
+
+/**
+ * Objetos que DEBEN existir tras cargar el manifiesto. Se verifican como
+ * BARRERA del global setup (§10), antes de habilitar las suites funcionales:
+ * si falta uno, ninguna prueba funcional debe correr, porque estaría midiendo
+ * un esquema incompleto.
+ */
+export const REQUIRED_OBJECTS = {
+  tables: [
+    "inventory_items",
+    "inventory_lots",
+    "inventory_movements",
+    "receptions",
+    "reception_items",
+    "logistics_orders",
+    "logistics_order_items",
+    "stock_allocations",
+    "clients",
+    "profiles",
+    "warehouses",
+    "warehouse_positions",
+  ],
+  enums: {
+    business_unit_t: ["ANMAT", "GENERAL", "CORPORATE"],
+    warehouse_type_t: ["general", "anmat", "mixed"],
+    user_role_t: ["admin", "operaciones", "supervisor", "cliente"],
+    movement_type_t: ["ingreso", "traslado", "egreso", "ajuste"],
+  },
+  functions: [
+    "confirm_reception",
+    "release_quarantine",
+    "confirm_movement",
+    "allocate_order",
+    "release_allocation",
+    "cancel_order",
+    "confirm_dispatch",
+    "confirm_delivery",
+    "revert_dispatch",
+    "current_role",
+    "has_permission",
+  ],
+  triggers: [
+    "trg_inventory_movements_immutable",
+    "trg_inventory_movements_no_truncate",
+    "trg_reception_item_bu",
+    "trg_reception_cascade_bu",
+  ],
+  constraints: ["reception_items_anmat_lot_chk"],
+  indexes: ["inventory_items_identity_uk", "inventory_lots_identity_uk"],
+} as const;
+
+export const MIGRATION_PATH = (file: string): string => join(MIGRATIONS_DIR, file);

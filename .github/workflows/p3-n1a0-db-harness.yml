@@ -1,0 +1,78 @@
+name: P3-N1A0 · WMS DB Harness
+
+# Suite de integración SQL del WMS sobre PostgreSQL 17.
+#
+# El alcance de este workflow está verificado ESTRUCTURALMENTE por
+# tests/db/t-a0-06-ci-definition.test.ts, que lo parsea como YAML y lo compara
+# contra una allowlist estricta: actions, imagen de servicio, versiones, nombres
+# y cantidad de steps, comandos exactos, variables y permisos. Cualquier step,
+# `uses`, `run`, servicio o variable no reconocido pone la suite en rojo hasta
+# que se autorice explícitamente en el test.
+#
+# La verificación NO vive acá porque un paso que hiciera grep de su propio
+# archivo se auto-marcaría al nombrar en el patrón aquello mismo que prohíbe.
+#
+# El resultado de CI lo determina el exit code real de Vitest, nunca un grep.
+
+on:
+  push:
+    branches:
+      - "test/p3-n1a0-wms-db-harness"
+  pull_request:
+    paths:
+      - "tests/db/**"
+      - "supabase/migrations/**"
+      - "vitest.db.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/p3-n1a0-db-harness.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p3-n1a0-db-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  db-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      P3N1A0_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias desde lockfile
+        run: npm ci --no-audit --no-fund
+
+      - name: Ejecutar suite de integracion SQL
+        run: npm run test:db
+
+      - name: Verificar bases de test residuales
+        if: always()
+        run: node tests/db/scripts/assert-no-residual-databases.mjs
