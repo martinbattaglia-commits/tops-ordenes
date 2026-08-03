@@ -71,15 +71,11 @@ jobs:
       - name: Instalar dependencias desde lockfile
         run: npm ci --no-audit --no-fund
 
-      - name: Verificar que el job no expone secretos
-        run: |
-          set -euo pipefail
-          # Falla si alguien agrega un `secrets.` a este workflow más adelante.
-          if grep -n 'secrets\.' .github/workflows/p3-n1a0-db-harness.yml; then
-            echo "::error::Este workflow no debe consumir secretos."
-            exit 1
-          fi
-          echo "P3_N1A0_CI_DEFINITION_PASS"
+      # La verificación de que este workflow no consume credenciales, no
+      # despliega y no corre por cron vive en tests/db/t-a0-06-ci-definition.test.ts,
+      # no acá: un paso que hiciera grep de su propio archivo se auto-marcaría
+      # al tener que nombrar en el patrón aquello mismo que prohíbe.
+      # Corre dentro de `npm run test:db`, tanto en local como en CI.
 
       - name: Confirmar PostgreSQL 17
         run: |
