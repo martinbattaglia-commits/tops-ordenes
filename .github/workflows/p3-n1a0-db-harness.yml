@@ -1,0 +1,101 @@
+name: P3-N1A0 · WMS DB Harness
+
+# Suite de integración SQL del WMS sobre PostgreSQL 17.
+#
+# Alcance deliberadamente acotado:
+#   · sin secretos;
+#   · sin acceso a Supabase remoto;
+#   · sin migraciones remotas;
+#   · sin Netlify;
+#   · sin deploy;
+#   · sin cron.
+#
+# Este check NO se declara todavía como requisito de branch protection: esa
+# decisión corresponde al cierre de P3-N1A.
+
+on:
+  push:
+    branches:
+      - "test/p3-n1a0-wms-db-harness"
+  pull_request:
+    paths:
+      - "tests/db/**"
+      - "supabase/migrations/**"
+      - "vitest.db.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/p3-n1a0-db-harness.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p3-n1a0-db-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  db-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # El harness usa este servidor en lugar de levantar su propio cluster.
+      # Host loopback y base con la marca `p3n1a0_test_`: la guarda lo exige.
+      P3N1A0_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias desde lockfile
+        run: npm ci --no-audit --no-fund
+
+      - name: Verificar que el job no expone secretos
+        run: |
+          set -euo pipefail
+          # Falla si alguien agrega un `secrets.` a este workflow más adelante.
+          if grep -n 'secrets\.' .github/workflows/p3-n1a0-db-harness.yml; then
+            echo "::error::Este workflow no debe consumir secretos."
+            exit 1
+          fi
+          echo "P3_N1A0_CI_DEFINITION_PASS"
+
+      - name: Confirmar PostgreSQL 17
+        run: |
+          set -euo pipefail
+          VER=$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -tAc "show server_version")
+          echo "server_version=$VER"
+          case "$VER" in 17.*) ;; *) echo "::error::Se requiere PostgreSQL 17"; exit 1 ;; esac
+
+      - name: Ejecutar suite de integración SQL
+        run: npm run test:db
+
+      - name: Verificar que no quedaron bases de test residuales
+        if: always()
+        run: |
+          set -euo pipefail
+          LEFT=$(PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -d postgres -tAc \
+            "select count(*) from pg_database where datname like 'p3n1a0\_test\_%'")
+          echo "bases de test residuales: $LEFT"
+          [ "$LEFT" = "0" ] || { echo "::error::Teardown incompleto"; exit 1; }
