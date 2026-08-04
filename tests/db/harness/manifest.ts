@@ -33,7 +33,7 @@ import { join, resolve } from "node:path";
 export const MIGRATIONS_DIR = resolve(__dirname, "..", "..", "..", "supabase", "migrations");
 
 /** Cantidad esperada. Cambiarla exige tocar el manifiesto y esta constante. */
-export const EXPECTED_MANIFEST_SIZE = 29;
+export const EXPECTED_MANIFEST_SIZE = 31;
 
 /** Cierre de dependencias WMS, en orden de aplicación. */
 export const WMS_MIGRATION_MANIFEST: readonly string[] = [
@@ -71,6 +71,15 @@ export const WMS_MIGRATION_MANIFEST: readonly string[] = [
   "0033_wms_packing.sql",
   "0034_wms_packing_cancel.sql",
   "0035_wms_dispatch.sql", // shipments, confirm_dispatch, confirm_delivery, revert_dispatch
+
+  // ── P3-N1B: identidad canónica de cliente + proyección de business_unit ──
+  // El salto 0036→0219 NO es un hueco del manifiesto: 0036-0194 están en la
+  // exclusión congelada (dominios ajenos al WMS) y 0195-0218 viven en el
+  // candidato Git bf33fa4, fuera de main. Se numera 0219 para no colisionar
+  // con esa secuencia observada. Esto NO prueba el estado de producción, que
+  // permanece NO VERIFICABLE en este expediente.
+  "0219_wms_client_identity_foundation.sql", // client_id ×3, BU proyectada, anomalías, bu_declaration_t
+  "0220_wms_canonical_identity_cutover.sql", // gates 100 %, unicidad canónica, RPC v2 (allocate/confirm)
 ];
 
 /**
@@ -401,12 +410,14 @@ export const REQUIRED_OBJECTS = {
     "profiles",
     "warehouses",
     "warehouse_positions",
+    "inventory_bu_anomalies", // P3-N1B: anomalías durables multi-BU (0219)
   ],
   enums: {
     business_unit_t: ["ANMAT", "GENERAL", "CORPORATE"],
     warehouse_type_t: ["general", "anmat", "mixed"],
     user_role_t: ["admin", "operaciones", "supervisor", "cliente"],
     movement_type_t: ["ingreso", "traslado", "egreso", "ajuste"],
+    bu_declaration_t: ["declared", "defaulted", "unknown"], // P3-N1B (0219)
   },
   functions: [
     "confirm_reception",
@@ -420,15 +431,28 @@ export const REQUIRED_OBJECTS = {
     "revert_dispatch",
     "current_role",
     "has_permission",
+    // P3-N1B (0219): proyección determinista de la línea + traza de declaración
+    "wms_recompute_item_business_unit",
+    "wms_reception_item_bu_projection",
+    "wms_reception_bu_declaration",
   ],
   triggers: [
     "trg_inventory_movements_immutable",
     "trg_inventory_movements_no_truncate",
     "trg_reception_item_bu",
     "trg_reception_cascade_bu",
+    // P3-N1B (0219)
+    "trg_reception_bu_declaration",
+    "trg_reception_item_bu_projection",
   ],
-  constraints: ["reception_items_anmat_lot_chk"],
-  indexes: ["inventory_items_identity_uk", "inventory_lots_identity_uk"],
+  constraints: ["reception_items_anmat_lot_chk", "inventory_bu_anomalies_kind_ck"],
+  // P3-N1B (0220): la unicidad legacy por client_name se RETIRA en el corte;
+  // la barrera exige la canónica. La legacy ya NO debe existir tras 0220.
+  indexes: [
+    "inventory_items_canonical_identity_uk",
+    "inventory_lots_identity_uk",
+    "inventory_bu_anomalies_open_uk",
+  ],
 } as const;
 
 export const MIGRATION_PATH = (file: string): string => join(MIGRATIONS_DIR, file);

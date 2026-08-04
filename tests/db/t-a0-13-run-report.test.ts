@@ -104,7 +104,8 @@ describe("T-A0-13 · reporte de corrida", () => {
   it("el total esperado está fijado y es coherente", () => {
     // Un 0 desactivaría la comprobación de total: debe ser un número real.
     expect(EXPECTED_TOTAL_TESTS).toBeGreaterThan(0);
-    expect(EXPECTED_TOTAL_TESTS).toBe(290);
+    // 290 de A0 + los casos P3-N1B (t-n1b-01..06) y los ajustes de identidad.
+    expect(EXPECTED_TOTAL_TESTS).toBe(350);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {

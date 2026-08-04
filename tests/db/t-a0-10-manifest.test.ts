@@ -28,7 +28,8 @@ describe("T-A0-10 · manifiesto", () => {
 
   it("tiene exactamente la cantidad esperada", () => {
     expect(WMS_MIGRATION_MANIFEST).toHaveLength(EXPECTED_MANIFEST_SIZE);
-    expect(EXPECTED_MANIFEST_SIZE).toBe(29);
+    // 29 de A0 + 0219/0220 de P3-N1B (decisión consciente, visible en el diff).
+    expect(EXPECTED_MANIFEST_SIZE).toBe(31);
   });
 
   it("no tiene duplicados", () => {

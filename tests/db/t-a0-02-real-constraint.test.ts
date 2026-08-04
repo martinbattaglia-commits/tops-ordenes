@@ -9,8 +9,11 @@
  * saltaba la comprobación si faltaba una posición, ahora hay una PRECONDICIÓN
  * EXPLÍCITA que falla de forma determinista si el esquema no la satisface.
  *
- * Los tests son fotografía del esquema ACTUAL. Los defectos que documentan
- * (identidad con posición nula) corresponden a P3-N1B; acá no se corrigen.
+ * Los tests son fotografía del esquema ACTUAL. Desde P3-N1B (0219/0220) la
+ * identidad del inventario es CANÓNICA (client_id, sku, position_id) NULLS
+ * NOT DISTINCT: los casos de identidad reflejan el corte — la expectativa del
+ * defecto M-1 (duplicados con posición NULL) quedó INVERTIDA, tal como este
+ * archivo lo anunciaba.
  */
 
 import { afterAll, beforeAll, describe, expect, it, inject } from "vitest";
@@ -43,6 +46,15 @@ async function seedReception(bu: "ANMAT" | "GENERAL"): Promise<string> {
     `insert into public.receptions (client_name, business_unit, status)
      values ($1, $2, 'pendiente') returning id`,
     [`__A0__${bu}`, bu],
+  );
+  return rows[0].id;
+}
+
+/** Siembra un cliente canónico (0219 exige client_id en inventory_items). */
+async function seedClient(suffix: string): Promise<string> {
+  const { rows } = await client.query<{ id: string }>(
+    `insert into public.clients (razon, cuit) values ($1, $2) returning id`,
+    [`__A0__CLIENTE_${suffix}`, `20-${suffix.padStart(8, "0")}-2`],
   );
   return rows[0].id;
 }
@@ -174,38 +186,74 @@ describe("T-A0-02 · restricciones reales del esquema", () => {
     });
   });
 
-  it("identidad: (client_name, sku, position_id) es única con posición NO nula", async () => {
+  it("identidad canónica: (client_id, sku, position_id) es única con posición NO nula", async () => {
     await withRollback(async () => {
       const positionId = await requireWarehousePosition();
+      const clientId = await seedClient("1");
       await client.query(
-        `insert into public.inventory_items (sku, description, client_name, position_id)
-         values ('__A0__UK', 'primera', '__A0__CLIENTE', $1)`,
-        [positionId],
+        `insert into public.inventory_items (sku, description, client_name, client_id, position_id)
+         values ('__A0__UK', 'primera', '__A0__CLIENTE', $1, $2)`,
+        [clientId, positionId],
       );
       await expect(
         client.query(
-          `insert into public.inventory_items (sku, description, client_name, position_id)
-           values ('__A0__UK', 'segunda', '__A0__CLIENTE', $1)`,
-          [positionId],
+          `insert into public.inventory_items (sku, description, client_name, client_id, position_id)
+           values ('__A0__UK', 'segunda', '__A0__CLIENTE', $1, $2)`,
+          [clientId, positionId],
         ),
-      ).rejects.toThrow(/inventory_items_identity_uk/);
+      ).rejects.toThrow(/inventory_items_canonical_identity_uk/);
     });
   });
 
-  it("identidad: con posición NULA el índice NO impide duplicados (defecto M-1 vigente)", async () => {
+  it("identidad canónica: dos clientes DISTINTOS pueden compartir client_name (el nombre ya no es identidad)", async () => {
     await withRollback(async () => {
+      const positionId = await requireWarehousePosition();
+      const clientA = await seedClient("2");
+      const clientB = await seedClient("3");
       await client.query(
-        `insert into public.inventory_items (sku, description, client_name, position_id)
-         values ('__A0__DUP', 'primera', '__A0__CLIENTE', null)`,
+        `insert into public.inventory_items (sku, description, client_name, client_id, position_id)
+         values ('__A0__HOMONIMO', 'de A', '__A0__MISMO_NOMBRE', $1, $2)`,
+        [clientA, positionId],
       );
-      // El índice no declara NULLS NOT DISTINCT, así que el segundo insert pasa.
-      // Fotografía del defecto tal como está HOY; P3-N1B deberá invertir esta
-      // expectativa al incorporar NULLS NOT DISTINCT.
+      // Con la unicidad legacy por client_name esto fallaba; con la canónica
+      // (P3-N1B) dos clientes homónimos conviven sin colisión.
       const res = await client.query(
-        `insert into public.inventory_items (sku, description, client_name, position_id)
-         values ('__A0__DUP', 'segunda', '__A0__CLIENTE', null) returning id`,
+        `insert into public.inventory_items (sku, description, client_name, client_id, position_id)
+         values ('__A0__HOMONIMO', 'de B', '__A0__MISMO_NOMBRE', $1, $2) returning id`,
+        [clientB, positionId],
       );
       expect(res.rowCount).toBe(1);
+    });
+  });
+
+  it("identidad canónica: con posición NULA el índice SÍ impide duplicados (M-1 CERRADO por NULLS NOT DISTINCT)", async () => {
+    await withRollback(async () => {
+      const clientId = await seedClient("4");
+      await client.query(
+        `insert into public.inventory_items (sku, description, client_name, client_id, position_id)
+         values ('__A0__DUP', 'primera', '__A0__CLIENTE', $1, null)`,
+        [clientId],
+      );
+      // Expectativa INVERTIDA respecto de A0, tal como estaba anunciado: el
+      // índice canónico declara NULLS NOT DISTINCT y el duplicado se rechaza.
+      await expect(
+        client.query(
+          `insert into public.inventory_items (sku, description, client_name, client_id, position_id)
+           values ('__A0__DUP', 'segunda', '__A0__CLIENTE', $1, null)`,
+          [clientId],
+        ),
+      ).rejects.toThrow(/inventory_items_canonical_identity_uk/);
+    });
+  });
+
+  it("identidad canónica: inventory_items sin client_id se rechaza (NOT NULL del corte 0220)", async () => {
+    await withRollback(async () => {
+      await expect(
+        client.query(
+          `insert into public.inventory_items (sku, description, client_name)
+           values ('__A0__SINID', 'sin identidad', '__A0__CLIENTE')`,
+        ),
+      ).rejects.toThrow(/client_id/);
     });
   });
 
