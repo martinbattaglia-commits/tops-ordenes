@@ -42,12 +42,22 @@ async function withRollback<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** Siembra un cliente canónico (P3-N1B: inventory_items.client_id NOT NULL). */
+async function seedClient(tag: string): Promise<string> {
+  const { rows } = await client.query<{ id: string }>(
+    `insert into public.clients (razon, cuit) values ($1, $2) returning id`,
+    [`__A0_RLS_${tag}__`, `RLS-${tag}`],
+  );
+  return rows[0].id;
+}
+
 /** Siembra una fila de inventario como owner, dentro de la transacción actual. */
 async function seedItem(sku: string): Promise<string> {
+  const clientId = await seedClient(sku);
   const { rows } = await client.query<{ id: string }>(
-    `insert into public.inventory_items (sku, description, client_name)
-     values ($1, 'fixture RLS', '__A0_RLS__') returning id`,
-    [sku],
+    `insert into public.inventory_items (sku, description, client_name, client_id)
+     values ($1, 'fixture RLS', '__A0_RLS__', $2) returning id`,
+    [sku, clientId],
   );
   return rows[0].id;
 }
@@ -96,10 +106,13 @@ describe("T-A0-11 · RLS efectiva", () => {
 
   it("authenticated ve TODO el inventario, de todos los depositantes (estado vigente)", async () => {
     await withRollback(async () => {
+      const clientA = await seedClient("TEN_A");
+      const clientB = await seedClient("TEN_B");
       await client.query(
-        `insert into public.inventory_items (sku, description, client_name) values
-           ('__A0_T1__','fixture','__A0_CLIENTE_A__'),
-           ('__A0_T2__','fixture','__A0_CLIENTE_B__')`,
+        `insert into public.inventory_items (sku, description, client_name, client_id) values
+           ('__A0_T1__','fixture','__A0_CLIENTE_A__',$1),
+           ('__A0_T2__','fixture','__A0_CLIENTE_B__',$2)`,
+        [clientA, clientB],
       );
       await becomeRole("authenticated");
       const { rows } = await client.query<{ client_name: string }>(
@@ -114,11 +127,13 @@ describe("T-A0-11 · RLS efectiva", () => {
 
   it("authenticated NO puede INSERT en inventory_items (lockdown 0027)", async () => {
     await withRollback(async () => {
+      const clientId = await seedClient("INS");
       await becomeRole("authenticated");
       await expect(
         client.query(
-          `insert into public.inventory_items (sku, description, client_name)
-           values ('__A0_RLS_INS__','x','__A0__')`,
+          `insert into public.inventory_items (sku, description, client_name, client_id)
+           values ('__A0_RLS_INS__','x','__A0__',$1)`,
+          [clientId],
         ),
       ).rejects.toThrow(/row-level security/i);
     });
@@ -184,11 +199,13 @@ describe("T-A0-11 · RLS efectiva", () => {
            for all using (auth.role() = 'authenticated')
            with check (auth.role() = 'authenticated')`,
       );
+      const clientId = await seedClient("MUT_ALL");
       await becomeRole("authenticated");
       // Con la mutación, el INSERT que el test permanente exige que falle, pasa.
       const r = await client.query(
-        `insert into public.inventory_items (sku, description, client_name)
-         values ('__A0_MUT_ALL__','x','__A0__') returning id`,
+        `insert into public.inventory_items (sku, description, client_name, client_id)
+         values ('__A0_MUT_ALL__','x','__A0__',$1) returning id`,
+        [clientId],
       );
       expect(r.rowCount).toBe(1);
     });
@@ -241,10 +258,12 @@ describe("T-A0-11 · RLS efectiva", () => {
         `create policy "inventory_items read" on public.inventory_items
            for all using (true)`,
       );
+      const clientId = await seedClient("MUT_WC");
       await becomeRole("authenticated");
       const r = await client.query(
-        `insert into public.inventory_items (sku, description, client_name)
-         values ('__A0_MUT_WC__','x','__A0__') returning id`,
+        `insert into public.inventory_items (sku, description, client_name, client_id)
+         values ('__A0_MUT_WC__','x','__A0__',$1) returning id`,
+        [clientId],
       );
       expect(r.rowCount).toBe(1);
     });
@@ -253,14 +272,16 @@ describe("T-A0-11 · RLS efectiva", () => {
   it("MUTANTE: revocar los grants de escritura enmascararía la RLS", async () => {
     await withRollback(async () => {
       await client.query(`revoke insert on public.inventory_items from authenticated`);
+      const clientId = await seedClient("MUT_GRANT");
       await becomeRole("authenticated");
       // Sin el grant, el INSERT falla por PRIVILEGIO, no por policy. Un test que
       // sólo mirara "¿falló?" daría un falso PASS de RLS. Por eso el bootstrap
       // reproduce los grants de Supabase y este caso distingue ambos motivos.
       await expect(
         client.query(
-          `insert into public.inventory_items (sku, description, client_name)
-           values ('__A0_MUT_GRANT__','x','__A0__')`,
+          `insert into public.inventory_items (sku, description, client_name, client_id)
+           values ('__A0_MUT_GRANT__','x','__A0__',$1)`,
+          [clientId],
         ),
       ).rejects.toThrow(/permission denied/i);
     });
@@ -268,11 +289,13 @@ describe("T-A0-11 · RLS efectiva", () => {
 
   it("el mensaje distingue policy de privilegio: con grants, el rechazo es de RLS", async () => {
     await withRollback(async () => {
+      const clientId = await seedClient("MSG");
       await becomeRole("authenticated");
       await expect(
         client.query(
-          `insert into public.inventory_items (sku, description, client_name)
-           values ('__A0_RLS_MSG__','x','__A0__')`,
+          `insert into public.inventory_items (sku, description, client_name, client_id)
+           values ('__A0_RLS_MSG__','x','__A0__',$1)`,
+          [clientId],
         ),
       ).rejects.toThrow(/row-level security/i);
     });

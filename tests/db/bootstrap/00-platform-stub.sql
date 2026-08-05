@@ -55,10 +55,16 @@ do $$ begin create role service_role nologin;  exception when duplicate_object t
 -- ---- Esquema auth --------------------------------------------------------
 create schema if not exists auth;
 
--- Sólo las columnas que las migraciones referencian (destino de FK y email).
+-- Sólo las columnas que las migraciones referencian (destino de FK, email y
+-- raw_user_meta_data: 0001 instala `handle_new_user()` AFTER INSERT sobre
+-- auth.users y lee `new.raw_user_meta_data->>'full_name'`. La columna existe
+-- en el auth.users real de Supabase; sin ella cualquier INSERT de usuarios
+-- rompe el trigger. El hueco era invisible en A0 porque ninguna prueba
+-- insertaba usuarios; P3-N1B simula sesiones operativas reales y lo destapó).
 create table if not exists auth.users (
   id    uuid primary key default gen_random_uuid(),
-  email text
+  email text,
+  raw_user_meta_data jsonb
 );
 
 -- En Supabase estas funciones leen el JWT del request. Acá leen GUCs, de modo

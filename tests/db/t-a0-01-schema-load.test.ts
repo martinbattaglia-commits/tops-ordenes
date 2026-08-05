@@ -138,11 +138,16 @@ describe("T-A0-01 · esquema cargado (autoridad: catálogo)", () => {
       "active",
       "created_at",
       "created_by",
+      // P3-N1B (0219/0220): identidad canónica + línea proyectada.
+      "client_id",
+      "business_unit",
     ]);
+    // client_name se CONSERVA como dato descriptivo (ADR-P3-13): NOT NULL.
     expect(rows.find((r) => r.column_name === "client_name")?.is_nullable).toBe("NO");
-    const names = rows.map((r) => r.column_name);
-    expect(names).not.toContain("client_id");
-    expect(names).not.toContain("business_unit");
+    // La identidad canónica es obligatoria tras el corte (gate G-1 de 0220).
+    expect(rows.find((r) => r.column_name === "client_id")?.is_nullable).toBe("NO");
+    // La línea proyectada es ANULABLE durante la transición (ADR-P3-06).
+    expect(rows.find((r) => r.column_name === "business_unit")?.is_nullable).toBe("YES");
   });
 
   it.each(Object.entries(REQUIRED_OBJECTS.enums))("el enum %s tiene sus etiquetas", async (t, labels) => {
@@ -325,17 +330,26 @@ describe("T-A0-01 · esquema cargado (autoridad: catálogo)", () => {
     expect(def).toContain("expiration_date is not null");
   });
 
-  it("los índices de identidad existen y NO usan NULLS NOT DISTINCT", async () => {
+  it("los índices de identidad existen; la canónica usa NULLS NOT DISTINCT (M-1 cerrado)", async () => {
     const { rows } = await client.query<{ indexname: string; indexdef: string }>(
       `select indexname, indexdef from pg_indexes
         where schemaname = 'public' and indexname = any($1)`,
       [[...REQUIRED_OBJECTS.indexes]],
     );
     expect(rows.map((r) => r.indexname).sort()).toEqual([...REQUIRED_OBJECTS.indexes].sort());
-    // Fotografía del defecto M-1 tal como está HOY. P3-N1B deberá invertirla.
-    for (const r of rows) expect(r.indexdef).not.toMatch(/NULLS NOT DISTINCT/i);
-    expect(rows.find((r) => r.indexname === "inventory_items_identity_uk")!.indexdef).toMatch(
-      /\(client_name, sku, position_id\)/,
+    // P3-N1B invirtió la fotografía del defecto M-1, tal como A0 lo anunciaba:
+    // la identidad canónica iguala posiciones NULL y cierra el duplicado.
+    const canonical = rows.find((r) => r.indexname === "inventory_items_canonical_identity_uk")!;
+    expect(canonical.indexdef).toMatch(/NULLS NOT DISTINCT/i);
+    expect(canonical.indexdef).toMatch(/\(client_id, sku, position_id\)/);
+    // La identidad de lotes conserva su semántica de A0 (sin NND).
+    const lots = rows.find((r) => r.indexname === "inventory_lots_identity_uk")!;
+    expect(lots.indexdef).not.toMatch(/NULLS NOT DISTINCT/i);
+    // La unicidad legacy por client_name fue RETIRADA en el corte 0220.
+    const { rows: legacy } = await client.query(
+      `select 1 from pg_indexes
+        where schemaname = 'public' and indexname = 'inventory_items_identity_uk'`,
     );
+    expect(legacy).toHaveLength(0);
   });
 });

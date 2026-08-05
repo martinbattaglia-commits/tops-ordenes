@@ -28,7 +28,14 @@ export const EXPECTED_TEST_FILES = [
   "t-a0-14-script-guards.test.ts",
   "t-a0-15-residual-failclosed.test.ts",
   "t-a0-16-cleanup-propagation.test.ts",
+  // ── P3-N1B: identidad canónica de cliente + business_unit (0219/0220) ──
+  "t-n1b-01-identity-foundation.test.ts",
+  "t-n1b-02-bu-projection.test.ts",
+  "t-n1b-03-cutover-gates.test.ts",
+  "t-n1b-04-allocate-canonical.test.ts",
+  "t-n1b-05-confirm-reception-canonical.test.ts",
+  "t-n1b-06-rollback-reapply.test.ts",
 ];
 
 /** Total exacto de casos. Se actualiza conscientemente con cada cambio. */
-export const EXPECTED_TOTAL_TESTS = 290;
+export const EXPECTED_TOTAL_TESTS = 350;
