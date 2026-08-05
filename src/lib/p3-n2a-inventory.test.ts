@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createApiKeyM2mAuthenticator } from "./wms/inventory/auth";
 import { INVENTORY_PERMISSION, type InventoryRepositoryPage } from "./wms/inventory/contract";
 import { createInventoryHandler, type InventoryHandlerDependencies } from "./wms/inventory/handler";
@@ -70,6 +70,41 @@ const request = (query = "", headers: Record<string, string> = {}) =>
   });
 
 const bodyOf = async (response: Response) => response.json() as Promise<Record<string, any>>;
+
+let unconfiguredCompositionDependencies: InventoryHandlerDependencies | undefined;
+
+beforeAll(async () => {
+  vi.resetModules();
+  vi.doMock("./wms/inventory/handler", () => ({
+    createInventoryHandler: (dependencies: InventoryHandlerDependencies) => {
+      unconfiguredCompositionDependencies = dependencies;
+      return vi.fn();
+    },
+  }));
+
+  try {
+    await import("./wms/inventory/composition");
+  } finally {
+    vi.doUnmock("./wms/inventory/handler");
+  }
+
+  expect(unconfiguredCompositionDependencies).toBeDefined();
+});
+
+afterAll(() => {
+  vi.doUnmock("./wms/inventory/handler");
+  vi.resetModules();
+});
+
+const compositionDefaults = (): InventoryHandlerDependencies => {
+  if (!unconfiguredCompositionDependencies) {
+    throw new Error("P3-N2A unconfigured composition was not captured");
+  }
+  return unconfiguredCompositionDependencies;
+};
+
+const denyExternalFetch = () =>
+  vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("external access forbidden in unit test"));
 
 describe("P3-N2A strict query contract", () => {
   it("rejects an unknown parameter", () => {
@@ -239,6 +274,35 @@ describe("P3-N2A scope, completeness and projection", () => {
     expect(await bodyOf(response)).not.toHaveProperty("data");
   });
 
+  it("X-09 revalidates row business unit independently from an authorized summary", async () => {
+    const harness = buildHarness({
+      repository: {
+        query: vi.fn(async () => page({
+          rows: [{ ...row, businessUnit: "GENERAL" as const }],
+        })),
+      },
+    });
+
+    const response = await harness.handler(request());
+    const body = await bodyOf(response);
+
+    expect(response.status).toBe(502);
+    expect(body.error).toEqual({
+      code: "nexus_data_integrity_error",
+      message: "Inventory integrity check failed",
+    });
+    expect(body).not.toHaveProperty("data");
+    expect(harness.audits).toEqual([
+      expect.objectContaining({
+        outcome: "nexus_data_integrity_error",
+        status: 502,
+        rowsEvaluated: 0,
+        rowsReturned: 0,
+        integrityResult: "failed",
+      }),
+    ]);
+  });
+
   it.each([
     {
       name: "CORPORATE",
@@ -269,6 +333,35 @@ describe("P3-N2A scope, completeness and projection", () => {
     const body = await bodyOf(response);
     expect(body.error.code).toBe("nexus_data_integrity_error");
     expect(body).not.toHaveProperty("data");
+  });
+
+  it("X-10 classifies an isolated CORPORATE row as an integrity failure", async () => {
+    const harness = buildHarness({
+      repository: {
+        query: vi.fn(async () => page({
+          rows: [{ ...row, businessUnit: "CORPORATE" as const }],
+        })),
+      },
+    });
+
+    const response = await harness.handler(request());
+    const body = await bodyOf(response);
+
+    expect(response.status).toBe(502);
+    expect(body.error).toEqual({
+      code: "nexus_data_integrity_error",
+      message: "Inventory integrity check failed",
+    });
+    expect(body).not.toHaveProperty("data");
+    expect(harness.audits).toEqual([
+      expect.objectContaining({
+        outcome: "nexus_data_integrity_error",
+        status: 502,
+        rowsEvaluated: 0,
+        rowsReturned: 0,
+        integrityResult: "failed",
+      }),
+    ]);
   });
 
   it("rejects a short or partial page", async () => {
@@ -362,6 +455,99 @@ describe("P3-N2A scope, completeness and projection", () => {
     expect(response.status).toBe(500);
     expect(body.error).toEqual({ code: "internal_error", message: "Internal error" });
     expect(JSON.stringify(body)).not.toContain("10.0.0.7");
+  });
+});
+
+describe("P3-N2A X-12 unconfigured composition ports", () => {
+  it("reaches the default authenticator in isolation and fails closed", async () => {
+    const defaults = compositionDefaults();
+    const authenticate = vi.fn(defaults.authenticator.authenticate.bind(defaults.authenticator));
+    const harness = buildHarness({ authenticator: { authenticate } });
+    const fetchSpy = denyExternalFetch();
+
+    try {
+      const response = await harness.handler(request());
+      const body = await bodyOf(response);
+
+      expect(authenticate).toHaveBeenCalledOnce();
+      expect(response.status).toBe(503);
+      expect(body.error.code).toBe("nexus_unavailable");
+      expect(body).not.toHaveProperty("data");
+      expect(harness.repositoryQuery).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("reaches the default scope resolver in isolation and fails closed", async () => {
+    const defaults = compositionDefaults();
+    const resolve = vi.fn(defaults.scopeResolver.resolve.bind(defaults.scopeResolver));
+    const harness = buildHarness({ scopeResolver: { resolve } });
+    const fetchSpy = denyExternalFetch();
+
+    try {
+      const response = await harness.handler(request());
+      const body = await bodyOf(response);
+
+      expect(resolve).toHaveBeenCalledOnce();
+      expect(response.status).toBe(500);
+      expect(body.error).toEqual({ code: "internal_error", message: "Internal error" });
+      expect(body).not.toHaveProperty("data");
+      expect(harness.repositoryQuery).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("reaches the default repository in isolation and fails closed", async () => {
+    const defaults = compositionDefaults();
+    const query = vi.fn(defaults.repository.query.bind(defaults.repository));
+    const harness = buildHarness({ repository: { query } });
+    const fetchSpy = denyExternalFetch();
+
+    try {
+      const response = await harness.handler(request());
+      const body = await bodyOf(response);
+
+      expect(query).toHaveBeenCalledOnce();
+      expect(response.status).toBe(503);
+      expect(body.error.code).toBe("nexus_unavailable");
+      expect(body).not.toHaveProperty("data");
+      expect(harness.audits).toEqual([
+        expect.objectContaining({
+          outcome: "nexus_unavailable",
+          status: 503,
+          rowsEvaluated: 0,
+          rowsReturned: 0,
+        }),
+      ]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it("reaches the default authoritative audit in isolation and returns zero data", async () => {
+    const defaults = compositionDefaults();
+    const record = vi.fn(defaults.audit.record.bind(defaults.audit));
+    const harness = buildHarness({ audit: { record } });
+    const fetchSpy = denyExternalFetch();
+
+    try {
+      const response = await harness.handler(request());
+      const body = await bodyOf(response);
+
+      expect(harness.repositoryQuery).toHaveBeenCalledOnce();
+      expect(record).toHaveBeenCalledOnce();
+      expect(response.status).toBe(503);
+      expect(body.error.code).toBe("audit_unavailable");
+      expect(body).not.toHaveProperty("data");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
 
