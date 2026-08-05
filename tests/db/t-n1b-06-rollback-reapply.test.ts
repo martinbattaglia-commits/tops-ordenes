@@ -434,4 +434,3 @@ describe("T-N1B-06 · compensación y reaplicación", () => {
     }
   });
 });
-

@@ -182,4 +182,3 @@ Mientras existan filas transicionales con `inventory_items.client_id` nulo,
 `0220` debe abortar por G-1. Después de resolverlas administrativamente, la
 reaplicación de `0220` vuelve a exigir G-1…G-5 y restaura `NOT NULL` sin cambiar
 la identidad, las BU, su procedencia ni las anomalías preservadas.
-
