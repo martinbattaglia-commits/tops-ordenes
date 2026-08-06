@@ -108,20 +108,53 @@ const serializeOutcome = (
   return { body, byteLength: new TextEncoder().encode(body).byteLength };
 };
 
-const enforceSuccessResponseSize = (
+/**
+ * Último recurso ACOTADO POR CONSTRUCCIÓN.
+ *
+ * 🔴 Es una constante de módulo, no una plantilla: si se compusiera con datos
+ * de la petición volvería a depender de una longitud que no controlamos, que
+ * es exactamente el defecto que esta barrera existe para cerrar.
+ */
+const MINIMAL_ERROR_BODY = JSON.stringify({
+  error: { code: "internal_error", message: "Internal error" },
+  meta: { correlationId: "00000000-0000-4000-8000-000000000000", apiVersion: INVENTORY_API_VERSION },
+});
+
+/**
+ * 🔴 Techo GLOBAL: se aplica a TODA respuesta, exitosa o de error.
+ *
+ * Limitarlo al éxito dejaba una vía real de desborde: el sobre de error refleja
+ * `meta.correlationId`, y ese valor podía venir de una cabecera del llamante sin
+ * cota de longitud. Una petición con `x-correlation-id` de dos megabytes
+ * producía una respuesta de dos megabytes que el conector de P3-N2 —que corta
+ * en 1 MiB— habría descartado, convirtiendo un abuso trivial en indisponibilidad.
+ *
+ * 🔴 Nunca se trunca: truncar produciría una página válida en apariencia pero
+ * incompleta, y el cliente no tendría forma de notarlo. Se SUSTITUYE la
+ * respuesta entera.
+ *
+ * 🔴 Sin recursión: como mucho dos serializaciones y, si ambas desbordaran, una
+ * constante. Reintentar sustituyendo sería un bucle sobre el mismo defecto.
+ */
+const enforceResponseSize = (
   outcome: Outcome,
   correlationId: string,
 ): { outcome: Outcome; serializedBody: string } => {
   const serialized = serializeOutcome(outcome, correlationId);
-  if (outcome.code !== "success" || serialized.byteLength <= INVENTORY_MAX_RESPONSE_BYTES) {
+  if (serialized.byteLength <= INVENTORY_MAX_RESPONSE_BYTES) {
     return { outcome, serializedBody: serialized.body };
   }
 
-  const rejected = errorOutcome(nexusBadResponse());
-  return {
-    outcome: rejected,
-    serializedBody: serializeOutcome(rejected, correlationId).body,
-  };
+  // Un éxito desbordado es una respuesta inválida de la fuente; un error
+  // desbordado sólo puede ser un defecto interno. Familias distintas.
+  const replacement = errorOutcome(
+    outcome.code === "success" ? nexusBadResponse() : internalError(),
+  );
+  const fallback = serializeOutcome(replacement, correlationId);
+  if (fallback.byteLength <= INVENTORY_MAX_RESPONSE_BYTES) {
+    return { outcome: replacement, serializedBody: fallback.body };
+  }
+  return { outcome: replacement, serializedBody: MINIMAL_ERROR_BODY };
 };
 
 const jsonResponse = (
@@ -145,7 +178,19 @@ export function createInventoryHandler(deps: InventoryHandlerDependencies) {
     const startedAt = Date.now();
     const now = deps.now ?? (() => new Date());
     const suppliedCorrelationId = request.headers.get("x-correlation-id");
-    const correlationId = suppliedCorrelationId ?? (deps.createCorrelationId ?? randomUUID)();
+    // 🔴 La longitud se comprueba ANTES que el patrón: correr una expresión
+    // regular sobre una cabecera de megabytes es trabajo que el llamante elige
+    // por nosotros. El identificador canónico mide exactamente 36 caracteres.
+    const suppliedIsValid =
+      suppliedCorrelationId !== null
+      && suppliedCorrelationId.length === 36
+      && UUID_V4.test(suppliedCorrelationId);
+    // 🔴 El sobre NUNCA refleja un identificador que no haya pasado la
+    // validación. Reflejarlo era la vía por la que una cabecera sin cota
+    // inflaba el cuerpo de la respuesta de error.
+    const correlationId = suppliedIsValid
+      ? suppliedCorrelationId
+      : (deps.createCorrelationId ?? randomUUID)();
 
     let outcome: Outcome;
     let principal: M2mPrincipal | undefined;
@@ -154,7 +199,7 @@ export function createInventoryHandler(deps: InventoryHandlerDependencies) {
     let authoritativeAudit = false;
 
     try {
-      if (!UUID_V4.test(correlationId)) {
+      if ((suppliedCorrelationId !== null && !suppliedIsValid) || !UUID_V4.test(correlationId)) {
         throw new InventoryApiError(400, "invalid_input", "Invalid request");
       }
       const url = new URL(request.url);
@@ -206,7 +251,7 @@ export function createInventoryHandler(deps: InventoryHandlerDependencies) {
       outcome = errorOutcome(safeError(error));
     }
 
-    let serialized = enforceSuccessResponseSize(outcome, correlationId);
+    let serialized = enforceResponseSize(outcome, correlationId);
     outcome = serialized.outcome;
 
     try {
@@ -222,7 +267,7 @@ export function createInventoryHandler(deps: InventoryHandlerDependencies) {
     } catch {
       if (authoritativeAudit) {
         outcome = errorOutcome(auditUnavailable());
-        serialized = enforceSuccessResponseSize(outcome, correlationId);
+        serialized = enforceResponseSize(outcome, correlationId);
       }
     }
 

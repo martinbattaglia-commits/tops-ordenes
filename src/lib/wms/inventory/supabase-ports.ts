@@ -100,6 +100,19 @@ interface ResolvedLot {
   quantity: number;
 }
 
+/**
+ * Comparador determinista por punto de código.
+ *
+ * 🔴 NO se usa `localeCompare`: su resultado depende del ICU disponible en el
+ * runtime. Con la colación española «á» precede a «b»; por punto de código va
+ * después. Aplicado a la selección FEFO eso significa que **dos despliegues del
+ * mismo código podrían despachar lotes distintos** — un defecto silencioso e
+ * irreproducible. La única propiedad que necesita el desempate es ser total y
+ * estable, no ser lingüísticamente correcta.
+ */
+const compareText = (left: string, right: string): number =>
+  left === right ? 0 : left < right ? -1 : 1;
+
 const activeLotsFrom = (raw: unknown): ResolvedLot[] | null => {
   const source = Array.isArray(raw) ? raw : raw === null || raw === undefined ? [] : [raw];
   const lots: ResolvedLot[] = [];
@@ -112,9 +125,10 @@ const activeLotsFrom = (raw: unknown): ResolvedLot[] | null => {
     }
     lots.push({ lotNumber: value.lot_number, date: value.expiration_date, quantity: amount });
   }
+  // FEFO: primero la fecha de vencimiento; el lote sólo desempata.
   return lots.sort(
     (left, right) =>
-      left.date.localeCompare(right.date) || left.lotNumber.localeCompare(right.lotNumber),
+      compareText(left.date, right.date) || compareText(left.lotNumber, right.lotNumber),
   );
 };
 
@@ -171,9 +185,8 @@ const repositoryRowFrom = (value: unknown): InventoryRepositoryRow | null => {
   };
 };
 
-const compareText = (left: string, right: string): number =>
-  left === right ? 0 : left < right ? -1 : 1;
-
+// Reutiliza el `compareText` único declarado junto a la selección FEFO: un
+// segundo comparador podría divergir del primero sin que nada lo delatara.
 const stableTieBreak = (left: InventoryRepositoryRow, right: InventoryRepositoryRow): number =>
   compareText(left.sku, right.sku) ||
   compareText(left.date, right.date) ||
