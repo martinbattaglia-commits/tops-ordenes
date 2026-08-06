@@ -1,5 +1,6 @@
 export const INVENTORY_PERMISSION = "wms.inventory.read" as const;
 export const INVENTORY_API_VERSION = "v1" as const;
+export const INVENTORY_MAX_RESPONSE_BYTES = 1_048_576 as const;
 
 export const BUSINESS_UNITS = ["ANMAT", "GENERAL"] as const;
 export type BusinessUnit = (typeof BUSINESS_UNITS)[number];

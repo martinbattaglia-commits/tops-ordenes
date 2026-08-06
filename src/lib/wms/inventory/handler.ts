@@ -1,10 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
-import { INVENTORY_API_VERSION, INVENTORY_PERMISSION } from "./contract";
+import {
+  INVENTORY_API_VERSION,
+  INVENTORY_MAX_RESPONSE_BYTES,
+  INVENTORY_PERMISSION,
+} from "./contract";
 import {
   InventoryApiError,
   auditUnavailable,
   forbidden,
   internalError,
+  nexusBadResponse,
   nexusUnavailable,
   rateLimited,
   unauthenticated,
@@ -87,14 +92,43 @@ const auditEvent = (input: {
   occurredAt: input.occurredAt,
 });
 
-const jsonResponse = (outcome: Outcome, correlationId: string): Response => {
-  const body =
-    outcome.code === "success"
-      ? outcome.body
-      : {
-          ...(outcome.body as Record<string, unknown>),
-          meta: { correlationId, apiVersion: INVENTORY_API_VERSION },
-        };
+const publicBodyFor = (outcome: Outcome, correlationId: string): unknown =>
+  outcome.code === "success"
+    ? outcome.body
+    : {
+        ...(outcome.body as Record<string, unknown>),
+        meta: { correlationId, apiVersion: INVENTORY_API_VERSION },
+      };
+
+const serializeOutcome = (
+  outcome: Outcome,
+  correlationId: string,
+): { body: string; byteLength: number } => {
+  const body = JSON.stringify(publicBodyFor(outcome, correlationId));
+  return { body, byteLength: new TextEncoder().encode(body).byteLength };
+};
+
+const enforceSuccessResponseSize = (
+  outcome: Outcome,
+  correlationId: string,
+): { outcome: Outcome; serializedBody: string } => {
+  const serialized = serializeOutcome(outcome, correlationId);
+  if (outcome.code !== "success" || serialized.byteLength <= INVENTORY_MAX_RESPONSE_BYTES) {
+    return { outcome, serializedBody: serialized.body };
+  }
+
+  const rejected = errorOutcome(nexusBadResponse());
+  return {
+    outcome: rejected,
+    serializedBody: serializeOutcome(rejected, correlationId).body,
+  };
+};
+
+const jsonResponse = (
+  outcome: Outcome,
+  correlationId: string,
+  serializedBody: string,
+): Response => {
   const headers = new Headers({
     "Cache-Control": "private, no-store",
     "Content-Type": "application/json; charset=utf-8",
@@ -103,7 +137,7 @@ const jsonResponse = (outcome: Outcome, correlationId: string): Response => {
   if (outcome.retryAfterMs !== undefined) {
     headers.set("Retry-After", String(Math.max(1, Math.ceil(outcome.retryAfterMs / 1_000))));
   }
-  return new Response(JSON.stringify(body), { status: outcome.status, headers });
+  return new Response(serializedBody, { status: outcome.status, headers });
 };
 
 export function createInventoryHandler(deps: InventoryHandlerDependencies) {
@@ -172,6 +206,9 @@ export function createInventoryHandler(deps: InventoryHandlerDependencies) {
       outcome = errorOutcome(safeError(error));
     }
 
+    let serialized = enforceSuccessResponseSize(outcome, correlationId);
+    outcome = serialized.outcome;
+
     try {
       await deps.audit.record(
         auditEvent({
@@ -183,7 +220,10 @@ export function createInventoryHandler(deps: InventoryHandlerDependencies) {
         }),
       );
     } catch {
-      if (authoritativeAudit) outcome = errorOutcome(auditUnavailable());
+      if (authoritativeAudit) {
+        outcome = errorOutcome(auditUnavailable());
+        serialized = enforceSuccessResponseSize(outcome, correlationId);
+      }
     }
 
     try {
@@ -200,6 +240,6 @@ export function createInventoryHandler(deps: InventoryHandlerDependencies) {
       // La observabilidad auxiliar nunca sustituye al journal de auditoría autoritativo.
     }
 
-    return jsonResponse(outcome, correlationId);
+    return jsonResponse(outcome, correlationId, serialized.serializedBody);
   };
 }
