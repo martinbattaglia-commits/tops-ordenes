@@ -67,7 +67,7 @@ describe("fail-closed sin API key", () => {
 describe("request bien formado", () => {
   beforeEach(() => vi.stubEnv("AI_GEMINI_API_KEY", "test-key-not-real"));
 
-  it("URL con modelo default gemini-2.5-pro, key SOLO en header, tools y schemas sanitizados", async () => {
+  it("URL con modelo default gemini-2.5-flash (autorizado por Dirección), key SOLO en header, tools y schemas sanitizados", async () => {
     const fetchSpy = mockFetchOnce({
       candidates: [{ content: { parts: [{ text: "ok" }] } }],
       usageMetadata: {},
@@ -77,7 +77,7 @@ describe("request bien formado", () => {
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(String(url)).toBe(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
     );
     expect(String(url)).not.toContain("key="); // jamás la key en la URL
     const headers = (init as RequestInit).headers as Record<string, string>;

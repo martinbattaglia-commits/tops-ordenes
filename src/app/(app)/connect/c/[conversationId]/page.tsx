@@ -7,6 +7,7 @@ import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
 import { ThreadView } from "../../_components/ThreadView";
 import { ConversationAdmin } from "../../_components/ConversationAdmin";
 import { JoinChannelPrompt } from "../../_components/JoinChannelPrompt";
+import { UnarchiveButton } from "../../_components/UnarchiveButton";
 
 export const dynamic = "force-dynamic";
 
@@ -102,14 +103,21 @@ export default async function ConnectThreadPage({
             </h2>
             <span className="chip text-[10px]">{KIND_LABEL[conversation.kind]}</span>
             {conversation.archivedAt && (
-              <span className="chip text-[10px] bg-amber-400/15 text-amber-500">
-                <Icon name="folder" size={10} /> Archivado
-              </span>
+              <>
+                <span className="chip text-[10px] bg-amber-400/15 text-amber-500">
+                  <Icon name="folder" size={10} /> Archivado
+                </span>
+                {/* H1 (D3): reversa visible también en hilos de entidad. */}
+                <UnarchiveButton conversationId={conversation.id} />
+              </>
             )}
           </div>
-          <p className="mt-0.5 truncate font-mono text-[11px] text-fg-muted">
-            {conversation.contextId}
-            {conversation.topic ? ` · ${conversation.topic}` : ""}
+          {/* UX-003: línea humana (tema); el context_id técnico pasa a tooltip. */}
+          <p
+            className="mt-0.5 truncate text-[11px] text-fg-muted"
+            title={conversation.contextId ?? undefined}
+          >
+            {conversation.topic ?? "Sin tema"}
           </p>
         </div>
         {links.length > 0 && (

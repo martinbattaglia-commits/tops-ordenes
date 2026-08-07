@@ -18,7 +18,8 @@ const INCIDENT_COLS =
   "id, public_id, conversation_id, titulo, sector, ubicacion, tipo_averia, severidad, estado, reportado_por, asignado_a, sla_due_at, resuelto_at, resolucion_text, created_at, updated_at";
 
 export interface IncidentFilters {
-  estado?: IncidentStatus | "activos" | "todos";
+  // UX-002: "archivo" = histórico (resuelto + cerrado), complemento visual de "activos".
+  estado?: IncidentStatus | "activos" | "todos" | "archivo";
   severidad?: IncidentSeverity;
   sector?: string;
   asignado?: string;
@@ -69,6 +70,8 @@ function applyMockFilters(items: Incident[], f: IncidentFilters): Incident[] {
   return items.filter((i) => {
     if (f.estado === "activos" || f.estado == null) {
       if (i.estado === "cerrado") return false;
+    } else if (f.estado === "archivo") {
+      if (i.estado !== "resuelto" && i.estado !== "cerrado") return false;
     } else if (f.estado !== "todos" && i.estado !== f.estado) return false;
     if (f.severidad && i.severidad !== f.severidad) return false;
     if (f.sector && (i.sector ?? "").toLowerCase() !== f.sector.toLowerCase()) return false;
@@ -94,6 +97,9 @@ export async function listIncidents(filters: IncidentFilters = {}): Promise<Inci
   let query = supabase.from("connect_incidents").select(INCIDENT_COLS);
   if (filters.estado === "todos") {
     // sin filtro de estado
+  } else if (filters.estado === "archivo") {
+    // UX-002: histórico = resuelto + cerrado (misma tabla, misma RLS).
+    query = query.in("estado", ["resuelto", "cerrado"]);
   } else if (filters.estado && filters.estado !== "activos") {
     query = query.eq("estado", filters.estado);
   } else {

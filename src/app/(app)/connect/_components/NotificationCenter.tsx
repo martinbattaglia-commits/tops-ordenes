@@ -150,7 +150,7 @@ function NotificationRow({
               {item.title}
             </p>
             {item.message && (
-              <p className="mt-0.5 line-clamp-2 text-[12px] text-fg-secondary">{item.message}</p>
+              <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{item.message}</p>
             )}
             <p className="mt-1 flex items-center gap-1.5 text-[11px] text-fg-muted">
               <Icon name="clock" size={11} /> {relTime(item.createdAt)}

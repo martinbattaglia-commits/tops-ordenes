@@ -65,7 +65,7 @@ export function ChannelView({
           {channel.topic && <p className="mt-1 max-w-sm text-sm text-fg-muted">{channel.topic}</p>}
           <p className="mt-1 font-mono text-[11px] text-fg-muted">{channel.contextId}</p>
         </div>
-        <button type="button" disabled={busy} onClick={() => void join()} className="btn btn-primary btn-sm">
+        <button type="button" disabled={busy} onClick={() => void join()} className="btn btn-nexus btn-sm">
           <Icon name="plus" size={14} /> Unirme a este canal
         </button>
         {err && <p className="text-xs text-tops-red">{err}</p>}

@@ -19,6 +19,10 @@ export const RegistrarCajaMovimientoSchema = z.object({
   concept: z.string().trim().min(1, "El concepto es obligatorio").max(200),
   responsable_id: UUID,
   observations: z.string().trim().max(500).optional().nullable(),
+  // CCN-002: moneda EXPLÍCITA y obligatoria — sin default en la app, para que
+  // ningún caller pueda registrar "silenciosamente" en una caja no elegida.
+  // (El default 'ARS' de la RPC existe sólo para compatibilidad de firma.)
+  currency: z.enum(["ARS", "USD"], { message: "Moneda inválida (ARS o USD)" }),
 });
 export type RegistrarCajaMovimientoInput = z.infer<typeof RegistrarCajaMovimientoSchema>;
 

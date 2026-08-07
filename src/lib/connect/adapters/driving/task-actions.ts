@@ -15,7 +15,7 @@ import {
 } from "../../application/task-use-cases";
 import { TaskRpcAdapter } from "../supabase/task-rpc.adapter";
 import type { RpcCapableClient } from "../supabase/connect-rpc.adapter";
-import { TASK_PRIORITIES, TASK_STATUSES } from "../../types";
+import { TASK_PRIORITIES, TASK_STATUSES, type TaskStatus } from "../../types";
 
 export type SimpleTaskResult = { ok: true } | { ok: false; message: string };
 export type CreateTaskResult =
@@ -48,6 +48,33 @@ async function guard(perm: "connect.view" | "connect.create"): Promise<Guarded> 
 function revalidateTasks(taskId?: string) {
   revalidatePath("/connect/tareas");
   if (taskId) revalidatePath(`/connect/tareas/${taskId}`);
+}
+
+/**
+ * H1 (LINK-UX-002): el hilo acompaña al estado real del trabajo — terminal ⇒ archivar,
+ * de vuelta a activo ⇒ desarchivar (D2). Best-effort: la entidad manda; un fallo acá
+ * NO revierte el cambio de estado (queda logueado). Las RPCs 0206 re-validan legitimidad
+ * por la entidad y son idempotentes sobre archived_at.
+ */
+async function syncTaskThreadArchive(
+  client: RpcCapableClient, taskId: string, status: TaskStatus,
+): Promise<void> {
+  const supabase = createClient();
+  if (!supabase) return;
+  const { data } = await supabase
+    .from("connect_tasks")
+    .select("conversation_id")
+    .eq("id", taskId)
+    .maybeSingle();
+  const conversationId =
+    (data as { conversation_id: string | null } | null)?.conversation_id ?? null;
+  if (!conversationId) return; // hilo LAZY: la tarea puede no tener chat
+  const fn = status === "completada" || status === "cancelada"
+    ? "connect_archive_entity_thread"
+    : "connect_unarchive_conversation";
+  const { error } = await client.rpc(fn, { p_conversation_id: conversationId });
+  if (error) console.error(`[connect/${fn}] best-effort (task ${taskId}):`, error.message);
+  else revalidatePath("/connect", "layout");
 }
 
 const CreateSchema = z.object({
@@ -114,6 +141,7 @@ export async function setTaskStatusAction(raw: unknown): Promise<SimpleTaskResul
   });
   if (!result.ok) return { ok: false, message: result.error.message };
   revalidateTasks(parsed.data.taskId);
+  await syncTaskThreadArchive(g.client, parsed.data.taskId, parsed.data.status);
   return { ok: true };
 }
 

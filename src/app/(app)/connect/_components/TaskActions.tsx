@@ -90,7 +90,7 @@ export function TaskActions({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         {has("claim") && currentUserId && (
-          <button type="button" className="btn btn-primary btn-sm" disabled={busy}
+          <button type="button" className="btn btn-nexus btn-sm" disabled={busy}
             onClick={() => void run(() => assignTaskAction({ taskId: task.id, toProfileId: currentUserId }))}>
             <Icon name="user" size={13} /> Reclamar
           </button>
@@ -114,7 +114,7 @@ export function TaskActions({
           </button>
         )}
         {has("complete") && (
-          <button type="button" className="btn btn-primary btn-sm" disabled={busy}
+          <button type="button" className="btn btn-nexus btn-sm" disabled={busy}
             onClick={() => void run(() => setTaskStatusAction({ taskId: task.id, status: "completada" }))}>
             <Icon name="check-circle" size={13} /> Completar
           </button>
@@ -223,7 +223,7 @@ export function TaskActions({
             <input type="datetime-local" className="input" value={due}
               onChange={(e) => setDue(e.target.value)} />
           </label>
-          <button type="button" className="btn btn-primary btn-sm" disabled={busy || !due}
+          <button type="button" className="btn btn-nexus btn-sm" disabled={busy || !due}
             onClick={() => void run(() => setTaskDueAction({ taskId: task.id, dueAt: new Date(due).toISOString() }))}>
             Guardar
           </button>

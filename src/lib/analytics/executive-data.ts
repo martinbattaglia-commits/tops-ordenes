@@ -23,10 +23,14 @@ import { getLibroIvaCompras } from "@/lib/erp/libro-iva-data";
 import { getCorporateVacancySummary } from "@/lib/wms/corporate-capacity";
 import { listOrders } from "@/lib/data/orders";
 import { clientifyConfigured, getPipelineSnapshot, getContactsPage } from "@/lib/clientify/data";
+import { sumArsBalances, cajaUsdBalance, onlyArs } from "@/lib/tesoreria/currency";
 
 export interface FinancieroKpis {
   ok: boolean;
+  /** Σ de saldos EXCLUSIVAMENTE ARS (CCN-002 · D-2: nunca se suman monedas). */
   cajaTotal: number;
+  /** Saldo Caja Chica USD, informativo y separado; null si la caja USD no existe. */
+  cajaUsd: number | null;
   porCobrar: number;
   porPagar: number;
   cobrosTotal: number;
@@ -94,13 +98,17 @@ async function financiero(): Promise<FinancieroKpis> {
   const flujo = cashflow.length ? Number(cashflow[cashflow.length - 1].flujo_acumulado) || 0 : 0;
   return {
     ok: true,
-    cajaTotal: sum(balances.map((b) => Number(b.balance) || 0)),
+    // CCN-002 · D-2: fence ARS en el titular; el USD viaja aparte, jamás sumado.
+    cajaTotal: sumArsBalances(balances),
+    cajaUsd: cajaUsdBalance(balances),
     porCobrar: sum(custOpen.map((i) => Number(i.saldo) || 0)),
     porPagar: sum(supOpen.map((i) => Number(i.saldo) || 0)),
     cobrosTotal: sum(custCta.map((c) => Number(c.total_cobrado) || 0)),
     pagosTotal: sum(supCta.map((s) => Number(s.total_pagado) || 0)),
     flujoProyectadoAcumulado: flujo,
-    bancos: balances.map((b) => ({ nombre: b.bank_name, cuenta: b.account_name, balance: Number(b.balance) || 0 })),
+    // Sólo cuentas ARS: la lista se formatea con "$" — una fila USD acá mentiría
+    // de símbolo. El USD tiene su propia línea (cajaUsd) con formato US$.
+    bancos: onlyArs(balances).map((b) => ({ nombre: b.bank_name, cuenta: b.account_name, balance: Number(b.balance) || 0 })),
   };
 }
 
@@ -162,7 +170,7 @@ async function comercial(): Promise<ComercialKpis> {
   };
 }
 
-const FIN_FAIL: FinancieroKpis = { ok: false, cajaTotal: 0, porCobrar: 0, porPagar: 0, cobrosTotal: 0, pagosTotal: 0, flujoProyectadoAcumulado: 0, bancos: [] };
+const FIN_FAIL: FinancieroKpis = { ok: false, cajaTotal: 0, cajaUsd: null, porCobrar: 0, porPagar: 0, cobrosTotal: 0, pagosTotal: 0, flujoProyectadoAcumulado: 0, bancos: [] };
 const COMP_FAIL: ComprasKpis = { ok: false, facturasCount: 0, facturasTotal: 0, ivaCreditoFiscal: 0, percepciones: 0, detalleVacio: true };
 const WMS_FAIL: WmsKpis = { ok: false, ocupadoM2: 0, disponibleM2: 0, comercializableM2: 0, vacanciaPct: 0, vacanciaComercialPct: 0 };
 const OPS_FAIL: OperacionesKpis = { ok: false, abiertas: 0, cerradas: 0, total: 0 };

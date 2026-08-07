@@ -205,6 +205,16 @@
     @apply text-base px-6 py-3;
     min-height: 48px;
   }
+  /* Nexus Link (UX-005): acción primaria del módulo — rojo TOPS = acción operativa.
+     Convive con .btn-primary (navy) que sigue siendo el primario del resto del ERP.
+     Escala tipográfica del módulo: título 13px/semibold · cuerpo 11-12px · metadata 10px. */
+  .btn-nexus {
+    @apply bg-tops-red text-white border border-transparent hover:bg-tops-red/90;
+  }
+  .btn-nexus:focus-visible,
+  .focus-nexus:focus-visible {
+    @apply outline-none ring-2 ring-tops-red/40;
+  }
 
   /* ---- Inputs ----------------------------------------------------- */
   .input {

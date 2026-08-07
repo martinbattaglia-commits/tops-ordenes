@@ -114,6 +114,16 @@ export interface ProviderUsage {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  /** Desglose informado por el proveedor (D-3). Sin él era imposible AFIRMAR si el
+   *  razonamiento estaba apagado: `outputTokens` sumaba candidates + thoughts en un
+   *  solo número, así que 1.990 tokens podían ser JSON puro o JSON + razonamiento.
+   *  Inferirlo no alcanza cuando el tope de salida es la causa del fallo. */
+  breakdown?: {
+    promptTokens: number;
+    candidatesTokens: number;
+    thoughtsTokens: number;
+    totalTokens: number;
+  };
 }
 
 export type ProviderTurnResponse =

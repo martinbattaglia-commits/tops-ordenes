@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { Icon, type IconName } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 import { PRODUCT } from "@/lib/org";
+import { NexusOsBrand } from "@/components/shell/NexusOsBrand";
 
 /** Clave de persistencia del set de dominios abiertos del sidebar (Accordion Tree). */
 const SIDEBAR_OPEN_KEY = "tops:sidebar:open:v1";
@@ -410,14 +411,8 @@ export default function Sidebar({
           priority
           className="w-auto h-20 object-contain"
         />
-        <div className="mt-2 text-center">
-          <div className="text-[15px] font-black tracking-[0.18em] text-white leading-none">
-            {PRODUCT.name}
-          </div>
-          <div className="mt-1 text-[9px] font-bold uppercase tracking-[0.18em] text-tops-red">
-            {PRODUCT.shortTagline}
-          </div>
-        </div>
+        {/* Marca NEXUS OS (Dirección 07-26) — el isologo de Logística TOPS queda arriba. */}
+        <NexusOsBrand />
       </Link>
 
       {/* Domain sections — Accordion Tree */}

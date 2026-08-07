@@ -13,7 +13,7 @@ import type { ConversationKind, ConversationLink, MemberRole, Message } from "@/
 import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
 import { canAdminister, canManageRoles } from "@/lib/connect/domain/channel";
 import {
-  setTitleAction, setTopicAction, archiveConversationAction,
+  setTitleAction, setTopicAction, archiveConversationAction, unarchiveConversationAction,
   addMemberAction, removeMemberAction, setMemberRoleAction, unpinMessageAction,
 } from "@/lib/connect/adapters/driving/channel-actions";
 import { ThreadView } from "./ThreadView";
@@ -102,7 +102,7 @@ export function ConversationAdmin({
                   className="w-64 rounded border border-stroke-soft bg-bg-page px-2 py-1 text-sm font-bold text-fg-primary outline-none focus:border-tops-red"
                   placeholder={`Nombre del ${noun}…`}
                 />
-                <button type="button" className="btn btn-primary btn-sm" disabled={busy}
+                <button type="button" className="btn btn-nexus btn-sm" disabled={busy}
                   onClick={async () => { if (await run(() => setTitleAction({ conversationId, title: titleDraft }))) setEditingTitle(false); }}>
                   <Icon name="check" size={13} />
                 </button>
@@ -140,7 +140,7 @@ export function ConversationAdmin({
                 className="w-72 rounded border border-stroke-soft bg-bg-page px-2 py-1 text-xs text-fg-primary outline-none focus:border-tops-red"
                 placeholder={`Tema del ${noun}…`}
               />
-              <button type="button" className="btn btn-primary btn-sm" disabled={busy}
+              <button type="button" className="btn btn-nexus btn-sm" disabled={busy}
                 onClick={async () => { if (await run(() => setTopicAction({ conversationId, topic: topicDraft }))) setEditingTopic(false); }}>
                 <Icon name="check" size={13} />
               </button>
@@ -149,9 +149,9 @@ export function ConversationAdmin({
               </button>
             </div>
           ) : (
-            <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-fg-muted">
-              <span className="font-mono">{contextId}</span>
-              {topic ? <span>· {topic}</span> : <span className="italic">sin tema</span>}
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-fg-muted" title={contextId}>
+              {/* UX-003: el tema encabeza; el context_id técnico queda en el tooltip. */}
+              {topic ? <span>{topic}</span> : <span className="italic">sin tema</span>}
               {canAdminActive && (
                 <button type="button" className="text-fg-link hover:underline" title="Editar tema" onClick={() => { setTopicDraft(topic ?? ""); setEditingTopic(true); }}>
                   editar tema
@@ -175,11 +175,22 @@ export function ConversationAdmin({
               <Icon name="folder" size={14} /> Archivar
             </button>
           )}
+          {/* H1 (D3): reversa visible — vuelve el hilo a Activos (RPC 0206 re-valida). */}
+          {archived && canAdminister(myRole, isAdmin) && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={busy}
+              onClick={() => void run(() => unarchiveConversationAction({ conversationId }))}
+            >
+              <Icon name="folder" size={14} /> Desarchivar
+            </button>
+          )}
         </div>
       </header>
 
       {archived && (
-        <p className="flex items-center gap-1.5 border-b border-stroke-soft bg-amber-400/10 px-4 py-1.5 text-[12px] text-fg-secondary">
+        <p className="flex items-center gap-1.5 border-b border-stroke-soft bg-amber-400/10 px-4 py-1.5 text-xs text-fg-secondary">
           <Icon name="folder" size={13} className="text-amber-500" />
           {nounCap} archivado — solo lectura. No se pueden enviar mensajes ni modificar {isChannel ? "el canal" : "el grupo"}.
         </p>
@@ -198,7 +209,7 @@ export function ConversationAdmin({
           {showPinned && (
             <ul className="mt-1.5 space-y-1">
               {pinned.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-2 rounded bg-bg-surface px-2 py-1 text-[12px]">
+                <li key={p.id} className="flex items-center justify-between gap-2 rounded bg-bg-surface px-2 py-1 text-xs">
                   <span className="min-w-0 truncate text-fg-primary">
                     {p.authorName && <span className="font-semibold text-fg-secondary">{p.authorName}: </span>}
                     {p.body ?? "—"}
@@ -247,7 +258,7 @@ export function ConversationAdmin({
                     {m.avatar ?? displayName.slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[12px] text-fg-primary">{displayName}</div>
+                    <div className="truncate text-xs text-fg-primary">{displayName}</div>
                     {canManageRolesActive && m.profileId ? (
                       <select
                         value={m.memberRole}

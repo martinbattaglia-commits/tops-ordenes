@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { Kpi } from "@/components/tesoreria/ui";
-import { fmtCurrency } from "@/lib/utils";
+import { fmtCurrency, fmtCurrencyUsd } from "@/lib/utils";
+import { sumArsBalances, cajaUsdBalance } from "@/lib/tesoreria/currency";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import {
   getBankBalances,
@@ -22,7 +23,10 @@ export default async function TesoreriaOverviewPage() {
       getCashflowProjection(),
     ]);
     // D1/D5: roll-up SERVER-SIDE sobre filas de vistas (nunca en React cliente).
-    const saldoBancos = banks.reduce((s, b) => s + Number(b.balance), 0);
+    // CCN-002 · D-2: el Σ es SÓLO ARS (fence). El USD jamás entra a un total ARS;
+    // se informa aparte, sin equivalencias ni cotización.
+    const saldoBancos = sumArsBalances(banks);
+    const cajaUsd = cajaUsdBalance(banks);
     const cobrPend = cc.reduce((s, c) => s + Number(c.saldo_cuenta), 0);
     const pagoPend = sc.reduce((s, c) => s + Number(c.saldo_cuenta), 0);
     const flujoProy = flow.length ? Number(flow[flow.length - 1].flujo_acumulado) : 0;
@@ -41,7 +45,14 @@ export default async function TesoreriaOverviewPage() {
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Kpi label="Saldo en bancos" value={saldoBancos} />
+          <div>
+            <Kpi label="Saldo en bancos" value={saldoBancos} />
+            {cajaUsd != null && (
+              <div className="text-[11px] text-fg-muted mt-1 px-1 tabular">
+                Caja Chica USD: {fmtCurrencyUsd(cajaUsd)} · no consolidado
+              </div>
+            )}
+          </div>
           <Link href="/tesoreria/cobranzas" className="nx-interactive block rounded-lg cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-blue-700" title="Ver detalle de cobranzas pendientes">
             <Kpi label="Cobranzas pendientes" value={cobrPend} />
           </Link>

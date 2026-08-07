@@ -62,7 +62,7 @@ export default async function ConnectHomePage() {
               {activity.map((e) => (
                 <li key={e.id} className="relative">
                   <span className="absolute -left-[15px] top-1 h-2 w-2 rounded-full bg-tops-red" />
-                  <div className="text-[12px] font-medium leading-snug text-fg-primary">{e.summary ?? e.eventType}</div>
+                  <div className="text-xs font-medium leading-snug text-fg-primary">{e.summary ?? e.eventType}</div>
                   <div className="text-[10px] text-fg-muted">{e.actorLabel ?? "—"} · {relTime(e.occurredAt)}</div>
                 </li>
               ))}
@@ -119,7 +119,7 @@ function HomeCard({ title, icon, href, badge, children }: {
         <div className="flex items-center gap-2">
           <Icon name={icon} size={15} className="text-fg-link" />
           <h2 className="text-sm font-bold text-fg-primary">{title}</h2>
-          {badge ? <span className="grid h-4 min-w-[16px] place-items-center rounded-pill bg-tops-red px-1 text-[9px] font-bold text-white">{badge > 9 ? "9+" : badge}</span> : null}
+          {badge ? <span className="grid h-4 min-w-[16px] place-items-center rounded-pill bg-tops-red px-1 text-[10px] font-bold text-white">{badge > 9 ? "9+" : badge}</span> : null}
         </div>
         <Link href={href} className="text-[11px] font-semibold text-fg-link hover:underline">Ver todo</Link>
       </div>
@@ -152,7 +152,7 @@ function ConvRow({ item }: { item: import("@/lib/connect/types").InboxItem }) {
       <FavoriteStar conversationId={item.conversationId} initial={item.isFavorite} />
       <Link href={`/connect/c/${item.conversationId}`} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-bg-surface-alt">
         <span className="truncate text-sm text-fg-primary">{item.title ?? item.slug ?? "Conversación"}</span>
-        {item.unreadCount > 0 && <span className="ml-auto grid h-4 min-w-[16px] place-items-center rounded-pill bg-tops-blue-700 px-1 text-[9px] font-bold text-white">{item.unreadCount}</span>}
+        {item.unreadCount > 0 && <span className="ml-auto grid h-4 min-w-[16px] place-items-center rounded-pill bg-tops-blue-700 px-1 text-[10px] font-bold text-white">{item.unreadCount}</span>}
       </Link>
     </li>
   );

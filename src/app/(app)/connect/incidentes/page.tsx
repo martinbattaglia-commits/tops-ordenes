@@ -22,8 +22,9 @@ function parseFilters(sp: Record<string, string | string[] | undefined>): Incide
   const severidad = one("severidad");
   return {
     estado:
-      estado === "todos" || (INCIDENT_STATUSES as readonly string[]).includes(estado ?? "")
-        ? (estado as IncidentStatus | "todos")
+      estado === "todos" || estado === "archivo" ||
+      (INCIDENT_STATUSES as readonly string[]).includes(estado ?? "")
+        ? (estado as IncidentStatus | "todos" | "archivo")
         : "activos",
     severidad: (INCIDENT_SEVERITIES as readonly string[]).includes(severidad ?? "")
       ? (severidad as IncidentSeverity)
@@ -49,9 +50,21 @@ export default async function IncidentsPage({
             Reporte, asignación y resolución de incidentes operativos.
           </p>
         </div>
-        <Link href="/connect/incidentes/nuevo" className="btn btn-primary btn-sm">
-          <Icon name="plus" size={14} /> Reportar incidente
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* UX-002: acceso directo al histórico (mismo filtro estado, sin ruta nueva). */}
+          {filters.estado === "archivo" ? (
+            <Link href="/connect/incidentes" className="btn btn-ghost btn-sm text-xs">
+              <Icon name="bolt" size={13} /> Ver activos
+            </Link>
+          ) : (
+            <Link href="/connect/incidentes?estado=archivo" className="btn btn-ghost btn-sm text-xs">
+              <Icon name="check" size={13} /> Ver archivo
+            </Link>
+          )}
+          <Link href="/connect/incidentes/nuevo" className="btn btn-nexus btn-sm">
+            <Icon name="plus" size={14} /> Reportar incidente
+          </Link>
+        </div>
       </header>
 
       {/* Filtros por GET (sin JS de cliente) */}
@@ -63,6 +76,7 @@ export default async function IncidentsPage({
             {INCIDENT_STATUSES.map((s) => (
               <option key={s} value={s}>{INCIDENT_STATUS_LABELS[s]}</option>
             ))}
+            <option value="archivo">Archivo (resueltos + cerrados)</option>
             <option value="todos">Todos</option>
           </select>
         </label>
@@ -109,10 +123,11 @@ export default async function IncidentsPage({
                   <tr key={i.id} className="border-b border-stroke-soft last:border-0 hover:bg-bg-surface-alt">
                     <td className="px-3 py-2">
                       <Link href={`/connect/incidentes/${i.id}`} className="group flex min-w-0 flex-col">
-                        <span className="font-mono text-[10px] text-fg-link">{i.publicId}</span>
+                        {/* UX-003: nombre humano primero; ID técnico como dato secundario. */}
                         <span className="truncate font-semibold text-fg-primary group-hover:underline">
-                          {i.titulo}
+                          {i.titulo || i.publicId}
                         </span>
+                        <span className="font-mono text-[10px] text-fg-muted">{i.publicId}</span>
                       </Link>
                     </td>
                     <td className="px-3 py-2"><SeverityChip severidad={i.severidad} /></td>

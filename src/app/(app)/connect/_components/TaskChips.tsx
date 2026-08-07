@@ -16,7 +16,7 @@ const PRIORITY_CLASS: Record<TaskPriority, string> = {
 const STATUS_CLASS: Record<TaskStatus, string> = {
   pendiente: "bg-amber-400/15 text-amber-500",
   en_progreso: "bg-blue-400/15 text-blue-400",
-  completada: "bg-emerald-400/15 text-emerald-400",
+  completada: "bg-emerald-400/15 text-emerald-500",
   cancelada: "bg-slate-400/15 text-fg-muted",
 };
 

@@ -48,7 +48,7 @@ function ResultRow({ result, icon }: { result: SearchResult; icon: IconName }) {
           )}
         </div>
         {result.snippet && (
-          <p className="mt-0.5 line-clamp-2 text-[12px] text-fg-secondary">{result.snippet}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{result.snippet}</p>
         )}
         <p className="mt-1 truncate font-mono text-[11px] text-fg-muted">{result.contextId}</p>
       </div>

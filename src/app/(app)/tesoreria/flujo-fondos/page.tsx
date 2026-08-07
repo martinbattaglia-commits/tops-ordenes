@@ -2,6 +2,7 @@ import { Kpi } from "@/components/tesoreria/ui";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { getCashflowProjection, getBankBalances } from "@/lib/tesoreria/data";
+import { sumArsBalances } from "@/lib/tesoreria/currency";
 
 export const metadata = { title: "Flujo de fondos · Tesorería" };
 export const dynamic = "force-dynamic";
@@ -9,7 +10,9 @@ export const dynamic = "force-dynamic";
 export default async function FlujoFondosPage() {
   try {
     const [flow, banks] = await Promise.all([getCashflowProjection(), getBankBalances()]);
-    const saldoActual = banks.reduce((s, b) => s + Number(b.balance), 0); // D1 roll-up server-side
+    // D1 roll-up server-side. CCN-002 · D-2: fence ARS — la proyección de flujo es
+    // ARS; una caja USD activa no debe contaminar el saldo base.
+    const saldoActual = sumArsBalances(banks);
     const saldoProyectado = saldoActual + (flow.length ? Number(flow[flow.length - 1].flujo_acumulado) : 0);
 
     return (

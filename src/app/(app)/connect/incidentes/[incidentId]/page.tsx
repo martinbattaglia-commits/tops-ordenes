@@ -62,11 +62,12 @@ export default async function IncidentDetailPage({
               <Link href="/connect/incidentes" className="btn btn-ghost btn-sm" aria-label="Volver a incidentes">
                 <Icon name="arrow-left" size={14} />
               </Link>
-              <span className="font-mono text-[11px] text-fg-link">{incident.publicId}</span>
+              {/* UX-003: el título encabeza; el ID pasa a subtítulo discreto. */}
+              <h1 className="truncate text-sm font-bold text-fg-primary">{incident.titulo || incident.publicId}</h1>
               <SeverityChip severidad={incident.severidad} />
               <StatusChip estado={incident.estado} />
             </div>
-            <h1 className="mt-1 truncate text-sm font-bold text-fg-primary">{incident.titulo}</h1>
+            <div className="mt-1 font-mono text-[11px] text-fg-muted">{incident.publicId}</div>
             <p className="mt-0.5 text-[11px] text-fg-muted">
               {[
                 incident.sector ? `Sector ${incident.sector}` : null,
@@ -91,7 +92,7 @@ export default async function IncidentDetailPage({
         </div>
 
         {incident.resolucionText && (
-          <div className="mt-2 rounded-md bg-emerald-400/10 px-3 py-2 text-xs text-emerald-400">
+          <div className="mt-2 rounded-md bg-emerald-400/10 px-3 py-2 text-xs text-emerald-500">
             <span className="font-semibold">Resolución:</span> {incident.resolucionText}
           </div>
         )}
