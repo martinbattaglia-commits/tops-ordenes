@@ -6,15 +6,26 @@
  *
  * Se abre como MODAL DENTRO de la pantalla (no es una pantalla aparte).
  * La CUENTA no se elige: la resuelve la RPC (cuenta `caja` del motor).
+ *
+ * CCN-002: el modal HEREDA la caja activa de la pantalla (`currency`) y la
+ * muestra como dato fijo. No hay selector de moneda dentro del movimiento —
+ * cambiar de caja se hace en la pantalla, nunca "silenciosamente" acá.
  */
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { registrarCajaMovimientoAction } from "@/lib/tesoreria/caja-chica/actions";
 import type { Responsable } from "@/lib/tesoreria/caja-chica/native-data";
+import type { CajaCurrency } from "@/lib/tesoreria/currency";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function RegistrarCajaModal({ responsables }: { responsables: Responsable[] }) {
+export function RegistrarCajaModal({
+  responsables,
+  currency,
+}: {
+  responsables: Responsable[];
+  currency: CajaCurrency;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
@@ -55,6 +66,7 @@ export function RegistrarCajaModal({ responsables }: { responsables: Responsable
         concept,
         responsable_id: responsableId,
         observations: observations || null,
+        currency,
       });
       setMsg({ ok: r.ok, text: r.message });
       if (r.ok) {
@@ -89,11 +101,17 @@ export function RegistrarCajaModal({ responsables }: { responsables: Responsable
         }}
       >
         <form onSubmit={submit} className="card w-full max-w-xl p-5 grid gap-3">
-          <div>
-            <h3 className="font-semibold">Registrar movimiento de caja</h3>
-            <p className="text-xs text-fg-muted mt-0.5">
-              El movimiento queda confirmado y auditado al registrarlo.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold">Registrar movimiento de caja</h3>
+              <p className="text-xs text-fg-muted mt-0.5">
+                El movimiento queda confirmado y auditado al registrarlo.
+              </p>
+            </div>
+            {/* Caja heredada de la pantalla: visible, no editable acá. */}
+            <span className="rounded-pill bg-neutral-100 text-fg-secondary px-2.5 py-1 text-[11px] font-bold uppercase whitespace-nowrap">
+              Caja {currency}
+            </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -133,7 +151,7 @@ export function RegistrarCajaModal({ responsables }: { responsables: Responsable
             </label>
 
             <label className="block">
-              <span className="field-label block mb-1.5">Importe (ARS)</span>
+              <span className="field-label block mb-1.5">Importe ({currency})</span>
               <input
                 className="input"
                 inputMode="decimal"
@@ -185,8 +203,8 @@ export function RegistrarCajaModal({ responsables }: { responsables: Responsable
           </div>
 
           <p className="text-xs text-fg-muted bg-neutral-50 rounded-md px-3 py-2">
-            La cuenta se resuelve automáticamente (cuenta <b>Caja</b> del motor de Tesorería). No se
-            elige cuenta manualmente.
+            La cuenta se resuelve automáticamente (caja <b>{currency}</b> del motor de Tesorería). No
+            se elige cuenta manualmente; para operar la otra moneda, cambiá de caja en la pantalla.
           </p>
 
           {msg && <p className={msg.ok ? "text-green-600 text-sm" : "text-red-600 text-sm"}>{msg.text}</p>}

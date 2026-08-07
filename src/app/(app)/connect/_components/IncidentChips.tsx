@@ -18,7 +18,7 @@ const STATUS_CLASS: Record<IncidentStatus, string> = {
   abierto: "bg-red-400/10 text-red-400",
   en_progreso: "bg-blue-400/15 text-blue-400",
   en_espera: "bg-amber-400/15 text-amber-500",
-  resuelto: "bg-emerald-400/15 text-emerald-400",
+  resuelto: "bg-emerald-400/15 text-emerald-500",
   cerrado: "bg-slate-400/15 text-fg-muted",
 };
 

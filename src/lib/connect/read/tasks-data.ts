@@ -20,7 +20,7 @@ function isMock(): boolean {
 const TASK_COLS =
   "id, public_id, titulo, descripcion, estado, prioridad, due_at, creado_por, asignado_a, conversation_id, incident_id, workflow_instance_id, step_no, area, cancel_reason, completed_at, created_at, updated_at";
 
-export type TaskView = "abiertas" | "mias" | "creadas" | "vacantes" | "todas";
+export type TaskView = "abiertas" | "mias" | "creadas" | "vacantes" | "cerradas" | "todas";
 
 export interface TaskFilters {
   vista?: TaskView;
@@ -74,6 +74,11 @@ function applyMockFilters(items: Task[], f: TaskFilters, uid: string): Task[] {
       case "mias": return t.asignadoA === uid;
       case "creadas": return t.creadoPor === uid;
       case "vacantes": return t.asignadoA == null && (t.estado === "pendiente" || t.estado === "en_progreso");
+      // UX-002: histórico = terminales. Espejo del SQL: estado explícito refina dentro del set.
+      case "cerradas":
+        return f.estado
+          ? true
+          : (t.estado === "completada" || t.estado === "cancelada");
       case "todas": return true;
       case "abiertas":
       default:
@@ -119,6 +124,10 @@ export async function listTasks(filters: TaskFilters = {}): Promise<Task[]> {
       break;
     case "vacantes":
       query = query.is("asignado_a", null).in("estado", ["pendiente", "en_progreso"]);
+      break;
+    case "cerradas":
+      // UX-002: histórico = estados terminales; un estado explícito lo refina (mismo criterio que "abiertas").
+      if (!filters.estado) query = query.in("estado", ["completada", "cancelada"]);
       break;
     case "todas":
       break;

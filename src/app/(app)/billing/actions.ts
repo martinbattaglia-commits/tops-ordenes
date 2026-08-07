@@ -44,9 +44,10 @@ async function auditContext(): Promise<{ userId: string | null; ip: string | nul
 }
 
 /**
- * H1 (FISCAL-HARDENING) — gate de las puertas de emisión: espejo del RLS de
- * escritura de customer_invoices (0011: write admin/operaciones). Antes,
- * emitInvoiceAction era una server action exportada sin ningún control.
+ * H1 (FISCAL-HARDENING) — gate de las puertas de emisión: mismo permiso que exige
+ * la RPC `ventas_persist_invoice` (migración 0204), de modo que aplicación y base
+ * comprueban lo mismo. Antes, emitInvoiceAction era una server action exportada
+ * sin ningún control.
  */
 async function assertBillingRole(): Promise<string | null> {
   if (env.app.demoMode || env.app.needsSupabase) return null; // demo: sin RBAC
@@ -56,14 +57,18 @@ async function assertBillingRole(): Promise<string | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return "No autenticado.";
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-  const role = profile?.role ?? null;
-  if (role !== "admin" && role !== "operaciones") {
-    return "Permiso insuficiente para emitir comprobantes (requiere admin u operaciones).";
+  // RBAC granular: el permiso `ventas.create` (migración 0204) reemplaza el chequeo
+  // por profiles.role. Se usa has_permission() directo y NO canAccess() a propósito:
+  // canAccess() tiene semántica de bootstrap —los usuarios sin rol asignado PASAN— y
+  // para emisión de comprobantes fiscales el gate debe ser fail-closed. Tras la
+  // migración 0201, has_permission() nunca devuelve NULL; `!== true` sigue siendo
+  // la comparación segura aunque eso cambiara.
+  const { data: allowed, error: permErr } = await supabase.rpc("has_permission", {
+    p_slug: "ventas.create",
+  });
+  if (permErr) return "No se pudo verificar el permiso de emisión.";
+  if (allowed !== true) {
+    return "Permiso insuficiente para emitir comprobantes (requiere el permiso ventas.create).";
   }
   return null;
 }

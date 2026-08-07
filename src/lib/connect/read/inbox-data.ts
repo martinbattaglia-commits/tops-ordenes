@@ -61,24 +61,73 @@ export const CHANNEL_VIEW_COLS =
 
 // ───────────────────────── Lecturas ─────────────────────────
 
-/** Bandeja unificada: mis conversaciones ordenadas por último mensaje. */
-export async function listInbox(): Promise<InboxItem[]> {
-  if (isMock()) return mockInbox();
+/**
+ * Bandeja unificada: mis conversaciones ordenadas por último mensaje.
+ * UX-002: `archived` invierte el único predicado de estado (`archived_at`) sobre
+ * la MISMA vista security_invoker — misma membresía, misma RLS, sin superficie nueva.
+ */
+export async function listInbox(opts: { archived?: boolean } = {}): Promise<InboxItem[]> {
+  const archived = opts.archived ?? false;
+  if (isMock()) return mockInbox().filter((i) => (i.archivedAt != null) === archived);
   const supabase = createClient();
-  if (!supabase) return mockInbox();
-  const { data, error } = await supabase
+  if (!supabase) return mockInbox().filter((i) => (i.archivedAt != null) === archived);
+  let query = supabase
     .from("v_connect_inbox")
     .select(
       "conversation_id, context_id, kind, title, slug, topic, last_message_at, last_message_seq, last_read_seq, unread_count, is_favorite, muted_until, archived_at",
-    )
-    // DEFECT-6 (piloto F3): la bandeja/sidebar activa excluye conversaciones archivadas.
-    .is("archived_at", null)
-    .order("last_message_at", { ascending: false, nullsFirst: false });
+    );
+  // DEFECT-6 (piloto F3): la bandeja activa excluye archivadas; UX-002 agrega la inversa.
+  query = archived ? query.not("archived_at", "is", null) : query.is("archived_at", null);
+  const { data, error } = await query.order("last_message_at", {
+    ascending: false,
+    nullsFirst: false,
+  });
   if (error) {
     console.error("[connect/listInbox] query error:", error.message);
     return [];
   }
-  return (data ?? []).map((row) => mapInbox(row as InboxRow));
+  const items = (data ?? []).map((row) => mapInbox(row as InboxRow));
+  return withDmNames(supabase, items);
+}
+
+/**
+ * UX-002c: los DM guardan title NULL — la bandeja debe mostrar el nombre de la
+ * contraparte. Nombres vía profiles_public (lockdown 0040 / lección I-1), misma
+ * técnica que tasks/incidents-data. Best-effort: si algo falla, queda el fallback.
+ */
+async function withDmNames(
+  supabase: NonNullable<ReturnType<typeof createClient>>,
+  items: InboxItem[],
+): Promise<InboxItem[]> {
+  const dmIds = items.filter((i) => i.kind === "dm" && !i.title).map((i) => i.conversationId);
+  if (dmIds.length === 0) return items;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return items;
+  const { data: parts, error } = await supabase
+    .from("connect_participants")
+    .select("conversation_id, profile_id")
+    .in("conversation_id", dmIds)
+    .neq("profile_id", user.id);
+  if (error || !parts) return items;
+  const otherByConv = new Map<string, string>();
+  for (const p of parts as Array<{ conversation_id: string; profile_id: string }>) {
+    if (!otherByConv.has(p.conversation_id)) otherByConv.set(p.conversation_id, p.profile_id);
+  }
+  const profileIds = Array.from(new Set(otherByConv.values()));
+  if (profileIds.length === 0) return items;
+  const { data: profs } = await supabase
+    .from("profiles_public")
+    .select("id, full_name")
+    .in("id", profileIds);
+  const names = new Map(
+    ((profs ?? []) as Array<{ id: string; full_name: string | null }>)
+      .map((p) => [p.id, (p.full_name ?? "").trim()]),
+  );
+  return items.map((i) => {
+    const other = otherByConv.get(i.conversationId);
+    const name = other ? names.get(other) : undefined;
+    return name ? { ...i, title: name } : i;
+  });
 }
 
 /** Una conversación por id (para el header del hilo). */
@@ -129,7 +178,63 @@ export async function listMessages(
     return [];
   }
   // De desc (keyset) a asc (render del hilo).
-  return (data ?? []).map((row) => mapMessage(row as MessageRow)).reverse();
+  const items = (data ?? []).map((row) => mapMessage(row as MessageRow)).reverse();
+  return withAuthorNames(supabase, conversationId, items);
+}
+
+/**
+ * WA-002 F1a: puebla `authorName` (el campo ya existía en el tipo y ThreadView ya lo
+ * renderiza — nunca se llenaba). Autores con perfil → profiles_public; autores externos
+ * (participant_type 'whatsapp') → external_ref.display_name. Best-effort: ante error,
+ * los mensajes salen sin nombre (comportamiento previo).
+ */
+async function withAuthorNames(
+  supabase: NonNullable<ReturnType<typeof createClient>>,
+  conversationId: string,
+  items: Message[],
+): Promise<Message[]> {
+  if (items.length === 0) return items;
+  const { data: parts, error } = await supabase
+    .from("connect_participants")
+    .select("id, profile_id, external_ref")
+    .eq("conversation_id", conversationId);
+  if (error || !parts) return items;
+  const rows = parts as Array<{
+    id: string; profile_id: string | null;
+    external_ref: { display_name?: string; author?: string } | null;
+  }>;
+  const nameByPart = new Map<string, string>();
+  const profileIds: string[] = [];
+  for (const p of rows) {
+    const ext = (p.external_ref?.display_name ?? p.external_ref?.author ?? "").trim();
+    if (ext) nameByPart.set(p.id, ext);
+    else if (p.profile_id) profileIds.push(p.profile_id);
+  }
+  const nameByProfile = new Map<string, string>();
+  if (profileIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles_public")
+      .select("id, full_name")
+      .in("id", profileIds);
+    for (const p of ((profs ?? []) as Array<{ id: string; full_name: string | null }>)) {
+      const n = (p.full_name ?? "").trim();
+      if (n) nameByProfile.set(p.id, n);
+    }
+  }
+  const partProfile = new Map(rows.map((p) => [p.id, p.profile_id] as const));
+  return items.map((m) => {
+    if (m.authorName) return m;
+    let name: string | undefined;
+    if (m.authorParticipantId) {
+      name = nameByPart.get(m.authorParticipantId);
+      if (!name) {
+        const pid = partProfile.get(m.authorParticipantId);
+        if (pid) name = nameByProfile.get(pid);
+      }
+    }
+    if (!name && m.authorProfileId) name = nameByProfile.get(m.authorProfileId);
+    return name ? { ...m, authorName: name } : m;
+  });
 }
 
 /** Canales visibles (públicos o donde soy miembro). */

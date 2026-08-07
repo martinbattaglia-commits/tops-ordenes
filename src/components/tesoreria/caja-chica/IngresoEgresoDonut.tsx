@@ -1,13 +1,15 @@
 // Donut Ingresos vs Egresos (CCN-001B · F3). Reemplaza la distribución por
 // categorías: el MVP no tiene categorías (decisión de Dirección 2026-07-22).
 // Misma técnica SVG que CategoriaDonut. Server-safe.
-import { fmtCurrency } from "@/lib/utils";
+import { fmtCaja, type CajaCurrency } from "@/lib/tesoreria/currency";
 import type { IngresoEgresoSplit } from "@/lib/tesoreria/caja-chica/native-logic";
 
 const VERDE = "#0F6E56";
 const ROJO = "#C90812";
 
-export function IngresoEgresoDonut({ split }: { split: IngresoEgresoSplit }) {
+// CCN-002: `currency` opcional con default ARS — el gráfico muestra los importes
+// en la moneda nativa de la caja activa, nunca mezcla.
+export function IngresoEgresoDonut({ split, currency = "ARS" }: { split: IngresoEgresoSplit; currency?: CajaCurrency }) {
   const r = 64, c = 80, sw = 18, circ = 2 * Math.PI * r;
   const total = split.ingresos + split.egresos;
   const egresoLen = total > 0 ? (split.egresos / total) * circ : 0;
@@ -49,13 +51,13 @@ export function IngresoEgresoDonut({ split }: { split: IngresoEgresoSplit }) {
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: VERDE }} />
             <span className="flex-1 text-fg-primary font-medium">Ingresos</span>
-            <span className="text-fg-secondary tabular">{fmtCurrency(split.ingresos)}</span>
+            <span className="text-fg-secondary tabular">{fmtCaja(currency, split.ingresos)}</span>
             <span className="text-fg-muted tabular w-12 text-right">{split.pctIngresos}%</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: ROJO }} />
             <span className="flex-1 text-fg-primary font-medium">Egresos</span>
-            <span className="text-fg-secondary tabular">{fmtCurrency(split.egresos)}</span>
+            <span className="text-fg-secondary tabular">{fmtCaja(currency, split.egresos)}</span>
             <span className="text-fg-muted tabular w-12 text-right">{split.pctEgresos}%</span>
           </div>
           {total === 0 && <div className="text-xs text-fg-muted mt-1">Sin movimientos en el período.</div>}

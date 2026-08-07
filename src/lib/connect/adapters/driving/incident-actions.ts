@@ -15,7 +15,7 @@ import {
 } from "../../application/incident-use-cases";
 import { IncidentRpcAdapter } from "../supabase/incident-rpc.adapter";
 import type { RpcCapableClient } from "../supabase/connect-rpc.adapter";
-import { INCIDENT_SEVERITIES, INCIDENT_STATUSES } from "../../types";
+import { INCIDENT_SEVERITIES, INCIDENT_STATUSES, type IncidentStatus } from "../../types";
 
 export type SimpleIncidentResult = { ok: true } | { ok: false; message: string };
 export type OpenIncidentResult =
@@ -43,6 +43,33 @@ async function guard(perm: "connect.view" | "connect.create"): Promise<Guarded> 
 function revalidateIncidents(incidentId?: string) {
   revalidatePath("/connect/incidentes");
   if (incidentId) revalidatePath(`/connect/incidentes/${incidentId}`);
+}
+
+/**
+ * H1 (LINK-UX-002): cerrado ⇒ archivar el hilo; vuelta a activo ⇒ desarchivar (D2).
+ * D1: 'resuelto' NO archiva — sigue operativo. Best-effort: la entidad manda; un fallo
+ * acá no revierte el cambio de estado. RPCs 0206: legitimidad por entidad + idempotencia.
+ */
+async function syncIncidentThreadArchive(
+  client: RpcCapableClient, incidentId: string, status: IncidentStatus,
+): Promise<void> {
+  if (status === "resuelto") return;
+  const supabase = createClient();
+  if (!supabase) return;
+  const { data } = await supabase
+    .from("connect_incidents")
+    .select("conversation_id")
+    .eq("id", incidentId)
+    .maybeSingle();
+  const conversationId =
+    (data as { conversation_id: string | null } | null)?.conversation_id ?? null;
+  if (!conversationId) return;
+  const fn = status === "cerrado"
+    ? "connect_archive_entity_thread"
+    : "connect_unarchive_conversation";
+  const { error } = await client.rpc(fn, { p_conversation_id: conversationId });
+  if (error) console.error(`[connect/${fn}] best-effort (incident ${incidentId}):`, error.message);
+  else revalidatePath("/connect", "layout");
 }
 
 const OpenSchema = z.object({
@@ -114,6 +141,7 @@ export async function setIncidentStatusAction(raw: unknown): Promise<SimpleIncid
   });
   if (!result.ok) return { ok: false, message: result.error.message };
   revalidateIncidents(parsed.data.incidentId);
+  await syncIncidentThreadArchive(g.client, parsed.data.incidentId, parsed.data.status);
   return { ok: true };
 }
 

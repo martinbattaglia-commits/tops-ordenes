@@ -97,11 +97,11 @@ export function MemberSearch({
               onClick={() => pick(h)}
               className="flex w-full items-center gap-2 px-2 py-1.5 text-left hover:bg-bg-surface-alt disabled:opacity-50"
             >
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-bg-surface-alt text-[9px] font-bold text-fg-secondary">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-bg-surface-alt text-[10px] font-bold text-fg-secondary">
                 {label(h).slice(0, 2).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] text-fg-primary">{label(h)}</span>
+                <span className="block truncate text-xs text-fg-primary">{label(h)}</span>
               </span>
               <Icon name="plus" size={12} className="shrink-0 text-fg-link" />
             </button>

@@ -89,6 +89,23 @@ export const env = {
      */
     enabled: process.env.AI_ENABLED === "1",
     /**
+     * LINK-WA-002 · Kill-switch ESPECÍFICO del analizador estructurado de WhatsApp.
+     *
+     * STATUS: DEFERRED / STANDBY — resolución de Dirección 2026-07-30, tras cuatro
+     * smokes reales fallidos (MAX_TOKENS · context_limit_exceeded · invalid_output ·
+     * http_400). El expediente cierra con el analizador PAUSADO; se reactiva en un
+     * expediente futuro separado.
+     *
+     * 🔑 FAIL-CLOSED Y APAGADO POR DEFECTO: sólo `"1"` lo habilita. La ausencia de la
+     * variable deja el analizador en pausa, así que el standby es el estado natural
+     * del sistema y reactivarlo exige un acto explícito y gobernado.
+     *
+     * ⚠️ NO afecta al Copilot conversacional (`enabled` + `askCopilot`), ni al
+     * importador de WhatsApp, ni a los hilos históricos, ni a la auditoría, ni al
+     * presupuesto, ni al historial de corridas ya ejecutadas.
+     */
+    waAnalysisEnabled: process.env.AI_WA_ANALYSIS_ENABLED === "1",
+    /**
      * Provider del modelo (decisión Dirección 2026-07-03: **Gemini es el
      * proveedor principal previsto**). 'mock' (default) = determinista, sin
      * red, sin secretos. La activación real requiere ventana aprobada:
@@ -101,14 +118,16 @@ export const env = {
       | "openai",
     /**
      * Modelo del provider real. Sin AI_MODEL explícito, el default depende
-     * del provider (gemini → gemini-2.5-pro; anthropic → claude-opus-4-8).
-     * Confirmar el model id vigente en la ventana de activación.
+     * del provider (gemini → gemini-2.5-flash; anthropic → claude-opus-4-8).
+     * ⚠️ Flash es el modelo AUTORIZADO por Dirección para la activación
+     * productiva (LINK-WA-002): 0,3/2,5 USD por Mtok contra 1,25/10 de Pro.
+     * Un AI_MODEL en el entorno PISA este default: verificarlo al activar.
      */
     model:
       process.env.AI_MODEL?.trim() ||
       ((process.env.AI_PROVIDER?.trim() || "mock") === "anthropic"
         ? "claude-opus-4-8"
-        : "gemini-2.5-pro"),
+        : "gemini-2.5-flash"),
     /**
      * API key Gemini (proveedor PRINCIPAL) — primaria AI_GEMINI_API_KEY,
      * fallback GEMINI_API_KEY (ambas cargadas por Dirección en Netlify con
@@ -120,18 +139,21 @@ export const env = {
       "",
     /** API key Anthropic (proveedor SECUNDARIO, no preferido) — solo backend. */
     anthropicApiKey: process.env.AI_ANTHROPIC_API_KEY?.trim() ?? "",
-    /** Límites duros del piloto (D-F5-8). Ajustables por env, defaults en código. */
+    /** Límites duros del piloto (D-F5-8). Ajustables por env, defaults en código.
+     *  ⚠️ Los defaults son los AUTORIZADOS por Dirección para la activación
+     *  productiva de la IA (20 análisis/día · USD 15/mes). El entorno los pisa:
+     *  si Netlify define valores más altos, MANDA el entorno. */
     limits: {
       requestsPerDay:
         Number(process.env.AI_DAILY_LIMIT) ||
         Number(process.env.AI_LIMIT_REQUESTS_PER_DAY) ||
-        40,
+        20,
       toolRoundsPerRequest: Number(process.env.AI_LIMIT_TOOL_ROUNDS) || 4,
       maxOutputTokens: Number(process.env.AI_LIMIT_OUTPUT_TOKENS) || 4000,
       maxContextChars: Number(process.env.AI_LIMIT_CONTEXT_CHARS) || 24000,
       maxTurnsPerSession: Number(process.env.AI_LIMIT_TURNS) || 10,
       /** Tope mensual global en USD (suma cost_estimate de ai_messages). */
-      monthlyBudgetUsd: Number(process.env.AI_MONTHLY_BUDGET_USD) || 100,
+      monthlyBudgetUsd: Number(process.env.AI_MONTHLY_BUDGET_USD) || 15,
     },
   },
   whatsapp: {

@@ -203,7 +203,7 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
         </div>
 
         <div className="mt-5 flex items-center gap-3 border-t border-stroke-soft pt-4">
-          <button type="button" className="btn btn-primary btn-sm" disabled={savePending} onClick={onSave}>
+          <button type="button" className="btn btn-nexus btn-sm" disabled={savePending} onClick={onSave}>
             <Icon name="check" size={14} /> {savePending ? "Guardando…" : "Guardar"}
           </button>
           {saveStatus.kind === "ok" && <p className="text-xs text-emerald-500">{saveStatus.message}</p>}

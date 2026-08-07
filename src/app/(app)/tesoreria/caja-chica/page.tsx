@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { fmtCurrency, fmtDate, fmtDateTime } from "@/lib/utils";
+import { fmtCaja, type CajaCurrency } from "@/lib/tesoreria/currency";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { StatusPill } from "@/components/tesoreria/ui";
 import { canAccess } from "@/lib/rbac/guard";
@@ -50,10 +51,11 @@ function KpiCard({ label, value, tone, sub }: { label: string; value: string; to
   );
 }
 
-function Tabs({ tab }: { tab: "nativo" | "historico" }) {
+function Tabs({ tab, caja }: { tab: "nativo" | "historico"; caja?: CajaCurrency }) {
   const base = "px-4 py-2.5 text-sm font-semibold border-b-2 -mb-px";
+  const seg = "px-3 py-1 text-xs font-bold rounded-md";
   return (
-    <div className="flex gap-1 border-b border-stroke-soft mb-6">
+    <div className="flex items-center gap-1 border-b border-stroke-soft mb-6">
       <Link
         href="/tesoreria/caja-chica"
         className={`${base} ${tab === "nativo" ? "border-fg-brand text-fg-brand" : "border-transparent text-fg-secondary"}`}
@@ -66,12 +68,36 @@ function Tabs({ tab }: { tab: "nativo" | "historico" }) {
       >
         Histórico (planilla)
       </Link>
+      {/* CCN-002: selector compacto de caja por moneda. Sólo aplica a la solapa
+          nativa (el histórico de planilla es ARS legado). ARS es el default. */}
+      {tab === "nativo" && caja && (
+        <div className="ml-auto mb-1.5 inline-flex gap-0.5 rounded-lg border border-stroke-soft p-0.5" role="group" aria-label="Caja por moneda">
+          <Link
+            href="/tesoreria/caja-chica"
+            aria-current={caja === "ARS" ? "true" : undefined}
+            className={`${seg} ${caja === "ARS" ? "bg-fg-brand text-white" : "text-fg-secondary"}`}
+          >
+            ARS
+          </Link>
+          <Link
+            href="/tesoreria/caja-chica?caja=usd"
+            aria-current={caja === "USD" ? "true" : undefined}
+            className={`${seg} ${caja === "USD" ? "bg-fg-brand text-white" : "text-fg-secondary"}`}
+          >
+            USD
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
 
 export default async function CajaChicaPage({ searchParams }: { searchParams: SP }) {
   const tab = one(searchParams, "tab") === "historico" ? "historico" : "nativo";
+  // CCN-002: caja activa por URL (`?caja=usd`). Cualquier otro valor cae a ARS —
+  // el default histórico — así una URL vieja o malformada nunca cambia de moneda
+  // en silencio hacia USD.
+  const caja: CajaCurrency = one(searchParams, "caja")?.toLowerCase() === "usd" ? "USD" : "ARS";
   const ctrl = "border border-stroke-soft rounded-md px-2 py-1 text-sm bg-transparent";
 
   const canView = await canAccess("tesoreria.caja.view");
@@ -194,10 +220,14 @@ export default async function CajaChicaPage({ searchParams }: { searchParams: SP
     ]);
 
     const [movs, saldoErp, responsables] = await Promise.all([
-      listCajaMovimientos(),
-      getCajaSaldoErp(),
+      listCajaMovimientos(caja),
+      getCajaSaldoErp(caja),
       canCreate ? listResponsables() : Promise.resolve([]),
     ]);
+
+    // saldoErp === null ⇒ la cuenta caja de esta moneda no existe (p. ej. USD
+    // antes del data-op de habilitación). Estado explícito, sin inventar un 0.
+    const cajaHabilitada = saldoErp != null;
 
     const tipo = one(searchParams, "tipo");
     const desde = one(searchParams, "desde");
@@ -215,31 +245,43 @@ export default async function CajaChicaPage({ searchParams }: { searchParams: SP
             <div className="eyebrow-tiny">Finanzas · Tesorería</div>
             <h1 className="page-title">Caja Chica</h1>
             <p className="page-subtitle">
-              Registro de ingresos y egresos de caja. El saldo se deriva del motor de Tesorería;
-              la anulación es lógica y auditada.
+              Registro de ingresos y egresos de caja en su moneda nativa ({caja}). El saldo se
+              deriva del motor de Tesorería; la anulación es lógica y auditada. Las cajas ARS y
+              USD son independientes: no se convierten ni se consolidan.
             </p>
           </div>
-          {canCreate && <RegistrarCajaModal responsables={responsables} />}
+          {canCreate && cajaHabilitada && <RegistrarCajaModal responsables={responsables} currency={caja} />}
         </div>
 
-        <Tabs tab="nativo" />
+        <Tabs tab="nativo" caja={caja} />
+
+        {!cajaHabilitada && (
+          <div className="card p-5 mb-6 border-l-4 border-status-warning">
+            <div className="font-semibold text-sm">Caja {caja} aún no habilitada</div>
+            <p className="text-xs text-fg-muted mt-1">
+              No existe una cuenta de Caja Chica en {caja}. La habilitación es una operación de
+              Dirección (alta de cuenta + apertura auditada). Hasta entonces esta caja no admite
+              movimientos.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <KpiCard
             label="Saldo Actual"
-            value={kpi.saldoActual == null ? "—" : fmtCurrency(kpi.saldoActual)}
+            value={kpi.saldoActual == null ? "—" : fmtCaja(caja, kpi.saldoActual)}
             tone={kpi.saldoActual != null && kpi.saldoActual <= 0 ? "bad" : "ok"}
-            sub="incluye lo registrado"
+            sub={`incluye lo registrado · ${caja}`}
           />
           <KpiCard
             label="Saldo ERP"
-            value={kpi.saldoErp == null ? "—" : fmtCurrency(kpi.saldoErp)}
+            value={kpi.saldoErp == null ? "—" : fmtCaja(caja, kpi.saldoErp)}
             tone="neutral"
-            sub="Σ confirmados"
+            sub={`Σ confirmados · ${caja}`}
           />
           <KpiCard
             label="Diferencia"
-            value={kpi.diferencia == null ? "—" : fmtCurrency(kpi.diferencia)}
+            value={kpi.diferencia == null ? "—" : fmtCaja(caja, kpi.diferencia)}
             tone={kpi.diferencia != null && kpi.diferencia !== 0 ? "warn" : "neutral"}
             sub="Actual − ERP"
           />
@@ -253,6 +295,8 @@ export default async function CajaChicaPage({ searchParams }: { searchParams: SP
         </div>
 
         <form method="get" className="card p-4 mb-6 flex flex-wrap items-end gap-3">
+          {/* La caja activa se preserva al filtrar: filtrar nunca cambia de moneda. */}
+          {caja === "USD" && <input type="hidden" name="caja" value="usd" />}
           <label className="text-xs text-fg-muted flex flex-col gap-1">
             Tipo
             <select name="tipo" defaultValue={tipo ?? ""} className={ctrl}>
@@ -270,12 +314,12 @@ export default async function CajaChicaPage({ searchParams }: { searchParams: SP
             <input type="date" name="hasta" defaultValue={hasta ?? ""} className={ctrl} />
           </label>
           <button type="submit" className="btn btn-primary btn-sm">Aplicar</button>
-          <a href="/tesoreria/caja-chica" className="btn btn-sm">Limpiar</a>
+          <a href={caja === "USD" ? "/tesoreria/caja-chica?caja=usd" : "/tesoreria/caja-chica"} className="btn btn-sm">Limpiar</a>
         </form>
 
         <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)" }}>
           <EvolucionMensualChart data={barras} />
-          <IngresoEgresoDonut split={split} />
+          <IngresoEgresoDonut split={split} currency={caja} />
         </div>
 
         <div className="card p-5">
@@ -311,7 +355,7 @@ export default async function CajaChicaPage({ searchParams }: { searchParams: SP
                       <td className="py-2 pr-2">{m.responsable ?? "—"}</td>
                       <td className={`py-2 pr-2 text-right tabular whitespace-nowrap ${anulado ? "" : m.direction === "ingreso" ? "text-status-success" : "text-tops-red"}`}>
                         {m.direction === "ingreso" ? "+" : "−"}
-                        {fmtCurrency(m.amount)}
+                        {fmtCaja(caja, m.amount)}
                       </td>
                       <td className="py-2 pr-2">
                         {anulado ? (
@@ -332,7 +376,7 @@ export default async function CajaChicaPage({ searchParams }: { searchParams: SP
                   <tr>
                     <td colSpan={6} className="py-6 text-center text-fg-muted text-sm">
                       {movs.length === 0
-                        ? "Aún no hay movimientos registrados en Caja Chica."
+                        ? `Aún no hay movimientos registrados en la Caja ${caja}.`
                         : "Sin movimientos para los filtros aplicados."}
                     </td>
                   </tr>

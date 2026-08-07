@@ -147,6 +147,21 @@ export async function archiveConversationAction(raw: unknown): Promise<SimpleRes
   return { ok: true };
 }
 
+// H1 (D3): reversa del archivado. La RPC 0206 valida owner/moderator/admin —
+// o entidad vinculada reactivada (D2) — y es idempotente sobre archived_at.
+export async function unarchiveConversationAction(raw: unknown): Promise<SimpleResult> {
+  const p = z.object({ conversationId: z.string().min(1) }).safeParse(raw);
+  if (!p.success) return { ok: false, message: "Datos inválidos." };
+  const g = await guard("connect.edit");
+  if (!g.ok) return g;
+  const { error } = await (g.client as RpcCapableClient).rpc("connect_unarchive_conversation", {
+    p_conversation_id: p.data.conversationId,
+  });
+  if (error) return { ok: false, message: error.message };
+  revalidateChannel();
+  return { ok: true };
+}
+
 // ── Mensajes fijados (Pinned) ───────────────────────────────────────────────
 export async function pinMessageAction(raw: unknown): Promise<SimpleResult> {
   const p = z.object({ messageId: z.string().min(1) }).safeParse(raw);

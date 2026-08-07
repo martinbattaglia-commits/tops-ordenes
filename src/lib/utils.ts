@@ -27,6 +27,21 @@ export function fmtMoney(n: number | null | undefined): string {
   );
 }
 
+/**
+ * Formato moneda USD con centavos exactos ("US$ 1.234,56"). CCN-002: un importe
+ * en dólares NUNCA comparte símbolo con ARS — el prefijo distingue la moneda en
+ * toda superficie donde ambas cajas convivan. Separadores es-AR (punto de miles,
+ * coma decimal) para mantener la lectura local.
+ */
+export function fmtCurrencyUsd(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return "US$ 0,00";
+  const fixed = Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+  return (
+    "US$ " +
+    fixed.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  );
+}
+
 // Zona horaria fija de la operación (Argentina). Formateamos SIEMPRE en esta TZ
 // para que el render del servidor (Netlify = UTC) y del cliente (navegador local)
 // produzcan EXACTAMENTE el mismo string y no se rompa la hidratación de React

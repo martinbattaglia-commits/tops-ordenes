@@ -43,7 +43,7 @@ export function JoinChannelPrompt({
           Es un canal público. Unite para ver los mensajes y participar.
         </p>
       </div>
-      <button type="button" onClick={() => void join()} disabled={busy} className="btn btn-primary btn-sm">
+      <button type="button" onClick={() => void join()} disabled={busy} className="btn btn-nexus btn-sm">
         <Icon name="plus" size={14} /> {busy ? "Uniéndote…" : "Unirme a este canal"}
       </button>
       {err && <p className="text-xs text-tops-red">{err}</p>}

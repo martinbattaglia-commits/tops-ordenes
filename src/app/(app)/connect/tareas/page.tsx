@@ -25,6 +25,8 @@ const VIEWS: Array<{ id: TaskView; label: string }> = [
   { id: "mias", label: "Mías" },
   { id: "creadas", label: "Creadas por mí" },
   { id: "vacantes", label: "Vacantes" },
+  // UX-002: histórico (completadas + canceladas) separado de lo accionable.
+  { id: "cerradas", label: "Cerradas" },
   { id: "todas", label: "Todas" },
 ];
 
@@ -62,7 +64,7 @@ export default async function TasksPage({
             Trabajo asignable entre personas y áreas. La fecha límite es informativa.
           </p>
         </div>
-        <Link href="/connect/tareas/nueva" className="btn btn-primary btn-sm">
+        <Link href="/connect/tareas/nueva" className="btn btn-nexus btn-sm">
           <Icon name="plus" size={14} /> Nueva tarea
         </Link>
       </header>
@@ -121,12 +123,13 @@ export default async function TasksPage({
                   <tr key={t.id} className="border-b border-stroke-soft last:border-0 hover:bg-bg-surface-alt">
                     <td className="px-3 py-2">
                       <Link href={`/connect/tareas/${t.id}`} className="group flex min-w-0 flex-col">
-                        <span className="font-mono text-[10px] text-fg-link">
+                        {/* UX-003: nombre humano primero; ID técnico como dato secundario. */}
+                        <span className="truncate font-semibold text-fg-primary group-hover:underline">
+                          {t.titulo || t.publicId}
+                        </span>
+                        <span className="font-mono text-[10px] text-fg-muted">
                           {t.publicId}
                           {t.workflowInstanceId && ` · paso ${t.stepNo}`}
-                        </span>
-                        <span className="truncate font-semibold text-fg-primary group-hover:underline">
-                          {t.titulo}
                         </span>
                       </Link>
                     </td>

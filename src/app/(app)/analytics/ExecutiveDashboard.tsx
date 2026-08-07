@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
-import { fmtCurrency } from "@/lib/utils";
+import { fmtCurrency, fmtCurrencyUsd } from "@/lib/utils";
 import type { ExecutiveSnapshot } from "@/lib/analytics/executive-data";
 
 function fmtM2(n: number): string {
@@ -48,6 +48,10 @@ export function ExecutiveDashboard({ snapshot }: { snapshot: ExecutiveSnapshot }
       <div className="grid lg:grid-cols-2 gap-4">
         <Section title="Financiero · Tesorería" href="/tesoreria" icon="wallet" ok={financiero.ok}>
           <Row label="Caja total" value={fmtCurrency(financiero.cajaTotal)} />
+          {/* CCN-002 · D-2: USD informativo y SEPARADO — nunca sumado ni convertido. */}
+          {financiero.cajaUsd != null && (
+            <Row label="Caja Chica USD (no consolidada)" value={fmtCurrencyUsd(financiero.cajaUsd)} />
+          )}
           <Row label="Cobros acumulados" value={fmtCurrency(financiero.cobrosTotal)} />
           <Row label="Pagos acumulados" value={fmtCurrency(financiero.pagosTotal)} />
           <Row label="Por cobrar (AR)" value={fmtCurrency(financiero.porCobrar)} />
