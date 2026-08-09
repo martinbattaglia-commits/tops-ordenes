@@ -56,3 +56,8 @@ backup-sa-key.json
 gcp-sa-*.json
 *.dump
 lifecycle.json.bak
+
+# Muestras de documentos generadas por los tests (DOC_SAMPLES_OUT).
+# Contienen datos de fixture; nunca deben versionarse.
+/doc-samples/
+*.sample.pdf

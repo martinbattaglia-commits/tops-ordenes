@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
+import { PrintDocHeader, PrintDocFooter } from "@/lib/doc-system/print/PrintDoc";
 import {
   MAGALDI_1765,
   getMagaldiCommercialSummary,
@@ -118,8 +119,13 @@ export function MagaldiMapView({ unitStates }: { unitStates?: Record<string, Crm
       : (Object.keys(CATEGORY_META) as SpaceCategory[]).map((k) => ({ label: CATEGORY_META[k].label, color: CATEGORY_META[k].color }));
 
   return (
-    <div className="p-4 lg:p-8 nx-page-fade" id="magaldi-map-root">
+    <div className="p-4 lg:p-8 nx-page-fade print-root" id="magaldi-map-root">
       <PrintStyles />
+      <PrintDocHeader
+        context="TOPS Comercial"
+        title="DISPONIBILIDAD · AGUSTÍN MAGALDI 1765"
+        subtitle="Espacios por categoría, piso y estado de ocupación"
+      />
 
       <div className="page-header">
         <div>
@@ -244,6 +250,8 @@ export function MagaldiMapView({ unitStates }: { unitStates?: Record<string, Crm
       </p>
 
       {sel && <SidePanel space={sel} state={stateOf(sel)} onClose={() => setSel(null)} />}
+
+      <PrintDocFooter docLine="Disponibilidad Agustín Magaldi 1765 · TOPS Comercial" />
     </div>
   );
 }
@@ -438,14 +446,9 @@ function SidePanel({ space, state, onClose }: { space: MagaldiSpace; state: CrmU
 
 function PrintStyles() {
   return (
-    <style>{`
-      @media print {
-        .no-print { display: none !important; }
-        #magaldi-map-root { padding: 0 !important; }
-        .nx-surface { box-shadow: none !important; border: 1px solid #ccc !important; }
-        @page { size: A4 landscape; margin: 10mm; }
-      }
-    `}</style>
+    // Sólo la orientación. El resto de las reglas de impresión son comunes al
+    // ERP y viven en globals.css (bloque doc-system).
+    <style>{`@page { size: A4 landscape; margin: 10mm; }`}</style>
   );
 }
 

@@ -6,6 +6,7 @@ export default defineConfig({
   resolve: {
     alias: { "@": resolve(process.cwd(), "src") },
   },
+  esbuild: { jsx: "automatic" },
   test: {
     include: [
       "src/lib/*.test.ts",
@@ -27,6 +28,7 @@ export default defineConfig({
       "src/lib/udie/**/*.test.ts",
       "src/lib/fiscal/**/*.test.ts",
       "src/lib/compras/**/*.test.ts",
+      "src/lib/doc-system/**/*.test.{ts,tsx}",
       "src/lib/ai/**/*.test.ts",
       "src/lib/voice/**/*.test.ts",
     ],

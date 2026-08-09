@@ -4,10 +4,12 @@ import type { PurchaseOrder, POItem, Vendor } from "@/lib/types-po";
 import { fmtCurrency, fmtDateTime, fmtCuit } from "@/lib/compras/format";
 import { ORG } from "@/lib/org";
 import { Icon } from "@/components/Icon";
+import { DOC } from "@/lib/doc-system/tokens";
 
 /**
- * Vista previa A4 estilo planilla — coincide con la salida final del PDF
- * generado por @react-pdf/renderer. Usado en wizard live-preview y detalle.
+ * Vista previa A4 — espejo HTML del PDF generado por @react-pdf/renderer
+ * (PoPdfDocument, layout REF-OC del doc-system). Usado en wizard live-preview
+ * y detalle. Colores desde los tokens del doc-system para evitar drift.
  */
 
 interface Props {
@@ -25,206 +27,399 @@ export function PdfPreview({ po, signatureDataUrl, qrUrl, className, fillerRows 
   const iva = po.iva ?? Math.round(neto * 0.21);
   const total = po.total ?? neto + iva;
   const filler = Math.max(0, fillerRows - items.length);
+  const year = po.date ? String(new Date(po.date).getFullYear()) : String(new Date().getFullYear());
 
   return (
     <div className={className}>
       <div
-        className="pdf-page bg-white relative overflow-hidden shadow-md"
+        className="pdf-page bg-white relative overflow-hidden shadow-md flex flex-col"
         style={{
           aspectRatio: "1 / 1.414",
-          padding: "36px 38px",
-          color: "#0B1220",
+          color: DOC.ink,
           fontSize: 12,
           borderRadius: 4,
           boxShadow: "0 0 0 1px rgba(5,5,85,0.08), 0 12px 32px rgba(5,5,85,0.10)",
         }}
       >
-        {/* Top accent bar */}
-        <div className="absolute left-0 right-0 top-0 h-1" style={{ background: "#C90812" }} />
-
-        {/* Header */}
-        <div className="flex items-start justify-between pb-3 border-b border-stroke-soft mb-4">
+        {/* Header banda navy */}
+        <div
+          className="flex items-start justify-between px-7 pt-4 pb-3"
+          style={{ background: DOC.navy }}
+        >
           <div>
-            <div className="flex items-end gap-1">
-              <span className="text-2xl font-black uppercase tracking-tight" style={{ color: "#050555" }}>
-                TOPS
-              </span>
-              <span className="text-[9px] font-bold tracking-[0.18em] uppercase mb-1 text-tops-red">
-                Compras
-              </span>
-            </div>
-            <div className="text-[9px] text-fg-secondary leading-relaxed mt-1 max-w-[300px]">
-              {ORG.legalName} · CUIT {ORG.cuit} · {ORG.iva}
-              <br />
-              {ORG.address}
-              <br />
-              {ORG.phone} · {ORG.website}
+            <img
+              src="/icons/logo-white-transparent.png"
+              alt="Logística TOPS"
+              style={{ width: 54, height: 54, objectFit: "contain" }}
+            />
+            <div
+              className="mt-1 font-semibold"
+              style={{ color: DOC.onNavySoft, fontSize: 7, letterSpacing: "0.2em" }}
+            >
+              {ORG.legalName.toUpperCase()} · DESDE {ORG.since}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] uppercase tracking-[0.16em] font-bold text-tops-red">
-              Orden de Compra
-            </div>
-            <div className="font-mono text-[20px] font-bold leading-tight" style={{ color: "#050555" }}>
-              {po.public_id ?? "OC-2026-XXXX"}
-            </div>
-            <div className="text-[10px] text-fg-secondary">{fmtDateTime(po.date ?? new Date())}</div>
-          </div>
-        </div>
-
-        {/* Bloque Proveedor */}
-        <Section label="Proveedor">
-          <div className="grid" style={{ gridTemplateColumns: "1.7fr 1fr 1fr", gap: 12 }}>
-            <KV label="Razón social" value={po.vendor?.razon ?? "—"} strong />
-            <KV label="CUIT" value={fmtCuit(po.vendor?.cuit ?? "")} mono />
-            <KV label="Contacto" value={po.vendor?.contacto ?? "—"} />
-            <KV label="Domicilio" value={po.vendor?.domicilio ?? "—"} colSpan={2} />
-            <KV label="Email" value={po.vendor?.email ?? "—"} />
-          </div>
-        </Section>
-
-        {/* Bloque Destino */}
-        <Section label="Destino y condiciones">
-          <div
-            className="rounded-md p-3 grid gap-3"
-            style={{ background: "#F7F8FB", gridTemplateColumns: "repeat(4, 1fr)" }}
-          >
-            <KV label="Destino" value={po.destino ?? "—"} />
-            <KV label="Cond. pago" value={po.cond_pago ?? "—"} />
-            <KV label="Entrega" value={po.entrega ?? "—"} />
-            <KV label="Categoría" value={po.categoria ?? "—"} />
-          </div>
-        </Section>
-
-        {/* Tabla items */}
-        <table className="w-full mt-3 text-[10px]" style={{ borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#050555", color: "#fff" }}>
-              <th className="text-left py-1.5 px-2 font-bold uppercase tracking-wide text-[9px] w-10">N°</th>
-              <th className="text-left py-1.5 px-2 font-bold uppercase tracking-wide text-[9px]">Producto / Servicio</th>
-              <th className="text-right py-1.5 px-2 font-bold uppercase tracking-wide text-[9px] w-14">Cant.</th>
-              <th className="text-left py-1.5 px-2 font-bold uppercase tracking-wide text-[9px] w-14">Un.</th>
-              <th className="text-right py-1.5 px-2 font-bold uppercase tracking-wide text-[9px] w-20">P. Unit.</th>
-              <th className="text-right py-1.5 px-2 font-bold uppercase tracking-wide text-[9px] w-24">Subtotal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((it, i) => (
-              <tr key={i} className="border-b" style={{ borderColor: "#EEF1F6" }}>
-                <td className="py-1.5 px-2 text-fg-muted font-mono">{String(i + 1).padStart(2, "0")}</td>
-                <td className="py-1.5 px-2 font-semibold" style={{ color: "#0B1220" }}>
-                  {it.label}
-                  {it.sku && (
-                    <div className="font-mono text-[9px] text-fg-muted mt-0.5">{it.sku}</div>
-                  )}
-                </td>
-                <td className="py-1.5 px-2 text-right tabular">{it.qty}</td>
-                <td className="py-1.5 px-2 text-fg-secondary">{it.unit}</td>
-                <td className="py-1.5 px-2 text-right tabular">{fmtCurrency(it.price)}</td>
-                <td className="py-1.5 px-2 text-right tabular font-bold" style={{ color: "#050555" }}>
-                  {fmtCurrency(it.subtotal)}
-                </td>
-              </tr>
-            ))}
-            {Array.from({ length: filler }).map((_, i) => (
-              <tr key={`f-${i}`} className="border-b" style={{ borderColor: "#EEF1F6" }}>
-                <td className="py-1.5 px-2 text-fg-muted/30 font-mono">
-                  {String(items.length + i + 1).padStart(2, "0")}
-                </td>
-                <td className="py-1.5 px-2">&nbsp;</td>
-                <td colSpan={4}>&nbsp;</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Totales */}
-        <div className="flex justify-end mt-3">
-          <div className="text-[10px] min-w-[200px]">
-            <div className="flex justify-between py-0.5">
-              <span className="text-fg-secondary">Subtotal neto</span>
-              <span className="tabular font-semibold">{fmtCurrency(neto)}</span>
-            </div>
-            <div className="flex justify-between py-0.5">
-              <span className="text-fg-secondary">IVA 21%</span>
-              <span className="tabular">{fmtCurrency(iva)}</span>
-            </div>
             <div
-              className="flex justify-between pt-1 mt-1 text-[12px] font-bold"
-              style={{ borderTop: "1.5px solid #050555", color: "#050555" }}
+              className="font-bold uppercase"
+              style={{ color: DOC.red, fontSize: 8, letterSpacing: "0.2em" }}
             >
-              <span>TOTAL</span>
-              <span className="tabular">{fmtCurrency(total)}</span>
+              TOPS Compras
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-1">
+              <div
+                className="font-extrabold text-right leading-tight"
+                style={{ color: DOC.white, fontSize: 22 }}
+              >
+                ORDEN DE
+                <br />
+                COMPRA
+              </div>
+              <div
+                className="rounded-sm px-1.5 py-1 text-center"
+                style={{ background: DOC.white, color: DOC.navy }}
+              >
+                <div className="font-extrabold leading-none" style={{ fontSize: 14 }}>
+                  OC
+                </div>
+                <div className="font-bold" style={{ fontSize: 6, letterSpacing: "0.06em" }}>
+                  {year}
+                </div>
+              </div>
+            </div>
+            <div className="font-mono mt-1.5" style={{ color: DOC.white, fontSize: 9 }}>
+              N.° {po.public_id ?? "OC-2026-XXXX"}
             </div>
           </div>
         </div>
+        <div style={{ height: 4, background: DOC.red }} />
 
-        {/* Footer firma + recibido + QR */}
-        <div className="absolute left-[38px] right-[38px] bottom-[26px] grid gap-3" style={{ gridTemplateColumns: "1fr 1fr 100px" }}>
-          <FooterCell label="Autorizado por">
-            {signatureDataUrl ? (
-              <img
-                src={signatureDataUrl}
-                alt="firma"
-                style={{ maxHeight: 38, width: "100%", objectFit: "contain" }}
-              />
-            ) : po.signed_by ? (
-              <div className="font-mono text-[18px] italic font-bold" style={{ color: "#050555" }}>
-                José Luis
-              </div>
-            ) : (
-              <div className="h-[24px] border-b border-dashed border-stroke-strong" />
-            )}
-            <div className="text-[9px] text-fg-primary font-semibold mt-1">{ORG.emitter.name}</div>
-            <div className="text-[8px] text-fg-muted">{ORG.emitter.role}</div>
-            {po.signed_at && (
-              <div className="text-[8px] text-fg-muted mt-0.5">{fmtDateTime(po.signed_at)}</div>
-            )}
-          </FooterCell>
-          <FooterCell label="Recibido y verificado por">
-            {po.recibido_por ? (
-              <>
-                <div className="text-[10px] font-semibold">{po.recibido_por}</div>
-                <div className="text-[9px] text-fg-muted">{fmtDateTime(po.recibido_at)}</div>
-                {po.factura_id && (
-                  <div className="font-mono text-[9px] text-fg-muted mt-0.5">
-                    Factura {po.factura_id}
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div className="h-[28px] border-b border-dashed border-stroke-strong" />
-                <div className="text-[8px] text-fg-muted mt-1">Aclaración / DNI</div>
-              </>
-            )}
-          </FooterCell>
-          <FooterCell label="Validar OC">
-            <div className="grid place-items-center w-[80px] h-[80px] mx-auto bg-white border border-stroke-soft rounded">
-              {qrUrl ? (
-                <img src={qrUrl} alt="QR" className="w-full h-full" />
-              ) : (
-                <Icon name="qr" size={64} />
-              )}
+        <div className="px-7 pb-2 grow">
+          <Section num="01" label="Datos de la orden">
+            <div
+              className="grid"
+              style={{ gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${DOC.rule}` }}
+            >
+              <GridCell>
+                <KV label="Fecha de emisión" value={fmtDateTime(po.date ?? new Date())} mono />
+              </GridCell>
+              <GridCell>
+                <KV label="Categoría" value={po.categoria ?? "—"} />
+              </GridCell>
+              <GridCell last>
+                <KV label="Moneda" value="ARS" mono />
+              </GridCell>
             </div>
-          </FooterCell>
+          </Section>
+
+          <div className="grid gap-5" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <Section num="02" label="Emisor">
+              <KV label="Razón social" value={ORG.legalName} strong />
+              <div className="text-[10px] mt-0.5" style={{ color: DOC.textSec }}>
+                {ORG.brand} · {ORG.iva}
+              </div>
+              <div className="text-[10px] mb-1" style={{ color: DOC.textSec }}>
+                {ORG.address}
+              </div>
+              <div className="grid" style={{ gridTemplateColumns: "1fr 1.4fr" }}>
+                <KV label="CUIT" value={fmtCuit(ORG.cuit)} mono />
+                <KV label="Teléfonos" value={ORG.phone} mono />
+              </div>
+            </Section>
+            <Section num="03" label="Proveedor">
+              <KV label="Razón social" value={po.vendor?.razon ?? "—"} strong />
+              <KV label="Domicilio" value={po.vendor?.domicilio ?? "—"} />
+              <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <KV label="CUIT" value={fmtCuit(po.vendor?.cuit ?? "")} mono />
+                <KV label="Teléfono" value={po.vendor?.telefono ?? "—"} />
+                <KV label="Contacto" value={po.vendor?.contacto ?? "—"} />
+                <KV label="Email" value={po.vendor?.email ?? "—"} />
+              </div>
+            </Section>
+          </div>
+
+          <Section num="04" label="Destino y condiciones">
+            <div
+              className="grid"
+              style={{ gridTemplateColumns: "repeat(3, 1fr)", border: `1px solid ${DOC.rule}` }}
+            >
+              <GridCell>
+                <KV label="Destino" value={po.destino ?? "—"} />
+              </GridCell>
+              <GridCell>
+                <KV label="Cond. de pago" value={po.cond_pago ?? "—"} />
+              </GridCell>
+              <GridCell last>
+                <KV label="Entrega" value={po.entrega ?? "—"} />
+              </GridCell>
+            </div>
+          </Section>
+
+          <Section num="05" label="Detalle de productos y servicios">
+            <table className="w-full text-[10px]" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: `2px solid ${DOC.navy}` }}>
+                  <Th className="text-left w-8">N.°</Th>
+                  <Th className="text-left">Producto / Servicio</Th>
+                  <Th className="text-right w-12">Cant.</Th>
+                  <Th className="text-center w-10">Un.</Th>
+                  <Th className="text-right w-20">P. Unitario</Th>
+                  <Th className="text-right w-24">Subtotal</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${DOC.rule}` }}>
+                    <td className="py-1.5 font-mono" style={{ color: DOC.labelSoft }}>
+                      {String(i + 1).padStart(2, "0")}
+                    </td>
+                    <td className="py-1.5 font-semibold">
+                      {it.label}
+                      {it.sku && (
+                        <span className="font-mono text-[9px] ml-1" style={{ color: DOC.labelSoft }}>
+                          ({it.sku})
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">{it.qty}</td>
+                    <td className="py-1.5 text-center" style={{ color: DOC.textSec }}>
+                      {it.unit}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">{fmtCurrency(it.price)}</td>
+                    <td
+                      className="py-1.5 text-right font-mono font-semibold"
+                      style={{ color: DOC.navy }}
+                    >
+                      {fmtCurrency(it.subtotal)}
+                    </td>
+                  </tr>
+                ))}
+                {Array.from({ length: filler }).map((_, i) => (
+                  <tr key={`f-${i}`} style={{ borderBottom: `1px solid ${DOC.ruleSoft}` }}>
+                    <td className="py-1.5 font-mono opacity-30">
+                      {String(items.length + i + 1).padStart(2, "0")}
+                    </td>
+                    <td colSpan={5}>&nbsp;</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Section>
+
+          {po.observ && (
+            <Section num="06" label="Observaciones">
+              <div className="text-[10px]" style={{ color: DOC.textSec }}>
+                {po.observ}
+              </div>
+            </Section>
+          )}
+
+          <div className="grid gap-5" style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <Section num={po.observ ? "07" : "06"} label="Autorizaciones">
+              <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <div>
+                  <Label>Autorizado por</Label>
+                  {signatureDataUrl ? (
+                    <img
+                      src={signatureDataUrl}
+                      alt="firma"
+                      style={{ maxHeight: 30, objectFit: "contain" }}
+                    />
+                  ) : (
+                    <div style={{ height: 30 }} />
+                  )}
+                  <div className="pt-0.5" style={{ borderTop: `1px solid ${DOC.ink}` }}>
+                    <div className="text-[9px] font-bold">{ORG.emitter.name}</div>
+                    <div className="text-[8px]" style={{ color: DOC.labelSoft }}>
+                      {ORG.emitter.role}
+                    </div>
+                    {po.signed_at && (
+                      <div className="text-[8px]" style={{ color: DOC.labelSoft }}>
+                        {fmtDateTime(po.signed_at)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label>Recibido y verificado</Label>
+                  <div style={{ height: 30 }} />
+                  <div className="pt-0.5" style={{ borderTop: `1px solid ${DOC.ink}` }}>
+                    {po.recibido_por ? (
+                      <>
+                        <div className="text-[9px] font-bold">{po.recibido_por}</div>
+                        {po.recibido_at && (
+                          <div className="text-[8px]" style={{ color: DOC.labelSoft }}>
+                            {fmtDateTime(po.recibido_at)}
+                          </div>
+                        )}
+                        {po.factura_id && (
+                          <div className="font-mono text-[8px]" style={{ color: DOC.labelSoft }}>
+                            Factura {po.factura_id}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-[8px]" style={{ color: DOC.label }}>
+                        Aclaración / DNI / fecha
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Section>
+            <Section num={po.observ ? "08" : "07"} label="Resumen">
+              <div
+                className="flex justify-between py-1 text-[10px]"
+                style={{ borderBottom: `1px solid ${DOC.rule}` }}
+              >
+                <span style={{ color: DOC.textSec }}>Subtotal neto</span>
+                <span className="font-mono">{fmtCurrency(neto)}</span>
+              </div>
+              <div
+                className="flex justify-between py-1 text-[10px]"
+                style={{ borderBottom: `1px solid ${DOC.rule}` }}
+              >
+                <span style={{ color: DOC.textSec }}>IVA 21%</span>
+                <span className="font-mono">{fmtCurrency(iva)}</span>
+              </div>
+              <div
+                className="flex items-center justify-between mt-2 px-3 py-2.5"
+                style={{ background: DOC.navy }}
+              >
+                <div>
+                  <div
+                    className="font-extrabold"
+                    style={{ color: DOC.red, fontSize: 8, letterSpacing: "0.16em" }}
+                  >
+                    TOTAL
+                  </div>
+                  <div style={{ color: DOC.onNavySoft, fontSize: 6.5, letterSpacing: "0.1em" }}>
+                    PESOS ARGENTINOS
+                  </div>
+                </div>
+                <div className="font-mono font-bold" style={{ color: DOC.white, fontSize: 16 }}>
+                  {fmtCurrency(total)}
+                </div>
+              </div>
+            </Section>
+          </div>
+
+          <Section num={po.observ ? "09" : "08"} label="Validación documental">
+            <div className="flex gap-4">
+              <div className="text-center w-[70px]">
+                <div
+                  className="grid place-items-center w-[62px] h-[62px] bg-white mx-auto"
+                  style={{ border: `1px solid ${DOC.ruleSoft}` }}
+                >
+                  {qrUrl ? (
+                    <img src={qrUrl} alt="QR" className="w-full h-full" />
+                  ) : (
+                    <Icon name="qr" size={48} />
+                  )}
+                </div>
+                <div
+                  className="mt-0.5 font-bold uppercase"
+                  style={{ color: DOC.labelSoft, fontSize: 6, letterSpacing: "0.16em" }}
+                >
+                  Validar OC
+                </div>
+              </div>
+              <div className="grow">
+                <KV label="Hash SHA-256" value={po.integrity_hash ?? "—"} mono small />
+                <KV label="Drive" value={po.drive_file_id ?? "—"} mono small />
+                <div className="mt-1 pl-2" style={{ borderLeft: `3px solid ${DOC.red}` }}>
+                  <div
+                    className="font-extrabold uppercase"
+                    style={{ color: DOC.red, fontSize: 8, letterSpacing: "0.08em" }}
+                  >
+                    Generado por TOPS Compras
+                  </div>
+                  <div className="text-[8px] leading-relaxed" style={{ color: DOC.textSec }}>
+                    Documento interno de compras. La recepción de mercadería o servicio debe
+                    verificarse contra esta orden antes de conformar la factura del proveedor.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Section>
         </div>
 
-        {/* Hash disclaimer */}
-        <div className="absolute left-[38px] right-[38px] bottom-[10px] text-[7px] text-fg-muted font-mono">
-          SHA-256 {po.integrity_hash ?? "—"} · Drive {po.drive_file_id ?? "—"} · Generado por TOPS Compras
+        {/* Footer banda navy */}
+        <div
+          className="flex items-center justify-between px-7 py-2.5"
+          style={{ background: DOC.navy }}
+        >
+          <div>
+            <div
+              className="font-extrabold uppercase"
+              style={{ color: DOC.white, fontSize: 8, letterSpacing: "0.14em" }}
+            >
+              Logística TOPS
+            </div>
+            <div style={{ color: DOC.onNavySoft, fontSize: 7 }}>
+              Buenos Aires, Argentina · {ORG.website} · {ORG.phone}
+            </div>
+          </div>
+          <div>
+            <div
+              className="font-extrabold uppercase"
+              style={{ color: DOC.white, fontSize: 8, letterSpacing: "0.14em" }}
+            >
+              {ORG.legalName}
+            </div>
+            <div style={{ color: DOC.onNavySoft, fontSize: 7 }}>
+              Orden de compra {po.public_id ?? "OC-2026-XXXX"} · TOPS Compras
+            </div>
+          </div>
+          <div className="font-mono" style={{ color: DOC.onNavySoft, fontSize: 7 }}>
+            Página 1 de 1
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  num,
+  label,
+  children,
+}: {
+  num: string;
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="mt-3">
-      <div className="text-[9px] font-bold uppercase tracking-[0.16em] text-tops-red mb-1.5">
-        {label}
+      <div
+        className="font-bold uppercase"
+        style={{ color: DOC.red, fontSize: 9, letterSpacing: "0.14em" }}
+      >
+        {num} · {label}
       </div>
+      <div className="mb-1.5 mt-0.5" style={{ height: 2, background: DOC.navy }} />
+      {children}
+    </div>
+  );
+}
+
+function GridCell({ children, last }: { children: React.ReactNode; last?: boolean }) {
+  return (
+    <div
+      className="px-2 py-1.5"
+      style={last ? undefined : { borderRight: `1px solid ${DOC.rule}` }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="font-bold uppercase mb-0.5"
+      style={{ color: DOC.label, fontSize: 8, letterSpacing: "0.12em" }}
+    >
       {children}
     </div>
   );
@@ -235,25 +430,20 @@ function KV({
   value,
   mono,
   strong,
-  colSpan,
+  small,
 }: {
   label: string;
   value: string;
   mono?: boolean;
   strong?: boolean;
-  colSpan?: number;
+  small?: boolean;
 }) {
   return (
-    <div style={colSpan ? { gridColumn: `span ${colSpan}` } : undefined}>
-      <div className="text-[8px] uppercase tracking-[0.12em] font-bold text-fg-muted mb-0.5">
-        {label}
-      </div>
+    <div className="mb-1">
+      <Label>{label}</Label>
       <div
-        className={[
-          "text-[10px]",
-          mono ? "font-mono" : "",
-          strong ? "font-bold text-fg-brand" : "text-fg-primary",
-        ].join(" ")}
+        className={[small ? "text-[8px]" : "text-[10px]", mono ? "font-mono" : "", strong ? "font-bold" : ""].join(" ")}
+        style={{ color: strong ? DOC.navy : DOC.ink, wordBreak: "break-all" }}
       >
         {value}
       </div>
@@ -261,12 +451,13 @@ function KV({
   );
 }
 
-function FooterCell({ label, children }: { label: string; children: React.ReactNode }) {
+function Th({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className="border-t pt-1.5" style={{ borderColor: "#DDE3EC" }}>
-      <div className="text-[8px] font-bold uppercase tracking-[0.14em] text-fg-muted mb-1">{label}</div>
+    <th
+      className={`py-1 font-bold uppercase ${className ?? ""}`}
+      style={{ color: DOC.label, fontSize: 8, letterSpacing: "0.1em" }}
+    >
       {children}
-    </div>
+    </th>
   );
 }
-

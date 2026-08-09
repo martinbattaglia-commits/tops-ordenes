@@ -6,6 +6,7 @@ import { listInbox, listChannels } from "@/lib/connect/read/inbox-data";
 import { listActivity } from "@/lib/connect/read/activity-data";
 import { listNotificationCenter } from "@/lib/notifications/data";
 import { getMyProfile } from "@/lib/profile/data";
+import { canAccessWaCommercialImport } from "@/lib/connect/wa-import/access";
 import type { NotificationItem, NotificationPriority } from "@/lib/notifications/types";
 import { relTime } from "@/lib/utils";
 
@@ -88,6 +89,21 @@ export default async function ConnectHomePage() {
           )}
         </HomeCard>
 
+        {/* WhatsApp Comercial: visible sólo para el mismo rol autorizado por ruta y actions. */}
+        {canAccessWaCommercialImport(profile?.role) ? (
+          <HomeCard
+            title="WhatsApp Comercial"
+            icon="whatsapp"
+            href="/connect/wa-import"
+            actionLabel="Importar"
+          >
+            <p className="text-xs leading-relaxed text-fg-muted">
+              Previsualizá e importá un historial exportado de WhatsApp con confirmación de
+              identidad y control de duplicados.
+            </p>
+          </HomeCard>
+        ) : null}
+
         {/* Canales activos */}
         <HomeCard title="Canales activos" icon="users" href="/connect/canales">
           {channels.length === 0 ? (
@@ -110,8 +126,8 @@ export default async function ConnectHomePage() {
   );
 }
 
-function HomeCard({ title, icon, href, badge, children }: {
-  title: string; icon: Parameters<typeof Icon>[0]["name"]; href: string; badge?: number; children: React.ReactNode;
+function HomeCard({ title, icon, href, badge, actionLabel = "Ver todo", children }: {
+  title: string; icon: Parameters<typeof Icon>[0]["name"]; href: string; badge?: number; actionLabel?: string; children: React.ReactNode;
 }) {
   return (
     <section className="card flex flex-col gap-3 p-4">
@@ -121,7 +137,7 @@ function HomeCard({ title, icon, href, badge, children }: {
           <h2 className="text-sm font-bold text-fg-primary">{title}</h2>
           {badge ? <span className="grid h-4 min-w-[16px] place-items-center rounded-pill bg-tops-red px-1 text-[10px] font-bold text-white">{badge > 9 ? "9+" : badge}</span> : null}
         </div>
-        <Link href={href} className="text-[11px] font-semibold text-fg-link hover:underline">Ver todo</Link>
+        <Link href={href} className="text-[11px] font-semibold text-fg-link hover:underline">{actionLabel}</Link>
       </div>
       <div className="min-h-[60px] flex-1">{children}</div>
     </section>

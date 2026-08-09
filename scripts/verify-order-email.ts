@@ -4,8 +4,28 @@
  *
  * Cubre: plan de 4 destinatarios por rol, ruteo de depósito por sede,
  * deduplicación por tag, y contenido diferenciado por rol.
+ *
+ * ── Trazabilidad de la baseline (exigida por Dirección, 2026-07-28) ─────────
+ * El total de PASS no es comparable a ciegas contra corridas anteriores. Las
+ * aserciones se clasifican así:
+ *
+ *  · REGRESIÓN NUEVA — ninguna. Ninguna aserción que pasaba antes falla ahora.
+ *
+ *  · BASELINE PREVIAMENTE FALLIDA — 1 aserción. En `origin/main` el check
+ *    "facturación incluye 'Importe estimado'" **ya fallaba**: buscaba una
+ *    cadena que `order-email.ts` nunca emitió. Se reescribió (línea marcada
+ *    [BASELINE-FIX]) para verificar lo que el email realmente contiene
+ *    —servicios y subtotal—. Es reparación de un test rancio, NO evidencia de
+ *    que el expediente haya preservado ese comportamiento.
+ *
+ *  · INCORPORADAS POR EL EXPEDIENTE — secciones 5b (shell institucional:
+ *    wordmark, tokens, role="presentation", footer, escape de comilla simple)
+ *    y 5c (versión text/plain por rol). Antes no existían.
+ *
+ * Corrida de referencia: `origin/main` = 21 PASS · 1 FAIL. Actual = 34 PASS.
  */
-import { orderEmailPlan, dedupeOrderEmails, renderRoleHtml } from "../src/lib/order-email";
+import { orderEmailPlan, dedupeOrderEmails, renderRoleHtml, renderRoleText } from "../src/lib/order-email";
+import { escapeHtml } from "../src/lib/doc-system/email/layout";
 
 let pass = 0;
 let fail = 0;
@@ -76,10 +96,31 @@ const htmlFact = renderRoleHtml(baseOrder, "facturacion", "https://x/OS-201601")
 const htmlCliente = renderRoleHtml(baseOrder, "cliente", "https://x/OS-201601");
 check("depósito menciona responsable operativo", /Responsable operativo/.test(htmlDepot));
 check("director incluye 'Servicios contratados'", /Servicios contratados/.test(htmlDirector));
-check("facturación incluye 'Importe estimado'", /Importe estimado/.test(htmlFact));
+check("[BASELINE-FIX] facturación incluye servicios y totales", /Servicios/.test(htmlFact) && /Subtotal neto/.test(htmlFact));
 check("cliente NO expone servicios internos", !/Servicios contratados/.test(htmlCliente));
 check("los 4 cuerpos son distintos", new Set([htmlDepot, htmlDirector, htmlFact, htmlCliente]).size === 4);
 check("PDF link presente cuando hay pdfUrl", /Descargar comprobante/.test(renderRoleHtml(baseOrder, "cliente", "https://x", "https://pdf")));
+
+console.log("\n[5b] Plantilla base doc-system (shell común)");
+check("wordmark LOGISTICA TOPS en el header (todos los roles)",
+  [htmlDepot, htmlDirector, htmlFact, htmlCliente].every((h) => /LOGISTICA<\/span>/.test(h) && />TOPS<\/span>/.test(h)));
+check("header navy con token #050555", /#050555/.test(htmlDepot));
+check("CTA rojo con token #C90812", /#C90812/.test(htmlDepot));
+check("tablas role=presentation (compatibilidad clientes de correo)", /role="presentation"/.test(htmlDepot));
+check("footer corporativo (Verotin S.A. + CUIT)", /Verotin S\.A\./.test(htmlDepot) && /33-60489698-9/.test(htmlDepot));
+check("escapeHtml único escapa comilla simple", escapeHtml(`O'Brien & <Cía> "x"`) === "O&#39;Brien &amp; &lt;Cía&gt; &quot;x&quot;");
+
+console.log("\n[5c] Versión text/plain por rol");
+const txtDepot = renderRoleText(baseOrder, "deposito", "https://x/OS-201601");
+const txtDirector = renderRoleText(baseOrder, "director", "https://x/OS-201601");
+const txtFact = renderRoleText(baseOrder, "facturacion", "https://x/OS-201601");
+const txtCliente = renderRoleText(baseOrder, "cliente", "https://x/OS-201601");
+check("los 4 textos son distintos", new Set([txtDepot, txtDirector, txtFact, txtCliente]).size === 4);
+check("sin HTML en el texto plano", ![txtDepot, txtDirector, txtFact, txtCliente].some((t) => /<[a-z]/i.test(t)));
+check("incluyen el link público", [txtDepot, txtDirector, txtFact, txtCliente].every((t) => t.includes("https://x/OS-201601")));
+check("incluyen footer corporativo", [txtDepot, txtDirector, txtFact, txtCliente].every((t) => t.includes("Verotin S.A.")));
+check("texto urgente incluye banner", /ENVÍO URGENTE/.test(renderRoleText(baseOrder, "deposito", "https://x", undefined, true)));
+check("PDF presente en texto cuando hay pdfUrl", /PDF: https:\/\/pdf/.test(renderRoleText(baseOrder, "cliente", "https://x", "https://pdf")));
 
 console.log("\n[6] Envío urgente — banner en los emails (Tarea E)");
 const htmlUrgent = renderRoleHtml(baseOrder, "deposito", "https://x", undefined, true);

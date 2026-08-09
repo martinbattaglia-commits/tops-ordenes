@@ -3,8 +3,8 @@
  *
  * Separada de `email.ts` (que hace la llamada real a Resend) para que el plan
  * de destinatarios, el contenido por rol y la deduplicación sean testeables
- * sin DB ni red. Sólo importa TIPOS (se borran en compilación), por lo que no
- * arrastra dependencias de runtime.
+ * sin DB ni red. Sólo importa tipos y constantes puras (tokens del doc-system
+ * y `ORG`), por lo que no arrastra dependencias de runtime (ni env, ni DB).
  *
  * Reglas de negocio (handoff Dirección):
  *   Toda OS generada dispara 4 correos diferenciados por rol:
@@ -16,6 +16,12 @@
  */
 
 import type { Depot, Order } from "@/lib/types";
+import {
+  escapeHtml,
+  renderEmailShell,
+  textFallback,
+} from "./doc-system/email/layout";
+import { DOC } from "./doc-system/tokens";
 
 export type OrderEmailRole = "deposito" | "director" | "facturacion" | "cliente";
 
@@ -126,22 +132,14 @@ function fmtDate(iso: string): string {
 function servicesRows(order: Order): string {
   const svcs = order.services ?? [];
   if (svcs.length === 0) {
-    return `<tr><td colspan="2" style="padding:8px 0;color:#5a6577;">Sin servicios detallados.</td></tr>`;
+    return `<tr><td colspan="2" style="padding:8px 0;color:${DOC.textSec};">Sin servicios detallados.</td></tr>`;
   }
   return svcs
     .map(
       (s) =>
-        `<tr><td style="padding:6px 0;border-top:1px solid #eef1f6;">${escapeHtml(s.label)} <span style="color:#8a94a6;">· ${s.qty} ${escapeHtml(String(s.unit))}</span></td><td style="padding:6px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${fmtMoney(s.subtotal)}</td></tr>`,
+        `<tr><td style="padding:6px 0;border-top:1px solid ${DOC.ruleSoft};">${escapeHtml(s.label)} <span style="color:${DOC.label};">· ${s.qty} ${escapeHtml(String(s.unit))}</span></td><td style="padding:6px 0;text-align:right;font-weight:600;border-top:1px solid ${DOC.ruleSoft};">${fmtMoney(s.subtotal)}</td></tr>`,
     )
     .join("");
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /**
@@ -153,13 +151,24 @@ function totalsRows(order: Order): string {
   const iva = Math.round(order.total * 0.21);
   const total = order.total + iva;
   return (
-    `<tr><td style="padding:8px 0;border-top:2px solid #050555;color:#5a6577;">Subtotal neto</td>` +
-    `<td style="padding:8px 0;text-align:right;border-top:2px solid #050555;">${fmtMoney(order.total)}</td></tr>` +
-    `<tr><td style="padding:4px 0;color:#5a6577;">IVA (21%)</td>` +
+    `<tr><td style="padding:8px 0;border-top:2px solid ${DOC.navy};color:${DOC.textSec};">Subtotal neto</td>` +
+    `<td style="padding:8px 0;text-align:right;border-top:2px solid ${DOC.navy};">${fmtMoney(order.total)}</td></tr>` +
+    `<tr><td style="padding:4px 0;color:${DOC.textSec};">IVA (21%)</td>` +
     `<td style="padding:4px 0;text-align:right;">${fmtMoney(iva)}</td></tr>` +
-    `<tr><td style="padding:6px 0;font-weight:700;border-top:1px solid #eef1f6;">Total</td>` +
-    `<td style="padding:6px 0;text-align:right;font-weight:700;color:#050555;">${fmtMoney(total)}</td></tr>`
+    `<tr><td style="padding:6px 0;font-weight:700;border-top:1px solid ${DOC.ruleSoft};">Total</td>` +
+    `<td style="padding:6px 0;text-align:right;font-weight:700;color:${DOC.navy};">${fmtMoney(total)}</td></tr>`
   );
+}
+
+/** Fila «label · valor» de las tablas de datos por rol (todo inline). */
+function kvRow(label: string, valueHtml: string, first = false): string {
+  const bt = first ? "" : `border-top:1px solid ${DOC.ruleSoft};`;
+  return `<tr><td style="padding:8px 0;color:${DOC.textSec};${bt}">${label}</td><td style="padding:8px 0;text-align:right;font-weight:600;${bt}">${valueHtml}</td></tr>`;
+}
+
+/** Encabezado chico de sección (SERVICIOS…). */
+function sectionHeading(label: string): string {
+  return `<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${DOC.label};margin-top:8px;">${label}</div>`;
 }
 
 /** Texto-objetivo por rol (encabeza el cuerpo del email). */
@@ -185,7 +194,7 @@ const ROLE_INTRO: Record<OrderEmailRole, { eyebrow: string; objetivo: string }> 
 /**
  * Render del cuerpo HTML del email, diferenciado por rol. Puro (no toca env ni
  * red). El bloque central varía según el destinatario; la cabecera, CTA y pie
- * son comunes.
+ * los aporta la plantilla base del doc-system (`renderEmailShell`).
  */
 export function renderRoleHtml(
   order: Order,
@@ -201,72 +210,150 @@ export function renderRoleHtml(
     order.h_start && order.h_end ? `${order.h_start} – ${order.h_end}` : "—";
   const responsable = order.operator?.full_name ?? "—";
 
-  // Bloque central por rol.
+  // Bloque central por rol (mismos datos que siempre; sólo cambia la piel).
   let middle = "";
   if (role === "deposito") {
     middle = `
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
-        <tr><td style="padding:8px 0;color:#5a6577;">Cliente</td><td style="padding:8px 0;text-align:right;font-weight:600;">${escapeHtml(razon)}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Depósito</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${DEPOT_LABEL[order.depot]}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Horario</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${horario}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Responsable operativo</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${escapeHtml(responsable)}</td></tr>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+        ${kvRow("Cliente", escapeHtml(razon), true)}
+        ${kvRow("Depósito", DEPOT_LABEL[order.depot])}
+        ${kvRow("Horario", horario)}
+        ${kvRow("Responsable operativo", escapeHtml(responsable))}
       </table>`;
   } else if (role === "director") {
     middle = `
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
-        <tr><td style="padding:8px 0;color:#5a6577;">Cliente</td><td style="padding:8px 0;text-align:right;font-weight:600;">${escapeHtml(razon)}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Depósito</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${DEPOT_LABEL[order.depot]}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Responsable</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${escapeHtml(responsable)}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Horario</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${horario}</td></tr>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+        ${kvRow("Cliente", escapeHtml(razon), true)}
+        ${kvRow("Depósito", DEPOT_LABEL[order.depot])}
+        ${kvRow("Responsable", escapeHtml(responsable))}
+        ${kvRow("Horario", horario)}
       </table>
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8a94a6;margin-top:8px;">Servicios contratados</div>
-      <table style="width:100%;border-collapse:collapse;margin:6px 0 0;font-size:14px;">${servicesRows(order)}
+      ${sectionHeading("Servicios contratados")}
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:6px 0 0;font-size:14px;">${servicesRows(order)}
         ${totalsRows(order)}
       </table>`;
   } else if (role === "facturacion") {
     middle = `
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
-        <tr><td style="padding:8px 0;color:#5a6577;">Cliente</td><td style="padding:8px 0;text-align:right;font-weight:600;">${escapeHtml(razon)}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Fecha</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${fmtDate(order.date)}</td></tr>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+        ${kvRow("Cliente", escapeHtml(razon), true)}
+        ${kvRow("Fecha", fmtDate(order.date))}
       </table>
-      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#8a94a6;margin-top:8px;">Servicios</div>
-      <table style="width:100%;border-collapse:collapse;margin:6px 0 0;font-size:14px;">${servicesRows(order)}
+      ${sectionHeading("Servicios")}
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:6px 0 0;font-size:14px;">${servicesRows(order)}
         ${totalsRows(order)}
       </table>`;
   } else {
     // cliente
     middle = `
-      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
-        <tr><td style="padding:8px 0;color:#5a6577;">Fecha</td><td style="padding:8px 0;text-align:right;font-weight:600;">${fmtDate(order.date)}</td></tr>
-        <tr><td style="padding:8px 0;color:#5a6577;border-top:1px solid #eef1f6;">Depósito</td><td style="padding:8px 0;text-align:right;font-weight:600;border-top:1px solid #eef1f6;">${DEPOT_LABEL[order.depot]}</td></tr>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+        ${kvRow("Fecha", fmtDate(order.date), true)}
+        ${kvRow("Depósito", DEPOT_LABEL[order.depot])}
         ${totalsRows(order)}
       </table>`;
   }
 
-  return `<!doctype html>
-<html lang="es">
-<head><meta charset="utf-8"><title>${pid}</title></head>
-<body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f7f8fb;color:#0b1220;">
-  <div style="max-width:600px;margin:0 auto;padding:24px;">
-    <div style="background:#050555;color:white;padding:20px 24px;border-radius:10px 10px 0 0;">
-      <div style="font-size:11px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;opacity:0.7;">${intro.eyebrow}</div>
-      <div style="font-size:24px;font-weight:700;margin-top:4px;">${pid}</div>
-      <div style="font-size:13px;opacity:0.85;margin-top:2px;">${DEPOT_LABEL[order.depot]}</div>
-    </div>
-    <div style="background:white;border:1px solid #dde3ec;border-top:none;padding:24px;border-radius:0 0 10px 10px;">
-      ${urgent ? `<div style="margin:0 0 16px;padding:10px 14px;background:#fdecec;border:1px solid #C90812;border-radius:6px;color:#C90812;font-weight:700;font-size:13px;letter-spacing:0.04em;">🚨 ENVÍO URGENTE — ejecución el mismo día · recargo +100%</div>` : ""}
-      <p style="margin:0 0 8px;font-size:15px;line-height:1.6;">${intro.objetivo}</p>
-      ${middle}
-      <div style="text-align:center;margin:24px 0;">
-        <a href="${publicUrl}" style="display:inline-block;background:#C90812;color:white;padding:12px 28px;border-radius:6px;font-weight:700;text-decoration:none;font-size:14px;letter-spacing:0.04em;">Ver comprobante online →</a>
-      </div>
-      ${pdfUrl ? `<p style="margin:16px 0 0;font-size:13px;color:#5a6577;text-align:center;">PDF: <a href="${pdfUrl}" style="color:#214576;">Descargar comprobante</a></p>` : ""}
-      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #eef1f6;font-size:12px;color:#8a94a6;line-height:1.5;">
-        Logística TOPS — Verotin S.A. · IVA Responsable Inscripto<br>
-        Agustín Magaldi 1765 — CABA · Tel/Fax: 4302-3944<br>
-        <a href="https://www.logisticatops.com" style="color:#214576;">www.logisticatops.com</a>
-      </div>
-    </div>
-  </div>
-</body></html>`;
+  const urgentBanner = urgent
+    ? `<div style="margin:0 0 16px;padding:10px 14px;background:#FDECEC;border:1px solid ${DOC.red};border-radius:6px;color:${DOC.red};font-weight:700;font-size:13px;letter-spacing:0.04em;">🚨 ENVÍO URGENTE — ejecución el mismo día · recargo +100%</div>`
+    : "";
+
+  return renderEmailShell({
+    eyebrow: intro.eyebrow,
+    title: pid,
+    subtitle: DEPOT_LABEL[order.depot],
+    bodyHtml: `${urgentBanner}<p style="margin:0 0 8px;font-size:15px;line-height:1.6;">${intro.objetivo}</p>${middle}`,
+    cta: { label: "Ver comprobante online →", url: publicUrl },
+    belowCtaHtml: pdfUrl
+      ? `<p style="margin:0;font-size:13px;color:${DOC.textSec};text-align:center;">PDF: <a href="${escapeHtml(pdfUrl)}" style="color:${DOC.navy};">Descargar comprobante</a></p>`
+      : undefined,
+  });
+}
+
+/** Servicios en formato texto plano (una línea por servicio). */
+function servicesText(order: Order): string[] {
+  const svcs = order.services ?? [];
+  if (svcs.length === 0) return ["  · Sin servicios detallados."];
+  return svcs.map(
+    (s) => `  · ${s.label} — ${s.qty} ${String(s.unit)} — ${fmtMoney(s.subtotal)}`,
+  );
+}
+
+/** Totales discriminados en texto plano (misma fórmula que totalsRows). */
+function totalsText(order: Order): string[] {
+  const iva = Math.round(order.total * 0.21);
+  return [
+    `Subtotal neto: ${fmtMoney(order.total)}`,
+    `IVA (21%): ${fmtMoney(iva)}`,
+    `Total: ${fmtMoney(order.total + iva)}`,
+  ];
+}
+
+/**
+ * Versión text/plain del email por rol (mismos datos que renderRoleHtml).
+ * Se pasa como campo `text` del payload de Resend.
+ */
+export function renderRoleText(
+  order: Order,
+  role: OrderEmailRole,
+  publicUrl: string,
+  pdfUrl?: string,
+  urgent = false,
+): string {
+  const intro = ROLE_INTRO[role];
+  const razon = order.client?.razon ?? "";
+  const horario =
+    order.h_start && order.h_end ? `${order.h_start} – ${order.h_end}` : "—";
+  const responsable = order.operator?.full_name ?? "—";
+  const depot = DEPOT_LABEL[order.depot];
+
+  const middle: string[] = [];
+  if (role === "deposito") {
+    middle.push(
+      `Cliente: ${razon}`,
+      `Depósito: ${depot}`,
+      `Horario: ${horario}`,
+      `Responsable operativo: ${responsable}`,
+    );
+  } else if (role === "director") {
+    middle.push(
+      `Cliente: ${razon}`,
+      `Depósito: ${depot}`,
+      `Responsable: ${responsable}`,
+      `Horario: ${horario}`,
+      "",
+      "Servicios contratados:",
+      ...servicesText(order),
+      "",
+      ...totalsText(order),
+    );
+  } else if (role === "facturacion") {
+    middle.push(
+      `Cliente: ${razon}`,
+      `Fecha: ${fmtDate(order.date)}`,
+      "",
+      "Servicios:",
+      ...servicesText(order),
+      "",
+      ...totalsText(order),
+    );
+  } else {
+    middle.push(
+      `Fecha: ${fmtDate(order.date)}`,
+      `Depósito: ${depot}`,
+      "",
+      ...totalsText(order),
+    );
+  }
+
+  return textFallback([
+    `${intro.eyebrow.toUpperCase()} — ${order.public_id} · ${depot}`,
+    "",
+    urgent && "🚨 ENVÍO URGENTE — ejecución el mismo día · recargo +100%",
+    urgent && "",
+    intro.objetivo,
+    "",
+    ...middle,
+    "",
+    `Ver comprobante online: ${publicUrl}`,
+    pdfUrl ? `PDF: ${pdfUrl}` : false,
+  ]);
 }

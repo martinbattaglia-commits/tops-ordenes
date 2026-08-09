@@ -3,23 +3,23 @@
 // Orquesta:
 //   1. Valida que se reciban IDs a exportar.
 //   2. Carga los prospectos con status 'aprobado' (filtrado por IDs).
-//   3. Delega la exportación y registro al ClientifyExportAdapter.
+//   3. Delega la exportación y registro al ClientifyExportPort.
 //   4. Devuelve un resumen tipado vía Result<ExportSummary>.
 //
 // Depende SOLO de puertos abstractos (AP-3/AP-15):
-//   - ClientifyExportAdapter (driven)
-//   - SupabaseClient (para fetch de prospectos)
+//   - ClientifyExportPort (driven)
+//   - ApprovedProspectReaderPort (driven)
 //
 // Errores de dominio: EXPORT_FAILED / NOT_FOUND (errors.ts).
 
 import { type Result, ok, err } from "../domain/result";
 import { domainError } from "../domain/errors";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  ClientifyExportAdapter,
-  type ProspectToExport,
-  type ExportResult,
-} from "../adapters/clientify/clientify-export.adapter";
+import type {
+  ApprovedProspectReaderPort,
+  ClientifyExportPort,
+  ExportResult,
+  ProspectToExport,
+} from "../ports/clientify-export.port";
 
 // ---------------------------------------------------------------------------
 // Tipos públicos del caso de uso
@@ -46,30 +46,13 @@ export interface ExportSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Fila mínima que se lee de prospeccion_prospects
-// ---------------------------------------------------------------------------
-
-interface ProspectRow {
-  id: string;
-  company_name: string | null;
-  full_name: string | null;
-  cargo: string | null;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  cuit: string | null;
-  linkedin_url: string | null;
-  status: string;
-}
-
-// ---------------------------------------------------------------------------
 // Caso de uso
 // ---------------------------------------------------------------------------
 
 export class ExportToClientifyUseCase {
   constructor(
-    private readonly exportAdapter: ClientifyExportAdapter,
-    private readonly supabase: SupabaseClient,
+    private readonly exportPort: ClientifyExportPort,
+    private readonly prospectReader: ApprovedProspectReaderPort,
   ) {}
 
   async execute(input: ExportToClientifyInput): Promise<Result<ExportSummary>> {
@@ -82,30 +65,22 @@ export class ExportToClientifyUseCase {
     }
 
     // -- 1. Cargar prospectos aprobados filtrados por IDs ---------------------
-    const { data, error } = await this.supabase
-      .from("prospeccion_prospects")
-      .select(
-        "id, company_name, full_name, cargo, email, phone, website, cuit, linkedin_url, status",
-      )
-      .in("id", input.prospectIds)
-      .eq("status", "aprobado");
-
-    if (error) {
+    const readResult = await this.prospectReader.loadApproved(input.prospectIds);
+    if (!readResult.ok) {
       return err(
         domainError(
           "EXPORT_FAILED",
-          `Error al cargar prospectos desde la base de datos: ${error.message}`,
+          `Error al cargar prospectos desde la base de datos: ${readResult.errorMessage}`,
         ),
       );
     }
-
-    const rows = (data ?? []) as ProspectRow[];
+    const prospectsToExport: ProspectToExport[] = readResult.prospects;
 
     // IDs solicitados que no estaban en status 'aprobado' (ya sincronizados, rechazados, etc.)
-    const foundIds = new Set(rows.map((r) => r.id));
+    const foundIds = new Set(prospectsToExport.map((prospect) => prospect.prospect_id));
     const skipped = input.prospectIds.filter((id) => !foundIds.has(id));
 
-    if (rows.length === 0) {
+    if (prospectsToExport.length === 0) {
       // Todos los IDs solicitados están en un status distinto de 'aprobado'.
       return ok({
         processed: 0,
@@ -116,25 +91,12 @@ export class ExportToClientifyUseCase {
       });
     }
 
-    // -- 2. Mapear a DTO del adapter ------------------------------------------
-    const prospectsToExport: ProspectToExport[] = rows.map((r) => ({
-      prospect_id: r.id,
-      company_name: r.company_name,
-      full_name: r.full_name,
-      cargo: r.cargo,
-      email: r.email,
-      phone: r.phone,
-      website: r.website,
-      cuit: r.cuit,
-      linkedin_url: r.linkedin_url,
-    }));
-
-    // -- 3. Delegar al adapter ------------------------------------------------
+    // -- 2. Delegar al puerto de exportación ----------------------------------
     try {
-      const summary = await this.exportAdapter.export(prospectsToExport, input.actorId);
+      const summary = await this.exportPort.export(prospectsToExport, input.actorId);
 
       return ok({
-        processed: rows.length,
+        processed: prospectsToExport.length,
         totalOk: summary.totalOk,
         totalErrors: summary.totalErrors,
         skipped,

@@ -12,6 +12,7 @@ import {
   type SiteCapacity,
   type CommittedSnapshot,
 } from "@/lib/wms/corporate-capacity";
+import { PrintDocHeader, PrintDocFooter } from "@/lib/doc-system/print/PrintDoc";
 
 const fmt = (n: number) => n.toLocaleString("es-AR");
 
@@ -43,8 +44,13 @@ export function DashboardVacanciaView({ committed = {} }: { committed?: Committe
   const [amount, setAmount] = useState<number>(300);
 
   return (
-    <div className="p-4 lg:p-8 nx-page-fade" id="vac-root">
+    <div className="p-4 lg:p-8 nx-page-fade print-root" id="vac-root">
       <PrintStyles />
+      <PrintDocHeader
+        context="TOPS Comercial"
+        title="VACANCIA CORPORATIVA"
+        subtitle="Capacidad, ocupación y disponibilidad por sede y categoría"
+      />
 
       <div className="page-header">
         <div>
@@ -188,6 +194,8 @@ export function DashboardVacanciaView({ committed = {} }: { committed?: Committe
         (ANMAT + CG + Oficinas). Disponible = físico; <code>committed = 0</code> hasta el CRM (F2.1).
         Racks con disponibilidad pendiente: {corp.racks.pendingSectors.join(", ") || "ninguno"}.
       </p>
+
+      <PrintDocFooter docLine="Vacancia corporativa · TOPS Comercial" />
     </div>
   );
 }
@@ -368,14 +376,9 @@ function ResultBox({
 
 function PrintStyles() {
   return (
-    <style>{`
-      @media print {
-        .no-print { display: none !important; }
-        #vac-root { padding: 0 !important; }
-        .nx-surface { box-shadow: none !important; border: 1px solid #ccc !important; }
-        @page { size: A4 portrait; margin: 10mm; }
-      }
-    `}</style>
+    // Sólo la orientación. El resto de las reglas de impresión son comunes al
+    // ERP y viven en globals.css (bloque doc-system).
+    <style>{`@page { size: A4 portrait; margin: 10mm; }`}</style>
   );
 }
 

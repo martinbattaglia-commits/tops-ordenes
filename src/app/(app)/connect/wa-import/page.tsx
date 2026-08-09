@@ -1,9 +1,10 @@
 // Nexus Link · LINK-WA-002 F1a — Importador de WhatsApp Comercial Histórico.
 // Gate FAIL-CLOSED: sólo rol admin (D2); las server actions re-validan siempre.
-// Sin entrada en el sidebar durante el piloto: acceso por URL directa.
+// Descubrible para admin desde el home de Nexus Link; sin rediseñar el sidebar.
 
 import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
+import { canAccessWaCommercialImport } from "@/lib/connect/wa-import/access";
 import { WaImportForm } from "../_components/WaImportForm";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ export const metadata = { title: "Nexus Link · Importar WhatsApp histórico" };
 
 export default async function WaImportPage() {
   const role = await getProfileRole();
-  if (role !== "admin") {
+  if (!canAccessWaCommercialImport(role)) {
     return <AccesoRestringido modulo="Importador de WhatsApp histórico" />;
   }
   return (

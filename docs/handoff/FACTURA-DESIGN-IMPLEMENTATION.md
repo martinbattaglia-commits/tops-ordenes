@@ -49,5 +49,15 @@
 ## §5 — Validaciones
 tsc 0 · lint 0 · build 0 (✓ Compiled) · render local de ambos casos OK · evidencia visual en Escritorio.
 
+## §5-bis — Estado posterior (2026-07-28 · expediente doc-system)
+Este handoff describe el diseño **Command Center**, reemplazado el 2026-07-28 por el
+sistema documental institucional (`src/lib/doc-system/`). Sobre los archivos de §4:
+
+- `invoice-fonts.ts` conserva **solo JetBrains Mono**, que usa el doc-system como
+  fuente monoespaciada. Las variantes de Inter se removieron: quedaron sin
+  consumidores al migrar los comprobantes a Montserrat.
+- `invoice-logos.ts` **eliminado** — sus dos logos quedaron sin consumidores; el
+  encabezado institucional del doc-system trae su propio logo.
+
 ## §6 — Nota
 Las facturas existentes (2-1…2-4) se regeneran on-demand: al desplegar, **todas** pasan automáticamente al nuevo diseño — el "reemplazo del diseño anterior" es total y retroactivo, sin migraciones. Validación final sobre comprobante real: abrir el PDF de cualquier factura en `/billing` tras el deploy.

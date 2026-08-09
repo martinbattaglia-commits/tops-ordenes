@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
+import { PrintDocHeader, PrintDocFooter } from "@/lib/doc-system/print/PrintDoc";
 import {
   LUJAN_3159,
   getCommercialAvailabilitySummary,
@@ -151,8 +152,13 @@ export function LujanMapView({ unitStates }: { unitStates?: Record<string, CrmUn
     LUJAN_3159.sectors.filter(sectorMatches).length + LUJAN_3159.cubicleBlocks.filter(blockVisible).length;
 
   return (
-    <div className="p-4 lg:p-8 nx-page-fade" id="lujan-map-root">
+    <div className="p-4 lg:p-8 nx-page-fade print-root" id="lujan-map-root">
       <PrintStyles />
+      <PrintDocHeader
+        context="TOPS Comercial"
+        title="DISPONIBILIDAD · PEDRO DE LUJÁN 3159"
+        subtitle="Sectores y cubículos por categoría, piso y estado de ocupación"
+      />
 
       {/* Header */}
       <div className="page-header">
@@ -282,6 +288,8 @@ export function LujanMapView({ unitStates }: { unitStates?: Record<string, CrmUn
 
       {/* Panel lateral */}
       {sel && <SidePanel selection={sel} unitStates={unitStates} onClose={() => setSel(null)} />}
+
+      <PrintDocFooter docLine="Disponibilidad Pedro de Luján 3159 · TOPS Comercial" />
     </div>
   );
 }
@@ -587,14 +595,9 @@ function CubicleDetail({ block, cubicle, unitStates }: { block: CubicleBlock; cu
 
 function PrintStyles() {
   return (
-    <style>{`
-      @media print {
-        .no-print { display: none !important; }
-        #lujan-map-root { padding: 0 !important; }
-        .nx-surface { box-shadow: none !important; border: 1px solid #ccc !important; }
-        @page { size: A4 landscape; margin: 10mm; }
-      }
-    `}</style>
+    // Sólo la orientación. El resto de las reglas de impresión son comunes al
+    // ERP y viven en globals.css (bloque doc-system).
+    <style>{`@page { size: A4 landscape; margin: 10mm; }`}</style>
   );
 }
 

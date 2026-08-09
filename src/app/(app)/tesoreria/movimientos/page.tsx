@@ -155,6 +155,18 @@ export default async function MovimientosPage({
                       <StatusPill status={m.status} />
                     </td>
                     <td className="py-2 text-right">
+                      {/* Recibo PDF on-demand (doc-system F5): sólo enlaza, no altera la UI */}
+                      {m.reference_type === "customer_receipt" && m.reference_id ? (
+                        <a
+                          href={`/api/tesoreria/recibos/${m.reference_id}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-sm"
+                          title="Recibo de cobranza (PDF)"
+                        >
+                          PDF
+                        </a>
+                      ) : null}
                       {anulable ? <AnularButton targetType="movement" targetId={m.id} /> : null}
                     </td>
                   </tr>
