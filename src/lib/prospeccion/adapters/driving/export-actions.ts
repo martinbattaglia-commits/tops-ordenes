@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { canAccess } from "@/lib/rbac/guard";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { ClientifyExportAdapter } from "../clientify/clientify-export.adapter";
+import { SupabaseApprovedProspectReaderAdapter } from "../supabase/supabase-approved-prospect-reader.adapter";
 import { ExportToClientifyUseCase } from "../../application/export-to-clientify.use-case";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -89,7 +90,8 @@ export async function exportApprovedToClientifyAction(
 
   // ---- Cablear Use Case ----
   const exportAdapter = new ClientifyExportAdapter(adminTyped);
-  const useCase = new ExportToClientifyUseCase(exportAdapter, adminTyped);
+  const prospectReader = new SupabaseApprovedProspectReaderAdapter(adminTyped);
+  const useCase = new ExportToClientifyUseCase(exportAdapter, prospectReader);
 
   const result = await useCase.execute({
     prospectIds: idsToExport,

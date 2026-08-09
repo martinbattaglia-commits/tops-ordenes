@@ -18,37 +18,22 @@ import {
   type CreateContactPayload,
 } from "@/lib/clientify/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type {
+  ClientifyExportPort,
+  ExportBatchSummary,
+  ExportResult,
+  ProspectToExport,
+} from "../../ports/clientify-export.port";
 
 // ---------------------------------------------------------------------------
-// Tipos públicos
+// Compatibilidad pública de tipos
 // ---------------------------------------------------------------------------
 
-export interface ProspectToExport {
-  readonly prospect_id: string;
-  readonly company_name: string | null;
-  readonly full_name: string | null;
-  readonly cargo: string | null;
-  readonly email: string | null;
-  readonly phone: string | null;
-  readonly website: string | null;
-  readonly cuit: string | null;
-  readonly linkedin_url: string | null;
-}
-
-export interface ExportResult {
-  readonly prospect_id: string;
-  readonly ok: boolean;
-  /** ID numérico del contacto en Clientify. Null si falló. */
-  readonly clientify_contact_id: number | null;
-  /** Mensaje de error legible. Null si fue exitoso. */
-  readonly error: string | null;
-}
-
-export interface ExportBatchSummary {
-  readonly results: ExportResult[];
-  readonly totalOk: number;
-  readonly totalErrors: number;
-}
+export type {
+  ExportBatchSummary,
+  ExportResult,
+  ProspectToExport,
+} from "../../ports/clientify-export.port";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,7 +68,7 @@ function buildContactPayload(p: ProspectToExport): CreateContactPayload {
 // Adapter
 // ---------------------------------------------------------------------------
 
-export class ClientifyExportAdapter {
+export class ClientifyExportAdapter implements ClientifyExportPort {
   constructor(private readonly supabase: SupabaseClient) {}
 
   /**
