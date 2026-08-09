@@ -17,7 +17,7 @@ desactualizado, suplantado o localmente modificado sea ejecutado como canon.
 ```
 CANON="${NEXUS_GOVERNANCE_PATH:-/Users/martinbattaglia/CODE/nexus-governance}"
 URL="https://github.com/martinbattaglia-commits/nexus-governance.git"
-TAG="nexus-governance-v1.0.0"
+TAG="nexus-governance-v2.0.0"
 ```
 
 ## 2. Obtener el canon
