@@ -623,13 +623,141 @@
   }
 }
 
-/* Print: hide chrome, focus on PDF preview */
+/* =========================================================================
+   Impresión — sistema documental institucional (doc-system)
+   ----------------------------------------------------------------------
+   Base común de TODA vista imprimible del ERP. Cada vista aporta sólo su
+   `@page` (orientación) y su contenido; el resto se hereda de acá para que
+   no haya seis definiciones divergentes.
+   ========================================================================= */
+
+/* Bloques que existen únicamente en el papel. */
+.print-only {
+  display: none;
+}
+
 @media print {
+  /* Esquema claro forzado. El selector lleva `:root.dark` explícito porque
+     `:root` a secas (0,1,0) PIERDE contra `:root.dark` (0,2,0): la media query
+     no aporta especificidad y el CSS compilado no usa @layer. Sin esto, todo
+     usuario con tema oscuro —incluido el automático por prefers-color-scheme—
+     imprimía con los tokens oscuros. */
+  :root,
+  :root.dark {
+    --bg-page: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-surface-alt: #f7f8fb;
+    --fg-primary: #0b1220;
+    --fg-secondary: #5a6577;
+    --fg-muted: #69738a;
+    --fg-brand: #050555;
+    --fg-link: #214576;
+    --stroke-soft: #dde3ec;
+    --stroke-strong: #c2cad6;
+    --neutral-50: #f7f8fb;
+    --neutral-100: #eef1f6;
+    --neutral-200: #dde3ec;
+    --neutral-300: #c2cad6;
+    --neutral-400: #8a94a6;
+    --neutral-500: #5a6577;
+    --neutral-700: #2a3340;
+    --neutral-900: #0b1220;
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0b1220 !important;
+  }
+
   .no-print {
     display: none !important;
   }
-  body {
-    background: white;
+  .print-only {
+    display: block !important;
+  }
+
+  /* El shell fija altura de viewport y scroll interno; en papel eso recorta
+     todo lo que no entra en la primera pantalla, incluido el pie institucional. */
+  html,
+  body,
+  .print-shell,
+  .print-root,
+  .scroll-area,
+  main {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* Color forzado SÓLO en los elementos institucionales que deben conservarlo
+     (bandas navy, reglas rojas, encabezados de tabla, badges). Un `*` global
+     obliga al navegador a imprimir cualquier fondo oscuro como tinta sólida. */
+  .print-doc-header,
+  .print-doc-header *,
+  .print-doc-footer,
+  .print-doc-footer *,
+  .print-doc-rule,
+  .print-keep-color,
+  .print-keep-color * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Superficies: fondo blanco explícito. Las utilidades de Tailwind resuelven
+     el token en tiempo de compilación, así que redefinir la variable no alcanza
+     para las clases que ya emitieron un color literal. */
+  .card,
+  .nx-surface,
+  .scroll-area,
+  .print-root {
+    background-color: #ffffff !important;
+  }
+
+  /* Raíz de una vista imprimible: sin el padding del shell de aplicación. */
+  .print-root {
+    padding: 0 !important;
+  }
+
+  /* Tarjetas: sin sombra y con la regla institucional (antes: #ccc suelto). */
+  .nx-surface {
+    box-shadow: none !important;
+    border: 1px solid #dde3ec !important;
+  }
+
+  /* Cortes de página. `break-inside` sólo donde es seguro: un bloque más alto
+     que la página quedaría cortado igual, así que las tarjetas grandes se
+     marcan una a una con .print-avoid-break. */
+  tr,
+  .print-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  thead {
+    display: table-header-group;
+  }
+  tfoot {
+    display: table-footer-group;
+  }
+  h1,
+  h2,
+  h3,
+  .print-doc-header {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Encabezado / pie institucionales del doc-system (PrintDocHeader/Footer). */
+  .print-doc-header,
+  .print-doc-footer {
+    background: #050555 !important;
+    color: #ffffff !important;
+  }
+  .print-doc-rule {
+    background: #c90812 !important;
   }
 }
 

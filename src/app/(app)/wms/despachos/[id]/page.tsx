@@ -60,6 +60,18 @@ export default async function DispatchPanelPage({ params }: { params: { id: stri
           <p className="page-subtitle">{panel.client_name}</p>
         </div>
         <div className="flex items-center gap-2 mt-1">
+          {/* Remito de salida on-demand (doc-system F5) — sólo con despacho vigente */}
+          {panel.shipment && (
+            <a
+              href={`/api/wms/despachos/${panel.shipment.id}/pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-ghost btn-sm"
+              title={`Remito de salida ${panel.shipment.public_id} (PDF)`}
+            >
+              <Icon name="download" size={12} /> Remito PDF
+            </a>
+          )}
           <Link href="/wms/despachos" className="btn btn-ghost btn-sm">
             <Icon name="arrow-left" size={12} /> Volver
           </Link>

@@ -16,6 +16,7 @@ import {
   UNIT_STATE_LABEL, UNIT_STATE_COLOR, UNIT_STATE_ORDER,
 } from "@/lib/comercial/crm-types";
 import { opportunityDisplayTitle } from "@/lib/comercial/opportunity-title";
+import { PrintDocHeader, PrintDocFooter } from "@/lib/doc-system/print/PrintDoc";
 
 /** Tipo de acción que dispara cada subcomponente (cierra sobre la server action). */
 type RunAction = (fn: () => Promise<ActionResult>) => void;
@@ -121,8 +122,13 @@ export function Opportunity360View({ full, source = "local", unitData, prefill =
   };
 
   return (
-    <div className="p-4 lg:p-8 nx-page-fade" id="ficha-root">
+    <div className="p-4 lg:p-8 nx-page-fade print-root" id="ficha-root">
       <PrintStyles />
+      <PrintDocHeader
+        context="TOPS Comercial"
+        title="FICHA DE OPORTUNIDAD"
+        subtitle={opportunityDisplayTitle(o)}
+      />
 
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs text-fg-muted mb-2 no-print">
@@ -291,6 +297,8 @@ export function Opportunity360View({ full, source = "local", unitData, prefill =
         persisten vía server actions (RPC transaccionales) sobre la fuente Supabase. Clientify y el webhook HMAC
         quedan fuera de este frente.
       </p>
+
+      <PrintDocFooter docLine={`Ficha de oportunidad · ${opportunityDisplayTitle(o)} · TOPS Comercial`} />
     </div>
   );
 }
@@ -762,5 +770,7 @@ function Empty({ text }: { text: string }) {
   return <div className="text-sm text-fg-muted italic py-8 text-center">{text}</div>;
 }
 function PrintStyles() {
-  return <style>{`@media print { .no-print{display:none!important} #ficha-root{padding:0!important} .nx-surface{box-shadow:none!important;border:1px solid #ccc!important} @page{size:A4 portrait;margin:10mm} }`}</style>;
+  // Sólo la orientación. El resto de las reglas de impresión son comunes al
+  // ERP y viven en globals.css (bloque doc-system).
+  return <style>{`@page { size: A4 portrait; margin: 10mm; }`}</style>;
 }

@@ -113,7 +113,19 @@ export default async function RecepcionesPage() {
                     </td>
                     <td className="text-xs">{fmtDate(r.received_at ?? r.created_at)}</td>
                     <td>
-                      <RowActions id={r.id} status={r.status} />
+                      <div className="flex items-center gap-1.5 justify-end">
+                        {/* Remito de entrada on-demand (doc-system F5) */}
+                        <a
+                          href={`/api/wms/recepciones/${r.id}/pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-ghost btn-sm"
+                          title="Remito de entrada (PDF)"
+                        >
+                          PDF
+                        </a>
+                        <RowActions id={r.id} status={r.status} />
+                      </div>
                     </td>
                   </tr>
                 );

@@ -24,9 +24,9 @@ export default function Shell({ user, canViewExecutive, canViewSistema, canViewR
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="h-[100dvh] flex bg-bg-page overflow-hidden">
+    <div className="h-[100dvh] flex bg-bg-page overflow-hidden print-shell">
       {/* Sidebar fijo desktop */}
-      <aside className="hidden lg:flex w-[248px] shrink-0 h-full">
+      <aside className="hidden lg:flex w-[248px] shrink-0 h-full no-print">
         <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} canViewContabilidad={canViewContabilidad} />
       </aside>
 
@@ -35,13 +35,13 @@ export default function Shell({ user, canViewExecutive, canViewSistema, canViewR
         <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} canViewContabilidad={canViewContabilidad} onNavigate={() => setDrawerOpen(false)} />
       </MobileDrawer>
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex-1 min-w-0 flex flex-col print-shell">
         <Topbar onMenuClick={() => setDrawerOpen(true)} />
         <main className="flex-1 min-h-0 scroll-area pb-[calc(80px+var(--safe-bottom))] lg:pb-0 nx-page-fade">
           {children}
           <VoiceOverlay />
         </main>
-        <div className="lg:hidden">
+        <div className="lg:hidden no-print">
           <MobileBottomNav />
         </div>
       </div>

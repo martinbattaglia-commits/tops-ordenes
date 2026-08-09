@@ -6,7 +6,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { dataUrlToBytes, isUrgentOrder } from "@/lib/utils";
 import { sendOneOrderEmail } from "@/lib/email";
-import { orderEmailPlan, dedupeOrderEmails, renderRoleHtml } from "@/lib/order-email";
+import { orderEmailPlan, dedupeOrderEmails, renderRoleHtml, renderRoleText } from "@/lib/order-email";
 import { emailFailureNotification } from "@/lib/email-failure";
 import { buildOrderPdf } from "@/lib/pdf/build";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
@@ -287,14 +287,22 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
         // Conflicto de índice único → ya existe → no duplicamos.
         continue;
       }
+      const urgent = isUrgentOrder(orderForEmail);
       const html = renderRoleHtml(
         orderForEmail,
         item.role,
         publicUrl,
         pdf_url ?? undefined,
-        isUrgentOrder(orderForEmail),
+        urgent,
       );
-      const res = await sendOneOrderEmail({ to: item.to, subject: item.subject, html });
+      const text = renderRoleText(
+        orderForEmail,
+        item.role,
+        publicUrl,
+        pdf_url ?? undefined,
+        urgent,
+      );
+      const res = await sendOneOrderEmail({ to: item.to, subject: item.subject, html, text });
       if (res.skipped) {
         // Dormido (sin RESEND_API_KEY): la fila queda 'queued' como intención auditada.
         continue;

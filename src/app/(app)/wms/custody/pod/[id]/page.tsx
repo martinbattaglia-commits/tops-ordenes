@@ -7,6 +7,7 @@ import type { CustodyEvidenceRef, CustodyTimelineEvent } from "@/lib/custody/typ
 import { EvidenceViewer } from "../../_components/EvidenceViewer";
 import { PrintButton } from "../../_components/PrintButton";
 import { PodDownloadButton } from "../../_components/PodDownloadButton";
+import { PrintDocHeader, PrintDocFooter } from "@/lib/doc-system/print/PrintDoc";
 
 export const metadata = { title: "POD · Custodia" };
 export const dynamic = "force-dynamic";
@@ -56,7 +57,12 @@ export default async function PodSurfacePage({ params }: { params: { id: string 
     : null;
 
   return (
-    <div className="p-4 lg:p-8 nx-page-fade max-w-2xl mx-auto">
+    <div className="p-4 lg:p-8 nx-page-fade max-w-2xl mx-auto print-root">
+      <PrintDocHeader
+        context="TOPS Operaciones"
+        title="PROOF OF DELIVERY"
+        subtitle={`${pod.public_id} · Despacho ${pod.shipment_public_id ?? pod.shipment_id}`}
+      />
       <div className="page-header">
         <div>
           <div className="eyebrow-tiny">WMS · Custodia</div>
@@ -95,6 +101,8 @@ export default async function PodSurfacePage({ params }: { params: { id: string 
           {evidences.map((e) => <EvidenceViewer key={e.evidence_id} evidence={e} />)}
         </div>
       </div>
+
+      <PrintDocFooter docLine={`Proof of Delivery ${pod.public_id} · TOPS Operaciones`} />
     </div>
   );
 }

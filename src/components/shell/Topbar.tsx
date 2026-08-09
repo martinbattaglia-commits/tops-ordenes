@@ -28,7 +28,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   return (
     <header
-      className="sticky top-0 z-30 bg-bg-surface/95 backdrop-blur border-b border-stroke-soft flex items-center gap-3 px-3 lg:px-6"
+      className="sticky top-0 z-30 bg-bg-surface/95 backdrop-blur border-b border-stroke-soft flex items-center gap-3 px-3 lg:px-6 no-print"
       style={{ height: "calc(56px + var(--safe-top))", paddingTop: "var(--safe-top)" }}
     >
       <button

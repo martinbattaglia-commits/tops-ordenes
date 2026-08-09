@@ -39,12 +39,18 @@ export default async function SettingsPage() {
 
       <Section title="Reglas de envío automático">
         <p className="text-sm text-fg-secondary mb-3">
-          Cuando se firma una orden, el sistema envía el comprobante a:
+          Toda orden de servicio firmada dispara 4 correos diferenciados por rol
+          (una sola vez por orden y por rol, con auditoría en email_sends):
         </p>
-        <Recipients label="Siempre" emails={[env.email.admin.ruth, env.email.admin.joseluis]} />
-        <Recipients label="Si depósito = Magaldi" emails={[env.email.depot.magaldi]} />
-        <Recipients label="Si depósito = Luján" emails={[env.email.depot.lujan]} />
-        <Recipients label="Cliente" emails={["(email registrado en su ficha)"]} />
+        <Recipients label="Depósito · Magaldi" emails={[env.email.depot.magaldi]} />
+        <Recipients label="Depósito · Luján" emails={[env.email.depot.lujan]} />
+        <Recipients label="Director" emails={[env.email.admin.joseluis]} />
+        <Recipients label="Facturación" emails={[env.email.admin.ruth]} />
+        <Recipients label="Cliente" emails={["(email registrado en su ficha, si existe)"]} />
+        <p className="text-xs text-fg-muted mt-2">
+          El correo de depósito va a una sede u otra según la sede de la orden.
+          El del cliente sólo se envía si su ficha tiene email cargado.
+        </p>
       </Section>
 
       <Section title="Datos de la empresa">
