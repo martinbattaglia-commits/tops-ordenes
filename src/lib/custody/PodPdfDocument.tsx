@@ -3,6 +3,7 @@ import { ORG } from "@/lib/org";
 import { fmtDateTime } from "@/lib/utils";
 import { STAGE_META, EVENT_TYPE_META } from "@/lib/custody/types";
 import type { CustodyStage, CustodyEventType } from "@/lib/custody/types";
+import { presentChainStatus, type CustodyChainStatus } from "./chain-presentation";
 
 /**
  * POD-PDF server-side (GATE 5.3 · B4) — @react-pdf/renderer. Mismo patrón que
@@ -98,7 +99,7 @@ export interface PodPdfData {
   signatureDataUrl: string | null;
   photos: PodPdfPhoto[];
   qrDataUrl: string | null;
-  chainValid: boolean;
+  chainStatus: CustodyChainStatus;
   chainEventsChecked: number;
   events: number;
   evidences: number;
@@ -106,6 +107,9 @@ export interface PodPdfData {
 }
 
 export function PodPdfDocument(d: PodPdfData) {
+  // M5 · etiqueta y color salen de la presentación canónica, la misma que usa
+  // la UI: el POD y la pantalla no pueden nombrar distinto el mismo hecho.
+  const chain = presentChainStatus(d.chainStatus);
   return (
     <Document
       title={`POD ${d.podPublicId}`}
@@ -178,15 +182,24 @@ export function PodPdfDocument(d: PodPdfData) {
           <Text
             style={[
               styles.chainPill,
-              { backgroundColor: d.chainValid ? "#16a34a1a" : "#C908121a", color: d.chainValid ? C.ok : C.bad },
+              { backgroundColor: chain.pdfBackground, color: chain.color },
             ]}
           >
-            {d.chainValid ? "CADENA VÁLIDA" : "CADENA INVÁLIDA"}
+            {chain.pdfLabel}
           </Text>
           <Text style={[styles.kvValue, { marginBottom: 0 }]}>
-            {d.chainEventsChecked} eventos verificados · {d.events} eventos · {d.evidences} evidencias
+            {d.chainEventsChecked} {chain.eventsCountLabel} · {d.events} eventos · {d.evidences} evidencias
           </Text>
         </View>
+        {/*
+          El POD no puede certificar favorablemente una cadena `invalid` ni
+          `unverifiable`. La píldora sola es un color y una etiqueta, y puede
+          leerse como favorable de todos modos: acá se dice explícitamente qué
+          acredita el documento y qué no.
+        */}
+        <Text style={[styles.kvValue, { color: chain.color, marginTop: 3 }]}>
+          {chain.podStatement}
+        </Text>
 
         {/* Timeline */}
         <Text style={styles.sectionLabel}>Línea de tiempo (cadena de custodia)</Text>

@@ -13,6 +13,7 @@ import {
 import { custodyQrDataUrl } from "@/lib/custody/qr";
 import { PodPdfDocument, type PodPdfData, type PodPdfPhoto } from "@/lib/custody/PodPdfDocument";
 import { EVENT_TYPE_META, type CustodyEvidenceRef, type CustodyTimelineEvent } from "@/lib/custody/types";
+import { resolveChainStatus } from "./chain-presentation";
 
 /**
  * Orquestación del POD-PDF server-side (GATE 5.3 · B4). Reutiliza el patrón de
@@ -165,7 +166,8 @@ export async function generateAndStorePodPdf(
     signatureDataUrl,
     photos,
     qrDataUrl,
-    chainValid: summary?.chain_valid ?? false,
+    // M5 · el PDF ya no recibe un booleano que no distingue rota de vacía.
+    chainStatus: resolveChainStatus(summary),
     chainEventsChecked: summary?.chain_events_checked ?? 0,
     events: summary?.events ?? eventNodes.length,
     evidences: summary?.evidences ?? photoRefs.length,

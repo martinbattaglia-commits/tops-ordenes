@@ -16,7 +16,21 @@ export type CustodyEventType =
   | "en_transito"
   | "foto_entrega"
   | "firmado"
-  | "pod";
+  | "pod"
+  // D1 (0221): las RPC de 0039 devuelven eventos creados después de 0222, y la
+  // inspección humana es uno de ellos. Omitirlo dejaba al timeline sin etiqueta
+  // para un evento que la base ya emite.
+  | "inspeccion_humana";
+
+/**
+ * Estado de cadena de custodia (espejo del `chain_status` de 0225).
+ *
+ * Se define en `chain-presentation.ts` junto a su presentación canónica y se
+ * re-exporta acá: el tipo y las etiquetas que lo traducen tienen que moverse
+ * juntos, o vuelve a existir un lugar donde inventar un cuarto estado.
+ */
+import type { CustodyChainStatus } from "./chain-presentation";
+export type { CustodyChainStatus };
 
 /** Tipo de evidencia (espejo de evidence_kind_t, 0036). */
 export type EvidenceKind = "foto" | "firma" | "documento";
@@ -39,6 +53,7 @@ export const EVENT_TYPE_META: Record<CustodyEventType, { label: string }> = {
   foto_entrega: { label: "Foto de entrega" },
   firmado: { label: "Firmado por receptor" },
   pod: { label: "POD generado" },
+  inspeccion_humana: { label: "Inspección humana" },
 };
 
 export const EVIDENCE_KIND_META: Record<EvidenceKind, { label: string; icon: string }> = {
@@ -110,6 +125,14 @@ export interface ShipmentCustodySummary {
   events: number;
   evidences: number;
   pod_present: boolean;
+  /**
+   * M5 (0225): estado real de la cadena. `chain_valid` no podía distinguir una
+   * cadena rota de una sin evidencia suficiente, y el POD imprimía la peor de
+   * las dos. Opcional a propósito: una respuesta anterior a 0225 no lo trae, y
+   * `resolveChainStatus` sabe degradarla sin acusar.
+   */
+  chain_status?: CustodyChainStatus;
+  /** Compatibilidad 0039. `true` únicamente cuando `chain_status='verified'`. */
   chain_valid: boolean;
   chain_events_checked: number;
   last_activity: string | null;
