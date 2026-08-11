@@ -127,6 +127,7 @@ const PUBLICAS_ESPERADAS = [
   "/auth/reset-password",
   "/api/auth/callback",
   "/api/whatsapp/webhook",
+  "/api/whatsapp/inbound-queue",
   "/api/clientify/webhook",
   "/api/clientify/webhook/token-abc",
   "/api/tracking/ingest",
@@ -153,6 +154,8 @@ const PUBLICAS_ESPERADAS = [
 const PRIVADAS_DE_CONTROL: Array<[string, Resultado]> = [
   ["/api/knowledge/drain/", "401"],
   ["/api/knowledge/drain/otra-ruta", "401"],
+  ["/api/whatsapp/inbound-queue/", "401"],
+  ["/api/whatsapp/inbound-queue/otra-ruta", "401"],
   ["/api/Knowledge/Drain", "401"],
   ["/api/knowledge", "401"],
   ["/api/drive/list", "401"],
@@ -255,6 +258,7 @@ describe("middleware · comportamiento no relacionado preservado (KDW-001)", () 
       "/api/comercial/contratos/sync",
       "/api/tesoreria/caja-chica/sync",
       "/api/clientify/sync-deals",
+      "/api/whatsapp/inbound-queue",
     ]) {
       expect(await evaluar(ruta), ruta).toBe("pasa");
     }
@@ -300,6 +304,7 @@ describe("middleware · inventario cerrado del allowlist (KDW-001)", () => {
       "/api/tesoreria/caja-chica/sync",
       "/api/tracking/ingest",
       "/api/version",
+      "/api/whatsapp/inbound-queue",
       "/api/whatsapp/webhook",
       // — páginas públicas —
       "/auth/forgot-password",
