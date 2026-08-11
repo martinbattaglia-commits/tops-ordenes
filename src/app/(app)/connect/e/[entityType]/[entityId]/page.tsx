@@ -56,7 +56,15 @@ export default async function EntityConversationPage({
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 flex-1 flex-col">
           {ref ? (
-            <ThreadView conversationId={ref.conversationId} initialMessages={messages} currentUserId={currentUserId} />
+            /* WA-8 · `getEntityConversation` filtra por `kind = 'erp'`, así que
+               esta conversación es 'erp' por construcción, no por suposición:
+               conserva el comportamiento Connect completo. */
+            <ThreadView
+              conversationId={ref.conversationId}
+              kind="erp"
+              initialMessages={messages}
+              currentUserId={currentUserId}
+            />
           ) : (
             <StartEntityConversation entityType={entityType} entityId={entityId} />
           )}

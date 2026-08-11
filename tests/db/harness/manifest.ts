@@ -288,6 +288,23 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "lo hace. Toda migración NUEVA queda fuera de este set, sin clasificar, y " +
       "rompe la suite hasta una decisión explícita.",
   },
+  {
+    // LINK-WA WA-8R9 · decisión explícita, en entrada propia y por filename
+    // EXACTO. Deliberadamente NO se agregó al snapshot congelado de arriba: ese
+    // set describe el árbol al cerrar la segunda revisión C4 y no debe crecer
+    // con dominios posteriores. Una entrada aparte deja la decisión legible.
+    id: "link-wa-r9-whatsapp-status",
+    matches: (f) => f === "0227_wa_atomic_status.sql" || f === "0228_wa_provenance_backfill.sql" ||
+      f === "0229_wa_inbound_queue.sql" ||
+      f === "0230_wa_forgery_lockdown.sql",
+    reason:
+      "Dominio WhatsApp/Connect, ajeno al cierre de dependencias WMS: 0227 sólo " +
+      "toca `connect_messages` y `connect_post_message` (cadena Connect 0142+), " +
+      "que el manifiesto A0 no carga. Se excluye del cierre WMS, NO de la " +
+      "verificación: sus funciones se ejercitan contra PostgreSQL real en " +
+      "tests/db/t-wa-r9-0{1,2,3}-*.test.ts, que montan su propio " +
+      "cierre acotado y ejecutan los archivos 0227/0228 tal como están en disco.",
+  },
 ];
 
 export class ManifestIntegrityError extends Error {

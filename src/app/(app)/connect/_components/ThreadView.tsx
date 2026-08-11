@@ -11,6 +11,21 @@ import {
 } from "@/lib/connect/domain/message";
 import { timeHM, isNewDay, dayLabel } from "@/lib/connect/format";
 import { postMessageAction } from "@/lib/connect/adapters/driving/message-actions";
+import { sendWhatsappTextAction } from "@/lib/whatsapp/reply-action";
+import { dispatchComposerSend } from "@/lib/connect/composer-dispatch";
+import { composerCapabilities, ownBubbleClass, sendButtonClass } from "@/lib/connect/composer-policy";
+import {
+  reduceMessageState,
+  projectWaMessage,
+  projectionFromActionOutcome,
+  initialMessageState,
+  hydrateMessageState,
+  isAuditedConfirmation,
+  clearsSendError,
+  type BubbleStatus,
+} from "@/lib/connect/realtime-status";
+import type { ConversationKind, WaProjection } from "@/lib/connect/types";
+import { applyRealtimeEvent, type RealtimeEvent } from "@/lib/connect/realtime-merge";
 import { markReadAction } from "@/lib/connect/adapters/driving/read-actions";
 import { createClient } from "@/lib/supabase/client";
 import { useAudioRecorder } from "@/lib/connect/audio/recorder";
@@ -32,7 +47,24 @@ function MicIcon({ size = 15 }: { size?: number }) {
 }
 
 interface UiMessage extends Message {
-  status?: "sending" | "failed";
+  /**
+   * WA-8 · `pending` es un estado propio, distinto de `failed`: un envío
+   * ambiguo pudo haber llegado y pintarlo como fallo invita a reintentar.
+   *
+   * WA-8R2 · es DERIVADO de `waEvidence`, nunca la memoria en sí: `undefined`
+   * no distingue «confirmado» de «todavía sin evidencia».
+   */
+  status?: BubbleStatus;
+  /**
+   * WA-8R3 · proyección SANITIZADA: dirección, estado canónico del proveedor,
+   * evidencia de auditoría e instante de ordenamiento. Nada de `meta` crudo,
+   * wamid, teléfono ni payload del proveedor.
+   *
+   * Su AUSENCIA identifica a la burbuja optimista local todavía en vuelo.
+   */
+  wa?: WaProjection;
+  /** WA-8R2 · el error pertenece al mensaje, no a un string global del hilo. */
+  sendError?: string;
   clientMsgId?: string;
 }
 
@@ -74,12 +106,20 @@ function renderWithMentions(body: string, names: string[]): ReactNode {
 
 export function ThreadView({
   conversationId,
+  kind,
   initialMessages,
   currentUserId,
   readOnly = false,
   mentionables = [],
 }: {
   conversationId: string;
+  /**
+   * WA-8 · tipo REAL de la conversación. Es obligatorio y es el ÚNICO criterio
+   * de ruteo del composer: sin él no se puede decidir entre Connect y WhatsApp,
+   * y adivinar por título, teléfono o contenido es exactamente lo que el
+   * contrato prohíbe. Un valor desconocido deja el composer fail-closed.
+   */
+  kind: ConversationKind;
   initialMessages: Message[];
   currentUserId: string | null;
   /** DEFECT-6 (piloto F3): canal archivado → composer deshabilitado (solo lectura). */
@@ -87,15 +127,50 @@ export function ThreadView({
   /** F4.1B: miembros mencionables (@) — la FK de menciones exige miembros (D-F41-8). */
   mentionables?: MentionPick[];
 }) {
-  const [messages, setMessages] = useState<UiMessage[]>(initialMessages);
+  /**
+   * WA-8R3 · B · la hidratación pasa por la MISMA política que realtime. Sin
+   * esto, un mensaje que llega del servidor entra con `status === undefined` y
+   * se pinta como confirmado sin ninguna evidencia — el falso éxito volvía a
+   * aparecer apenas el operador recargaba la página.
+   */
+  const hydrate = useCallback(
+    (list: Message[]): UiMessage[] =>
+      list.map((m) => ({ ...m, ...hydrateMessageState(kind, (m as UiMessage).wa) })),
+    [kind],
+  );
+
+  const [messages, setMessages] = useState<UiMessage[]>(() => hydrate(initialMessages));
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  /** Id del texto de ayuda; lo referencia el textarea por `aria-describedby`. */
+  const ayudaTecladoId = `composer-ayuda-${conversationId}`;
+  /**
+   * CLOSEOUT · §4.F · CERROJO SÍNCRONO contra el doble envío.
+   *
+   * `sending` es estado de React: `setSending(true)` no se refleja hasta el
+   * próximo render. Dos clics dentro del mismo lote —un doble clic real— leen
+   * ambos `sending === false` y disparan DOS envíos. En WhatsApp eso significa
+   * dos mensajes al cliente, y no hay forma de retirarlos.
+   *
+   * El ref cambia en el acto, así que la segunda entrada ve el cerrojo puesto.
+   * El estado sigue existiendo: es el que deshabilita el botón en la UI.
+   */
+  const enviando = useRef(false);
   // LINK-MEDIA-001: grabación de mensajes de voz (D1: circuito separado del Voice Command).
   const recorder = useAudioRecorder();
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioErr, setAudioErr] = useState<string | null>(null);
 
+  // WA-8 · capacidades efectivas. Se consultan para PINTAR y se vuelven a exigir
+  // antes de EJECUTAR: ocultar un botón no impide que un atajo, un dictado o un
+  // re-render disparen la acción igual.
+  const caps = useMemo(() => composerCapabilities(kind, { readOnly }), [kind, readOnly]);
+
   async function sendAudio() {
+    // WA-8 · guarda de LÓGICA, no de CSS: en WhatsApp (y en solo-lectura) esto
+    // corta antes de `prepareAudioUploadAction`, `uploadToSignedUrl` y
+    // `finalizeAudioMessageAction`. Cero acciones de audio.
+    if (!caps.canSendAudio) return;
     if (!recorder.blob || audioBusy) return;
     setAudioBusy(true);
     setAudioErr(null);
@@ -133,13 +208,16 @@ export function ThreadView({
     [mentionables],
   );
   const candidates = useMemo(() => {
+    // WA-8 · sin menciones no hay candidatos: el autocomplete no existe en
+    // WhatsApp, ni siquiera oculto.
+    if (!caps.canMention) return [];
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
     return mentionables
       .filter((m) => m.profileId && m.name && m.profileId !== currentUserId)
       .filter((m) => q.length === 0 || m.name.toLowerCase().includes(q))
       .slice(0, 6);
-  }, [mentionQuery, mentionables, currentUserId]);
+  }, [caps.canMention, mentionQuery, mentionables, currentUserId]);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -148,7 +226,7 @@ export function ThreadView({
   // Reset SOLO al cambiar de conversación (NO en cada revalidate del padre con la misma conversación):
   // así no se pierden mensajes optimistas/fallidos/realtime en-flight cuando el server re-renderiza.
   useEffect(() => {
-    setMessages(initialMessages);
+    setMessages(hydrate(initialMessages));
     sentSeqRef.current = 0;
     setPicks([]);
     setMentionQuery(null);
@@ -183,52 +261,75 @@ export function ThreadView({
   useRealtimeTable(
     "connect_messages",
     (payload) => {
-      if (payload.eventType !== "INSERT" || !payload.new) return;
-      const row = payload.new as Record<string, unknown>;
-      const incoming: UiMessage = {
-        id: row.id as string,
-        conversationId: row.conversation_id as string,
-        seq: Number(row.seq),
-        authorParticipantId: (row.author_participant_id as string) ?? null,
-        authorProfileId: (row.author_profile_id as string) ?? null,
-        kind: (row.kind as Message["kind"]) ?? "text",
-        body: (row.body as string) ?? null,
-        bodyFormat: (row.body_format as string) ?? "markdown",
-        replyToMessageId: (row.reply_to_message_id as string) ?? null,
-        editedAt: null,
-        deletedAt: null,
-        redacted: false,
-        createdAt: (row.created_at as string) ?? new Date().toISOString(),
-        clientMsgId: (row.client_msg_id as string) ?? undefined,
-        // Fix realtime (28-07): el mensaje EN VIVO llega sin authorName (el canal no pasa
-        // por el read-layer) — se resuelve contra los miembros ya presentes en memoria.
-        authorName:
-          mentionables.find((p) => p.profileId === ((row.author_profile_id as string) ?? ""))
-            ?.name ?? null,
-      };
-      setMessages((prev) => {
-        // Ya tenemos el mensaje real (por id) o su seq real ya reconciliado → no-op (idempotente).
-        if (prev.some((m) => m.id === incoming.id || (m.seq === incoming.seq && m.status === undefined))) return prev;
-        // DEFECT-5: si el eco realtime corresponde a un mensaje optimista PROPIO (mismo client_msg_id),
-        // reconciliarlo EN SU LUGAR en vez de agregar una 2ª burbuja. Idempotente con el ACK de send():
-        // corra el que corra primero, converge a UN solo mensaje (por client_msg_id / id).
-        if (incoming.clientMsgId && prev.some((m) => m.clientMsgId === incoming.clientMsgId)) {
-          return prev.map((m) =>
-            m.clientMsgId === incoming.clientMsgId
-              ? { ...m, id: incoming.id, seq: incoming.seq, status: undefined }
-              : m,
-          );
-        }
-        // Mensaje de otro usuario/origen → append.
-        return [...prev, incoming];
-      });
+      // 1B-1: la reconciliación vive en `connect/realtime-merge` (pura y
+      // testeada). Acá queda sólo el mapeo fila→UiMessage, que es lo que
+      // depende de la UI. Se conserva el comportamiento de INSERT (incluida la
+      // reconciliación DEFECT-5 del eco optimista) y se agrega UPDATE, que
+      // antes se descartaba: por eso los estados no llegaban en vivo.
+      setMessages(
+        (prev) =>
+          applyRealtimeEvent<UiMessage>(prev, payload as RealtimeEvent, {
+            conversationId,
+            build: (row, existing) => {
+              // WA-8R2 · el estado NO se decide acá. `meta` y `external_msg_id`
+              // entran como `unknown` al reducer y NO se conservan: lo único que
+              // cruza a la UI es una evidencia sanitizada.
+              const reduced = reduceMessageState({
+                kind,
+                source: "realtime",
+                current: { wa: existing?.wa, status: existing?.status },
+                incoming: projectWaMessage({
+                  meta: row.meta,
+                  externalMsgId: row.external_msg_id,
+                }),
+              });
+              return {
+              id: row.id as string,
+              conversationId: (row.conversation_id as string) ?? existing?.conversationId ?? conversationId,
+              seq: row.seq != null ? Number(row.seq) : (existing?.seq as number),
+              authorParticipantId:
+                row.author_participant_id !== undefined
+                  ? ((row.author_participant_id as string) ?? null)
+                  : existing?.authorParticipantId ?? null,
+              authorProfileId:
+                row.author_profile_id !== undefined
+                  ? ((row.author_profile_id as string) ?? null)
+                  : existing?.authorProfileId ?? null,
+              kind: (row.kind as Message["kind"]) ?? existing?.kind ?? "text",
+              body: row.body !== undefined ? ((row.body as string) ?? null) : existing?.body ?? null,
+              bodyFormat: (row.body_format as string) ?? existing?.bodyFormat ?? "markdown",
+              replyToMessageId:
+                (row.reply_to_message_id as string) ?? existing?.replyToMessageId ?? null,
+              editedAt: existing?.editedAt ?? null,
+              deletedAt: existing?.deletedAt ?? null,
+              redacted: existing?.redacted ?? false,
+              createdAt:
+                (row.created_at as string) ?? existing?.createdAt ?? new Date().toISOString(),
+              clientMsgId: (row.client_msg_id as string) ?? existing?.clientMsgId,
+              // Fix realtime (28-07): el mensaje EN VIVO llega sin authorName (el canal no pasa
+              // por el read-layer) — se resuelve contra los miembros ya presentes en memoria.
+              authorName:
+                mentionables.find(
+                  (p) => p.profileId === ((row.author_profile_id as string) ?? ""),
+                )?.name ??
+                existing?.authorName ??
+                null,
+              ...reduced,
+              // El error pertenece a ESTE mensaje: se limpia sólo cuando su
+              // propia evidencia queda confirmada, nunca por un evento ajeno.
+              sendError: isAuditedConfirmation(reduced.wa) ? undefined : existing?.sendError,
+              };
+            },
+          }) as UiMessage[],
+      );
     },
     { filter: `conversation_id=eq.${conversationId}` },
   );
 
   /** Detecta si el caret está dentro de un token @… en curso (dispara el autocomplete). */
   function updateMentionQuery(value: string, caret: number) {
-    if (mentionables.length === 0) {
+    // WA-8 · en WhatsApp `@` es texto común: no abre autocomplete ni acumula picks.
+    if (!caps.canMention || mentionables.length === 0) {
       setMentionQuery(null);
       return;
     }
@@ -262,9 +363,18 @@ export function ThreadView({
 
   async function send() {
     const body = draft.trim();
-    if (!body || sending || readOnly) return;
+    // El cerrojo se consulta ANTES que el estado: es el único que ya cambió.
+    if (!body || enviando.current || sending || readOnly) return;
+    enviando.current = true;
+    // WA-8 · guarda de LÓGICA: kind desconocido o solo-lectura ⇒ cero acciones.
+    if (!caps.canSendText) {
+      enviando.current = false;
+      return;
+    }
     // F4.1B: menciones efectivas = picks ∩ cuerpo final (dominio puro; dedupe/tope/sin autor).
-    const mentions = resolveMentions(body, picks, currentUserId);
+    // WA-8 · en WhatsApp no viajan menciones: no hay a quién notificar del otro
+    // lado y mandarlas filtraría nombres del tenant a un tercero.
+    const mentions = caps.canMention ? resolveMentions(body, picks, currentUserId) : [];
     const clientMsgId = crypto.randomUUID();
     const optimistic: UiMessage = {
       id: `tmp-${clientMsgId}`,
@@ -281,25 +391,71 @@ export function ThreadView({
       deletedAt: null,
       redacted: false,
       createdAt: new Date().toISOString(),
-      status: "sending",
+      // WA-8R2 · el estado inicial también sale del módulo puro: el componente
+      // no compara `kind` para decidir nada.
+      ...initialMessageState(kind),
+      sendError: undefined,
       clientMsgId,
     };
+    // Una ÚNICA burbuja optimista, con un ÚNICO clientMsgId, antes de elegir camino.
     setMessages((prev) => [...prev, optimistic]);
     setDraft("");
     setPicks([]);
     setMentionQuery(null);
     setSending(true);
-    const res = await postMessageAction({ conversationId, body, clientMsgId, mentions });
-    setSending(false);
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.clientMsgId === clientMsgId
-          ? res.ok
-            ? { ...m, id: res.messageId, seq: res.seq, status: undefined }
-            : { ...m, status: "failed" }
-          : m,
-      ),
-    );
+
+    try {
+      // WA-8 · el despacho es del dispatcher puro: acá no se decide nada.
+      // WA-8R1 · el dispatcher ya convierte una excepción del camino WhatsApp en
+      // `pending`, así que este `await` no puede rechazar por esa vía.
+      const outcome = await dispatchComposerSend(
+        { kind, conversationId, body, clientMsgId, mentions },
+        {
+          postConnectMessage: (i) => postMessageAction(i),
+          sendWhatsappText: (i) => sendWhatsappTextAction(i),
+        },
+      );
+
+      // WA-8R2 · la resolución de la acción aplica el MISMO reducer que
+      // realtime, y lo hace DENTRO del update funcional: así opera sobre el
+      // estado más reciente y no sobre una copia capturada antes del `await`.
+      // Sin reintento automático en ninguna rama: un resultado ambiguo pudo
+      // haber salido, y reintentarlo le duplica el mensaje al contacto.
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.clientMsgId !== clientMsgId) return m;
+
+          const reduced = reduceMessageState({
+            kind,
+            source: "action",
+            current: { wa: m.wa, status: m.status },
+            incoming: projectionFromActionOutcome(outcome),
+          });
+          // D · sólo una confirmación afirmativa limpia el error, y sólo el de
+          // ESTE mensaje. El criterio por tipo vive en el módulo puro.
+          const confirmed = clearsSendError(kind, reduced);
+
+          return {
+            ...m,
+            // La identidad sólo se adopta del resultado exitoso; un fallo no
+            // reescribe el id ni el seq de una fila que quizá ya existe.
+            id: outcome.status === "sent" ? outcome.messageId : m.id,
+            seq:
+              outcome.status === "sent" && outcome.route === "connect" ? outcome.seq : m.seq,
+            ...reduced,
+            // El error queda atado a ESTE mensaje: una confirmación lo limpia,
+            // y un resultado tardío de otro intento no puede tocarlo.
+            sendError: confirmed ? undefined : outcome.status === "sent" ? m.sendError : outcome.message,
+          };
+        }),
+      );
+    } finally {
+      // WA-8R1 · el composer NUNCA queda congelado en «enviando…». Aun si algo
+      // inesperado escapara del dispatcher, el operador recupera el control —
+      // sin que eso se interprete como permiso para reintentar.
+      setSending(false);
+      enviando.current = false;
+    }
   }
 
   return (
@@ -346,12 +502,20 @@ export function ThreadView({
                 className={cn(
                   "max-w-[72%] rounded-lg px-3 py-2 text-[13px]",
                   own
-                    ? "bg-tops-red/10 text-fg-primary"
+                    ? ownBubbleClass(kind)
                     : "border border-stroke-soft bg-bg-surface text-fg-primary",
                 )}
               >
-                {!own && m.authorName && (
-                  <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">{m.authorName}</div>
+                {/*
+                  El nombre va en TODOS los mensajes, no sólo en los ajenos.
+                  La bandeja de WhatsApp es compartida: varios operadores
+                  responden el mismo hilo, y sin el nombre no se sabe quién
+                  contestó. Junto con la hora, cada burbuja dice QUIÉN y CUÁNDO.
+                */}
+                {m.authorName && (
+                  <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">
+                    {m.authorName}
+                  </div>
                 )}
                 {/* LINK-MEDIA-001: mensajes de audio → reproductor único (URL firmada on-demand). */}
                 {m.kind === "audio" ? (
@@ -362,10 +526,39 @@ export function ThreadView({
                   </div>
                 )}
                 <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
+                  {/*
+                    WA-8R9 · H-3 · la HORA se muestra SIEMPRE.
+
+                    Antes colgaba de `status === undefined`, así que cualquier
+                    mensaje en vuelo, pendiente o fallido perdía su hora — y las
+                    filas históricas, que caían en `pending`, también.
+                    El indicador de envío es información ADICIONAL sobre la hora,
+                    no un reemplazo.
+                  */}
+                  <span>{timeHM(m.createdAt)}</span>
                   {m.status === "sending" && <span>enviando…</span>}
+                  {m.status === "pending" && (
+                    <span className="text-tops-amber">pendiente de confirmación</span>
+                  )}
                   {m.status === "failed" && <span className="text-tops-red">no se pudo enviar</span>}
-                  {m.status === undefined && <span>{timeHM(m.createdAt)}</span>}
+                  {/*
+                    Neutro: hay un mensaje y una hora, pero ninguna evidencia
+                    acreditable sobre su envío. No se afirma éxito ni pendiente.
+                  */}
+                  {m.status === "historical" && <span className="text-fg-muted">sin registro de envío</span>}
                 </div>
+                {/* WA-8R2 · el error vive en SU mensaje. Sin botón de reintento:
+                    un envío ambiguo pudo haber salido y reintentarlo lo duplicaría. */}
+                {m.sendError && (
+                  <p
+                    className={cn(
+                      "mt-1 text-[10px]",
+                      m.status === "failed" ? "text-tops-red" : "text-amber-500",
+                    )}
+                  >
+                    {m.sendError}
+                  </p>
+                )}
               </div>
             </div>
             </Fragment>
@@ -440,17 +633,23 @@ export function ThreadView({
                     void send();
                   }
                 }}
-                placeholder={
-                  mentionables.length > 0
-                    ? "Escribí un mensaje…  (@ menciona · Enter envía · Shift+Enter salto)"
-                    : "Escribí un mensaje…  (Enter envía · Shift+Enter salto de línea)"
-                }
+                /*
+                  WA-VIS-01 · el placeholder vuelve a ser corto.
+                  La ayuda de teclado vivía acá dentro, en un textarea de UNA
+                  línea con `overflow-y:auto`: se recortaba a mitad de frase y
+                  el operador nunca leía que Enter envía. Ahora vive fuera, en
+                  un elemento propio, y se asocia por `aria-describedby` para
+                  que un lector de pantalla la anuncie al enfocar el campo.
+                */
+                placeholder="Escribí un mensaje…"
+                aria-describedby={ayudaTecladoId}
                 rows={1}
                 className="max-h-32 min-h-[2.25rem] w-full resize-none overflow-y-auto rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
               />
             </VoiceField>
-            {/* D1: botón de MENSAJE de voz — separado del Voice Command, sin desplazar el envío. */}
-            {recorder.state !== "recording" && recorder.state !== "preview" && (
+            {/* D1: botón de MENSAJE de voz — separado del Voice Command, sin desplazar el envío.
+                WA-8: en WhatsApp no se renderiza; `sendAudio` además corta por lógica. */}
+            {caps.canSendAudio && recorder.state !== "recording" && recorder.state !== "preview" && (
               <button
                 type="button"
                 onClick={() => void recorder.start()}
@@ -465,15 +664,25 @@ export function ThreadView({
             <button
               type="button"
               onClick={() => void send()}
-              disabled={!draft.trim() || sending}
-              className="btn btn-nexus btn-sm shrink-0"
+              disabled={!draft.trim() || sending || !caps.canSendText}
+              className={cn("btn btn-sm shrink-0", sendButtonClass(kind))}
               aria-label="Enviar mensaje"
             >
               <Icon name="send" size={15} />
             </button>
           </div>
+          {/*
+            WA-VIS-01 · ayuda de teclado FUERA del campo.
+
+            Es texto real y visible —no `sr-only` ni oculto por CSS—: el
+            objetivo era que se leyera, no que pasara una captura. El `id` lo
+            referencia el textarea con `aria-describedby`.
+          */}
+          <p id={ayudaTecladoId} className="mt-1 px-0.5 text-[10px] leading-tight text-fg-muted">
+            Enter para enviar · Shift+Enter para salto de línea
+          </p>
           {/* LINK-MEDIA-001: barra de grabación/preview (reemplaza visualmente al flujo de texto). */}
-          {recorder.state === "recording" && (
+          {caps.canSendAudio && recorder.state === "recording" && (
             <div className="mt-2 flex items-center gap-3 rounded-lg border border-tops-red/40 bg-tops-red/5 px-3 py-2">
               <span className="flex items-center gap-2 text-xs font-semibold text-tops-red">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-tops-red" />
@@ -488,7 +697,7 @@ export function ThreadView({
               </button>
             </div>
           )}
-          {recorder.state === "preview" && recorder.blob && (
+          {caps.canSendAudio && recorder.state === "preview" && recorder.blob && (
             <div className="mt-2 flex items-center gap-3 rounded-lg border border-stroke-soft bg-bg-surface px-3 py-2">
               <AudioPlayer src={URL.createObjectURL(recorder.blob)} compact />
               <span className="flex-1" />
@@ -500,9 +709,10 @@ export function ThreadView({
               </button>
             </div>
           )}
-          {(recorder.error || audioErr) && (
+          {caps.canSendAudio && (recorder.error || audioErr) && (
             <p className="mt-1 text-[11px] text-tops-red">{recorder.error ?? audioErr}</p>
           )}
+
         </div>
       )}
     </>

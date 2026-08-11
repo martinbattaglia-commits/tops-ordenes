@@ -42,5 +42,10 @@ declare module "*/scripts/guard.mjs" {
 
 declare module "*/scripts/expected-suite.mjs" {
   export const EXPECTED_TEST_FILES: string[];
+  /** WA-8R9 · conteo declarado POR ARCHIVO; el total se deriva de acá. */
+  export const EXPECTED_TESTS_PER_FILE: Readonly<Record<string, number>>;
   export const EXPECTED_TOTAL_TESTS: number;
+  /** Incoherencias entre archivos declarados y conteos. Vacío = consistente. */
+  export function suiteCoherenceProblems(): string[];
+  export function assertSuiteCoherence(): void;
 }

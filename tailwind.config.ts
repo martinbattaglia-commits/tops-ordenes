@@ -15,6 +15,14 @@ const config: Config = {
           red: "#C90812",
           white: "#FFFFFF",
         },
+        /* Burbuja propia de WhatsApp. Mapeada a CSS var para que el modo
+           oscuro la voltee; como todo token var, NO admite el modificador de
+           opacidad de Tailwind (`/60` cae a un gris fijo). */
+        wa: {
+          bubble: "var(--wa-bubble)",
+          stroke: "var(--wa-bubble-stroke)",
+          accent: "var(--wa-accent)",
+        },
         // Neutrales — mapeados a CSS vars para que dark mode los flippea
         neutral: {
           0: "#FFFFFF",

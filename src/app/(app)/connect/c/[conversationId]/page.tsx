@@ -132,8 +132,11 @@ export default async function ConnectThreadPage({
         )}
       </header>
 
+      {/* WA-8 · el kind REAL viaja hasta el composer: es el único criterio de
+          ruteo entre Connect y el outbound WhatsApp. */}
       <ThreadView
         conversationId={conversation.id}
+        kind={conversation.kind}
         initialMessages={messages}
         currentUserId={currentUserId}
         readOnly={!!conversation.archivedAt}

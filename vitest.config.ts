@@ -31,6 +31,11 @@ export default defineConfig({
       "src/lib/doc-system/**/*.test.{ts,tsx}",
       "src/lib/ai/**/*.test.ts",
       "src/lib/voice/**/*.test.ts",
+      // M-3 · pruebas de RENDER real de la UI del hilo. Declaran su propio
+      // entorno jsdom por docblock; el resto de la suite sigue en "node".
+      // Los paréntesis de `(app)` son sintaxis de grupo en glob: se usa `**`
+      // para no depender de escaparlos.
+      "src/app/**/connect/_components/*.test.tsx",
     ],
     environment: "node",
   },
