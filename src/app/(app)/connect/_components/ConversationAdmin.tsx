@@ -232,6 +232,9 @@ export function ConversationAdmin({
         <div className="flex min-h-0 flex-1 flex-col">
           <ThreadView
             conversationId={conversationId}
+            /* WA-8 · esta superficie sólo administra canales y grupos: nunca
+               WhatsApp. El kind ya es una prop del componente. */
+            kind={kind}
             initialMessages={initialMessages}
             currentUserId={currentUserId ?? null}
             readOnly={archived}

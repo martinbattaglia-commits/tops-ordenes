@@ -20,13 +20,26 @@
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { basename } from "node:path";
 import { REPORT_PATH, STAMP_PATH } from "./report-path.mjs";
-import { EXPECTED_TEST_FILES, EXPECTED_TOTAL_TESTS } from "./expected-suite.mjs";
+import {
+  EXPECTED_TEST_FILES,
+  EXPECTED_TOTAL_TESTS,
+  EXPECTED_TESTS_PER_FILE,
+  suiteCoherenceProblems,
+} from "./expected-suite.mjs";
 
 const NON_PASSING = new Set(["failed", "pending", "skipped", "todo", "disabled"]);
 const fail = (msg) => {
   console.error(`[P3-N1A0] ${msg}`);
   process.exit(1);
 };
+
+// ── 0) COHERENCIA INTERNA del universo declarado ───────────────────────────
+// Si `EXPECTED_TEST_FILES` y `EXPECTED_TESTS_PER_FILE` no describen el mismo
+// conjunto, cualquier veredicto sobre la corrida sería ruido: se falla antes.
+const incoherencias = suiteCoherenceProblems();
+if (incoherencias.length) {
+  fail(`universo declarado incoherente:\n  - ${incoherencias.join("\n  - ")}`);
+}
 
 // ── 1) el reporte existe (si Vitest no corrió, prepare-run lo borró) ────────
 if (!existsSync(REPORT_PATH)) {
@@ -91,6 +104,20 @@ for (const file of results) {
   }
 }
 
+// Desglose por archivo: dice DÓNDE está la diferencia, no sólo que la hay.
+const desvios = [];
+for (const r of results) {
+  const f = basename(String(r.name ?? ""));
+  if (!f) continue;
+  const real = Array.isArray(r.assertionResults) ? r.assertionResults.length : 0;
+  const esperado = EXPECTED_TESTS_PER_FILE[f];
+  if (esperado !== undefined && real !== esperado) {
+    desvios.push(`${f}: ${real} casos, se esperan ${esperado}`);
+  }
+}
+if (desvios.length) {
+  fail(`conteo por archivo distinto del declarado:\n  - ${desvios.join("\n  - ")}`);
+}
 if (EXPECTED_TOTAL_TESTS > 0 && total !== EXPECTED_TOTAL_TESTS) {
   fail(`la corrida ejecutó ${total} casos; se esperan exactamente ${EXPECTED_TOTAL_TESTS}.`);
 }

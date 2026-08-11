@@ -37,6 +37,13 @@
     --stroke-soft: #dde3ec;
     --stroke-strong: #c2cad6;
 
+    /* WhatsApp: la burbuja PROPIA es verde claro. Es el distintivo del canal y
+       lo que un operador espera ver; el rosa de marca corresponde a Connect. */
+    --wa-bubble: #d9fdd3;
+    --wa-bubble-stroke: #b7ecab;
+    --wa-accent: #00a884;
+    --wa-accent-hover: #018f72;
+
     /* Safe area for iOS notch + home indicator */
     --safe-top: env(safe-area-inset-top);
     --safe-bottom: env(safe-area-inset-bottom);
@@ -77,6 +84,12 @@
     --fg-link: #6da3e6;
     --stroke-soft: #1f2540;
     --stroke-strong: #2a3252;
+
+    /* Verde profundo de WhatsApp en oscuro: mismo distintivo, sin encandilar. */
+    --wa-bubble: #10513f;
+    --wa-bubble-stroke: #146b52;
+    --wa-accent: #00a884;
+    --wa-accent-hover: #21c7a8;
 
     /* Neutral swaps: lo que era #fff en light ahora es surface oscuro */
     --neutral-50: #11162a;
@@ -214,6 +227,19 @@
   .btn-nexus:focus-visible,
   .focus-nexus:focus-visible {
     @apply outline-none ring-2 ring-tops-red/40;
+  }
+
+  /* Acción del canal WhatsApp. Hermano de .btn-nexus: misma forma, mismo
+     tamaño y mismo anillo de foco; cambia sólo la identidad de color, que en
+     WhatsApp es el verde. Se usa SÓLO en hilos de ese canal. */
+  .btn-wa {
+    @apply bg-wa-accent text-white border border-transparent;
+  }
+  .btn-wa:hover {
+    background-color: var(--wa-accent-hover);
+  }
+  .btn-wa:focus-visible {
+    @apply outline-none ring-2 ring-wa-accent;
   }
 
   /* ---- Inputs ----------------------------------------------------- */

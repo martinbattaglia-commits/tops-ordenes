@@ -11,6 +11,7 @@ import type {
 import {
   mockInbox, mockChannels, MOCK_CONVERSATIONS, MOCK_MESSAGES,
 } from "../mock";
+import { projectWaMessage } from "../realtime-status";
 
 function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
@@ -27,12 +28,27 @@ function mapConversation(r: ConversationRow): Conversation {
   };
 }
 
+/**
+ * WA-8R3 · B · HIDRATACIÓN SANITIZADA.
+ *
+ * `meta` y `external_msg_id` se leen SÓLO para derivar la proyección y se
+ * descartan acá: el objeto que viaja al cliente no los contiene, ni contiene
+ * wamid, payloads del proveedor, tokens, teléfonos ni errores internos.
+ *
+ * La proyección se adjunta SIEMPRE en la lectura real. Su presencia es lo que
+ * distingue «el servidor miró esta fila» de una burbuja optimista local, y por
+ * eso un mensaje hidratado sin evidencia afirmativa no puede mostrarse
+ * confirmado sólo porque su estado visual sea `undefined`.
+ *
+ * Es sólo lectura: no escribe ni modifica filas.
+ */
 function mapMessage(r: MessageRow): Message {
   return {
     id: r.id, conversationId: r.conversation_id, seq: r.seq,
     authorParticipantId: r.author_participant_id, authorProfileId: r.author_profile_id,
     kind: r.kind, body: r.body, bodyFormat: r.body_format, replyToMessageId: r.reply_to_message_id,
     editedAt: r.edited_at, deletedAt: r.deleted_at, redacted: r.redacted, createdAt: r.created_at,
+    wa: projectWaMessage({ meta: r.meta, externalMsgId: r.external_msg_id }),
   };
 }
 
@@ -166,7 +182,9 @@ export async function listMessages(
   let query = supabase
     .from("connect_messages")
     .select(
-      "id, conversation_id, seq, author_participant_id, author_profile_id, kind, body, body_format, reply_to_message_id, edited_at, deleted_at, redacted, created_at",
+      // `meta` y `external_msg_id` entran SÓLO para derivar la proyección
+      // sanitizada en `mapMessage`; no se propagan al cliente.
+      "id, conversation_id, seq, author_participant_id, author_profile_id, kind, body, body_format, reply_to_message_id, edited_at, deleted_at, redacted, created_at, meta, external_msg_id",
     )
     .eq("conversation_id", conversationId)
     .order("seq", { ascending: false })

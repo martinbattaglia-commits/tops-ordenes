@@ -131,6 +131,9 @@ export default async function TaskDetailPage({
       {conversation ? (
         <ThreadView
           conversationId={conversation.id}
+          /* WA-8 · kind real; los hilos de tarea no son WhatsApp y conservan
+             el comportamiento Connect (menciones y audio incluidos). */
+          kind={conversation.kind}
           initialMessages={messages}
           currentUserId={currentUserId}
           readOnly={terminal || !!conversation.archivedAt}

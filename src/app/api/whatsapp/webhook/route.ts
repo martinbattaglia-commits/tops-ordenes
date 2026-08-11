@@ -1,30 +1,29 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyMetaSignature, verifyMetaVerifyToken } from "@/lib/whatsapp/webhook";
+import { parseInboundPayload } from "@/lib/whatsapp/inbound";
+import { parseOperatorProfileIds } from "@/lib/whatsapp/operators";
+import { projectInbound } from "@/lib/whatsapp/link-projection";
+import { createSupabaseProjectionPort } from "@/lib/whatsapp/link-projection.supabase";
+import { handleInboundEvent, type InboundPorts } from "@/lib/whatsapp/inbound-core";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/whatsapp/webhook — verificación inicial de Meta (handshake).
- * POST /api/whatsapp/webhook — recibe eventos (mensajes entrantes, statuses).
+ * GET /api/whatsapp/webhook — handshake de verificación de Meta.
+ * POST /api/whatsapp/webhook — eventos entrantes (mensajes y statuses).
  *
- * F4.4-E2/E3 (cierra el TODO F3 y el hallazgo A08 de la auditoría):
- *  - POST verifica `X-Hub-Signature-256` (HMAC-SHA256 del body CRUDO con
- *    META_WA_APP_SECRET) ANTES de parsear. Fail-closed: sin secret → 503;
- *    firma ausente/ inválida → 401 + fila de auditoría del rechazo.
- *  - GET fail-closed: se eliminó el default hardcodeado del verify token.
- *  - Persistencia sandbox: eventos firmados se guardan CRUDOS en
- *    `wa_inbound_events` (mig 0171, RLS deny-all, solo service_role) sin
- *    parsing de negocio. La tabla ES la auditoría del canal.
- *  - PII: el body ya NO se loguea (contiene teléfonos y texto de terceros).
+ * 1B-1B: la orquestación vive en `inbound-core.ts` (pura y testeable con
+ * fakes). Esta route es sólo el adaptador: lee el body CRUDO, cablea los
+ * puertos contra Supabase/env y traduce `{status, body}` a `NextResponse`.
  *
- * Configuración (panel Meta Developers → app → WhatsApp → Configuration):
+ * Configuración (Meta Developers → app → WhatsApp → Configuration):
  *  1. Webhook URL: https://nexus.logisticatops.com/api/whatsapp/webhook
- *  2. Verify Token: valor de META_WA_WEBHOOK_VERIFY_TOKEN
- *  3. App Secret: valor de META_WA_APP_SECRET (Settings → Basic)
- *  4. Subscribir a: messages, message_status (mínimo)
+ *  2. Verify Token: META_WA_WEBHOOK_VERIFY_TOKEN
+ *  3. App Secret: META_WA_APP_SECRET
+ *  4. Suscribir: messages, message_status
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -34,8 +33,7 @@ export async function GET(req: Request) {
   const configured = process.env.META_WA_WEBHOOK_VERIFY_TOKEN;
 
   if (!configured?.trim()) {
-    // Fail-closed: sin token configurado no hay handshake (antes caía a un
-    // default hardcodeado conocido públicamente en el repo).
+    // Fail-closed: sin token configurado no hay handshake.
     return NextResponse.json(
       { ok: false, error: "META_WA_WEBHOOK_VERIFY_TOKEN no configurado (fail-closed)" },
       { status: 503 },
@@ -49,68 +47,85 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   // Body CRUDO antes de cualquier parse — la firma es sobre los bytes exactos.
-  const raw = await req.text();
-  const result = verifyMetaSignature(
-    raw,
-    req.headers.get("x-hub-signature-256"),
-    process.env.META_WA_APP_SECRET,
-  );
+  const rawBody = await req.text();
+  const signatureHeader = req.headers.get("x-hub-signature-256");
 
-  if (!result.valid) {
-    if (result.reason === "no_secret") {
-      // Misconfig visible: el canal no procesa NADA sin App Secret.
-      return NextResponse.json(
-        { ok: false, error: "META_WA_APP_SECRET no configurado (fail-closed)" },
-        { status: 503 },
-      );
-    }
-    // Anti-flood (fix adversarial F4.4): el endpoint es público — sin límite,
-    // un atacante convierte cada POST basura en un insert de audit_log. El 401
-    // se responde SIEMPRE; solo se muestrea la auditoría (10/min por instancia).
-    if (rateLimit("whatsapp-webhook-audit", { limit: 10, windowMs: 60_000 }).ok) {
-      await auditSignatureRejection(result.reason);
-    }
-    return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
-  }
-
-  let payload: unknown;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    payload = { _unparseable: true, _length: raw.length };
-  }
-
-  // Persistencia best-effort: si la mig 0171 aún no está aplicada, el evento
-  // se pierde con error logueado pero Meta recibe 200 (evita que deshabilite
-  // el webhook por reintentos fallidos).
-  let persisted = false;
-  const admin = createAdminClient();
-  if (admin) {
-    const { error } = await admin
-      .from("wa_inbound_events")
-      .insert({ payload, signature_valid: true });
-    if (error) {
-      console.error("[whatsapp] wa_inbound_events insert falló:", error.message);
-    } else {
-      persisted = true;
-    }
-  }
-
-  return NextResponse.json({ ok: true, received: true, persisted });
+  const result = await handleInboundEvent({ rawBody, signatureHeader }, buildPorts());
+  return NextResponse.json(result.body, { status: result.status });
 }
 
-/** Auditoría del rechazo (sin firma, sin body, sin PII — solo la razón). */
-async function auditSignatureRejection(reason: string): Promise<void> {
-  try {
-    const admin = createAdminClient();
-    if (!admin) return;
-    await admin.from("audit_log").insert({
-      entity: "whatsapp_webhook",
-      entity_id: null,
-      action: "signature_rejected",
-      payload: { reason },
-    });
-  } catch (e) {
-    console.error("[whatsapp] audit de rechazo falló:", e instanceof Error ? e.message : e);
-  }
+/** Cableado productivo de los puertos. No decide nada: sólo conecta. */
+function buildPorts(): InboundPorts {
+  const admin = createAdminClient();
+
+  return {
+    verifySignature: (raw, header) =>
+      verifyMetaSignature(raw, header, process.env.META_WA_APP_SECRET),
+
+    parsePayload: (payload) => parseInboundPayload(payload, process.env.META_WA_PHONE_NUMBER_ID),
+
+    store: {
+      async persist(payload) {
+        if (!admin) return null;
+        const { data, error } = await admin
+          .from("wa_inbound_events")
+          .insert({ payload, signature_valid: true })
+          .select("seq")
+          .maybeSingle();
+        if (error || data?.seq == null) return null;
+        return Number(data.seq);
+      },
+      // R7 · una marca que no actualizó exactamente una fila NO acredita nada:
+      // lanza, y el core la traduce en evento pendiente (nunca processed:true).
+      async markProcessed(seq, notes) {
+        if (!admin) throw new Error("sin service client");
+        const { data, error } = await admin
+          .from("wa_inbound_events")
+          .update({ processed: true, notes: notes.slice(0, 500) })
+          .eq("seq", seq)
+          .select("seq");
+        if (error || (data ?? []).length !== 1) {
+          throw new Error("mark_processed_row_count");
+        }
+      },
+      async markPending(seq, notes) {
+        if (!admin) throw new Error("sin service client");
+        // `processed` permanece false: cola durable de reconciliación.
+        const { data, error } = await admin
+          .from("wa_inbound_events")
+          .update({ processed: false, notes: `PENDING ${notes}`.slice(0, 500) })
+          .eq("seq", seq)
+          .select("seq");
+        if (error || (data ?? []).length !== 1) {
+          throw new Error("mark_pending_row_count");
+        }
+      },
+    },
+
+    async project(input) {
+      if (!admin) throw new Error("sin service client");
+      const operators = parseOperatorProfileIds();
+      return projectInbound(input, createSupabaseProjectionPort(admin), operators.ids);
+    },
+
+    async auditSignatureRejection(reason) {
+      if (!admin) return;
+      await admin.from("audit_log").insert({
+        entity: "whatsapp_webhook",
+        entity_id: null,
+        action: "signature_rejected",
+        payload: { reason },
+      });
+    },
+
+    // Anti-flood: el endpoint es público; el 401 se responde siempre pero la
+    // auditoría se muestrea para que un atacante no genere inserts a voluntad.
+    shouldAuditRejection: () =>
+      rateLimit("whatsapp-webhook-audit", { limit: 10, windowMs: 60_000 }).ok,
+
+    logger: {
+      error: (message) => console.error("[whatsapp]", message),
+      warn: (message) => console.warn("[whatsapp]", message),
+    },
+  };
 }

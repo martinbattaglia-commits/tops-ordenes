@@ -9,6 +9,78 @@ export type MemberRole = "owner" | "moderator" | "member" | "guest";
 export type MessageKind = "text" | "system" | "ai" | "file" | "call_link" | "whatsapp" | "audio";
 export type ParticipantType = "staff" | "client" | "provider" | "ai" | "system" | "whatsapp";
 
+/**
+ * WA-8R3 · proyección WhatsApp SANITIZADA para la UI.
+ *
+ * Es un DTO cerrado del contexto `connect`: deliberadamente NO importa nada de
+ * `whatsapp` (el header de este archivo lo prohíbe). `realtime-status.ts`, que
+ * sí puede tocar ese contexto, verifica en compilación que este espejo siga
+ * siendo compatible con la máquina canónica.
+ *
+ * Nunca lleva `meta` crudo, `external_msg_id`, wamid, teléfono, texto del
+ * proveedor, tokens ni errores internos: sólo dirección, estado canónico,
+ * evidencia de auditoría y un instante propio para ordenar eventos.
+ */
+export type WaDirection = "inbound" | "outbound" | "unknown";
+
+export type WaProviderState =
+  | "queued"
+  | "sending"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed"
+  | "reconciliation_required";
+
+/**
+ * WA-8R7 · procedencia del estado. Describe QUIÉN observó o escribió el hecho,
+ * no qué tan importante es. `unknown` es fail-closed.
+ */
+/**
+ * Procedencia del estado del outbound.
+ *
+ * WA-8R9 · H-3 · `historical_unknown` NO es un `unknown` más. Distingue la fila
+ * que SÍ tiene un estado registrado pero cuya procedencia no se puede acreditar
+ * —las anteriores a WA-8R7 y las del import histórico— de la que simplemente no
+ * tiene estado. La diferencia importa para la UI: la primera nunca puede
+ * mostrarse como intento en curso ni como confirmada, y la segunda es
+ * sencillamente una fila sin egress.
+ */
+export type WaStateSource = "server" | "meta" | "unknown" | "historical_unknown";
+
+export interface WaProjection {
+  direction: WaDirection;
+  /** Ganador único entre los candidatos, o `null` si hay ambigüedad. */
+  providerState: WaProviderState | null;
+  audited: boolean;
+  stateAt: string | null;
+  /**
+   * WA-8R5 · estados canónicos observados en `stateAt`.
+   *
+   * Deduplicado y ordenado determinísticamente por la progresión canónica, de
+   * modo que el resultado dependa del CONJUNTO de hechos y no del orden de
+   * llegada. Conservarlos permite además que un evento posterior sólo resuelva
+   * la ambigüedad si es alcanzable desde TODOS ellos.
+   *
+   * Cerrado a `WaProviderState`: nunca `meta` crudo, WAMID, teléfono, texto,
+   * token ni payload del proveedor.
+   */
+  candidates: readonly WaProviderState[];
+  /**
+   * WA-8R7 · dominio de reloj y autoridad del estado.
+   *
+   * `meta.wa.status_at` mezcla dos relojes: el del servidor (con milisegundos) y
+   * el de Meta (segundos enteros). Compararlos como texto hacía que un `failed`
+   * real de Meta a las `12:00:03.000Z` pareciera anterior a un `sent` local de
+   * las `12:00:03.500Z` y se descartara, dejando la burbuja en éxito auditado
+   * hasta el próximo reload. Los instantes sólo se comparan dentro del mismo
+   * dominio; entre dominios manda la procedencia.
+   *
+   * No lleva PII: es una de tres etiquetas cerradas.
+   */
+  stateSource: WaStateSource;
+}
+
 /** Vocabulario de entidades ERP vinculables (CHECK de connect_conversation_links, 0143). */
 export const CONNECT_ENTITY_TYPES = [
   "clients", "orders", "purchase_orders", "customer_invoices", "supplier_invoices",
@@ -82,6 +154,14 @@ export interface Message {
   deletedAt: string | null;
   redacted: boolean;
   createdAt: string;
+  /**
+   * WA-8R3 · proyección WhatsApp sanitizada, derivada server-side.
+   *
+   * Su PRESENCIA significa «el servidor miró la fila»: por eso una burbuja
+   * optimista local (que no la tiene) no se confunde con un mensaje hidratado
+   * sin evidencia, que es exactamente el caso que no puede mostrarse confirmado.
+   */
+  wa?: WaProjection;
 }
 
 export interface ConversationLink {
@@ -155,6 +235,12 @@ export interface MessageRow {
   deleted_at: string | null;
   redacted: boolean;
   created_at: string;
+  /**
+   * WA-8R3 · columnas leídas SÓLO para derivar la proyección. No se propagan al
+   * cliente: `mapMessage` las consume y las descarta.
+   */
+  meta?: unknown;
+  external_msg_id?: unknown;
 }
 
 export interface InboxRow {

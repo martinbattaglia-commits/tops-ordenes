@@ -125,6 +125,8 @@ export default async function IncidentDetailPage({
       {conversation ? (
         <ThreadView
           conversationId={conversation.id}
+          /* WA-8 · kind real; los hilos de incidente conservan Connect. */
+          kind={conversation.kind}
           initialMessages={messages}
           currentUserId={currentUserId}
           readOnly={closed || !!conversation.archivedAt}
