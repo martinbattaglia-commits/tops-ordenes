@@ -267,6 +267,49 @@ const FROZEN_EXCLUDED_FILES: ReadonlySet<string> = new Set([
   "0194_treasury_beneficiaries.sql",
 ]);
 
+/**
+ * SCR-WMS-002 · Migraciones que pertenecen al HARNESS DEDICADO de Custodia.
+ *
+ * `0221`–`0223` viven en `supabase/migrations/` porque son migraciones reales
+ * del repositorio, pero su cierre de dependencias exige PostGIS y la serie
+ * 0036–0039, que el manifiesto vanilla excluye por diseño (ver arriba). Su
+ * lugar es `tests/custody-db/harness/manifest.ts`, no éste.
+ *
+ * Sin esta regla quedaban SIN CLASIFICAR y `validateCanonicalManifest()`
+ * rompía la suite A0 entera — que es exactamente lo que debe hacer con una
+ * migración nueva hasta que alguien decida dónde va. Ésta es esa decisión, y
+ * está tomada por FILENAME EXACTO: es un set aparte del snapshot congelado,
+ * cuyo contenido no se toca, y no absorbe nada que no esté enumerado acá.
+ * `0224_*` —o cualquier migración futura, se llame como se llame— sigue sin
+ * clasificarse sola.
+ *
+ * NO agrega estos archivos al manifiesto vanilla ni altera
+ * `EXPECTED_MANIFEST_SIZE`: el cierre WMS sobre PostgreSQL vanilla sigue
+ * siendo el mismo de 31 archivos.
+ */
+const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
+  "0221_custody_integrity_enums.sql",
+  "0222_custody_integrity_foundation.sql",
+  "0223_custody_integrity_decision.sql",
+  // W22-BIS · remediación DB-C4 (B-1 · M-1 · M-3/M-4). Se incorpora por DECISIÓN
+  // EXPLÍCITA, que es exactamente lo que la advertencia de abajo exigía.
+  "0224_custody_integrity_authority_hardening.sql",
+  // W22-TER-B · M-5 (compatibilidad tri-state con 0039). Misma decisión
+  // explícita: depende de PostGIS y de 0036-0039, excluidas del vanilla.
+  "0225_custody_0039_tristate_compat.sql",
+  // W22-TER-C · M-2 (atestación server-side del contenido). Decisión explícita,
+  // misma razón: PostGIS y la serie 0036-0039, excluidas del vanilla.
+  "0226_custody_content_attestation.sql",
+  // Serial UI/E2E · lectura de custodia acotada por tenant. Decisión explícita:
+  // reescribe policies sobre `custody_events`/`custody_evidence`, que sólo
+  // existen tras 0036-0039 (PostGIS), excluidas del vanilla.
+  "0231_custody_read_tenant_scope.sql",
+  // Remediación consolidada · reserva EXCLUSIVA del intento de evaluación y
+  // abandono explícito. Misma decisión: redefine funciones de 0223 que se
+  // apoyan en `custody_events` y en la serie 0036-0039, fuera del vanilla.
+  "0232_custody_evaluation_lease_exclusive.sql",
+]);
+
 export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
   id: string;
   matches: (file: string) => boolean;
@@ -287,6 +330,26 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "NO debe afirmarse que ninguna migración posterior toca objetos del WMS: 0036 " +
       "lo hace. Toda migración NUEVA queda fuera de este set, sin clasificar, y " +
       "rompe la suite hasta una decisión explícita.",
+  },
+  {
+    id: "custody-integrity-dedicated-harness",
+    // Filename EXACTO, en un set PROPIO y separado del snapshot congelado, cuyo
+    // contenido no se modifica. No es un rango ni un patrón por prefijo.
+    matches: (f) => CUSTODY_HARNESS_MIGRATION_FILES.has(f),
+    reason:
+      "Serie de Integridad de Custodia (0221 enums · 0222 fundación · 0223 decisión · " +
+      "0224 contención de autoridad y cota temporal · 0225 tri-state 0039 · " +
+      "0226 atestación de contenido). " +
+      "Se excluye del cierre WMS vanilla porque su cierre de dependencias exige " +
+      "PostGIS y la serie 0036-0039, que este manifiesto excluye por diseño para " +
+      "no convertir una extensión pesada en dependencia obligatoria de toda la " +
+      "suite A0. Estas migraciones SÍ se cargan, y se verifican, en el harness " +
+      "DEDICADO de `tests/custody-db/`, cuyo manifiesto propio las enumera. " +
+      "ADVERTENCIA: 0222 modifica `custody_events` (CHECK stage/event_type) y " +
+      "reemplaza `attach_custody_evidence`, objetos del dominio de custodia; se " +
+      "excluye por la dependencia de PostGIS, NO porque sea ajena. La exclusión " +
+      "es por los SEIS filenames exactos: 0227 y cualquier migración posterior " +
+      "quedan sin clasificar y rompen la suite hasta una decisión explícita.",
   },
 ];
 
