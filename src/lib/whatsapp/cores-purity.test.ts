@@ -92,7 +92,14 @@ describe("no existe un endpoint outbound público nuevo", () => {
     // WA-8R9 · M-4 agrega `inbound-queue`, que DRENA la cola de eventos
     // entrantes; no es una superficie de envío. El inventario sigue cerrado:
     // cualquier otro endpoint nuevo rompe esta prueba y exige una decisión.
-    expect(dirs).toEqual(["inbound-queue", "ping", "send", "webhook"]);
+    expect(dirs).toEqual(["inbound-queue", "ping", "relay-queue", "send", "webhook"]);
+  });
+
+  it("el relay durable es autenticado y delega en su worker", () => {
+    const src = read("src/app/api/whatsapp/relay-queue/route.ts");
+    expect(src).toMatch(/requireCronAuth\(/);
+    expect(src).toMatch(/consumeMakeRelayBatch\(/);
+    expect(src).not.toMatch(/rawBody|signatureHeader|WHATSAPP_MAKE_RELAY_URL/);
   });
 
   it("el drenaje de la cola es AUTENTICADO y no puede enviar", () => {

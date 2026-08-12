@@ -27,6 +27,14 @@ export interface InboundResponse {
   body: Record<string, unknown>;
 }
 
+export interface PersistedInbound {
+  seq: number;
+  /** null = relay apagado; valor = identidad durable ya encolada. */
+  relayKey: string | null;
+}
+
+export type RelayKickResult = "disabled" | "delivered" | "pending";
+
 export interface InboundPorts {
   verifySignature(
     rawBody: string,
@@ -34,8 +42,15 @@ export interface InboundPorts {
   ): { valid: boolean; reason: string };
   parsePayload(payload: unknown): WaInboundParse;
   store: {
-    /** Devuelve el `seq` del evento persistido, o null si no hay custodia. */
-    persist(payload: unknown): Promise<number | null>;
+    /**
+     * Persiste el evento y, si el relay está habilitado, crea su outbox en la
+     * MISMA transacción. Devuelve null si no puede acreditar ambas custodias.
+     */
+    persist(input: {
+      payload: unknown;
+      rawBody: string;
+      signatureHeader: string | null;
+    }): Promise<PersistedInbound | null>;
     markProcessed(seq: number, notes: string): Promise<void>;
     markPending(seq: number, notes: string): Promise<void>;
   };
@@ -43,6 +58,8 @@ export interface InboundPorts {
     messages: WaInboundMessage[];
     statuses: WaInboundStatus[];
   }): Promise<ProjectionResult>;
+  /** Intenta drenar de inmediato la fila YA durable; el cron conserva el fallback. */
+  kickRelay(relayKey: string | null): Promise<RelayKickResult>;
   /** Auditoría del rechazo de firma. Muestreada por el llamador. */
   auditSignatureRejection(reason: string): Promise<void>;
   shouldAuditRejection(): boolean;
@@ -86,19 +103,44 @@ export async function handleInboundEvent(
   }
 
   // CUSTODIA DURABLE OBLIGATORIA antes de proyectar.
-  let seq: number | null;
+  let persisted: PersistedInbound | null;
   try {
-    seq = await ports.store.persist(payload);
+    persisted = await ports.store.persist({
+      payload,
+      rawBody: req.rawBody,
+      signatureHeader: req.signatureHeader,
+    });
   } catch (e) {
     ports.logger.error("category=custody_write");
-    seq = null;
+    persisted = null;
   }
-  if (seq == null) {
+  if (persisted == null) {
     return { status: 503, body: { ok: false, error: "event_not_persisted", retryable: true } };
   }
 
-  const projection = await projectSafely(payload, seq, ports);
-  return { status: 200, body: { ok: true, received: true, persisted: true, projection } };
+  const projection = await projectSafely(payload, persisted.seq, ports);
+
+  // La entrega inmediata mejora la latencia del bot, pero NO es la custodia:
+  // el evento ya está en una outbox independiente. Un timeout o caída de Make
+  // deja `pending` y el cron reintenta con identidad estable.
+  let relay: RelayKickResult;
+  try {
+    relay = await ports.kickRelay(persisted.relayKey);
+  } catch {
+    relay = "pending";
+    ports.logger.error(`event=${persisted.seq} category=make_relay_pending`);
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      received: true,
+      persisted: true,
+      projection,
+      relay,
+    },
+  };
 }
 
 type ProjectionSummary =

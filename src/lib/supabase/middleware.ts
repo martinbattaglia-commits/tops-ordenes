@@ -102,6 +102,9 @@ export async function updateSession(request: NextRequest) {
     // con Authorization: Bearer CRON_SECRET. La frontera fail-closed vive en el
     // handler; se abre sólo esta ruta exacta, no subrutas ni el resto de WhatsApp.
     pathname === "/api/whatsapp/inbound-queue" ||
+    // Relay durable Nexus → Make. Netlify Scheduled Function lo invoca con
+    // CRON_SECRET; la auth fail-closed vive en el handler.
+    pathname === "/api/whatsapp/relay-queue" ||
     pathname.startsWith("/compras/validar") ||
     // Trazabilidad de despliegue: sólo metadata de build (commit/branch/fecha/buildId/entorno),
     // sin datos sensibles. Pública para verificar deploys y monitoreo externo. La misma info

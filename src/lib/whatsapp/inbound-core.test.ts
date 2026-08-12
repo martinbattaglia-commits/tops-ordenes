@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { handleInboundEvent, type InboundPorts } from "./inbound-core";
+import {
+  handleInboundEvent,
+  type InboundPorts,
+  type PersistedInbound,
+  type RelayKickResult,
+} from "./inbound-core";
 import type { ProjectionResult } from "./link-projection";
 import type { WaInboundParse } from "./inbound";
 
@@ -29,9 +34,10 @@ const PARSED_OK: WaInboundParse = {
 interface Opts {
   signature?: { valid: boolean; reason: string };
   parse?: WaInboundParse;
-  persist?: number | null | (() => Promise<number | null>);
+  persist?: PersistedInbound | null | (() => Promise<PersistedInbound | null>);
   result?: ProjectionResult;
   projectThrows?: boolean;
+  relay?: RelayKickResult;
 }
 
 function makePorts(o: Opts = {}) {
@@ -41,18 +47,20 @@ function makePorts(o: Opts = {}) {
     if (o.projectThrows) throw new Error("fallo sintético");
     return o.result ?? projection();
   });
+  const persist = vi.fn(async () => {
+    if (typeof o.persist === "function") return o.persist();
+    return o.persist === undefined ? { seq: 42, relayKey: null } : o.persist;
+  });
   const ports: InboundPorts = {
     verifySignature: () => o.signature ?? { valid: true, reason: "ok" },
     parsePayload: () => o.parse ?? PARSED_OK,
     store: {
-      async persist() {
-        if (typeof o.persist === "function") return o.persist();
-        return o.persist === undefined ? 42 : o.persist;
-      },
+      persist,
       async markProcessed(seq, notes) { marks.push({ kind: "processed", seq, notes }); },
       async markPending(seq, notes) { marks.push({ kind: "pending", seq, notes }); },
     },
     project,
+    kickRelay: vi.fn(async () => o.relay ?? "disabled"),
     auditSignatureRejection: vi.fn(async () => {}),
     shouldAuditRejection: () => true,
     logger: { error: (m) => logs.push(m), warn: (m) => logs.push(m) },
@@ -92,7 +100,7 @@ describe("16 · body o JSON inválido", () => {
 
 describe("17 · falla de persistencia → retryable", () => {
   it.each([
-    ["sin custodia (null)", null as number | null],
+    ["sin custodia (null)", null as PersistedInbound | null],
   ])("%s", async (_l, persist) => {
     const f = makePorts({ persist });
     const res = await handleInboundEvent(REQ, f.ports);
@@ -163,7 +171,49 @@ describe("22 · handler invocado exactamente una vez", () => {
     const f = makePorts();
     await handleInboundEvent(REQ, f.ports);
     expect(f.project).toHaveBeenCalledTimes(1);
+    expect(f.ports.kickRelay).toHaveBeenCalledTimes(1);
     expect(f.marks).toHaveLength(1);
+  });
+});
+
+describe("22b · relay Nexus → Make", () => {
+  it("firma inválida ⇒ nunca hay egress", async () => {
+    const f = makePorts({ signature: { valid: false, reason: "mismatch" } });
+    await handleInboundEvent(REQ, f.ports);
+    expect(f.ports.kickRelay).not.toHaveBeenCalled();
+  });
+
+  it("persistencia fallida ⇒ nunca hay egress", async () => {
+    const f = makePorts({ persist: null });
+    await handleInboundEvent(REQ, f.ports);
+    expect(f.ports.kickRelay).not.toHaveBeenCalled();
+  });
+
+  it("persiste body crudo y firma antes de intentar el relay", async () => {
+    const f = makePorts();
+    await handleInboundEvent(REQ, f.ports);
+    expect(f.ports.store.persist).toHaveBeenCalledWith({
+      payload: JSON.parse(REQ.rawBody),
+      rawBody: REQ.rawBody,
+      signatureHeader: REQ.signatureHeader,
+    });
+  });
+
+  it("outbox encolada se intenta por su identidad estable", async () => {
+    const f = makePorts({ persist: { seq: 42, relayKey: "a".repeat(64) }, relay: "delivered" });
+    const res = await handleInboundEvent(REQ, f.ports);
+    expect(f.ports.kickRelay).toHaveBeenCalledWith("a".repeat(64));
+    expect(res.status).toBe(200);
+    expect(res.body.relay).toBe("delivered");
+  });
+
+  it("Make caído ⇒ 200 porque la outbox queda pendiente y durable", async () => {
+    const f = makePorts({ persist: { seq: 42, relayKey: "a".repeat(64) }, relay: "pending" });
+    const res = await handleInboundEvent(REQ, f.ports);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, persisted: true, relay: "pending" });
+    expect(JSON.stringify({ body: res.body, logs: f.logs })).not.toContain(REQ.rawBody);
+    expect(JSON.stringify({ body: res.body, logs: f.logs })).not.toContain(REQ.signatureHeader);
   });
 });
 
