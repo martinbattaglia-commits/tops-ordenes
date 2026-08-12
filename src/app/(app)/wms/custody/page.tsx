@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
-import { listRecentCustodyEvents, listRecentPods } from "@/lib/custody/custody";
+import { listCustodyIntegrityCases, listRecentCustodyEvents, listRecentPods } from "@/lib/custody/custody";
 import { STAGE_META, EVENT_TYPE_META, type CustodyEventRow, type DeliveryPodRow } from "@/lib/custody/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { fmtDateTime } from "@/lib/utils";
@@ -20,8 +20,15 @@ export default async function CustodyDashboard({
 }) {
   let events: CustodyEventRow[];
   let pods: DeliveryPodRow[];
+  let cases: Awaited<ReturnType<typeof listCustodyIntegrityCases>> = [];
   try {
-    [events, pods] = await Promise.all([listRecentCustodyEvents(80), listRecentPods(40)]);
+    [events, pods, cases] = await Promise.all([
+      listRecentCustodyEvents(80),
+      listRecentPods(40),
+      // Los casos de integridad son la puerta de entrada al detalle. La RLS de
+      // 0222 ya los acota por tenant; acá no se agrega ningún filtro del cliente.
+      listCustodyIntegrityCases(40),
+    ]);
   } catch (e) {
     return (
       <ModuleUnavailable
@@ -60,6 +67,29 @@ export default async function CustodyDashboard({
         <Stat label="PODs" value={totalPods} sub="comprobantes de entrega" index={2} />
         <Stat label="PODs firmados" value={signedPods} sub="con firma del receptor" index={3} />
       </div>
+
+      {/* Casos de integridad · acceso al detalle */}
+      <section className="card p-4 mb-6" aria-labelledby="casos-title">
+        <h2 id="casos-title" className="eyebrow-tiny">Custodia Digital · casos</h2>
+        {cases.length === 0 ? (
+          <p className="mt-2 text-sm text-fg-muted">Sin casos de integridad abiertos.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-stroke-soft">
+            {cases.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-3 py-2">
+                <Link
+                  href={`/wms/custody/${c.id}`}
+                  className="text-sm font-medium hover:underline"
+                  aria-label={`Abrir caso ${c.public_id}`}
+                >
+                  {c.public_id}
+                </Link>
+                <span className="text-xs text-fg-muted">{c.state}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Filtro por etapa */}
       <form method="get" className="flex flex-wrap items-end gap-2 mb-4">

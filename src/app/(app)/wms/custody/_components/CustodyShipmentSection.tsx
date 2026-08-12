@@ -5,6 +5,7 @@ import {
   getShipmentCustodySummary,
   getShipmentToken,
 } from "@/lib/custody/custody";
+import { presentChain } from "@/lib/custody/chain-presentation";
 import { custodyQrDataUrl } from "@/lib/custody/qr";
 import { fmtDateTime } from "@/lib/utils";
 import { CustodyTimeline } from "./CustodyTimeline";
@@ -45,6 +46,7 @@ export async function CustodyShipmentSection({
   }
   if (!timeline || !summary) return null;
 
+  const chain = presentChain(summary);
   const revalidate = `/wms/despachos/${orderId}`;
 
   return (
@@ -61,7 +63,10 @@ export async function CustodyShipmentSection({
         <MiniStat label="Eventos" value={String(summary.events)} />
         <MiniStat label="Evidencias" value={String(summary.evidences)} />
         <MiniStat label="POD" value={summary.pod_present ? "Sí" : "No"} color={summary.pod_present ? "#16a34a" : "#6b7280"} />
-        <MiniStat label="Cadena" value={summary.chain_valid ? "Íntegra" : "ROTA"} color={summary.chain_valid ? "#16a34a" : "#dc2626"} />
+        {/* M5 · tres estados reales: una cadena sin evidencia suficiente ya no
+            se muestra como rota. Etiqueta y color vienen de la presentación
+            canónica que comparte con el POD. */}
+        <MiniStat label="Cadena" value={chain.uiLabel} color={chain.color} />
       </div>
       {summary.last_activity && (
         <div className="text-[11px] text-fg-muted">Última actividad: {fmtDateTime(summary.last_activity)}</div>

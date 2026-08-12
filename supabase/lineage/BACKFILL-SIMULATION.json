@@ -1,0 +1,1580 @@
+{
+  "$schema": "wms-lineage-backfill-plan/1",
+  "naturaleza": "PLAN ONLY — no se ejecutó ninguna sonda ni ninguna escritura",
+  "generado_por": "supabase/lineage/simulate-backfill.mjs",
+  "determinista": "misma entrada → mismos bytes; no usa reloj, azar ni orden de directorio",
+  "fuente_ledger": {
+    "archivo": "ledger-evidence-20260811.json",
+    "presente": true,
+    "sha256": "b898eac4b76821d1b1816f863b95d4a50c0c377173a68f21eef982893fda680c",
+    "alcance": "lectura read-only del ledger productivo; NO incluye estado del esquema"
+  },
+  "conteos": {
+    "ejecutables_en_catalogo": 194,
+    "observadas_en_ledger": 98,
+    "inferidas_no_registradas": 96,
+    "filas_autorizadas_a_escritura": 0,
+    "sondas_ejecutadas": 0
+  },
+  "advertencia": "Las filas inferidas NO son seguras para producción. Afirmar que lo son exigiría sondas reales autorizadas contra el esquema, que este generador no ejecuta y esta sesión no autoriza.",
+  "escritura": {
+    "sentencia_prevista": "insert into supabase_migrations.schema_migrations(version,name) values (<ledger_version>,<ledger_name>) on conflict (version) do nothing",
+    "idempotencia": "on conflict (version) do nothing → una segunda corrida escribe 0 filas",
+    "precondicion": "cada fila exige su sonda ejecutada y autorizada; hoy: 0 de 194",
+    "ejecutada": false
+  },
+  "filas": [
+    {
+      "ledger_version": "L00001",
+      "ledger_name": "0001_init",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00002",
+      "ledger_name": "0002_seed",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00003",
+      "ledger_name": "0003_storage",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00004",
+      "ledger_name": "0004_extended_schema",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00005",
+      "ledger_name": "0005_fix_rls_recursion",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00006",
+      "ledger_name": "0006_real_operators",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00007",
+      "ledger_name": "0007_extend_service_units",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00008",
+      "ledger_name": "0008_purchase_orders",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00009",
+      "ledger_name": "0009_rbac",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00010",
+      "ledger_name": "0010_documents",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00011",
+      "ledger_name": "0011_arca_billing",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00012",
+      "ledger_name": "0013_invoices_storage_isolation",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00013",
+      "ledger_name": "0014_supplier_invoices",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00014",
+      "ledger_name": "0015_supplier_invoice_attachments",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00015",
+      "ledger_name": "0016_tracking_foundation",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00016",
+      "ledger_name": "0017_tracking_geofences",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00017",
+      "ledger_name": "0018_tracking_events",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00018",
+      "ledger_name": "0019_tracking_rbac_seed",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00019",
+      "ledger_name": "0020_wms_physical_model",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00020",
+      "ledger_name": "0021_wms_permission_module",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00021",
+      "ledger_name": "0022_wms_rbac_seed",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00022",
+      "ledger_name": "0023_lujan_cubiculos",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00023",
+      "ledger_name": "0024_wms_inventory",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00024",
+      "ledger_name": "0025_wms_receptions",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00025",
+      "ledger_name": "0026_inventory_movements",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00026",
+      "ledger_name": "0027_wms_functions",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00027",
+      "ledger_name": "0029_pedidos_permission_module",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00028",
+      "ledger_name": "0030_logistics_orders",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00029",
+      "ledger_name": "0031_pedidos_functions",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00030",
+      "ledger_name": "0032_wms_picking",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00031",
+      "ledger_name": "0033_wms_packing",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00032",
+      "ledger_name": "0034_wms_packing_cancel",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00033",
+      "ledger_name": "0035_wms_dispatch",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00034",
+      "ledger_name": "0036_custody_core",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00035",
+      "ledger_name": "0037_custody_storage",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00036",
+      "ledger_name": "0038_custody_evidence",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00037",
+      "ledger_name": "0039_custody_pod_reads",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00038",
+      "ledger_name": "0040_profiles_pii_lockdown",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00039",
+      "ledger_name": "0041_crm_enums",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00040",
+      "ledger_name": "0042_crm_core",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00041",
+      "ledger_name": "0043_crm_quotes_proposals",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00042",
+      "ledger_name": "0044_crm_contracts_onboarding",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00043",
+      "ledger_name": "0045_crm_sync_audit",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00044",
+      "ledger_name": "0046_crm_rbac_seed",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00045",
+      "ledger_name": "0047_crm_write_path_fns",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00046",
+      "ledger_name": "0048_crm_ingest_lead",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00047",
+      "ledger_name": "0049_crm_list_commercial_users",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00048",
+      "ledger_name": "0050_crm_promote_lead",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00049",
+      "ledger_name": "0051_crm_onboarding_autocreate",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00050",
+      "ledger_name": "0052_crm_opportunity_clientify_mirror",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00051",
+      "ledger_name": "0052_treasury_permission_module",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00052",
+      "ledger_name": "0053_crm_ingest_deal",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00053",
+      "ledger_name": "0053_treasury_core",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00054",
+      "ledger_name": "0054_treasury_functions",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00055",
+      "ledger_name": "0055_treasury_security_fix",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00056",
+      "ledger_name": "0056_ap_fiscal_detail",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00057",
+      "ledger_name": "0056_rrhh_permission_module",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00058",
+      "ledger_name": "0057_ap_workflow_permissions",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00059",
+      "ledger_name": "0057_rrhh_rbac_seed",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00060",
+      "ledger_name": "0058_ap_rpcs",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00061",
+      "ledger_name": "0058_rrhh_core",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00062",
+      "ledger_name": "0059_iva_compras_views",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00063",
+      "ledger_name": "0059_rrhh_workflows",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00064",
+      "ledger_name": "0060_rrhh_documents_storage",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00066",
+      "ledger_name": "0061a_rrhh_modalidad_real",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00067",
+      "ledger_name": "0062_rrhh_carga_inicial",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00068",
+      "ledger_name": "0063_rrhh_bancario_carga",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00069",
+      "ledger_name": "0064_rrhh_doc_class_recibo",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00070",
+      "ledger_name": "0065_compliance_core",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00071",
+      "ledger_name": "0066_crm_units",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00072",
+      "ledger_name": "0067_crm_units_seed",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00073",
+      "ledger_name": "0068_crm_reserve_units",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00074",
+      "ledger_name": "0069_crm_opportunities_deal_name",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00076",
+      "ledger_name": "20260811230310_rbac_gerencia_finanzas_constraint_safe",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00077",
+      "ledger_name": "0071_fiscal_hardening",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00078",
+      "ledger_name": "0072_vat_sales_fiscal_detail",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00079",
+      "ledger_name": "0073_libro_iva_ventas",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00080",
+      "ledger_name": "0074_add_operator_ruth",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00081",
+      "ledger_name": "0075_email_sends_dedup",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00082",
+      "ledger_name": "0076_crm_contracts",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00083",
+      "ledger_name": "0077_contracts_drive_sync",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00084",
+      "ledger_name": "0081_compliance_drive_sync",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00085",
+      "ledger_name": "0082_cash_box_foundation",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00087",
+      "ledger_name": "0084_announcements",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00088",
+      "ledger_name": "0085_clientify_dashboard",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00089",
+      "ledger_name": "0086_mi_espacio_module_enum",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00090",
+      "ledger_name": "0087_mi_espacio_permission_and_grant",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00091",
+      "ledger_name": "0088_prospeccion_module_enum",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00092",
+      "ledger_name": "0089_prospeccion_core",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00094",
+      "ledger_name": "0092_add_deal_source",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00095",
+      "ledger_name": "0093_refresh_v_clientify_deals_enriched_deal_source",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00096",
+      "ledger_name": "0094_rpc_add_deal_source_to_cache_replace",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00097",
+      "ledger_name": "0095_add_lost_reason_to_deals",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00098",
+      "ledger_name": "0096_sync_log_observability",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00099",
+      "ledger_name": "0097_recon_schema",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00100",
+      "ledger_name": "0098_recon_rpc",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00101",
+      "ledger_name": "0099_ganancias_retencion",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00102",
+      "ledger_name": "0100_vendors_fiscal_ganancias",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00103",
+      "ledger_name": "0101_fiscal_dashboard_views",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00104",
+      "ledger_name": "0102_recon_views",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00105",
+      "ledger_name": "0103_recon_role_fix",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00106",
+      "ledger_name": "0104_recon_approve_role_fix",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00107",
+      "ledger_name": "0105_recon_approve_admin_self_approval",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00108",
+      "ledger_name": "0106_prospeccion_qualification",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00109",
+      "ledger_name": "0107_prospeccion_approval",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00110",
+      "ledger_name": "0120_chart_of_accounts_baseline",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00111",
+      "ledger_name": "0121_legajo_cuenta_contable",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00112",
+      "ledger_name": "0122_mipyme_foundation",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00113",
+      "ledger_name": "0123_comprobante_tipo_fce_enum",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00114",
+      "ledger_name": "20260811230308_contabilidad_module_enum",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00115",
+      "ledger_name": "0124_contabilidad_permissions_seed",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00116",
+      "ledger_name": "0125_knowledge_module_enum",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00117",
+      "ledger_name": "0126_knowledge_core",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00118",
+      "ledger_name": "0127_knowledge_rpc",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00119",
+      "ledger_name": "0128_knowledge_projection_triggers",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00120",
+      "ledger_name": "0129_knowledge_rbac_seed",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00121",
+      "ledger_name": "0130_knowledge_views",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00122",
+      "ledger_name": "0131_knowledge_harden_grants",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00123",
+      "ledger_name": "0132_knowledge_emit_status",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00124",
+      "ledger_name": "0133_knowledge_dispatch",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00125",
+      "ledger_name": "0134_knowledge_sentinel_fix",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00126",
+      "ledger_name": "0135_knowledge_adapter_recon",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00127",
+      "ledger_name": "0136_knowledge_adapter_po",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00128",
+      "ledger_name": "0137_knowledge_adapter_treasury",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00129",
+      "ledger_name": "0138_knowledge_adapter_custody",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00130",
+      "ledger_name": "0139_knowledge_adapter_rrhh",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00131",
+      "ledger_name": "0140_knowledge_kpis_admin",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00132",
+      "ledger_name": "0141_compliance_cases",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00133",
+      "ledger_name": "0142_connect_module_enum",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00134",
+      "ledger_name": "0143_connect_schema",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00135",
+      "ledger_name": "0144_connect_rpc",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00136",
+      "ledger_name": "0145_connect_views",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00137",
+      "ledger_name": "0146_connect_rbac_seed",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00138",
+      "ledger_name": "0147_connect_notifications_ext",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00139",
+      "ledger_name": "0148_connect_storage",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00140",
+      "ledger_name": "0149_connect_knowledge_adapter",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00141",
+      "ledger_name": "0150_connect_join_channel",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00142",
+      "ledger_name": "0151_connect_moderation_failclose",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00143",
+      "ledger_name": "0152_connect_get_or_create_entity_conversation",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00144",
+      "ledger_name": "0153_connect_search",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00145",
+      "ledger_name": "0154_profile_experience",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00146",
+      "ledger_name": "0155_connect_rbac_pilot_grants",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00147",
+      "ledger_name": "0156_fix_connect_search_ambiguous_conversation_id",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00148",
+      "ledger_name": "0157_fix_connect_search_union_order_by",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00149",
+      "ledger_name": "0158_connect_member_profile_search",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00150",
+      "ledger_name": "0159_connect_archive_rename_hotfix",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por sufijo sin prefijo numérico)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00151",
+      "ledger_name": "0160_connect_outbox_worker",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00152",
+      "ledger_name": "0161_connect_mentions_fanout",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00153",
+      "ledger_name": "0162_connect_notification_actions",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00154",
+      "ledger_name": "0163_connect_archived_guards",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00155",
+      "ledger_name": "0164_connect_incidents_schema",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00156",
+      "ledger_name": "0165_connect_incidents_rpcs",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00157",
+      "ledger_name": "0166_connect_incidents_knowledge",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00158",
+      "ledger_name": "0167_connect_tasks_enums_permissions",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00159",
+      "ledger_name": "0168_connect_tasks_schema",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00160",
+      "ledger_name": "0169_connect_tasks_rpcs_workflows",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00161",
+      "ledger_name": "0170_connect_tasks_knowledge",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00162",
+      "ledger_name": "0171_wa_inbound_events",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00163",
+      "ledger_name": "0172_connect_automations_mvp",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00164",
+      "ledger_name": "0173_ai_module_enum",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00165",
+      "ledger_name": "0174_ai_core",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00166",
+      "ledger_name": "0175_ai_rbac_seed",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00168",
+      "ledger_name": "20260811195739_ai_docs_redact_paren_fix",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00169",
+      "ledger_name": "0177_knowledge_view_pilot_grant",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00170",
+      "ledger_name": "0178_docs_retrieval_improvements",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00171",
+      "ledger_name": "0179_docs_browse_fts",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00172",
+      "ledger_name": "0180_ai_budget_overrides",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00173",
+      "ledger_name": "0181_ai_finance_overview",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00174",
+      "ledger_name": "0182_ai_analytics_overview",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00175",
+      "ledger_name": "0183_ai_customer_revenue",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00176",
+      "ledger_name": "0184_ai_revenue_by_category",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00177",
+      "ledger_name": "0185_company_knowledge_base",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00178",
+      "ledger_name": "0186_manual_nexus_kb_layer",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00179",
+      "ledger_name": "0189_treasury_operational_movement_enum",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00180",
+      "ledger_name": "0190_treasury_operational_movements",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00181",
+      "ledger_name": "0191_treasury_operational_movement_fix_reference_type",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00182",
+      "ledger_name": "0192_treasury_type_direction_add_movimiento_operativo",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00183",
+      "ledger_name": "0193_treasury_operational_category_add_honorarios_sueldo",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00184",
+      "ledger_name": "0194_treasury_beneficiaries",
+      "estado_ledger": "OBSERVED_REGISTERED",
+      "evidencia": "dato observado en el ledger (match por nombre exacto)",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00185",
+      "ledger_name": "0219_wms_client_identity_foundation",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00186",
+      "ledger_name": "0220_wms_canonical_identity_cutover",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00187",
+      "ledger_name": "0221_custody_integrity_enums",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00188",
+      "ledger_name": "0222_custody_integrity_foundation",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00189",
+      "ledger_name": "0223_custody_integrity_decision",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00190",
+      "ledger_name": "0224_custody_integrity_authority_hardening",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00191",
+      "ledger_name": "0225_custody_0039_tristate_compat",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00192",
+      "ledger_name": "0226_custody_content_attestation",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00193",
+      "ledger_name": "0227_wa_atomic_status",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00194",
+      "ledger_name": "0228_wa_provenance_backfill",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00195",
+      "ledger_name": "0229_wa_inbound_queue",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00196",
+      "ledger_name": "0230_wa_forgery_lockdown",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00197",
+      "ledger_name": "0231_custody_read_tenant_scope",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00198",
+      "ledger_name": "0232_custody_evaluation_lease_exclusive",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00199",
+      "ledger_name": "0233_wa_make_relay_outbox",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    }
+  ]
+}
