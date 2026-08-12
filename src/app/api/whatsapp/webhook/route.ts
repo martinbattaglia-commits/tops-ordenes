@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyMetaSignature, verifyMetaVerifyToken } from "@/lib/whatsapp/webhook";
@@ -6,6 +7,8 @@ import { parseOperatorProfileIds } from "@/lib/whatsapp/operators";
 import { projectInbound } from "@/lib/whatsapp/link-projection";
 import { createSupabaseProjectionPort } from "@/lib/whatsapp/link-projection.supabase";
 import { handleInboundEvent, type InboundPorts } from "@/lib/whatsapp/inbound-core";
+import { consumeMakeRelayBatch } from "@/lib/whatsapp/make-relay-worker";
+import { createSupabaseMakeRelayPorts } from "@/lib/whatsapp/make-relay-worker.supabase";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -65,15 +68,33 @@ function buildPorts(): InboundPorts {
     parsePayload: (payload) => parseInboundPayload(payload, process.env.META_WA_PHONE_NUMBER_ID),
 
     store: {
-      async persist(payload) {
+      async persist({ payload, rawBody, signatureHeader }) {
         if (!admin) return null;
+        const relayEnabled = process.env.WHATSAPP_MAKE_RELAY_ENABLED === "1";
+        if (relayEnabled) {
+          // Una sola transacción PostgreSQL custodia el inbound y crea la
+          // outbox. Si la migración/función falta, se responde 503 y Meta
+          // reintenta: nunca se activa el relay a medias.
+          const relayKey = createHash("sha256").update(rawBody, "utf8").digest("hex");
+          const { data, error } = await admin.rpc("wa_persist_inbound_with_relay", {
+            p_payload: payload,
+            p_raw_body: rawBody,
+            p_signature_header: signatureHeader,
+            p_relay_key: relayKey,
+          });
+          const row = Array.isArray(data) ? data[0] : data;
+          const seq = Number((row as { event_seq?: unknown } | null)?.event_seq);
+          if (error || !Number.isFinite(seq)) return null;
+          return { seq, relayKey };
+        }
+
         const { data, error } = await admin
           .from("wa_inbound_events")
           .insert({ payload, signature_valid: true })
           .select("seq")
           .maybeSingle();
         if (error || data?.seq == null) return null;
-        return Number(data.seq);
+        return { seq: Number(data.seq), relayKey: null };
       },
       // R7 · una marca que no actualizó exactamente una fila NO acredita nada:
       // lanza, y el core la traduce en evento pendiente (nunca processed:true).
@@ -106,6 +127,16 @@ function buildPorts(): InboundPorts {
       if (!admin) throw new Error("sin service client");
       const operators = parseOperatorProfileIds();
       return projectInbound(input, createSupabaseProjectionPort(admin), operators.ids);
+    },
+
+    async kickRelay(relayKey) {
+      if (!relayKey) return "disabled";
+      if (!admin || process.env.WHATSAPP_MAKE_RELAY_ENABLED !== "1") return "pending";
+      const result = await consumeMakeRelayBatch(
+        createSupabaseMakeRelayPorts(admin as never),
+        { limit: 1, relayKey },
+      );
+      return result.delivered > 0 ? "delivered" : "pending";
     },
 
     async auditSignatureRejection(reason) {

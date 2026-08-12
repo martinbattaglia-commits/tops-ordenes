@@ -305,6 +305,21 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "tests/db/t-wa-r9-0{1,2,3}-*.test.ts, que montan su propio " +
       "cierre acotado y ejecutan los archivos 0227/0228 tal como están en disco.",
   },
+  {
+    // WhatsApp Relay Nexus → Make · decisión explícita y por filename EXACTO.
+    // La migración y su inversa pre-activación se clasifican juntas, sin abrir
+    // un rango que pueda absorber futuras migraciones sin revisión consciente.
+    id: "whatsapp-make-relay-outbox",
+    matches: (f) =>
+      f === "0233_wa_make_relay_outbox.sql" ||
+      f === "ROLLBACK_0233_wa_make_relay_outbox.sql",
+    reason:
+      "Dominio WhatsApp Relay, ajeno al cierre de dependencias WMS: 0233 crea " +
+      "la outbox durable y sus RPC de custodia/entrega Nexus → Make; " +
+      "ROLLBACK_0233 es su inversa pre-activación. Se excluyen del cierre WMS, " +
+      "NO de su verificación específica en " +
+      "src/lib/whatsapp/make-relay-migration.test.ts.",
+  },
 ];
 
 export class ManifestIntegrityError extends Error {
