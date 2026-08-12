@@ -98,6 +98,9 @@ export async function updateSession(request: NextRequest) {
     // el middleware devolvía 401 "Auth required" antes de llegar al handler — mismo
     // patrón que dispatch-outbox y que los 5 crons de arriba.
     pathname === "/api/knowledge/drain" ||
+    // Relay durable Nexus → Make. Netlify Scheduled Function lo invoca con
+    // CRON_SECRET; la auth fail-closed vive en el handler.
+    pathname === "/api/whatsapp/relay-queue" ||
     pathname.startsWith("/compras/validar") ||
     // Trazabilidad de despliegue: sólo metadata de build (commit/branch/fecha/buildId/entorno),
     // sin datos sensibles. Pública para verificar deploys y monitoreo externo. La misma info
