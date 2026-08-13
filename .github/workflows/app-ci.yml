@@ -44,8 +44,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Tests
-        run: npm test
+      # El benchmark de remito-capacidad corre AISLADO (paso siguiente) para
+      # eliminar la contención de CPU del pool paralelo en el runner
+      # compartido, sin relajar su presupuesto de 5000 ms.
+      - name: Tests (suite general, sin el benchmark)
+        run: npm test -- --exclude='src/lib/doc-system/remito-capacidad.test.tsx'
+
+      - name: Benchmark remito-capacidad (aislado, presupuesto original)
+        run: npm test -- src/lib/doc-system/remito-capacidad.test.tsx --no-file-parallelism --maxWorkers=1 --minWorkers=1
 
       - name: Build
         run: npm run build
