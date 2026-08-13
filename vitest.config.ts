@@ -31,6 +31,8 @@ export default defineConfig({
       "src/lib/doc-system/**/*.test.{ts,tsx}",
       "src/lib/ai/**/*.test.ts",
       "src/lib/voice/**/*.test.ts",
+      // P3-N1B · puente de identidad canónica de cliente (lógica pura, sin IO).
+      "src/lib/wms/**/*.test.ts",
       // M-3 · pruebas de RENDER real de la UI del hilo. Declaran su propio
       // entorno jsdom por docblock; el resto de la suite sigue en "node".
       // Los paréntesis de `(app)` son sintaxis de grupo en glob: se usa `**`
