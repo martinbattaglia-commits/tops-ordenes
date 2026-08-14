@@ -45,6 +45,13 @@ export const EXPECTED_TEST_FILES = [
   "t-n1b-04-allocate-canonical.test.ts",
   "t-n1b-05-confirm-reception-canonical.test.ts",
   "t-n1b-06-rollback-reapply.test.ts",
+  // ── NEXUS-LINK-NOTIFICATIONS-MEDIA-001 · FASE A: contadores reales y
+  //    campanita tricolor (0234). Monta su propio cierre acotado Connect y
+  //    ejecuta 0234 y su ROLLBACK tal como están en disco.
+  "t-link-a1-01-tricolor-badges.test.ts",
+  // Ensayo prod-shaped de 0234+0235: orden de aplicación, rollback inverso sin
+  // residuos, reaplicación idéntica y aislamiento A / B / administrador.
+  "t-link-a1-03-migration-rehearsal.test.ts",
 ];
 
 /**
@@ -90,6 +97,8 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-wa-r9-05-isolation.test.ts": 9,
   "t-wa-r9-06-forgery-rls.test.ts": 23,
   "t-wa-r9-07-end-to-end.test.ts": 7,
+  "t-link-a1-01-tricolor-badges.test.ts": 53,
+  "t-link-a1-03-migration-rehearsal.test.ts": 16,
 });
 
 /**

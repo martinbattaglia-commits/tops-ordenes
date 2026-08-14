@@ -130,7 +130,9 @@ describe("T-A0-13 · reporte de corrida", () => {
     // (que es exactamente lo que pasó con el 350 contra 454 reales).
     const derivado = Object.values(EXPECTED_TESTS_PER_FILE).reduce((a, b) => a + b, 0);
     expect(EXPECTED_TOTAL_TESTS).toBe(derivado);
-    expect(EXPECTED_TOTAL_TESTS).toBe(519);
+    // 519 + 53 (t-link-a1-01) + 16 (t-link-a1-03) de la FASE A de
+    // NEXUS-LINK-NOTIFICATIONS-MEDIA-001.
+    expect(EXPECTED_TOTAL_TESTS).toBe(588);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {

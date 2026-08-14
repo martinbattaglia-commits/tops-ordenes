@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "supabase/lineage/build-catalog.mjs",
-  "ejecutables": 194,
-  "no_ejecutables": 6,
+  "ejecutables": 196,
+  "no_ejecutables": 8,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2249,6 +2249,56 @@
       "ledger_name": "ROLLBACK_0233_wa_make_relay_outbox",
       "provenance": "repo (main)",
       "motivo": "Inversa pre-activación de 0233. Script de reversión: NO es forward."
+    },
+    {
+      "id": "0234_link_notification_badges_tricolor.sql",
+      "filename": "0234_link_notification_badges_tricolor.sql",
+      "sha256": "cbbe988b32f5752c83337fcc91ff6226ee6c186495bb0ed143224a799ca113bc",
+      "orden": 201,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00201",
+      "ledger_name": "0234_link_notification_badges_tricolor",
+      "provenance": "repo (candidate/link-notif-tricolor-r1)",
+      "motivo": "Nexus Link · contadores reales de no-leidos y campanita de tres colores. Redefine v_connect_inbox / v_connect_unread_total conservando su contrato de columnas y agrega v_link_notification_badges. Solo vistas: no toca datos."
+    },
+    {
+      "id": "ROLLBACK_0234_link_notification_badges_tricolor.sql",
+      "filename": "ROLLBACK_0234_link_notification_badges_tricolor.sql",
+      "sha256": "2d7ef60d8f63f7428120b08e228aa1ec377de400611d665a7b9642bd80223a43",
+      "orden": 202,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00202",
+      "ledger_name": "ROLLBACK_0234_link_notification_badges_tricolor",
+      "provenance": "repo (candidate/link-notif-tricolor-r1)",
+      "motivo": "Inversa de 0234: restaura textualmente las vistas de 0145. NO es forward."
+    },
+    {
+      "id": "0235_link_notification_personal_read.sql",
+      "filename": "0235_link_notification_personal_read.sql",
+      "sha256": "eed83e0b5294749490790f6748e1f1412d5659deafa8e182978280cbb9c4a30d",
+      "orden": 203,
+      "requires": [
+        "0234_link_notification_badges_tricolor.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00203",
+      "ledger_name": "0235_link_notification_personal_read",
+      "provenance": "repo (candidate/link-notif-tricolor-r1)",
+      "motivo": "Nexus Link · lectura individual de broadcasts (notification_reads + RPC) y aislamiento por destinatario dentro de la vista. Aditiva, sin backfill. Requiere 0234: redefine v_link_notification_badges, que 0234 crea."
+    },
+    {
+      "id": "ROLLBACK_0235_link_notification_personal_read.sql",
+      "filename": "ROLLBACK_0235_link_notification_personal_read.sql",
+      "sha256": "36a810f72d4fe206a5df9ab5d780f416d57436c6b65b1d44eaf13a7cd6ec209b",
+      "orden": 204,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00204",
+      "ledger_name": "ROLLBACK_0235_link_notification_personal_read",
+      "provenance": "repo (candidate/link-notif-tricolor-r1)",
+      "motivo": "Inversa de 0235: elimina tabla, vista y RPC y restituye el estado de 0162. NO es forward."
     }
   ]
 }

@@ -38,6 +38,9 @@ export default defineConfig({
       // Los paréntesis de `(app)` son sintaxis de grupo en glob: se usa `**`
       // para no depender de escaparlos.
       "src/app/**/connect/_components/*.test.tsx",
+      // FASE A · NEXUS-LINK-NOTIFICATIONS-MEDIA-001: render real de la
+      // campanita de tres colores (jsdom por docblock, igual que ThreadView).
+      "src/components/shell/*.test.tsx",
     ],
     environment: "node",
   },

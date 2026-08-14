@@ -4,10 +4,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { FavoriteStar } from "@/components/connect/FavoriteStar";
 import { listInbox, listChannels } from "@/lib/connect/read/inbox-data";
 import { listActivity } from "@/lib/connect/read/activity-data";
-import { listNotificationCenter } from "@/lib/notifications/data";
+import { listNotificationCenter, readNotificationBadges } from "@/lib/notifications/data";
 import { getMyProfile } from "@/lib/profile/data";
 import { canAccessWaCommercialImport } from "@/lib/connect/wa-import/access";
 import type { NotificationItem, NotificationPriority } from "@/lib/notifications/types";
+import {
+  CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
+  type NotificationCategory,
+} from "@/lib/notifications/categories";
 import { relTime } from "@/lib/utils";
 
 export const metadata = { title: "Nexus Link · Inicio" };
@@ -19,11 +23,17 @@ const PRIORITY_DOT: Record<NotificationPriority, string> = {
 
 /** Home de Nexus Link (D-RC1.4-6): punto de entrada diario. Reusa centros (notif/actividad/inbox). */
 export default async function ConnectHomePage() {
-  const [profile, notifs, activity, inbox, channels] = await Promise.all([
+  const [profile, notifs, activity, inbox, channels, badges] = await Promise.all([
     getMyProfile(), listNotificationCenter(), listActivity(6), listInbox(), listChannels(),
+    readNotificationBadges(),
   ]);
 
-  const unread = notifs.filter((n) => !n.read);
+  // FASE A · C4 H-2: la tarjeta "Notificaciones" es la categoría ROJA. Antes
+  // fusionaba avisos del sistema con mensajes de WhatsApp y de chat interno en
+  // un único pill rojo, que es exactamente la fusión que el mandato prohíbe:
+  // los pendientes de conversación ya tienen su badge verde/amarillo en las
+  // tarjetas de conversaciones y favoritos.
+  const unread = notifs.filter((n) => !n.read && n.source === "notification");
   const favorites = inbox.filter((i) => i.isFavorite);
   const relevant = inbox.filter((i) => !i.isFavorite).slice(0, 5);
   const firstName = (profile?.fullName ?? "").split(" ")[0] || "equipo";
@@ -44,7 +54,9 @@ export default async function ConnectHomePage() {
 
       <div className="grid flex-1 gap-4 p-5 md:grid-cols-2 xl:grid-cols-3">
         {/* Notificaciones */}
-        <HomeCard title="Notificaciones" icon="bell" href="/connect/notificaciones" badge={unread.length}>
+        {/* C4 2/2 · M-1: la cifra sale de v_link_notification_badges, la misma
+            fuente que la campanita. `unread` sólo alimenta la lista de abajo. */}
+        <HomeCard title="Notificaciones" icon="bell" href="/connect/notificaciones" badge={badges.red}>
           {unread.length === 0 ? (
             <CardEmpty text="Sin pendientes." />
           ) : (
@@ -126,8 +138,9 @@ export default async function ConnectHomePage() {
   );
 }
 
-function HomeCard({ title, icon, href, badge, actionLabel = "Ver todo", children }: {
-  title: string; icon: Parameters<typeof Icon>[0]["name"]; href: string; badge?: number; actionLabel?: string; children: React.ReactNode;
+function HomeCard({ title, icon, href, badge, badgeCategory = "red_system", actionLabel = "Ver todo", children }: {
+  title: string; icon: Parameters<typeof Icon>[0]["name"]; href: string; badge?: number;
+  badgeCategory?: NotificationCategory; actionLabel?: string; children: React.ReactNode;
 }) {
   return (
     <section className="card flex flex-col gap-3 p-4">
@@ -135,7 +148,18 @@ function HomeCard({ title, icon, href, badge, actionLabel = "Ver todo", children
         <div className="flex items-center gap-2">
           <Icon name={icon} size={15} className="text-fg-link" />
           <h2 className="text-sm font-bold text-fg-primary">{title}</h2>
-          {badge ? <span className="grid h-4 min-w-[16px] place-items-center rounded-pill bg-tops-red px-1 text-[10px] font-bold text-white">{badge > 9 ? "9+" : badge}</span> : null}
+          {/* C4 · H-2: el recorte pasó de "9+" mudo a `formatBadgeCount`, con la
+              cantidad EXACTA en aria-label y tooltip, y con el color de su
+              categoría en vez de un rojo único para todo. */}
+          {badge ? (
+            <span
+              aria-label={categoryAriaLabel(badgeCategory, badge)}
+              title={categoryAriaLabel(badgeCategory, badge)}
+              className={`grid h-4 min-w-[16px] place-items-center px-1 text-[10px] font-bold ${CATEGORY_STYLE[badgeCategory].badgeClass}`}
+            >
+              {formatBadgeCount(badge)}
+            </span>
+          ) : null}
         </div>
         <Link href={href} className="text-[11px] font-semibold text-fg-link hover:underline">{actionLabel}</Link>
       </div>
@@ -168,7 +192,15 @@ function ConvRow({ item }: { item: import("@/lib/connect/types").InboxItem }) {
       <FavoriteStar conversationId={item.conversationId} initial={item.isFavorite} />
       <Link href={`/connect/c/${item.conversationId}`} className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 hover:bg-bg-surface-alt">
         <span className="truncate text-sm text-fg-primary">{item.title ?? item.slug ?? "Conversación"}</span>
-        {item.unreadCount > 0 && <span className="ml-auto grid h-4 min-w-[16px] place-items-center rounded-pill bg-tops-blue-700 px-1 text-[10px] font-bold text-white">{item.unreadCount}</span>}
+        {item.unreadCount > 0 && (
+          <span
+            aria-label={categoryAriaLabel(categoryForConversationKind(item.kind), item.unreadCount)}
+            title={categoryAriaLabel(categoryForConversationKind(item.kind), item.unreadCount)}
+            className={`ml-auto grid h-4 min-w-[16px] place-items-center px-1 text-[10px] font-bold ${CATEGORY_STYLE[categoryForConversationKind(item.kind)].badgeClass}`}
+          >
+            {formatBadgeCount(item.unreadCount)}
+          </span>
+        )}
       </Link>
     </li>
   );

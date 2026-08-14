@@ -83,11 +83,6 @@ export function messageDisplayBody(m: Pick<Message, "deletedAt" | "redacted" | "
   return m.body ?? "";
 }
 
-/** No-leídos = último seq de la conversación − último seq leído por el participante (≥ 0). */
-export function unreadCount(lastMessageSeq: number | null, lastReadSeq: number): number {
-  return Math.max((lastMessageSeq ?? 0) - (lastReadSeq ?? 0), 0);
-}
-
 /** ¿El mensaje es del usuario dado? (para alinear el hilo). */
 export function isOwnMessage(m: Pick<Message, "authorProfileId">, userId: string | null): boolean {
   return !!userId && m.authorProfileId === userId;

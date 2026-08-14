@@ -11,6 +11,9 @@ import {
   listArchivedInboxAction, archiveInboxItemAction,
 } from "@/lib/connect/adapters/driving/inbox-actions";
 import { KIND_COLOR } from "@/lib/connect/theme";
+import {
+  CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
+} from "@/lib/notifications/categories";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 const KIND_ICON: Record<ConversationKind, IconName> = {
@@ -252,8 +255,15 @@ export function ConversationList({
                   </span>
                 ) : (
                   it.unreadCount > 0 && (
-                    <span className="rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
-                      {it.unreadCount}
+                    // FASE A: el color identifica el canal —verde WhatsApp,
+                    // amarillo chat interno— y la cifra es el conteo REAL de
+                    // 0234, no la resta de secuencias globales.
+                    <span
+                      aria-label={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
+                      title={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
+                      className={`px-1.5 text-[10px] font-bold ${CATEGORY_STYLE[categoryForConversationKind(it.kind)].badgeClass}`}
+                    >
+                      {formatBadgeCount(it.unreadCount)}
                     </span>
                   )
                 )}

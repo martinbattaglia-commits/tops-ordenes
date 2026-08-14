@@ -1,0 +1,111 @@
+// NEXUS-LINK-NOTIFICATIONS-MEDIA-001 · FASE A · clasificación de la campanita.
+//
+// Tres categorías INDEPENDIENTES, nunca fusionadas en un cuarto color y nunca
+// suprimidas entre sí (A.1/A.2). Este módulo es la única definición del mapeo
+// categoría → color/forma/icono/etiqueta: la campanita, la bandeja y la lista
+// de conversaciones lo consumen, de modo que no puedan divergir.
+//
+// El color NO es el único portador de información (A.4): cada categoría lleva
+// además su propio icono, su propia forma (radio de borde) y su texto
+// accesible. Los pares de color cumplen contraste AA para texto pequeño:
+//   rojo    #c90812 sobre blanco  ≈ 6.0:1
+//   verde   #0f6b39 sobre blanco  ≈ 6.5:1
+//   amarillo #f2c200 con texto #1f1a00 ≈ 10.6:1
+
+import type { IconName } from "@/components/Icon";
+
+export type NotificationCategory = "red_system" | "green_whatsapp" | "yellow_internal";
+
+/** Tipos de conversación que son chat interno nativo de Nexus Link. */
+export const INTERNAL_CONVERSATION_KINDS = [
+  "dm", "group", "channel", "erp", "incident", "ai", "task",
+] as const;
+
+/**
+ * Categoría del badge de una conversación. WhatsApp es verde; todo el resto
+ * del chat nativo —incluidos los hilos de tarea, incidente, ERP e IA— es
+ * amarillo. Las notificaciones del sistema (rojo) NO son conversaciones y por
+ * eso no se resuelven acá.
+ */
+export function categoryForConversationKind(
+  kind: string,
+): Extract<NotificationCategory, "green_whatsapp" | "yellow_internal"> {
+  return kind === "whatsapp" ? "green_whatsapp" : "yellow_internal";
+}
+
+export interface CategoryStyle {
+  /** Nombre corto para el usuario. */
+  label: string;
+  /** Icono propio: la forma distingue la categoría sin depender del color. */
+  icon: IconName;
+  /** Clases del badge (color + forma). */
+  badgeClass: string;
+  /** Clases del punto/indicador compacto. */
+  dotClass: string;
+}
+
+export const CATEGORY_STYLE: Record<NotificationCategory, CategoryStyle> = {
+  // Círculo: notificaciones generales del sistema.
+  red_system: {
+    label: "Notificaciones del sistema",
+    icon: "bell",
+    badgeClass: "rounded-full bg-[#c90812] text-white",
+    dotClass: "rounded-full bg-[#c90812]",
+  },
+  // Cuadrado redondeado: WhatsApp.
+  green_whatsapp: {
+    label: "WhatsApp",
+    icon: "whatsapp",
+    badgeClass: "rounded-[4px] bg-[#0f6b39] text-white",
+    dotClass: "rounded-[3px] bg-[#0f6b39]",
+  },
+  // Cuadrado redondeado con texto oscuro: chat interno.
+  yellow_internal: {
+    label: "Chat interno",
+    icon: "chat",
+    badgeClass: "rounded-[4px] bg-[#f2c200] text-[#1f1a00]",
+    dotClass: "rounded-[3px] bg-[#f2c200]",
+  },
+};
+
+/** Tope visual del badge. Por encima se muestra `99+`. */
+export const BADGE_VISUAL_CAP = 99;
+
+/**
+ * Texto que se DIBUJA en el badge. Se recorta a `99+` sólo por espacio: el
+ * total exacto viaja siempre en `categoryAriaLabel()` y en el tooltip, como
+ * exige el mandato.
+ */
+export function formatBadgeCount(count: number): string {
+  if (count > BADGE_VISUAL_CAP) return `${BADGE_VISUAL_CAP}+`;
+  return String(count);
+}
+
+/** Etiqueta accesible: categoría + CANTIDAD EXACTA, nunca recortada. */
+export function categoryAriaLabel(category: NotificationCategory, count: number): string {
+  const { label } = CATEGORY_STYLE[category];
+  const unidad = count === 1 ? "pendiente" : "pendientes";
+  return `${label}: ${count} ${unidad}`;
+}
+
+export interface BadgeCounts {
+  red: number;
+  green: number;
+  yellow: number;
+}
+
+export const EMPTY_BADGE_COUNTS: BadgeCounts = { red: 0, green: 0, yellow: 0 };
+
+/**
+ * Resumen accesible del botón de la campanita. Enumera SÓLO las categorías con
+ * pendientes —una categoría en cero no debe anunciarse ni mostrar badge— con
+ * sus cantidades exactas.
+ */
+export function bellAriaLabel(counts: BadgeCounts): string {
+  const partes: string[] = [];
+  if (counts.red > 0) partes.push(categoryAriaLabel("red_system", counts.red));
+  if (counts.green > 0) partes.push(categoryAriaLabel("green_whatsapp", counts.green));
+  if (counts.yellow > 0) partes.push(categoryAriaLabel("yellow_internal", counts.yellow));
+  if (partes.length === 0) return "Notificaciones: sin pendientes";
+  return `Notificaciones. ${partes.join(". ")}.`;
+}

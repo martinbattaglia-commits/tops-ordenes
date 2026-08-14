@@ -17,14 +17,26 @@ async function session() {
   return { ok: true as const, supabase };
 }
 
+// FASE A · 0235: el marcado de lectura pasa a RPC SECDEF, una sola vía de
+// escritura con verificación explícita del destinatario.
+//
+// El UPDATE directo anterior tenía dos defectos materiales:
+//  · `.eq("id", …)` se apoyaba en la policy de UPDATE, cuya rama
+//    `current_role() = 'admin'` deja a un admin marcar leída la notificación
+//    de CUALQUIER usuario;
+//  · `markAll` hacía `.is("read_at", null)` SIN filtro de destinatario: para un
+//    perfil admin marcaba leídas las pendientes de toda la organización de un
+//    solo clic, silenciosamente.
+// Además, un broadcast por rol es una fila compartida: marcarla por UPDATE la
+// apagaba para todo el rol. La RPC registra la lectura PERSONAL en
+// `notification_reads` y no toca a terceros.
 export async function markNotificationReadAction(raw: unknown): Promise<SimpleResult> {
   const p = z.object({ id: z.string().uuid() }).safeParse(raw);
   if (!p.success) return { ok: false, message: "Datos inválidos." };
   const s = await session();
   if (!s.ok) return s;
-  const { error } = await s.supabase
-    .from("notifications").update({ read_at: new Date().toISOString() }).eq("id", p.data.id);
-  if (error) return { ok: false, message: error.message };
+  const { error } = await s.supabase.rpc("connect_notif_mark_read", { p_id: p.data.id });
+  if (error) return { ok: false, message: mapNotifRpcError(error.message) };
   revalidatePath("/connect/notificaciones");
   return { ok: true };
 }
@@ -32,9 +44,8 @@ export async function markNotificationReadAction(raw: unknown): Promise<SimpleRe
 export async function markAllNotificationsReadAction(): Promise<SimpleResult> {
   const s = await session();
   if (!s.ok) return s;
-  const { error } = await s.supabase
-    .from("notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
-  if (error) return { ok: false, message: error.message };
+  const { error } = await s.supabase.rpc("connect_notif_mark_all_read");
+  if (error) return { ok: false, message: mapNotifRpcError(error.message) };
   revalidatePath("/connect/notificaciones");
   return { ok: true };
 }
@@ -42,6 +53,10 @@ export async function markAllNotificationsReadAction(): Promise<SimpleResult> {
 /** Traduce errores Postgres de las RPCs 0162 a mensajes accionables (lección DEFECT-4). */
 function mapNotifRpcError(message: string): string {
   if (/inexistente/.test(message)) return "La notificación ya no existe.";
+  if (/no está dirigida a este usuario/.test(message)) {
+    return "Esa notificación no está dirigida a vos.";
+  }
+  if (/sesión no autenticada/.test(message)) return "Sesión no autenticada.";
   if (/dueño o el delegado|insufficient_privilege/i.test(message)) {
     return "Solo el dueño o el delegado pueden accionar esta notificación.";
   }

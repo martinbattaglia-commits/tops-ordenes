@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  canPost, normalizeBody, parseMentions, messageDisplayBody, unreadCount, isOwnMessage,
+  canPost, normalizeBody, parseMentions, messageDisplayBody, isOwnMessage,
   resolveMentions, MAX_MESSAGE_LENGTH, MAX_MENTIONS, type MentionPick,
 } from "./message";
 
@@ -51,11 +51,6 @@ describe("connect/domain/message · presentación", () => {
     expect(messageDisplayBody({ deletedAt: "2026-06-30T00:00:00Z", redacted: false, body: "x" })).toBe("Mensaje eliminado");
     expect(messageDisplayBody({ deletedAt: null, redacted: true, body: "x" })).toBe("Mensaje eliminado");
     expect(messageDisplayBody({ deletedAt: null, redacted: false, body: "hola" })).toBe("hola");
-  });
-  it("unreadCount nunca negativo", () => {
-    expect(unreadCount(10, 4)).toBe(6);
-    expect(unreadCount(4, 10)).toBe(0);
-    expect(unreadCount(null, 0)).toBe(0);
   });
   it("isOwnMessage compara author con user", () => {
     expect(isOwnMessage({ authorProfileId: "u1" }, "u1")).toBe(true);
