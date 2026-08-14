@@ -388,6 +388,28 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "src/lib/whatsapp/make-relay-migration.test.ts.",
     },
     {
+    // NEXUS-LINK-NOTIFICATIONS-MEDIA-001 · FASE A · decisión explícita y por
+    // filename EXACTO. La migración y su inversa se clasifican juntas, sin
+    // abrir un rango que absorba migraciones futuras sin revisión consciente.
+    id: "link-notification-badges-tricolor",
+    matches: (f) =>
+      f === "0234_link_notification_badges_tricolor.sql" ||
+      f === "ROLLBACK_0234_link_notification_badges_tricolor.sql" ||
+      f === "0235_link_notification_personal_read.sql" ||
+      f === "ROLLBACK_0235_link_notification_personal_read.sql",
+    reason:
+      "Dominio Connect/Nexus Link, ajeno al cierre de dependencias WMS: 0234 " +
+      "sólo redefine las vistas de la cadena Connect 0142+ (v_connect_inbox, " +
+      "v_connect_unread_total) y agrega v_link_notification_badges; 0235 agrega " +
+      "notification_reads (lectura personal de broadcasts), " +
+      "v_link_my_notifications y las RPC de marcado. Ninguna de las dos toca " +
+      "objetos WMS y el manifiesto A0 no carga esa cadena. Se excluyen del " +
+      "cierre WMS, NO de su verificación: ambas se ejercitan contra PostgreSQL " +
+      "real en tests/db/t-link-a1-01-tricolor-badges.test.ts, que monta su " +
+      "propio cierre acotado y ejecuta los cuatro archivos tal como están en " +
+      "disco, incluidos sus ROLLBACK.",
+    },
+    {
     id: "lineage-recovered-and-correctives",
     // Filename EXACTO, set propio. No absorbe rangos ni prefijos.
     matches: (f) => LINEAGE_RECOVERED_AND_CORRECTIVE_FILES.has(f),

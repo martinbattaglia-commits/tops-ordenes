@@ -9,6 +9,9 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { cn } from "@/lib/utils";
 import type { InboxItem } from "@/lib/connect/types";
+import {
+  CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
+} from "@/lib/notifications/categories";
 import { ConversationList } from "./ConversationList";
 
 const LS_KEY = "nexus-link:inbox-collapsed";
@@ -40,7 +43,20 @@ export function InboxPanel({ items }: { items: InboxItem[] }) {
     });
   }
 
-  const withUnread = items.reduce((n, i) => n + (i.unreadCount > 0 ? 1 : 0), 0);
+  // C4 · M-6: el riel colapsado mostraba UN pill rojo que fusionaba WhatsApp y
+  // chat interno. Ahora son dos cifras separadas, con su color, su icono y su
+  // texto accesible, y cuentan MENSAJES pendientes (misma fuente que el resto),
+  // no "conversaciones que tienen alguno".
+  const pendientes = items.reduce(
+    (acc, i) => {
+      if (i.unreadCount <= 0) return acc;
+      const cat = categoryForConversationKind(i.kind);
+      return cat === "green_whatsapp"
+        ? { ...acc, verde: acc.verde + i.unreadCount }
+        : { ...acc, amarillo: acc.amarillo + i.unreadCount };
+    },
+    { verde: 0, amarillo: 0 },
+  );
 
   return (
     <>
@@ -59,9 +75,22 @@ export function InboxPanel({ items }: { items: InboxItem[] }) {
             className="flex flex-col items-center gap-1.5 py-3 transition-colors hover:bg-bg-surface-alt"
           >
             <Icon name="inbox" size={16} className="text-fg-secondary" />
-            {withUnread > 0 && (
-              <span className="rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
-                {withUnread}
+            {pendientes.verde > 0 && (
+              <span
+                aria-label={categoryAriaLabel("green_whatsapp", pendientes.verde)}
+                title={categoryAriaLabel("green_whatsapp", pendientes.verde)}
+                className={`px-1.5 text-[10px] font-bold ${CATEGORY_STYLE.green_whatsapp.badgeClass}`}
+              >
+                {formatBadgeCount(pendientes.verde)}
+              </span>
+            )}
+            {pendientes.amarillo > 0 && (
+              <span
+                aria-label={categoryAriaLabel("yellow_internal", pendientes.amarillo)}
+                title={categoryAriaLabel("yellow_internal", pendientes.amarillo)}
+                className={`px-1.5 text-[10px] font-bold ${CATEGORY_STYLE.yellow_internal.badgeClass}`}
+              >
+                {formatBadgeCount(pendientes.amarillo)}
               </span>
             )}
           </button>
@@ -80,11 +109,28 @@ export function InboxPanel({ items }: { items: InboxItem[] }) {
             className="fixed bottom-4 right-4 z-40 grid h-11 w-11 place-items-center rounded-full bg-tops-red text-white shadow-lg"
           >
             <Icon name="inbox" size={18} />
-            {withUnread > 0 && (
-              <span className="absolute -right-1 -top-1 rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-black">
-                {withUnread}
-              </span>
-            )}
+            {/* Móvil: el botón flotante es uno solo, así que se apilan las dos
+                cifras separadas en vez de sumarlas en un color ajeno a ambas. */}
+            <span className="pointer-events-none absolute -right-1 -top-1 flex items-center gap-[2px]">
+              {pendientes.verde > 0 && (
+                <span
+                  aria-label={categoryAriaLabel("green_whatsapp", pendientes.verde)}
+                  title={categoryAriaLabel("green_whatsapp", pendientes.verde)}
+                  className={`pointer-events-auto px-1 text-[10px] font-bold ${CATEGORY_STYLE.green_whatsapp.badgeClass}`}
+                >
+                  {formatBadgeCount(pendientes.verde)}
+                </span>
+              )}
+              {pendientes.amarillo > 0 && (
+                <span
+                  aria-label={categoryAriaLabel("yellow_internal", pendientes.amarillo)}
+                  title={categoryAriaLabel("yellow_internal", pendientes.amarillo)}
+                  className={`pointer-events-auto px-1 text-[10px] font-bold ${CATEGORY_STYLE.yellow_internal.badgeClass}`}
+                >
+                  {formatBadgeCount(pendientes.amarillo)}
+                </span>
+              )}
+            </span>
           </button>
         )}
         {drawerOpen && (

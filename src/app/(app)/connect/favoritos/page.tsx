@@ -7,6 +7,9 @@ import { Icon } from "@/components/Icon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { FavoriteStar } from "@/components/connect/FavoriteStar";
 import { listInbox } from "@/lib/connect/read/inbox-data";
+import {
+  CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
+} from "@/lib/notifications/categories";
 import { relTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +47,12 @@ export default async function FavoritosPage() {
                 <Link href={href} className="flex min-w-0 flex-1 items-center gap-2">
                   <span className="truncate text-[13px] font-semibold text-fg-primary">{title}</span>
                   {it.unreadCount > 0 && (
-                    <span className="shrink-0 rounded-full bg-tops-red px-1.5 text-[10px] font-bold text-white">
-                      {it.unreadCount}
+                    <span
+                      aria-label={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
+                      title={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
+                      className={`shrink-0 px-1.5 text-[10px] font-bold ${CATEGORY_STYLE[categoryForConversationKind(it.kind)].badgeClass}`}
+                    >
+                      {formatBadgeCount(it.unreadCount)}
                     </span>
                   )}
                   <span className="ml-auto shrink-0 text-[10px] text-fg-muted">
