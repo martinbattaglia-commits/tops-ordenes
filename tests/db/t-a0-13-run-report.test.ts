@@ -131,9 +131,11 @@ describe("T-A0-13 · reporte de corrida", () => {
     const derivado = Object.values(EXPECTED_TESTS_PER_FILE).reduce((a, b) => a + b, 0);
     expect(EXPECTED_TOTAL_TESTS).toBe(derivado);
     // 519 + 53 (a1-01) + 16 (a1-03) de FASE A + 21 (b1-01, frontera de canal)
-    // + 30 (b1-02, cierre estructural y Realtime autenticado) + 37 (b2-01, ciclo de vida de la subida)
-    // de NEXUS-LINK-NOTIFICATIONS-MEDIA-001.
-    expect(EXPECTED_TOTAL_TESTS).toBe(676);
+    // + 41 (b1-02, cierre estructural, Realtime autenticado, el teléfono del
+    // contacto y el hallazgo abierto de connect_participants)
+    // + 37 (b2-01, ciclo de vida de la subida) de
+    // NEXUS-LINK-NOTIFICATIONS-MEDIA-001.
+    expect(EXPECTED_TOTAL_TESTS).toBe(687);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {

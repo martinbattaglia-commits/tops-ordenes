@@ -175,10 +175,18 @@ async function guardSession(): Promise<Guard> {
 async function assertPuedeAdjuntar(conversationId: string): Promise<string | null> {
   const supabase = createClient();
   if (!supabase) return "Sin sesión.";
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return "Sin sesión.";
   const { data, error } = await supabase
     .from("connect_conversations")
     .select("id, kind, archived_at, connect_participants!inner(profile_id)")
     .eq("id", conversationId)
+    // El `!inner` SOLO exige que exista ALGÚN participante legible: en un canal
+    // público la policy de 0237 deja ver la conversación a un no-miembro, con
+    // lo cual la comprobación afirmaba «sos miembro» siéndolo otro. Hoy no era
+    // explotable —`connect_upload_begin` (0238) vuelve a exigir membresía en la
+    // base—, pero la guarda decía verificar algo que no verificaba.
+    .eq("connect_participants.profile_id", user.id)
     .limit(1)
     .maybeSingle();
   if (error || !data) return "No sos miembro de esta conversación.";

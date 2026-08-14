@@ -28,6 +28,8 @@ const ENCARGADO = "11111111-1111-4111-8111-111111111111";
 const COMERCIAL = "22222222-2222-4222-8222-222222222222";
 const ADMIN_OK = "33333333-3333-4333-8333-333333333333";
 const AJENO = "55555555-5555-4555-8555-555555555555";
+/** Teléfono sintético de la contraparte. No es de nadie: sirve para atacarlo. */
+const TEL_CONTRAPARTE = "+5491100000001";
 
 /** Cierre acotado con storage real, RBAC real y los helpers de 0143/0144. */
 const CIERRE = `
@@ -76,10 +78,15 @@ const CIERRE = `
     kind public.connect_conversation_kind_t not null, title text, slug text, topic text,
     visibility text default 'private',
     last_message_at timestamptz, last_message_seq bigint, archived_at timestamptz);
+  -- participant_type y external_ref son las columnas REALES de 0143. El
+  -- importador y la proyeccion del inbound escriben el telefono de la
+  -- contraparte dentro de external_ref->>'phone'. Sin estas dos columnas el
+  -- arnes no podia siquiera formular la pregunta.
   create table public.connect_participants (
     id uuid primary key default gen_random_uuid(),
     conversation_id uuid not null references public.connect_conversations(id) on delete cascade,
-    profile_id uuid, last_read_seq bigint not null default 0, muted_until timestamptz,
+    profile_id uuid, participant_type text not null default 'user',
+    external_ref jsonb, last_read_seq bigint not null default 0, muted_until timestamptz,
     is_favorite boolean not null default false, unique (conversation_id, profile_id));
   create table public.connect_messages (
     id uuid primary key default gen_random_uuid(),
@@ -116,6 +123,12 @@ const CIERRE = `
   alter table public.connect_conversations enable row level security;
   alter table public.connect_messages      enable row level security;
   alter table public.connect_attachments   enable row level security;
+  alter table public.connect_participants  enable row level security;
+  -- Reproducida LITERAL de 0143:372-375, verificada contra producción el
+  -- 2026-08-14: no tiene predicado de canal, y 0236/0237 no la tocan.
+  create policy "connect_participants select" on public.connect_participants for select
+    using (has_permission('connect.view')
+           and (public._connect_is_member(conversation_id) or is_admin()));
   create policy "connect_conversations select" on public.connect_conversations for select
     using (has_permission('connect.view') and (public._connect_is_member(id)
       or (kind='channel' and visibility='public') or is_admin()));
@@ -167,8 +180,12 @@ const CIERRE = `
   -- Realtime: postgres_changes sólo entrega filas que pasen la policy SELECT
   -- de la tabla para el rol suscripto. La publicación se reproduce acá para
   -- poder afirmar que el canal existe ANTES de razonar sobre qué filtra.
+  -- connect_participants se publica desde 0147 y sigue publicada en produccion
+  -- (medido el 2026-08-14). Se incluye para que el cierre no sea mas benigno
+  -- que la realidad: omitirla escondia una superficie entera.
   create publication supabase_realtime for table
-    public.connect_messages, public.connect_attachments, public.connect_conversations;
+    public.connect_messages, public.connect_attachments, public.connect_conversations,
+    public.connect_participants;
 
   do $rol$ begin
     if not exists (select 1 from pg_roles where rolname='authenticated') then
@@ -227,14 +244,30 @@ beforeAll(async () => {
     union all select $4::uuid, id from public.roles where name='Ajeno'`,
     [ENCARGADO, COMERCIAL, ADMIN_OK, AJENO]);
 
-  const { rows: w } = await db.query(`insert into public.connect_conversations (kind,title)
-     values ('whatsapp'::public.connect_conversation_kind_t,'Cliente Comercial') returning id`);
-  const { rows: d } = await db.query(`insert into public.connect_conversations (kind,title)
-     values ('dm'::public.connect_conversation_kind_t,'Coordinacion Deposito') returning id`);
+  // El context_id de un hilo de WhatsApp ES el teléfono de la contraparte
+  // (convención wa:E164, fijada a la vez por el importador histórico y por la
+  // proyección del inbound vivo). Se siembra tal cual para poder atacar ese
+  // dato en particular, y no sólo la fila en abstracto.
+  const { rows: w } = await db.query(
+    `insert into public.connect_conversations (kind,title,context_id)
+     values ('whatsapp'::public.connect_conversation_kind_t,'Cliente Comercial',$1) returning id`,
+    [`wa:${TEL_CONTRAPARTE}`]);
+  const { rows: d } = await db.query(
+    `insert into public.connect_conversations (kind,title,context_id)
+     values ('dm'::public.connect_conversation_kind_t,'Coordinacion Deposito','CTX-2026-000001')
+     returning id`);
   convWa = w[0].id; convDm = d[0].id;
   // ADVERSARIAL: el encargado ES participante del hilo de WhatsApp.
   await db.query(`insert into public.connect_participants (conversation_id, profile_id) values
      ($1,$2),($1,$3),($4,$2),($4,$3)`, [convWa, ENCARGADO, COMERCIAL, convDm]);
+  // Y el participante EXTERNO del hilo, tal como lo escriben el importador
+  // (wa-import/ingest.ts) y la proyección del inbound vivo
+  // (whatsapp/link-projection.supabase.ts): el teléfono, en claro, en el JSON.
+  await db.query(
+    `insert into public.connect_participants (conversation_id, profile_id, participant_type, external_ref)
+     values ($1, null, 'whatsapp', jsonb_build_object(
+        'phone', $2::text, 'side', 'counterpart', 'source', 'meta_cloud_api'))`,
+    [convWa, TEL_CONTRAPARTE]);
   await db.query(`insert into public.connect_messages (conversation_id, author_profile_id, body)
      values ($1,null,'presupuesto confidencial del cliente'),($2,$3,'coordinamos la carga')`,
     [convWa, convDm, COMERCIAL]);
@@ -453,12 +486,13 @@ describe("T-LINK-B1-02 · Realtime AUTENTICADO", () => {
    * eso —el predicado bajo cada observador—, y no un cliente de websocket: el
    * websocket no agrega ninguna decisión que no esté ya en la policy.
    */
-  it("las tres tablas están publicadas: hay canal del que hablar", async () => {
+  it("las cuatro tablas están publicadas: hay canal del que hablar", async () => {
     const { rows } = await db.query(
       `select tablename from pg_publication_tables
         where pubname='supabase_realtime' order by 1`);
     expect(rows.map((r) => r.tablename)).toEqual(
-      ["connect_attachments", "connect_conversations", "connect_messages"]);
+      ["connect_attachments", "connect_conversations", "connect_messages",
+       "connect_participants"]);
   });
 
   it("el encargado NO recibe eventos de WhatsApp, aunque sea participante", async () => {
@@ -519,6 +553,166 @@ describe("T-LINK-B1-02 · Realtime AUTENTICADO", () => {
       // un residuo mío haría fallar pruebas ajenas por una causa inventada.
       await db.query("delete from public.connect_messages where id=$1", [rows[0].id]);
     }
+  });
+});
+
+describe("T-LINK-B1-02 · el TELÉFONO del contacto (ficha de contacto, FASE B)", () => {
+  /**
+   * La ficha «Información del contacto» no agrega una fuente nueva: lee el
+   * `context_id` de la conversación, que ya contenía el teléfono desde el día
+   * uno. Por eso su superficie de fuga es exactamente la de la fila, y es esa
+   * la que se ataca acá — nombrando el dato, no la tabla.
+   *
+   * Medido en producción (2026-08-14, sólo lectura): 20 de 20 conversaciones
+   * `kind='whatsapp'` tienen `context_id like 'wa:%'` y las 20 validan E.164.
+   * `wa_identities` cubre 5 de 20 y tiene RLS activa con CERO políticas, así
+   * que `authenticated` no puede leerla en ningún caso: por eso NO es la
+   * fuente de la ficha.
+   *
+   * ⚠️ Lo de acá abajo cubre `connect_conversations`, `connect_messages`,
+   * `connect_attachments` y la búsqueda. NO cubre `connect_participants`, que
+   * guarda el mismo teléfono y SIGUE ABIERTA: ver el describe siguiente.
+   */
+
+  it("el teléfono vive en el context_id, y el usuario autorizado lo obtiene", async () => {
+    const r = await como<{ context_id: string }>(COMERCIAL,
+      `select context_id from public.connect_conversations where id='${convWa}'`);
+    expect(r).toHaveLength(1);
+    expect(r[0].context_id).toBe(`wa:${TEL_CONTRAPARTE}`);
+  });
+
+  it("b · el encargado NO recibe el teléfono, aunque sea participante del hilo", async () => {
+    expect(await count(ENCARGADO,
+      `select count(*)::text n from public.connect_conversations
+        where id='${convWa}' and context_id is not null`)).toBe(0);
+  });
+
+  it("c · conocer el UUID exacto no cambia nada: misma respuesta que si no existiera", async () => {
+    const real = await como(ENCARGADO,
+      `select context_id from public.connect_conversations where id='${convWa}'`);
+    const inventado = await como(ENCARGADO,
+      "select context_id from public.connect_conversations where id='99999999-9999-4999-8999-999999999999'");
+    expect(real).toEqual([]);
+    expect(inventado).toEqual([]);
+  });
+
+  it("tampoco por barrido: pedir TODOS los context_id de WhatsApp devuelve cero", async () => {
+    // Un atacante que ni siquiera sepa el UUID podría intentar el patrón.
+    expect(await count(ENCARGADO,
+      "select count(*)::text n from public.connect_conversations where context_id like 'wa:%'")).toBe(0);
+    // Y el comercial, que sí puede, lo ve: la consulta no está rota.
+    expect(await count(COMERCIAL,
+      "select count(*)::text n from public.connect_conversations where context_id like 'wa:%'")).toBe(1);
+  });
+
+  it("la búsqueda tampoco lo devuelve: connect_search proyecta context_id", async () => {
+    // `connect_search` incluye `context_id` entre sus columnas: si filtrara por
+    // conversación pero no por canal, el teléfono saldría por acá.
+    expect(await count(ENCARGADO,
+      `select count(*)::text n from public.connect_search('presupuesto')
+        where context_id is not null and context_id like 'wa:%'`)).toBe(0);
+  });
+
+  it("d · el chat interno sigue entero: su propio context_id se lee sin problema", async () => {
+    const r = await como<{ context_id: string }>(ENCARGADO,
+      `select context_id from public.connect_conversations where id='${convDm}'`);
+    expect(r).toHaveLength(1);
+    expect(r[0].context_id).toBe("CTX-2026-000001");
+  });
+
+  it("g · barrido con SEÑAL REAL por conversación, mensaje y adjunto", async () => {
+    // El barrido no sirve de nada si el número no está en ninguna de las
+    // columnas barridas: pasaría igual con la RLS apagada. Así que se planta
+    // el teléfono EN los tres lugares, se mide, y se retira.
+    const { rows: m } = await db.query(
+      `insert into public.connect_messages (conversation_id, author_profile_id, body)
+       values ($1, null, $2) returning id`,
+      [convWa, `llamar al ${TEL_CONTRAPARTE} por el remito`]);
+    const { rows: a } = await db.query(
+      `insert into public.connect_attachments (conversation_id, storage_bucket, storage_path, file_name, mime_type)
+       values ($1,'connect-files',$2,$3,'image/jpeg') returning id`,
+      [convWa, `${convWa}/files/cccccccc-cccc-4ccc-8ccc-cccccccccccc`,
+       `remito-${TEL_CONTRAPARTE}.jpg`]);
+    const barrido = `
+      select (
+        (select count(*) from public.connect_conversations
+          where coalesce(context_id,'')||coalesce(title,'')||coalesce(topic,'') like '%${TEL_CONTRAPARTE}%')
+      + (select count(*) from public.connect_messages where coalesce(body,'') like '%${TEL_CONTRAPARTE}%')
+      + (select count(*) from public.connect_attachments where coalesce(file_name,'') like '%${TEL_CONTRAPARTE}%')
+      )::text n`;
+    try {
+      // CONTROL POSITIVO: el comercial encuentra las tres apariciones.
+      expect(await count(COMERCIAL, barrido)).toBe(3);
+      // Y el encargado, ninguna.
+      expect(await count(ENCARGADO, barrido)).toBe(0);
+    } finally {
+      await db.query("delete from public.connect_attachments where id=$1", [a[0].id]);
+      await db.query("delete from public.connect_messages where id=$1", [m[0].id]);
+    }
+  });
+
+  it("la búsqueda del comercial SÍ devuelve el hilo: la consulta no está rota", async () => {
+    // Control positivo del caso anterior sobre connect_search: sin él, un cero
+    // para el encargado podría deberse a que la búsqueda no devuelve nada a
+    // nadie, y no a la frontera de canal.
+    expect(await count(COMERCIAL,
+      `select count(*)::text n from public.connect_search('presupuesto')
+        where context_id = 'wa:${TEL_CONTRAPARTE}'`)).toBe(1);
+  });
+});
+
+describe("T-LINK-B1-02 · HALLAZGO ABIERTO · el teléfono TAMBIÉN vive en connect_participants", () => {
+  /**
+   * ─── ESTE BLOQUE DOCUMENTA UNA FUGA QUE SIGUE ABIERTA ────────────────────
+   *
+   * `context_id` no es el único lugar donde está el teléfono. El importador
+   * (`connect/wa-import/ingest.ts`) y la proyección del inbound vivo
+   * (`whatsapp/link-projection.supabase.ts`) escriben el número EN CLARO dentro
+   * de `connect_participants.external_ref->>'phone'`.
+   *
+   * Y la policy SELECT de esa tabla —`0143:372-375`, reproducida literal en el
+   * cierre de esta suite— NO tiene predicado de canal. Ni `0236` ni `0237` la
+   * tocan: `0237` enumera las superficies que cierra y `connect_participants`
+   * no está entre ellas.
+   *
+   * Medido en producción el 2026-08-14 (sólo lectura):
+   *   · 26 participantes `participant_type='whatsapp'`
+   *   · 21 con un E.164 válido en `external_ref->>'phone'`
+   *   · la tabla está publicada en `supabase_realtime`
+   *
+   * Los casos de abajo AFIRMAN LA FUGA. Cuando se cierre, van a fallar, y ese
+   * fallo es la señal correcta: obliga a actualizar este bloque en el mismo
+   * commit que la corrige, en vez de dejar una prueba verde que ya no describe
+   * nada. Un test que afirmara lo contrario hoy sería sencillamente falso.
+   */
+
+  it("el encargado SIN capacidad de WhatsApp lee el teléfono de la contraparte", async () => {
+    const r = await como<{ phone: string }>(ENCARGADO,
+      `select external_ref->>'phone' as phone from public.connect_participants
+        where participant_type='whatsapp'`);
+    expect(r).toHaveLength(1);
+    expect(r[0].phone).toBe(TEL_CONTRAPARTE); // ⇠ fuga confirmada
+  });
+
+  it("y le llega por realtime, porque la tabla está publicada", async () => {
+    // `postgres_changes` entrega la fila si la policy SELECT la deja ver. Ya se
+    // demostró que la deja; falta sólo que exista el canal.
+    const { rows } = await db.query(
+      `select count(*)::int n from pg_publication_tables
+        where pubname='supabase_realtime' and tablename='connect_participants'`);
+    expect(rows[0].n).toBe(1);
+  });
+
+  it("un usuario AJENO al hilo no la ve: la membresía sigue rigiendo", async () => {
+    // Acota el alcance del hallazgo: no es una tabla pública. La fuga alcanza a
+    // participantes del hilo —el escenario exacto que 0236 declara amenaza— y a
+    // `is_admin()`, que 0236 quitó a propósito de `nexus_link_can()`.
+    expect(await count(AJENO,
+      "select count(*)::text n from public.connect_participants where participant_type='whatsapp'"))
+      .toBe(0);
+    expect(await count(ADMIN_OK,
+      "select count(*)::text n from public.connect_participants where participant_type='whatsapp'"))
+      .toBe(1);
   });
 });
 

@@ -108,7 +108,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-link-a1-01-tricolor-badges.test.ts": 53,
   "t-link-a1-03-migration-rehearsal.test.ts": 16,
   "t-link-b1-01-channel-boundary.test.ts": 21,
-  "t-link-b1-02-channel-rls.test.ts": 30,
+  "t-link-b1-02-channel-rls.test.ts": 41,
   "t-link-b2-01-upload-lifecycle.test.ts": 37,
 });
 
