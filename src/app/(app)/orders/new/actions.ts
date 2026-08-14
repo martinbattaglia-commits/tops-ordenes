@@ -81,28 +81,40 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
     };
   }
 
-  // 4a. Upsert cliente (siempre, así si cambian datos quedan al día)
-  const { data: clientRow, error: cErr } = await admin
+  // 4a. RESOLVER el cliente. Acá no se crea ni se modifica ninguna fila.
+  //
+  // La versión anterior hacía `upsert(onConflict: "cuit")` con service_role:
+  // crear una orden de servicio pisaba en silencio razón social, domicilio,
+  // teléfono, contacto y email del cliente con lo que mandara el navegador, y
+  // daba de alta clientes como efecto colateral. Un alta de cliente es un acto
+  // deliberado, con permiso y auditoría —`createClient` en
+  // `(app)/clients/actions.ts`—, no la consecuencia de completar un wizard.
+  const cuitDigits = data.client.cuit.replace(/\D/g, "");
+  const clientQuery = admin
     .from("clients")
-    .upsert(
-      {
-        id: data.client.id ?? undefined,
-        razon: data.client.razon,
-        cuit: data.client.cuit,
-        domicilio: data.client.domicilio || null,
-        telefono: data.client.telefono || null,
-        contacto: data.client.contacto || null,
-        email: data.client.email || null,
-      },
-      { onConflict: "cuit" }
-    )
-    .select("id, razon, cuit, domicilio, contacto, email, tags")
-    .single();
-  if (cErr || !clientRow) {
-    console.error("[createOrder] client upsert failed", cErr);
+    .select("id, razon, cuit, domicilio, contacto, email, tags, activo");
+
+  const { data: clientRow, error: cErr } = await (data.client.id
+    ? clientQuery.eq("id", data.client.id)
+    : clientQuery.eq("cuit", cuitDigits)
+  ).maybeSingle();
+
+  if (cErr) {
+    console.error("[createOrder] client lookup failed", cErr);
+    return { ok: false, error: cErr.message };
+  }
+  if (!clientRow) {
     return {
       ok: false,
-      error: cErr?.message ?? "No pudimos guardar los datos del cliente.",
+      error:
+        `El cliente ${data.client.razon} (CUIT ${cuitDigits}) no existe en el registro maestro. ` +
+        "Crealo primero desde Clientes: una orden no da de alta clientes.",
+    };
+  }
+  if (clientRow.activo === false) {
+    return {
+      ok: false,
+      error: `El cliente ${clientRow.razon} está desactivado y no admite órdenes nuevas.`,
     };
   }
   const client_id = clientRow.id;

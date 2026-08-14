@@ -6,7 +6,12 @@ import { Icon } from "@/components/Icon";
 import { VoiceField } from "@/components/voice/VoiceField";
 import { cn, fmtCuit, isValidCuit } from "@/lib/utils";
 import type { Client } from "@/lib/types";
-import { createClient, fetchClients, refreshFromClientify, type NewClientInput } from "./actions";
+import {
+  createClient,
+  fetchClients,
+  previewClientifyDivergences,
+  type NewClientInput,
+} from "./actions";
 import { AccountPicker } from "@/components/erp/AccountPicker";
 import { CONDICION_IVA_LABEL, CONDICION_IVA_VALUES } from "@/lib/invoicing/types";
 import type { ChartAccount } from "@/lib/erp/types";
@@ -82,11 +87,19 @@ export default function ClientsView({
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   };
 
+  /**
+   * Compara con Clientify y REPORTA. No escribe nada.
+   *
+   * Antes esto llamaba a `refreshFromClientify`, que hacía un upsert masivo
+   * por CUIT con service_role y pisaba en silencio datos cargados a mano. Qué
+   * hacer con cada divergencia es una decisión de una persona, así que el
+   * botón termina en un informe, no en una escritura.
+   */
   const handleRefresh = () => {
     startRefresh(async () => {
-      const r = await refreshFromClientify();
+      const r = await previewClientifyDivergences();
       if (!r.ok) {
-        pushToast("error", r.error ?? "No se pudo refrescar desde Clientify");
+        pushToast("error", r.error ?? "No se pudo comparar contra Clientify");
         return;
       }
       const list = await fetchClients();
@@ -95,7 +108,16 @@ export default function ClientsView({
         setSource(list.source);
         setWarning(list.warning);
       }
-      pushToast("success", `Sincronizados ${r.synced} clientes desde Clientify`);
+      pushToast(
+        r.divergencias.length === 0 ? "success" : "error",
+        r.divergencias.length === 0
+          ? "Sin divergencias con Clientify"
+          : `${r.divergencias.length} divergencia(s) con Clientify: ` +
+            r.divergencias
+              .slice(0, 3)
+              .map((d) => `${d.razon_crm} (${d.campos_distintos.join(", ")})`)
+              .join(" · "),
+      );
     });
   };
 
@@ -403,7 +425,7 @@ function NewClientModal({
         setSubmitting(false);
         return;
       }
-      onCreated(result.client, result.source);
+      onCreated(result.client, result.clientify_sync);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
       setSubmitting(false);

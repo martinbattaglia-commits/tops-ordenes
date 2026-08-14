@@ -28,9 +28,12 @@ describe("T-A0-10 · manifiesto", () => {
 
   it("tiene exactamente la cantidad esperada", () => {
     expect(WMS_MIGRATION_MANIFEST).toHaveLength(EXPECTED_MANIFEST_SIZE);
-    // 29 de A0 + 0219/0220 de P3-N1B + 0240/0241 del registro maestro de
-    // clientes (cada incorporación es una decisión consciente, visible en el diff).
-    expect(EXPECTED_MANIFEST_SIZE).toBe(33);
+    // 29 de A0 + 0219/0220 de P3-N1B (decisión consciente, visible en el diff).
+    // 0240/0241 NO entran: T-C1-05 del harness de Custodia exige que este
+    // manifiesto permanezca invariante, y esas dos migraciones no pertenecen
+    // al cierre WMS. Van a una exclusión documentada y se verifican en su
+    // propio cierre acotado.
+    expect(EXPECTED_MANIFEST_SIZE).toBe(31);
   });
 
   it("no tiene duplicados", () => {
