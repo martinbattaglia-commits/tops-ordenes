@@ -24,6 +24,22 @@
  *   · SUBIDA   → el `storage_path`, uno por archivo y elegido por el servidor;
  *   · ADJUNTO  → la fila que crea `finalize`, una por archivo.
  *
+ * ─── LA EXCEPCIÓN: EN WHATSAPP, UN LOTE ES VARIOS MENSAJES ────────────────
+ *
+ * Hallazgo de C4 (2026-08-14): el CAS del envío a Meta (`media-send-core.ts`)
+ * reclama por `messageId` — UN wamid por fila de `connect_messages`. Un lote
+ * de tres fotos que compartiera `client_msg_id` compartiría ESE messageId, así
+ * que el segundo y el tercer archivo perderían el CAS del PRIMERO —"ya hay un
+ * envío en curso para este mensaje"— y jamás llegarían a Meta, mientras la UI
+ * los pintaba a los tres como enviados. WhatsApp además no tiene "un mensaje
+ * con tres adjuntos": Meta envía un `/messages` por cada media item.
+ *
+ * Por eso, cuando `kind === "whatsapp"`, CADA archivo acuña su PROPIO
+ * `client_msg_id` — no hay lote. Cada uno se vuelve su propio mensaje en
+ * Connect, con su propia fila, su propio wamid y su propio CAS, reflejando
+ * exactamente lo que Meta hace del otro lado. En chat interno nada cambia: el
+ * lote sigue siendo un solo mensaje con varios adjuntos, como siempre.
+ *
  * ─── REINTENTAR NO PUEDE DUPLICAR ─────────────────────────────────────────
  *
  * El reintento conserva el `client_msg_id` del lote y estrena una subida nueva.
@@ -44,6 +60,7 @@
 
 import { useCallback, useRef, useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { ConversationKind } from "@/lib/connect/types";
 import {
   ACCEPT_ATTR, CLIENT_LIMITS, formatBytes, precheckAttachment, tieneVistaPrevia,
 } from "@/lib/connect/attachments/client-precheck";
@@ -61,7 +78,14 @@ function ClipIcon({ size = 15 }: { size?: number }) {
   );
 }
 
-type EstadoAdjunto = "encolado" | "subiendo" | "verificando" | "enviado" | "error";
+/**
+ * H2 (FASE B): `incierto` es un estado PROPIO, distinto de `error`. Un envío
+ * de WhatsApp `reconciliation_required` significa que el archivo pudo haber
+ * salido — tratarlo como error invitaría a reintentar y duplicarlo. Por eso
+ * NO entra en el filtro de "pendientes" de `enviarTodo` y no se autodescarta:
+ * el operador tiene que verlo y decidir, no perderlo de vista.
+ */
+type EstadoAdjunto = "encolado" | "subiendo" | "verificando" | "enviado" | "error" | "incierto";
 
 interface EnCola {
   /** Identidad local del ítem en la cola; NO viaja al servidor. */
@@ -71,10 +95,23 @@ interface EnCola {
   error?: string;
   /** ObjectURL de la miniatura; se revoca al descartar el ítem. */
   preview?: string;
+  /**
+   * SÓLO en WhatsApp: el `client_msg_id` PROPIO de este archivo, acuñado la
+   * primera vez que se envía y reutilizado en cada reintento — mismo criterio
+   * que `loteActual()` para el lote interno, pero por ítem. `undefined` en
+   * chat interno, donde el lote entero comparte uno solo.
+   */
+  clientMsgIdPropio?: string;
 }
 
 export interface AttachmentComposerProps {
   conversationId: string;
+  /**
+   * H2 (FASE B): decide si el lote se trata como UN mensaje con varios
+   * adjuntos (interno) o como VARIOS mensajes independientes, uno por archivo
+   * (WhatsApp) — ver el docblock del archivo. `undefined` se trata como no-WhatsApp.
+   */
+  kind?: ConversationKind;
   /** Deshabilita la selección mientras el hilo está ocupado con otro envío. */
   disabled?: boolean;
   /** Pie de foto opcional que acompaña al primer archivo. */
@@ -84,8 +121,9 @@ export interface AttachmentComposerProps {
 }
 
 export function AttachmentComposer({
-  conversationId, disabled = false, caption, onSent,
+  conversationId, kind, disabled = false, caption, onSent,
 }: AttachmentComposerProps) {
+  const esWhatsapp = kind === "whatsapp";
   const [cola, setCola] = useState<EnCola[]>([]);
   const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +210,18 @@ export function AttachmentComposer({
       if (upErr) { marcar(item.key, { estado: "error", error: `Subida: ${upErr.message}` }); return; }
 
       marcar(item.key, { estado: "verificando" });
+      // En WhatsApp, ESTE archivo es su propio mensaje (ver docblock del
+      // archivo): acuña su client_msg_id la primera vez y lo persiste en la
+      // cola para que un reintento lo reutilice, igual que `loteActual()`
+      // hace por lote en interno. `item` es una instantánea recibida como
+      // parámetro — se actualiza vía `marcar`, nunca por mutación directa.
+      let clientMsgId: string;
+      if (esWhatsapp) {
+        clientMsgId = item.clientMsgIdPropio ?? crypto.randomUUID();
+        if (!item.clientMsgIdPropio) marcar(item.key, { clientMsgIdPropio: clientMsgId });
+      } else {
+        clientMsgId = loteActual();
+      }
       const fin = await finalizeAttachmentAction({
         conversationId,
         path: prep.path,
@@ -180,10 +230,29 @@ export function AttachmentComposer({
         // que se publica una vez; mandarlo únicamente con el primer archivo
         // perdería el texto si justo ese archivo fallara.
         body: caption ?? null,
-        clientMsgId: loteActual(),
-        attachmentCount: total,
+        clientMsgId,
+        // En WhatsApp cada archivo es 1 de 1 (su propio mensaje); en interno,
+        // 1 de N del lote — es lo que `cuerpoDelMensaje` usa para rotular.
+        attachmentCount: esWhatsapp ? 1 : total,
       });
       if (!fin.ok) { marcar(item.key, { estado: "error", error: fin.message }); return; }
+
+      // H2 (FASE B): en WhatsApp, `whatsapp` es el desenlace REAL del envío a
+      // Meta. `undefined` (chat interno) y `sent`/`already_claimed` son éxito
+      // pleno; `failed` es un error retryable más; `reconciliation_required`
+      // NUNCA se reintenta solo — ver el docblock de `EstadoAdjunto`.
+      if (fin.whatsapp?.state === "reconciliation_required") {
+        marcar(item.key, {
+          estado: "incierto",
+          error: fin.whatsapp.message ?? "No se sabe si WhatsApp lo recibió. No lo reintentes.",
+        });
+        onSent?.();
+        return; // sin autodescarte: el operador tiene que verlo.
+      }
+      if (fin.whatsapp?.state === "failed") {
+        marcar(item.key, { estado: "error", error: fin.whatsapp.message ?? "No se pudo enviar por WhatsApp." });
+        return;
+      }
 
       marcar(item.key, { estado: "enviado" });
       onSent?.();
@@ -192,7 +261,7 @@ export function AttachmentComposer({
     } finally {
       enVuelo.current.delete(item.key);
     }
-  }, [conversationId, caption, marcar, descartar, onSent, loteActual]);
+  }, [conversationId, caption, marcar, descartar, onSent, loteActual, esWhatsapp]);
 
   const enviarTodo = useCallback(async () => {
     const pendientes = cola.filter((i) => i.estado === "encolado" || i.estado === "error");
@@ -258,9 +327,15 @@ export function AttachmentComposer({
                     {i.estado === "subiendo" && " · Subiendo…"}
                     {i.estado === "verificando" && " · Verificando…"}
                     {i.estado === "enviado" && " · Enviado"}
+                    {i.estado === "incierto" && " · Sin confirmar"}
                   </span>
                   {i.estado === "error" && (
                     <span role="alert" className="block text-[10px] text-tops-red">{i.error}</span>
+                  )}
+                  {i.estado === "incierto" && (
+                    // Ámbar, no rojo: no es un error para reintentar — es
+                    // incertidumbre real que el operador tiene que leer.
+                    <span role="status" className="block text-[10px] text-amber-600">{i.error}</span>
                   )}
                 </span>
                 {(i.estado === "subiendo" || i.estado === "verificando") && (

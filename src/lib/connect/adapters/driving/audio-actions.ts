@@ -16,8 +16,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { canAccess } from "@/lib/rbac/guard";
+import { canChannel } from "@/lib/rbac/nexus-link";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { validateAudio, AUDIO_LIMITS } from "../../audio/validate";
+import { counterpartPhoneFromContext } from "@/lib/whatsapp/reply-core";
+import { sendWhatsappMediaForAttachment, type MediaSendResult } from "@/lib/whatsapp/media-send";
 
 const BUCKET = "connect-files";
 
@@ -34,21 +37,56 @@ async function guardSession(): Promise<SessionGuard> {
   return { ok: true, userId: user.id };
 }
 
-/** Membresía + hilo activo, verificados BAJO RLS DE SESIÓN (fail-closed). */
-async function assertMemberActive(conversationId: string): Promise<string | null> {
+type PuedeGrabar =
+  | { ok: true; kind: string; contextId: string | null }
+  | { ok: false; message: string };
+
+/**
+ * Membresía + hilo activo + CAPACIDAD DEL CANAL, verificados bajo RLS de
+ * sesión (fail-closed).
+ *
+ * H2/H4 (FASE B): antes esta función sólo exigía `connect.view` + membresía,
+ * sin distinguir canal — la MISMA asimetría que ya tenían los adjuntos antes
+ * de `assertPuedeAdjuntar`. Un audio en WhatsApp nunca pasaba por
+ * `nexus_link.whatsapp.media`. Se alinea al mismo criterio, exacto.
+ */
+async function assertPuedeGrabar(conversationId: string): Promise<PuedeGrabar> {
   const supabase = createClient();
-  if (!supabase) return "Sin sesión.";
+  if (!supabase) return { ok: false, message: "Sin sesión." };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, message: "Sin sesión." };
   const { data, error } = await supabase
     .from("connect_conversations")
-    .select("id, archived_at, connect_participants!inner(profile_id)")
+    .select("id, kind, context_id, archived_at, connect_participants!inner(profile_id)")
     .eq("id", conversationId)
+    .eq("connect_participants.profile_id", user.id)
     .limit(1)
     .maybeSingle();
-  if (error || !data) return "No sos miembro de esta conversación.";
-  if ((data as { archived_at: string | null }).archived_at) {
-    return "La conversación está archivada: no se pueden enviar audios.";
+  if (error || !data) return { ok: false, message: "No sos miembro de esta conversación." };
+  const conv = data as { kind: string; context_id: string | null; archived_at: string | null };
+  if (conv.archived_at) {
+    return { ok: false, message: "La conversación está archivada: no se pueden enviar audios." };
   }
-  return null;
+  const capacidad = conv.kind === "whatsapp"
+    ? "nexus_link.whatsapp.media" as const
+    : "nexus_link.internal_chat.media" as const;
+  if (!(await canChannel(capacidad))) return { ok: false, message: "No tenés acceso a este canal." };
+  return { ok: true, kind: conv.kind, contextId: conv.context_id };
+}
+
+/** Mismo intento de egress que los adjuntos — ver su docblock en attachment-actions.ts. */
+async function intentarEnviarAudioPorWhatsapp(
+  autorizado: Extract<PuedeGrabar, { ok: true }>,
+  input: { messageId: string; bucket: string; path: string; mimeType: string; fileName: string },
+): Promise<{ state: MediaSendResult["state"]; message?: string } | undefined> {
+  if (autorizado.kind !== "whatsapp") return undefined;
+  const to = counterpartPhoneFromContext(autorizado.contextId ?? "");
+  if (!to) return { state: "failed", message: "El hilo no tiene un teléfono de contraparte válido." };
+  const r = await sendWhatsappMediaForAttachment({
+    messageId: input.messageId, to, bucket: input.bucket, path: input.path,
+    mimeType: input.mimeType, fileName: input.fileName,
+  });
+  return r.ok ? { state: r.state } : { state: r.state, message: r.message };
 }
 
 const PrepareSchema = z.object({ conversationId: z.string().uuid() });
@@ -62,8 +100,8 @@ export async function prepareAudioUploadAction(raw: unknown): Promise<PrepareUpl
   if (!g.ok) return g;
   const p = PrepareSchema.safeParse(raw);
   if (!p.success) return { ok: false, message: "Datos inválidos." };
-  const membership = await assertMemberActive(p.data.conversationId);
-  if (membership) return { ok: false, message: membership };
+  const autorizado = await assertPuedeGrabar(p.data.conversationId);
+  if (!autorizado.ok) return { ok: false, message: autorizado.message };
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, message: "Storage no disponible." };
@@ -81,8 +119,12 @@ const FinalizeSchema = z.object({
   clientMsgId: z.string().uuid(),
 });
 
+/** `whatsapp` refleja el desenlace REAL del envío a Meta — ver el mismo campo en attachment-actions.ts. */
 export type FinalizeResult =
-  | { ok: true; messageId: string; attachmentId: string }
+  | {
+      ok: true; messageId: string; attachmentId: string;
+      whatsapp?: { state: MediaSendResult["state"]; message?: string };
+    }
   | { ok: false; message: string };
 
 export async function finalizeAudioMessageAction(raw: unknown): Promise<FinalizeResult> {
@@ -94,8 +136,8 @@ export async function finalizeAudioMessageAction(raw: unknown): Promise<Finalize
   if (!p.data.path.startsWith(`${p.data.conversationId}/audio/`)) {
     return { ok: false, message: "Path inválido." };
   }
-  const membership = await assertMemberActive(p.data.conversationId);
-  if (membership) return { ok: false, message: membership };
+  const autorizado = await assertPuedeGrabar(p.data.conversationId);
+  if (!autorizado.ok) return { ok: false, message: autorizado.message };
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, message: "Storage no disponible." };
@@ -164,7 +206,14 @@ export async function finalizeAudioMessageAction(raw: unknown): Promise<Finalize
   const messageId = (msg as { id: string }).id;
   await admin.from("connect_attachments").update({ message_id: messageId }).eq("id", attachmentId);
 
-  return { ok: true, messageId, attachmentId };
+  // H2 (FASE B): en WhatsApp, la nota de voz reenvasada (WebM→Ogg, ver
+  // opus-remux.ts) recién se publica como enviada cuando Meta la acepta.
+  const whatsapp = await intentarEnviarAudioPorWhatsapp(autorizado, {
+    messageId, bucket: BUCKET, path: p.data.path,
+    mimeType: v.sniffed.mime, fileName: `voz-${Math.round(p.data.durationMs / 1000)}s.${v.sniffed.ext}`,
+  });
+
+  return { ok: true, messageId, attachmentId, whatsapp };
 }
 
 const UrlSchema = z.object({ messageId: z.string().uuid() });

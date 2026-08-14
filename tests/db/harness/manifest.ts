@@ -402,7 +402,11 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       f === "0237_nexus_link_channel_rls.sql" ||
       f === "ROLLBACK_0237_nexus_link_channel_rls.sql" ||
       f === "0238_nexus_link_upload_lifecycle.sql" ||
-      f === "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
+      f === "ROLLBACK_0238_nexus_link_upload_lifecycle.sql" ||
+      f === "0235a_nexus_link_permission_module.sql" ||
+      f === "ROLLBACK_0235a_nexus_link_permission_module.sql" ||
+      f === "0239_nexus_link_participants_channel_rls.sql" ||
+      f === "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
     reason:
       "Dominio Connect/Nexus Link, ajeno al cierre de dependencias WMS: 0234 " +
       "sólo redefine las vistas de la cadena Connect 0142+ (v_connect_inbox, " +
@@ -419,7 +423,19 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "de vida de la subida (connect_pending_uploads y su máquina de estados) " +
       "sobre esa misma cadena y se verifica en " +
       "tests/db/t-link-b2-01-upload-lifecycle.test.ts, que además ejecuta su " +
-      "ROLLBACK y contrasta el catálogo resultante.",
+      "ROLLBACK y contrasta el catálogo resultante. 0235a agrega dos valores " +
+      "al enum permission_module_t ('nexus_link_chat','nexus_link_whatsapp'), " +
+      "aislada en su propia migración por la misma razón que 0142 (Postgres " +
+      "prohíbe usar un valor de enum recién agregado en la misma transacción " +
+      "que lo agrega); es el hallazgo de C5 que corrige a 0236 (unique(module," +
+      "action) real, medido contra producción, que 'connect' ya no podía " +
+      "absorber). 0239 cierra H1 (fuga de connect_participants.external_ref, " +
+      "el teléfono de la contraparte de WhatsApp) agregando el predicado de " +
+      "canal —reutilizando _connect_channel_allowed de 0237, sin función " +
+      "nueva— a la policy SELECT de connect_participants. Ambas se verifican " +
+      "contra PostgreSQL real, con el esquema REAL derivado de main (no un " +
+      "cierre sintético), en tests/db/t-link-h1-01-participants-channel-rls." +
+      "test.ts, que además ejecuta ambos ROLLBACK y una reaplicación limpia.",
     },
     {
     id: "lineage-recovered-and-correctives",

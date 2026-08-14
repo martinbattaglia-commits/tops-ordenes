@@ -34,23 +34,35 @@
 -- ─────────────────────────────────────────────────────────────────────────
 
 -- ═══ (1) Las seis capacidades ═══
-insert into public.permissions (slug, module, action, name, description) values
-  ('nexus_link.internal_chat.read',  'connect', 'view',
+-- CORRECCIÓN C5 (2026-08-14), dos defectos reales que el arnés sintético
+-- previo no podía detectar — ver 0235a para la medición completa:
+--   1. la columna real de `public.permissions` es `label`, no `name`;
+--   2. `module='connect'` habría violado `unique(module,action)`:
+--      `connect` ya ocupa `view`/`create`/`edit`/`delete`/`admin`/
+--      `incident_admin`/`task_admin` en producción, y estas seis filas
+--      pedían dos veces `view` y cuatro veces `create` bajo ese mismo módulo.
+--      Se usan los dos módulos nuevos de 0235a, con exactamente tres acciones
+--      cada uno (view=leer, create=enviar, edit=adjuntar). Ninguna fila
+--      existente de `permissions` se toca.
+-- Nunca se aplicó a producción: corregir acá no reescribe una migración
+-- sellada, es la única aplicación que va a tener.
+insert into public.permissions (slug, module, action, label, description) values
+  ('nexus_link.internal_chat.read',  'nexus_link_chat', 'view',
    'Nexus Link · leer chat interno',
    'Ver conversaciones internas nativas donde es participante'),
-  ('nexus_link.internal_chat.send',  'connect', 'create',
+  ('nexus_link.internal_chat.send',  'nexus_link_chat', 'create',
    'Nexus Link · escribir en chat interno',
    'Postear mensajes en conversaciones internas donde es participante'),
-  ('nexus_link.internal_chat.media', 'connect', 'create',
+  ('nexus_link.internal_chat.media', 'nexus_link_chat', 'edit',
    'Nexus Link · adjuntar en chat interno',
    'Adjuntar imágenes, documentos y audios en conversaciones internas'),
-  ('nexus_link.whatsapp.read',       'connect', 'view',
+  ('nexus_link.whatsapp.read',       'nexus_link_whatsapp', 'view',
    'Nexus Link · leer WhatsApp',
    'Ver conversaciones de WhatsApp Comercial donde es participante'),
-  ('nexus_link.whatsapp.send',       'connect', 'create',
+  ('nexus_link.whatsapp.send',       'nexus_link_whatsapp', 'create',
    'Nexus Link · escribir por WhatsApp',
    'Enviar mensajes por WhatsApp Comercial'),
-  ('nexus_link.whatsapp.media',      'connect', 'create',
+  ('nexus_link.whatsapp.media',      'nexus_link_whatsapp', 'edit',
    'Nexus Link · enviar media por WhatsApp',
    'Enviar imágenes, documentos y audios por WhatsApp Comercial')
 on conflict (slug) do nothing;

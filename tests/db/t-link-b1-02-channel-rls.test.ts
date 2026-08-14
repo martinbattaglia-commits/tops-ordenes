@@ -51,8 +51,10 @@ const CIERRE = `
       select coalesce((select role = 'admin' from public.profiles where id = auth.uid()), false) $fn$;
 
   create table public.roles (id uuid primary key default gen_random_uuid(), slug text, name text unique);
+  -- columna real es label, no name (medido contra 0009_rbac.sql y contra
+  -- produccion; corregido junto con el mismo defecto en 0236, ver su cabecera).
   create table public.permissions (id uuid primary key default gen_random_uuid(), slug text unique not null,
-    module text, action text, name text, description text);
+    module text, action text, label text, description text);
   create table public.role_permissions (role_id uuid not null references public.roles(id) on delete cascade,
     permission_id uuid not null references public.permissions(id) on delete cascade,
     created_at timestamptz not null default now(), primary key (role_id, permission_id));
@@ -225,7 +227,7 @@ beforeAll(async () => {
       ($3,'admin'::public.user_role_t), ($4,'operaciones'::public.user_role_t)`,
     [ENCARGADO, COMERCIAL, ADMIN_OK, AJENO]);
   await db.query(`
-    insert into public.permissions (slug, module, action, name) values
+    insert into public.permissions (slug, module, action, label) values
       ('connect.view','connect','view','Ver'), ('connect.create','connect','create','Crear'),
       ('connect.edit','connect','edit','Editar'), ('connect.admin','connect','admin','Admin');
     insert into public.roles (slug, name) values

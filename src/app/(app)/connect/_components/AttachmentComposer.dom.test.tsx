@@ -222,6 +222,49 @@ describe("fallo y reintento", () => {
   });
 });
 
+describe("H2 (FASE B) · el desenlace de WhatsApp decide la burbuja, no el guardado en Connect", () => {
+  it("whatsapp.state='failed': NO se pinta como enviado, y ofrece Reintentar", async () => {
+    finalize.mockResolvedValue({
+      ok: true, messageId: "m-1", attachmentId: "a-1", fileName: "remito.pdf",
+      whatsapp: { state: "failed", message: "No se pudo enviar por WhatsApp." },
+    });
+    await montar();
+    await elegir(archivo("remito.pdf"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    expect(host.textContent).not.toContain("· Enviado");
+    expect(host.textContent).toContain("No se pudo enviar por WhatsApp.");
+    expect(botonPorTexto("Reintentar")).toBeDefined();
+  });
+
+  it("whatsapp.state='reconciliation_required': NO se pinta como enviado, NO ofrece Reintentar, y no se autodescarta", async () => {
+    finalize.mockResolvedValue({
+      ok: true, messageId: "m-1", attachmentId: "a-1", fileName: "remito.pdf",
+      whatsapp: { state: "reconciliation_required", message: "No se sabe si WhatsApp lo recibió. No lo reintentes." },
+    });
+    await montar();
+    await elegir(archivo("remito.pdf"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    expect(host.textContent).not.toContain("· Enviado");
+    expect(host.textContent).toContain("Sin confirmar");
+    expect(host.textContent).toContain("No se sabe si WhatsApp lo recibió");
+    // La propiedad crítica: NUNCA se ofrece reintentar un envío incierto —
+    // reintentar podría duplicarlo del lado del cliente de WhatsApp.
+    expect(botonPorTexto("Reintentar")).toBeUndefined();
+    // Y sigue en la cola: no desapareció como los envíos exitosos.
+    expect(host.textContent).toContain("remito.pdf");
+  });
+
+  it("whatsapp undefined (chat interno) o `sent`: se pinta como enviado, como siempre", async () => {
+    finalize.mockResolvedValue({
+      ok: true, messageId: "m-1", attachmentId: "a-1", fileName: "remito.pdf", whatsapp: { state: "sent" },
+    });
+    await montar();
+    await elegir(archivo("remito.pdf"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    expect(host.textContent).toContain("· Enviado");
+  });
+});
+
 // ═══════════════ identidad: mensaje ≠ subida ≠ adjunto ═══════════════════
 
 const idsDeMensaje = () =>
@@ -317,5 +360,68 @@ describe("un mensaje lógico, varios adjuntos", () => {
     await act(async () => { botonPorTexto("Enviar")?.click(); });
     const enviados = finalize.mock.calls.map((c) => (c[0] as { fileName: string }).fileName);
     expect(enviados).toEqual(["a.pdf", "c.pdf"]);
+  });
+});
+
+// ═══ H2 (hallazgo C4) · EN WHATSAPP, LA EXCEPCIÓN: un lote es VARIOS mensajes ═══
+//
+// El defecto: los N archivos de un mismo lote comparten `client_msg_id` (arriba
+// se prueba que ESO es lo correcto en Connect interno). En WhatsApp ese mismo
+// `client_msg_id` se mapea 1:1 a un `messageId` server-side vía el CAS de
+// `claimSending` — así que compartirlo hace que sólo el PRIMER archivo gane el
+// CAS y los demás vuelvan `already_claimed`, que el composer no distinguía de
+// un éxito real y pintaba TODOS como "Enviado" aunque WhatsApp sólo recibiera
+// uno. La corrección: en un hilo `kind="whatsapp"`, cada archivo acuña (o
+// conserva, si ya lo tenía por un reintento) su PROPIO `clientMsgIdPropio`.
+describe("H2 (hallazgo C4) · en WhatsApp cada adjunto del lote es un mensaje propio", () => {
+  it("dos archivos en un hilo de WhatsApp finalizan con client_msg_id DISTINTOS", async () => {
+    await montar({ kind: "whatsapp" });
+    await elegir(archivo("a.jpg", "image/jpeg"), archivo("b.jpg", "image/jpeg"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    expect(finalize).toHaveBeenCalledTimes(2);
+    const ids = idsDeMensaje();
+    expect(new Set(ids).size).toBe(2);
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it("en WhatsApp cada envío declara attachmentCount=1, nunca el tamaño del lote", async () => {
+    await montar({ kind: "whatsapp" });
+    await elegir(archivo("a.jpg", "image/jpeg"), archivo("b.jpg", "image/jpeg"), archivo("c.jpg", "image/jpeg"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    for (const c of finalize.mock.calls) {
+      expect((c[0] as { attachmentCount: number }).attachmentCount).toBe(1);
+    }
+  });
+
+  it("sin kind (Connect interno), el mismo lote de dos archivos SIGUE siendo un solo mensaje", async () => {
+    // Guarda de contraste: la rama nueva es la excepción, no el default.
+    await montar();
+    await elegir(archivo("a.jpg", "image/jpeg"), archivo("b.jpg", "image/jpeg"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    expect(new Set(idsDeMensaje()).size).toBe(1);
+  });
+
+  it("reintentar UN archivo de WhatsApp conserva SU propio client_msg_id, no el de otro archivo del lote", async () => {
+    finalize.mockImplementation(async (a: unknown) => {
+      const arg = a as { fileName: string };
+      return arg.fileName === "falla.jpg"
+        ? { ok: false, message: "Red caída." }
+        : { ok: true, messageId: "m1", attachmentId: "a1", fileName: arg.fileName, whatsapp: { state: "sent" } };
+    });
+    await montar({ kind: "whatsapp" });
+    await elegir(archivo("ok.jpg", "image/jpeg"), archivo("falla.jpg", "image/jpeg"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    const primeraTanda = idsDeMensaje();
+    expect(new Set(primeraTanda).size).toBe(2); // ya distintos en el primer intento
+
+    finalize.mockImplementation(async (a: unknown) => {
+      const arg = a as { fileName: string };
+      return { ok: true, messageId: "m2", attachmentId: "a2", fileName: arg.fileName, whatsapp: { state: "sent" } };
+    });
+    await act(async () => { botonPorTexto("Reintentar")?.click(); });
+    const [, , reintento] = idsDeMensaje();
+    // El reintento de "falla.jpg" usa SU MISMO id, no el de "ok.jpg".
+    expect(reintento).toBe(primeraTanda[1]);
+    expect(reintento).not.toBe(primeraTanda[0]);
   });
 });

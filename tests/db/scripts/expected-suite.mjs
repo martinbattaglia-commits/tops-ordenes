@@ -60,6 +60,11 @@ export const EXPECTED_TEST_FILES = [
   // Ciclo de vida de la subida (0238): carreras reales entre finalize y
   // barrido, adopción ajena, reintento tras fallo de Storage y rollback.
   "t-link-b2-01-upload-lifecycle.test.ts",
+  // Cierre de H1 (0239): fuga de connect_participants.external_ref. Entorno
+  // C5 con esquema REAL derivado de main (0001/.../0238 vía readFileSync,
+  // no un cierre sintético), incluidos los dos defectos que ese entorno
+  // descubrió en 0236 (columna label, no name; unique(module,action) real).
+  "t-link-h1-01-participants-channel-rls.test.ts",
 ];
 
 /**
@@ -110,6 +115,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-link-b1-01-channel-boundary.test.ts": 21,
   "t-link-b1-02-channel-rls.test.ts": 41,
   "t-link-b2-01-upload-lifecycle.test.ts": 37,
+  "t-link-h1-01-participants-channel-rls.test.ts": 34,
 });
 
 /**

@@ -1,0 +1,45 @@
+-- 0235a_nexus_link_permission_module.sql — NEXUS LINK · defecto C5.
+-- ─────────────────────────────────────────────────────────────────────────
+-- HALLAZGO DE C5 (2026-08-14), NO de H1/H2: el arnés existente de esta rama
+-- (t-link-b1-01/b1-02, y por lo tanto los C4 y Guardián previos) reproducía
+-- `permissions` a mano, con columna `name` y SIN el `unique(module,action)`
+-- real. Esa reproducción sintética coincidía por accidente con el defecto que
+-- tenía 0236, y por eso nadie lo vio: la primera vez que se intentó aplicar
+-- 0236 contra un esquema REAL (0009_rbac.sql, e independientemente medido
+-- contra producción) rompió dos veces:
+--
+--   1. `insert into permissions (..., name, ...)` — la columna real es
+--      `label`. Corregido directamente en 0236 (nunca se aplicó, no hay
+--      historia que reescribir).
+--   2. `module='connect'` para las seis capacidades nuevas — PRODUCCIÓN mide
+--      que `module='connect'` YA ocupa 7 de los 13 valores de
+--      `permission_action_t` (view, create, edit, delete, admin,
+--      incident_admin, task_admin) contra `unique(module,action)`. Las seis
+--      filas de 0236 —dos con action='view', cuatro con action='create'—
+--      habrían violado esa unicidad desde la primera fila: `connect.view` ya
+--      existe. Este archivo es la corrección: DOS módulos nuevos, uno para
+--      chat interno y otro para WhatsApp, cada uno con exactamente tres
+--      acciones (view/create/edit → leer/enviar/adjuntar), sin tocar ni un
+--      valor existente.
+--
+-- AISLADA en su propia migración por la misma razón que 0142: Postgres
+-- prohíbe usar un valor de enum recién agregado dentro de la misma
+-- transacción que lo agrega (confirmado en este mismo repo por el comentario
+-- de 0056: «mismo patrón que 0052→0053»). El uso vive en 0236, que corre
+-- después, en su propia transacción.
+--
+-- Por qué DOS módulos y no uno con seis acciones prestadas: `action` es un
+-- vocabulario COMPARTIDO entre todos los módulos (view/create/edit/delete/…),
+-- y modelar "leer WhatsApp" como `action='delete'` bajo un módulo único
+-- mentiría sobre la operación a cualquiera que lea la tabla de permisos. Dos
+-- módulos con {view,create,edit} cada uno son seis pares (module,action)
+-- limpios y ninguno se reinterpreta.
+--
+-- DEPENDE de: permission_module_t (0009_rbac.sql).
+-- Rollback: ROLLBACK_0235a_nexus_link_permission_module.sql (lógico: un valor
+-- de enum no se puede DROPear sin recrear el tipo; mismo criterio que 0142).
+-- ─────────────────────────────────────────────────────────────────────────
+alter type public.permission_module_t add value if not exists 'nexus_link_chat';
+alter type public.permission_module_t add value if not exists 'nexus_link_whatsapp';
+
+notify pgrst, 'reload schema';

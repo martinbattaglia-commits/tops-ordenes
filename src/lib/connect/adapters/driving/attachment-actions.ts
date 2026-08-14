@@ -37,6 +37,8 @@ import { canAccess } from "@/lib/rbac/guard";
 import { canChannel } from "@/lib/rbac/nexus-link";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { validateAttachment } from "../../attachments/validate";
+import { counterpartPhoneFromContext } from "@/lib/whatsapp/reply-core";
+import { sendWhatsappMediaForAttachment, type MediaSendResult } from "@/lib/whatsapp/media-send";
 
 const BUCKET = "connect-files";
 
@@ -172,14 +174,24 @@ async function guardSession(): Promise<Guard> {
  * el caso degenera al mismo mensaje neutro que "no sos miembro". No se revela
  * que exista ni de qué canal es.
  */
-async function assertPuedeAdjuntar(conversationId: string): Promise<string | null> {
+type PuedeAdjuntar =
+  | { ok: true; kind: string; contextId: string | null }
+  | { ok: false; message: string };
+
+/**
+ * H2 (FASE B): además del veredicto, devuelve `kind`/`contextId` — LA MISMA
+ * fila que esta comprobación ya trae para decidir la capacidad. `finalize`
+ * los necesita para resolver el destinatario de WhatsApp y NO vuelve a
+ * consultar `connect_conversations`: es el mismo dato, no una consulta nueva.
+ */
+async function assertPuedeAdjuntar(conversationId: string): Promise<PuedeAdjuntar> {
   const supabase = createClient();
-  if (!supabase) return "Sin sesión.";
+  if (!supabase) return { ok: false, message: "Sin sesión." };
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return "Sin sesión.";
+  if (!user) return { ok: false, message: "Sin sesión." };
   const { data, error } = await supabase
     .from("connect_conversations")
-    .select("id, kind, archived_at, connect_participants!inner(profile_id)")
+    .select("id, kind, context_id, archived_at, connect_participants!inner(profile_id)")
     .eq("id", conversationId)
     // El `!inner` SOLO exige que exista ALGÚN participante legible: en un canal
     // público la policy de 0237 deja ver la conversación a un no-miembro, con
@@ -189,15 +201,50 @@ async function assertPuedeAdjuntar(conversationId: string): Promise<string | nul
     .eq("connect_participants.profile_id", user.id)
     .limit(1)
     .maybeSingle();
-  if (error || !data) return "No sos miembro de esta conversación.";
-  const conv = data as { kind: string; archived_at: string | null };
-  if (conv.archived_at) return "La conversación está archivada: no se pueden adjuntar archivos.";
+  if (error || !data) return { ok: false, message: "No sos miembro de esta conversación." };
+  const conv = data as { kind: string; context_id: string | null; archived_at: string | null };
+  if (conv.archived_at) {
+    return { ok: false, message: "La conversación está archivada: no se pueden adjuntar archivos." };
+  }
 
   const capacidad = conv.kind === "whatsapp"
     ? "nexus_link.whatsapp.media" as const
     : "nexus_link.internal_chat.media" as const;
-  if (!(await canChannel(capacidad))) return "No tenés acceso a este canal.";
-  return null;
+  if (!(await canChannel(capacidad))) return { ok: false, message: "No tenés acceso a este canal." };
+  return { ok: true, kind: conv.kind, contextId: conv.context_id };
+}
+
+/**
+ * H2 (FASE B): intenta el egress real a Meta si, y sólo si, el hilo es de
+ * WhatsApp. `undefined` en cualquier otro canal — ahí no hay nada que enviar.
+ *
+ * Segura de llamar más de una vez para el MISMO adjunto: el CAS de
+ * `sendWhatsappMedia` (`claimSending`) hace que un segundo intento sobre un
+ * mensaje ya reclamado devuelva `already_claimed` en vez de reenviar. Por eso
+ * se invoca tanto desde el camino feliz como desde la adopción por carrera
+ * (`yaLigado.message_id`): si la llamada que lo dejó "completo" murió ANTES
+ * del envío, este segundo intento lo termina; si ya se envió, no hace nada.
+ */
+async function intentarEnviarPorWhatsapp(
+  autorizado: Extract<PuedeAdjuntar, { ok: true }>,
+  input: { messageId: string; bucket: string; path: string; mimeType: string; fileName: string },
+): Promise<{ state: MediaSendResult["state"]; message?: string } | undefined> {
+  if (autorizado.kind !== "whatsapp") return undefined;
+  const to = counterpartPhoneFromContext(autorizado.contextId ?? "");
+  if (!to) {
+    return { state: "failed", message: "El hilo no tiene un teléfono de contraparte válido." };
+  }
+  const r = await sendWhatsappMediaForAttachment({
+    messageId: input.messageId,
+    to,
+    bucket: input.bucket,
+    path: input.path,
+    mimeType: input.mimeType,
+    fileName: input.fileName,
+  });
+  return r.ok
+    ? { state: r.state }
+    : { state: r.state, message: r.message };
 }
 
 const PrepareSchema = z.object({ conversationId: z.string().uuid() });
@@ -211,8 +258,8 @@ export async function prepareAttachmentUploadAction(raw: unknown): Promise<Prepa
   if (!g.ok) return g;
   const p = PrepareSchema.safeParse(raw);
   if (!p.success) return { ok: false, message: "Datos inválidos." };
-  const bloqueo = await assertPuedeAdjuntar(p.data.conversationId);
-  if (bloqueo) return { ok: false, message: bloqueo };
+  const autorizado = await assertPuedeAdjuntar(p.data.conversationId);
+  if (!autorizado.ok) return { ok: false, message: autorizado.message };
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, message: "Storage no disponible." };
@@ -250,8 +297,19 @@ const FinalizeSchema = z.object({
   attachmentCount: z.number().int().min(1).max(10).optional(),
 });
 
+/**
+ * H2 (FASE B): en un hilo de WhatsApp, `whatsapp` refleja el desenlace REAL
+ * del envío a Meta — nunca se infiere del éxito de la escritura en Connect.
+ * `undefined` en chat interno: ahí no hay egress que reportar.
+ */
 export type FinalizeAttachmentResult =
-  | { ok: true; messageId: string; attachmentId: string; fileName: string }
+  | {
+      ok: true;
+      messageId: string;
+      attachmentId: string;
+      fileName: string;
+      whatsapp?: { state: MediaSendResult["state"]; message?: string };
+    }
   | { ok: false; message: string };
 
 export async function finalizeAttachmentAction(raw: unknown): Promise<FinalizeAttachmentResult> {
@@ -263,8 +321,8 @@ export async function finalizeAttachmentAction(raw: unknown): Promise<FinalizeAt
   if (!p.data.path.startsWith(`${p.data.conversationId}/files/`)) {
     return { ok: false, message: "Path inválido." };
   }
-  const bloqueo = await assertPuedeAdjuntar(p.data.conversationId);
-  if (bloqueo) return { ok: false, message: bloqueo };
+  const autorizado = await assertPuedeAdjuntar(p.data.conversationId);
+  if (!autorizado.ok) return { ok: false, message: autorizado.message };
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, message: "Storage no disponible." };
@@ -333,10 +391,17 @@ export async function finalizeAttachmentAction(raw: unknown): Promise<FinalizeAt
       .maybeSingle();
     if (!existente) return { ok: false, message: "No se pudo resolver el adjunto." };
     const yaLigado = existente as { id: string; message_id: string | null };
-    // Si ya quedó ligado a un mensaje, la operación estaba COMPLETA: se devuelve
-    // el mismo resultado en vez de repetir el trabajo o romper.
+    // Si ya quedó ligado a un mensaje, la operación estaba COMPLETA salvo,
+    // quizás, el envío a WhatsApp — el CAS de abajo decide si hace falta.
     if (yaLigado.message_id) {
-      return { ok: true, messageId: yaLigado.message_id, attachmentId: yaLigado.id, fileName: v.fileName };
+      const whatsapp = await intentarEnviarPorWhatsapp(autorizado, {
+        messageId: yaLigado.message_id, bucket: BUCKET, path: p.data.path,
+        mimeType: v.sniffed.mime, fileName: v.fileName,
+      });
+      return {
+        ok: true, messageId: yaLigado.message_id, attachmentId: yaLigado.id,
+        fileName: v.fileName, whatsapp,
+      };
     }
     attachmentId = yaLigado.id;
   } else {
@@ -385,7 +450,14 @@ export async function finalizeAttachmentAction(raw: unknown): Promise<FinalizeAt
     .eq("id", attachmentId)
     .is("message_id", null);
 
-  return { ok: true, messageId, attachmentId, fileName: v.fileName };
+  // H2 (FASE B): en WhatsApp, el adjunto ya está en Connect —el operador lo
+  // ve— pero la burbuja se publica como enviada recién cuando esto resuelve.
+  // `undefined` en chat interno: no hay egress que intentar.
+  const whatsapp = await intentarEnviarPorWhatsapp(autorizado, {
+    messageId, bucket: BUCKET, path: p.data.path, mimeType: v.sniffed.mime, fileName: v.fileName,
+  });
+
+  return { ok: true, messageId, attachmentId, fileName: v.fileName, whatsapp };
 }
 
 const UrlSchema = z.object({ attachmentId: z.string().uuid() });

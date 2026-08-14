@@ -658,6 +658,7 @@ export function ThreadView({
             {caps.canAttachFile && recorder.state !== "recording" && recorder.state !== "preview" && (
               <AttachmentComposer
                 conversationId={conversationId}
+                kind={kind}
                 disabled={sending || audioBusy}
                 caption={draft.trim() || undefined}
                 onSent={() => setDraft("")}
