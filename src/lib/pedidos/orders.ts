@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import { resolveClientSelection, type ClientSelectionInput } from "@/lib/wms/client-identity";
+import { lookupCanonicalClient } from "@/lib/wms/receptions";
 import type {
   OrderRow,
   OrderItemRow,
@@ -23,13 +25,13 @@ function isMock(): boolean {
 
 const MOCK_ORDERS: OrderRow[] = [
   {
-    id: "ped-1", public_id: "PED-2026-0001", client_name: "Lab. Andrómaco",
+    id: "ped-1", public_id: "PED-2026-0001", client_id: null, client_name: "Lab. Andrómaco",
     customer_ref: "OC-CLI-8841", status: "en_preparacion", priority: 0,
     requested_date: "2026-06-05", notes: null, created_at: "2026-06-02T09:00:00Z",
     item_count: 2, reserved_count: 1,
   },
   {
-    id: "ped-2", public_id: "PED-2026-0002", client_name: "Farma Sur",
+    id: "ped-2", public_id: "PED-2026-0002", client_id: null, client_name: "Farma Sur",
     customer_ref: null, status: "pendiente", priority: 0,
     requested_date: null, notes: null, created_at: "2026-06-02T10:30:00Z",
     item_count: 1, reserved_count: 0,
@@ -38,7 +40,7 @@ const MOCK_ORDERS: OrderRow[] = [
 
 interface RawItem { status: string; quantity_requested: number | string | null }
 interface RawOrder {
-  id: string; public_id: string; client_name: string; customer_ref: string | null;
+  id: string; public_id: string; client_id: string | null; client_name: string; customer_ref: string | null;
   status: string; priority: number | null; requested_date: string | null;
   notes: string | null; created_at: string;
   logistics_order_items?: RawItem[] | null;
@@ -53,7 +55,7 @@ export async function listOrders(): Promise<OrderRow[]> {
   const { data, error } = await supabase
     .from("logistics_orders")
     .select(
-      `id, public_id, client_name, customer_ref, status, priority, requested_date,
+      `id, public_id, client_id, client_name, customer_ref, status, priority, requested_date,
        notes, created_at, logistics_order_items(status, quantity_requested)`
     )
     .order("created_at", { ascending: false });
@@ -64,6 +66,7 @@ export async function listOrders(): Promise<OrderRow[]> {
     return {
       id: o.id,
       public_id: o.public_id,
+      client_id: o.client_id ?? null,
       client_name: o.client_name,
       customer_ref: o.customer_ref ?? null,
       status: o.status as LogisticsOrderStatus,
@@ -104,7 +107,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
   const { data, error } = await supabase
     .from("logistics_orders")
     .select(
-      `id, public_id, client_name, customer_ref, status, priority, requested_date, notes, created_at,
+      `id, public_id, client_id, client_name, customer_ref, status, priority, requested_date, notes, created_at,
        logistics_order_items(id, order_id, sku, description, quantity_requested, lot_constraint, status, created_at,
          stock_allocations(quantity, status))`
     )
@@ -120,7 +123,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
     stock_allocations?: { quantity: number | string | null; status: string }[] | null;
   }
   interface RawOrderFull {
-    id: string; public_id: string; client_name: string; customer_ref: string | null;
+    id: string; public_id: string; client_id: string | null; client_name: string; customer_ref: string | null;
     status: string; priority: number | null; requested_date: string | null;
     notes: string | null; created_at: string;
     logistics_order_items?: RawItemFull[] | null;
@@ -149,6 +152,7 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
   const order: OrderRow = {
     id: raw.id,
     public_id: raw.public_id,
+    client_id: raw.client_id ?? null,
     client_name: raw.client_name,
     customer_ref: raw.customer_ref ?? null,
     status: raw.status as LogisticsOrderStatus,
@@ -167,10 +171,14 @@ export async function getOrder(id: string): Promise<OrderDetail | null> {
 export async function createOrder(input: NewOrderInput): Promise<string> {
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase no configurado");
+  // P3-N1B: identidad canónica obligatoria; client_name derivado server-side.
+  // Fila construida EXPLÍCITAMENTE (sin spread). PRECONDICIÓN: 0219 aplicada.
+  const cliente = await resolveClientSelection(input, lookupCanonicalClient);
   const { data, error } = await supabase
     .from("logistics_orders")
     .insert({
-      client_name: input.client_name,
+      client_id: cliente.client_id,
+      client_name: cliente.client_name,
       customer_ref: input.customer_ref ?? null,
       priority: input.priority ?? 0,
       requested_date: input.requested_date ?? null,
@@ -213,8 +221,12 @@ export async function submitOrder(id: string): Promise<void> {
 // Sin SQL ni tablas nuevas: writes permitidos por las RLS de 0030. La guarda de
 // estado 'borrador' la aplica el .eq(...) y la UI (solo muestra edición en borrador).
 
+/**
+ * P3-N1B: la edición de borrador puede cambiar el cliente SOLO vía selección
+ * canónica (client_selection); `client_name` suelto ya no es editable.
+ */
 export interface UpdateOrderInput {
-  client_name?: string;
+  client_selection?: ClientSelectionInput;
   customer_ref?: string | null;
   priority?: number;
   requested_date?: string | null;
@@ -224,9 +236,21 @@ export interface UpdateOrderInput {
 export async function updateOrder(id: string, patch: UpdateOrderInput): Promise<void> {
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase no configurado");
+  // Fila construida explícitamente: nada del payload viaja sin control.
+  const row: Record<string, unknown> = {};
+  if (patch.client_selection !== undefined) {
+    const cliente = await resolveClientSelection(patch.client_selection, lookupCanonicalClient);
+    row.client_id = cliente.client_id;
+    row.client_name = cliente.client_name;
+  }
+  if (patch.customer_ref !== undefined) row.customer_ref = patch.customer_ref;
+  if (patch.priority !== undefined) row.priority = patch.priority;
+  if (patch.requested_date !== undefined) row.requested_date = patch.requested_date;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (Object.keys(row).length === 0) return;
   const { error } = await supabase
     .from("logistics_orders")
-    .update(patch)
+    .update(row)
     .eq("id", id)
     .eq("status", "borrador");
   if (error) throw new Error(`updateOrder: ${error.message}`);

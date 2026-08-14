@@ -194,3 +194,30 @@ async function projectToSupabase(rows: Client[]): Promise<void> {
     console.error("[clients] upsert into supabase failed (non-blocking)", error);
   }
 }
+
+// ============================================================================
+// P3-N1B · selector canónico de cliente (puente de identidad WMS)
+// ============================================================================
+
+/** Opción del selector canónico de clientes. */
+export interface ClientSelectOption {
+  id: string;
+  razon: string;
+}
+
+/**
+ * Opciones para el selector canónico de cliente de los formularios WMS.
+ * Fuente EXCLUSIVA: public.clients (Supabase), sólo activos. El UUID es lo que
+ * viaja al servidor; la razón social es apenas la etiqueta visible.
+ */
+export async function listActiveClientRefs(): Promise<ClientSelectOption[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data, error } = await admin
+    .from("clients")
+    .select("id, razon")
+    .eq("activo", true)
+    .order("razon");
+  if (error) throw new Error(`listActiveClientRefs: ${error.message}`);
+  return (data ?? []) as ClientSelectOption[];
+}

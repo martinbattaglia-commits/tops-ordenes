@@ -3,6 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
+import {
+  ClientSelector,
+  EMPTY_CLIENT_SELECTION,
+  clientSelectionValid,
+  toClientSelectionPayload,
+  type ClientSelectOptionUI,
+  type ClientSelectionState,
+} from "@/components/ClientSelector";
 import { createOrderFull } from "../actions";
 
 interface ItemRow {
@@ -14,13 +22,13 @@ interface ItemRow {
 
 const EMPTY_ITEM: ItemRow = { sku: "", description: "", quantity_requested: "", lot_constraint: "" };
 
-export function NewOrderForm() {
+export function NewOrderForm({ clients }: { clients: ClientSelectOptionUI[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
+  const [cliente, setCliente] = useState<ClientSelectionState>(EMPTY_CLIENT_SELECTION);
   const [header, setHeader] = useState({
-    client_name: "",
     customer_ref: "",
     requested_date: "",
     priority: "0",
@@ -35,14 +43,14 @@ export function NewOrderForm() {
 
   const itemInvalid = (it: ItemRow) =>
     !it.sku.trim() || !it.description.trim() || !it.quantity_requested || Number(it.quantity_requested) <= 0;
-  const formInvalid = !header.client_name.trim() || items.length === 0 || items.some(itemInvalid);
+  const formInvalid = !clientSelectionValid(cliente) || items.length === 0 || items.some(itemInvalid);
 
   const submit = () =>
     start(async () => {
       setErr(null);
       const res = await createOrderFull({
         header: {
-          client_name: header.client_name.trim(),
+          ...toClientSelectionPayload(cliente),
           customer_ref: header.customer_ref.trim() || null,
           requested_date: header.requested_date || null,
           priority: Number(header.priority) || 0,
@@ -74,8 +82,7 @@ export function NewOrderForm() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <label className="flex flex-col gap-1">
             <span className="kpi-label">Cliente *</span>
-            <input className="input" value={header.client_name}
-              onChange={(e) => setHeader({ ...header, client_name: e.target.value })} placeholder="Depositante" />
+            <ClientSelector options={clients} value={cliente} onChange={setCliente} />
           </label>
           <label className="flex flex-col gap-1">
             <span className="kpi-label">Ref. cliente</span>

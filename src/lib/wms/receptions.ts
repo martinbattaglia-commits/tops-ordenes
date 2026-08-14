@@ -1,6 +1,11 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import type { ReceptionRow, BusinessUnit, ReceptionStatus } from "./types";
+import {
+  resolveClientSelection,
+  type CanonicalClientRef,
+  type ClientSelectionInput,
+} from "./client-identity";
 
 /**
  * Servicios de Recepciones (WMS Sprint 2). Las CONFIRMACIONES van por RPC
@@ -81,8 +86,7 @@ export async function listReceptions(): Promise<ReceptionRow[]> {
 
 // ── Alta de cabecera y líneas (inserts directos) ──────────────────────────
 
-export interface NewReceptionInput {
-  client_name: string;
+export interface NewReceptionInput extends ClientSelectionInput {
   business_unit: BusinessUnit;
   numero_oc?: string | null;
   numero_remito?: string | null;
@@ -93,12 +97,45 @@ export interface NewReceptionInput {
   notes?: string | null;
 }
 
+/**
+ * P3-N1B: lookup canónico de cliente, SOLO por UUID, server-side. Usa el admin
+ * client (igual que src/lib/data/clients.ts) para leer la fila canónica.
+ */
+export async function lookupCanonicalClient(clientId: string): Promise<CanonicalClientRef | null> {
+  const admin = createAdminClient();
+  if (!admin) throw new Error("Supabase admin no configurado");
+  const { data, error } = await admin
+    .from("clients")
+    .select("id, razon, activo")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (error) throw new Error(`lookupCanonicalClient: ${error.message}`);
+  return (data as CanonicalClientRef | null) ?? null;
+}
+
 export async function createReception(input: NewReceptionInput): Promise<string> {
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase no configurado");
+  // P3-N1B: el navegador no es autoridad sobre el cliente. Se resuelve el UUID
+  // canónico y se deriva client_name server-side; la fila se construye
+  // EXPLÍCITAMENTE (sin spread) para que ningún campo extra del payload llegue
+  // a la tabla. PRECONDICIÓN: 0219 aplicada (columna client_id).
+  const cliente = await resolveClientSelection(input, lookupCanonicalClient);
   const { data, error } = await supabase
     .from("receptions")
-    .insert({ ...input, requires_quarantine: input.requires_quarantine ?? false, status: "borrador" })
+    .insert({
+      client_id: cliente.client_id,
+      client_name: cliente.client_name,
+      business_unit: input.business_unit,
+      numero_oc: input.numero_oc ?? null,
+      numero_remito: input.numero_remito ?? null,
+      transportista: input.transportista ?? null,
+      patente: input.patente ?? null,
+      chofer: input.chofer ?? null,
+      notes: input.notes ?? null,
+      requires_quarantine: input.requires_quarantine ?? false,
+      status: "borrador",
+    })
     .select("id")
     .single();
   if (error) throw new Error(`createReception: ${error.message}`);

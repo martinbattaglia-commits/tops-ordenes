@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { listActiveClientRefs } from "@/lib/data/clients";
 import { NewOrderForm } from "./NewOrderForm";
 
 export const metadata = { title: "Nuevo pedido · Pedidos" };
+export const dynamic = "force-dynamic";
 
-export default function NuevoPedidoPage() {
+export default async function NuevoPedidoPage() {
+  const clients = await listActiveClientRefs();
   return (
     <div className="p-4 lg:p-8 nx-page-fade">
       <div className="page-header">
@@ -20,7 +23,7 @@ export default function NuevoPedidoPage() {
           <Icon name="arrow-left" size={12} /> Volver
         </Link>
       </div>
-      <NewOrderForm />
+      <NewOrderForm clients={clients} />
     </div>
   );
 }

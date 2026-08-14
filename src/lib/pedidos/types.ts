@@ -48,6 +48,8 @@ export const ORDER_ITEM_STATUS_META: Record<OrderItemStatus, { label: string; co
 export interface OrderRow {
   id: string;
   public_id: string;
+  /** P3-N1B: UUID canónico de public.clients; null sólo en filas legadas o «no listado». */
+  client_id: string | null;
   client_name: string;
   customer_ref: string | null;
   status: LogisticsOrderStatus;
@@ -90,8 +92,16 @@ export interface OrderDetail {
   items: OrderItemRow[];
 }
 
+/**
+ * P3-N1B: el alta exige la selección canónica de cliente (client_id) o el
+ * escape explícito «cliente no listado». `client_name` del navegador no es
+ * autoridad: se deriva server-side de public.clients.
+ */
 export interface NewOrderInput {
-  client_name: string;
+  client_id?: string | null;
+  unlisted_client_name?: string | null;
+  /** Ignorado como autoridad (compatibilidad de payloads). */
+  client_name?: string | null;
   customer_ref?: string | null;
   priority?: number;
   requested_date?: string | null;

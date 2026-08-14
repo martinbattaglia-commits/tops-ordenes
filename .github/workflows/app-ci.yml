@@ -1,0 +1,57 @@
+name: App CI
+
+# CI general de aplicación — autorizado por Dirección (expediente P3-N1B,
+# 2026-08-13). Valida typecheck, lint, tests unitarios y build de TODAS las
+# PR contra main, sin path-filters, para evitar falsos verdes por
+# clasificación incompleta de archivos. No usa secretos, no levanta
+# servicios y no conecta con Supabase, Netlify, Make ni producción: los
+# cuatro comandos son los mismos gates locales del repositorio.
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias desde lockfile
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # El benchmark de remito-capacidad corre AISLADO (paso siguiente) para
+      # eliminar la contención de CPU del pool paralelo en el runner
+      # compartido, sin relajar su presupuesto de 5000 ms.
+      - name: Tests (suite general, sin el benchmark)
+        run: npm test -- --exclude='src/lib/doc-system/remito-capacidad.test.tsx'
+
+      - name: Benchmark remito-capacidad (aislado, presupuesto original)
+        run: npm test -- src/lib/doc-system/remito-capacidad.test.tsx --no-file-parallelism --maxWorkers=1 --minWorkers=1
+
+      - name: Build
+        run: npm run build
