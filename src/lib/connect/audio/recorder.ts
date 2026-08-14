@@ -6,6 +6,10 @@
 // denegado ⇒ estado de error legible, jamás excepción sin manejar.
 // D2: formato negociado — audio/mp4 si el navegador lo soporta (Safari/iOS,
 // reproducible en todos lados), si no audio/webm;codecs=opus (Chrome/Android).
+//
+// FASE B · WhatsApp NO reproduce WebM. Para ese canal se PREFIERE un formato
+// que Meta acepte tal cual, y si el navegador sólo da WebM se graba igual: el
+// servidor lo reenvasa a Ogg antes de enviarlo. Grabar siempre es posible.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AUDIO_LIMITS } from "./validate";
@@ -24,15 +28,45 @@ export interface AudioRecorder {
   reset: () => void;
 }
 
-function pickMimeType(): string | null {
+/** Orden de preferencia para Connect: lo mejor soportado por el navegador. */
+export const MIME_PREFERIDOS = [
+  "audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus",
+] as const;
+
+/**
+ * Orden de preferencia para WhatsApp.
+ *
+ * Primero lo que Meta reproduce tal cual —mp4, ogg/opus—, para no hacer trabajo
+ * innecesario. Pero el WebM NO se descarta: Chrome y Android no ofrecen otra
+ * cosa, y el servidor lo REENVASA a Ogg antes de mandarlo (mismo códec Opus,
+ * otro contenedor, sin recodificar). Sacarlo de la lista dejaría a Android sin
+ * mensajes de voz, que es el problema, no la solución.
+ */
+export const MIME_PREFERIDOS_WHATSAPP = [
+  "audio/mp4", "audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm",
+] as const;
+
+export function pickMimeType(paraWhatsapp = false): string | null {
   if (typeof MediaRecorder === "undefined") return null;
-  for (const t of ["audio/mp4", "audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]) {
+  const candidatos = paraWhatsapp ? MIME_PREFERIDOS_WHATSAPP : MIME_PREFERIDOS;
+  for (const t of candidatos) {
     if (MediaRecorder.isTypeSupported(t)) return t;
   }
   return null;
 }
 
-export function useAudioRecorder(): AudioRecorder {
+export interface AudioRecorderOptions {
+  /**
+   * Restringe la negociación a formatos que WhatsApp reproduce.
+   *
+   * No es una preferencia estética: con esto en `false` sobre Chrome/Android el
+   * audio sale en WebM y Meta lo rechaza.
+   */
+  forWhatsapp?: boolean;
+}
+
+export function useAudioRecorder(options: AudioRecorderOptions = {}): AudioRecorder {
+  const paraWhatsapp = options.forWhatsapp === true;
   const [state, setState] = useState<RecorderState>("idle");
   const [durationMs, setDurationMs] = useState(0);
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -61,7 +95,7 @@ export function useAudioRecorder(): AudioRecorder {
     setError(null);
     setBlob(null);
     setDurationMs(0);
-    const mime = pickMimeType();
+    const mime = pickMimeType(paraWhatsapp);
     if (!mime) {
       setError("Este navegador no soporta grabación de audio.");
       setState("error");
@@ -106,7 +140,7 @@ export function useAudioRecorder(): AudioRecorder {
         recorderRef.current.stop();
       }
     }, 250);
-  }, [cleanupStream]);
+  }, [cleanupStream, paraWhatsapp]);
 
   const stop = useCallback(() => {
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();

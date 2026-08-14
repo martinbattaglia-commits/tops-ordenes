@@ -1,0 +1,196 @@
+// Nexus Link · FASE B — decisión del envío de media por WhatsApp.
+//
+// Todo por inyección: estado, objetos, transporte y sandbox. Lo que se prueba
+// es la parte que, si falla, le llega al cliente y no se puede retirar: que el
+// CAS impida el segundo envío, que el orden sea reclamar-antes-de-subir, y que
+// un resultado incierto NUNCA vuelva a intentarse.
+
+import { describe, expect, it, vi } from "vitest";
+import { prepararParaWhatsapp, sendWhatsappMedia, type MediaSendPorts } from "./media-send-core";
+
+const ENTRADA = {
+  messageId: "m-1",
+  to: "5491131079124",
+  bucket: "connect-files",
+  path: "conv/files/u1",
+  mimeType: "image/jpeg",
+  fileName: "remito.jpg",
+  caption: "Remito de hoy",
+};
+
+function puertos(over: Partial<{
+  claimSending: boolean;
+  sealSent: boolean;
+  bytes: Uint8Array | null;
+  upload: unknown;
+  send: unknown;
+  sandbox: boolean;
+}> = {}) {
+  const claimSending = vi.fn(async () => over.claimSending ?? true);
+  const sealSent = vi.fn(async () => over.sealSent ?? true);
+  const stamp = vi.fn(async () => true);
+  const uploadMedia = vi.fn(async (_i: { bytes: Uint8Array; mimeType: string; fileName: string }) =>
+    (over.upload ?? { kind: "uploaded", mediaId: "media-9" }) as never);
+  const sendMedia = vi.fn(async (_i: { to: string; kind: string; mediaId: string }) =>
+    (over.send ?? { kind: "accepted", wamid: "wamid.OK" }) as never);
+  const read = vi.fn(async () => (over.bytes === undefined ? new Uint8Array([1, 2, 3]) : over.bytes));
+  const ports: MediaSendPorts = {
+    state: { claimSending, sealSent, stamp },
+    objects: { read },
+    transport: { uploadMedia, sendMedia },
+    sandbox: { isAllowed: () => over.sandbox ?? true },
+  };
+  return { ports, claimSending, sealSent, stamp, uploadMedia, sendMedia, read };
+}
+
+describe("el CAS decide quién envía", () => {
+  it("el ganador sube, envía y sella", async () => {
+    const p = puertos();
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r).toEqual({ ok: true, state: "sent", wamid: "wamid.OK" });
+    expect(p.uploadMedia).toHaveBeenCalledTimes(1);
+    expect(p.sealSent).toHaveBeenCalledWith("m-1", "wamid.OK");
+  });
+
+  it("el PERDEDOR no toca Meta: ni sube ni envía", async () => {
+    const p = puertos({ claimSending: false });
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r).toEqual({ ok: true, state: "already_claimed" });
+    expect(p.uploadMedia).not.toHaveBeenCalled();
+    expect(p.sendMedia).not.toHaveBeenCalled();
+    // Perder no es un error: el mensaje ya está saliendo por el otro intento.
+    expect(p.stamp).not.toHaveBeenCalled();
+  });
+
+  it("se reclama ANTES de leer y subir el binario", async () => {
+    const orden: string[] = [];
+    const p = puertos();
+    p.claimSending.mockImplementation(async () => { orden.push("claim"); return true; });
+    p.read.mockImplementation(async () => { orden.push("read"); return new Uint8Array([1]); });
+    p.uploadMedia.mockImplementation(async () => { orden.push("upload"); return { kind: "uploaded", mediaId: "m" } as never; });
+    await sendWhatsappMedia(ENTRADA, p.ports);
+    // Al revés, dos llamadas concurrentes subirían el mismo archivo dos veces
+    // antes de que una descubriera que perdió.
+    expect(orden).toEqual(["claim", "read", "upload"]);
+  });
+
+  it("el sandbox corta ANTES del CAS: el mensaje queda reintentable", async () => {
+    const p = puertos({ sandbox: false });
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r.ok).toBe(false);
+    expect(p.claimSending).not.toHaveBeenCalled();
+    // Si hubiera reclamado, el mensaje quedaría en `sending` y un reintento
+    // legítimo —tras habilitar el número— ya no podría ganarlo.
+    expect(p.stamp).not.toHaveBeenCalled();
+  });
+});
+
+describe("fallos deterministas dejan el intento REINTENTABLE", () => {
+  const esperarFailed = async (p: ReturnType<typeof puertos>, patron: RegExp) => {
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.state).toBe("failed");
+    if (!r.ok) expect(r.message).toMatch(patron);
+    expect(p.stamp).toHaveBeenCalledWith("m-1", expect.objectContaining({ status: "failed" }));
+  };
+
+  it("objeto ausente", async () => {
+    await esperarFailed(puertos({ bytes: null }), /no está disponible/);
+  });
+
+  it("subida fallida —incluso por red— porque nada salió hacia el cliente", async () => {
+    const p = puertos({ upload: { kind: "failed", reason: "network", detail: "x" } });
+    await esperarFailed(p, /No se pudo subir/);
+    expect(p.sendMedia).not.toHaveBeenCalled();
+  });
+
+  it("rechazo inequívoco de Meta", async () => {
+    await esperarFailed(
+      puertos({ send: { kind: "rejected", reason: "http_error", status: 400, detail: "HTTP 400" } }),
+      /rechazó/,
+    );
+  });
+
+  it("formato que WhatsApp no acepta, detectado sin subir nada", async () => {
+    const p = puertos();
+    const r = await sendWhatsappMedia({ ...ENTRADA, mimeType: "image/gif" }, p.ports);
+    expect(r.ok).toBe(false);
+    expect(p.uploadMedia).not.toHaveBeenCalled();
+  });
+});
+
+describe("lo incierto NUNCA se reintenta solo", () => {
+  it("un envío ambiguo queda en reconciliación, no en fallo", async () => {
+    const p = puertos({ send: { kind: "ambiguous", reason: "server_error", detail: "HTTP 503" } });
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.state).toBe("reconciliation_required");
+      expect(r.message).toMatch(/No lo reenvíes/);
+    }
+    expect(p.stamp).toHaveBeenCalledWith(
+      "m-1", expect.objectContaining({ status: "reconciliation_required" }));
+  });
+
+  it("aceptado por Meta pero sin sello local ⇒ reconciliación, no reenvío", async () => {
+    // El archivo SALIÓ. Tratarlo como fallo invitaría a mandarlo de nuevo.
+    const p = puertos({ sealSent: false });
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.state).toBe("reconciliation_required");
+      expect(r.message).toMatch(/salió pero no se pudo registrar/);
+    }
+  });
+});
+
+describe("el binario se prepara según lo que WhatsApp reproduce", () => {
+  it("lo que ya sirve pasa intacto", () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const r = prepararParaWhatsapp(bytes, "audio/mp4");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.mimeType).toBe("audio/mp4");
+      expect(r.bytes).toBe(bytes); // ni una copia: no hay nada que hacerle
+    }
+  });
+
+  it("un WebM inválido no se manda a medias: se explica el motivo", () => {
+    const r = prepararParaWhatsapp(new Uint8Array([0, 1, 2]), "audio/webm");
+    expect(r.ok).toBe(false);
+  });
+
+  it("el envío de audio informa el MIME REENVASADO, no el original", async () => {
+    // Se usa un WebM sintético mínimo con un paquete Opus real.
+    const enc = new TextEncoder();
+    const size8 = (n: number) => {
+      const o = new Uint8Array(8); o[0] = 1;
+      for (let i = 7; i >= 1; i--) { o[i] = n & 0xff; n = Math.floor(n / 256); }
+      return o;
+    };
+    const cat = (...p: Uint8Array[]) => {
+      const o = new Uint8Array(p.reduce((a, x) => a + x.length, 0));
+      let k = 0; for (const x of p) { o.set(x, k); k += x.length; } return o;
+    };
+    const el = (id: number[], pl: Uint8Array) => cat(new Uint8Array(id), size8(pl.length), pl);
+    const head = cat(enc.encode("OpusHead"), new Uint8Array([1, 1, 0x38, 1, 0x80, 0xbb, 0, 0, 0, 0, 0]));
+    const webm = cat(
+      new Uint8Array([0x18, 0x53, 0x80, 0x67, 0x01, 255, 255, 255, 255, 255, 255, 255]),
+      el([0x16, 0x54, 0xae, 0x6b], el([0xae], cat(
+        el([0x86], enc.encode("A_OPUS")), el([0x63, 0xa2], head)))),
+      new Uint8Array([0x1f, 0x43, 0xb6, 0x75, 0x01, 255, 255, 255, 255, 255, 255, 255]),
+      el([0xa3], cat(new Uint8Array([0x81, 0, 0, 0]), new Uint8Array([0xfc, 1, 2, 3]))),
+    );
+
+    const p = puertos({ bytes: webm });
+    const r = await sendWhatsappMedia(
+      { ...ENTRADA, mimeType: "audio/webm", fileName: "voz.webm" }, p.ports);
+    expect(r.ok).toBe(true);
+    const subido = p.uploadMedia.mock.calls[0]?.[0] as { mimeType: string; bytes: Uint8Array };
+    expect(subido.mimeType).toBe("audio/ogg");
+    expect(String.fromCharCode(...subido.bytes.subarray(0, 4))).toBe("OggS");
+    // Y el audio se manda como AUDIO, sin pie: Meta lo descartaría en silencio.
+    const enviado = p.sendMedia.mock.calls[0]?.[0] as { kind: string };
+    expect(enviado.kind).toBe("audio");
+  });
+});

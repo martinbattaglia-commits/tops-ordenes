@@ -6,7 +6,7 @@ import { listInbox, listChannels } from "@/lib/connect/read/inbox-data";
 import { listActivity } from "@/lib/connect/read/activity-data";
 import { listNotificationCenter, readNotificationBadges } from "@/lib/notifications/data";
 import { getMyProfile } from "@/lib/profile/data";
-import { canAccessWaCommercialImport } from "@/lib/connect/wa-import/access";
+import { canAdminWhatsappImport } from "@/lib/rbac/nexus-link";
 import type { NotificationItem, NotificationPriority } from "@/lib/notifications/types";
 import {
   CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
@@ -27,6 +27,8 @@ export default async function ConnectHomePage() {
     getMyProfile(), listNotificationCenter(), listActivity(6), listInbox(), listChannels(),
     readNotificationBadges(),
   ]);
+  // Menú y navegación: misma autoridad canónica que la ruta y las actions.
+  const puedeVerWhatsapp = await canAdminWhatsappImport();
 
   // FASE A · C4 H-2: la tarjeta "Notificaciones" es la categoría ROJA. Antes
   // fusionaba avisos del sistema con mensajes de WhatsApp y de chat interno en
@@ -102,7 +104,7 @@ export default async function ConnectHomePage() {
         </HomeCard>
 
         {/* WhatsApp Comercial: visible sólo para el mismo rol autorizado por ruta y actions. */}
-        {canAccessWaCommercialImport(profile?.role) ? (
+        {puedeVerWhatsapp ? (
           <HomeCard
             title="WhatsApp Comercial"
             icon="whatsapp"

@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "supabase/lineage/build-catalog.mjs",
-  "ejecutables": 196,
-  "no_ejecutables": 8,
+  "ejecutables": 199,
+  "no_ejecutables": 11,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2299,6 +2299,84 @@
       "ledger_name": "ROLLBACK_0235_link_notification_personal_read",
       "provenance": "repo (candidate/link-notif-tricolor-r1)",
       "motivo": "Inversa de 0235: elimina tabla, vista y RPC y restituye el estado de 0162. NO es forward."
+    },
+    {
+      "id": "0236_nexus_link_channel_capabilities.sql",
+      "filename": "0236_nexus_link_channel_capabilities.sql",
+      "sha256": "117b941ee3421894db87293435303942439f01a709948a036556776b20a9a50c",
+      "orden": 205,
+      "requires": [
+        "0234_link_notification_badges_tricolor.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00205",
+      "ledger_name": "0236_nexus_link_channel_capabilities",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Nexus Link · frontera de canal: capacidades nexus_link.internal_chat.* y nexus_link.whatsapp.*, resolvedor nexus_link_can() y filtro de canal dentro de v_connect_inbox. Aditiva: no quita ningun permiso vigente. Requiere 0234, que define la vista que redefine."
+    },
+    {
+      "id": "ROLLBACK_0236_nexus_link_channel_capabilities.sql",
+      "filename": "ROLLBACK_0236_nexus_link_channel_capabilities.sql",
+      "sha256": "2a49435f398fb19ac0a43637a7fee69a94406dec19d54dd7add10886a88504ea",
+      "orden": 206,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00206",
+      "ledger_name": "ROLLBACK_0236_nexus_link_channel_capabilities",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa de 0236: elimina capacidades, concesiones y resolvedor, y restituye v_connect_inbox sin filtro de canal. NO es forward."
+    },
+    {
+      "id": "0237_nexus_link_channel_rls.sql",
+      "filename": "0237_nexus_link_channel_rls.sql",
+      "sha256": "f130447fdb1d56c1d4a0f6beee04b3d5bd464d48f3db985ee5f82fa707bd81fb",
+      "orden": 207,
+      "requires": [
+        "0236_nexus_link_channel_capabilities.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00207",
+      "ledger_name": "0237_nexus_link_channel_rls",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Nexus Link · frontera de canal ESTRUCTURAL: predicado _connect_channel_allowed en la RLS de mensajes, adjuntos y conversaciones (cierra realtime), en el porton de la signed URL (descarga), en connect_search (busqueda) y en la policy de storage por ruta. Requiere 0236, que define nexus_link_can()."
+    },
+    {
+      "id": "ROLLBACK_0237_nexus_link_channel_rls.sql",
+      "filename": "ROLLBACK_0237_nexus_link_channel_rls.sql",
+      "sha256": "eb3f91b5d6593c713abc25ef559a9e19e842c50c2dfdb23b3c2020f1d2422d37",
+      "orden": 208,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00208",
+      "ledger_name": "ROLLBACK_0237_nexus_link_channel_rls",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa de 0237: restituye policies y funciones previas. NO es forward."
+    },
+    {
+      "id": "0238_nexus_link_upload_lifecycle.sql",
+      "filename": "0238_nexus_link_upload_lifecycle.sql",
+      "sha256": "a46dfd48124706297c11ef4a46cef4e4fc697d9ce59bdfd652641e65b2dccee1",
+      "orden": 209,
+      "requires": [
+        "0237_nexus_link_channel_rls.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00209",
+      "ledger_name": "0238_nexus_link_upload_lifecycle",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Nexus Link · ciclo de vida de la subida: tabla connect_pending_uploads, transicion atomica pending→finalized, barrido acotado de pendientes vencidas, trigger que ata el adjunto a su subida finalizada y alineacion de allowed_mime_types del bucket connect-files (HEIC/HEIF/PPTX). Requiere 0237, que define _connect_channel_allowed()."
+    },
+    {
+      "id": "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
+      "filename": "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
+      "sha256": "6a2678a8ec3092a69cde90ddf7099fbeea59603cbf16d9228bd00c1aa688bd01",
+      "orden": 210,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00210",
+      "ledger_name": "ROLLBACK_0238_nexus_link_upload_lifecycle",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa de 0238: suelta trigger, funciones y tabla, y restituye literalmente la lista MIME medida en produccion. NO es forward."
     }
   ]
 }

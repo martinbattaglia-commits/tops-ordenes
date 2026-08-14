@@ -396,7 +396,13 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       f === "0234_link_notification_badges_tricolor.sql" ||
       f === "ROLLBACK_0234_link_notification_badges_tricolor.sql" ||
       f === "0235_link_notification_personal_read.sql" ||
-      f === "ROLLBACK_0235_link_notification_personal_read.sql",
+      f === "ROLLBACK_0235_link_notification_personal_read.sql" ||
+      f === "0236_nexus_link_channel_capabilities.sql" ||
+      f === "ROLLBACK_0236_nexus_link_channel_capabilities.sql" ||
+      f === "0237_nexus_link_channel_rls.sql" ||
+      f === "ROLLBACK_0237_nexus_link_channel_rls.sql" ||
+      f === "0238_nexus_link_upload_lifecycle.sql" ||
+      f === "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
     reason:
       "Dominio Connect/Nexus Link, ajeno al cierre de dependencias WMS: 0234 " +
       "sólo redefine las vistas de la cadena Connect 0142+ (v_connect_inbox, " +
@@ -407,7 +413,13 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "cierre WMS, NO de su verificación: ambas se ejercitan contra PostgreSQL " +
       "real en tests/db/t-link-a1-01-tricolor-badges.test.ts, que monta su " +
       "propio cierre acotado y ejecuta los cuatro archivos tal como están en " +
-      "disco, incluidos sus ROLLBACK.",
+      "disco, incluidos sus ROLLBACK. 0236 agrega la frontera de canal " +
+      "(capacidades nexus_link.*) sobre la misma cadena Connect y se verifica " +
+      "en tests/db/t-link-b1-01-channel-boundary.test.ts. 0238 agrega el ciclo " +
+      "de vida de la subida (connect_pending_uploads y su máquina de estados) " +
+      "sobre esa misma cadena y se verifica en " +
+      "tests/db/t-link-b2-01-upload-lifecycle.test.ts, que además ejecuta su " +
+      "ROLLBACK y contrasta el catálogo resultante.",
     },
     {
     id: "lineage-recovered-and-correctives",

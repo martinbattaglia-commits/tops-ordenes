@@ -54,6 +54,13 @@ vi.mock("@/components/voice/VoiceField", () => ({
   VoiceField: (p: { children?: unknown }) => <div>{p.children as never}</div>,
 }));
 vi.mock("@/components/Icon", () => ({ Icon: () => <span /> }));
+// El composer de adjuntos es un componente aparte, con su propia suite de DOM
+// (`AttachmentComposer.dom.test.tsx`). Acá se sustituye por un doble: sin esto,
+// `ThreadView` arrastraría sus server actions —y con ellas `server-only`, que
+// no es un paquete resoluble fuera del bundler de Next— al grafo de esta prueba.
+vi.mock("./AttachmentComposer", () => ({
+  AttachmentComposer: () => <button type="button" aria-label="Adjuntar archivo" />,
+}));
 
 // Los dobles devuelven el resultado COMPLETO de la acción real. Un doble
 // incompleto —sin `messageId`— dejaba el id del mensaje en `undefined` y con él

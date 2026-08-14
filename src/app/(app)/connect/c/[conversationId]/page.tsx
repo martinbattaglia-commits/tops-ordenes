@@ -3,6 +3,7 @@ import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
 import { listConversationLinks, getCurrentUserId } from "@/lib/connect/data";
 import { getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
 import { getProfileRole } from "@/lib/rbac/boot-permissions";
+import { canChannel } from "@/lib/rbac/nexus-link";
 import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
 import { ThreadView } from "../../_components/ThreadView";
 import { ConversationAdmin } from "../../_components/ConversationAdmin";
@@ -33,7 +34,14 @@ export default async function ConnectThreadPage({
     .filter((m) => m.profileId && m.name)
     .map((m) => ({ profileId: m.profileId as string, name: m.name as string }));
 
-  if (!conversation) {
+  // Frontera de canal (0236) en la RUTA, no sólo en la lista: entrar por URL
+  // directa a un hilo de WhatsApp sin la capacidad devuelve la MISMA respuesta
+  // que un hilo inexistente. No se confirma ni se desmiente su existencia, y no
+  // se rendereó ningún contenido antes de decidir.
+  const accesoDenegadoPorCanal =
+    conversation?.kind === "whatsapp" && !(await canChannel("nexus_link.whatsapp.read"));
+
+  if (!conversation || accesoDenegadoPorCanal) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
         <Icon name="x" size={22} className="text-fg-muted" />

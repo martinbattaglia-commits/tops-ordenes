@@ -13,7 +13,9 @@ import { timeHM, isNewDay, dayLabel } from "@/lib/connect/format";
 import { postMessageAction } from "@/lib/connect/adapters/driving/message-actions";
 import { sendWhatsappTextAction } from "@/lib/whatsapp/reply-action";
 import { dispatchComposerSend } from "@/lib/connect/composer-dispatch";
-import { composerCapabilities, ownBubbleClass, sendButtonClass } from "@/lib/connect/composer-policy";
+import {
+  audioRecorderOptionsFor, composerCapabilities, ownBubbleClass, sendButtonClass,
+} from "@/lib/connect/composer-policy";
 import {
   reduceMessageState,
   projectWaMessage,
@@ -33,6 +35,7 @@ import {
   prepareAudioUploadAction, finalizeAudioMessageAction,
 } from "@/lib/connect/adapters/driving/audio-actions";
 import { AudioPlayer } from "./AudioPlayer";
+import { AttachmentComposer } from "./AttachmentComposer";
 
 /** D1 (LINK-MEDIA-001): ícono propio del MENSAJE de voz — distinto del Voice Command. */
 function MicIcon({ size = 15 }: { size?: number }) {
@@ -157,7 +160,9 @@ export function ThreadView({
    */
   const enviando = useRef(false);
   // LINK-MEDIA-001: grabación de mensajes de voz (D1: circuito separado del Voice Command).
-  const recorder = useAudioRecorder();
+  // FASE B · el canal decide el formato: WhatsApp no reproduce WebM. La vista
+  // consulta la decisión, no compara `kind`.
+  const recorder = useAudioRecorder(audioRecorderOptionsFor(kind));
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioErr, setAudioErr] = useState<string | null>(null);
 
@@ -597,7 +602,7 @@ export function ThreadView({
               ))}
             </div>
           )}
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             {/* VOICE-002 (root cause): el wrapper de VoiceField DEBE acotarse en la
                 fila flex — su propio docstring prescribe "flex-1 min-w-0". Sin esto,
                 el preview del parcial de dictado (p.truncate) no tiene ancho límite
@@ -647,6 +652,17 @@ export function ThreadView({
                 className="max-h-32 min-h-[2.25rem] w-full resize-none overflow-y-auto rounded-md border border-stroke-soft bg-bg-page px-3 py-2 text-[13px] text-fg-primary outline-none focus:border-tops-red"
               />
             </VoiceField>
+            {/* FASE B: adjuntar archivos. El clip es un tercer ícono DISTINTO del
+                micrófono de dictado (VoiceField) y del micrófono de mensaje de
+                voz: los tres caminos son distintos y tienen que verse distintos. */}
+            {caps.canAttachFile && recorder.state !== "recording" && recorder.state !== "preview" && (
+              <AttachmentComposer
+                conversationId={conversationId}
+                disabled={sending || audioBusy}
+                caption={draft.trim() || undefined}
+                onSent={() => setDraft("")}
+              />
+            )}
             {/* D1: botón de MENSAJE de voz — separado del Voice Command, sin desplazar el envío.
                 WA-8: en WhatsApp no se renderiza; `sendAudio` además corta por lógica. */}
             {caps.canSendAudio && recorder.state !== "recording" && recorder.state !== "preview" && (
