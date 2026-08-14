@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { listPositionOptions } from "@/lib/wms/data";
+import { listActiveClientRefs } from "@/lib/data/clients";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { NewReceptionForm } from "./NewReceptionForm";
 
@@ -9,8 +10,10 @@ export const dynamic = "force-dynamic";
 
 export default async function NuevaRecepcionPage() {
   let positions: Awaited<ReturnType<typeof listPositionOptions>>;
+  let clients: Awaited<ReturnType<typeof listActiveClientRefs>>;
   try {
     positions = await listPositionOptions();
+    clients = await listActiveClientRefs();
   } catch (e) {
     return (
       <ModuleUnavailable
@@ -37,7 +40,7 @@ export default async function NuevaRecepcionPage() {
         </Link>
       </div>
 
-      <NewReceptionForm positions={positions} />
+      <NewReceptionForm positions={positions} clients={clients} />
     </div>
   );
 }

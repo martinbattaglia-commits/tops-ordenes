@@ -4,6 +4,13 @@ import { useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import type { OrderRow, OrderItemRow } from "@/lib/pedidos/types";
 import {
+  ClientSelector,
+  clientSelectionValid,
+  toClientSelectionPayload,
+  type ClientSelectOptionUI,
+  type ClientSelectionState,
+} from "@/components/ClientSelector";
+import {
   updateOrderAction,
   addOrderItemAction,
   updateOrderItemAction,
@@ -12,13 +19,28 @@ import {
 
 type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
 
-export function EditOrderForm({ order, items }: { order: OrderRow; items: OrderItemRow[] }) {
+export function EditOrderForm({
+  order,
+  items,
+  clients,
+}: {
+  order: OrderRow;
+  items: OrderItemRow[];
+  clients: ClientSelectOptionUI[];
+}) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
+  // P3-N1B: el cliente sólo se cambia vía selección canónica. Preseleccionado
+  // con el client_id vigente; una fila legada sin client_id muestra su nombre
+  // descriptivo hasta que se elija el canónico.
+  const [cliente, setCliente] = useState<ClientSelectionState>({
+    client_id: order.client_id ?? "",
+    unlisted: false,
+    unlisted_name: "",
+  });
   const [hdr, setHdr] = useState({
-    client_name: order.client_name,
     customer_ref: order.customer_ref ?? "",
     requested_date: order.requested_date ?? "",
     priority: String(order.priority),
@@ -34,14 +56,19 @@ export function EditOrderForm({ order, items }: { order: OrderRow; items: OrderI
       // UI actualizada por revalidatePath('/pedidos/[id]') de la action (sin router.refresh → sin 503).
     });
 
-  const saveHeader = () =>
+  const saveHeader = () => {
+    if (!clientSelectionValid(cliente)) {
+      setErr("Elegí un cliente canónico (o marcá «cliente no listado») antes de guardar.");
+      return;
+    }
     run(() => updateOrderAction(order.id, {
-      client_name: hdr.client_name.trim(),
+      client_selection: toClientSelectionPayload(cliente),
       customer_ref: hdr.customer_ref.trim() || null,
       requested_date: hdr.requested_date || null,
       priority: Number(hdr.priority) || 0,
       notes: hdr.notes.trim() || null,
     }));
+  };
 
   const addLine = () => {
     if (!newItem.sku.trim() || !newItem.description.trim() || Number(newItem.quantity_requested) <= 0) return;
@@ -71,7 +98,11 @@ export function EditOrderForm({ order, items }: { order: OrderRow; items: OrderI
 
           {/* Cabecera */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <Field label="Cliente" value={hdr.client_name} onChange={(v) => setHdr({ ...hdr, client_name: v })} />
+            <label className="flex flex-col gap-1">
+              <span className="kpi-label">Cliente</span>
+              <ClientSelector options={clients} value={cliente} onChange={setCliente}
+                initialLabel={order.client_id ? null : order.client_name} />
+            </label>
             <Field label="Ref. cliente" value={hdr.customer_ref} onChange={(v) => setHdr({ ...hdr, customer_ref: v })} />
             <Field label="Fecha solicitada" type="date" value={hdr.requested_date} onChange={(v) => setHdr({ ...hdr, requested_date: v })} />
             <Field label="Prioridad" type="number" value={hdr.priority} onChange={(v) => setHdr({ ...hdr, priority: v })} />

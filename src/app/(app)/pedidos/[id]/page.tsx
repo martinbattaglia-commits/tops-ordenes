@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { getOrder } from "@/lib/pedidos/orders";
 import { listAllocations } from "@/lib/pedidos/allocations";
+import { listActiveClientRefs } from "@/lib/data/clients";
 import { getLotInventory } from "@/lib/wms/lots";
 import {
   ORDER_STATUS_META,
@@ -43,6 +44,7 @@ export default async function PedidoDetailPage({ params }: { params: { id: strin
   const { order, items } = detail;
 
   const allocations = await listAllocations(order.id);
+  const clients = order.status === "borrador" ? await listActiveClientRefs() : [];
   const skuById = new Map(items.map((it) => [it.id, it.sku]));
 
   // Visualización FEFO: cola de lotes por SKU del pedido (reutiliza capa 9A).
@@ -106,7 +108,7 @@ export default async function PedidoDetailPage({ params }: { params: { id: strin
       </div>
 
       {/* Edición (solo borrador) */}
-      {isBorrador && <EditOrderForm order={order} items={items} />}
+      {isBorrador && <EditOrderForm order={order} items={items} clients={clients} />}
 
       {/* Líneas */}
       <div className="nx-surface card overflow-hidden mb-6">

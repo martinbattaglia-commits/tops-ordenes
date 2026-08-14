@@ -4,6 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import type { PositionOption, BusinessUnit } from "@/lib/wms/types";
+import {
+  ClientSelector,
+  EMPTY_CLIENT_SELECTION,
+  clientSelectionValid,
+  toClientSelectionPayload,
+  type ClientSelectOptionUI,
+  type ClientSelectionState,
+} from "@/components/ClientSelector";
 import { createReceptionFull } from "../actions";
 
 interface ItemRow {
@@ -21,13 +29,19 @@ const EMPTY_ITEM: ItemRow = {
 
 const BU_OPTIONS: BusinessUnit[] = ["GENERAL", "ANMAT", "CORPORATE"];
 
-export function NewReceptionForm({ positions }: { positions: PositionOption[] }) {
+export function NewReceptionForm({
+  positions,
+  clients,
+}: {
+  positions: PositionOption[];
+  clients: ClientSelectOptionUI[];
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [err, setErr] = useState<string | null>(null);
 
+  const [cliente, setCliente] = useState<ClientSelectionState>(EMPTY_CLIENT_SELECTION);
   const [header, setHeader] = useState({
-    client_name: "",
     business_unit: "GENERAL" as BusinessUnit,
     requires_quarantine: false,
     numero_oc: "",
@@ -53,13 +67,13 @@ export function NewReceptionForm({ positions }: { positions: PositionOption[] })
     !it.position_id ||
     (isAnmat && (!it.lot_number.trim() || !it.expiration_date));
 
-  const formInvalid = !header.client_name.trim() || items.length === 0 || items.some(itemInvalid);
+  const formInvalid = !clientSelectionValid(cliente) || items.length === 0 || items.some(itemInvalid);
 
   const submit = () =>
     start(async () => {
       setErr(null);
       const r = await createReceptionFull({
-        header: { ...header },
+        header: { ...header, ...toClientSelectionPayload(cliente) },
         items: items.map((it) => ({
           sku: it.sku.trim(),
           description: it.description.trim(),
@@ -87,8 +101,7 @@ export function NewReceptionForm({ positions }: { positions: PositionOption[] })
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Cliente *">
-            <input className="input w-full" value={header.client_name}
-              onChange={(e) => setHeader({ ...header, client_name: e.target.value })} />
+            <ClientSelector options={clients} value={cliente} onChange={setCliente} />
           </Field>
           <Field label="Business Unit">
             <select className="input w-full" value={header.business_unit}
