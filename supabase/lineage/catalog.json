@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "supabase/lineage/build-catalog.mjs",
-  "ejecutables": 196,
-  "no_ejecutables": 8,
+  "ejecutables": 198,
+  "no_ejecutables": 10,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2299,6 +2299,56 @@
       "ledger_name": "ROLLBACK_0235_link_notification_personal_read",
       "provenance": "repo (candidate/link-notif-tricolor-r1)",
       "motivo": "Inversa de 0235: elimina tabla, vista y RPC y restituye el estado de 0162. NO es forward."
+    },
+    {
+      "id": "0240_clientes_permission_module.sql",
+      "filename": "0240_clientes_permission_module.sql",
+      "sha256": "198c9df1a78d9fb550aafa21fe37ac9a9f96876ca5b4fe9d9c5f7a92e082f795",
+      "orden": 205,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00205",
+      "ledger_name": "0240_clientes_permission_module",
+      "provenance": "repo (candidate/clientes-ordenes-precios-rbac-r1)",
+      "motivo": "Carril A · extiende permission_module_t con 'clientes'. Va sola porque PostgreSQL prohibe usar un valor de enum recien agregado en la misma transaccion (mismo patron que 0021/0029/0052/0056)."
+    },
+    {
+      "id": "ROLLBACK_0240_clientes_permission_module.sql",
+      "filename": "ROLLBACK_0240_clientes_permission_module.sql",
+      "sha256": "87d2d59d37867aa7ab049823aab29f5e8f113bab1bc2c7b22d03edbf03269e67",
+      "orden": 206,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00206",
+      "ledger_name": "ROLLBACK_0240_clientes_permission_module",
+      "provenance": "repo (candidate/clientes-ordenes-precios-rbac-r1)",
+      "motivo": "Inversa de 0240. PostgreSQL no permite quitar un valor de enum: verifica que no queden filas que lo referencien y aborta si las hay. NO es forward."
+    },
+    {
+      "id": "0241_clients_native_master.sql",
+      "filename": "0241_clients_native_master.sql",
+      "sha256": "571045d3f7719d7780ab952bc187f5c5c8f27d8c9c1f6022addabf4b3c3259eb",
+      "orden": 207,
+      "requires": [
+        "0240_clientes_permission_module.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00207",
+      "ledger_name": "0241_clients_native_master",
+      "provenance": "repo (candidate/clientes-ordenes-precios-rbac-r1)",
+      "motivo": "Carril A · registro maestro de clientes: columnas de identidad externa y sincronizacion, updated_by, client_events, normalizadores indexables nx_text_norm/nx_digits, indices de busqueda y RPC clients_search / clients_duplicate_candidates. Aditiva, sin backfill. Requiere 0240: siembra permisos con module='clientes'."
+    },
+    {
+      "id": "ROLLBACK_0241_clients_native_master.sql",
+      "filename": "ROLLBACK_0241_clients_native_master.sql",
+      "sha256": "d82f67de0a30e1b52e1c07ec88674f420528dad0cdcfa8ad6792794b6c60d15a",
+      "orden": 208,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00208",
+      "ledger_name": "ROLLBACK_0241_clients_native_master",
+      "provenance": "repo (candidate/clientes-ordenes-precios-rbac-r1)",
+      "motivo": "Inversa de 0241: elimina funciones, trigger, indices, columnas nuevas y la tabla client_events, y borra los cinco slugs sembrados. Perdida declarada: el historico de client_events. NO es forward."
     }
   ]
 }

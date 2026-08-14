@@ -33,7 +33,7 @@ import { join, resolve } from "node:path";
 export const MIGRATIONS_DIR = resolve(__dirname, "..", "..", "..", "supabase", "migrations");
 
 /** Cantidad esperada. Cambiarla exige tocar el manifiesto y esta constante. */
-export const EXPECTED_MANIFEST_SIZE = 31;
+export const EXPECTED_MANIFEST_SIZE = 33;
 
 /** Cierre de dependencias WMS, en orden de aplicación. */
 export const WMS_MIGRATION_MANIFEST: readonly string[] = [
@@ -80,6 +80,24 @@ export const WMS_MIGRATION_MANIFEST: readonly string[] = [
   // permanece NO VERIFICABLE en este expediente.
   "0219_wms_client_identity_foundation.sql", // client_id ×3, BU proyectada, anomalías, bu_declaration_t
   "0220_wms_canonical_identity_cutover.sql", // gates 100 %, unicidad canónica, RPC v2 (allocate/confirm)
+
+  // ── Carril A: registro maestro de clientes ──
+  // Entran al cierre WMS porque 0241 ALTERA `public.clients`, que es la tabla
+  // sobre la que 0219/0220 apoyan la identidad canónica de `receptions`,
+  // `inventory_items` y `logistics_orders`: sin ellas en el sustrato, el
+  // cierre probaría una versión de `clients` que ya no existe en producción.
+  //
+  // ALCANCE, DECLARADO SIN ADORNO: al entrar al manifiesto, estas dos
+  // migraciones se cargan en el sustrato de TODAS las suites de la corrida,
+  // no sólo de las dos nuevas. Es una expansión real y deliberada.
+  //
+  // Lo que NO se afirma: hoy `src/` NO consume `clients_search` ni
+  // `clients_duplicate_candidates` — verificado por grep, cero consumidores
+  // fuera de las migraciones, el catálogo de linaje y estos tests. Las RPC
+  // quedan disponibles para la capa de aplicación del Carril A, que es
+  // trabajo posterior a este commit.
+  "0240_clientes_permission_module.sql", // permission_module_t += 'clientes'
+  "0241_clients_native_master.sql", // columnas maestras, client_events, nx_text_norm/nx_digits, clients_search
 ];
 
 /**
@@ -408,6 +426,25 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "real en tests/db/t-link-a1-01-tricolor-badges.test.ts, que monta su " +
       "propio cierre acotado y ejecuta los cuatro archivos tal como están en " +
       "disco, incluidos sus ROLLBACK.",
+    },
+    {
+    // NEXUS-CLIENTES-ORDENES-PRECIOS-USUARIOS-001 · Carril A. Decisión
+    // explícita y por filename EXACTO, sin abrir rango.
+    id: "clientes-native-master-rollbacks",
+    matches: (f) =>
+      f === "ROLLBACK_0240_clientes_permission_module.sql" ||
+      f === "ROLLBACK_0241_clients_native_master.sql",
+    reason:
+      "Son las INVERSAS de 0240/0241, no migraciones forward: aplicarlas dentro " +
+      "del cierre WMS destruiría los objetos que el propio cierre acaba de " +
+      "crear. Las dos forward SÍ están en WMS_MIGRATION_MANIFEST porque 0241 " +
+      "altera public.clients, la tabla sobre la que 0219/0220 apoyan la " +
+      "identidad canónica de receptions e inventory_items. Se " +
+      "excluyen del cierre, NO de su verificación: ambas inversas se ejecutan " +
+      "contra PostgreSQL real en " +
+      "tests/db/t-cli-a1-02-clients-master-rollback.test.ts, que monta su " +
+      "propio cierre acotado y comprueba que revertir deja el esquema en el " +
+      "estado previo sin tocar las filas de public.clients.",
     },
     {
     id: "lineage-recovered-and-correctives",

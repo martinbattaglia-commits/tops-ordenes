@@ -52,6 +52,12 @@ export const EXPECTED_TEST_FILES = [
   // Ensayo prod-shaped de 0234+0235: orden de aplicación, rollback inverso sin
   // residuos, reaplicación idéntica y aislamiento A / B / administrador.
   "t-link-a1-03-migration-rehearsal.test.ts",
+  // ── NEXUS-CLIENTES-ORDENES-PRECIOS-USUARIOS-001 · Carril A: registro
+  //    maestro de clientes (0240/0241). Montan su propio cierre acotado
+  //    (clients + permissions + extensiones) y ejecutan las migraciones y sus
+  //    inversas tal como están en disco.
+  "t-cli-a1-01-clients-search.test.ts",
+  "t-cli-a1-02-clients-master-rollback.test.ts",
 ];
 
 /**
@@ -99,6 +105,8 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-wa-r9-07-end-to-end.test.ts": 7,
   "t-link-a1-01-tricolor-badges.test.ts": 53,
   "t-link-a1-03-migration-rehearsal.test.ts": 16,
+  "t-cli-a1-01-clients-search.test.ts": 33,
+  "t-cli-a1-02-clients-master-rollback.test.ts": 9,
 });
 
 /**

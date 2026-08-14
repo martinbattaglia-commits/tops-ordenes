@@ -131,8 +131,9 @@ describe("T-A0-13 · reporte de corrida", () => {
     const derivado = Object.values(EXPECTED_TESTS_PER_FILE).reduce((a, b) => a + b, 0);
     expect(EXPECTED_TOTAL_TESTS).toBe(derivado);
     // 519 + 53 (t-link-a1-01) + 16 (t-link-a1-03) de la FASE A de
-    // NEXUS-LINK-NOTIFICATIONS-MEDIA-001.
-    expect(EXPECTED_TOTAL_TESTS).toBe(588);
+    // NEXUS-LINK-NOTIFICATIONS-MEDIA-001 + 33 (t-cli-a1-01) + 9 (t-cli-a1-02)
+    // del Carril A de NEXUS-CLIENTES-ORDENES-PRECIOS-USUARIOS-001.
+    expect(EXPECTED_TOTAL_TESTS).toBe(630);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {
