@@ -1,0 +1,87 @@
+name: WMS Custody · DB Harness (PG17 + PostGIS)
+
+# Harness DEDICADO de Custodia Digital sobre PostgreSQL 17 con PostGIS REAL.
+#
+# Por qué no alcanza el workflow vanilla `p3-n1a0-db-harness.yml`:
+#   · corre `npm run test:db`, es decir `vitest.db.config.ts` y el manifiesto
+#     VANILLA de 31 migraciones, que excluye por diseño 0016 y 0036-0039;
+#   · su servicio es `postgres:17` PELADO, sin PostGIS, de modo que ni siquiera
+#     podría aplicar 0016.
+# Son dos contratos distintos y ninguno sustituye al otro.
+#
+# Sustrato: este job NO levanta un cluster efímero. Define `P3N1A0_TEST_PG_URL`,
+# con lo cual `startEphemeralCluster()` toma su segundo sustrato —servidor
+# externo—: crea una base con nombre único, corre el manifiesto de Custodia
+# sobre ella y la ELIMINA verificando su desaparición. El servicio PostGIS es,
+# entonces, el runtime que la suite usa de verdad, y no un adorno.
+#
+# El resultado lo determina el exit code real de Vitest. La sonda de PostGIS
+# corre ANTES de la suite y prueba `postgis_lib_version()`, no el nombre de la
+# extensión.
+#
+# La forma de este archivo está verificada estructuralmente por
+# tests/custody-db/t-c2-04-ci-contract.test.ts, que lo parsea como YAML.
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "tests/custody-db/**"
+      - "vitest.custody.config.ts"
+      - "package.json"
+      - ".github/workflows/wms-custody-db-harness.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wms-custody-db-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  custody-db-harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      P3N1A0_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias desde lockfile
+        run: npm ci --no-audit --no-fund
+
+      - name: Probar PostGIS real sobre el runtime de la suite
+        run: node tests/custody-db/scripts/assert-postgis-runtime.mjs
+
+      - name: Ejecutar harness dedicado de Custodia
+        run: npm run test:custody:db
+
+      - name: Verificar bases de test residuales
+        if: always()
+        run: node tests/db/scripts/assert-no-residual-databases.mjs

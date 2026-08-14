@@ -15,6 +15,7 @@
     "env:check": "node scripts/env-check.mjs",
     "test": "vitest run",
     "test:db": "node tests/db/scripts/run-db-gates.mjs",
+    "test:custody:db": "vitest run --config vitest.custody.config.ts",
     "lint:boundaries": "node scripts/prospeccion-boundaries.mjs",
     "lint:udie-boundary": "node scripts/udie-boundary.mjs"
   },

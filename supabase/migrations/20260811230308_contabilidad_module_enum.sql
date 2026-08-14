@@ -1,0 +1,25 @@
+-- =========================================================================
+-- CORRECTIVA FORWARD-ONLY · valor de enum `contabilidad`
+--
+-- ─── QUÉ CORRIGE ────────────────────────────────────────────────────────
+--
+-- `0124_contabilidad_permissions_seed.sql` inserta permisos con
+-- `module = 'contabilidad'`, pero NINGUNA migración del repositorio agrega ese
+-- valor a `public.permission_module_t`. Sobre una base nueva corta con
+-- «invalid input value for enum permission_module_t: "contabilidad"».
+--
+-- En producción el valor SÍ existe (evidencia de ledger del 2026-08-11: el
+-- enum trae `contabilidad`) y `0124` está registrada: el ALTER TYPE se aplicó
+-- fuera del repositorio y nunca se versionó. Esta correctiva lo repone para
+-- que la genealogía sea reconstruible desde cero.
+--
+-- ─── POR QUÉ EN SU PROPIA MIGRACIÓN ─────────────────────────────────────
+--
+-- PostgreSQL no permite USAR un valor de enum recién agregado dentro de la
+-- misma transacción que lo agrega. Por eso va sola, igual que `0086` hizo con
+-- `mi_espacio`. El catálogo la ordena ANTES de `0124`.
+--
+-- Idempotente. No toca ninguna migración histórica.
+-- =========================================================================
+
+alter type public.permission_module_t add value if not exists 'contabilidad';

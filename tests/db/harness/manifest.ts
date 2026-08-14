@@ -267,6 +267,73 @@ const FROZEN_EXCLUDED_FILES: ReadonlySet<string> = new Set([
   "0194_treasury_beneficiaries.sql",
 ]);
 
+/**
+ * SCR-WMS-002 · Migraciones que pertenecen al HARNESS DEDICADO de Custodia.
+ *
+ * `0221`–`0223` viven en `supabase/migrations/` porque son migraciones reales
+ * del repositorio, pero su cierre de dependencias exige PostGIS y la serie
+ * 0036–0039, que el manifiesto vanilla excluye por diseño (ver arriba). Su
+ * lugar es `tests/custody-db/harness/manifest.ts`, no éste.
+ *
+ * Sin esta regla quedaban SIN CLASIFICAR y `validateCanonicalManifest()`
+ * rompía la suite A0 entera — que es exactamente lo que debe hacer con una
+ * migración nueva hasta que alguien decida dónde va. Ésta es esa decisión, y
+ * está tomada por FILENAME EXACTO: es un set aparte del snapshot congelado,
+ * cuyo contenido no se toca, y no absorbe nada que no esté enumerado acá.
+ * `0224_*` —o cualquier migración futura, se llame como se llame— sigue sin
+ * clasificarse sola.
+ *
+ * NO agrega estos archivos al manifiesto vanilla ni altera
+ * `EXPECTED_MANIFEST_SIZE`: el cierre WMS sobre PostgreSQL vanilla sigue
+ * siendo el mismo de 31 archivos.
+ */
+const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
+  "0221_custody_integrity_enums.sql",
+  "0222_custody_integrity_foundation.sql",
+  "0223_custody_integrity_decision.sql",
+  // W22-BIS · remediación DB-C4 (B-1 · M-1 · M-3/M-4). Se incorpora por DECISIÓN
+  // EXPLÍCITA, que es exactamente lo que la advertencia de abajo exigía.
+  "0224_custody_integrity_authority_hardening.sql",
+  // W22-TER-B · M-5 (compatibilidad tri-state con 0039). Misma decisión
+  // explícita: depende de PostGIS y de 0036-0039, excluidas del vanilla.
+  "0225_custody_0039_tristate_compat.sql",
+  // W22-TER-C · M-2 (atestación server-side del contenido). Decisión explícita,
+  // misma razón: PostGIS y la serie 0036-0039, excluidas del vanilla.
+  "0226_custody_content_attestation.sql",
+  // Serial UI/E2E · lectura de custodia acotada por tenant. Decisión explícita:
+  // reescribe policies sobre `custody_events`/`custody_evidence`, que sólo
+  // existen tras 0036-0039 (PostGIS), excluidas del vanilla.
+  "0231_custody_read_tenant_scope.sql",
+  // Remediación consolidada · reserva EXCLUSIVA del intento de evaluación y
+  // abandono explícito. Misma decisión: redefine funciones de 0223 que se
+  // apoyan en `custody_events` y en la serie 0036-0039, fuera del vanilla.
+  "0232_custody_evaluation_lease_exclusive.sql",
+]);
+
+/**
+ * L4 · LINAJE — recuperadas y correctivas forward-only.
+ *
+ * `0141` volvió al árbol ejecutable porque es la dependencia real de
+ * `0174/0175/0177` (decisión de Dirección, opción (a) del gate de linaje), y
+ * las tres correctivas reponen contratos que migraciones históricas
+ * defectuosas no logran establecer sobre una base nueva.
+ *
+ * Igual que la serie de Custodia: quedarían SIN CLASIFICAR y romperían
+ * `validateCanonicalManifest()`, que es exactamente lo que debe pasar con toda
+ * migración nueva hasta que alguien decida dónde va. Ésta es esa decisión,
+ * tomada por FILENAME EXACTO y en un set PROPIO, sin tocar el snapshot
+ * congelado ni `EXPECTED_MANIFEST_SIZE`.
+ *
+ * `0205`–`0218` NO están acá ni en ningún otro set: son APPLIED_REMOTE_ARCHIVE
+ * y viven fuera del árbol ejecutable.
+ */
+const LINEAGE_RECOVERED_AND_CORRECTIVE_FILES: ReadonlySet<string> = new Set([
+  "0141_compliance_cases.sql",
+  "20260811195739_ai_docs_redact_paren_fix.sql",
+  "20260811230308_contabilidad_module_enum.sql",
+  "20260811230310_rbac_gerencia_finanzas_constraint_safe.sql",
+]);
+
 export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
   id: string;
   matches: (file: string) => boolean;
@@ -319,6 +386,41 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "ROLLBACK_0233 es su inversa pre-activación. Se excluyen del cierre WMS, " +
       "NO de su verificación específica en " +
       "src/lib/whatsapp/make-relay-migration.test.ts.",
+    },
+    {
+    id: "lineage-recovered-and-correctives",
+    // Filename EXACTO, set propio. No absorbe rangos ni prefijos.
+    matches: (f) => LINEAGE_RECOVERED_AND_CORRECTIVE_FILES.has(f),
+    reason:
+      "Gate de linaje L4: 0141 (dependencia real de 0174/0175/0177, restaurada por decisión " +
+      "de Dirección) y las tres correctivas forward-only que reponen contratos rotos en " +
+      "instalación limpia (ai_docs_redact de 0176, el valor de enum contabilidad que 0124 " +
+      "usa y nadie agrega, y el seed de 0070 que choca con unique (module, action) de 0009). " +
+      "Se excluyen del cierre WMS vanilla por la misma razón que la serie de custodia: su " +
+      "cierre de dependencias exige PostGIS y la serie 0036-0039. Se verifican en el replay " +
+      "gobernado por supabase/lineage/catalog.json y en tests/custody-db/. " +
+      "0205-0218 NO participan: son APPLIED_REMOTE_ARCHIVE, fuera del arbol ejecutable.",
+  },
+  {
+    id: "custody-integrity-dedicated-harness",
+    // Filename EXACTO, en un set PROPIO y separado del snapshot congelado, cuyo
+    // contenido no se modifica. No es un rango ni un patrón por prefijo.
+    matches: (f) => CUSTODY_HARNESS_MIGRATION_FILES.has(f),
+    reason:
+      "Serie de Integridad de Custodia (0221 enums · 0222 fundación · 0223 decisión · " +
+      "0224 contención de autoridad y cota temporal · 0225 tri-state 0039 · " +
+      "0226 atestación de contenido). " +
+      "Se excluye del cierre WMS vanilla porque su cierre de dependencias exige " +
+      "PostGIS y la serie 0036-0039, que este manifiesto excluye por diseño para " +
+      "no convertir una extensión pesada en dependencia obligatoria de toda la " +
+      "suite A0. Estas migraciones SÍ se cargan, y se verifican, en el harness " +
+      "DEDICADO de `tests/custody-db/`, cuyo manifiesto propio las enumera. " +
+      "ADVERTENCIA: 0222 modifica `custody_events` (CHECK stage/event_type) y " +
+      "reemplaza `attach_custody_evidence`, objetos del dominio de custodia; se " +
+      "excluye por la dependencia de PostGIS, NO porque sea ajena. La exclusión " +
+      "es por los SEIS filenames exactos de esta serie; cualquier migración que " +
+      "no enumere ninguna regla queda sin clasificar y rompe la suite hasta una " +
+      "decisión explícita.",
   },
 ];
 
