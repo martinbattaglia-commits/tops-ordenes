@@ -25,7 +25,7 @@ const ROLE_LABEL: Record<MemberRole, string> = { owner: "Dueño", moderator: "Mo
 export function ConversationAdmin({
   conversationId, kind, title, topic, slug, contextId, visibility, archivedAt,
   myRole, isAdmin, members = [], pinned = [], initialMessages = [], currentUserId,
-  links = [], archiveRedirectTo,
+  links = [], archiveRedirectTo, initialNowIso,
 }: {
   conversationId: string;
   kind: ConversationKind;
@@ -45,6 +45,8 @@ export function ConversationAdmin({
   links?: ConversationLink[];
   /** A dónde ir tras archivar: /connect/canales (vista de canal) o /connect (ruta de conversación). */
   archiveRedirectTo: string;
+  /** Snapshot SSR compartido con ThreadView en la ruta directa de conversación. */
+  initialNowIso?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -237,6 +239,7 @@ export function ConversationAdmin({
             kind={kind}
             initialMessages={initialMessages}
             currentUserId={currentUserId ?? null}
+            initialNowIso={initialNowIso}
             readOnly={archived}
             mentionables={members
               .filter((m) => m.profileId && m.name)

@@ -13,7 +13,12 @@ export function timeAgo(iso: string | null): string {
 }
 
 export function timeHM(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("es-AR", {
+    timeZone: AR_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
 }
 
 // ── LINK-WA-UX-001 · Separadores de fecha por día ───────────────────────────
@@ -46,10 +51,20 @@ export function isNewDay(iso: string, prevIso: string | null | undefined, timeZo
  */
 export function dayLabel(
   iso: string,
-  now: Date = new Date(),
+  now: Date | null = new Date(),
   timeZone: string = AR_TIME_ZONE,
 ): string {
   const key = dayKey(iso, timeZone);
+  // Durante SSR/hidratación el caller puede usar `null` como snapshot estable:
+  // se muestra una fecha absoluta hasta que el reloj real se habilita post-mount.
+  if (now === null) {
+    return new Date(iso).toLocaleDateString("es-AR", {
+      timeZone,
+      year: "numeric",
+      day: "numeric",
+      month: "long",
+    });
+  }
   const todayKey = dayKey(now.toISOString(), timeZone);
   if (key === todayKey) return "Hoy";
   const yesterdayKey = dayKey(new Date(now.getTime() - 86_400_000).toISOString(), timeZone);

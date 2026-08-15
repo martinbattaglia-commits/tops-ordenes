@@ -24,6 +24,9 @@ export default async function ConnectThreadPage({
 }: {
   params: { conversationId: string };
 }) {
+  // Un único instante por request: se serializa y se reutiliza en SSR y en el
+  // primer render del cliente, incluso si la hidratación cruza medianoche.
+  const initialNowIso = new Date().toISOString();
   const [conversation, messages, links, currentUserId, participants] = await Promise.all([
     getConversation(params.conversationId),
     listMessages(params.conversationId),
@@ -97,6 +100,7 @@ export default async function ConnectThreadPage({
         currentUserId={currentUserId}
         links={links}
         archiveRedirectTo="/connect"
+        initialNowIso={initialNowIso}
       />
     );
   }
@@ -165,6 +169,7 @@ export default async function ConnectThreadPage({
         currentUserId={currentUserId}
         readOnly={!!conversation.archivedAt}
         mentionables={mentionables}
+        initialNowIso={initialNowIso}
       />
     </div>
   );
