@@ -52,6 +52,19 @@ export const EXPECTED_TEST_FILES = [
   // Ensayo prod-shaped de 0234+0235: orden de aplicación, rollback inverso sin
   // residuos, reaplicación idéntica y aislamiento A / B / administrador.
   "t-link-a1-03-migration-rehearsal.test.ts",
+  // Frontera de canal de Nexus Link (0236): prueba adversarial Jefe de
+  // Deposito + participante WhatsApp + legacy connect.* = DENEGADO.
+  "t-link-b1-01-channel-boundary.test.ts",
+  // Cierre estructural (0237): RLS, realtime, búsqueda, signed URL y Storage.
+  "t-link-b1-02-channel-rls.test.ts",
+  // Ciclo de vida de la subida (0238): carreras reales entre finalize y
+  // barrido, adopción ajena, reintento tras fallo de Storage y rollback.
+  "t-link-b2-01-upload-lifecycle.test.ts",
+  // Cierre de H1 (0239): fuga de connect_participants.external_ref. Entorno
+  // C5 con esquema REAL derivado de main (0001/.../0238 vía readFileSync,
+  // no un cierre sintético), incluidos los dos defectos que ese entorno
+  // descubrió en 0236 (columna label, no name; unique(module,action) real).
+  "t-link-h1-01-participants-channel-rls.test.ts",
 ];
 
 /**
@@ -99,6 +112,10 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-wa-r9-07-end-to-end.test.ts": 7,
   "t-link-a1-01-tricolor-badges.test.ts": 53,
   "t-link-a1-03-migration-rehearsal.test.ts": 16,
+  "t-link-b1-01-channel-boundary.test.ts": 21,
+  "t-link-b1-02-channel-rls.test.ts": 41,
+  "t-link-b2-01-upload-lifecycle.test.ts": 37,
+  "t-link-h1-01-participants-channel-rls.test.ts": 34,
 });
 
 /**

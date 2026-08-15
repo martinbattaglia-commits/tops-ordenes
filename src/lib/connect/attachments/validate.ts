@@ -1,0 +1,161 @@
+// Nexus Link · FASE B — Validación de adjuntos (PURA, sin IO).
+//
+// Mismo principio que `audio/validate.ts`: JAMÁS confiar en el MIME ni en la
+// extensión que declara el navegador. El tipo real se determina por la FIRMA
+// BINARIA, y sólo se acepta lo que está en la lista blanca.
+//
+// La lista es blanca a propósito: rechazar "lo peligroso" es una carrera que se
+// pierde —basta un formato nuevo—, mientras que aceptar sólo lo conocido falla
+// del lado seguro.
+
+import { validateOoxml } from "./ooxml";
+
+export const ATTACHMENT_LIMITS = {
+  /** Tope duro del adjunto. */
+  maxBytes: 25 * 1024 * 1024, // 25 MB
+  /** Tope específico de imagen: no hace falta más para un chat operativo. */
+  maxImageBytes: 10 * 1024 * 1024, // 10 MB
+  /** Largo máximo del nombre ya normalizado. */
+  maxFileNameLength: 120,
+} as const;
+
+export type AttachmentFamily = "image" | "document";
+
+export interface SniffedAttachment {
+  mime: string;
+  ext: string;
+  family: AttachmentFamily;
+}
+
+const startsWith = (b: Uint8Array, sig: number[], offset = 0): boolean =>
+  b.length >= offset + sig.length && sig.every((v, i) => b[offset + i] === v);
+
+/**
+ * Detecta el tipo real por firma binaria. `null` = no soportado ⇒ se rechaza.
+ *
+ * No se incluyen SVG ni HTML: son texto con capacidad de ejecutar script en el
+ * navegador de quien los abre. Un adjunto no tiene por qué poder hacer eso.
+ */
+export function sniffAttachment(bytes: Uint8Array): SniffedAttachment | null {
+  if (bytes.length < 12) return null;
+
+  // ── Imágenes ──
+  // JPEG: FF D8 FF
+  if (startsWith(bytes, [0xff, 0xd8, 0xff])) {
+    return { mime: "image/jpeg", ext: "jpg", family: "image" };
+  }
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return { mime: "image/png", ext: "png", family: "image" };
+  }
+  // WebP: 'RIFF' … 'WEBP'
+  if (startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+      startsWith(bytes, [0x57, 0x45, 0x42, 0x50], 8)) {
+    return { mime: "image/webp", ext: "webp", family: "image" };
+  }
+  // GIF: 'GIF87a' / 'GIF89a'
+  if (startsWith(bytes, [0x47, 0x49, 0x46, 0x38])) {
+    return { mime: "image/gif", ext: "gif", family: "image" };
+  }
+  // HEIC/HEIF: ISO-BMFF con brand 'heic'/'heif'/'mif1' en offset 8
+  if (startsWith(bytes, [0x66, 0x74, 0x79, 0x70], 4)) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (["heic", "heix", "heif", "mif1"].includes(brand)) {
+      return { mime: "image/heic", ext: "heic", family: "image" };
+    }
+  }
+
+  // ── Documentos ──
+  // PDF: '%PDF'
+  if (startsWith(bytes, [0x25, 0x50, 0x44, 0x46])) {
+    return { mime: "application/pdf", ext: "pdf", family: "document" };
+  }
+  // ZIP: firma NECESARIA pero NO suficiente. Un DOCX es un ZIP, pero también lo
+  // es un ejecutable comprimido o una bomba de descompresión. La familia se
+  // resuelve recién en `validateAttachment`, que valida el paquete OOXML de
+  // verdad con `validateOoxml`.
+  if (startsWith(bytes, [0x50, 0x4b, 0x03, 0x04])) {
+    return { mime: "application/zip", ext: "zip", family: "document" };
+  }
+  return null;
+}
+
+/** Nombres que NUNCA se aceptan, cualquiera sea la firma. */
+const EXTENSIONES_PROHIBIDAS = new Set([
+  "exe", "dll", "so", "dylib", "bat", "cmd", "com", "scr", "msi", "app",
+  "sh", "bash", "zsh", "ps1", "psm1", "vbs", "js", "mjs", "cjs", "jar",
+  "html", "htm", "svg", "xhtml", "php", "py", "rb", "pl",
+]);
+
+/**
+ * Normaliza el nombre para persistir y mostrar.
+ *
+ * No se usa para construir la ruta de storage —el servidor elige esa ruta— así
+ * que esto es presentación y trazabilidad. Aun así se sanea: un nombre viaja a
+ * cabeceras, a la UI y a WhatsApp.
+ */
+export function normalizeFileName(raw: string | null | undefined, fallbackExt: string): string {
+  // NFC, no NFKC: la descomposición por compatibilidad de NFKC convierte `Nº`
+  // en `No` y `½` en `1⁄2`, es decir, deforma nombres legítimos de la operación
+  // ("Remito Nº 42"). NFC unifica la composición sin alterar el texto.
+  const base = (raw ?? "").normalize("NFC");
+  // Se descarta cualquier componente de ruta: `..`, `/` y `\` no sobreviven.
+  const soloNombre = base.split(/[/\\]/).pop() ?? "";
+  const limpio = soloNombre
+    .replace(/[\x00-\x1f\x7f]/g, "")      // control chars
+    .replace(/[^\p{L}\p{N}._ -]/gu, "_")        // sólo letras, números y separadores
+    .replace(/\.{2,}/g, ".")                     // colapsa '..'
+    .replace(/^[.\s]+/, "")                      // sin punto ni espacio inicial
+    .trim();
+  const conNombre = limpio.length > 0 ? limpio : `adjunto.${fallbackExt}`;
+  return conNombre.slice(0, ATTACHMENT_LIMITS.maxFileNameLength);
+}
+
+/** ¿La extensión del nombre declarado está prohibida? */
+export function hasForbiddenExtension(name: string): boolean {
+  const partes = name.toLowerCase().split(".");
+  if (partes.length < 2) return false;
+  // Se miran TODAS las extensiones, no sólo la última: `factura.pdf.exe`.
+  return partes.slice(1).some((e) => EXTENSIONES_PROHIBIDAS.has(e));
+}
+
+export type AttachmentValidation =
+  | { ok: true; sniffed: SniffedAttachment; fileName: string }
+  | { ok: false; message: string };
+
+/** Validación completa server-side: firma real, límites y nombre. */
+export function validateAttachment(
+  bytes: Uint8Array,
+  declaredName: string | null | undefined,
+): AttachmentValidation {
+  if (bytes.length === 0) return { ok: false, message: "El archivo está vacío." };
+  if (bytes.length > ATTACHMENT_LIMITS.maxBytes) {
+    return { ok: false, message: "El archivo supera el máximo de 25 MB." };
+  }
+  const sniffed = sniffAttachment(bytes);
+  if (!sniffed) {
+    return {
+      ok: false,
+      message: "Tipo de archivo no permitido (se verifica el contenido real, no la extensión).",
+    };
+  }
+  if (sniffed.family === "image" && bytes.length > ATTACHMENT_LIMITS.maxImageBytes) {
+    return { ok: false, message: "La imagen supera el máximo de 10 MB." };
+  }
+  if (declaredName && hasForbiddenExtension(declaredName)) {
+    return { ok: false, message: "Ese tipo de archivo no está permitido." };
+  }
+  // Un ZIP sólo se acepta si es un paquete OOXML coherente: estructura válida,
+  // `[Content_Types].xml`, carpeta de familia, sin traversal, sin bomba, sin
+  // macros y con la extensión declarada correspondiendo al contenido.
+  if (sniffed.mime === "application/zip") {
+    const ooxml = validateOoxml(bytes, declaredName);
+    if (!ooxml.ok) return { ok: false, message: ooxml.message };
+    return {
+      ok: true,
+      sniffed: { mime: ooxml.mime, ext: ooxml.ext, family: "document" },
+      fileName: normalizeFileName(declaredName, ooxml.ext),
+    };
+  }
+  return { ok: true, sniffed, fileName: normalizeFileName(declaredName, sniffed.ext) };
+}

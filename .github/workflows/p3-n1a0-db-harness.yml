@@ -1,6 +1,6 @@
 name: P3-N1A0 · WMS DB Harness
 
-# Suite de integración SQL del WMS sobre PostgreSQL 17.
+# Suite de integración SQL del WMS sobre PostgreSQL 17 + PostGIS 3.5.
 #
 # El alcance de este workflow está verificado ESTRUCTURALMENTE por
 # tests/db/t-a0-06-ci-definition.test.ts, que lo parsea como YAML y lo compara
@@ -41,7 +41,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:17
+        image: postgis/postgis:17-3.5
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres

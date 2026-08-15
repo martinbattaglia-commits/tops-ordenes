@@ -488,22 +488,33 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     // ROLLBACK_ ya las obliga a estado `rollback` en el validador.
     "ROLLBACK_0234_link_notification_badges_tricolor.sql",
     "ROLLBACK_0235_link_notification_personal_read.sql",
+    // Frontera de canal de Nexus Link: inversa de 0236. Entra por la CONVENCIÓN
+    // de nombre, no por una excepción.
+    "ROLLBACK_0236_nexus_link_channel_capabilities.sql",
+    "ROLLBACK_0237_nexus_link_channel_rls.sql",
+    "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
+    // Hallazgo de C5: enum de módulo (prerrequisito de 0236) y cierre de H1
+    // sobre connect_participants. Misma convención de nombre.
+    "ROLLBACK_0235a_nexus_link_permission_module.sql",
+    "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 
-  it("control sano: 204 entradas, 196 ejecutables y 8 no ejecutables, recalculados", () => {
-    // +4 respecto de la línea previa (200/194/6): 0234 y 0235 ejecutables, sus
-    // dos inversas no ejecutables. Las cifras se contrastan contra el recálculo
-    // desde `entries`, así que no pueden quedar desfasadas en silencio.
-    expect(REAL.entries).toHaveLength(204);
+  it("control sano: 214 entradas, 201 ejecutables y 13 no ejecutables, recalculados", () => {
+    // +4 en FASE A (0234/0235 y sus inversas) y +6 en FASE B (0236, 0237 y
+    // 0238 con sus inversas), sobre la línea previa 200/194/6; +4 en el
+    // hallazgo de C5 (0235a y 0239, cada una con su inversa) sobre la línea
+    // 210/199/11. Las cifras se contrastan contra el recálculo desde
+    // `entries`, así que no pueden quedar desfasadas en silencio.
+    expect(REAL.entries).toHaveLength(214);
     const ejec = REAL.entries.filter(
       (e) => e.estado === "active" || e.estado === "corrective",
     );
-    expect(ejec).toHaveLength(196);
-    expect(REAL.entries.length - ejec.length).toBe(8);
+    expect(ejec).toHaveLength(201);
+    expect(REAL.entries.length - ejec.length).toBe(13);
     // Y los contadores declarados coinciden con lo recalculado.
-    expect(REAL.ejecutables).toBe(196);
-    expect(REAL.no_ejecutables).toBe(8);
+    expect(REAL.ejecutables).toBe(201);
+    expect(REAL.no_ejecutables).toBe(13);
   });
 
   it("la convención cerrada identifica exactamente a los tres rollbacks del árbol", () => {
@@ -526,12 +537,12 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     expect(cods).toContain("CONTADOR_NO_EJECUTABLES_INCOHERENTE");
   });
 
-  it("MUTANTE B · reclasificación CON contadores maquillados (197/7) → sigue FAIL por rollback", () => {
+  it("MUTANTE B · reclasificación CON contadores maquillados (202/12) → sigue FAIL por rollback", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 197;
-    c.no_ejecutables = 7;
+    c.ejecutables = 202;
+    c.no_ejecutables = 12;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     // Los contadores ahora «cuadran» con las entries mutadas: si el rechazo
     // dependiera de ellos, este mutante viajaría en verde.
@@ -545,8 +556,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 197;
-    c.no_ejecutables = 7;
+    c.ejecutables = 202;
+    c.no_ejecutables = 12;
     expect(() => construirPlan({ catalogo: c })).toThrow(/CATALOGO_INVALIDO/);
     expect(() => construirPlan({ catalogo: c })).toThrow(/ROLLBACK_RECLASIFICADO/);
   });
@@ -576,8 +587,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
       estado: "active",
       ledger_name: "0233b_wa_make_relay_outbox_redo",
     };
-    c.ejecutables = 197;
-    c.no_ejecutables = 7;
+    c.ejecutables = 202;
+    c.no_ejecutables = 12;
     const v = verificarCatalogo({ catalogo: c, dirMigraciones: dir });
     expect(codigos(v)).toEqual(["ROLLBACK_CONOCIDO_AUSENTE"]);
     expect(v[0].detalle).toBe(OBJETIVO);

@@ -54,6 +54,13 @@ vi.mock("@/components/voice/VoiceField", () => ({
   VoiceField: (p: { children?: unknown }) => <div>{p.children as never}</div>,
 }));
 vi.mock("@/components/Icon", () => ({ Icon: () => <span /> }));
+// El composer de adjuntos es un componente aparte, con su propia suite de DOM
+// (`AttachmentComposer.dom.test.tsx`). Acá se sustituye por un doble: sin esto,
+// `ThreadView` arrastraría sus server actions —y con ellas `server-only`, que
+// no es un paquete resoluble fuera del bundler de Next— al grafo de esta prueba.
+vi.mock("./AttachmentComposer", () => ({
+  AttachmentComposer: () => <button type="button" aria-label="Adjuntar archivo" />,
+}));
 
 // Los dobles devuelven el resultado COMPLETO de la acción real. Un doble
 // incompleto —sin `messageId`— dejaba el id del mensaje en `undefined` y con él
@@ -75,6 +82,19 @@ vi.mock("@/lib/whatsapp/reply-action", () => ({
 }));
 vi.mock("@/lib/connect/adapters/driving/read-actions", () => ({
   markReadAction: vi.fn(async () => ({ ok: true })),
+}));
+// H2 (FASE B): audio-actions.ts ahora importa canChannel (nexus-link.ts, que
+// trae `server-only`) para exigir la capacidad del canal, igual que ya hacían
+// los adjuntos. Sin este mock, la cadena transitiva rompe el bundle de esta
+// prueba jsdom — mismo defecto de fondo que ya se corrigió una vez con
+// AttachmentComposer: NO se toca vitest.config.ts, se mockea el módulo que
+// arrastra `server-only` a un entorno que no lo necesita.
+vi.mock("@/lib/rbac/nexus-link", () => ({ canChannel: async () => true }));
+// Mismo motivo: audio-actions.ts también importa el adaptador productivo de
+// envío de media (server-only). No se ejercita el egress real acá — eso vive
+// en media-send-core.test.ts, contra el core puro.
+vi.mock("@/lib/whatsapp/media-send", () => ({
+  sendWhatsappMediaForAttachment: async () => ({ ok: true, state: "sent", wamid: "wamid.TEST" }),
 }));
 
 import { ThreadView } from "./ThreadView";

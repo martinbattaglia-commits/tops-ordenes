@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/Icon";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { searchConnect, type SearchResult, type SearchResultType } from "@/lib/connect/read/search-data";
+import { etiquetaDeContexto } from "@/lib/whatsapp/contact-identity";
 import { relTime } from "@/lib/utils";
 import { GlobalSearch } from "../_components/GlobalSearch";
 
@@ -50,7 +51,11 @@ function ResultRow({ result, icon }: { result: SearchResult; icon: IconName }) {
         {result.snippet && (
           <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{result.snippet}</p>
         )}
-        <p className="mt-1 truncate font-mono text-[11px] text-fg-muted">{result.contextId}</p>
+        {/* LINK-MEDIA-001: en WhatsApp el context_id ES el teléfono. La
+            decisión vive en `etiquetaDeContexto`, que está bajo prueba. */}
+        <p className="mt-1 truncate font-mono text-[11px] text-fg-muted">
+          {etiquetaDeContexto(result.kind, result.contextId)}
+        </p>
       </div>
       <Icon
         name="arrow-up-right"

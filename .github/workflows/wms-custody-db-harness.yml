@@ -2,12 +2,12 @@ name: WMS Custody · DB Harness (PG17 + PostGIS)
 
 # Harness DEDICADO de Custodia Digital sobre PostgreSQL 17 con PostGIS REAL.
 #
-# Por qué no alcanza el workflow vanilla `p3-n1a0-db-harness.yml`:
+# Por qué no sustituye al workflow vanilla `p3-n1a0-db-harness.yml`:
 #   · corre `npm run test:db`, es decir `vitest.db.config.ts` y el manifiesto
 #     VANILLA de 31 migraciones, que excluye por diseño 0016 y 0036-0039;
-#   · su servicio es `postgres:17` PELADO, sin PostGIS, de modo que ni siquiera
-#     podría aplicar 0016.
-# Son dos contratos distintos y ninguno sustituye al otro.
+#   · aunque ambos usan PostgreSQL 17 + PostGIS 3.5, éste conserva el manifiesto
+#     y las sondas propias de Custodia Digital.
+# Son dos contratos de suite distintos y ninguno sustituye al otro.
 #
 # Sustrato: este job NO levanta un cluster efímero. Define `P3N1A0_TEST_PG_URL`,
 # con lo cual `startEphemeralCluster()` toma su segundo sustrato —servidor

@@ -4,15 +4,16 @@
 
 import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
-import { canAccessWaCommercialImport } from "@/lib/connect/wa-import/access";
+import { canAdminWhatsappImport } from "@/lib/rbac/nexus-link";
 import { WaImportForm } from "../_components/WaImportForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Nexus Link · Importar WhatsApp histórico" };
 
 export default async function WaImportPage() {
-  const role = await getProfileRole();
-  if (!canAccessWaCommercialImport(role)) {
+  // Autoridad CANÓNICA: administrador con doble evidencia Y capacidad de canal,
+  // acumulativas. `profiles.role` por sí solo no prueba nada.
+  if (!(await canAdminWhatsappImport())) {
     return <AccesoRestringido modulo="Importador de WhatsApp histórico" />;
   }
   return (

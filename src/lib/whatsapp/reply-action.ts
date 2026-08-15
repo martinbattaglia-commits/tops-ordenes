@@ -13,11 +13,19 @@
  */
 
 import { replyToWhatsappThread } from "./reply";
+import { canChannel } from "@/lib/rbac/nexus-link";
 import {
   executeWhatsappComposerSend,
   type WhatsappComposerResult,
 } from "./reply-action-core";
 
 export async function sendWhatsappTextAction(raw: unknown): Promise<WhatsappComposerResult> {
+  // Frontera de canal (0236) ANTES de cualquier otra cosa: autorización propia
+  // e independiente de la UI. Un Jefe de Deposito que invoque esta acción a mano
+  // —aunque sea participante del hilo y conserve connect.create— recibe
+  // denegación acá, sin llegar a tocar Meta ni la base.
+  if (!(await canChannel("nexus_link.whatsapp.send"))) {
+    return { ok: false, state: "rejected", message: "No tenés acceso a este canal." };
+  }
   return executeWhatsappComposerSend(raw, { reply: replyToWhatsappThread });
 }

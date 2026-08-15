@@ -11,30 +11,47 @@ import {
 } from "./composer-policy";
 
 /**
- * LINK-WA WA-8 · Capacidades del composer por tipo de conversación.
+ * Capacidades del composer por tipo de conversación.
  *
  * Esta es la restricción que el mandato exige que exista en la LÓGICA y no sólo
  * en CSS: ocultar el botón del micrófono no impide que un atajo, un dictado o un
  * re-render disparen la acción igual.
+ *
+ * ─── CAMBIO DE CONTRATO EN FASE B ──────────────────────────────────────────
+ *
+ * WA-8 fijaba WhatsApp como TEXT-ONLY y estas pruebas lo exigían. La razón no
+ * era de negocio: no existía camino de salida para media. FASE B lo construye
+ * sobre los endpoints oficiales de Meta, así que audio y adjuntos quedan
+ * habilitados también en WhatsApp y las expectativas se reescriben a propósito.
+ *
+ * Lo que NO cambia es la prohibición de MENCIONES en WhatsApp, porque su motivo
+ * sigue en pie: filtrarían nombres del tenant a un tercero. Se conserva como
+ * caso propio para que aflojar eso siga costando romper una prueba.
  */
 
 const CONNECT_KINDS = CONVERSATION_KINDS.filter((k) => k !== "whatsapp");
 
-describe("19-20 · WhatsApp es TEXT-ONLY", () => {
-  it("permite texto y bloquea audio y menciones", () => {
+describe("WhatsApp · media habilitada, menciones NO", () => {
+  it("permite texto, audio y adjuntos, y sigue bloqueando menciones", () => {
     expect(composerCapabilities("whatsapp")).toEqual({
       canSendText: true,
-      canSendAudio: false,
+      canSendAudio: true,
+      canAttachFile: true,
       canMention: false,
     });
   });
+
+  it("la mención sigue prohibida: es la única restricción de canal que queda", () => {
+    expect(composerCapabilities("whatsapp").canMention).toBe(false);
+  });
 });
 
-describe("21 · audio y menciones siguen operativos en Connect", () => {
-  it.each(CONNECT_KINDS)("%s conserva texto, audio y menciones", (kind) => {
+describe("21 · audio, adjuntos y menciones operativos en Connect", () => {
+  it.each(CONNECT_KINDS)("%s conserva texto, audio, adjuntos y menciones", (kind) => {
     expect(composerCapabilities(kind)).toEqual({
       canSendText: true,
       canSendAudio: true,
+      canAttachFile: true,
       canMention: true,
     });
   });
@@ -45,6 +62,7 @@ describe("22 · archived/readOnly bloquea todo, en cualquier kind", () => {
     expect(composerCapabilities(kind, { readOnly: true })).toEqual({
       canSendText: false,
       canSendAudio: false,
+      canAttachFile: false,
       canMention: false,
     });
   });
@@ -76,6 +94,7 @@ describe("kind desconocido o ausente ⇒ fail-closed", () => {
     expect(composerCapabilities(kind)).toEqual({
       canSendText: false,
       canSendAudio: false,
+      canAttachFile: false,
       canMention: false,
     });
   });

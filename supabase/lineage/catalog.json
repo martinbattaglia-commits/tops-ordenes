@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "supabase/lineage/build-catalog.mjs",
-  "ejecutables": 196,
-  "no_ejecutables": 8,
+  "ejecutables": 201,
+  "no_ejecutables": 13,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2299,6 +2299,137 @@
       "ledger_name": "ROLLBACK_0235_link_notification_personal_read",
       "provenance": "repo (candidate/link-notif-tricolor-r1)",
       "motivo": "Inversa de 0235: elimina tabla, vista y RPC y restituye el estado de 0162. NO es forward."
+    },
+    {
+      "id": "0235a_nexus_link_permission_module.sql",
+      "filename": "0235a_nexus_link_permission_module.sql",
+      "sha256": "9162956da65a5ea6906a51a87e0a6e3b84799032c674b18b6e08b3ecbaa87b06",
+      "orden": 205,
+      "requires": [
+        "0234_link_notification_badges_tricolor.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00205",
+      "ledger_name": "0235a_nexus_link_permission_module",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Hallazgo de C5 (2026-08-14): agrega dos valores al enum permission_module_t ('nexus_link_chat','nexus_link_whatsapp'), aislada en su propia migracion por la misma razon que 0142 (Postgres prohibe usar un valor de enum recien agregado en la misma transaccion que lo agrega). Corrige a 0236: module='connect' colisionaba con unique(module,action), medido contra produccion, porque 'connect' ya ocupa 7 de los 13 valores de accion."
+    },
+    {
+      "id": "ROLLBACK_0235a_nexus_link_permission_module.sql",
+      "filename": "ROLLBACK_0235a_nexus_link_permission_module.sql",
+      "sha256": "c6feb2fc9f4d000d8018d4754a45bbc35dd83e4293e4b79c8258de033e6cabd1",
+      "orden": 206,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00206",
+      "ledger_name": "ROLLBACK_0235a_nexus_link_permission_module",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa logica de 0235a: un valor de enum agregado no puede DROPearse sin recrear el tipo completo. Los dos valores quedan inertes en el tipo, sin filas de permissions que los usen. NO es destructiva."
+    },
+    {
+      "id": "0236_nexus_link_channel_capabilities.sql",
+      "filename": "0236_nexus_link_channel_capabilities.sql",
+      "sha256": "3fb602c872f225a59c814313083b6bc1e06a6347e4064029c291841cc3fb32f9",
+      "orden": 207,
+      "requires": [
+        "0234_link_notification_badges_tricolor.sql",
+        "0235a_nexus_link_permission_module.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00207",
+      "ledger_name": "0236_nexus_link_channel_capabilities",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Nexus Link · frontera de canal: capacidades nexus_link.internal_chat.* y nexus_link.whatsapp.*, resolvedor nexus_link_can() y filtro de canal dentro de v_connect_inbox. Aditiva: no quita ningun permiso vigente. Requiere 0234, que define la vista que redefine. CORREGIDO en C5 (2026-08-14): la columna real de permissions es label, no name; y module pasa de 'connect' a 'nexus_link_chat'/'nexus_link_whatsapp' (ver 0235a) porque 'connect' ya no tenia action libre bajo unique(module,action)."
+    },
+    {
+      "id": "ROLLBACK_0236_nexus_link_channel_capabilities.sql",
+      "filename": "ROLLBACK_0236_nexus_link_channel_capabilities.sql",
+      "sha256": "2a49435f398fb19ac0a43637a7fee69a94406dec19d54dd7add10886a88504ea",
+      "orden": 208,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00208",
+      "ledger_name": "ROLLBACK_0236_nexus_link_channel_capabilities",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa de 0236: elimina capacidades, concesiones y resolvedor, y restituye v_connect_inbox sin filtro de canal. NO es forward."
+    },
+    {
+      "id": "0237_nexus_link_channel_rls.sql",
+      "filename": "0237_nexus_link_channel_rls.sql",
+      "sha256": "f130447fdb1d56c1d4a0f6beee04b3d5bd464d48f3db985ee5f82fa707bd81fb",
+      "orden": 209,
+      "requires": [
+        "0236_nexus_link_channel_capabilities.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00209",
+      "ledger_name": "0237_nexus_link_channel_rls",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Nexus Link · frontera de canal ESTRUCTURAL: predicado _connect_channel_allowed en la RLS de mensajes, adjuntos y conversaciones (cierra realtime), en el porton de la signed URL (descarga), en connect_search (busqueda) y en la policy de storage por ruta. Requiere 0236, que define nexus_link_can()."
+    },
+    {
+      "id": "ROLLBACK_0237_nexus_link_channel_rls.sql",
+      "filename": "ROLLBACK_0237_nexus_link_channel_rls.sql",
+      "sha256": "eb3f91b5d6593c713abc25ef559a9e19e842c50c2dfdb23b3c2020f1d2422d37",
+      "orden": 210,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00210",
+      "ledger_name": "ROLLBACK_0237_nexus_link_channel_rls",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa de 0237: restituye policies y funciones previas. NO es forward."
+    },
+    {
+      "id": "0238_nexus_link_upload_lifecycle.sql",
+      "filename": "0238_nexus_link_upload_lifecycle.sql",
+      "sha256": "a46dfd48124706297c11ef4a46cef4e4fc697d9ce59bdfd652641e65b2dccee1",
+      "orden": 211,
+      "requires": [
+        "0237_nexus_link_channel_rls.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00211",
+      "ledger_name": "0238_nexus_link_upload_lifecycle",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Nexus Link · ciclo de vida de la subida: tabla connect_pending_uploads, transicion atomica pending→finalized, barrido acotado de pendientes vencidas, trigger que ata el adjunto a su subida finalizada y alineacion de allowed_mime_types del bucket connect-files (HEIC/HEIF/PPTX). Requiere 0237, que define _connect_channel_allowed()."
+    },
+    {
+      "id": "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
+      "filename": "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
+      "sha256": "6a2678a8ec3092a69cde90ddf7099fbeea59603cbf16d9228bd00c1aa688bd01",
+      "orden": 212,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00212",
+      "ledger_name": "ROLLBACK_0238_nexus_link_upload_lifecycle",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa de 0238: suelta trigger, funciones y tabla, y restituye literalmente la lista MIME medida en produccion. NO es forward."
+    },
+    {
+      "id": "0239_nexus_link_participants_channel_rls.sql",
+      "filename": "0239_nexus_link_participants_channel_rls.sql",
+      "sha256": "8deffcd72b8322b561d9e1eb45b0935bd83a21abcfb632a0136d9c4b6f792cf2",
+      "orden": 213,
+      "requires": [
+        "0237_nexus_link_channel_rls.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00213",
+      "ledger_name": "0239_nexus_link_participants_channel_rls",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Cierre de H1: connect_participants.external_ref (el telefono de la contraparte de WhatsApp) se leia sin predicado de canal — 0236/0237 no tocaron esa tabla. Agrega _connect_channel_allowed() (0237, sin funcion nueva) a la policy SELECT, como AND externo sobre _connect_is_member() E is_admin()."
+    },
+    {
+      "id": "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
+      "filename": "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
+      "sha256": "9d463b5246efb9957cb9bbbcd513e861f626c4dbcc827e46a988e948f11e1b9b",
+      "orden": 214,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00214",
+      "ledger_name": "ROLLBACK_0239_nexus_link_participants_channel_rls",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Inversa de 0239: restituye la policy SELECT exacta de 0143."
     }
   ]
 }

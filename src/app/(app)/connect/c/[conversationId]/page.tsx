@@ -3,8 +3,11 @@ import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
 import { listConversationLinks, getCurrentUserId } from "@/lib/connect/data";
 import { getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
 import { getProfileRole } from "@/lib/rbac/boot-permissions";
+import { canChannel } from "@/lib/rbac/nexus-link";
 import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
+import { getWaContact } from "@/lib/connect/read/wa-contact";
 import { ThreadView } from "../../_components/ThreadView";
+import { WaContactCard } from "../../_components/WaContactCard";
 import { ConversationAdmin } from "../../_components/ConversationAdmin";
 import { JoinChannelPrompt } from "../../_components/JoinChannelPrompt";
 import { UnarchiveButton } from "../../_components/UnarchiveButton";
@@ -33,7 +36,14 @@ export default async function ConnectThreadPage({
     .filter((m) => m.profileId && m.name)
     .map((m) => ({ profileId: m.profileId as string, name: m.name as string }));
 
-  if (!conversation) {
+  // Frontera de canal (0236) en la RUTA, no sólo en la lista: entrar por URL
+  // directa a un hilo de WhatsApp sin la capacidad devuelve la MISMA respuesta
+  // que un hilo inexistente. No se confirma ni se desmiente su existencia, y no
+  // se rendereó ningún contenido antes de decidir.
+  const accesoDenegadoPorCanal =
+    conversation?.kind === "whatsapp" && !(await canChannel("nexus_link.whatsapp.read"));
+
+  if (!conversation || accesoDenegadoPorCanal) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
         <Icon name="x" size={22} className="text-fg-muted" />
@@ -91,6 +101,13 @@ export default async function ConnectThreadPage({
     );
   }
 
+  // Ficha de contacto: SÓLO para WhatsApp y sólo después de la guarda. El
+  // resolutor vuelve a exigir la capacidad por su cuenta, así que aunque este
+  // llamado se moviera de lugar no podría entregar el teléfono a quien no
+  // corresponde. Un hilo interno no la pide y por eso no la muestra.
+  const contactoWa =
+    conversation.kind === "whatsapp" ? await getWaContact(conversation.id) : null;
+
   // Otras conversaciones (dm / erp / incident / whatsapp / ai): header + hilo (comportamiento actual).
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -112,16 +129,23 @@ export default async function ConnectThreadPage({
               </>
             )}
           </div>
-          {/* UX-003: línea humana (tema); el context_id técnico pasa a tooltip. */}
+          {/* UX-003: línea humana (tema); el context_id técnico pasa a tooltip.
+              LINK-MEDIA-001: en WhatsApp el context_id ES el teléfono, y un dato
+              personal no se expone como cadena técnica al pasar el mouse: para
+              eso está ahora la ficha de contacto, que es explícita y deliberada. */}
           <p
             className="mt-0.5 truncate text-[11px] text-fg-muted"
-            title={conversation.contextId ?? undefined}
+            title={conversation.kind === "whatsapp" ? undefined : conversation.contextId ?? undefined}
           >
             {conversation.topic ?? "Sin tema"}
           </p>
         </div>
-        {links.length > 0 && (
-          <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        {/* El contenedor se monta SÓLO si hay algo adentro: el header es un flex
+            con `gap-3`, y un div vacío igual consume esa separación, recortando
+            12px al título en todo hilo sin vínculos ni ficha. */}
+        {(contactoWa || links.length > 0) && (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {contactoWa && <WaContactCard contacto={contactoWa} />}
             {links.map((l) => (
               <span key={l.id} className="chip text-[10px]" title={l.entityId ?? l.entityIdText ?? ""}>
                 <Icon name="database" size={11} className="text-fg-link" />

@@ -72,8 +72,10 @@ export function sendButtonClass(kind: unknown): string {
 export interface ComposerCapabilities {
   /** Enviar texto por el camino que corresponda (Connect o WhatsApp). */
   canSendText: boolean;
-  /** Grabar y enviar mensajes de voz (sólo Connect). */
+  /** Grabar y enviar mensajes de voz. */
   canSendAudio: boolean;
+  /** Adjuntar imágenes, fotos y archivos. */
+  canAttachFile: boolean;
   /** Menciones internas `@` (sólo Connect: la FK exige miembros del tenant). */
   canMention: boolean;
 }
@@ -81,15 +83,22 @@ export interface ComposerCapabilities {
 const NONE: ComposerCapabilities = {
   canSendText: false,
   canSendAudio: false,
+  canAttachFile: false,
   canMention: false,
 };
 
 /**
  * Capacidades efectivas del composer.
  *
- * WhatsApp es TEXT-ONLY en WA-8: no hay adjuntos ni audio en el outbound, y una
- * mención interna no significa nada del lado del contacto — mandarla filtraría
- * nombres del tenant a un tercero.
+ * WhatsApp era TEXT-ONLY en WA-8. No era una regla de negocio: era la
+ * consecuencia de que no existiera camino de salida para media —mandar un
+ * adjunto habría requerido inventarlo—. FASE B construye ese camino con los
+ * endpoints oficiales de Meta (`/media` para subir, `/messages` para enviar),
+ * así que audio y adjuntos quedan habilitados también en WhatsApp.
+ *
+ * Las MENCIONES siguen prohibidas ahí, y por un motivo que no cambió: una
+ * mención interna no significa nada del lado del contacto y filtraría nombres
+ * del tenant a un tercero.
  *
  * Un `kind` desconocido o ausente NO habilita nada: si el composer no sabe a
  * dónde va el mensaje, no puede elegir un camino, y adivinar es exactamente lo
@@ -102,9 +111,9 @@ export function composerCapabilities(
   if (options.readOnly === true) return NONE;
   if (!isConversationKind(kind)) return NONE;
   if (isWhatsappKind(kind)) {
-    return { canSendText: true, canSendAudio: false, canMention: false };
+    return { canSendText: true, canSendAudio: true, canAttachFile: true, canMention: false };
   }
-  return { canSendText: true, canSendAudio: true, canMention: true };
+  return { canSendText: true, canSendAudio: true, canAttachFile: true, canMention: true };
 }
 
 /**
@@ -122,4 +131,19 @@ export function bubbleStatusFor(outcome: {
   if (outcome.status === "sent") return undefined;
   if (outcome.status === "pending") return "pending";
   return "failed";
+}
+
+/**
+ * Opciones del grabador de voz según el canal.
+ *
+ * Vive acá por la misma razón que `ownBubbleClass` y `sendButtonClass`: la
+ * vista CONSULTA la decisión por `kind`, no la compara. El contrato estructural
+ * prohíbe condicionales sobre `kind` dentro de `ThreadView`, y esto lo respeta.
+ *
+ * Lo que decide no es cosmético: WhatsApp no reproduce WebM, así que en ese
+ * canal la negociación se restringe a formatos que Meta acepte. Ver
+ * `MIME_PREFERIDOS_WHATSAPP` en `audio/recorder.ts`.
+ */
+export function audioRecorderOptionsFor(kind: unknown): { forWhatsapp: boolean } {
+  return { forWhatsapp: isWhatsappKind(kind) };
 }
