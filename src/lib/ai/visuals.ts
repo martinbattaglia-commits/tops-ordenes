@@ -540,21 +540,22 @@ export const TOOL_VISUALS: Partial<
 
   purchase_orders_overview: (rows) => {
     if (rows.length === 0) return null;
-    const total = rows.reduce((a, r) => a + num(r.total), 0);
+    const reales = rows.filter((r) => r.total !== null && r.total !== undefined && r.total !== "");
+    const total = reales.reduce((a, r) => a + num(r.total), 0);
     return {
       kind: "report",
       title: "Órdenes de compra",
       period: "más recientes primero",
       kpis: [
         { label: "OC listadas", value: String(rows.length), hint: null, tone: "brand", url: "/compras/ordenes", actionLabel: "Ver OC" },
-        { label: "Monto total listado", value: fmtMonto(total), hint: null, tone: "brand" },
+        { label: "Monto real listado", value: fmtMonto(total), hint: `${reales.length} OC con importe real`, tone: "brand" },
       ],
       table: {
         columns: ["OC", "Proveedor", "Total", "Fecha", "Estado"],
         rows: rows.slice(0, 12).map((r) => [
           s(r.public_id),
           s(r.proveedor) || "—",
-          fmtMonto(num(r.total)),
+          r.total === null || r.total === undefined || r.total === "" ? "Precio pendiente/estimado" : fmtMonto(num(r.total)),
           s(r.fecha),
           s(r.estado),
         ]),
@@ -562,7 +563,9 @@ export const TOOL_VISUALS: Partial<
       },
       chart: null,
       insights: [],
-      warnings: [],
+      warnings: reales.length < rows.length
+        ? [`${rows.length - reales.length} OC sin importe real fueron excluidas del monto.`]
+        : [],
     };
   },
 

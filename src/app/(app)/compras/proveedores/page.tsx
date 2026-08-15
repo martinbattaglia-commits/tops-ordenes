@@ -10,7 +10,11 @@ export const dynamic = "force-dynamic";
 
 export default async function VendorsPage() {
   const vendors = await listVendors();
-  const totalYtd = vendors.reduce((a, v) => a + (v.ytd_spend ?? 0), 0);
+  const realYtdAmounts = vendors
+    .map((vendor) => vendor.ytd_spend)
+    .filter((amount): amount is number => typeof amount === "number" && Number.isFinite(amount));
+  const totalYtd = realYtdAmounts.reduce((total, amount) => total + amount, 0);
+  const withoutRealYtd = vendors.length - realYtdAmounts.length;
   // Cuentas de gasto/costo para imputación de compras (degrada a [] si no hay catálogo).
   let accounts: ChartAccount[] = [];
   try {
@@ -26,7 +30,9 @@ export default async function VendorsPage() {
           <div className="eyebrow-tiny">Maestro · {vendors.length} proveedores</div>
           <h1 className="page-title">Proveedores</h1>
           <p className="page-subtitle">
-            Compras YTD: <span className="font-bold tabular text-fg-brand">{fmtCurrency(totalYtd)}</span>
+            Importe real YTD registrado:{" "}
+            <span className="font-bold tabular text-fg-brand">{fmtCurrency(totalYtd)}</span>
+            {withoutRealYtd > 0 ? ` · ${withoutRealYtd} proveedores sin importe real YTD` : ""}
           </p>
         </div>
         <div className="flex gap-2">
@@ -70,7 +76,7 @@ export default async function VendorsPage() {
                   <td className="text-xs text-fg-secondary">{v.cond_pago}</td>
                   <td className="text-right tabular text-sm">{v.oc_count ?? 0}</td>
                   <td className="text-right tabular font-bold text-fg-brand">
-                    {fmtCurrency(v.ytd_spend ?? 0)}
+                    {formatVendorYtd(v.ytd_spend)}
                   </td>
                   <td className="text-xs text-fg-secondary">{fmtDate(v.last_oc_at)}</td>
                 </tr>
@@ -93,7 +99,7 @@ export default async function VendorsPage() {
                 <div className="flex justify-between mt-2 text-xs">
                   <span className="text-fg-muted">{v.oc_count ?? 0} OC · {v.cond_pago}</span>
                   <span className="font-bold tabular text-fg-brand">
-                    {fmtCurrency(v.ytd_spend ?? 0)}
+                    {formatVendorYtd(v.ytd_spend)}
                   </span>
                 </div>
               </div>
@@ -103,4 +109,10 @@ export default async function VendorsPage() {
       </div>
     </div>
   );
+}
+
+function formatVendorYtd(value: number | undefined): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? fmtCurrency(value)
+    : "Sin importe real YTD";
 }

@@ -12,7 +12,8 @@ import {
   fmtRel,
   fmtCuit,
 } from "@/lib/compras/format";
-import { ORG } from "@/lib/org";
+import { purchaseOrderAmount } from "@/lib/compras/order-amounts";
+import { purchaseDeliveryEvidence } from "@/lib/compras/delivery-status";
 import { PO_EVENT_LABEL } from "@/lib/types-po";
 import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import { OrderDetailTabs } from "./OrderDetailTabs";
@@ -32,6 +33,25 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
   const po = await getPurchaseOrder(params.publicId);
   if (!po) notFound();
   const justCreated = searchParams?.just_created === "1";
+  const delivery = purchaseDeliveryEvidence(po.emails, po.events, po.drive_file_id);
+  const emitterInitials = po.emisor_name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] ?? "")
+    .join("")
+    .toUpperCase();
+  const amount = purchaseOrderAmount(po);
+  const displayNeto = amount.kind === "real"
+    ? po.neto
+    : amount.kind === "estimated"
+      ? po.planning_neto
+      : null;
+  const displayIva = amount.kind === "real"
+    ? po.iva
+    : amount.kind === "estimated"
+      ? po.planning_iva
+      : null;
 
   return (
     <div className="p-4 md:p-7 lg:p-8">
@@ -39,10 +59,8 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
         <div className="card p-4 mb-4 border-status-success/40 bg-status-success/5 flex items-center gap-3">
           <Icon name="check-circle" size={22} className="text-status-success" stroke={2} />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-status-success">OC creada y enviada</div>
-            <div className="text-xs text-fg-secondary">
-              Email enviado a {po.vendor?.email}, {ORG.admin.email} y {ORG.emitter.email}. Sincronizada en Drive.
-            </div>
+            <div className="text-sm font-bold text-status-success">OC creada</div>
+            <div className="text-xs text-fg-secondary">{delivery.detail}</div>
           </div>
           <Link href="/compras/nueva" className="btn btn-ghost btn-sm">
             Nueva OC
@@ -75,10 +93,6 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
             <Icon name="download" size={14} />
             <span>PDF</span>
           </a>
-          <button className="btn btn-ghost btn-sm" type="button">
-            <Icon name="send" size={14} />
-            <span className="hidden sm:inline">Reenviar email</span>
-          </button>
         </div>
       </div>
 
@@ -110,13 +124,15 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
             <div className="flex items-end justify-between mt-4 pt-4 border-t border-stroke-soft">
               <div>
                 <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-fg-muted">
-                  Total
+                  {amount.label}
                 </div>
-                <div className="text-2xl font-bold text-fg-brand tabular">{fmtCurrency(po.total)}</div>
+                <div className="text-2xl font-bold text-fg-brand tabular">
+                  {amount.kind === "pending" ? "Pendiente" : fmtCurrency(amount.amount)}
+                </div>
               </div>
               <div className="text-right text-xs text-fg-secondary leading-tight">
-                <div>Neto {fmtCurrencyShort(po.neto)}</div>
-                <div className="text-fg-muted">+ IVA {fmtCurrencyShort(po.iva)}</div>
+                <div>Neto {fmtCurrencyShort(displayNeto)}</div>
+                <div className="text-fg-muted">+ IVA {fmtCurrencyShort(displayIva)}</div>
               </div>
             </div>
           </div>
@@ -124,7 +140,7 @@ export default async function OrderDetailPage({ params, searchParams }: PageProp
           {/* Emisor */}
           <div className="card p-4 flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-tops-red text-white grid place-items-center font-bold flex-shrink-0">
-              {ORG.emitter.initials}
+              {emitterInitials}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-fg-muted mb-0.5">

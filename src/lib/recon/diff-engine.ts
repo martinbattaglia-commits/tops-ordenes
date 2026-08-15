@@ -74,10 +74,22 @@ export function computeRecon(po: POForRecon, invoice: InvoiceForRecon): ReconRes
   // Moneda
   push(strDiff("moneda", po.moneda ?? "ARS", invoice.moneda ?? "ARS", "error"));
 
-  // Importes
-  push(numDiff("neto",   po.neto,  invoice.neto,  "warning"));
-  push(numDiff("iva",    po.iva,   invoice.iva,   "warning"));
-  push(numDiff("total",  po.total, invoice.total, "error"));
+  // Importes. Un pendiente/estimado NO equivale a cero: la factura establece
+  // el valor real y se registra como diferencia informativa para revisión.
+  if (po.total === null || po.neto === null || po.iva === null) {
+    diffs.push({
+      field: "precio_unitario",
+      val_oc: po.price_state === "estimated"
+        ? `estimado ${po.planning_total ?? "sin total"}`
+        : "pendiente de precio",
+      val_factura: String(invoice.total),
+      severity: "info",
+    });
+  } else {
+    push(numDiff("neto", po.neto, invoice.neto, "warning"));
+    push(numDiff("iva", po.iva, invoice.iva, "warning"));
+    push(numDiff("total", po.total, invoice.total, "error"));
+  }
 
   // Percepciones y tributos (la OC no los tiene pre-calculados → sólo warning si invoice > 0)
   if ((invoice.percepciones ?? 0) > 0) {

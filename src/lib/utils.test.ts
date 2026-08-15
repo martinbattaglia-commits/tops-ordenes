@@ -36,3 +36,10 @@ describe("fmtMoney (Tesorería · dinero exacto)", () => {
     expect(fmtMoney(0.1 + 0.2)).toBe("$ 0,30");
   });
 });
+
+describe("fmtCurrency (moneda explícita)", () => {
+  it("distingue USD de ARS sin conversión implícita", () => {
+    expect(fmtCurrency(1234.5, "ARS")).toBe("$ 1.235");
+    expect(fmtCurrency(1234.5, "USD")).toBe("US$ 1.234,50");
+  });
+});

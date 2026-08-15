@@ -46,9 +46,13 @@ export interface POForRecon {
   id: string;
   public_id: string;
   vendor_id: string;
-  neto: number;
-  iva: number;
-  total: number;
+  neto: number | null;
+  iva: number | null;
+  total: number | null;
+  price_state?: "known" | "estimated" | "pending";
+  planning_neto?: number | null;
+  planning_iva?: number | null;
+  planning_total?: number | null;
   moneda?: string;
   cond_pago?: string;
   items: Array<{ descripcion: string; cantidad: number; precio_unitario: number }>;

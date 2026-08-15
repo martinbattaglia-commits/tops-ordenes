@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { PoStatusBadge } from "@/components/compras/PoStatusBadge";
+import { purchaseOrderAmount } from "@/lib/compras/order-amounts";
 import { listPurchaseOrders } from "@/lib/compras/data";
 import { fmtCurrency, fmtCurrencyShort, fmtDate, truncate } from "@/lib/compras/format";
-import type { PoStatus } from "@/lib/types-po";
+import type { PoStatus, PurchaseOrder } from "@/lib/types-po";
 import type { Depot } from "@/lib/types";
 import { OrdersToolbar } from "./OrdersToolbar";
 
@@ -35,7 +36,7 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
   const page = Math.max(1, parseInt(searchParams?.page ?? "1", 10) || 1);
   const pageSize = 18;
 
-  const { rows, total, counts, sumTotal } = await listPurchaseOrders({
+  const { rows, total, counts, sumTotal, nonRealAmountCount } = await listPurchaseOrders({
     status,
     depot,
     search,
@@ -60,7 +61,7 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
           <div className="eyebrow-tiny">Historial · {total} OC</div>
           <h1 className="page-title">Órdenes de Compra</h1>
           <p className="page-subtitle">
-            Filtros y exportación de comprobantes firmados por José Luis Battaglia.
+            Filtros y exportación de comprobantes firmados por José Luis Rodríguez Silva.
           </p>
         </div>
         <div className="flex gap-2">
@@ -104,8 +105,9 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
       <OrdersToolbar
         initialSearch={search}
         initialDepot={depot}
-        resultCount={rows.length}
+        resultCount={total}
         sumTotal={sumTotal}
+        nonRealAmountCount={nonRealAmountCount}
       />
 
       <div className="card overflow-hidden mt-4">
@@ -154,7 +156,12 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
                     {o.items?.length ?? 0}
                   </td>
                   <td className="text-right tabular font-bold text-fg-brand">
-                    {fmtCurrency(o.total)}
+                    <div>{formatOrderAmount(o)}</div>
+                    {purchaseOrderAmount(o).kind !== "real" && (
+                      <div className="text-[9px] font-bold uppercase text-status-warning">
+                        {purchaseOrderAmount(o).label}
+                      </div>
+                    )}
                   </td>
                   <td>
                     <PoStatusBadge status={o.status} />
@@ -206,7 +213,7 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
               <div className="flex items-center justify-between text-xs text-fg-secondary">
                 <span>{fmtDate(o.date)}</span>
                 <span className="font-bold text-fg-brand tabular text-sm">
-                  {fmtCurrency(o.total)}
+                  {formatOrderAmount(o)}
                 </span>
               </div>
             </Link>
@@ -223,7 +230,8 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
             Mostrando {rows.length === 0 ? 0 : (page - 1) * pageSize + 1}–
             {(page - 1) * pageSize + rows.length} de {total} ·{" "}
             <span className="font-bold text-fg-brand tabular">
-              {fmtCurrencyShort(sumTotal)}
+              Importe real registrado: {fmtCurrencyShort(sumTotal)}
+              {nonRealAmountCount > 0 ? ` · ${nonRealAmountCount} OC sin importe real` : ""}
             </span>
           </div>
           <div className="flex gap-1">
@@ -243,4 +251,9 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
       </div>
     </div>
   );
+}
+
+function formatOrderAmount(order: PurchaseOrder): string {
+  const amount = purchaseOrderAmount(order);
+  return amount.kind === "pending" ? "Pendiente" : fmtCurrency(amount.amount);
 }

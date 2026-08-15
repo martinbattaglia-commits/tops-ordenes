@@ -16,7 +16,6 @@ export default async function EmailPreviewPage() {
     );
   }
   const items = latest.items ?? [];
-  const url = `${ORG.website}/api/compras/${latest.public_id}/pdf`;
   return (
     <div className="p-4 md:p-7 lg:p-8">
       <div className="page-header">
@@ -56,7 +55,8 @@ export default async function EmailPreviewPage() {
             </h3>
             <p className="text-sm text-fg-primary leading-relaxed mb-3">
               Estimado/a <b>{latest.vendor?.contacto ?? latest.vendor?.razon}</b>,<br />
-              Adjuntamos la orden de compra firmada por nuestro Director de Operaciones.
+              Emitimos la orden de compra firmada por nuestro Director de Operaciones. El documento
+              firmado se entrega exclusivamente por un canal autorizado de TOPS.
             </p>
             <div className="grid grid-cols-2 gap-3 my-4 p-3 bg-neutral-50 rounded-md">
               <KV label="Orden" value={latest.public_id} mono />
@@ -64,28 +64,17 @@ export default async function EmailPreviewPage() {
               <KV label="Cond. pago" value={latest.cond_pago} />
               <KV label="Entrega" value={latest.entrega ?? "—"} />
               <KV label="Items" value={String(items.length)} />
-              <KV label="Total" value={fmtCurrency(latest.total)} accent />
+              <KV
+                label={latest.price_state === "estimated" ? "Total estimado" : latest.price_state === "pending" ? "Importe" : "Total"}
+                value={latest.price_state === "pending" ? "Pendiente de precio" : fmtCurrency(latest.total ?? latest.planning_total)}
+                accent
+              />
             </div>
-            <a
-              href={`/api/compras/${latest.public_id}/pdf`}
-              target="_blank"
-              rel="noopener"
-              className="inline-flex items-center gap-2 bg-tops-red text-white font-bold px-4 py-2 rounded-md text-sm hover:opacity-90"
-            >
-              Ver Orden de Compra (PDF) →
-            </a>
             <div className="mt-5 text-[11px] text-fg-muted">
               {ORG.emitter.name} · {ORG.emitter.role}
               <br />
               {ORG.legalName} · CUIT {ORG.cuit}
             </div>
-          </div>
-          <div className="px-5 py-3 bg-neutral-50 border-t border-stroke-soft flex items-center gap-3 text-[11px] text-fg-muted">
-            <Icon name="paperclip" size={12} />
-            <span>OC-{latest.public_id}.pdf · 312 KB</span>
-            <span className="text-fg-muted">|</span>
-            <Icon name="paperclip" size={12} />
-            <span>firma-{latest.public_id}.png · 34 KB</span>
           </div>
         </div>
 
@@ -97,19 +86,11 @@ export default async function EmailPreviewPage() {
 
           <div className="card p-4">
             <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-fg-muted mb-2">
-              Adjuntos
+              Entrega documental
             </div>
-            <div className="space-y-1.5 text-xs">
-              <div className="flex items-center gap-2">
-                <Icon name="file-pdf" size={12} className="text-tops-red" />
-                <span className="font-mono text-fg-primary">OC-{latest.public_id}.pdf</span>
-                <span className="text-fg-muted ml-auto">~312 KB</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Icon name="paperclip" size={12} />
-                <span className="font-mono text-fg-primary">firma-{latest.public_id}.png</span>
-                <span className="text-fg-muted ml-auto">~34 KB</span>
-              </div>
+            <div className="text-xs text-fg-primary">
+              El email no adjunta ni publica el comprobante. La copia firmada se entrega por un canal
+              interno autorizado y queda preservada en Nexus.
             </div>
           </div>
 
@@ -119,7 +100,7 @@ export default async function EmailPreviewPage() {
               <div className="text-xs text-fg-primary">
                 Sincronización automática con Google Drive en{" "}
                 <code className="font-mono text-[11px] text-fg-secondary">/{ORG.driveRoot}/Mes/Proveedor/</code>
-                . URL del PDF embebida arriba: {url}
+                . Esta previsualización no afirma que el archivo haya sido sincronizado.
               </div>
             </div>
           </div>

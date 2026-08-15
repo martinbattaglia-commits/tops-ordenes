@@ -65,6 +65,13 @@ export const EXPECTED_TEST_FILES = [
   // no un cierre sintético), incluidos los dos defectos que ese entorno
   // descubrió en 0236 (columna label, no name; unique(module,action) real).
   "t-link-h1-01-participants-channel-rls.test.ts",
+  // PR #66 · FASE A: maestro nativo, OC y Ordenes de Servicio. Cada suite
+  // monta su cierre de dependencias y ejecuta los SQL productivos en PG17.
+  "t-cli-a1-01-clients-search.test.ts",
+  "t-cli-a1-02-clients-master-rollback.test.ts",
+  "t-cli-a2-01-atomic-mutations.test.ts",
+  "t-pr66-a1-purchase-order-integrity.test.ts",
+  "t-pr66-01-order-pricing.test.ts",
 ];
 
 /**
@@ -90,7 +97,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-a0-07-sentinel.test.ts": 15,
   "t-a0-08-version-gate.test.ts": 7,
   "t-a0-09-process-ownership.test.ts": 20,
-  "t-a0-10-manifest.test.ts": 22,
+  "t-a0-10-manifest.test.ts": 24,
   "t-a0-11-rls-effective.test.ts": 15,
   "t-a0-12-storage-stub.test.ts": 8,
   "t-a0-13-run-report.test.ts": 27,
@@ -116,6 +123,11 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-link-b1-02-channel-rls.test.ts": 41,
   "t-link-b2-01-upload-lifecycle.test.ts": 44,
   "t-link-h1-01-participants-channel-rls.test.ts": 34,
+  "t-cli-a1-01-clients-search.test.ts": 38,
+  "t-cli-a1-02-clients-master-rollback.test.ts": 10,
+  "t-cli-a2-01-atomic-mutations.test.ts": 47,
+  "t-pr66-a1-purchase-order-integrity.test.ts": 7,
+  "t-pr66-01-order-pricing.test.ts": 19,
 });
 
 /**

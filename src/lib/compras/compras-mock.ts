@@ -245,10 +245,12 @@ function makeMockOrders(): PurchaseOrder[] {
         qty,
         price: prod.price,
         subtotal: qty * prod.price,
+        price_state: "known",
+        price_reason: null,
         pos: j,
       });
     }
-    const neto = items.reduce((a, b) => a + b.subtotal, 0);
+    const neto = items.reduce((a, b) => a + (b.subtotal ?? 0), 0);
     const iva = Math.round(neto * 0.21);
     const total = neto + iva;
     const depot = DEPOTS_POOL[Math.floor(rng() * DEPOTS_POOL.length)];
@@ -273,12 +275,28 @@ function makeMockOrders(): PurchaseOrder[] {
       neto,
       iva,
       total,
+      price_state: "known",
+      planning_neto: neto,
+      planning_iva: iva,
+      planning_total: total,
+      known_partial_neto: neto,
+      pending_price_lines: 0,
+      issued_neto: neto,
+      issued_iva: iva,
+      issued_total: total,
+      price_reconciled_at: null,
+      price_reconciled_by: null,
+      price_reconciled_invoice_id: null,
+      price_reconciliation_reason: null,
       signed_by: signed ? ORG.emitter.name : null,
       signed_at: signed ? new Date(d.getTime() + 12 * 60 * 1000).toISOString() : null,
       signature_url: null,
       signature_hash: signed ? "a7d3f29c4b1e8a92" : null,
       integrity_hash: "sha256-9f3a8c…",
       pdf_url: null,
+      pdf_sha256: null,
+      pdf_size_bytes: null,
+      vendor_snapshot: vendor,
       drive_folder:
         ORG.driveRoot +
         "/" +
@@ -399,7 +417,7 @@ export const MOCK_NOTIFICATIONS: NotificationItem[] = [
     id: "n1",
     kind: "signed",
     title: "OC-2026-0347 firmada",
-    message: "José Luis Battaglia · Pallets Sur S.R.L.",
+    message: "José Luis Rodríguez Silva · Pallets Sur S.R.L.",
     created_at: "2026-05-25T11:14:00Z",
     read: false,
   },

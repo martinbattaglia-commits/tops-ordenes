@@ -1,7 +1,10 @@
-import { createClient } from "@/lib/supabase/server";
+import { createHash } from "node:crypto";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { MOCK_CLIENTS, MOCK_OPERATORS, MOCK_ORDERS } from "@/lib/mock-data";
 import type { Order, OrderStatus, Depot, Client, Operator } from "@/lib/types";
+
+export type OrderClientOption = Pick<Client, "id" | "razon" | "cuit" | "tags" | "activo">;
 
 /**
  * Data access para órdenes.
@@ -105,14 +108,41 @@ export async function getOrder(idOrPublicId: string): Promise<Order | null> {
        client:clients(*),
        operator:operators(*),
        services:order_services(*),
-       attachments(*)`
+       attachments(*),
+       service_order_events(*),
+       service_order_billing_adjustments(*)`
     )
     .limit(1);
   q = isUuid ? q.eq("id", idOrPublicId) : q.eq("public_id", idOrPublicId);
 
   const { data, error } = await q.maybeSingle();
-  if (error) throw new Error(`getOrder: ${error.message}`);
-  return (data as Order) ?? null;
+  if (error) throw new Error("getOrder: lectura fallida");
+  if (!data) return null;
+  return hydrateOrderSignature({
+    ...(data as Order),
+    // Las URLs legacy de buckets públicos no son evidencia autoritativa.
+    signature_url: null,
+    pdf_url: null,
+  });
+}
+
+async function hydrateOrderSignature(order: Order): Promise<Order> {
+  if (!order.signature_hash?.match(/^[a-f0-9]{64}$/)) return order;
+  const admin = createAdminClient();
+  if (!admin) return order;
+  const { data, error } = await admin
+    .from("service_order_signatures")
+    .select("png,sha256")
+    .eq("order_id", order.id)
+    .maybeSingle();
+  if (error || !data || data.sha256 !== order.signature_hash || typeof data.png !== "string") {
+    return order;
+  }
+  const hex = data.png.startsWith("\\x") ? data.png.slice(2) : data.png;
+  if (!/^[a-f0-9]+$/i.test(hex) || hex.length % 2 !== 0) return order;
+  const bytes = Buffer.from(hex, "hex");
+  if (createHash("sha256").update(bytes).digest("hex") !== order.signature_hash) return order;
+  return { ...order, signature_url: `data:image/png;base64,${bytes.toString("base64")}` };
 }
 
 export async function listRecentOrders(limit = 6): Promise<Order[]> {
@@ -120,13 +150,17 @@ export async function listRecentOrders(limit = 6): Promise<Order[]> {
   return rows;
 }
 
-export async function listClients(): Promise<Client[]> {
-  if (shouldUseMock()) return MOCK_CLIENTS;
+export async function listClients(
+  scope: "create" | "edit" = "create",
+): Promise<OrderClientOption[]> {
+  if (env.app.demoMode) return MOCK_CLIENTS;
   const supabase = createClient();
-  if (!supabase) return MOCK_CLIENTS;
-  const { data, error } = await supabase.from("clients").select("*").order("razon");
-  if (error) throw new Error(`listClients: ${error.message}`);
-  return (data ?? []) as Client[];
+  if (!supabase) throw new Error("listClients: backend no disponible");
+  const { data, error } = await supabase.rpc("clients_service_order_candidates", {
+    p_scope: scope,
+  });
+  if (error) throw new Error("listClients: acceso denegado");
+  return (data ?? []) as OrderClientOption[];
 }
 
 export async function listOperators(): Promise<Operator[]> {
@@ -153,6 +187,8 @@ export interface DashboardKpis {
   hoursDelta: string;
   revenueProjection: number;
   revenueDelta: string;
+  revenueCurrency: "ARS";
+  revenueExcludedOrders: number;
   signatureRate: number;
   signatureDelta: string;
   byDepot: Array<{ depot: Depot; count: number }>;
@@ -164,10 +200,14 @@ export interface DashboardKpis {
 const PALETTE = ["#050555", "#214576", "#3a6db0", "#C90812", "#8A94A6", "#C2CAD6"];
 
 export async function getDashboardKpis(): Promise<DashboardKpis> {
-  if (shouldUseMock()) return buildKpisFromOrders(MOCK_ORDERS);
+  if (shouldUseMock()) {
+    return buildKpisFromOrders(MOCK_ORDERS.map((order) => ({ ...order, pricing_currency: "ARS" as const })));
+  }
 
   const supabase = createClient();
-  if (!supabase) return buildKpisFromOrders(MOCK_ORDERS);
+  if (!supabase) {
+    return buildKpisFromOrders(MOCK_ORDERS.map((order) => ({ ...order, pricing_currency: "ARS" as const })));
+  }
 
   // Trae las últimas 90 días → derivamos KPIs en memoria. Para >10k órdenes
   // pasar a vistas materializadas o RPC dedicada.
@@ -199,7 +239,12 @@ function buildKpisFromOrders(orders: Order[]): DashboardKpis {
   const prevMonth = orders.filter((o) => new Date(o.date).getMonth() === lastMonth);
 
   const hours = thisMonth.reduce((a, o) => a + (o.hours ?? 0), 0);
-  const revenue = thisMonth.reduce((a, o) => a + Number(o.total ?? 0), 0);
+  // La tarjeta historica se expresa exclusivamente en ARS. Las OS USD y las
+  // filas legacy sin moneda demostrable se excluyen: sumar monedas o asumir
+  // una moneda seria una metrica ficticia.
+  const thisMonthArs = thisMonth.filter((o) => o.pricing_currency === "ARS");
+  const prevMonthArs = prevMonth.filter((o) => o.pricing_currency === "ARS");
+  const revenue = thisMonthArs.reduce((a, o) => a + Number(o.issued_total ?? o.total ?? 0), 0);
   const signed = thisMonth.filter((o) => o.signed_by).length;
   const signatureRate = thisMonth.length ? (signed / thisMonth.length) * 100 : 0;
 
@@ -214,7 +259,7 @@ function buildKpisFromOrders(orders: Order[]): DashboardKpis {
   const hoursDelta = deltaPct(hours, prevMonth.reduce((a, o) => a + (o.hours ?? 0), 0));
   const revenueDelta = deltaPct(
     revenue,
-    prevMonth.reduce((a, o) => a + Number(o.total ?? 0), 0)
+    prevMonthArs.reduce((a, o) => a + Number(o.issued_total ?? o.total ?? 0), 0)
   );
   const prevSignRate = prevMonth.length
     ? (prevMonth.filter((o) => o.signed_by).length / prevMonth.length) * 100
@@ -292,6 +337,8 @@ function buildKpisFromOrders(orders: Order[]): DashboardKpis {
     hoursDelta,
     revenueProjection: revenue,
     revenueDelta,
+    revenueCurrency: "ARS",
+    revenueExcludedOrders: thisMonth.length - thisMonthArs.length,
     signatureRate,
     signatureDelta,
     byDepot: [

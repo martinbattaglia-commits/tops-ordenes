@@ -334,6 +334,30 @@ const LINEAGE_RECOVERED_AND_CORRECTIVE_FILES: ReadonlySet<string> = new Set([
   "20260811230310_rbac_gerencia_finanzas_constraint_safe.sql",
 ]);
 
+/** PR #66 · FASE A de Clientes, OC y Ordenes de Servicio.
+ *
+ * Estos catorce artefactos pertenecen a cierres de dominio propios y no al
+ * replay WMS vanilla. Se clasifican por filename exacto, incluidas sus siete
+ * inversas ejecutables; cualquier artefacto adicional vuelve a quedar sin
+ * clasificar y rompe el gate.
+ */
+const PR66_PHASE_A_MIGRATION_FILES: ReadonlySet<string> = new Set([
+  "0240_clientes_permission_module.sql",
+  "ROLLBACK_0240_clientes_permission_module.sql",
+  "0241_clients_native_master.sql",
+  "ROLLBACK_0241_clients_native_master.sql",
+  "0242_clients_atomic_mutations.sql",
+  "ROLLBACK_0242_clients_atomic_mutations.sql",
+  "0243_purchase_order_price_lifecycle.sql",
+  "ROLLBACK_0243_purchase_order_price_lifecycle.sql",
+  "0244_service_order_pricing_lifecycle.sql",
+  "ROLLBACK_0244_service_order_pricing_lifecycle.sql",
+  "20260815002748_service_unit_m2.sql",
+  "ROLLBACK_20260815002748_service_unit_m2.sql",
+  "20260815002807_service_tariff_m2_rates.sql",
+  "ROLLBACK_20260815002807_service_tariff_m2_rates.sql",
+]);
+
 export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
   id: string;
   matches: (file: string) => boolean;
@@ -456,6 +480,16 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "cierre de dependencias exige PostGIS y la serie 0036-0039. Se verifican en el replay " +
       "gobernado por supabase/lineage/catalog.json y en tests/custody-db/. " +
       "0205-0218 NO participan: son APPLIED_REMOTE_ARCHIVE, fuera del arbol ejecutable.",
+  },
+  {
+    id: "pr66-phase-a-clients-purchase-service-orders",
+    matches: (f) => PR66_PHASE_A_MIGRATION_FILES.has(f),
+    reason:
+      "PR #66 FASE A: Clientes nativos, ciclo de precios de OC y tarifario/ciclo " +
+      "economico de Ordenes de Servicio. No forman parte del cierre WMS vanilla; " +
+      "se ejecutan contra PostgreSQL 17 real en t-cli-a1-01, t-cli-a1-02, " +
+      "t-cli-a2-01, t-pr66-a1-purchase-order-integrity y t-pr66-01-order-pricing. " +
+      "La clasificacion enumera exactamente siete forwards y siete rollbacks.",
   },
   {
     id: "custody-integrity-dedicated-harness",

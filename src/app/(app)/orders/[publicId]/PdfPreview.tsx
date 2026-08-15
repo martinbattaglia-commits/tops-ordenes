@@ -4,6 +4,15 @@ import { ivaEstimate } from "@/lib/pricing/calculator";
 import type { Order } from "@/lib/types";
 
 export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
+  type OrderCurrency = NonNullable<Order["pricing_currency"]>;
+  const currency =
+    order.pricing_currency ??
+    order.services?.find((service) => service.currency_snapshot)?.currency_snapshot ??
+    null;
+  const fmtOrderMoney = (
+    amount: number | null | undefined,
+    amountCurrency: OrderCurrency | null = currency,
+  ) => (amountCurrency ? fmtCurrency(amount, amountCurrency) : "— · MONEDA NO INFORMADA");
   const ivaMonto = ivaEstimate(order.total);
   const totalConIva = order.total + ivaMonto;
   return (
@@ -67,6 +76,7 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
           <Row label="Responsable" value={order.operator?.full_name ?? "—"} />
           <Row label="Hora inicio" value={order.h_start ?? "—"} />
           <Row label="Hora fin" value={order.h_end ?? "—"} />
+          <Row label="Moneda" value={currency ?? "NO INFORMADA"} />
         </div>
       </Section>
 
@@ -87,9 +97,11 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
                 <td className="px-2.5 py-1.5 font-medium">{s.label}</td>
                 <td className="px-2.5 py-1.5 text-right tabular">{s.qty}</td>
                 <td className="px-2.5 py-1.5">{s.unit}</td>
-                <td className="px-2.5 py-1.5 text-right tabular">{fmtCurrency(s.rate)}</td>
+                <td className="px-2.5 py-1.5 text-right tabular">
+                  {fmtOrderMoney(s.rate, s.currency_snapshot ?? currency)}
+                </td>
                 <td className="px-2.5 py-1.5 text-right tabular font-semibold">
-                  {fmtCurrency(s.subtotal)}
+                  {fmtOrderMoney(s.subtotal, s.currency_snapshot ?? currency)}
                 </td>
               </tr>
             ))}
@@ -101,7 +113,7 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
                 Subtotal neto
               </td>
               <td className="px-2.5 pt-2 text-right tabular text-xs">
-                {fmtCurrency(order.total)}
+                {fmtOrderMoney(order.total)}
               </td>
             </tr>
             <tr>
@@ -109,7 +121,7 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
                 IVA (21%)
               </td>
               <td className="px-2.5 py-0.5 text-right tabular text-xs">
-                {fmtCurrency(ivaMonto)}
+                {fmtOrderMoney(ivaMonto)}
               </td>
             </tr>
             <tr>
@@ -117,7 +129,7 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
                 Total
               </td>
               <td className="px-2.5 pb-2 text-right font-bold text-fg-brand tabular text-xs">
-                {fmtCurrency(totalConIva)}
+                {fmtOrderMoney(totalConIva)}
               </td>
             </tr>
           </tbody>

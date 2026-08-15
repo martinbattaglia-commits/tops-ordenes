@@ -122,7 +122,16 @@ interface Props {
 }
 
 export function OrderPdfDocument({ order, qrDataUrl }: Props) {
+  type OrderCurrency = NonNullable<Order["pricing_currency"]>;
   const depotLabel = order.depot === "MAGALDI" ? "Magaldi · CABA" : "Luján · BsAs";
+  const currency =
+    order.pricing_currency ??
+    order.services?.find((service) => service.currency_snapshot)?.currency_snapshot ??
+    null;
+  const fmtOrderMoney = (
+    amount: number | null | undefined,
+    amountCurrency: OrderCurrency | null = currency,
+  ) => (amountCurrency ? fmtCurrency(amount, amountCurrency) : "— · MONEDA NO INFORMADA");
   // order.total es NETO (sin IVA). Discriminamos IVA 21% (estimación; la
   // facturación fiscal real corre por el módulo de Facturación/ARCA).
   const ivaMonto = ivaEstimate(order.total);
@@ -159,7 +168,7 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
               </View>
             ) : null}
             <View style={[styles.gridCell, styles.gridCellLast]}>
-              <Field label="Moneda" value="ARS" mono />
+              <Field label="Moneda" value={currency ?? "NO INFORMADA"} mono />
             </View>
           </View>
           {isUrgentOrder(order) ? <Text style={styles.urgent}>Urgente · +100%</Text> : null}
@@ -225,8 +234,12 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
               </View>
               <Text style={styles.cellQty}>{s.qty}</Text>
               <Text style={styles.cellUnit}>{s.unit}</Text>
-              <Text style={styles.cellRate}>{fmtCurrency(s.rate)}</Text>
-              <Text style={styles.cellSubtotal}>{fmtCurrency(s.subtotal)}</Text>
+              <Text style={styles.cellRate}>
+                {fmtOrderMoney(s.rate, s.currency_snapshot ?? currency)}
+              </Text>
+              <Text style={styles.cellSubtotal}>
+                {fmtOrderMoney(s.subtotal, s.currency_snapshot ?? currency)}
+              </Text>
             </View>
           ))}
           <Text style={styles.tableMeta}>
@@ -245,7 +258,7 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
           <View style={styles.twoCols}>
             <View style={styles.col}>
               <View style={{ marginTop: 8 }}>
-                {order.signature_url && order.signature_url.startsWith("http") ? (
+                {order.signature_url ? (
                   <Image src={order.signature_url} style={styles.sigImage} />
                 ) : (
                   <View style={{ height: 34 }} />
@@ -285,13 +298,13 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
                 <Text style={styles.subHead}>Resumen</Text>
                 <View style={styles.sumRow}>
                   <Text style={styles.sumLabel}>Subtotal neto</Text>
-                  <Text style={styles.sumValue}>{fmtCurrency(order.total)}</Text>
+                  <Text style={styles.sumValue}>{fmtOrderMoney(order.total)}</Text>
                 </View>
                 <View style={styles.sumRow}>
                   <Text style={styles.sumLabel}>IVA 21%</Text>
-                  <Text style={styles.sumValue}>{fmtCurrency(ivaMonto)}</Text>
+                  <Text style={styles.sumValue}>{fmtOrderMoney(ivaMonto)}</Text>
                 </View>
-                <TotalBlock amount={fmtCurrency(totalConIva)} />
+                <TotalBlock amount={fmtOrderMoney(totalConIva)} />
               </View>
             </View>
           </View>

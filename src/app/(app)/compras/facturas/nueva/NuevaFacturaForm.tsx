@@ -33,7 +33,7 @@ interface PoOpt {
   id: string;
   public_id: string;
   status: string;
-  total: number;
+  total: number | null;
   vendor_id: string;
 }
 
@@ -617,7 +617,7 @@ export function NuevaFacturaForm({
             <option value="">{vendorId ? "Sin OC asociada" : "Elegí primero el proveedor…"}</option>
             {poForVendor.map((po) => (
               <option key={po.id} value={po.id}>
-                {po.public_id} · {fmtCurrency(po.total)} · {po.status}
+                {po.public_id} · {po.total === null ? "Importe pendiente" : fmtCurrency(po.total)} · {po.status}
               </option>
             ))}
           </select>

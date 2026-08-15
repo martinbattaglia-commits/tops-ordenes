@@ -77,9 +77,9 @@ export async function GET(
         "Cache-Control": "private, max-age=0, must-revalidate",
       },
     });
-  } catch (e) {
+  } catch {
     // Sin contenido documental en el log: sólo el identificador del request.
-    console.error("orden-servicio-pdf", { publicId: params.publicId, error: String(e) });
+    console.error("orden-servicio-pdf", { publicId: params.publicId, code: "ORDER_PDF_FAILED" });
     return NextResponse.json({ error: "No se pudo generar el documento" }, { status: 500 });
   }
 }

@@ -14,16 +14,19 @@ import type { ChartAccount } from "@/lib/erp/types";
  */
 export function ClienteFiscalEditor({
   clientId,
+  updatedAt,
   initial,
   accounts,
 }: {
   clientId: string;
+  updatedAt: string;
   initial: { condicion_iva: CondicionIva; cuenta_contable: string };
   accounts: ChartAccount[];
 }) {
   const router = useRouter();
   const [edit, setEdit] = useState(false);
   const [f, setF] = useState(initial);
+  const [version, setVersion] = useState(updatedAt);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState(false);
   const [pending, start] = useTransition();
@@ -34,8 +37,18 @@ export function ClienteFiscalEditor({
     setError(null);
     setOk(false);
     start(async () => {
-      const r = await updateClientFiscal({ id: clientId, condicion_iva: f.condicion_iva, cuenta_contable: f.cuenta_contable });
-      if (r.ok) { setOk(true); setEdit(false); router.refresh(); }
+      const r = await updateClientFiscal({
+        id: clientId,
+        condicion_iva: f.condicion_iva,
+        cuenta_contable: f.cuenta_contable,
+        expected_updated_at: version,
+      });
+      if (r.ok) {
+        setVersion(r.updated_at);
+        setOk(true);
+        setEdit(false);
+        router.refresh();
+      }
       else setError(r.error);
     });
   }

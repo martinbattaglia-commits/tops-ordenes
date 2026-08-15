@@ -97,8 +97,9 @@ function EmailMockup({ po }: { po: PurchaseOrder }) {
         </h3>
         <p className="text-sm text-fg-primary leading-relaxed mb-3">
           Estimado/a <b>{po.vendor?.contacto ?? po.vendor?.razon}</b>,<br />
-          Adjuntamos la orden de compra firmada por nuestro {ORG.emitter.role}. Le solicitamos
-          confirmación de recepción y coordinación de entrega.
+          Emitimos la orden de compra firmada por nuestro {ORG.emitter.role}. El documento firmado
+          se entrega exclusivamente por un canal autorizado de TOPS. Le solicitamos confirmación de
+          recepción y coordinación de entrega.
         </p>
         <div className="grid grid-cols-2 gap-3 my-4 p-3 bg-neutral-50 rounded-md">
           <KV label="Orden" value={po.public_id} mono />
@@ -106,28 +107,17 @@ function EmailMockup({ po }: { po: PurchaseOrder }) {
           <KV label="Cond. pago" value={po.cond_pago} />
           <KV label="Entrega" value={po.entrega ?? "—"} />
           <KV label="Items" value={String(po.items?.length ?? 0)} />
-          <KV label="Total" value={fmtCurrency(po.total)} accent />
+          <KV
+            label={po.price_state === "known" ? "Total" : po.price_state === "estimated" ? "Total estimado" : "Importe"}
+            value={po.price_state === "pending" ? "Pendiente de precio" : fmtCurrency(po.total ?? po.planning_total)}
+            accent
+          />
         </div>
-        <a
-          href={`/api/compras/${po.public_id}/pdf`}
-          target="_blank"
-          rel="noopener"
-          className="inline-flex items-center gap-2 bg-tops-red text-white font-bold px-4 py-2 rounded-md text-sm hover:opacity-90"
-        >
-          Ver Orden de Compra (PDF) →
-        </a>
         <div className="mt-5 text-[11px] text-fg-muted">
           {ORG.emitter.name} · {ORG.emitter.role}
           <br />
           {ORG.legalName} · CUIT {ORG.cuit}
         </div>
-      </div>
-      <div className="px-5 py-3 bg-neutral-50 border-t border-stroke-soft flex items-center gap-3 text-[11px] text-fg-muted">
-        <Icon name="paperclip" size={12} />
-        <span>OC-{po.public_id}.pdf · 312 KB</span>
-        <span className="text-fg-muted">|</span>
-        <Icon name="paperclip" size={12} />
-        <span>firma-{po.public_id}.png · 34 KB</span>
       </div>
     </div>
   );
@@ -142,7 +132,7 @@ function WhatsappMockup({ po }: { po: PurchaseOrder }) {
           {`Hola ${po.vendor?.contacto ?? po.vendor?.razon},
 Te paso la OC ${po.public_id} firmada.
 
-Total: ${fmtCurrency(po.total)}
+${po.price_state === "known" ? "Total" : po.price_state === "estimated" ? "Total estimado" : "Importe"}: ${po.price_state === "pending" ? "Pendiente de precio" : fmtCurrency(po.total ?? po.planning_total)}
 Cond. pago: ${po.cond_pago}
 Entrega: ${po.entrega ?? "—"}
 

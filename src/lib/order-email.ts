@@ -113,11 +113,23 @@ export function dedupeOrderEmails(
   return plan.filter((item) => !alreadySentTags.has(item.tag));
 }
 
-function fmtMoney(n: number): string {
+type OrderCurrency = NonNullable<Order["pricing_currency"]>;
+
+function orderCurrency(order: Order): OrderCurrency | null {
+  return (
+    order.pricing_currency ??
+    order.services?.find((service) => service.currency_snapshot)?.currency_snapshot ??
+    null
+  );
+}
+
+function fmtMoney(n: number, currency: OrderCurrency | null): string {
+  if (!currency) return "IMPORTE SIN MONEDA";
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
+    currency,
+    minimumFractionDigits: currency === "USD" ? 2 : 0,
+    maximumFractionDigits: currency === "USD" ? 2 : 0,
   }).format(Number.isFinite(n) ? n : 0);
 }
 
@@ -131,13 +143,14 @@ function fmtDate(iso: string): string {
 
 function servicesRows(order: Order): string {
   const svcs = order.services ?? [];
+  const currency = orderCurrency(order);
   if (svcs.length === 0) {
     return `<tr><td colspan="2" style="padding:8px 0;color:${DOC.textSec};">Sin servicios detallados.</td></tr>`;
   }
   return svcs
     .map(
       (s) =>
-        `<tr><td style="padding:6px 0;border-top:1px solid ${DOC.ruleSoft};">${escapeHtml(s.label)} <span style="color:${DOC.label};">· ${s.qty} ${escapeHtml(String(s.unit))}</span></td><td style="padding:6px 0;text-align:right;font-weight:600;border-top:1px solid ${DOC.ruleSoft};">${fmtMoney(s.subtotal)}</td></tr>`,
+        `<tr><td style="padding:6px 0;border-top:1px solid ${DOC.ruleSoft};">${escapeHtml(s.label)} <span style="color:${DOC.label};">· ${s.qty} ${escapeHtml(String(s.unit))}</span></td><td style="padding:6px 0;text-align:right;font-weight:600;border-top:1px solid ${DOC.ruleSoft};">${fmtMoney(s.subtotal, s.currency_snapshot ?? currency)}</td></tr>`,
     )
     .join("");
 }
@@ -148,15 +161,18 @@ function servicesRows(order: Order): string {
  * facturación fiscal real corre por el módulo de Facturación/ARCA.
  */
 function totalsRows(order: Order): string {
+  const currency = orderCurrency(order);
   const iva = Math.round(order.total * 0.21);
   const total = order.total + iva;
   return (
-    `<tr><td style="padding:8px 0;border-top:2px solid ${DOC.navy};color:${DOC.textSec};">Subtotal neto</td>` +
-    `<td style="padding:8px 0;text-align:right;border-top:2px solid ${DOC.navy};">${fmtMoney(order.total)}</td></tr>` +
+    `<tr><td style="padding:8px 0;border-top:2px solid ${DOC.navy};color:${DOC.textSec};">Moneda</td>` +
+    `<td style="padding:8px 0;text-align:right;border-top:2px solid ${DOC.navy};font-weight:600;">${currency ?? "NO INFORMADA"}</td></tr>` +
+    `<tr><td style="padding:4px 0;color:${DOC.textSec};">Subtotal neto</td>` +
+    `<td style="padding:4px 0;text-align:right;">${fmtMoney(order.total, currency)}</td></tr>` +
     `<tr><td style="padding:4px 0;color:${DOC.textSec};">IVA (21%)</td>` +
-    `<td style="padding:4px 0;text-align:right;">${fmtMoney(iva)}</td></tr>` +
+    `<td style="padding:4px 0;text-align:right;">${fmtMoney(iva, currency)}</td></tr>` +
     `<tr><td style="padding:6px 0;font-weight:700;border-top:1px solid ${DOC.ruleSoft};">Total</td>` +
-    `<td style="padding:6px 0;text-align:right;font-weight:700;color:${DOC.navy};">${fmtMoney(total)}</td></tr>`
+    `<td style="padding:6px 0;text-align:right;font-weight:700;color:${DOC.navy};">${fmtMoney(total, currency)}</td></tr>`
   );
 }
 
@@ -271,19 +287,23 @@ export function renderRoleHtml(
 /** Servicios en formato texto plano (una línea por servicio). */
 function servicesText(order: Order): string[] {
   const svcs = order.services ?? [];
+  const currency = orderCurrency(order);
   if (svcs.length === 0) return ["  · Sin servicios detallados."];
   return svcs.map(
-    (s) => `  · ${s.label} — ${s.qty} ${String(s.unit)} — ${fmtMoney(s.subtotal)}`,
+    (s) =>
+      `  · ${s.label} — ${s.qty} ${String(s.unit)} — ${fmtMoney(s.subtotal, s.currency_snapshot ?? currency)}`,
   );
 }
 
 /** Totales discriminados en texto plano (misma fórmula que totalsRows). */
 function totalsText(order: Order): string[] {
+  const currency = orderCurrency(order);
   const iva = Math.round(order.total * 0.21);
   return [
-    `Subtotal neto: ${fmtMoney(order.total)}`,
-    `IVA (21%): ${fmtMoney(iva)}`,
-    `Total: ${fmtMoney(order.total + iva)}`,
+    `Moneda: ${currency ?? "NO INFORMADA"}`,
+    `Subtotal neto: ${fmtMoney(order.total, currency)}`,
+    `IVA (21%): ${fmtMoney(iva, currency)}`,
+    `Total: ${fmtMoney(order.total + iva, currency)}`,
   ];
 }
 

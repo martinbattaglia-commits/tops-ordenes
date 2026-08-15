@@ -40,6 +40,9 @@ export interface Client {
   contacto: string | null;
   email: string | null;
   tags: string[];
+  nombre_comercial?: string | null;
+  codigo?: string | null;
+  observaciones?: string | null;
   created_at: string;
   // Campos fiscales/operativos (migs 0004/0011) — opcionales en TS (no en todos los mocks).
   condicion_iva?: import("./invoicing/types").CondicionIva | null;
@@ -48,6 +51,7 @@ export interface Client {
   deposito_asignado?: Depot | null;
   activo?: boolean | null;
   updated_at?: string | null;
+  updated_by?: string | null;
   /** Imputación contable por defecto (código de chart_of_accounts, mig 0121). */
   cuenta_contable?: string | null;
 }
@@ -57,11 +61,18 @@ export interface ServiceCatalogItem {
   slug: string;
   label: string;
   unit: ServiceUnit;
-  rate: number;
+  /** `null` es A COTIZAR. Cero nunca representa una tarifa. */
+  rate: number | null;
   min_qty?: number;
   min_billing?: number;
+  /** `true` significa que no hay tarifa general: requiere precio particular. */
+  requires_quote?: boolean;
+  /** Identidad de la tarifa versionada que se congelara al emitir. */
+  tariff_rate_id?: string;
+  tariff_version_id?: string;
+  client_rate_id?: string | null;
   observ?: string;
-  category?: ServiceCategory;
+  category?: ServiceCategory | string;
   icon?: string | null;
   active: boolean;
 }
@@ -82,6 +93,29 @@ export interface OrderService {
   unit: ServiceUnit;
   rate: number;
   subtotal: number;
+  currency_snapshot?: "ARS" | "USD";
+  tariff_rate_id?: string | null;
+  client_rate_id?: string | null;
+  price_source?: "legacy" | "general_tariff" | "client_rate" | "derived" | "manual" | "bonification";
+  pricing_reason?: string | null;
+  pricing_formula_snapshot?: {
+    kind: "legacy" | "catalog_v1" | "transport_v1" | "derived_v1" | "manual_v1" | "bonification_v1";
+    second_trip_discount?: boolean;
+    surcharge_pct?: number;
+    basis?: string;
+  };
+  min_qty_snapshot?: number;
+  min_billing_snapshot?: number;
+  qty_requested?: number;
+  qty_effective?: number;
+  rate_snapshot?: number;
+  subtotal_requested?: number;
+  qty_provided?: number | null;
+  subtotal_provided?: number | null;
+  qty_billed?: number | null;
+  subtotal_billed?: number | null;
+  pricing_snapshot_at?: string;
+  line_sequence?: number;
 }
 
 export interface Order {
@@ -101,6 +135,12 @@ export interface Order {
   km: number;
   observ: string | null;
   total: number;
+  pricing_currency?: "ARS" | "USD";
+  tariff_version_id?: string | null;
+  pricing_snapshot_at?: string;
+  issued_total?: number;
+  provided_total?: number | null;
+  billed_total?: number | null;
   signed_by: string | null;
   signed_doc: string | null;
   signed_at: string | null;
@@ -115,6 +155,32 @@ export interface Order {
   client?: Client;
   operator?: Operator;
   services?: OrderService[];
+  service_order_events?: ServiceOrderEvent[];
+  service_order_billing_adjustments?: ServiceOrderBillingAdjustment[];
+}
+
+export interface ServiceOrderEvent {
+  id: number;
+  order_id: string;
+  order_service_id: string | null;
+  event_kind: "issued" | "fulfillment_recorded" | "billing_adjusted";
+  reason: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ServiceOrderBillingAdjustment {
+  id: number;
+  order_id: string;
+  order_service_id: string;
+  prior_qty: number | null;
+  prior_amount: number | null;
+  billed_qty: number;
+  billed_amount: number;
+  delta_amount: number;
+  reason: string;
+  authorized_by: string;
+  created_at: string;
 }
 
 export interface NotificationItem {

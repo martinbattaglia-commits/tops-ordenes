@@ -38,6 +38,16 @@ export interface LineItem {
   vehicle_slug?: string;
   /** Categoría visual. */
   category?: string;
+  /** Clasificacion que la RPC usa para resolver el precio sin confiar en UI. */
+  pricing_kind?: "catalog" | "transport" | "urgent" | "manual" | "bonification";
+  /** Motivo obligatorio para importes manuales/bonificaciones. */
+  pricing_reason?: string;
+  /** Modificadores de transporte que la RPC vuelve a calcular. */
+  second_trip_discount?: boolean;
+  surcharge?: "none" | "17_19" | "19_21" | "21_plus";
+  /** Tokens de consentimiento económico que la RPC compara con su resolución. */
+  tariff_rate_id?: string;
+  client_rate_id?: string | null;
 }
 
 /**
@@ -46,15 +56,23 @@ export interface LineItem {
  */
 export function computeServiceLine(
   service: ServiceCatalogItem,
-  qtyRequested: number
+  qtyRequested: number,
+  currency: "ARS" | "USD" = "ARS",
 ): LineItem {
-  const qReq = Number.isFinite(qtyRequested) && qtyRequested > 0 ? qtyRequested : 1;
+  if (!Number.isFinite(qtyRequested) || qtyRequested <= 0) {
+    throw new Error("Cantidad de servicio inválida");
+  }
+  const rate = service.rate;
+  if (!service.active || rate == null || !Number.isFinite(rate) || rate <= 0 || service.requires_quote) {
+    throw new Error("El servicio requiere una tarifa aprobada");
+  }
+  const qReq = qtyRequested;
   const minQty = service.min_qty ?? 0;
   const qEff = Math.max(qReq, minQty);
 
-  const raw = qEff * service.rate;
+  const raw = qEff * rate;
   const minBilling = service.min_billing ?? 0;
-  const subtotal = Math.max(raw, minBilling);
+  const subtotal = roundMoney(Math.max(raw, minBilling));
 
   const qtyBumped = qEff > qReq;
   const billBumped = minBilling > 0 && raw < minBilling;
@@ -62,11 +80,11 @@ export function computeServiceLine(
 
   let min_reason: string | undefined;
   if (qtyBumped && billBumped) {
-    min_reason = `Aplicado mínimo de ${minQty} ${service.unit} y subtotal mínimo de ${fmtARS(minBilling)}.`;
+    min_reason = `Aplicado mínimo de ${minQty} ${service.unit} y subtotal mínimo de ${fmtMoney(minBilling, currency)}.`;
   } else if (qtyBumped) {
     min_reason = `Aplicado mínimo de ${minQty} ${service.unit} (pediste ${qReq}).`;
   } else if (billBumped) {
-    min_reason = `Aplicado subtotal mínimo de ${fmtARS(minBilling)}.`;
+    min_reason = `Aplicado subtotal mínimo de ${fmtMoney(minBilling, currency)}.`;
   }
 
   return {
@@ -74,13 +92,16 @@ export function computeServiceLine(
     label: service.label,
     qty_requested: qReq,
     qty_effective: qEff,
-    rate: service.rate,
+    rate,
     unit: service.unit,
     subtotal,
     min_applied,
     min_reason,
     service_slug: service.slug,
     category: service.category,
+    pricing_kind: "catalog",
+    tariff_rate_id: service.tariff_rate_id,
+    client_rate_id: service.client_rate_id ?? null,
   };
 }
 
@@ -93,6 +114,9 @@ export interface TransportLineInput {
   secondTripDiscount?: boolean;
   /** True si el viaje se hace fuera de horario y requiere recargo. */
   surcharge?: "none" | "17_19" | "19_21" | "21_plus";
+  /** Mínimos congelados de la misma tarifa DB que provee `zone.price`. */
+  minQty?: number;
+  minBilling?: number;
 }
 
 /**
@@ -100,34 +124,35 @@ export interface TransportLineInput {
  * Aplica reglas operativas del tarifario febrero 2026.
  */
 export function computeTransportLine(input: TransportLineInput): LineItem {
-  const { vehicle, zone, trips, secondTripDiscount, surcharge = "none" } = input;
-  const tripsCount = Math.max(1, Math.floor(trips || 1));
+  const {
+    vehicle,
+    zone,
+    trips,
+    secondTripDiscount,
+    surcharge = "none",
+    minQty = 0,
+    minBilling = 0,
+  } = input;
+  if (!Number.isInteger(trips) || trips <= 0 || !Number.isInteger(minQty) || minQty < 0) {
+    throw new Error("Cantidad o mínimo de viajes inválido");
+  }
+  const tripsCount = trips;
+  const effectiveTrips = Math.max(tripsCount, minQty);
 
   if (zone.price == null) {
-    // A cotizar — devolvemos line con subtotal 0 y mensaje claro.
-    return {
-      key: `trip:${vehicle.slug}:${zone.zone}`,
-      label: `${vehicle.label} · ${zone.label}`,
-      qty_requested: tripsCount,
-      qty_effective: tripsCount,
-      rate: 0,
-      unit: "viaje",
-      subtotal: 0,
-      min_applied: false,
-      min_reason: "Tarifa a cotizar — coordinar con comercial.",
-      vehicle_slug: vehicle.slug,
-      category: "transporte",
-    };
+    throw new Error("El transporte requiere una tarifa aprobada");
   }
 
-  let subtotal = zone.price * tripsCount;
+  let subtotal = zone.price * effectiveTrips;
 
   // Regla: 2do viaje al 50%
-  if (secondTripDiscount && tripsCount >= 2) {
+  if (secondTripDiscount && effectiveTrips >= 2) {
     const fullPrice = zone.price;
-    const discountedTrips = tripsCount - 1;
+    const discountedTrips = effectiveTrips - 1;
     subtotal = fullPrice + discountedTrips * (fullPrice * 0.5);
   }
+
+  subtotal = Math.max(subtotal, minBilling);
 
   // Recargos por horario (camión)
   const surchargePct =
@@ -137,31 +162,46 @@ export function computeTransportLine(input: TransportLineInput): LineItem {
   }
 
   const reasons: string[] = [];
-  if (secondTripDiscount && tripsCount >= 2) {
+  if (effectiveTrips > tripsCount) {
+    reasons.push(`Aplicado mínimo de ${effectiveTrips} viajes.`);
+  }
+  if (secondTripDiscount && effectiveTrips >= 2) {
     reasons.push("Aplicado descuento 50% en viajes adicionales.");
   }
   if (surchargePct > 0) {
     reasons.push(`Recargo fuera de horario +${Math.round(surchargePct * 100)}%.`);
   }
 
+  const transportLabel = zone.label.startsWith(vehicle.label)
+    ? zone.label
+    : `${vehicle.label} · ${zone.label}`;
+
   return {
     key: `trip:${vehicle.slug}:${zone.zone}`,
-    label: `${vehicle.label} · ${zone.label}`,
+    label: transportLabel,
     qty_requested: tripsCount,
-    qty_effective: tripsCount,
+    qty_effective: effectiveTrips,
     rate: zone.price,
     unit: "viaje",
-    subtotal: Math.round(subtotal),
+    subtotal: roundMoney(subtotal),
     min_applied: reasons.length > 0,
     min_reason: reasons.join(" "),
     vehicle_slug: vehicle.slug,
+    service_slug: `transporte:${vehicle.slug}:${zone.zone}`,
     category: "transporte",
+    pricing_kind: "transport",
+    second_trip_discount: Boolean(secondTripDiscount),
+    surcharge,
   };
 }
 
 /** Suma los subtotales de una lista de líneas. */
 export function sumLines(lines: LineItem[]): number {
-  return lines.reduce((acc, l) => acc + l.subtotal, 0);
+  return roundMoney(lines.reduce((acc, l) => acc + l.subtotal, 0));
+}
+
+function roundMoney(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 /** Aproximación visual rápida del IVA al 21% (la facturación real corre por sistema contable). */
@@ -169,6 +209,10 @@ export function ivaEstimate(net: number, rate = 0.21): number {
   return Math.round(net * rate);
 }
 
-function fmtARS(n: number): string {
-  return "$ " + Math.round(n).toLocaleString("es-AR");
+function fmtMoney(n: number, currency: "ARS" | "USD"): string {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(n);
 }

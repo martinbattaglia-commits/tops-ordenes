@@ -498,28 +498,38 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0235a_nexus_link_permission_module.sql",
     "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
     "ROLLBACK_0239a_nexus_link_revoke_trigger_execute.sql",
+    // PR #66 FASE A: siete inversas ejecutables y catalogadas.
+    "ROLLBACK_0240_clientes_permission_module.sql",
+    "ROLLBACK_0241_clients_native_master.sql",
+    "ROLLBACK_0242_clients_atomic_mutations.sql",
+    "ROLLBACK_0243_purchase_order_price_lifecycle.sql",
+    "ROLLBACK_0244_service_order_pricing_lifecycle.sql",
+    "ROLLBACK_20260815002748_service_unit_m2.sql",
+    "ROLLBACK_20260815002807_service_tariff_m2_rates.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 
-  it("control sano: 216 entradas, 202 ejecutables y 14 no ejecutables, recalculados", () => {
+  it("control sano: 230 entradas, 209 ejecutables y 21 no ejecutables, recalculados", () => {
     // +4 en FASE A (0234/0235 y sus inversas) y +6 en FASE B (0236, 0237 y
     // 0238 con sus inversas), sobre la línea previa 200/194/6; +4 en el
     // hallazgo de C5 (0235a y 0239, cada una con su inversa) sobre la línea
-    // 210/199/11; +2 por el correctivo ACL 0239a y su rollback documental.
+    // 210/199/11; +2 por el correctivo ACL 0239a y su rollback documental;
+    // +14 por PR #66 FASE A (siete forwards y siete rollbacks), sobre la base
+    // viva 216/202/14.
     // Las cifras se contrastan contra el recálculo desde
     // `entries`, así que no pueden quedar desfasadas en silencio.
-    expect(REAL.entries).toHaveLength(216);
+    expect(REAL.entries).toHaveLength(230);
     const ejec = REAL.entries.filter(
       (e) => e.estado === "active" || e.estado === "corrective",
     );
-    expect(ejec).toHaveLength(202);
-    expect(REAL.entries.length - ejec.length).toBe(14);
+    expect(ejec).toHaveLength(209);
+    expect(REAL.entries.length - ejec.length).toBe(21);
     // Y los contadores declarados coinciden con lo recalculado.
-    expect(REAL.ejecutables).toBe(202);
-    expect(REAL.no_ejecutables).toBe(14);
+    expect(REAL.ejecutables).toBe(209);
+    expect(REAL.no_ejecutables).toBe(21);
   });
 
-  it("la convención cerrada identifica exactamente a los tres rollbacks del árbol", () => {
+  it("la convención cerrada identifica exactamente todos los rollbacks del árbol", () => {
     const porNombre = REAL.entries.filter(
       (e) => e.filename.startsWith("ROLLBACK_") || e.filename.endsWith("_rollback.sql"),
     );
@@ -539,12 +549,12 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     expect(cods).toContain("CONTADOR_NO_EJECUTABLES_INCOHERENTE");
   });
 
-  it("MUTANTE B · reclasificación CON contadores maquillados (203/13) → sigue FAIL por rollback", () => {
+  it("MUTANTE B · reclasificación CON contadores maquillados (210/20) → sigue FAIL por rollback", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 203;
-    c.no_ejecutables = 13;
+    c.ejecutables = 210;
+    c.no_ejecutables = 20;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     // Los contadores ahora «cuadran» con las entries mutadas: si el rechazo
     // dependiera de ellos, este mutante viajaría en verde.
@@ -558,8 +568,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 203;
-    c.no_ejecutables = 13;
+    c.ejecutables = 210;
+    c.no_ejecutables = 20;
     expect(() => construirPlan({ catalogo: c })).toThrow(/CATALOGO_INVALIDO/);
     expect(() => construirPlan({ catalogo: c })).toThrow(/ROLLBACK_RECLASIFICADO/);
   });
@@ -589,24 +599,24 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
       estado: "active",
       ledger_name: "0233b_wa_make_relay_outbox_redo",
     };
-    c.ejecutables = 203;
-    c.no_ejecutables = 13;
+    c.ejecutables = 210;
+    c.no_ejecutables = 20;
     const v = verificarCatalogo({ catalogo: c, dirMigraciones: dir });
     expect(codigos(v)).toEqual(["ROLLBACK_CONOCIDO_AUSENTE"]);
     expect(v[0].detalle).toBe(OBJETIVO);
   });
 
-  it("MUTANTE D · contador ejecutables 194→195 sin tocar entries → CONTADOR_EJECUTABLES_INCOHERENTE", () => {
+  it("MUTANTE D · contador ejecutables 209→210 sin tocar entries → CONTADOR_EJECUTABLES_INCOHERENTE", () => {
     const c = clon();
-    c.ejecutables = 195;
+    c.ejecutables = 210;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     expect(cods).toContain("CONTADOR_EJECUTABLES_INCOHERENTE");
     expect(cods).not.toContain("CONTADOR_NO_EJECUTABLES_INCOHERENTE");
   });
 
-  it("MUTANTE E · contador no_ejecutables 6→5 sin tocar entries → CONTADOR_NO_EJECUTABLES_INCOHERENTE", () => {
+  it("MUTANTE E · contador no_ejecutables 21→20 sin tocar entries → CONTADOR_NO_EJECUTABLES_INCOHERENTE", () => {
     const c = clon();
-    c.no_ejecutables = 5;
+    c.no_ejecutables = 20;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     expect(cods).toContain("CONTADOR_NO_EJECUTABLES_INCOHERENTE");
     expect(cods).not.toContain("CONTADOR_EJECUTABLES_INCOHERENTE");

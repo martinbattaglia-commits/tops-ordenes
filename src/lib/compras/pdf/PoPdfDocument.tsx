@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import type { PurchaseOrder } from "@/lib/types-po";
+import { PO_PRICE_STATE_LABEL } from "@/lib/compras/pricing";
 import { fmtCurrency, fmtDateTime, fmtCuit } from "@/lib/compras/format";
 import { ORG } from "@/lib/org";
 import { registerDocFonts } from "@/lib/doc-system/fonts";
@@ -106,7 +107,7 @@ export function PoPdfDocument({ po, signatureDataUrl, qrDataUrl }: Props) {
   return (
     <Document
       title={`Orden de Compra ${po.public_id}`}
-      author={ORG.emitter.name}
+      author={po.emisor_name}
       subject="Orden de Compra"
       creator="TOPS Compras"
       producer="TOPS Compras"
@@ -198,6 +199,11 @@ export function PoPdfDocument({ po, signatureDataUrl, qrDataUrl }: Props) {
                   {it.label}
                   {it.sku ? <Text style={styles.prodSku}>  ({it.sku})</Text> : null}
                 </Text>
+                {it.price_state !== "known" ? (
+                  <Text style={styles.prodSku}>
+                    {PO_PRICE_STATE_LABEL[it.price_state]}{it.price_reason ? ` · ${it.price_reason}` : ""}
+                  </Text>
+                ) : null}
               </View>
               <Text style={styles.cellQty}>{it.qty}</Text>
               <Text style={styles.cellUnit}>{it.unit}</Text>
@@ -226,8 +232,8 @@ export function PoPdfDocument({ po, signatureDataUrl, qrDataUrl }: Props) {
                     )}
                   </Field>
                   <View style={styles.sigLine}>
-                    <Text style={styles.sigName}>{ORG.emitter.name}</Text>
-                    <Text style={styles.sigRole}>{ORG.emitter.role}</Text>
+                    <Text style={styles.sigName}>{po.signed_by ?? po.emisor_name}</Text>
+                    <Text style={styles.sigRole}>{po.emisor_role}</Text>
                     {po.signed_at ? <Text style={styles.sigRole}>{fmtDateTime(po.signed_at)}</Text> : null}
                   </View>
                 </View>
@@ -257,14 +263,14 @@ export function PoPdfDocument({ po, signatureDataUrl, qrDataUrl }: Props) {
               <SectionTitle num={po.observ ? 8 : 7} title="Resumen" />
               <View style={{ marginTop: 6 }}>
                 <View style={styles.sumRow}>
-                  <Text style={styles.sumLabel}>Subtotal neto</Text>
-                  <Text style={styles.sumValue}>{fmtCurrency(po.neto)}</Text>
+                  <Text style={styles.sumLabel}>{po.price_state === "estimated" ? "Neto estimado" : "Subtotal neto"}</Text>
+                  <Text style={styles.sumValue}>{fmtCurrency(po.neto ?? po.planning_neto)}</Text>
                 </View>
                 <View style={styles.sumRow}>
                   <Text style={styles.sumLabel}>IVA 21%</Text>
-                  <Text style={styles.sumValue}>{fmtCurrency(po.iva)}</Text>
+                  <Text style={styles.sumValue}>{fmtCurrency(po.iva ?? po.planning_iva)}</Text>
                 </View>
-                <TotalBlock amount={fmtCurrency(po.total)} />
+                <TotalBlock amount={po.price_state === "pending" ? "PRECIO PENDIENTE" : fmtCurrency(po.total ?? po.planning_total)} />
               </View>
             </View>
           </View>

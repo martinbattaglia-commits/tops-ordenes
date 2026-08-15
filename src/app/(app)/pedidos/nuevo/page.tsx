@@ -7,7 +7,7 @@ export const metadata = { title: "Nuevo pedido · Pedidos" };
 export const dynamic = "force-dynamic";
 
 export default async function NuevoPedidoPage() {
-  const clients = await listActiveClientRefs();
+  const clients = await listActiveClientRefs("pedidos");
   return (
     <div className="p-4 lg:p-8 nx-page-fade">
       <div className="page-header">

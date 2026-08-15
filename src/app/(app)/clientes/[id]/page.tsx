@@ -7,6 +7,7 @@ import type { ChartAccount } from "@/lib/erp/types";
 import { ClienteFiscalEditor } from "@/components/comercial/ClienteFiscalEditor";
 import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import type { CondicionIva } from "@/lib/invoicing/types";
+import { ClientMasterEditor } from "./ClientMasterEditor";
 
 export const metadata = { title: "Ficha de cliente" };
 export const dynamic = "force-dynamic";
@@ -44,6 +45,9 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
     accounts = [];
   }
   const condicionIva = (c.condicion_iva ?? "RESPONSABLE_INSCRIPTO") as CondicionIva;
+  const depositoAsignado = c.deposito_asignado === "MAGALDI" || c.deposito_asignado === "LUJAN"
+    ? c.deposito_asignado
+    : "";
 
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1200px] mx-auto">
@@ -64,7 +68,9 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
         <h2 className="font-semibold mb-3 flex items-center gap-2"><Icon name="building" size={15} /> General</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Field label="Razón social" value={c.razon} />
+          <Field label="Nombre comercial" value={c.nombre_comercial} />
           <Field label="CUIT" value={c.cuit} />
+          <Field label="Código interno" value={c.codigo} />
           <Field label="Condición IVA" value={c.condicion_iva} />
           <Field label="Domicilio" value={c.domicilio} />
           <Field label="Localidad" value={c.localidad} />
@@ -72,12 +78,35 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
           <Field label="Email" value={c.email ? <a href={`mailto:${c.email}`} className="text-fg-link hover:underline">{c.email}</a> : null} />
           <Field label="Contacto" value={c.contacto} />
           <Field label="Tags" value={(c.tags ?? []).join(" · ")} />
+          <Field label="Observaciones" value={c.observaciones} />
         </div>
       </section>
+
+      <ClientMasterEditor
+        clientId={c.id}
+        cuit={c.cuit ?? ""}
+        activo={c.activo !== false}
+        updatedAt={c.updated_at ?? c.created_at ?? ""}
+        initial={{
+          razon: c.razon ?? "",
+          nombre_comercial: c.nombre_comercial ?? "",
+          codigo: c.codigo ?? "",
+          domicilio: c.domicilio ?? "",
+          localidad: c.localidad ?? "",
+          telefono: c.telefono ?? "",
+          contacto: c.contacto ?? "",
+          email: c.email ?? "",
+          tags: (c.tags ?? []).join(", "),
+          deposito_asignado: depositoAsignado,
+          observaciones: c.observaciones ?? "",
+          motivo: "edición de ficha nativa",
+        }}
+      />
 
       {/* Fiscal & contable (Contadora) */}
       <ClienteFiscalEditor
         clientId={c.id}
+        updatedAt={c.updated_at ?? c.created_at ?? ""}
         accounts={accounts}
         initial={{ condicion_iva: condicionIva, cuenta_contable: c.cuenta_contable ?? "" }}
       />
@@ -129,13 +158,6 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
           <Field label="Servicios (OS)" value={<Link href="/orders" className="text-fg-link hover:underline">Ver órdenes de servicio →</Link>} />
         </div>
         <p className="text-[11px] text-fg-muted mt-2">m² ocupados: la ocupación por cliente se gestiona en WMS (vista corporativa). Trazabilidad m²-por-cliente: fase futura.</p>
-      </section>
-
-      {/* Comercial (CRM = Clientify, no linkable por client_id interno) */}
-      <section className="card p-5">
-        <h2 className="font-semibold mb-3 flex items-center gap-2"><Icon name="trend-up" size={15} /> Comercial / CRM</h2>
-        <p className="text-sm text-fg-secondary">La actividad comercial (oportunidades, pipeline) vive en Clientify. El cliente interno no está vinculado por id al CRM externo.</p>
-        <a href="https://new.clientify.com/contacts" target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-fg-link hover:underline mt-2 text-sm"><Icon name="arrow-up-right" size={13} /> Buscar en Clientify CRM</a>
       </section>
 
       {/* Documentación */}

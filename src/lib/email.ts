@@ -23,28 +23,55 @@ export async function sendOneOrderEmail(opts: {
   html: string;
   /** Versión text/plain (fallback para clientes sin HTML / filtros antispam). */
   text?: string;
-}): Promise<{ ok: boolean; id?: string; skipped?: boolean; error?: string }> {
+  /** Identidad durable derivada por PostgreSQL; nunca se genera al azar. */
+  idempotencyKey: string;
+}): Promise<{
+  ok: boolean;
+  id?: string;
+  skipped?: boolean;
+  ambiguous?: boolean;
+  error?: string;
+}> {
   if (!env.email.resendKey) {
     return { ok: true, skipped: true };
   }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.email.resendKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: env.email.from,
-      to: [opts.to],
-      subject: opts.subject,
-      html: opts.html,
-      text: opts.text,
-    }),
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "");
-    return { ok: false, error: errText || `HTTP ${res.status}` };
+  if (!/^[\x21-\x7e]{1,256}$/.test(opts.idempotencyKey)) {
+    throw new Error("ORDER_EMAIL_IDEMPOTENCY_KEY_INVALID");
   }
-  const j = (await res.json()) as { id?: string };
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.email.resendKey}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": opts.idempotencyKey,
+        },
+        body: JSON.stringify({
+          from: env.email.from,
+          to: [opts.to],
+          subject: opts.subject,
+          html: opts.html,
+          text: opts.text,
+        }),
+      });
+    } catch {
+      if (attempt === 0) continue;
+      return { ok: false, ambiguous: true, error: "ORDER_EMAIL_NETWORK_AMBIGUOUS" };
+    }
+    if (res.ok || res.status < 500) break;
+  }
+  if (!res) {
+    return { ok: false, ambiguous: true, error: "ORDER_EMAIL_NETWORK_AMBIGUOUS" };
+  }
+  if (!res.ok) {
+    await res.text().catch(() => "");
+    return { ok: false, error: "ORDER_EMAIL_PROVIDER_REJECTED" };
+  }
+  const j = (await res.json().catch(() => ({}))) as { id?: string };
+  if (!j.id || typeof j.id !== "string" || j.id.length > 200) {
+    return { ok: false, ambiguous: true, error: "ORDER_EMAIL_PROVIDER_RESPONSE_INVALID" };
+  }
   return { ok: true, id: j.id };
 }

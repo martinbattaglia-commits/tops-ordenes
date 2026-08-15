@@ -6,17 +6,17 @@ import { Icon } from "@/components/Icon";
 import { VoiceField } from "@/components/voice/VoiceField";
 import { cn, fmtCurrency, isValidCuit, sha256, URGENT_SERVICE_SLUG } from "@/lib/utils";
 import { createOrder } from "./actions";
+import { canCreateClientFromOrder, createClient } from "../../clients/actions";
 import type { Client, Operator, ServiceCatalogItem } from "@/lib/types";
+import type { OrderClientOption } from "@/lib/data/orders";
 import { DEPOT_META } from "@/lib/types";
 import {
   VEHICLES,
-  getVehicle,
-  getVehicleZone,
-  suggestVehicleByPallets,
   TRANSPORT_RULES,
   type VehicleZoneKey,
   type VehicleSpec,
 } from "@/lib/pricing/vehicles";
+import type { ServicePricingPayload } from "@/lib/data/service-pricing";
 import {
   computeServiceLine,
   computeTransportLine,
@@ -26,11 +26,47 @@ import {
 } from "@/lib/pricing/calculator";
 import { SERVICE_CATEGORIES, unitLabel } from "@/lib/services-catalog";
 
+type PricingCurrency = ServicePricingPayload["currency"];
+
 interface Props {
-  clients: Client[];
+  clients: OrderClientOption[];
   operators: Operator[];
   catalog: ServiceCatalogItem[];
+  pricing?: ServicePricingPayload;
 }
+
+const FALLBACK_GENERAL_RATES: ServicePricingPayload["generalRates"] = Object.fromEntries(
+  VEHICLES.flatMap((vehicle) =>
+    vehicle.zones.map((zone) => {
+      const slug = `transporte:${vehicle.slug}:${zone.zone}`;
+      return [
+        slug,
+        {
+          tariffRateId: slug,
+          label: `${vehicle.label} · ${zone.label}`,
+          category: "transporte",
+          unit: "viaje" as const,
+          rate: zone.price,
+          minQty: 0,
+          minBilling: 0,
+          requiresQuote: zone.price == null,
+          metadata: { vehicle: vehicle.slug, zone: zone.zone },
+        },
+      ];
+    })
+  )
+);
+
+const FALLBACK_PRICING: ServicePricingPayload = {
+  versionId: null,
+  versionCode: "COMPAT",
+  currency: "ARS",
+  catalog: [],
+  vehicles: VEHICLES,
+  generalRates: FALLBACK_GENERAL_RATES,
+  clientRates: {},
+  canAdjust: true,
+};
 
 interface ConceptoLibre {
   enabled: boolean;
@@ -106,23 +142,78 @@ function safeNonNegInt(raw: string): number {
   return Math.floor(n);
 }
 
-export default function NewOrderWizard({ clients, operators, catalog }: Props) {
+export default function NewOrderWizard({
+  clients,
+  operators,
+  catalog,
+  pricing = FALLBACK_PRICING,
+}: Props) {
   const router = useRouter();
   const [stepIdx, setStepIdx] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<WizardState>(initial(clients[0]));
 
+  const clientPriceMap = useMemo(
+    () => (data.client_id ? pricing.clientRates[data.client_id] ?? {} : {}),
+    [data.client_id, pricing.clientRates]
+  );
+  const pricedCatalog = useMemo(
+    () =>
+      catalog.map((service) => {
+        const particular = clientPriceMap[service.slug];
+        if (!particular) return service;
+        return {
+          ...service,
+          rate: particular.rate,
+          min_qty: particular.minQty ?? service.min_qty,
+          min_billing: particular.minBilling ?? service.min_billing,
+          requires_quote: false,
+          client_rate_id: particular.clientRateId,
+        };
+      }),
+    [catalog, clientPriceMap]
+  );
+  const pricedVehicles = useMemo<VehicleSpec[]>(
+    () =>
+      pricing.vehicles.map((vehicle) => ({
+        ...vehicle,
+        zones: vehicle.zones.map((zone) => {
+          const slug = `transporte:${vehicle.slug}:${zone.zone}`;
+          const particular = clientPriceMap[slug];
+          const general = pricing.generalRates[slug];
+          return { ...zone, price: particular?.rate ?? general?.rate ?? null };
+        }),
+      })),
+    [clientPriceMap, pricing.generalRates, pricing.vehicles]
+  );
+
   // Auto-save en localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem(DRAFT_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw);
-        setData((prev) => ({ ...prev, ...parsed, signature_data: null }));
+        const parsed = JSON.parse(raw) as Partial<WizardState>;
+        const knownServices = new Set(catalog.map((service) => service.slug));
+        const knownTransports = new Set(
+          Object.keys(pricing.generalRates).filter((slug) => slug.startsWith("transporte:")),
+        );
+        setData((prev) => ({
+          ...prev,
+          ...parsed,
+          services: Array.isArray(parsed.services)
+            ? parsed.services.filter((slug) => knownServices.has(slug))
+            : prev.services,
+          transports: Array.isArray(parsed.transports)
+            ? parsed.transports.filter((selection) =>
+                knownTransports.has(`transporte:${selection.vehicle_slug}:${selection.zone}`),
+              )
+            : prev.transports,
+          signature_data: null,
+        }));
       }
     } catch {}
-  }, []);
+  }, [catalog, pricing.generalRates]);
   useEffect(() => {
     try {
       const { signature_data: _drop, ...rest } = data;
@@ -130,7 +221,27 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
     } catch {}
   }, [data]);
 
+  /**
+   * Aplica un parche al estado del wizard.
+   *
+   * INVALIDA el vínculo canónico si se editan a mano la razón social o el
+   * CUIT. Sin esto, `client_id` quedaba apuntando al cliente que se había
+   * seleccionado antes —o al que el wizard precarga— mientras la pantalla
+   * mostraba otros datos, y la orden se emitía a nombre del equivocado.
+   *
+   * Sólo se limpia cuando el cambio viene del teclado: `selectClient` fija
+   * los tres campos a la vez y pasa por `updateFromSelection`.
+   */
   const update = (patch: Partial<WizardState>) =>
+    setData((d) => {
+      const editoIdentidad =
+        (patch.razon !== undefined && patch.razon !== d.razon) ||
+        (patch.cuit !== undefined && patch.cuit !== d.cuit);
+      return editoIdentidad ? { ...d, ...patch, client_id: null } : { ...d, ...patch };
+    });
+
+  /** Parche que NO invalida el vínculo: lo usa la selección de un cliente. */
+  const updateFromSelection = (patch: Partial<WizardState>) =>
     setData((d) => ({ ...d, ...patch }));
 
   // ==========================================================================
@@ -145,26 +256,36 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
   const lines: LineItem[] = useMemo(() => {
     const out: LineItem[] = [];
     for (const slug of data.services) {
-      const svc = catalog.find((c) => c.slug === slug);
-      if (!svc) continue;
+      const svc = pricedCatalog.find((c) => c.slug === slug);
+      if (!svc?.active || svc.requires_quote || svc.rate == null || svc.rate <= 0) continue;
       const q = data.qty[slug] ?? 1;
-      out.push(computeServiceLine(svc, q));
+      out.push(computeServiceLine(svc, q, pricing.currency));
     }
     // Multi-vehículo: una línea de transporte por cada vehículo seleccionado.
     let transportSum = 0;
     for (const t of data.transports) {
-      const v = getVehicle(t.vehicle_slug);
-      const z = v ? getVehicleZone(v.slug, t.zone) : undefined;
+      const v = pricedVehicles.find((vehicle) => vehicle.slug === t.vehicle_slug);
+      const z = v?.zones.find((zone) => zone.zone === t.zone);
       if (v && z) {
+        const slug = `transporte:${v.slug}:${z.zone}`;
+        const particular = clientPriceMap[slug];
+        const general = pricing.generalRates[slug];
+        if (z.price == null || z.price <= 0 || (!particular && general?.requiresQuote)) continue;
         const tl = computeTransportLine({
           vehicle: v,
           zone: z,
           trips: t.trips,
           secondTripDiscount: t.second_trip_discount,
           surcharge: t.surcharge,
+          minQty: particular?.minQty ?? general?.minQty ?? 0,
+          minBilling: particular?.minBilling ?? general?.minBilling ?? 0,
         });
         transportSum += tl.subtotal;
-        out.push(tl);
+        out.push({
+          ...tl,
+          tariff_rate_id: pricing.generalRates[slug]?.tariffRateId,
+          client_rate_id: clientPriceMap[slug]?.clientRateId ?? null,
+        });
       }
     }
     // Envío urgente (mismo día): recargo del 100% sobre el transporte. Se modela
@@ -183,10 +304,12 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         min_reason: "Despacho prioritario para ejecución el mismo día.",
         service_slug: URGENT_SERVICE_SLUG,
         category: "transporte",
+        pricing_kind: "urgent",
+        pricing_reason: "Despacho prioritario para ejecucion el mismo dia.",
       });
     }
     const cl = data.concepto_libre;
-    if (cl.enabled && cl.label.trim() && cl.price > 0) {
+    if (pricing.canAdjust && cl.enabled && cl.label.trim() && cl.price > 0) {
       out.push({
         key: "concepto-libre",
         label: cl.label.trim(),
@@ -198,13 +321,15 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         min_applied: false,
         service_slug: "concepto-libre",
         category: "personalizado",
+        pricing_kind: "manual",
+        pricing_reason: cl.observ.trim(),
       });
     }
     // Bonificaciones comerciales: por cada bonificación cuyo destino siga
     // presente (línea positiva), se agrega una línea NEGATIVA propia. El
     // servicio original queda intacto y visible → trazabilidad total. El
     // descuento se topea al subtotal del destino (nunca deja la línea < $0).
-    for (const b of data.bonifications) {
+    for (const b of pricing.canAdjust ? data.bonifications : []) {
       const target = out.find((l) => l.key === b.target_key && l.subtotal > 0);
       if (!target) continue;
       const raw =
@@ -228,6 +353,11 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
             : `Bonificación comercial (importe fijo) sobre ${target.label}.`,
         service_slug: `bonif:${b.target_key}`,
         category: "bonificacion",
+        pricing_kind: "bonification",
+        pricing_reason:
+          b.type === "pct"
+            ? `Bonificacion comercial ${b.value}% sobre ${target.label}.`
+            : `Bonificacion comercial de importe fijo sobre ${target.label}.`,
       });
     }
     return out;
@@ -238,19 +368,53 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
     data.transport_urgent,
     data.concepto_libre,
     data.bonifications,
-    catalog,
+    pricedCatalog,
+    pricedVehicles,
+    pricing.generalRates,
+    pricing.currency,
+    clientPriceMap,
+    pricing.canAdjust,
   ]);
+
+  const hasPendingPricing = useMemo(() => {
+    const servicePending = data.services.some((slug) => {
+      const service = pricedCatalog.find((item) => item.slug === slug);
+      return !service?.active || service.requires_quote || service.rate == null || service.rate <= 0;
+    });
+    const transportPending = data.transports.some((selection) => {
+      const slug = `transporte:${selection.vehicle_slug}:${selection.zone}`;
+      const particular = clientPriceMap[slug];
+      const general = pricing.generalRates[slug];
+      return !particular && (!general || general.requiresQuote || general.rate == null || general.rate <= 0);
+    });
+    return servicePending || transportPending;
+  }, [clientPriceMap, data.services, data.transports, pricedCatalog, pricing.generalRates]);
 
   const total = useMemo(() => sumLines(lines), [lines]);
   const ivaEst = useMemo(() => ivaEstimate(total), [total]);
 
   const canAdvance = () => {
-    if (stepIdx === 0) return data.razon.trim().length > 1 && data.cuit.replace(/\D/g, "").length === 11;
+    if (stepIdx === 0) {
+      // Se exige IDENTIDAD CANÓNICA, no sólo datos con forma válida. Antes
+      // alcanzaba con una razón social de dos letras y once dígitos, así que
+      // se podía avanzar —y emitir— con `client_id` invalidado o nulo.
+      return (
+        Boolean(data.client_id) &&
+        data.razon.trim().length > 1 &&
+        data.cuit.replace(/\D/g, "").length === 11
+      );
+    }
     if (stepIdx === 1) return Boolean(data.depot && data.operator_id);
     if (stepIdx === 2) {
       const cl = data.concepto_libre;
-      const conceptoOk = cl.enabled && cl.label.trim().length > 0 && cl.price > 0;
-      return data.services.length > 0 || data.transports.length > 0 || conceptoOk;
+      const conceptoOk =
+        pricing.canAdjust &&
+        cl.enabled && cl.label.trim().length > 0 && cl.price > 0 && cl.observ.trim().length >= 3;
+      const haySeleccion = data.services.length > 0 || data.transports.length > 0 || conceptoOk;
+      const sinCotizacionesPendientes = lines
+        .filter((line) => line.pricing_kind === "catalog" || line.pricing_kind === "transport")
+        .every((line) => line.rate > 0 && line.subtotal > 0);
+      return haySeleccion && !hasPendingPricing && sinCotizacionesPendientes;
     }
     return true;
   };
@@ -314,6 +478,21 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
             unit: normalizeUnit(realUnit),
             rate,
             subtotal,
+            qty_requested: Math.max(0.01, numOrDefault(ln.qty_requested, 1)),
+            pricing_kind: ln.pricing_kind ?? "catalog",
+            pricing_reason: ln.pricing_reason ?? ln.min_reason ?? "",
+            second_trip_discount: ln.second_trip_discount ?? false,
+            surcharge: ln.surcharge ?? "none",
+            expected_tariff_rate_id: ln.tariff_rate_id ?? null,
+            expected_client_rate_id: ln.client_rate_id ?? null,
+            manual_rate:
+              ln.pricing_kind === "manual" || ln.pricing_kind === "bonification"
+                ? rate
+                : undefined,
+            manual_subtotal:
+              ln.pricing_kind === "manual" || ln.pricing_kind === "bonification"
+                ? subtotal
+                : undefined,
           };
         });
 
@@ -346,6 +525,7 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
         .slice(0, 2000);
 
       const result = await createOrder({
+        pricing_version_id: pricing.versionId,
         client: {
           id: data.client_id,
           razon: data.razon.trim(),
@@ -416,19 +596,22 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
       <div className="px-4 lg:px-8 py-5 pb-32 lg:pb-10 grid grid-cols-1 lg:grid-cols-[1.15fr_1fr] gap-6 items-start">
         <div className="card p-5 lg:p-7 min-h-[480px]">
           {stepIdx === 0 && (
-            <StepClient clients={clients} data={data} update={update} />
+            <StepClient clients={clients} data={data} update={update} selectClient={updateFromSelection} />
           )}
           {stepIdx === 1 && (
             <StepOperativo operators={operators} data={data} update={update} />
           )}
           {stepIdx === 2 && (
             <StepServicio
-              catalog={catalog}
+              catalog={pricedCatalog}
+              vehicles={pricedVehicles}
+              canAdjust={pricing.canAdjust}
               data={data}
               update={update}
               total={total}
               lines={lines}
               ivaEst={ivaEst}
+              currency={pricing.currency}
             />
           )}
           {stepIdx === 3 && (
@@ -438,6 +621,7 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
               total={total}
               onConfirm={handleSubmit}
               submitting={submitting}
+              currency={pricing.currency}
             />
           )}
 
@@ -496,6 +680,7 @@ export default function NewOrderWizard({ clients, operators, catalog }: Props) {
             total={total}
             lines={lines}
             operator={operators.find((o) => o.id === data.operator_id)}
+            currency={pricing.currency}
           />
         </aside>
       </div>
@@ -531,19 +716,175 @@ function Stepper({ steps, current }: { steps: string[]; current: number }) {
 /* Steps                                                                       */
 /* ========================================================================== */
 
+/**
+ * D-5 · Alta de cliente SIN abandonar la orden.
+ *
+ * El permiso `wms.clients.create` existía en el catálogo desde 0241 y no tenía
+ * ni un consumidor: una capacidad muerta que la revisión C4 marcó como HIGH.
+ * Acá se le da su interfaz.
+ *
+ * El panel se abre encima del paso 1 y NO desmonta el wizard, así que todo lo
+ * ya cargado —depósito, operario, servicios, firma— sigue intacto al volver.
+ * Al crear, el cliente queda seleccionado con su identidad canónica: el uuid
+ * que devuelve el servidor, con la razón social y el CUIT tal como quedaron
+ * guardados, no como se tipearon.
+ */
+function AltaClienteInline({
+  razonInicial,
+  cuitInicial,
+  onCreado,
+  onCancelar,
+}: {
+  razonInicial: string;
+  cuitInicial: string;
+  onCreado: (c: Client) => void;
+  onCancelar: () => void;
+}) {
+  const [razon, setRazon] = useState(razonInicial);
+  const [cuit, setCuit] = useState(cuitInicial);
+  const [email, setEmail] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [duplicados, setDuplicados] = useState<{ razon: string; cuit: string }[]>([]);
+  // Acuse que emitió el servidor junto con los parecidos. No es un booleano
+  // «confirmar»: es la prueba de QUÉ lista se vio. Se limpia ante cualquier
+  // edición, así que confirmar una lista y crear otra cosa es imposible.
+  const [acuse, setAcuse] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  const cuitOk = cuit.replace(/\D/g, "").length === 11 && isValidCuit(cuit);
+  const puedeEnviar = razon.trim().length > 1 && cuitOk && !enviando;
+
+  /** Cualquier cambio invalida la advertencia ya vista. */
+  const editar = (set: (v: string) => void) => (v: string) => {
+    set(v);
+    if (acuse !== null || duplicados.length > 0) {
+      setAcuse(null);
+      setDuplicados([]);
+    }
+  };
+
+  const enviar = async (conAcuse: string | null) => {
+    // Doble envío: el guard cierra la ventana entre el click y la respuesta.
+    if (enviando) return;
+    setEnviando(true);
+    setError(null);
+    try {
+      const r = await createClient({
+        razon: razon.trim(),
+        cuit: cuit.trim(),
+        email: email.trim(),
+        telefono: telefono.trim(),
+        origen: "wms",
+        ...(conAcuse ? { confirmacion_duplicados: conAcuse } : {}),
+      });
+      if (!r.ok) {
+        setError(r.error);
+        setDuplicados(r.duplicados?.map((d) => ({ razon: d.razon, cuit: d.cuit })) ?? []);
+        setAcuse(r.confirmacion_duplicados ?? null);
+        setEnviando(false);
+        return;
+      }
+      // Identidad CANÓNICA: lo que devolvió el servidor, no lo tipeado.
+      onCreado(r.client);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error inesperado");
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div className="card card-pad mb-3 border-fg-brand/30 bg-fg-brand/5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-base font-bold text-fg-brand">Nuevo cliente</div>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelar}>
+          Cancelar
+        </button>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Field label="Razón Social" required>
+          <input className="input" value={razon} onChange={(e) => editar(setRazon)(e.target.value)} />
+        </Field>
+        <Field label="CUIT" required help={cuit && !cuitOk ? "CUIT inválido" : undefined}>
+          <input className="input mono" value={cuit} inputMode="numeric"
+            onChange={(e) => editar(setCuit)(e.target.value)} />
+        </Field>
+        <Field label="Email">
+          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
+        <Field label="Teléfono">
+          <input className="input" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+        </Field>
+      </div>
+
+      {duplicados.length > 0 && (
+        <div className="mt-3 text-sm">
+          <div className="text-status-warning font-medium mb-1">Clientes parecidos:</div>
+          <ul className="list-disc pl-5 text-fg-secondary">
+            {duplicados.map((d) => (
+              <li key={d.cuit}>
+                {d.razon} · <span className="mono">{d.cuit}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {error && <div className="mt-3 text-sm text-status-danger">{error}</div>}
+
+      <div className="flex justify-end gap-2 mt-3">
+        {acuse !== null && (
+          // Acción explícita y separada. No es un checkbox que se pueda dejar
+          // tildado antes de ver nada: sólo aparece DESPUÉS de la advertencia,
+          // y lo que manda es el acuse de esa advertencia concreta.
+          <button type="button" className="btn btn-ghost btn-sm disabled:opacity-50"
+            disabled={enviando} onClick={() => void enviar(acuse)}>
+            {enviando ? "Creando…" : "Crear de todos modos"}
+          </button>
+        )}
+        <button type="button" className="btn btn-primary btn-sm disabled:opacity-50"
+          disabled={!puedeEnviar} onClick={() => void enviar(null)}>
+          {enviando ? "Creando…" : "Crear y seleccionar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StepClient({
   clients,
   data,
   update,
+  selectClient,
 }: {
-  clients: Client[];
+  clients: OrderClientOption[];
   data: WizardState;
+  /** Parche normal: invalida el vínculo canónico si se edita razón o CUIT. */
   update: (p: Partial<WizardState>) => void;
+  /** Parche de SELECCIÓN: fija los tres campos juntos y conserva el vínculo. */
+  selectClient: (p: Partial<WizardState>) => void;
 }) {
   const [search, setSearch] = useState("");
   const [showSug, setShowSug] = useState(false);
+  const [altaAbierta, setAltaAbierta] = useState(false);
+  const [puedeCrear, setPuedeCrear] = useState(false);
+
+  // Sondeo de capacidad: sirve para NO ofrecer un botón que va a fallar. La
+  // autorización real la deciden la server action y la RPC de 0242.
+  useEffect(() => {
+    let vivo = true;
+    canCreateClientFromOrder()
+      .then((v) => vivo && setPuedeCrear(v))
+      .catch(() => vivo && setPuedeCrear(false));
+    return () => {
+      vivo = false;
+    };
+  }, []);
 
   const cuitValid = data.cuit.replace(/\D/g, "").length === 11 && isValidCuit(data.cuit);
+
+  /** El vínculo canónico se perdió al editar razón o CUIT a mano. */
+  const sinVinculo = !data.client_id;
 
   const filtered = search
     ? clients.filter(
@@ -553,15 +894,17 @@ function StepClient({
       )
     : clients.slice(0, 5);
 
-  const pick = (c: Client) => {
-    update({
+  const pick = (c: OrderClientOption) => {
+    selectClient({
       client_id: c.id,
       razon: c.razon,
       cuit: c.cuit,
-      domicilio: c.domicilio ?? "",
-      telefono: c.telefono ?? "",
-      contacto: c.contacto ?? "",
-      email: c.email ?? "",
+      // La lista acotada no expone contacto/PII. El servidor relee la ficha
+      // canónica al emitir y esos valores del navegador nunca son autoridad.
+      domicilio: "",
+      telefono: "",
+      contacto: "",
+      email: "",
     });
     setSearch("");
     setShowSug(false);
@@ -660,6 +1003,47 @@ function StepClient({
         )}
       </div>
 
+      {altaAbierta && (
+        <AltaClienteInline
+          razonInicial={data.razon}
+          cuitInicial={data.cuit}
+          onCancelar={() => setAltaAbierta(false)}
+          onCreado={(c) => {
+            // Identidad canónica: uuid + razón + CUIT tal como quedaron
+            // guardados por el servidor, no como se tipearon.
+            selectClient({
+              client_id: c.id,
+              razon: c.razon,
+              cuit: c.cuit,
+              domicilio: c.domicilio ?? "",
+              telefono: c.telefono ?? "",
+              contacto: c.contacto ?? "",
+              email: c.email ?? "",
+            });
+            setAltaAbierta(false); // vuelve al MISMO paso, sin perder nada
+          }}
+        />
+      )}
+
+      {sinVinculo && !altaAbierta && (
+        <div className="card card-pad mb-3 border-status-warning/40 bg-status-warning/5 text-sm text-status-warning flex items-start gap-2">
+          <Icon name="shield" size={15} />
+          <span>
+            <b>Cliente sin validar.</b> Editaste la razón social o el CUIT a mano, así que el
+            vínculo con el cliente seleccionado se invalidó. Elegí un cliente de la lista para
+            resolver la identidad antes de continuar.
+            {puedeCrear && (
+              <>
+                {" "}
+                <button type="button" className="underline font-medium"
+                  onClick={() => setAltaAbierta(true)}>
+                  o creá uno nuevo sin salir de la orden
+                </button>
+              </>
+            )}
+          </span>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-[2fr_1.2fr] gap-3 mb-3">
         <Field label="Razón Social" required>
           <input
@@ -871,18 +1255,24 @@ function DepotCard({
 
 function StepServicio({
   catalog,
+  vehicles,
+  canAdjust,
   data,
   update,
   total,
   lines,
   ivaEst,
+  currency,
 }: {
   catalog: ServiceCatalogItem[];
+  vehicles: VehicleSpec[];
+  canAdjust: boolean;
   data: WizardState;
   update: (p: Partial<WizardState>) => void;
   total: number;
   lines: LineItem[];
   ivaEst: number;
+  currency: PricingCurrency;
 }) {
   const patchConceptoLibre = (patch: Partial<ConceptoLibre>) =>
     update({ concepto_libre: { ...data.concepto_libre, ...patch } });
@@ -920,11 +1310,15 @@ function StepServicio({
       </p>
 
       {/* ============ TRANSPORTE ============ */}
-      <TransportSection data={data} update={update} />
+      <TransportSection data={data} update={update} vehicles={vehicles} currency={currency} />
 
       {/* ============ SERVICIOS POR CATEGORÍA ============ */}
-      {SERVICE_CATEGORIES.map((cat) => {
-        const items = grouped[cat.key] ?? [];
+      {Object.entries(grouped).map(([categoryKey, items]) => {
+        const cat = SERVICE_CATEGORIES.find((known) => known.key === categoryKey) ?? {
+          key: categoryKey,
+          label: categoryKey.replace(/[_-]+/g, " "),
+          icon: "package",
+        };
         if (items.length === 0) return null;
         return (
           <CategorySection
@@ -936,23 +1330,30 @@ function StepServicio({
             qty={data.qty}
             onToggle={toggle}
             onQty={setQty}
+            currency={currency}
           />
         );
       })}
 
       {/* ============ CONCEPTO LIBRE ============ */}
-      <ConceptoLibreSection
-        state={data.concepto_libre}
-        onToggle={() => patchConceptoLibre({ enabled: !data.concepto_libre.enabled })}
-        onChange={patchConceptoLibre}
-      />
+      {canAdjust && (
+        <ConceptoLibreSection
+          state={data.concepto_libre}
+          onToggle={() => patchConceptoLibre({ enabled: !data.concepto_libre.enabled })}
+          onChange={patchConceptoLibre}
+          currency={currency}
+        />
+      )}
 
       {/* ============ BONIFICACIONES (al final del acordeón) ============ */}
-      <BonificacionesSection
-        bonifiableLines={lines.filter((l) => l.subtotal > 0 && l.category !== "bonificacion")}
-        bonifications={data.bonifications}
-        onChange={(next) => update({ bonifications: next })}
-      />
+      {canAdjust && (
+        <BonificacionesSection
+          bonifiableLines={lines.filter((l) => l.subtotal > 0 && l.category !== "bonificacion")}
+          bonifications={data.bonifications}
+          onChange={(next) => update({ bonifications: next })}
+          currency={currency}
+        />
+      )}
 
       {/* ============ Datos operativos complementarios ============ */}
       <div className="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1011,7 +1412,7 @@ function StepServicio({
       </div>
 
       {/* ============ Desglose visual + total ============ */}
-      <BreakdownCard lines={lines} total={total} ivaEst={ivaEst} />
+      <BreakdownCard lines={lines} total={total} ivaEst={ivaEst} currency={currency} />
     </div>
   );
 }
@@ -1023,9 +1424,13 @@ function StepServicio({
 function TransportSection({
   data,
   update,
+  vehicles,
+  currency,
 }: {
   data: WizardState;
   update: (p: Partial<WizardState>) => void;
+  vehicles: VehicleSpec[];
+  currency: PricingCurrency;
 }) {
   const hasTransport = data.transports.length > 0;
   const [expanded, setExpanded] = useState<boolean>(hasTransport);
@@ -1035,8 +1440,11 @@ function TransportSection({
   }, [hasTransport]);
 
   const suggested = useMemo(
-    () => (data.pallets > 0 ? suggestVehicleByPallets(data.pallets) : undefined),
-    [data.pallets]
+    () =>
+      data.pallets > 0
+        ? vehicles.find((vehicle) => vehicle.capacity_pallets >= data.pallets)
+        : undefined,
+    [data.pallets, vehicles]
   );
 
   const isSelected = (slug: string) => data.transports.some((t) => t.vehicle_slug === slug);
@@ -1046,8 +1454,8 @@ function TransportSection({
       update({ transports: data.transports.filter((t) => t.vehicle_slug !== slug) });
       return;
     }
-    const v = getVehicle(slug);
-    const defaultZone = (v?.zones[0]?.zone ?? "CABA") as VehicleZoneKey;
+    const v = vehicles.find((vehicle) => vehicle.slug === slug);
+    const defaultZone = (v?.zones.find((zone) => zone.price != null)?.zone ?? "CABA") as VehicleZoneKey;
     update({
       transports: [
         ...data.transports,
@@ -1116,17 +1524,19 @@ function TransportSection({
               Seleccioná uno o más vehículos
             </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-              {VEHICLES.map((v) => {
+              {vehicles.map((v) => {
                 const overCap = data.pallets > v.capacity_pallets;
                 const sel = isSelected(v.slug);
                 const isSuggested = suggested?.slug === v.slug;
+                const hasPrice = v.zones.some((zone) => zone.price != null);
                 return (
                   <button
                     type="button"
                     key={v.slug}
                     onClick={() => toggleVehicle(v.slug)}
+                    disabled={!hasPrice}
                     className={cn(
-                      "p-3 rounded-lg border text-left transition-all duration-200 relative",
+                      "p-3 rounded-lg border text-left transition-all duration-200 relative disabled:cursor-not-allowed disabled:opacity-55",
                       sel
                         ? "border-tops-red bg-tops-red/5 shadow-ring-brand"
                         : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/40"
@@ -1162,6 +1572,11 @@ function TransportSection({
                       {overCap && (
                         <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
                           Excede
+                        </span>
+                      )}
+                      {!hasPrice && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
+                          A cotizar
                         </span>
                       )}
                     </div>
@@ -1216,7 +1631,7 @@ function TransportSection({
 
             {/* Bloque de configuración por cada vehículo seleccionado */}
             {data.transports.map((t) => {
-              const v = getVehicle(t.vehicle_slug);
+              const v = vehicles.find((vehicle) => vehicle.slug === t.vehicle_slug);
               if (!v) return null;
               return (
                 <div
@@ -1249,8 +1664,9 @@ function TransportSection({
                           type="button"
                           key={z.zone}
                           onClick={() => patchVehicle(t.vehicle_slug, { zone: z.zone })}
+                          disabled={z.price === null}
                           className={cn(
-                            "p-2.5 rounded-md border text-left transition-all duration-150",
+                            "p-2.5 rounded-md border text-left transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-55",
                             isSel
                               ? "border-tops-blue-900 bg-tops-blue-900 text-white"
                               : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/40"
@@ -1263,7 +1679,7 @@ function TransportSection({
                               isSel ? "text-white/85" : "text-fg-muted"
                             )}
                           >
-                            {z.price === null ? "A cotizar" : fmtCurrency(z.price)}
+                            {z.price === null ? "A cotizar" : fmtCurrency(z.price, currency)}
                           </div>
                         </button>
                       );
@@ -1422,6 +1838,7 @@ function CategorySection({
   qty,
   onToggle,
   onQty,
+  currency,
 }: {
   title: string;
   iconName: "user" | "forklift" | "package" | "bill" | "building";
@@ -1430,6 +1847,7 @@ function CategorySection({
   qty: Record<string, number>;
   onToggle: (slug: string) => void;
   onQty: (slug: string, qty: number) => void;
+  currency: PricingCurrency;
 }) {
   const selectedCount = items.filter((i) => selected.includes(i.slug)).length;
   const [open, setOpen] = useState<boolean>(selectedCount > 0);
@@ -1492,7 +1910,8 @@ function CategorySection({
               <button
                 type="button"
                 onClick={() => onToggle(s.slug)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                disabled={Boolean(s.requires_quote) && !isSel}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <div
                   className={cn(
@@ -1505,9 +1924,15 @@ function CategorySection({
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-fg-primary truncate">{s.label}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-[11px] font-mono text-tops-red font-bold tabular">
-                      {fmtCurrency(s.rate)} <span className="text-fg-muted font-sans font-normal">/ {unitLabel(s.unit)}</span>
-                    </span>
+                    {s.requires_quote || s.rate == null ? (
+                      <span className="text-[11px] text-status-warning font-bold">
+                        A cotizar · requiere precio particular vigente
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-mono text-tops-red font-bold tabular">
+                        {fmtCurrency(s.rate, currency)} <span className="text-fg-muted font-sans font-normal">/ {unitLabel(s.unit)}</span>
+                      </span>
+                    )}
                     {s.min_qty != null && s.min_qty > 1 && (
                       <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
                         Mín {s.min_qty} {unitLabel(s.unit)}
@@ -1515,7 +1940,7 @@ function CategorySection({
                     )}
                     {s.min_billing != null && s.min_billing > 0 && (
                       <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-status-warning/10 text-status-warning">
-                        Mín {fmtCurrency(s.min_billing)}
+                        Mín {fmtCurrency(s.min_billing, currency)}
                       </span>
                     )}
                   </div>
@@ -1549,10 +1974,12 @@ function ConceptoLibreSection({
   state,
   onToggle,
   onChange,
+  currency,
 }: {
   state: ConceptoLibre;
   onToggle: () => void;
   onChange: (patch: Partial<ConceptoLibre>) => void;
+  currency: PricingCurrency;
 }) {
   const [open, setOpen] = useState<boolean>(state.enabled);
   // Abrir si el concepto se habilita (incluye restauración de borrador).
@@ -1641,7 +2068,9 @@ function ConceptoLibreSection({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Precio neto sin IVA" required>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted text-sm font-mono">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted text-sm font-mono">
+                    {currency === "USD" ? "US$" : "$"}
+                  </span>
                   <input
                     className="input pl-7 tabular"
                     type="number"
@@ -1657,7 +2086,7 @@ function ConceptoLibreSection({
                   />
                 </div>
               </Field>
-              <Field label="Observaciones" help="Opcional">
+              <Field label="Motivo del precio manual" required help="Queda auditado en la OS">
                 <input
                   className="input"
                   placeholder="Detalle adicional…"
@@ -1671,7 +2100,7 @@ function ConceptoLibreSection({
                 <Icon name="check-circle" size={13} className="text-status-success shrink-0" />
                 <span>
                   Se facturará: <strong className="text-fg-primary">{state.label.trim()}</strong> ·{" "}
-                  <strong className="text-fg-brand tabular">{fmtCurrency(state.price)}</strong> neto + IVA
+                  <strong className="text-fg-brand tabular">{fmtCurrency(state.price, currency)}</strong> neto + IVA
                 </span>
               </div>
             )}
@@ -1695,10 +2124,12 @@ function BonificacionesSection({
   bonifiableLines,
   bonifications,
   onChange,
+  currency,
 }: {
   bonifiableLines: LineItem[];
   bonifications: Bonification[];
   onChange: (next: Bonification[]) => void;
+  currency: PricingCurrency;
 }) {
   // Sólo cuentan las bonificaciones cuyo destino sigue presente.
   const activeCount = bonifications.filter((b) =>
@@ -1808,7 +2239,7 @@ function BonificacionesSection({
                             {line.label}
                           </div>
                           <div className="text-[11px] text-fg-muted">
-                            Vendido: <span className="tabular">{fmtCurrency(line.subtotal)}</span>
+                            Vendido: <span className="tabular">{fmtCurrency(line.subtotal, currency)}</span>
                           </div>
                         </div>
                       </button>
@@ -1838,7 +2269,7 @@ function BonificacionesSection({
                             {b.type === "fixed" && (
                               <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted text-sm font-mono">
-                                  $
+                                  {currency === "USD" ? "US$" : "$"}
                                 </span>
                                 <input
                                   className="input h-9 py-0 pl-7 tabular w-36"
@@ -1859,10 +2290,10 @@ function BonificacionesSection({
                           <div className="flex items-center justify-between text-xs">
                             <span className="inline-flex items-center gap-1.5 text-status-success font-semibold">
                               <Icon name="check-circle" size={13} className="shrink-0" />
-                              Bonificación: −{fmtCurrency(amount)}
+                              Bonificación: −{fmtCurrency(amount, currency)}
                             </span>
                             <span className="text-fg-secondary">
-                              Subtotal: <strong className="text-fg-primary tabular">{fmtCurrency(net)}</strong>
+                              Subtotal: <strong className="text-fg-primary tabular">{fmtCurrency(net, currency)}</strong>
                             </span>
                           </div>
                         </div>
@@ -1887,10 +2318,12 @@ function BreakdownCard({
   lines,
   total,
   ivaEst,
+  currency,
 }: {
   lines: LineItem[];
   total: number;
   ivaEst: number;
+  currency: PricingCurrency;
 }) {
   return (
     <div className="mt-6 rounded-lg border border-stroke-soft bg-gradient-to-br from-tops-blue-900/5 to-tops-red/5 overflow-hidden">
@@ -1931,7 +2364,7 @@ function BreakdownCard({
                 <div className="text-[11px] text-fg-muted flex items-center gap-1.5 flex-wrap mt-0.5">
                   {!isBonif && (
                     <span>
-                      {ln.qty_effective} {unitLabel(ln.unit)} × {fmtCurrency(ln.rate)}
+                      {ln.qty_effective} {unitLabel(ln.unit)} × {fmtCurrency(ln.rate, currency)}
                     </span>
                   )}
                   {ln.min_applied && ln.min_reason && (
@@ -1952,7 +2385,9 @@ function BreakdownCard({
                   isBonif ? "text-status-success" : "text-fg-brand"
                 )}
               >
-                {isBonif ? `− ${fmtCurrency(Math.abs(ln.subtotal))}` : fmtCurrency(ln.subtotal)}
+                {isBonif
+                  ? `− ${fmtCurrency(Math.abs(ln.subtotal), currency)}`
+                  : fmtCurrency(ln.subtotal, currency)}
               </div>
             </div>
             );
@@ -1962,14 +2397,14 @@ function BreakdownCard({
 
       <div className="px-4 py-3 border-t border-stroke-soft bg-bg-surface flex items-center justify-between">
         <div className="text-xs text-fg-secondary">
-          IVA estimado (21%): <strong className="text-fg-primary">{fmtCurrency(ivaEst)}</strong>
+          IVA estimado (21%): <strong className="text-fg-primary">{fmtCurrency(ivaEst, currency)}</strong>
         </div>
         <div className="text-right">
           <div className="text-[10px] uppercase tracking-wider text-fg-muted font-bold">
             Total neto
           </div>
           <div className="text-2xl font-bold text-fg-brand tabular -tracking-[0.01em]">
-            {fmtCurrency(total)}
+            {fmtCurrency(total, currency)}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-fg-muted">+ IVA</div>
         </div>
@@ -1984,12 +2419,14 @@ function StepFirma({
   total,
   onConfirm,
   submitting,
+  currency,
 }: {
   data: WizardState;
   update: (p: Partial<WizardState>) => void;
   total: number;
   onConfirm: (sig: { data: string; hash: string }) => void;
   submitting: boolean;
+  currency: PricingCurrency;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [hasInk, setHasInk] = useState(false);
@@ -2180,7 +2617,7 @@ function StepFirma({
       <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center mt-6 pt-5 border-t border-stroke-soft">
         <div className="text-xs text-fg-secondary">
           Total estimado:{" "}
-          <strong className="text-fg-brand text-base tabular">{fmtCurrency(total)}</strong>
+          <strong className="text-fg-brand text-base tabular">{fmtCurrency(total, currency)}</strong>
         </div>
         <button
           type="button"
@@ -2210,11 +2647,13 @@ function SummaryCard({
   total,
   lines,
   operator,
+  currency,
 }: {
   data: WizardState;
   total: number;
   lines: LineItem[];
   operator?: Operator;
+  currency: PricingCurrency;
 }) {
   return (
     <div className="card p-5">
@@ -2262,7 +2701,9 @@ function SummaryCard({
               )}
             </span>
             <span className={cn("font-bold tabular shrink-0", isBonif && "text-status-success")}>
-              {isBonif ? `− ${fmtCurrency(Math.abs(ln.subtotal))}` : fmtCurrency(ln.subtotal)}
+              {isBonif
+                ? `− ${fmtCurrency(Math.abs(ln.subtotal), currency)}`
+                : fmtCurrency(ln.subtotal, currency)}
             </span>
           </div>
           );
@@ -2276,7 +2717,7 @@ function SummaryCard({
           </div>
           <div className="text-xs text-white/70">+ IVA</div>
         </div>
-        <div className="text-2xl font-bold tabular">{fmtCurrency(total)}</div>
+        <div className="text-2xl font-bold tabular">{fmtCurrency(total, currency)}</div>
       </div>
 
       {data.observ && (
@@ -2324,15 +2765,15 @@ function Field({
   );
 }
 
-function initial(firstClient?: Client): WizardState {
+function initial(firstClient?: OrderClientOption): WizardState {
   return {
     client_id: firstClient?.id ?? null,
     razon: firstClient?.razon ?? "",
     cuit: firstClient?.cuit ?? "",
-    domicilio: firstClient?.domicilio ?? "",
-    telefono: firstClient?.telefono ?? "",
-    contacto: firstClient?.contacto ?? "",
-    email: firstClient?.email ?? "",
+    domicilio: "",
+    telefono: "",
+    contacto: "",
+    email: "",
     depot: "MAGALDI",
     operator_id: "",
     services: [],
@@ -2347,7 +2788,7 @@ function initial(firstClient?: Client): WizardState {
     units: 0,
     km: 0,
     observ: "",
-    signer_name: firstClient?.contacto ?? "",
+    signer_name: "",
     signer_doc: "",
     signature_data: null,
     signature_hash: null,
@@ -2355,4 +2796,3 @@ function initial(firstClient?: Client): WizardState {
     geo_lng: null,
   };
 }
-

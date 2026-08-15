@@ -10,9 +10,9 @@
     "alcance": "lectura read-only del ledger productivo; NO incluye estado del esquema"
   },
   "conteos": {
-    "ejecutables_en_catalogo": 202,
+    "ejecutables_en_catalogo": 209,
     "observadas_en_ledger": 98,
-    "inferidas_no_registradas": 104,
+    "inferidas_no_registradas": 111,
     "filas_autorizadas_a_escritura": 0,
     "sondas_ejecutadas": 0
   },
@@ -20,7 +20,7 @@
   "escritura": {
     "sentencia_prevista": "insert into supabase_migrations.schema_migrations(version,name) values (<ledger_version>,<ledger_name>) on conflict (version) do nothing",
     "idempotencia": "on conflict (version) do nothing → una segunda corrida escribe 0 filas",
-    "precondicion": "cada fila exige su sonda ejecutada y autorizada; hoy: 0 de 202",
+    "precondicion": "cada fila exige su sonda ejecutada y autorizada; hoy: 0 de 209",
     "ejecutada": false
   },
   "filas": [
@@ -1635,6 +1635,62 @@
     {
       "ledger_version": "L00215",
       "ledger_name": "0239a_nexus_link_revoke_trigger_execute",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00217",
+      "ledger_name": "0240_clientes_permission_module",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00219",
+      "ledger_name": "0241_clients_native_master",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00221",
+      "ledger_name": "0242_clients_atomic_mutations",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00223",
+      "ledger_name": "0243_purchase_order_price_lifecycle",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00225",
+      "ledger_name": "0244_service_order_pricing_lifecycle",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00227",
+      "ledger_name": "20260815002748_service_unit_m2",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00229",
+      "ledger_name": "20260815002807_service_tariff_m2_rates",
       "estado_ledger": "INFERRED_NOT_REGISTERED",
       "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
       "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",

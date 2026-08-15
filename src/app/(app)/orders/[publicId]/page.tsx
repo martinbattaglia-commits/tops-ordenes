@@ -5,14 +5,16 @@ import { Icon } from "@/components/Icon";
 import { StatusBadge } from "@/components/StatusBadge";
 import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import { getOrder } from "@/lib/data/orders";
+import { canAdjustServicePricing } from "@/lib/data/service-pricing";
 import { env } from "@/lib/env";
 import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
 import { OrderActions } from "./OrderActions";
 import { PdfPreview } from "./PdfPreview";
+import { adjustBillingAction, recordFulfillmentAction } from "./pricing-actions";
 
 interface Props {
   params: { publicId: string };
-  searchParams?: { created?: string };
+  searchParams?: { created?: string; pricing?: string; message?: string };
 }
 
 export async function generateMetadata({ params }: Props) {
@@ -21,7 +23,10 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function OrderDetailPage({ params, searchParams }: Props) {
-  const order = await getOrder(params.publicId);
+  const [order, canAdjustPricing] = await Promise.all([
+    getOrder(params.publicId),
+    canAdjustServicePricing(),
+  ]);
   if (!order) notFound();
 
   const publicUrl = `${env.app.url}/orders/${order.public_id}`;
@@ -35,6 +40,15 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
   return (
     <div className="pb-10">
       {searchParams?.created === "1" && <SuccessBanner publicId={order.public_id} />}
+      {searchParams?.message && (
+        <div className={`border-y px-4 lg:px-8 py-3 text-sm ${
+          searchParams.pricing === "updated"
+            ? "border-status-success/20 bg-status-success/10 text-status-success"
+            : "border-tops-red/20 bg-tops-red/5 text-tops-red"
+        }`}>
+          {searchParams.message}
+        </div>
+      )}
 
       <div className="px-4 lg:px-8 pt-4 lg:pt-6 flex flex-wrap items-center gap-2">
         <Link href="/orders" className="btn btn-ghost btn-sm">
@@ -124,7 +138,9 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
         </div>
 
         {/* Right column — PDF Preview */}
-        <div>
+        <div className="space-y-5">
+          <PricingLifecycle order={order} canAdjust={canAdjustPricing} />
+          <div>
           <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
             <div>
               <div className="eyebrow-tiny">Vista previa · A4</div>
@@ -139,10 +155,148 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
             </Link>
           </div>
           <PdfPreview order={order} qrSvg={qrSvg} />
+          </div>
         </div>
       </div>
     </div>
   );
+}
+
+function PricingLifecycle({
+  order,
+  canAdjust,
+}: {
+  order: NonNullable<Awaited<ReturnType<typeof getOrder>>>;
+  canAdjust: boolean;
+}) {
+  const currency = order.pricing_currency;
+  return (
+    <div className="card overflow-hidden">
+      <div className="card-pad border-b border-stroke-soft flex flex-wrap items-start gap-3">
+        <div className="flex-1">
+          <div className="eyebrow-tiny">Ciclo económico inmutable</div>
+          <div className="text-base font-bold text-fg-brand">Solicitado · prestado · facturado</div>
+          <div className="text-xs text-fg-muted mt-1">
+            Moneda del snapshot: {currency ?? "legado sin moneda demostrable"}
+          </div>
+        </div>
+        <Link href="/orders/tarifas" className="btn btn-ghost btn-sm">Ver tarifario</Link>
+      </div>
+
+      <div className="grid grid-cols-3 gap-px bg-stroke-soft border-b border-stroke-soft">
+        <AmountCard label="Emitido" value={order.issued_total ?? order.total} currency={currency} />
+        <AmountCard label="Prestado" value={order.provided_total} currency={currency} pending="Sin registrar" />
+        <AmountCard label="Facturado" value={order.billed_total} currency={currency} pending="Sin registrar" />
+      </div>
+
+      <div className="divide-y divide-stroke-soft">
+        {(order.services ?? []).map((line, index) => (
+          <div key={line.id ?? `${line.service_slug}-${index}`} className="p-4">
+            <div className="flex flex-wrap justify-between gap-2 mb-3">
+              <div>
+                <div className="text-sm font-bold text-fg-primary">{line.label}</div>
+                <div className="text-[11px] text-fg-muted">
+                  Solicitado {line.qty_requested ?? line.qty} {line.unit} · {line.price_source ?? "legacy"}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-bold text-fg-brand">
+                  {formatSnapshotMoney(line.subtotal_requested ?? line.subtotal, line.currency_snapshot ?? currency)}
+                </div>
+                <div className="text-[11px] text-fg-muted">snapshot emitido</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs mb-3">
+              <div className="rounded-lg bg-neutral-50 border border-stroke-soft p-3">
+                <div className="font-semibold text-fg-secondary">Prestación registrada</div>
+                <div className="mt-1 tabular">
+                  {line.qty_provided == null ? "Pendiente" : `${line.qty_provided} ${line.unit}`} · {formatSnapshotMoney(line.subtotal_provided, line.currency_snapshot ?? currency)}
+                </div>
+              </div>
+              <div className="rounded-lg bg-neutral-50 border border-stroke-soft p-3">
+                <div className="font-semibold text-fg-secondary">Facturación final</div>
+                <div className="mt-1 tabular">
+                  {line.qty_billed == null ? "Pendiente" : `${line.qty_billed} ${line.unit}`} · {formatSnapshotMoney(line.subtotal_billed, line.currency_snapshot ?? currency)}
+                </div>
+              </div>
+            </div>
+
+            {canAdjust && line.id && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <form action={recordFulfillmentAction} className="rounded-lg border border-stroke-soft p-3 space-y-2">
+                  <div className="text-xs font-bold text-fg-brand">Registrar prestación</div>
+                  <input type="hidden" name="public_id" value={order.public_id} />
+                  <input type="hidden" name="line_id" value={line.id} />
+                  <input name="qty_provided" type="number" min="0" step="0.01" required defaultValue={line.qty_provided ?? line.qty_requested ?? line.qty} className="input w-full" aria-label="Cantidad prestada" />
+                  <input name="reason" required minLength={3} className="input w-full" placeholder="Motivo / evidencia operativa" />
+                  <button className="btn btn-ghost btn-sm w-full" type="submit">Guardar prestación</button>
+                </form>
+                <form action={adjustBillingAction} className="rounded-lg border border-stroke-soft p-3 space-y-2">
+                  <div className="text-xs font-bold text-fg-brand">
+                    {line.price_source === "bonification" ? "Autorizar magnitud de bonificación" : "Autorizar facturación"}
+                  </div>
+                  <input type="hidden" name="public_id" value={order.public_id} />
+                  <input type="hidden" name="line_id" value={line.id} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input name="qty_billed" type="number" min="0" step="0.01" required defaultValue={line.qty_billed ?? line.qty_provided ?? line.qty_requested ?? line.qty} className="input w-full" aria-label="Cantidad facturada" />
+                    <input
+                      name="billed_amount"
+                      type="number"
+                      min="0"
+                      max={line.price_source === "bonification" ? Math.abs(line.subtotal_requested ?? line.subtotal) : undefined}
+                      step="0.01"
+                      required
+                      defaultValue={line.price_source === "bonification"
+                        ? Math.abs(line.subtotal_billed ?? line.subtotal_requested ?? line.subtotal)
+                        : (line.subtotal_billed ?? line.subtotal_provided ?? line.subtotal_requested ?? line.subtotal)}
+                      className="input w-full"
+                      aria-label={line.price_source === "bonification" ? "Magnitud de bonificación facturada" : "Importe facturado"}
+                    />
+                  </div>
+                  <input name="reason" required minLength={3} className="input w-full" placeholder="Motivo y autorización" />
+                  <button className="btn btn-primary btn-sm w-full" type="submit">Guardar facturación</button>
+                </form>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {!canAdjust && (
+        <div className="px-4 py-3 border-t border-stroke-soft text-xs text-fg-muted">
+          La actualización de prestación y facturación requiere autorización de Servicios.
+        </div>
+      )}
+      {(order.service_order_events?.length ?? 0) > 0 && (
+        <details className="border-t border-stroke-soft px-4 py-3">
+          <summary className="text-xs font-bold text-fg-brand cursor-pointer">Ledger de eventos ({order.service_order_events?.length})</summary>
+          <div className="mt-3 space-y-2">
+            {[...(order.service_order_events ?? [])].sort((a,b) => a.id-b.id).map((event) => (
+              <div key={event.id} className="text-[11px] text-fg-secondary">
+                <span className="font-mono">#{event.id}</span> · {event.event_kind} · {fmtDateTime(event.created_at)}{event.reason ? ` · ${event.reason}` : ""}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function AmountCard({ label, value, currency, pending = "Pendiente" }: { label: string; value?: number | null; currency?: "ARS" | "USD"; pending?: string }) {
+  return (
+    <div className="bg-white p-3 text-center">
+      <div className="text-[10px] uppercase tracking-wider font-bold text-fg-muted">{label}</div>
+      <div className="text-sm font-bold text-fg-brand mt-1">{value == null ? pending : formatSnapshotMoney(value, currency)}</div>
+    </div>
+  );
+}
+
+function formatSnapshotMoney(value: number | null | undefined, currency?: "ARS" | "USD"): string {
+  if (value == null) return "Pendiente";
+  if (!currency) return `${Number(value).toLocaleString("es-AR")} · moneda no verificada`;
+  return new Intl.NumberFormat("es-AR", { style: "currency", currency }).format(Number(value));
 }
 
 function SuccessBanner({ publicId }: { publicId: string }) {
