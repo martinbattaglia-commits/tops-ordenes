@@ -64,6 +64,7 @@ describe("H2 · el resultado que llega al cliente no lleva más que estado y un 
     const bytes = new Uint8Array([1, 2, 3]);
     const ports = {
       state: {
+        read: async () => ({ status: "sending" as const, wamid: null, auditedWamid: null }),
         claimSending: async () => true,
         sealSent: async () => true,
         stamp: async () => true,

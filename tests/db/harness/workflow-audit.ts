@@ -56,7 +56,7 @@ export const EXPECTED_WORKFLOW = {
       "timeout-minutes": 20,
       services: {
         postgres: {
-          image: "postgres:17",
+          image: "postgis/postgis:17-3.5",
           env: { POSTGRES_USER: "postgres", POSTGRES_PASSWORD: "postgres", POSTGRES_DB: "postgres" },
           ports: ["5432:5432"],
           options:

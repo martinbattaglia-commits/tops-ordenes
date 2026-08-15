@@ -101,8 +101,12 @@ export interface ReplyPorts {
     /** `null` SÓLO si la fila existe y no tiene estado. Un error debe lanzar. */
     read(messageId: string): Promise<OutboundStateSnapshot>;
     stamp(messageId: string, patch: StampPatch): Promise<boolean>;
-    /** CAS a `sending`. `true` sólo para el ganador. Un error debe lanzar. */
-    claimSending(messageId: string): Promise<boolean>;
+    /**
+     * CAS a `sending`. `true` sólo para el ganador. Un error debe lanzar.
+     * `allowFailed` queda reservado al reintento manual de media: el texto
+     * conserva su contrato de un `clientMsgId` por intento y nunca lo solicita.
+     */
+    claimSending(messageId: string, options?: { allowFailed?: boolean }): Promise<boolean>;
     /**
      * Sello final con precondición: exige estado `sending` y
      * `external_msg_id` nulo. `false` si no afectó exactamente una fila.

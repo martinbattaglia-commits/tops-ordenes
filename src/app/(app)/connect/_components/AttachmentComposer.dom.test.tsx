@@ -236,6 +236,28 @@ describe("H2 (FASE B) · el desenlace de WhatsApp decide la burbuja, no el guard
     expect(botonPorTexto("Reintentar")).toBeDefined();
   });
 
+  it("reintento WhatsApp reutiliza el adjunto finalizado: una subida, un path y un mensaje", async () => {
+    finalize
+      .mockResolvedValueOnce({
+        ok: true, messageId: "m-1", attachmentId: "a-1", fileName: "remito.pdf",
+        whatsapp: { state: "failed", message: "Meta rechazó antes de aceptar." },
+      })
+      .mockResolvedValueOnce({
+        ok: true, messageId: "m-1", attachmentId: "a-1", fileName: "remito.pdf",
+        whatsapp: { state: "sent" },
+      });
+    await montar({ kind: "whatsapp" });
+    await elegir(archivo("remito.pdf"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    await act(async () => { botonPorTexto("Reintentar")?.click(); });
+
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(subir).toHaveBeenCalledTimes(1);
+    expect(finalize).toHaveBeenCalledTimes(2);
+    const intentos = finalize.mock.calls.map((c) => c[0] as { path: string; clientMsgId: string });
+    expect(intentos[1]).toMatchObject({ path: intentos[0].path, clientMsgId: intentos[0].clientMsgId });
+  });
+
   it("whatsapp.state='reconciliation_required': NO se pinta como enviado, NO ofrece Reintentar, y no se autodescarta", async () => {
     finalize.mockResolvedValue({
       ok: true, messageId: "m-1", attachmentId: "a-1", fileName: "remito.pdf",
@@ -251,6 +273,20 @@ describe("H2 (FASE B) · el desenlace de WhatsApp decide la burbuja, no el guard
     // reintentar podría duplicarlo del lado del cliente de WhatsApp.
     expect(botonPorTexto("Reintentar")).toBeUndefined();
     // Y sigue en la cola: no desapareció como los envíos exitosos.
+    expect(host.textContent).toContain("remito.pdf");
+  });
+
+  it("already_claimed NO se interpreta como éxito: queda visible y el reintento vuelve al CAS", async () => {
+    finalize.mockResolvedValue({
+      ok: true, messageId: "m-1", attachmentId: "a-1", fileName: "remito.pdf",
+      whatsapp: { state: "already_claimed", message: "Otro intento sigue en curso." },
+    });
+    await montar({ kind: "whatsapp" });
+    await elegir(archivo("remito.pdf"));
+    await act(async () => { botonPorTexto("Enviar")?.click(); });
+    expect(host.textContent).not.toContain("· Enviado");
+    expect(host.textContent).toContain("Otro intento sigue en curso.");
+    expect(botonPorTexto("Reintentar")).toBeDefined();
     expect(host.textContent).toContain("remito.pdf");
   });
 

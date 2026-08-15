@@ -14,11 +14,11 @@
  * ─── EL CAS ES LO QUE IMPIDE EL DUPLICADO ─────────────────────────────────
  *
  * `claimSending` es una comparación-e-intercambio: sólo UNA llamada consigue
- * mover el mensaje a `sending`. Cualquier otra —un reintento del operador, un
- * doble clic, dos pestañas abiertas, un worker que corre dos veces— pierde y
- * devuelve `already_claimed` SIN tocar Meta. Es la diferencia entre reintentar
- * y duplicar: en WhatsApp un duplicado le llega al cliente y no se puede
- * retirar.
+ * mover el mensaje a `sending`. Un reintento manual puede reabrir únicamente
+ * `failed` sin wamid; `sent`, `delivered`, `read` y
+ * `reconciliation_required` siguen cerrados. Si el CAS se pierde, se relee el
+ * estado real antes de responder: `already_claimed` nunca se usa para disfrazar
+ * un `failed` durable.
  *
  * ─── EL ORDEN IMPORTA ──────────────────────────────────────────────────────
  *
@@ -29,6 +29,7 @@
  */
 
 import type { MetaSendOutcome } from "./transport";
+import type { ReplyPorts } from "./reply-core";
 import {
   checkWhatsappMedia, type MetaMediaKind, type MetaMediaTransport,
 } from "./media-transport";
@@ -36,23 +37,14 @@ import { necesitaRemuxParaWhatsapp, remuxWebmOpusAOgg } from "./opus-remux";
 
 export type MediaSendResult =
   | { ok: true; state: "sent"; wamid: string }
-  /** Otro intento ya tiene el mensaje: NO se reenvía. No es un error. */
-  | { ok: true; state: "already_claimed" }
+  /** Otro intento sigue en curso: no se reenvía ni se informa éxito. */
+  | { ok: false; state: "already_claimed"; message: string }
   | { ok: false; state: "failed"; message: string }
   /** Pudo haber llegado. Jamás se reintenta solo. */
   | { ok: false; state: "reconciliation_required"; message: string };
 
 export interface MediaSendPorts {
-  state: {
-    /** CAS a `sending`. `true` sólo para el ganador. Un error debe lanzar. */
-    claimSending(messageId: string): Promise<boolean>;
-    /** Sello final con precondición de `sending` y wamid nulo. */
-    sealSent(messageId: string, wamid: string): Promise<boolean>;
-    stamp(
-      messageId: string,
-      patch: { status: "failed" | "reconciliation_required"; error?: string },
-    ): Promise<boolean>;
-  };
+  state: Pick<ReplyPorts["state"], "read" | "claimSending" | "sealSent" | "stamp">;
   /** Bytes del objeto ya validado por firma. `null` si no está. */
   objects: { read(bucket: string, path: string): Promise<Uint8Array | null> };
   transport: MetaMediaTransport;
@@ -111,8 +103,45 @@ export async function sendWhatsappMedia(
   }
 
   // ─── EL CAS ───────────────────────────────────────────────────────────────
-  const gane = await ports.state.claimSending(input.messageId);
-  if (!gane) return { ok: true, state: "already_claimed" };
+  const gane = await ports.state.claimSending(input.messageId, { allowFailed: true });
+  if (!gane) {
+    // La derrota del CAS no describe por sí sola el estado. Releer evita el
+    // defecto original: `failed` se interpretaba como éxito sin tocar Meta.
+    const actual = await ports.state.read(input.messageId);
+    if (actual.status === "failed") {
+      return { ok: false, state: "failed", message: "El envío anterior falló y todavía no pudo reclamarse." };
+    }
+    if (actual.status === "reconciliation_required") {
+      return {
+        ok: false,
+        state: "reconciliation_required",
+        message: "No se pudo confirmar el envío. No lo reenvíes: puede haber llegado.",
+      };
+    }
+    if (actual.status === "sent" || actual.status === "delivered" || actual.status === "read") {
+      // La fila ya prueba aceptación de Meta. Sin wamid, la inconsistencia exige
+      // reconciliar y nunca habilita un segundo egress.
+      return actual.wamid
+        ? { ok: true, state: "sent", wamid: actual.wamid }
+        : {
+            ok: false,
+            state: "reconciliation_required",
+            message: "El mensaje figura enviado sin identificador de Meta. No lo reenvíes.",
+          };
+    }
+    if (actual.status === "sending") {
+      return {
+        ok: false,
+        state: "already_claimed",
+        message: "Otro intento ya está en curso. Esperá su resultado antes de reintentar.",
+      };
+    }
+    return {
+      ok: false,
+      state: "failed",
+      message: "No se pudo reclamar el envío de forma verificable.",
+    };
+  }
 
   const fallar = async (message: string): Promise<MediaSendResult> => {
     // `failed` deja el intento REINTENTABLE: nada salió hacia el cliente.

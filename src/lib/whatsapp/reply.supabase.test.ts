@@ -390,6 +390,23 @@ describe("20-22 · claimSending", () => {
     expect(upd.filters).toHaveLength(3);
   });
 
+  it("media manual: `failed` sin wamid es reclamable sólo con autorización explícita", async () => {
+    const f = makeFactory(casProgram("failed"));
+    expect(await f.ports.state.claimSending(MSG, { allowFailed: true })).toBe(true);
+    const upd = f.calls.find((c) => c.op === "update")!;
+    expect(upd.filters).toEqual([
+      { kind: "eq", column: "id", value: MSG },
+      { kind: "eq", column: "meta->wa->>status", value: "failed" },
+      { kind: "is", column: "external_msg_id", value: null },
+    ]);
+  });
+
+  it("texto: `failed` sigue cerrado si no se autoriza el reintento manual", async () => {
+    const f = makeFactory(casProgram("failed"));
+    expect(await f.ports.state.claimSending(MSG)).toBe(false);
+    expect(f.calls.some((c) => c.op === "update")).toBe(false);
+  });
+
   /**
    * WA-7R · A · MUTANTE DIRIGIDO al filtro `external_msg_id IS NULL`.
    *
@@ -423,7 +440,7 @@ describe("20-22 · claimSending", () => {
     expect(upd.filters).toContainEqual({ kind: "is", column: "external_msg_id", value: null });
   });
 
-  it.each(["sending", "sent", "delivered", "read", "failed", "reconciliation_required"])(
+  it.each(["sending", "sent", "delivered", "read", "reconciliation_required"])(
     "estado %s NO es reclamable: cero UPDATE",
     async (status) => {
       const f = makeFactory(casProgram(status));

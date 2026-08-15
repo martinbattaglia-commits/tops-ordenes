@@ -7,6 +7,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { prepararParaWhatsapp, sendWhatsappMedia, type MediaSendPorts } from "./media-send-core";
+import type { OutboundStateSnapshot } from "./reply-core";
 
 const ENTRADA = {
   messageId: "m-1",
@@ -25,8 +26,11 @@ function puertos(over: Partial<{
   upload: unknown;
   send: unknown;
   sandbox: boolean;
+  state: OutboundStateSnapshot;
 }> = {}) {
   const claimSending = vi.fn(async () => over.claimSending ?? true);
+  const readState = vi.fn(async (): Promise<OutboundStateSnapshot> =>
+    over.state ?? { status: "sending", wamid: null, auditedWamid: null });
   const sealSent = vi.fn(async () => over.sealSent ?? true);
   const stamp = vi.fn(async () => true);
   const uploadMedia = vi.fn(async (_i: { bytes: Uint8Array; mimeType: string; fileName: string }) =>
@@ -35,12 +39,12 @@ function puertos(over: Partial<{
     (over.send ?? { kind: "accepted", wamid: "wamid.OK" }) as never);
   const read = vi.fn(async () => (over.bytes === undefined ? new Uint8Array([1, 2, 3]) : over.bytes));
   const ports: MediaSendPorts = {
-    state: { claimSending, sealSent, stamp },
+    state: { read: readState, claimSending, sealSent, stamp },
     objects: { read },
     transport: { uploadMedia, sendMedia },
     sandbox: { isAllowed: () => over.sandbox ?? true },
   };
-  return { ports, claimSending, sealSent, stamp, uploadMedia, sendMedia, read };
+  return { ports, readState, claimSending, sealSent, stamp, uploadMedia, sendMedia, read };
 }
 
 describe("el CAS decide quién envía", () => {
@@ -50,16 +54,58 @@ describe("el CAS decide quién envía", () => {
     expect(r).toEqual({ ok: true, state: "sent", wamid: "wamid.OK" });
     expect(p.uploadMedia).toHaveBeenCalledTimes(1);
     expect(p.sealSent).toHaveBeenCalledWith("m-1", "wamid.OK");
+    expect(p.claimSending).toHaveBeenCalledWith("m-1", { allowFailed: true });
   });
 
   it("el PERDEDOR no toca Meta: ni sube ni envía", async () => {
     const p = puertos({ claimSending: false });
     const r = await sendWhatsappMedia(ENTRADA, p.ports);
-    expect(r).toEqual({ ok: true, state: "already_claimed" });
+    expect(r).toEqual({
+      ok: false,
+      state: "already_claimed",
+      message: "Otro intento ya está en curso. Esperá su resultado antes de reintentar.",
+    });
     expect(p.uploadMedia).not.toHaveBeenCalled();
     expect(p.sendMedia).not.toHaveBeenCalled();
-    // Perder no es un error: el mensaje ya está saliendo por el otro intento.
+    // Perder no acredita éxito: el mensaje sigue en curso y la UI no debe ocultarlo.
     expect(p.stamp).not.toHaveBeenCalled();
+  });
+
+  it("un CAS perdido relee `failed`: nunca lo disfraza de already_claimed", async () => {
+    const p = puertos({
+      claimSending: false,
+      state: { status: "failed", wamid: null, auditedWamid: null },
+    });
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r).toMatchObject({ ok: false, state: "failed" });
+    expect(p.readState).toHaveBeenCalledWith("m-1");
+    expect(p.uploadMedia).not.toHaveBeenCalled();
+    expect(p.sendMedia).not.toHaveBeenCalled();
+  });
+
+  it.each(["sent", "delivered", "read"] as const)(
+    "%s con wamid nunca reenvía y devuelve el sello existente",
+    async (status) => {
+      const p = puertos({
+        claimSending: false,
+        state: { status, wamid: "wamid.EXISTENTE", auditedWamid: null },
+      });
+      const r = await sendWhatsappMedia(ENTRADA, p.ports);
+      expect(r).toEqual({ ok: true, state: "sent", wamid: "wamid.EXISTENTE" });
+      expect(p.uploadMedia).not.toHaveBeenCalled();
+      expect(p.sendMedia).not.toHaveBeenCalled();
+    },
+  );
+
+  it("reconciliation_required nunca reenvía ni se traduce a éxito", async () => {
+    const p = puertos({
+      claimSending: false,
+      state: { status: "reconciliation_required", wamid: null, auditedWamid: null },
+    });
+    const r = await sendWhatsappMedia(ENTRADA, p.ports);
+    expect(r).toMatchObject({ ok: false, state: "reconciliation_required" });
+    expect(p.uploadMedia).not.toHaveBeenCalled();
+    expect(p.sendMedia).not.toHaveBeenCalled();
   });
 
   it("se reclama ANTES de leer y subir el binario", async () => {
@@ -116,6 +162,45 @@ describe("fallos deterministas dejan el intento REINTENTABLE", () => {
     const r = await sendWhatsappMedia({ ...ENTRADA, mimeType: "image/gif" }, p.ports);
     expect(r.ok).toBe(false);
     expect(p.uploadMedia).not.toHaveBeenCalled();
+  });
+
+  it("un `failed` durable se reabre una vez, acepta Meta y queda sent con su wamid", async () => {
+    let state: OutboundStateSnapshot = { status: "failed", wamid: null, auditedWamid: null };
+    const sendMedia = vi.fn(async () => ({ kind: "accepted" as const, wamid: "wamid.RETRY" }));
+    const ports: MediaSendPorts = {
+      state: {
+        read: async () => state,
+        claimSending: async (_id, options) => {
+          if (state.status !== "failed" || options?.allowFailed !== true || state.wamid) return false;
+          state = { ...state, status: "sending" };
+          return true;
+        },
+        sealSent: async (_id, wamid) => {
+          if (state.status !== "sending" || state.wamid) return false;
+          state = { ...state, status: "sent", wamid };
+          return true;
+        },
+        stamp: async (_id, patch) => {
+          state = { ...state, status: patch.status };
+          return true;
+        },
+      },
+      objects: { read: async () => new Uint8Array([1, 2, 3]) },
+      transport: {
+        uploadMedia: async () => ({ kind: "uploaded", mediaId: "media.RETRY" }),
+        sendMedia,
+      },
+      sandbox: { isAllowed: () => true },
+    };
+
+    const retry = await sendWhatsappMedia(ENTRADA, ports);
+    expect(retry).toEqual({ ok: true, state: "sent", wamid: "wamid.RETRY" });
+    expect(state).toMatchObject({ status: "sent", wamid: "wamid.RETRY" });
+    expect(sendMedia).toHaveBeenCalledTimes(1); // exactamente una llamada nueva a Meta
+
+    const replay = await sendWhatsappMedia(ENTRADA, ports);
+    expect(replay).toEqual({ ok: true, state: "sent", wamid: "wamid.RETRY" });
+    expect(sendMedia).toHaveBeenCalledTimes(1); // sent nunca vuelve a salir
   });
 });
 

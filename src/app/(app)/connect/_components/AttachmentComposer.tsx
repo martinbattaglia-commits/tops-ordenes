@@ -42,11 +42,10 @@
  *
  * ─── REINTENTAR NO PUEDE DUPLICAR ─────────────────────────────────────────
  *
- * El reintento conserva el `client_msg_id` del lote y estrena una subida nueva.
- * Si el primer intento en realidad llegó y lo que falló fue la respuesta, el
- * servidor encuentra el mensaje y lo adopta en vez de publicar otro. En WhatsApp
- * esto no es una comodidad: un duplicado le llega al cliente y no hay forma de
- * retirarlo.
+ * El reintento conserva el `client_msg_id` y, si el adjunto ya quedó finalizado
+ * en Connect, reutiliza también su `storage_path`: no crea otra subida ni otra
+ * fila de adjunto. El servidor adopta el mismo mensaje y el CAS decide si el
+ * estado permite una nueva llamada a Meta.
  *
  * ─── LA BARRA DE PROGRESO QUE NO ESTÁ ─────────────────────────────────────
  *
@@ -102,6 +101,11 @@ interface EnCola {
    * chat interno, donde el lote entero comparte uno solo.
    */
   clientMsgIdPropio?: string;
+  /**
+   * Path ya validado, ligado y visible en Connect. Sólo se conserva cuando el
+   * guardado terminó y el egress de WhatsApp falló de forma reintentable.
+   */
+  finalizedPath?: string;
 }
 
 export interface AttachmentComposerProps {
@@ -196,18 +200,22 @@ export function AttachmentComposer({
     if (enVuelo.current.has(item.key)) return;
     enVuelo.current.add(item.key);
     try {
-      marcar(item.key, { estado: "subiendo", error: undefined });
-      const prep = await prepareAttachmentUploadAction({ conversationId });
-      if (!prep.ok) { marcar(item.key, { estado: "error", error: prep.message }); return; }
+      let path = item.finalizedPath;
+      if (!path) {
+        marcar(item.key, { estado: "subiendo", error: undefined });
+        const prep = await prepareAttachmentUploadAction({ conversationId });
+        if (!prep.ok) { marcar(item.key, { estado: "error", error: prep.message }); return; }
 
-      const sb = createClient();
-      if (!sb) { marcar(item.key, { estado: "error", error: "Demo: adjuntos no disponibles." }); return; }
-      const { error: upErr } = await sb.storage
-        .from("connect-files")
-        .uploadToSignedUrl(prep.path, prep.token, item.file, {
-          contentType: item.file.type || "application/octet-stream",
-        });
-      if (upErr) { marcar(item.key, { estado: "error", error: `Subida: ${upErr.message}` }); return; }
+        const sb = createClient();
+        if (!sb) { marcar(item.key, { estado: "error", error: "Demo: adjuntos no disponibles." }); return; }
+        const { error: upErr } = await sb.storage
+          .from("connect-files")
+          .uploadToSignedUrl(prep.path, prep.token, item.file, {
+            contentType: item.file.type || "application/octet-stream",
+          });
+        if (upErr) { marcar(item.key, { estado: "error", error: `Subida: ${upErr.message}` }); return; }
+        path = prep.path;
+      }
 
       marcar(item.key, { estado: "verificando" });
       // En WhatsApp, ESTE archivo es su propio mensaje (ver docblock del
@@ -224,7 +232,7 @@ export function AttachmentComposer({
       }
       const fin = await finalizeAttachmentAction({
         conversationId,
-        path: prep.path,
+        path,
         fileName: item.file.name,
         // El pie viaja SIEMPRE. El servidor lo usa sólo al crear el mensaje, así
         // que se publica una vez; mandarlo únicamente con el primer archivo
@@ -238,19 +246,25 @@ export function AttachmentComposer({
       if (!fin.ok) { marcar(item.key, { estado: "error", error: fin.message }); return; }
 
       // H2 (FASE B): en WhatsApp, `whatsapp` es el desenlace REAL del envío a
-      // Meta. `undefined` (chat interno) y `sent`/`already_claimed` son éxito
-      // pleno; `failed` es un error retryable más; `reconciliation_required`
-      // NUNCA se reintenta solo — ver el docblock de `EstadoAdjunto`.
+      // Meta. `undefined` (chat interno) y `sent` son éxito pleno. Un
+      // `already_claimed` sólo informa una carrera: queda visible como error
+      // verificable y otro clic vuelve a pasar por el CAS, nunca directo a Meta.
+      // `reconciliation_required` NUNCA se reintenta — ver `EstadoAdjunto`.
       if (fin.whatsapp?.state === "reconciliation_required") {
         marcar(item.key, {
           estado: "incierto",
-          error: fin.whatsapp.message ?? "No se sabe si WhatsApp lo recibió. No lo reintentes.",
+          error: fin.whatsapp.message ?? "El envío no está confirmado. No lo reintentes.",
+          finalizedPath: path,
         });
         onSent?.();
         return; // sin autodescarte: el operador tiene que verlo.
       }
-      if (fin.whatsapp?.state === "failed") {
-        marcar(item.key, { estado: "error", error: fin.whatsapp.message ?? "No se pudo enviar por WhatsApp." });
+      if (fin.whatsapp?.state === "failed" || fin.whatsapp?.state === "already_claimed") {
+        marcar(item.key, {
+          estado: "error",
+          error: fin.whatsapp.message ?? "No se pudo enviar por WhatsApp.",
+          finalizedPath: path,
+        });
         return;
       }
 

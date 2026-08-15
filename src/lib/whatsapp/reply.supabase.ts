@@ -48,7 +48,7 @@ export const WA_STATUS_SOURCE_SERVER = "server" as const;
 export const CLAIM_COLUMNS =
   "id, conversation_id, author_profile_id, client_msg_id, body, external_msg_id";
 
-/** Estados desde los que un egress NUEVO es admisible. `failed` ya no lo es. */
+/** Estados desde los que un egress NUEVO es admisible sin autorización adicional. */
 const CLAIMABLE: Array<WaOutboundState | null> = [null, "queued"];
 
 /**
@@ -495,12 +495,17 @@ export function createSupabaseReplyPorts(deps: ReplyPortsDeps): ReplyPorts {
         };
       },
 
-      async claimSending(messageId) {
+      async claimSending(messageId, options) {
         if (!admin) throw new Error("state_unavailable");
         const meta = await readMeta(messageId); // lanza ante error o ausencia
         const wa = ((meta.wa ?? {}) as Record<string, unknown>) ?? {};
         const current = (wa.status as WaOutboundState | undefined) ?? null;
-        if (!CLAIMABLE.includes(current)) return false;
+        // El texto mantiene `failed` cerrado. Sólo la media, ante una acción
+        // manual explícita, puede reabrir un rechazo definitivo. El WHERE sobre
+        // `external_msg_id IS NULL` sigue siendo la prueba atómica de que Meta
+        // nunca selló ese mensaje; sin ella el reintento no es admisible.
+        const retryingFailed = options?.allowFailed === true && current === "failed";
+        if (!CLAIMABLE.includes(current) && !retryingFailed) return false;
 
         let q = admin
           .from("connect_messages")
@@ -508,10 +513,13 @@ export function createSupabaseReplyPorts(deps: ReplyPortsDeps): ReplyPorts {
             meta: {
               ...meta,
               wa: {
-                ...wa,
+                ...stripAuditMarker(wa),
                 direction: "outbound",
                 status: "sending",
                 status_at: clock.now(),
+                // Un error del intento anterior no describe el reintento que
+                // acaba de ganar. Se limpia al reabrir, no antes del CAS.
+                ...(retryingFailed ? { error: null } : {}),
                 // WA-8R7 · procedencia del hecho. La asigna el adaptador que
                 // conoce el origen; nunca llega desde la UI ni de un payload.
                 status_source: WA_STATUS_SOURCE_SERVER,

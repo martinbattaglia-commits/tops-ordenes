@@ -249,7 +249,7 @@ describe("T-C2-04 · M6 · el contrato vanilla queda intacto", () => {
     expect(vruns.some((c) => /npm run test:db\b/.test(c))).toBe(true);
     expect(vruns.some((c) => c.includes(OFFICIAL_SCRIPT))).toBe(false);
     const vimg = String(((vjob.services as Dict).postgres as Dict).image ?? "");
-    expect(vimg).toBe("postgres:17");
+    expect(vimg).toBe("postgis/postgis:17-3.5");
   });
 
   it("12.b · el workflow de Custodia es un archivo DISTINTO", () => {
