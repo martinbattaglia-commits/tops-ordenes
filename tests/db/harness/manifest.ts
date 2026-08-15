@@ -406,7 +406,9 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       f === "0235a_nexus_link_permission_module.sql" ||
       f === "ROLLBACK_0235a_nexus_link_permission_module.sql" ||
       f === "0239_nexus_link_participants_channel_rls.sql" ||
-      f === "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
+      f === "ROLLBACK_0239_nexus_link_participants_channel_rls.sql" ||
+      f === "0239a_nexus_link_revoke_trigger_execute.sql" ||
+      f === "ROLLBACK_0239a_nexus_link_revoke_trigger_execute.sql",
     reason:
       "Dominio Connect/Nexus Link, ajeno al cierre de dependencias WMS: 0234 " +
       "sólo redefine las vistas de la cadena Connect 0142+ (v_connect_inbox, " +
@@ -435,7 +437,11 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "nueva— a la policy SELECT de connect_participants. Ambas se verifican " +
       "contra PostgreSQL real, con el esquema REAL derivado de main (no un " +
       "cierre sintético), en tests/db/t-link-h1-01-participants-channel-rls." +
-      "test.ts, que además ejecuta ambos ROLLBACK y una reaplicación limpia.",
+      "test.ts, que además ejecuta ambos ROLLBACK y una reaplicación limpia." +
+      " 0239a revoca la invocación directa de la función trigger interna de " +
+      "0238 a PUBLIC/anon/authenticated/service_role sin cambiar su lógica; " +
+      "se verifica contra PostgreSQL real en t-link-b2-01, incluido el binding, " +
+      "el rechazo de subidas no finalizadas y el flujo legítimo.",
     },
     {
     id: "lineage-recovered-and-correctives",
