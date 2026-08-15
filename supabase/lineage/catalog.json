@@ -2532,7 +2532,7 @@
     {
       "id": "0243_purchase_order_price_lifecycle.sql",
       "filename": "0243_purchase_order_price_lifecycle.sql",
-      "sha256": "3a9075823b652d504cf3b0feacbf9e3a50e120e96e4774fb64e740db730abd8f",
+      "sha256": "33fe3bb52b44874591c30bcd7c889f3a5504f2fddbe3522a1935545f38187fa0",
       "orden": 223,
       "requires": [
         "0008_purchase_orders.sql",
@@ -2546,7 +2546,7 @@
       "ledger_version": "L00223",
       "ledger_name": "0243_purchase_order_price_lifecycle",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Ordenes de compra · precio conocido, estimado o pendiente; cabecera reconstruida desde lineas, ARS explicito, conciliacion congruente con factura y diferencias auditadas."
+      "motivo": "Ordenes de compra · precio conocido, estimado o pendiente; cabecera reconstruida desde lineas, ARS explicito, conciliacion congruente con factura y diferencias auditadas. El CHECK de subtotal conserva con NOT VALID exactamente dos excepciones legacy verificadas, pero sigue rechazando INSERT/UPDATE nuevos incompatibles."
     },
     {
       "id": "ROLLBACK_0243_purchase_order_price_lifecycle.sql",

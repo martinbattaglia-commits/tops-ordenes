@@ -710,11 +710,112 @@ describe("T-PR66-A1 · conciliación congruente y trazable", () => {
          returning id`,
         [legacyVendor],
       )).rows[0].id;
+      const legacyItems = (await cleanDb.query<{
+        id: string;
+        label: string;
+        qty: string;
+        price: string;
+        subtotal: string;
+        pos: number;
+      }>(
+        `insert into public.po_items(order_id,label,unit,qty,price,subtotal,pos)
+         values ($1,'Legacy delta 0.20','un',1,100,100.20,0),
+                ($1,'Legacy delta 0.40','un',1,100,100.40,1),
+                ($1,'Legacy válida','un',1,100,100,2)
+         returning id,label,qty::text,price::text,subtotal::text,pos`,
+        [legacyOrder],
+      )).rows;
+      const legacyBusinessBefore = legacyItems.map((row) => ({
+        ...row,
+        qty: Number(row.qty).toFixed(2),
+        price: Number(row.price).toFixed(2),
+        subtotal: Number(row.subtotal).toFixed(2),
+      }));
       await cleanDb.query(`
         create or replace function public.ai_docs_redact(p text)
         returns text language sql immutable as $$ select p $$;
       `);
+      await cleanDb.query("begin");
+      await cleanDb.query(
+        `insert into public.po_items(order_id,label,unit,qty,price,subtotal,pos)
+         values ($1,'Tercera anomalía','un',1,100,100.60,3)`,
+        [legacyOrder],
+      );
+      const thirdAnomaly = await errorOf(() => cleanDb.query(
+        readFileSync(resolve(MIGRATIONS, "0243_purchase_order_price_lifecycle.sql"), "utf8"),
+      ));
+      expect(thirdAnomaly).toMatch(/PR66_0243_HISTORICAL_ANOMALY_DRIFT/i);
+      await cleanDb.query("rollback");
+      expect((await cleanDb.query<{ n: string }>(
+        `select count(*)::text n from public.po_items
+          where price is not null
+            and not (abs(subtotal-round(qty*price,2)) <= 0.01)`,
+      )).rows[0].n).toBe("2");
       await cleanDb.query(readFileSync(resolve(MIGRATIONS, "0243_purchase_order_price_lifecycle.sql"), "utf8"));
+      const constraint = (await cleanDb.query<{ validated: boolean; comment: string }>(
+        `select c.convalidated validated, obj_description(c.oid,'pg_constraint') comment
+           from pg_constraint c
+          where c.conrelid='public.po_items'::regclass
+            and c.conname='po_items_price_subtotal_ck'`,
+      )).rows[0];
+      expect(constraint).toEqual({
+        validated: false,
+        comment: "PR66 FASE A · NOT VALID preserva sin modificar exactamente 2 excepciones legacy verificadas (deltas ARS 0.20 y 0.40, sin PII); INSERT/UPDATE nuevos siguen sujetos a tolerancia máxima ARS 0.01.",
+      });
+      expect((await cleanDb.query<{ delta: string }>(
+        `select abs(subtotal-round(qty*price,2))::text delta
+           from public.po_items
+          where price is not null
+            and not (abs(subtotal-round(qty*price,2)) <= 0.01)
+          order by abs(subtotal-round(qty*price,2))`,
+      )).rows).toEqual([{ delta: "0.20" }, { delta: "0.40" }]);
+      expect((await cleanDb.query<{
+        id: string;
+        label: string;
+        qty: string;
+        price: string;
+        subtotal: string;
+        pos: number;
+      }>(
+        `select id,label,qty::text,price::text,subtotal::text,pos
+           from public.po_items where id=any($1::uuid[]) order by pos`,
+        [legacyItems.map((row) => row.id)],
+      )).rows.map((row) => ({
+        ...row,
+        qty: Number(row.qty).toFixed(2),
+        price: Number(row.price).toFixed(2),
+        subtotal: Number(row.subtotal).toFixed(2),
+      }))).toEqual(legacyBusinessBefore);
+
+      const invalidInsert = await errorOf(() => cleanDb.query(
+        `insert into public.po_items(order_id,label,unit,qty,price,subtotal,pos)
+         values ($1,'Nueva inconsistente','un',1,100,100.20,3)`,
+        [legacyOrder],
+      ));
+      expect(invalidInsert).toMatch(/po_items_price_subtotal_ck/i);
+      const validItem = (await cleanDb.query<{ id: string }>(
+        `insert into public.po_items(order_id,label,unit,qty,price,subtotal,pos)
+         values ($1,'Nueva válida','un',2,100,200,3) returning id`,
+        [legacyOrder],
+      )).rows[0].id;
+      const futureInvalidUpdate = await errorOf(() => cleanDb.query(
+        "update public.po_items set subtotal=200.20 where id=$1",
+        [validItem],
+      ));
+      expect(futureInvalidUpdate).toMatch(/inmutable|po_items_price_subtotal_ck/i);
+      const invalidUpdate = await errorOf(() => cleanDb.query(
+        "update public.po_items set label='Legacy alterada' where id=$1",
+        [legacyItems[0].id],
+      ));
+      expect(invalidUpdate).toMatch(/po_items_price_subtotal_ck/i);
+      await cleanDb.query(
+        "update public.po_items set label='Nueva válida operable' where id=$1",
+        [validItem],
+      );
+      expect((await cleanDb.query<{ label: string; price: string; subtotal: string }>(
+        "select label,price::text,subtotal::text from public.po_items where id=$1",
+        [validItem],
+      )).rows[0]).toEqual({ label: "Nueva válida operable", price: "100.00", subtotal: "200.00" });
       expect((await cleanDb.query<{ snap: boolean }>(
         "select vendor_snapshot is not null snap from public.purchase_orders where id=$1",
         [legacyOrder],
@@ -734,6 +835,11 @@ describe("T-PR66-A1 · conciliación congruente y trazable", () => {
         "select 1 from pg_type where typname='po_price_state_t'",
       )).rowCount).toBe(0);
       expect((await cleanDb.query(
+        `select 1 from pg_constraint
+          where conrelid='public.po_items'::regclass
+            and conname='po_items_price_subtotal_ck'`,
+      )).rowCount).toBe(0);
+      expect((await cleanDb.query(
         "select 1 from pg_proc where proname in ('purchase_order_prepare_email_delivery','purchase_order_begin_email_delivery','purchase_order_finalize_email_delivery','purchase_order_finalize_document')",
       )).rowCount).toBe(0);
       expect((await cleanDb.query(
@@ -743,6 +849,23 @@ describe("T-PR66-A1 · conciliación congruente y trazable", () => {
         "select 1 from public.purchase_orders where id=$1",
         [legacyOrder],
       )).rowCount).toBe(1);
+      expect((await cleanDb.query<{
+        id: string;
+        label: string;
+        qty: string;
+        price: string;
+        subtotal: string;
+        pos: number;
+      }>(
+        `select id,label,qty::text,price::text,subtotal::text,pos
+           from public.po_items where id=any($1::uuid[]) order by pos`,
+        [legacyItems.map((row) => row.id)],
+      )).rows.map((row) => ({
+        ...row,
+        qty: Number(row.qty).toFixed(2),
+        price: Number(row.price).toFixed(2),
+        subtotal: Number(row.subtotal).toFixed(2),
+      }))).toEqual(legacyBusinessBefore);
       expect((await cleanDb.query<{ id: string; public: boolean }>(
         "select id,public from storage.buckets where id in ('po-pdfs','po-pdfs-private') order by id",
       )).rows).toEqual([{ id: "po-pdfs", public: true }]);

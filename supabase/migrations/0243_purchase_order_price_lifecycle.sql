@@ -104,9 +104,40 @@ alter table public.po_items add constraint po_items_price_semantics_ck check (
 );
 
 alter table public.po_items drop constraint if exists po_items_price_subtotal_ck;
+
+-- Dirección preserva sin reescritura las excepciones históricas verificadas.
+-- El lock mantiene estable ese universo hasta que el CHECK quede instalado:
+-- una tercera anomalía o una diferencia distinta aborta antes de cambiar DDL.
+lock table public.po_items in share row exclusive mode;
+do $$
+declare
+  v_anomaly_count integer;
+  v_anomaly_deltas numeric[];
+begin
+  select count(*)::integer,
+         coalesce(array_agg(delta order by delta), array[]::numeric[])
+    into v_anomaly_count, v_anomaly_deltas
+    from (
+      select abs(subtotal - round(qty * price, 2)) as delta
+        from public.po_items
+       where price is not null
+         and not (abs(subtotal - round(qty * price, 2)) <= 0.01)
+    ) anomalies;
+
+  if v_anomaly_count not in (0, 2)
+     or (v_anomaly_count = 2 and v_anomaly_deltas is distinct from array[0.20::numeric, 0.40::numeric]) then
+    raise exception 'PR66_0243_HISTORICAL_ANOMALY_DRIFT: se esperaban 0 filas (base limpia) o exactamente 2 excepciones legacy con deltas 0.20/0.40; observadas % con deltas %',
+      v_anomaly_count, v_anomaly_deltas using errcode = '23514';
+  end if;
+end;
+$$;
+
 alter table public.po_items add constraint po_items_price_subtotal_ck check (
   price is null or abs(subtotal - round(qty * price, 2)) <= 0.01
-);
+) not valid;
+
+comment on constraint po_items_price_subtotal_ck on public.po_items is
+  'PR66 FASE A · NOT VALID preserva sin modificar exactamente 2 excepciones legacy verificadas (deltas ARS 0.20 y 0.40, sin PII); INSERT/UPDATE nuevos siguen sujetos a tolerancia máxima ARS 0.01.';
 
 alter table public.po_items drop constraint if exists po_items_actual_price_ck;
 alter table public.po_items add constraint po_items_actual_price_ck check (
@@ -252,8 +283,14 @@ create or replace function public._po_items_price_prepare()
 returns trigger language plpgsql set search_path = public, pg_temp as $$
 begin
   if new.price_state = 'pending' then
+    if new.price is not null or new.subtotal is not null then
+      raise exception 'po_items_price_subtotal_ck: una línea pendiente no admite importes';
+    end if;
     new.price := null;
     new.subtotal := null;
+  elsif new.price is null or new.subtotal is null
+        or abs(new.subtotal - round(new.qty * new.price, 2)) > 0.01 then
+    raise exception 'po_items_price_subtotal_ck: subtotal incompatible con cantidad y precio';
   else
     new.subtotal := round(new.qty * new.price, 2);
   end if;

@@ -8,7 +8,7 @@
 
 - Fecha: `2026-08-15`.
 - Expediente: PR #66 · Clientes nativos, Compras y Órdenes de Servicio · FASE A.
-- Rama local: `candidate/clientes-ordenes-precios-fase-a-r3`.
+- Rama local/publicación: `candidate/clientes-ordenes-precios-rbac-r1` (clon correctivo aislado).
 - Rama de publicación: `candidate/clientes-ordenes-precios-rbac-r1`.
 - Base/HEAD: `2ee31f815695cbfb88a6a87e8194e12d9cbbaa58`.
 - Segundo padre preservado: `0d5379751ed554f8d384d0f6b73f54c95ef2c8d8`.
@@ -24,15 +24,17 @@ los waivers de Nexus Link.
 ## Identidad funcional post-remediación autorizada
 
 ```text
-tree_funcional        = d8d8601cff2ff017bcef5afbec515959054b23f4
-fingerprint_funcional = 34f0c98204d010ab0a0a645448d4016f0011b97205170629c681174b3a7ed629
+tree_funcional        = bb705716e86302cdddf3f3549695c24ce2cbdd60
+fingerprint_funcional = c8fe78c4328b1a71379400476ef3f4a56b843840ec3da7f3f95f7a025595002a
 rutas_funcionales     = 119
 pathlist_nul_sha256   = 9ea943a192643504a38cbea301cfbe3973678dfffca474e491db356ab3e6e370
 ```
 
 Dirección autorizó después las remediaciones acotadas del destinatario de
 correo, continuidad temporal y autorización NULL-bypass, el preflight
-adversarial integral y una C4 FINAL 6/6. Las decisiones exigieron recalcular la
+adversarial integral, una C4 FINAL 6/6 y el correctivo productivo acotado de
+`0243` que preserva dos excepciones históricas mediante `NOT VALID`. Las
+decisiones exigieron recalcular la
 identidad y mantuvieron de forma literal `CUSTODY 450/451 — WAIVED BY
 DIRECTION`. Las identidades previas quedan preservadas como checkpoints y son
 sucedidas por esta identidad de 119 paths; los nueve paths DB fueron
@@ -68,7 +70,7 @@ manifiestos, clausura y conteos fail-closed.
 | 6 | `tests/db/t-cli-a1-02-clients-master-rollback.test.ts` | `beec93a69ee7aa3a21fa3ce56323a745d2df8cec5e928d10fd51efb681dccc1b` | DB Harness · rollback y reaplicación del maestro nativo. |
 | 7 | `tests/db/t-cli-a2-01-atomic-mutations.test.ts` | `0aee9e098393dc0fcabaf2dd8c9de6f2e90811b38de07c579af744dd1c5071e3` | DB Harness · CUIT, CAS, concurrencia, auditoría atómica y autorización fail-closed. |
 | 8 | `tests/db/t-pr66-01-order-pricing.test.ts` | `28aafbe9824d634817e7d6acbfda0b376cc8f92d4b8a992a8ac2e7de481469cf` | DB Harness · migraciones/rollbacks de tarifarios, OS y matriz adversarial de autorización. |
-| 9 | `tests/db/t-pr66-a1-purchase-order-integrity.test.ts` | `1aac0f41a12e6841aebb069e8c6d9e54c8b9f622e316d33172887d7662d89913` | DB Harness · migración/rollback de OC y conciliación. |
+| 9 | `tests/db/t-pr66-a1-purchase-order-integrity.test.ts` | `1bf6f42f55a55efaed773e4417bcd58a40a33055d832cdb528cdb756ec6a5b76` | DB Harness · migración/rollback de OC, conciliación y preservación prod-shaped de dos excepciones legacy bajo `NOT VALID`. |
 
 `tests/db/harness/manifest.ts` también cambia, pero es el único path que el
 invariante vanilla autoriza y no integra la lista de nueve violaciones.
@@ -77,6 +79,7 @@ invariante vanilla autoriza y no integra la lista de nueve violaciones.
 
 | Control | Resultado |
 |---|---|
+| Correctivo `0243` · PostgreSQL 17 prod-shaped | **7/7 PASS**; preserva exactamente dos deltas `0.20/0.40`, aborta una tercera anomalía, rechaza `INSERT/UPDATE` nuevos incompatibles y prueba rollback lógico |
 | Focales adversariales NULL/ACL | **97/97 PASS**, incluidas guardas estructurales y controles positivos |
 | Unitarias | **3654 PASS**, una omisión manual histórica |
 | Typecheck | **PASS** |
