@@ -14,6 +14,8 @@ import { getBootContext } from "@/lib/rbac/boot-permissions";
  * Semántica idéntica: Estrategia B intacta, page guards intactos.
  */
 export default async function AppLayout({ children }: { children: ReactNode }) {
+  const initialNowIso = new Date().toISOString();
+
   // ÚNICO await del boot — acotado por BOOT_BUDGET_MS (anti-cuelgue).
   const { user, profileRole, perms } = await getBootContext();
 
@@ -56,6 +58,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <Shell
       user={userMeta}
+      initialNowIso={initialNowIso}
       canViewExecutive={perms.exec}
       canViewSistema={perms.sistema}
       canViewRrhhDocs={perms.rrhhDocs}

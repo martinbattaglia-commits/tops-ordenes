@@ -3,16 +3,40 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { NotificationsBell } from "@/components/shell/NotificationsBell";
 import { ThemeToggle } from "@/components/shell/ThemeToggle";
 import { TopsConnectButton } from "@/components/shell/TopsConnectButton";
 import { PRODUCT } from "@/lib/org";
 
-export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
+export function formatTopbarDate(now: Date): string {
+  return now.toLocaleDateString("es-AR", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
+
+export default function Topbar({
+  onMenuClick,
+  initialNowIso,
+}: {
+  onMenuClick: () => void;
+  initialNowIso: string;
+}) {
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [now, setNow] = useState(() => new Date(initialNowIso));
+
+  useEffect(() => {
+    const refreshDate = () => setNow(new Date());
+
+    refreshDate();
+    const intervalId = window.setInterval(refreshDate, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,11 +44,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
     router.push(`/compras/ordenes?search=${encodeURIComponent(search.trim())}`);
   };
 
-  const fechaHoy = new Date().toLocaleDateString("es-AR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const fechaHoy = formatTopbarDate(now);
 
   return (
     <header
