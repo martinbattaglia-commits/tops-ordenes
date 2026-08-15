@@ -497,24 +497,26 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     // sobre connect_participants. Misma convención de nombre.
     "ROLLBACK_0235a_nexus_link_permission_module.sql",
     "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
+    "ROLLBACK_0239a_nexus_link_revoke_trigger_execute.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 
-  it("control sano: 214 entradas, 201 ejecutables y 13 no ejecutables, recalculados", () => {
+  it("control sano: 216 entradas, 202 ejecutables y 14 no ejecutables, recalculados", () => {
     // +4 en FASE A (0234/0235 y sus inversas) y +6 en FASE B (0236, 0237 y
     // 0238 con sus inversas), sobre la línea previa 200/194/6; +4 en el
     // hallazgo de C5 (0235a y 0239, cada una con su inversa) sobre la línea
-    // 210/199/11. Las cifras se contrastan contra el recálculo desde
+    // 210/199/11; +2 por el correctivo ACL 0239a y su rollback documental.
+    // Las cifras se contrastan contra el recálculo desde
     // `entries`, así que no pueden quedar desfasadas en silencio.
-    expect(REAL.entries).toHaveLength(214);
+    expect(REAL.entries).toHaveLength(216);
     const ejec = REAL.entries.filter(
       (e) => e.estado === "active" || e.estado === "corrective",
     );
-    expect(ejec).toHaveLength(201);
-    expect(REAL.entries.length - ejec.length).toBe(13);
+    expect(ejec).toHaveLength(202);
+    expect(REAL.entries.length - ejec.length).toBe(14);
     // Y los contadores declarados coinciden con lo recalculado.
-    expect(REAL.ejecutables).toBe(201);
-    expect(REAL.no_ejecutables).toBe(13);
+    expect(REAL.ejecutables).toBe(202);
+    expect(REAL.no_ejecutables).toBe(14);
   });
 
   it("la convención cerrada identifica exactamente a los tres rollbacks del árbol", () => {
@@ -537,12 +539,12 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     expect(cods).toContain("CONTADOR_NO_EJECUTABLES_INCOHERENTE");
   });
 
-  it("MUTANTE B · reclasificación CON contadores maquillados (202/12) → sigue FAIL por rollback", () => {
+  it("MUTANTE B · reclasificación CON contadores maquillados (203/13) → sigue FAIL por rollback", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 202;
-    c.no_ejecutables = 12;
+    c.ejecutables = 203;
+    c.no_ejecutables = 13;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     // Los contadores ahora «cuadran» con las entries mutadas: si el rechazo
     // dependiera de ellos, este mutante viajaría en verde.
@@ -556,8 +558,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 202;
-    c.no_ejecutables = 12;
+    c.ejecutables = 203;
+    c.no_ejecutables = 13;
     expect(() => construirPlan({ catalogo: c })).toThrow(/CATALOGO_INVALIDO/);
     expect(() => construirPlan({ catalogo: c })).toThrow(/ROLLBACK_RECLASIFICADO/);
   });
@@ -587,8 +589,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
       estado: "active",
       ledger_name: "0233b_wa_make_relay_outbox_redo",
     };
-    c.ejecutables = 202;
-    c.no_ejecutables = 12;
+    c.ejecutables = 203;
+    c.no_ejecutables = 13;
     const v = verificarCatalogo({ catalogo: c, dirMigraciones: dir });
     expect(codigos(v)).toEqual(["ROLLBACK_CONOCIDO_AUSENTE"]);
     expect(v[0].detalle).toBe(OBJETIVO);

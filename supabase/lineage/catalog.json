@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "supabase/lineage/build-catalog.mjs",
-  "ejecutables": 201,
-  "no_ejecutables": 13,
+  "ejecutables": 202,
+  "no_ejecutables": 14,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2430,6 +2430,32 @@
       "ledger_name": "ROLLBACK_0239_nexus_link_participants_channel_rls",
       "provenance": "repo (candidate/link-media-fase-b)",
       "motivo": "Inversa de 0239: restituye la policy SELECT exacta de 0143."
+    },
+    {
+      "id": "0239a_nexus_link_revoke_trigger_execute.sql",
+      "filename": "0239a_nexus_link_revoke_trigger_execute.sql",
+      "sha256": "6be16e2f73065ca4f390ba4abf31ac5272a7f4889c19c783d0a7f3978683e0cb",
+      "orden": 215,
+      "requires": [
+        "0238_nexus_link_upload_lifecycle.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00215",
+      "ledger_name": "0239a_nexus_link_revoke_trigger_execute",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Correctivo ACL post-migracion de Nexus Link: revoca la invocacion directa de _connect_attachment_requires_finalized_upload() a PUBLIC, anon, authenticated y service_role. Conserva SECURITY DEFINER porque el trigger debe leer connect_pending_uploads con RLS activa; no cambia su logica ni el binding interno."
+    },
+    {
+      "id": "ROLLBACK_0239a_nexus_link_revoke_trigger_execute.sql",
+      "filename": "ROLLBACK_0239a_nexus_link_revoke_trigger_execute.sql",
+      "sha256": "17062ad10a18ed1c3232b6948fc5241b1ffb66045ce9ca69a1b1264abd216f7b",
+      "orden": 216,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00216",
+      "ledger_name": "ROLLBACK_0239a_nexus_link_revoke_trigger_execute",
+      "provenance": "repo (candidate/link-media-fase-b)",
+      "motivo": "Rollback documental y fail-closed de 0239a: no reotorga EXECUTE porque reabriria la exposicion. El rollback funcional de la funcion y su trigger sigue siendo ROLLBACK_0238. NO es forward."
     }
   ]
 }

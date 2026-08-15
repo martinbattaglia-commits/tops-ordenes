@@ -22,7 +22,9 @@ const MIG = (f: string) => resolve(__dirname, "..", "..", "supabase", "migration
 const M0236 = MIG("0236_nexus_link_channel_capabilities.sql");
 const M0237 = MIG("0237_nexus_link_channel_rls.sql");
 const M0238 = MIG("0238_nexus_link_upload_lifecycle.sql");
+const M0239A = MIG("0239a_nexus_link_revoke_trigger_execute.sql");
 const R0238 = MIG("ROLLBACK_0238_nexus_link_upload_lifecycle.sql");
+const R0239A = MIG("ROLLBACK_0239a_nexus_link_revoke_trigger_execute.sql");
 
 const COMERCIAL = "22222222-2222-4222-8222-222222222222";
 const ENCARGADO = "11111111-1111-4111-8111-111111111111";
@@ -295,10 +297,11 @@ beforeAll(async () => {
     union all select $3::uuid, id from public.roles where name='Ajeno'`,
     [COMERCIAL, ENCARGADO, AJENO]);
 
-  // 0236 → 0237 → 0238, en el orden en que se aplican en producción.
+  // 0236 → 0237 → 0238 → 0239a, en el orden en que se aplican en producción.
   await db.query(readFileSync(M0236, "utf8"));
   await db.query(readFileSync(M0237, "utf8"));
   await db.query(readFileSync(M0238, "utf8"));
+  await db.query(readFileSync(M0239A, "utf8"));
 
   const mk = async (kind: string, title: string): Promise<string> =>
     (await db.query(
@@ -315,6 +318,100 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => { await sb?.destroy(); });
+
+describe("0239a · ACL del trigger fail-closed", () => {
+  const fn = "public._connect_attachment_requires_finalized_upload()";
+
+  it("conserva SECURITY DEFINER, retorno trigger y search_path fijo", async () => {
+    const { rows } = await db.query(`
+      select p.prosecdef, p.prorettype::regtype::text as return_type,
+             coalesce(array_to_string(p.proconfig, ','), '') as config
+        from pg_proc p
+       where p.oid = to_regprocedure($1)`, [fn]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].prosecdef).toBe(true);
+    expect(rows[0].return_type).toBe("trigger");
+    expect(rows[0].config).toContain("search_path=public, pg_temp");
+  });
+
+  it("PUBLIC, anon, authenticated y service_role no tienen EXECUTE", async () => {
+    const { rows } = await db.query(`
+      select coalesce(array_to_string(p.proacl, ','), '') as acl,
+             has_function_privilege('anon', p.oid, 'EXECUTE') as anon_exec,
+             has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth_exec,
+             has_function_privilege('service_role', p.oid, 'EXECUTE') as service_exec
+        from pg_proc p
+       where p.oid = to_regprocedure($1)`, [fn]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].acl).not.toMatch(/(^|,)=X\//); // grantee vacío = PUBLIC
+    expect(rows[0].anon_exec).toBe(false);
+    expect(rows[0].auth_exec).toBe(false);
+    expect(rows[0].service_exec).toBe(false);
+  });
+
+  it("falla cerrada si el binding no protege cada INSERT normal", async () => {
+    await db.query(`alter table public.connect_attachments
+      enable replica trigger connect_attachments_upload_binding`);
+    try {
+      await expect(db.query(readFileSync(M0239A, "utf8")))
+        .rejects.toThrow(/binding BEFORE INSERT ROW connect_attachments_upload_binding no verificable/);
+    } finally {
+      await db.query(`alter table public.connect_attachments
+        enable trigger connect_attachments_upload_binding`);
+    }
+
+    await db.query(`drop trigger connect_attachments_upload_binding
+      on public.connect_attachments`);
+    await db.query(`create trigger connect_attachments_upload_binding
+      before update on public.connect_attachments
+      for each row execute function public._connect_attachment_requires_finalized_upload()`);
+    try {
+      await expect(db.query(readFileSync(M0239A, "utf8")))
+        .rejects.toThrow(/binding BEFORE INSERT ROW connect_attachments_upload_binding no verificable/);
+    } finally {
+      await db.query(`drop trigger connect_attachments_upload_binding
+        on public.connect_attachments`);
+      await db.query(`create trigger connect_attachments_upload_binding
+        before insert on public.connect_attachments
+        for each row execute function public._connect_attachment_requires_finalized_upload()`);
+    }
+
+    const { rows } = await db.query(`
+      select t.tgenabled, t.tgtype, t.tgqual is null as unconditional,
+             t.tgnargs, t.tgattr::text as columns
+        from pg_trigger t
+       where t.tgrelid = 'public.connect_attachments'::regclass
+         and t.tgname = 'connect_attachments_upload_binding'
+         and not t.tgisinternal`);
+    expect(rows).toEqual([{
+      tgenabled: "O", tgtype: 7, unconditional: true, tgnargs: 0, columns: "",
+    }]);
+  });
+
+  it.each(["anon", "authenticated", "service_role"])(
+    "%s no puede invocarla directamente",
+    async (role) => {
+      await db.query("begin");
+      try {
+        await db.query(`set local role ${role}`);
+        await expect(db.query(`select ${fn}`)).rejects.toThrow(/permission denied/i);
+      } finally {
+        await db.query("rollback");
+      }
+    },
+  );
+
+  it("el rollback documental no reabre la ACL", async () => {
+    await db.query(readFileSync(R0239A, "utf8"));
+    const { rows } = await db.query(`
+      select has_function_privilege('anon', p.oid, 'EXECUTE') as anon_exec,
+             has_function_privilege('authenticated', p.oid, 'EXECUTE') as auth_exec,
+             has_function_privilege('service_role', p.oid, 'EXECUTE') as service_exec
+        from pg_proc p
+       where p.oid = to_regprocedure($1)`, [fn]);
+    expect(rows[0]).toEqual({ anon_exec: false, auth_exec: false, service_exec: false });
+  });
+});
 
 // ═══════════════════ apertura: la identidad la pone el servidor ═══════════
 
@@ -548,7 +645,7 @@ describe("connect_upload_reclaim_expired", () => {
 
 // ═══════════════════ la atadura estructural del adjunto ═══════════════════
 
-describe("trigger connect_attachments_upload_binding", () => {
+describe("trigger connect_attachments_upload_binding después de revocar EXECUTE", () => {
   const insertar = (conv: string, path: string, uploader: string | null) =>
     db.query(
       `insert into public.connect_attachments
