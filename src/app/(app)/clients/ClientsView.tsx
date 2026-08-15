@@ -6,7 +6,8 @@ import { Icon } from "@/components/Icon";
 import { VoiceField } from "@/components/voice/VoiceField";
 import { cn, fmtCuit, isValidCuit } from "@/lib/utils";
 import type { Client } from "@/lib/types";
-import { createClient, fetchClients, refreshFromClientify, type NewClientInput } from "./actions";
+import { createClient, fetchClients, type NewClientInput } from "./actions";
+import type { DuplicateCandidate } from "@/lib/data/clients";
 import { AccountPicker } from "@/components/erp/AccountPicker";
 import { CONDICION_IVA_LABEL, CONDICION_IVA_VALUES } from "@/lib/invoicing/types";
 import type { ChartAccount } from "@/lib/erp/types";
@@ -15,7 +16,6 @@ interface Props {
   initialRows: Client[];
   initialSource: string;
   initialWarning?: string;
-  clientifyConfigured: boolean;
   accounts?: ChartAccount[];
 }
 
@@ -29,7 +29,6 @@ export default function ClientsView({
   initialRows,
   initialSource,
   initialWarning,
-  clientifyConfigured,
   accounts = [],
 }: Props) {
   const [rows, setRows] = useState<Client[]>(initialRows);
@@ -38,7 +37,6 @@ export default function ClientsView({
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [refreshing, startRefresh] = useTransition();
   const [loadingSearch, startSearch] = useTransition();
 
   const filtered = useMemo(() => {
@@ -52,8 +50,6 @@ export default function ClientsView({
         (c.contacto?.toLowerCase().includes(q) ?? false)
     );
   }, [rows, search]);
-
-  // Search vs Clientify cuando el local no encuentra nada
   useEffect(() => {
     const q = search.trim();
     if (!q || q.length < 3) return;
@@ -82,31 +78,10 @@ export default function ClientsView({
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   };
 
-  const handleRefresh = () => {
-    startRefresh(async () => {
-      const r = await refreshFromClientify();
-      if (!r.ok) {
-        pushToast("error", r.error ?? "No se pudo refrescar desde Clientify");
-        return;
-      }
-      const list = await fetchClients();
-      if (list.ok) {
-        setRows(list.rows);
-        setSource(list.source);
-        setWarning(list.warning);
-      }
-      pushToast("success", `Sincronizados ${r.synced} clientes desde Clientify`);
-    });
-  };
-
-  const handleCreated = (client: Client, syncSource: string) => {
+  /** El alta es local y atómica: si devolvió ok, el cliente existe. */
+  const handleCreated = (client: Client) => {
     setRows((prev) => [client, ...prev.filter((p) => p.cuit !== client.cuit)]);
-    pushToast(
-      "success",
-      syncSource === "clientify+supabase"
-        ? `Cliente creado y sincronizado en Clientify`
-        : `Cliente creado localmente (Clientify pendiente)`
-    );
+    pushToast("success", "Cliente creado.");
     setShowModal(false);
   };
 
@@ -121,22 +96,6 @@ export default function ClientsView({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {clientifyConfigured && (
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="btn btn-ghost btn-sm"
-              title="Sincronizar empresas desde Clientify"
-            >
-              <Icon
-                name="refresh"
-                size={13}
-                className={cn(refreshing && "animate-spin")}
-              />
-              {refreshing ? "Sincronizando…" : "Refrescar CRM"}
-            </button>
-          )}
           <button
             type="button"
             onClick={() => setShowModal(true)}
@@ -153,29 +112,14 @@ export default function ClientsView({
         <span
           className={cn(
             "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-pill font-bold uppercase tracking-wider text-[10px]",
-            source === "clientify"
-              ? "bg-status-success/10 text-status-success"
-              : source === "supabase"
-                ? "bg-tops-blue-700/10 text-tops-blue-700"
-                : "bg-neutral-100 text-fg-muted"
+            source === "supabase"
+              ? "bg-tops-blue-700/10 text-tops-blue-700"
+              : "bg-neutral-100 text-fg-muted"
           )}
         >
           <span className="dot inline-block w-1.5 h-1.5 rounded-full bg-current" />
-          {source === "clientify"
-            ? "Clientify"
-            : source === "supabase"
-              ? "Supabase"
-              : "Datos demo"}
+          {source === "supabase" ? "Supabase" : "Datos demo"}
         </span>
-        {!clientifyConfigured && (
-          <span className="text-fg-muted text-[11px]">
-            ·{" "}
-            <Link href="/settings" className="text-fg-link">
-              Conectar Clientify
-            </Link>{" "}
-            para sincronizar empresas del CRM
-          </span>
-        )}
         {warning && (
           <span className="text-status-warning text-[11px] inline-flex items-center gap-1">
             ⚠ {warning}
@@ -199,7 +143,7 @@ export default function ClientsView({
           />
           {loadingSearch && (
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-fg-muted">
-              Buscando en CRM…
+              Buscando…
             </span>
           )}
         </div>
@@ -354,12 +298,16 @@ function NewClientModal({
   accounts,
 }: {
   onClose: () => void;
-  onCreated: (c: Client, source: string) => void;
+  onCreated: (c: Client) => void;
   accounts: ChartAccount[];
 }) {
   const [form, setForm] = useState<NewClientInput>({
     razon: "",
     cuit: "",
+    nombre_comercial: "",
+    codigo: "",
+    domicilio: "",
+    localidad: "",
     contacto: "",
     email: "",
     telefono: "",
@@ -371,6 +319,17 @@ function NewClientModal({
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Candidatos a duplicado que el servidor advirtió, y el acuse de ESA
+   * advertencia.
+   *
+   * Antes el servidor devolvía los candidatos y exigía confirmación, pero el
+   * modal sólo pintaba `result.error` y nunca ofrecía confirmar: una razón
+   * social parecida dejaba el alta sin salida desde esta pantalla. El wizard de
+   * Órdenes sí lo resolvía; el maestro, no.
+   */
+  const [duplicados, setDuplicados] = useState<DuplicateCandidate[]>([]);
+  const [acuse, setAcuse] = useState<string | null>(null);
 
   const cuitDigits = form.cuit.replace(/\D/g, "");
   const cuitValid = cuitDigits.length === 11 && isValidCuit(form.cuit);
@@ -387,27 +346,55 @@ function NewClientModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  /**
+   * Envía el alta. `conAcuse` sólo viaja cuando el usuario apretó «Crear de
+   * todos modos» sobre una advertencia concreta.
+   *
+   * El servidor recalcula los parecidos en CADA llamada y compara el acuse con
+   * el que corresponde a la foto vigente: si la lista cambió mientras el modal
+   * estaba abierto, vuelve a advertir en vez de dar por confirmado algo que
+   * nadie vio.
+   */
+  const enviar = async (conAcuse: string | null) => {
+    // Doble envío: cierra la ventana entre el click y la respuesta. El respaldo
+    // real es la unicidad de CUIT en la tabla, que rechaza el segundo alta.
+    if (submitting) return;
     setError(null);
-    if (!canSubmit) return;
     setSubmitting(true);
     try {
       const result = await createClient({
         ...form,
         cuit: cuitDigits,
         tags: form.tags ?? [],
+        ...(conAcuse ? { confirmacion_duplicados: conAcuse } : {}),
       });
       if (!result.ok) {
         setError(result.error);
+        setDuplicados(result.duplicados ?? []);
+        setAcuse(result.confirmacion_duplicados ?? null);
         setSubmitting(false);
         return;
       }
-      onCreated(result.client, result.source);
+      onCreated(result.client);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error inesperado");
       setSubmitting(false);
     }
+  };
+
+  /** Cualquier edición invalida la advertencia ya vista. */
+  const actualizar = (parcial: Partial<NewClientInput>) => {
+    setForm((f) => ({ ...f, ...parcial }));
+    if (acuse !== null || duplicados.length > 0) {
+      setAcuse(null);
+      setDuplicados([]);
+    }
+  };
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    await enviar(null);
   };
 
   const toggleTag = (t: string) => {
@@ -453,10 +440,29 @@ function NewClientModal({
                 className="input"
                 autoFocus
                 value={form.razon}
-                onChange={(e) => setForm((f) => ({ ...f, razon: e.target.value }))}
+                onChange={(e) => actualizar({ razon: e.target.value })}
                 placeholder="Ej: Laboratorios Bagó S.A."
               />
             </ModalField>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ModalField label="Nombre comercial">
+                <input
+                  className="input"
+                  value={form.nombre_comercial}
+                  onChange={(e) => actualizar({ nombre_comercial: e.target.value })}
+                  placeholder="Nombre de fantasía"
+                />
+              </ModalField>
+              <ModalField label="Código interno">
+                <input
+                  className="input"
+                  value={form.codigo}
+                  onChange={(e) => actualizar({ codigo: e.target.value })}
+                  placeholder="Ej: CLI-001"
+                />
+              </ModalField>
+            </div>
 
             <ModalField
               label="CUIT"
@@ -475,7 +481,7 @@ function NewClientModal({
                   className="input mono pr-10"
                   inputMode="numeric"
                   value={form.cuit}
-                  onChange={(e) => setForm((f) => ({ ...f, cuit: e.target.value }))}
+                  onChange={(e) => actualizar({ cuit: e.target.value })}
                   placeholder="30-12345678-9"
                 />
                 {cuitValid && (
@@ -508,6 +514,25 @@ function NewClientModal({
                     setForm((f) => ({ ...f, telefono: e.target.value }))
                   }
                   placeholder="11-5555-5555"
+                />
+              </ModalField>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <ModalField label="Domicilio">
+                <input
+                  className="input"
+                  value={form.domicilio}
+                  onChange={(e) => actualizar({ domicilio: e.target.value })}
+                  placeholder="Calle, número"
+                />
+              </ModalField>
+              <ModalField label="Localidad">
+                <input
+                  className="input"
+                  value={form.localidad}
+                  onChange={(e) => actualizar({ localidad: e.target.value })}
+                  placeholder="Ciudad / partido"
                 />
               </ModalField>
             </div>
@@ -628,6 +653,39 @@ function NewClientModal({
                 </div>
               </div>
             )}
+
+            {duplicados.length > 0 && (
+              <div
+                role="status"
+                className="rounded-md bg-status-warning/10 text-fg-primary text-sm px-3 py-2 border border-status-warning/30"
+              >
+                <div className="font-semibold text-status-warning mb-1.5 flex items-center gap-1.5">
+                  <Icon name="shield" size={14} />
+                  Clientes parecidos ya registrados
+                </div>
+                <ul className="space-y-1">
+                  {duplicados.map((d) => (
+                    <li key={d.id} className="flex items-baseline gap-2">
+                      <Link
+                        href={`/clientes/${d.id}`}
+                        target="_blank"
+                        className="text-fg-link hover:underline font-medium"
+                      >
+                        {d.razon}
+                      </Link>
+                      <span className="mono text-[11px] text-fg-muted">{fmtCuit(d.cuit)}</span>
+                      <span className="text-[10px] uppercase tracking-wide text-fg-muted">
+                        {d.match_reason === "cuit_identico" ? "mismo CUIT" : "nombre parecido"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-fg-muted mt-2">
+                  Revisalos antes de seguir. Si aun así es un cliente distinto, usá «Crear de todos
+                  modos».
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Footer */}
@@ -640,15 +698,30 @@ function NewClientModal({
             >
               Cancelar
             </button>
-            <button type="submit" disabled={!canSubmit} className="btn btn-primary">
-              {submitting ? (
-                <>Guardando…</>
-              ) : (
-                <>
-                  <Icon name="check" size={14} stroke={2.2} /> Crear cliente
-                </>
+            <div className="flex items-center gap-2">
+              {acuse !== null && (
+                // Aparece SÓLO después de la advertencia y manda el acuse de
+                // esa advertencia concreta. No es un tilde que pueda dejarse
+                // marcado de antemano.
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void enviar(acuse)}
+                  className="btn btn-ghost btn-sm text-status-warning"
+                >
+                  {submitting ? "Guardando…" : "Crear de todos modos"}
+                </button>
               )}
-            </button>
+              <button type="submit" disabled={!canSubmit} className="btn btn-primary">
+                {submitting ? (
+                  <>Guardando…</>
+                ) : (
+                  <>
+                    <Icon name="check" size={14} stroke={2.2} /> Crear cliente
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -7,6 +7,7 @@ import { CategoryDonut } from "@/components/compras/charts/CategoryDonut";
 import { Sparkline } from "@/components/compras/charts/Sparkline";
 import { getDashboardKpis } from "@/lib/compras/data";
 import { fmtCurrency, fmtCurrencyShort, fmtRel, truncate } from "@/lib/compras/format";
+import { purchaseOrderAmount } from "@/lib/compras/order-amounts";
 
 export const metadata = { title: "Compras · Dashboard" };
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ export default async function ComprasDashboardPage() {
           <h1 className="page-title">Buen día, José Luis.</h1>
           <p className="page-subtitle">
             {k.ocThisMonth} órdenes de compra emitidas este mes ·{" "}
-            {fmtCurrencyShort(k.spendThisMonth)} comprometidos.
+            {fmtCurrencyShort(k.spendThisMonth)} con importe real
+            {k.nonRealThisMonth > 0 ? ` · ${k.nonRealThisMonth} sin importe real.` : "."}
           </p>
         </div>
         <div className="flex gap-2">
@@ -49,7 +51,7 @@ export default async function ComprasDashboardPage() {
           href="/compras/ordenes"
         />
         <Kpi
-          label="Monto comprometido"
+          label="Importe real registrado"
           value={fmtCurrencyShort(k.spendThisMonth)}
           delta={k.spendDelta}
           featured
@@ -80,15 +82,15 @@ export default async function ComprasDashboardPage() {
         <div className="nx-surface card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-stroke-soft">
             <div>
-              <div className="text-sm font-bold text-fg-primary">Gasto últimos 6 meses</div>
+              <div className="text-sm font-bold text-fg-primary">Importes reales · últimos 6 meses</div>
               <div className="text-[11px] text-fg-secondary mt-0.5">
-                Emitidas vs. conciliadas contra factura
+                Excluye estimaciones y precios pendientes
               </div>
             </div>
             <div className="flex items-center gap-3 text-[11px] font-semibold">
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#050555" }} />
-                Emitidas
+                Con importe real
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#C90812" }} />
@@ -109,7 +111,7 @@ export default async function ComprasDashboardPage() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-stroke-soft">
             <div>
               <div className="text-sm font-bold text-fg-primary">Mix de categorías</div>
-              <div className="text-[11px] text-fg-secondary mt-0.5">YTD por categoría</div>
+              <div className="text-[11px] text-fg-secondary mt-0.5">Sólo importes reales por categoría</div>
             </div>
           </div>
           <div className="p-5">
@@ -205,7 +207,7 @@ function RecentOrdersCard({ rows }: { rows: Awaited<ReturnType<typeof getDashboa
               {o.vendor?.categoria ?? "—"}
             </div>
             <div className="text-right text-sm tabular font-bold text-fg-brand w-28">
-              {fmtCurrency(o.total)}
+              {formatOrderAmount(o)}
             </div>
             <PoStatusBadge status={o.status} className="hidden sm:inline-flex" />
             <Icon name="chevron-right" size={14} className="text-fg-muted hidden md:block" />
@@ -214,6 +216,16 @@ function RecentOrdersCard({ rows }: { rows: Awaited<ReturnType<typeof getDashboa
       </div>
     </div>
   );
+}
+
+function formatOrderAmount(
+  order: Awaited<ReturnType<typeof getDashboardKpis>>["recentOrders"][number],
+): string {
+  const amount = purchaseOrderAmount(order);
+  if (amount.kind === "pending") return "Pendiente";
+  return amount.kind === "estimated"
+    ? `${fmtCurrency(amount.amount)} est.`
+    : fmtCurrency(amount.amount);
 }
 
 function AlertsCard() {

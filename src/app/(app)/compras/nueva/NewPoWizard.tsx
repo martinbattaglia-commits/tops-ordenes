@@ -15,6 +15,7 @@ import {
   validateCuit,
 } from "@/lib/compras/format";
 import { computeTotals, lineSubtotal } from "@/lib/compras/totals";
+import { PO_PRICE_STATE_LABEL } from "@/lib/compras/pricing";
 import { POSITIVE_CATEGORIES, COND_PAGO_OPTIONS, ORG } from "@/lib/org";
 import type { Vendor, Product, POItem } from "@/lib/types-po";
 import type { Depot } from "@/lib/types";
@@ -52,8 +53,10 @@ const EMPTY_ITEM = (pos: number): POItem => ({
   label: "",
   unit: "un",
   qty: 1,
-  price: 0,
-  subtotal: 0,
+  price: null,
+  subtotal: null,
+  price_state: "pending",
+  price_reason: null,
   pos,
 });
 
@@ -86,18 +89,46 @@ export function NewPoWizard({ vendors, products }: Props) {
     signatureHash: null,
   }));
 
-  const totals = useMemo(() => computeTotals(draft.items), [draft.items]);
+  // El dominio estricto rechaza un borrador incompleto. Para la vista previa se
+  // proyecta temporalmente cualquier campo aún vacío a "pending"; el submit
+  // conserva los bytes reales y canStep3 exige motivo/precio antes de avanzar.
+  const totals = useMemo(
+    () => computeTotals(draft.items.map((item) => {
+      const qty = Number.isFinite(item.qty) && item.qty > 0 ? item.qty : 1;
+      if (item.price_state === "pending" || item.price === null || !Number.isFinite(item.price)) {
+        return { ...item, qty, price: null, price_state: "pending" as const, price_reason: item.price_reason || "Borrador incompleto" };
+      }
+      if (item.price_state === "estimated") {
+        return { ...item, qty, price_reason: item.price_reason || "Borrador incompleto" };
+      }
+      return { ...item, qty };
+    })),
+    [draft.items],
+  );
 
   const cuitOk = validateCuit(draft.vendor.cuit);
 
   const canStep1 =
+    Boolean(draft.vendor.id) &&
     draft.vendor.razon.trim().length >= 2 &&
     draft.vendor.cuit.replace(/\D/g, "").length === 11 &&
     draft.vendor.email.includes("@");
   const canStep2 =
     !!draft.depot && !!draft.categoria && !!draft.cond_pago && !!draft.entrega;
   const canStep3 =
-    draft.items.length > 0 && draft.items.every((it) => it.label.trim().length > 0 && it.qty > 0);
+    draft.items.length > 0 && draft.items.every((it) => {
+      if (
+        it.label.trim().length === 0 ||
+        !Number.isFinite(it.qty) ||
+        it.qty <= 0 ||
+        Math.abs(it.qty * 100 - Math.round(it.qty * 100)) >= 1e-7
+      ) return false;
+      if (it.price_state === "pending") {
+        return it.price === null && (it.price_reason?.trim().length ?? 0) >= 3;
+      }
+      if (it.price === null || it.price < 0) return false;
+      return it.price_state === "known" || (it.price_reason?.trim().length ?? 0) >= 3;
+    });
   const canStep4 = draft.signed;
 
   const stepReady = [canStep1, canStep2, canStep3, canStep4];
@@ -112,8 +143,12 @@ export function NewPoWizard({ vendors, products }: Props) {
     setError(null);
     setSaving(true);
     try {
+      if (!draft.vendor.id) {
+        setError("Seleccioná un proveedor activo del maestro antes de emitir.");
+        return;
+      }
       const res = await createPurchaseOrderAction({
-        vendor: draft.vendor,
+        vendor: { ...draft.vendor, id: draft.vendor.id },
         depot: draft.depot,
         destino: draft.destino,
         entrega: draft.entrega,
@@ -201,8 +236,10 @@ export function NewPoWizard({ vendors, products }: Props) {
                 Atrás
               </button>
               <div className="text-xs text-fg-secondary tabular">
-                Subtotal estimado:{" "}
-                <span className="font-bold text-fg-brand">{fmtCurrencyShort(totals.total)}</span>
+                {totals.state === "known" ? "Total real" : totals.state === "estimated" ? "Total estimado" : "Importe"}:{" "}
+                <span className="font-bold text-fg-brand">
+                  {totals.state === "pending" ? "pendiente" : fmtCurrencyShort(totals.planningTotal)}
+                </span>
               </div>
               <button
                 type="button"
@@ -244,6 +281,12 @@ export function NewPoWizard({ vendors, products }: Props) {
                   neto: totals.neto,
                   iva: totals.iva,
                   total: totals.total,
+                  price_state: totals.state,
+                  planning_neto: totals.planningNeto,
+                  planning_iva: totals.planningIva,
+                  planning_total: totals.planningTotal,
+                  known_partial_neto: totals.knownPartialNeto,
+                  pending_price_lines: totals.pendingLines,
                   signed_by: draft.signed ? ORG.emitter.name : null,
                   signed_at: draft.signed ? new Date().toISOString() : null,
                 }}
@@ -266,7 +309,7 @@ function stepSubtitle(i: number): string {
     case 2:
       return "Cargá los productos del catálogo o tipeá libre. Los totales se calculan automáticamente.";
     case 3:
-      return "Único habilitado: José Luis Battaglia, Director de Operaciones. Tu firma queda hasheada con SHA-256.";
+      return "Único habilitado: José Luis Rodríguez Silva, Director de Operaciones y Apoderado. Tu firma queda hasheada con SHA-256.";
     default:
       return "";
   }
@@ -527,7 +570,12 @@ function VendorStep({
             }
           />
         </Field>
-        <Field label="Email" required cs={2} help="Recibirá el PDF firmado automáticamente">
+        <Field
+          label="Email"
+          required
+          cs={2}
+          help="Recibirá una notificación; el PDF firmado se entrega sólo por canal autorizado"
+        >
           <div className="relative">
             <Icon
               name="mail"
@@ -727,7 +775,7 @@ function ProductsStep({
   products: Product[];
   draft: Draft;
   setDraft: (next: Draft | ((d: Draft) => Draft)) => void;
-  totals: { neto: number; iva: number; total: number };
+  totals: ReturnType<typeof computeTotals>;
 }) {
   const [pickerForIdx, setPickerForIdx] = useState<number | null>(null);
 
@@ -736,6 +784,7 @@ function ProductsStep({
       const items = d.items.map((it, idx) => {
         if (idx !== i) return it;
         const next = { ...it, ...patch };
+        if (patch.price_state === "pending") next.price = null;
         next.subtotal = lineSubtotal(next.qty, next.price);
         return next;
       });
@@ -794,6 +843,31 @@ function ProductsStep({
                     onFocus={() => setPickerForIdx(i)}
                     onChange={(e) => updateItem(i, { label: e.target.value, sku: null })}
                   />
+                  <div className="grid grid-cols-[150px_minmax(180px,1fr)] gap-2 px-1 pb-1">
+                    <select
+                      className="input input-sm text-xs"
+                      value={it.price_state}
+                      onChange={(e) => updateItem(i, {
+                        price_state: e.target.value as POItem["price_state"],
+                        price_reason: e.target.value === "known" ? null : it.price_reason,
+                      })}
+                      aria-label={`Estado de precio, línea ${i + 1}`}
+                    >
+                      <option value="known">Conocido</option>
+                      <option value="estimated">Estimado</option>
+                      <option value="pending">Pendiente</option>
+                    </select>
+                    {it.price_state !== "known" && (
+                      <input
+                        className="input input-sm text-xs"
+                        value={it.price_reason ?? ""}
+                        maxLength={500}
+                        placeholder={it.price_state === "pending" ? "Motivo del precio pendiente" : "Fuente o motivo del estimado"}
+                        onChange={(e) => updateItem(i, { price_reason: e.target.value })}
+                        aria-label={`Motivo de precio, línea ${i + 1}`}
+                      />
+                    )}
+                  </div>
                   {pickerForIdx === i && (
                     <ProductPicker
                       products={products}
@@ -803,7 +877,9 @@ function ProductsStep({
                           sku: p.sku,
                           label: p.label,
                           unit: p.unit,
-                          price: p.price,
+                          price: p.price > 0 ? p.price : null,
+                          price_state: p.price > 0 ? "known" : "pending",
+                          price_reason: null,
                           qty: it.qty || 1,
                         });
                         setPickerForIdx(null);
@@ -816,8 +892,8 @@ function ProductsStep({
                   <input
                     type="number"
                     inputMode="numeric"
-                    min={0}
-                    step={1}
+                    min={0.01}
+                    step={0.01}
                     className="w-full px-2 py-2 rounded-md border border-transparent hover:bg-white hover:border-stroke-soft focus:bg-white focus:border-tops-blue-700 focus:outline-none focus:ring-2 focus:ring-tops-blue-700/20 text-sm text-right tabular"
                     value={it.qty || ""}
                     onChange={(e) => updateItem(i, { qty: Number(e.target.value) || 0 })}
@@ -837,12 +913,17 @@ function ProductsStep({
                     min={0}
                     step={0.01}
                     className="w-full px-2 py-2 rounded-md border border-transparent hover:bg-white hover:border-stroke-soft focus:bg-white focus:border-tops-blue-700 focus:outline-none focus:ring-2 focus:ring-tops-blue-700/20 text-sm text-right tabular"
-                    value={it.price || ""}
-                    onChange={(e) => updateItem(i, { price: Number(e.target.value) || 0 })}
+                    disabled={it.price_state === "pending"}
+                    placeholder={it.price_state === "pending" ? "Pendiente" : "0,00"}
+                    value={it.price ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      updateItem(i, { price: raw === "" ? null : Number(raw) });
+                    }}
                   />
                 </td>
                 <td className="px-2 py-2 text-right tabular font-bold text-fg-brand">
-                  {fmtCurrency(it.subtotal)}
+                  {it.subtotal === null ? "—" : fmtCurrency(it.subtotal)}
                 </td>
                 <td className="px-1 py-1">
                   <button
@@ -873,18 +954,35 @@ function ProductsStep({
 
       {/* Totales */}
       <div className="rounded-lg bg-neutral-50 border-t border-stroke-soft p-4 mt-2">
-        <div className="flex justify-between text-sm text-fg-secondary py-1">
-          <span>Subtotal neto</span>
-          <b className="text-fg-primary tabular">{fmtCurrency(totals.neto)}</b>
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <span className={`badge ${totals.state === "known" ? "badge-success" : "badge-warning"}`}>
+            {PO_PRICE_STATE_LABEL[totals.state]}
+          </span>
+          <span className="text-xs text-fg-muted">Responsable: usuario que emite la OC</span>
         </div>
-        <div className="flex justify-between text-sm text-fg-secondary py-1">
-          <span>IVA 21%</span>
-          <b className="text-fg-primary tabular">{fmtCurrency(totals.iva)}</b>
-        </div>
-        <div className="flex justify-between pt-2 mt-1 border-t border-stroke-soft text-base font-bold text-fg-brand">
-          <span>TOTAL</span>
-          <b className="tabular text-lg">{fmtCurrency(totals.total)}</b>
-        </div>
+        {totals.state === "pending" ? (
+          <div className="rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-3 text-sm text-fg-primary">
+            Hay {totals.pendingLines} {totals.pendingLines === 1 ? "línea" : "líneas"} sin precio. La OC puede emitirse, pero no informará un total ficticio ni alimentará métricas monetarias.
+            {totals.knownPartialNeto > 0 && (
+              <div className="mt-1 text-xs text-fg-secondary">Parcial conocido: {fmtCurrency(totals.knownPartialNeto)} neto.</div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-between text-sm text-fg-secondary py-1">
+              <span>{totals.state === "estimated" ? "Neto estimado" : "Subtotal neto"}</span>
+              <b className="text-fg-primary tabular">{fmtCurrency(totals.planningNeto)}</b>
+            </div>
+            <div className="flex justify-between text-sm text-fg-secondary py-1">
+              <span>IVA 21%</span>
+              <b className="text-fg-primary tabular">{fmtCurrency(totals.planningIva)}</b>
+            </div>
+            <div className="flex justify-between pt-2 mt-1 border-t border-stroke-soft text-base font-bold text-fg-brand">
+              <span>{totals.state === "estimated" ? "TOTAL ESTIMADO" : "TOTAL"}</span>
+              <b className="tabular text-lg">{fmtCurrency(totals.planningTotal)}</b>
+            </div>
+          </>
+        )}
       </div>
 
       <Field label="Observaciones para el proveedor">
@@ -988,6 +1086,8 @@ function SmartSuggestion({
           qty: 24,
           price: tape.price,
           subtotal: lineSubtotal(24, tape.price),
+          price_state: tape.price > 0 ? "known" : "pending",
+          price_reason: null,
           pos: d.items.length,
         },
       ],
@@ -1027,7 +1127,7 @@ function SignatureStep({
 }: {
   draft: Draft;
   setDraft: (next: Draft | ((d: Draft) => Draft)) => void;
-  totals: { neto: number; iva: number; total: number };
+  totals: ReturnType<typeof computeTotals>;
   onSubmit: () => void;
   saving: boolean;
   error: string | null;
@@ -1057,7 +1157,13 @@ function SignatureStep({
             {ORG.emitter.role} · {ORG.emitter.email}
           </div>
         </div>
-        <span className="text-xs text-fg-muted tabular">Total: {fmtCurrency(totals.total)}</span>
+        <span className="text-xs text-fg-muted tabular">
+          {totals.state === "known"
+            ? `Total: ${fmtCurrency(totals.total)}`
+            : totals.state === "estimated"
+              ? `Estimado: ${fmtCurrency(totals.planningTotal)}`
+              : "Importe pendiente"}
+        </span>
       </div>
 
       <SignaturePad ref={padRef} onChange={onInkChange} />
@@ -1085,7 +1191,7 @@ function SignatureStep({
           {[
             { icon: "file-pdf" as const, label: "Generar PDF corporativo con QR y firma" },
             { icon: "drive" as const, label: `Subir a Drive: /${ORG.driveRoot}/Mayo/${draft.vendor.razon || "Proveedor"}` },
-            { icon: "mail" as const, label: `Enviar email a ${draft.vendor.email || "—"}, ${ORG.admin.email} y ${ORG.emitter.email}` },
+            { icon: "mail" as const, label: `Enviar notificación a ${draft.vendor.email || "—"}, ${ORG.admin.email} y ${ORG.emitter.email}` },
             { icon: "database" as const, label: "Registrar en historial y trazabilidad" },
           ].map((row, i) => (
             <li key={i} className="flex items-center gap-2.5">

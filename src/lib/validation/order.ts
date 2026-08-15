@@ -65,14 +65,17 @@ const intOr0 = z.preprocess((v) => {
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 }, z.number().int("Debe ser entero").nonnegative("Debe ser ≥ 0"));
 
-/** Cantidad: ≥ 1, default 1 si llega vacío. */
+/** Cantidad positiva explícita. Ausencia e inputs inválidos fallan cerrado. */
 const qtyPositive = z.preprocess((v) => {
-  if (v === "" || v === null || v === undefined) return 1;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-}, z.number().positive("Cantidad debe ser mayor a 0"));
+  if (typeof v === "string" && v.trim() !== "") return Number(v);
+  return v;
+}, z.number().finite().positive("Cantidad debe ser mayor a 0").max(9_999_999_999.99).refine(
+  (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-7,
+  "Máximo dos decimales",
+));
 
 export const CreateOrderSchema = z.object({
+  pricing_version_id: z.string().uuid().nullable().default(null),
   client: z.object({
     id: z.string().nullable(),
     razon: z.string().min(2, "Razón social muy corta").max(200),
@@ -100,6 +103,17 @@ export const CreateOrderSchema = z.object({
           unit: z.string(),
           rate: numAny,
           subtotal: numAny,
+          qty_requested: qtyPositive.optional(),
+          pricing_kind: z
+            .enum(["catalog", "transport", "urgent", "manual", "bonification"])
+            .default("catalog"),
+          pricing_reason: z.string().max(500).default(""),
+          second_trip_discount: z.boolean().default(false),
+          surcharge: z.enum(["none", "17_19", "19_21", "21_plus"]).default("none"),
+          expected_tariff_rate_id: z.string().uuid().nullable().optional(),
+          expected_client_rate_id: z.string().uuid().nullable().optional(),
+          manual_rate: numAny.optional(),
+          manual_subtotal: numAny.optional(),
         })
         // Las líneas de bonificación ("bonif:…") son descuentos → importes ≤ 0.
         // Cualquier otra línea de servicio debe ser ≥ 0 (no se admiten negativos
@@ -116,6 +130,16 @@ export const CreateOrderSchema = z.object({
               ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subtotal"], message: "Debe ser ≥ 0" });
             if (s.rate < 0)
               ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate"], message: "Debe ser ≥ 0" });
+          }
+          if (
+            (s.pricing_kind === "manual" || s.pricing_kind === "bonification") &&
+            s.pricing_reason.trim().length < 3
+          ) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["pricing_reason"],
+              message: "El precio manual requiere motivo",
+            });
           }
         })
     )

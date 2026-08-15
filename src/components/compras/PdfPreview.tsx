@@ -5,6 +5,7 @@ import { fmtCurrency, fmtDateTime, fmtCuit } from "@/lib/compras/format";
 import { ORG } from "@/lib/org";
 import { Icon } from "@/components/Icon";
 import { DOC } from "@/lib/doc-system/tokens";
+import { PO_PRICE_STATE_LABEL } from "@/lib/compras/pricing";
 
 /**
  * Vista previa A4 — espejo HTML del PDF generado por @react-pdf/renderer
@@ -23,9 +24,11 @@ interface Props {
 
 export function PdfPreview({ po, signatureDataUrl, qrUrl, className, fillerRows = 4 }: Props) {
   const items = po.items ?? [];
-  const neto = po.neto ?? items.reduce((a, b) => a + b.subtotal, 0);
-  const iva = po.iva ?? Math.round(neto * 0.21);
-  const total = po.total ?? neto + iva;
+  const priceState = po.price_state ?? "known";
+  const computedNeto = items.reduce((a, b) => a + (b.subtotal ?? 0), 0);
+  const neto = po.neto ?? po.planning_neto ?? (priceState === "pending" ? null : computedNeto);
+  const iva = po.iva ?? po.planning_iva ?? (neto === null ? null : Math.round(neto * 0.21));
+  const total = po.total ?? po.planning_total ?? (neto === null || iva === null ? null : neto + iva);
   const filler = Math.max(0, fillerRows - items.length);
   const year = po.date ? String(new Date(po.date).getFullYear()) : String(new Date().getFullYear());
 
@@ -180,6 +183,11 @@ export function PdfPreview({ po, signatureDataUrl, qrUrl, className, fillerRows 
                           ({it.sku})
                         </span>
                       )}
+                      {it.price_state !== "known" && (
+                        <span className="block text-[8px] font-bold uppercase" style={{ color: DOC.red }}>
+                          {PO_PRICE_STATE_LABEL[it.price_state]}{it.price_reason ? ` · ${it.price_reason}` : ""}
+                        </span>
+                      )}
                     </td>
                     <td className="py-1.5 text-right font-mono">{it.qty}</td>
                     <td className="py-1.5 text-center" style={{ color: DOC.textSec }}>
@@ -272,7 +280,7 @@ export function PdfPreview({ po, signatureDataUrl, qrUrl, className, fillerRows 
                 className="flex justify-between py-1 text-[10px]"
                 style={{ borderBottom: `1px solid ${DOC.rule}` }}
               >
-                <span style={{ color: DOC.textSec }}>Subtotal neto</span>
+                <span style={{ color: DOC.textSec }}>{priceState === "estimated" ? "Neto estimado" : "Subtotal neto"}</span>
                 <span className="font-mono">{fmtCurrency(neto)}</span>
               </div>
               <div
@@ -291,7 +299,7 @@ export function PdfPreview({ po, signatureDataUrl, qrUrl, className, fillerRows 
                     className="font-extrabold"
                     style={{ color: DOC.red, fontSize: 8, letterSpacing: "0.16em" }}
                   >
-                    TOTAL
+                    {priceState === "known" ? "TOTAL" : priceState === "estimated" ? "TOTAL ESTIMADO" : "IMPORTE PENDIENTE"}
                   </div>
                   <div style={{ color: DOC.onNavySoft, fontSize: 6.5, letterSpacing: "0.1em" }}>
                     PESOS ARGENTINOS

@@ -44,7 +44,7 @@ export default async function PedidoDetailPage({ params }: { params: { id: strin
   const { order, items } = detail;
 
   const allocations = await listAllocations(order.id);
-  const clients = order.status === "borrador" ? await listActiveClientRefs() : [];
+  const clients = order.status === "borrador" ? await listActiveClientRefs("pedidos") : [];
   const skuById = new Map(items.map((it) => [it.id, it.sku]));
 
   // Visualización FEFO: cola de lotes por SKU del pedido (reutiliza capa 9A).

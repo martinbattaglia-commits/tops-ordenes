@@ -1,16 +1,22 @@
 import { listClients, listOperators } from "@/lib/data/orders";
-import { SERVICES_CATALOG } from "@/lib/services-catalog";
+import { loadServicePricing } from "@/lib/data/service-pricing";
 import NewOrderWizard from "./NewOrderWizard";
 
 export const metadata = { title: "Nueva orden" };
+export const dynamic = "force-dynamic";
 
 export default async function NewOrderPage() {
-  const [clients, operators] = await Promise.all([listClients(), listOperators()]);
+  const [clients, operators, pricing] = await Promise.all([
+    listClients("create"),
+    listOperators(),
+    loadServicePricing(),
+  ]);
   return (
     <NewOrderWizard
       clients={clients}
       operators={operators}
-      catalog={SERVICES_CATALOG}
+      catalog={pricing.catalog}
+      pricing={pricing}
     />
   );
 }

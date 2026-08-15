@@ -11,9 +11,16 @@ interface Props {
   initialDepot: Depot | "todos";
   resultCount: number;
   sumTotal: number;
+  nonRealAmountCount: number;
 }
 
-export function OrdersToolbar({ initialSearch, initialDepot, resultCount, sumTotal }: Props) {
+export function OrdersToolbar({
+  initialSearch,
+  initialDepot,
+  resultCount,
+  sumTotal,
+  nonRealAmountCount,
+}: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const [pending, start] = useTransition();
@@ -84,7 +91,12 @@ export function OrdersToolbar({ initialSearch, initialDepot, resultCount, sumTot
           <strong className="text-fg-primary">{resultCount}</strong> resultados
         </span>
         <span>·</span>
-        <span className="tabular font-bold text-fg-brand">{fmtCurrencyShort(sumTotal)}</span>
+        <span className="tabular font-bold text-fg-brand" title="Sólo precios conocidos o conciliados">
+          {fmtCurrencyShort(sumTotal)} reales
+        </span>
+        {nonRealAmountCount > 0 && (
+          <span className="text-status-warning">{nonRealAmountCount} sin importe real</span>
+        )}
         {pending && <Icon name="refresh" size={12} className="text-fg-muted animate-spin" />}
       </div>
     </div>

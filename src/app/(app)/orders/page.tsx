@@ -57,6 +57,10 @@ export default async function OrdersPage({ searchParams }: PageProps) {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link href="/orders/tarifas" className="btn btn-ghost btn-sm">
+            <Icon name="calculator" size={14} />
+            <span className="hidden sm:inline">Tarifas</span>
+          </Link>
           <Link href="/api/orders/export" className="btn btn-ghost btn-sm">
             <Icon name="export" size={14} />
             <span className="hidden sm:inline">Exportar CSV</span>

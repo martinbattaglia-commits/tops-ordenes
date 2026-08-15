@@ -3,6 +3,7 @@ import { ORG } from "@/lib/org";
 import { fmtCurrency, fmtDate } from "./format";
 import type { POItem } from "@/lib/types-po";
 import type { Totals } from "./totals";
+import { PO_PRICE_STATE_LABEL } from "./pricing";
 import {
   escapeHtml,
   renderEmailShell,
@@ -13,6 +14,8 @@ import { DOC } from "@/lib/doc-system/tokens";
 
 interface SendInput {
   public_id: string;
+  issuedAt: string;
+  emitter: { name: string; email: string; role: string };
   vendor: { razon: string; cuit: string; email: string; contacto: string };
   items: POItem[];
   totals: Totals;
@@ -40,45 +43,67 @@ export interface SendPurchaseOrderEmailsResult {
  */
 export async function sendPurchaseOrderEmails(
   input: SendInput,
+  idempotencyKey: string,
 ): Promise<SendPurchaseOrderEmailsResult> {
   const to = [input.vendor.email].filter(Boolean);
-  const cc = [ORG.admin.email, ORG.emitter.email].filter(Boolean);
+  const cc = [ORG.admin.email, input.emitter.email].filter(Boolean);
 
   if (!env.email.resendKey) {
-    console.info("[compras] RESEND_API_KEY missing — skipping email send", input.public_id);
+    console.info("[compras] email send skipped", { code: "PO_EMAIL_NOT_CONFIGURED" });
     return { sent: false, providerId: null, skippedReason: "no_resend_key", to, cc };
   }
   if (to.length === 0) {
-    console.warn("[compras] vendor sin email — no se puede enviar", input.public_id);
+    console.warn("[compras] vendor sin email — no se puede enviar", {
+      code: "PO_VENDOR_EMAIL_MISSING",
+    });
     return { sent: false, providerId: null, skippedReason: "vendor_sin_email", to, cc };
+  }
+  if (!/^[\x21-\x7e]{1,256}$/.test(idempotencyKey)) {
+    throw new Error("PO_EMAIL_IDEMPOTENCY_KEY_INVALID");
   }
 
   const subject = `Orden de Compra ${input.public_id} · ${ORG.brand}`;
   const html = renderEmailHtml(input);
   const text = renderEmailText(input);
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.email.resendKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: env.email.from,
-      to,
-      cc,
-      subject,
-      html,
-      text,
-    }),
-  });
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.email.resendKey}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify({
+          from: env.email.from,
+          to,
+          cc,
+          subject,
+          html,
+          text,
+        }),
+      });
+    } catch {
+      if (attempt === 0) continue;
+      throw new Error("PO_EMAIL_SEND_FAILED");
+    }
+    if (res.ok || (res.status < 500 && res.status !== 409)) break;
+  }
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Resend ${res.status}: ${body}`);
+  if (!res || !res.ok) {
+    // Consumimos el body para cerrar correctamente la respuesta, pero jamás lo
+    // propagamos: un proveedor puede incluir destinatarios u otros datos
+    // personales en el error.
+    if (res) await res.text().catch(() => "");
+    throw new Error("PO_EMAIL_PROVIDER_REJECTED");
   }
   const j = (await res.json().catch(() => ({}))) as { id?: string };
-  return { sent: true, providerId: j.id ?? null, to, cc };
+  if (!j.id || typeof j.id !== "string" || j.id.length > 200) {
+    throw new Error("PO_EMAIL_PROVIDER_RESPONSE_INVALID");
+  }
+  return { sent: true, providerId: j.id, to, cc };
 }
 
 /** Celda del resumen (Cond. pago / Entrega / Items / Total). */
@@ -99,22 +124,25 @@ export function renderEmailHtml(input: SendInput): string {
     <tr>
       <td style="padding:6px 8px;font-size:13px;color:${DOC.ink};">${escapeHtml(it.label)}</td>
       <td align="right" style="padding:6px 8px;font-size:13px;color:${DOC.ink};font-variant-numeric:tabular-nums;">${it.qty} ${escapeHtml(it.unit)}</td>
-      <td align="right" style="padding:6px 8px;font-size:13px;color:${DOC.navy};font-weight:700;font-variant-numeric:tabular-nums;">${escapeHtml(fmtCurrency(it.subtotal))}</td>
+      <td align="right" style="padding:6px 8px;font-size:13px;color:${DOC.navy};font-weight:700;font-variant-numeric:tabular-nums;">${escapeHtml(it.subtotal === null ? PO_PRICE_STATE_LABEL[it.price_state] : fmtCurrency(it.subtotal))}</td>
     </tr>`,
     )
     .join("");
 
-  const pdfUrl = `${env.app.url}/api/compras/${encodeURIComponent(input.public_id)}/pdf`;
-
   const bodyHtml = `
     <p style="margin:0 0 10px;font-size:14px;line-height:1.55;">Estimado/a <b>${escapeHtml(input.vendor.contacto || input.vendor.razon)}</b>,</p>
-    <p style="margin:0 0 14px;font-size:14px;line-height:1.55;">Adjuntamos la orden de compra ${escapeHtml(input.public_id)} firmada por nuestro ${escapeHtml(ORG.emitter.role)}. Le solicitamos confirmación de recepción y coordinación de entrega.</p>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.55;">Emitimos la orden de compra ${escapeHtml(input.public_id)}, firmada por ${escapeHtml(input.emitter.name)} (${escapeHtml(input.emitter.role)}). El documento firmado se entrega exclusivamente por un canal autorizado de TOPS. Le solicitamos confirmación de recepción y coordinación de entrega.</p>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${DOC.bgSoft};border-radius:8px;">
       <tr>
         ${summaryCell("Cond. pago", escapeHtml(input.cond_pago))}
         ${summaryCell("Entrega", escapeHtml(input.entrega))}
         ${summaryCell("Items", `<span style="font-variant-numeric:tabular-nums;">${input.items.length}</span>`)}
-        ${summaryCell("Total", `<span style="color:${DOC.red};font-variant-numeric:tabular-nums;">${escapeHtml(fmtCurrency(input.totals.total))}</span>`)}
+        ${summaryCell(
+          input.totals.state === "known" ? "Total" : input.totals.state === "estimated" ? "Total estimado" : "Importe",
+          `<span style="color:${DOC.red};font-variant-numeric:tabular-nums;">${escapeHtml(
+            input.totals.state === "pending" ? "Pendiente de precio" : fmtCurrency(input.totals.planningTotal),
+          )}</span>`,
+        )}
       </tr>
     </table>
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid ${DOC.rule};margin-top:14px;">
@@ -126,10 +154,9 @@ export function renderEmailHtml(input: SendInput): string {
     eyebrow: "Compras · Orden de Compra",
     title: input.public_id,
     titleMono: true,
-    subtitle: `${fmtDate(new Date())} · ${input.categoria}`,
+    subtitle: `${fmtDate(new Date(input.issuedAt))} · ${input.categoria}`,
     bodyHtml,
-    cta: { label: "Ver Orden de Compra (PDF) →", url: pdfUrl },
-    footerExtraHtml: `<b>${escapeHtml(ORG.emitter.name)}</b> · ${escapeHtml(ORG.emitter.role)} — este email fue enviado automáticamente por TOPS Compras.`,
+    footerExtraHtml: `<b>${escapeHtml(input.emitter.name)}</b> · ${escapeHtml(input.emitter.role)} — este email fue enviado automáticamente por TOPS Compras.`,
   });
 }
 
@@ -140,19 +167,21 @@ export function renderEmailText(input: SendInput): string {
     "",
     `Estimado/a ${input.vendor.contacto || input.vendor.razon},`,
     "",
-    `Adjuntamos la orden de compra firmada por nuestro ${ORG.emitter.role}.`,
+    `Emitimos la orden de compra firmada por ${input.emitter.name} (${input.emitter.role}).`,
     "",
     "Detalles:",
-    `- Fecha: ${fmtDate(new Date())}`,
+    `- Fecha: ${fmtDate(new Date(input.issuedAt))}`,
     `- Cond. pago: ${input.cond_pago}`,
     `- Entrega: ${input.entrega}`,
     `- Items: ${input.items.length}`,
-    `- Total: ${fmtCurrency(input.totals.total)}`,
+    `- ${input.totals.state === "known" ? "Total" : input.totals.state === "estimated" ? "Total estimado" : "Importe"}: ${
+      input.totals.state === "pending" ? "Pendiente de precio" : fmtCurrency(input.totals.planningTotal)
+    }`,
     "",
-    `PDF: ${env.app.url}/api/compras/${encodeURIComponent(input.public_id)}/pdf`,
+    "El documento firmado se entrega exclusivamente por un canal autorizado de TOPS.",
     "",
     input.observ ? `Observaciones: ${input.observ}` : false,
     input.observ ? "" : false,
-    `${ORG.emitter.name} · ${ORG.emitter.role}`,
+    `${input.emitter.name} · ${input.emitter.role}`,
   ]);
 }

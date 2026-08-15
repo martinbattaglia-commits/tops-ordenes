@@ -2,14 +2,16 @@
  * Formatters AR (es-AR): pesos argentinos, miles `.`, decimales `,`.
  */
 
-export function fmtCurrency(n: number): string {
+export function fmtCurrency(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "Precio pendiente";
   return (
     "$ " +
     Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 })
   );
 }
 
-export function fmtCurrencyShort(n: number): string {
+export function fmtCurrencyShort(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "Pendiente";
   if (Math.abs(n) >= 1e6) {
     return "$ " + (n / 1e6).toFixed(1).replace(".", ",") + " M";
   }

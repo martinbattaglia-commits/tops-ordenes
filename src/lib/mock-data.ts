@@ -116,15 +116,18 @@ function makeMockOrders(): Order[] {
     const services: OrderService[] = [];
     const nSvc = 1 + Math.floor(rng() * 2);
     for (let j = 0; j < nSvc; j++) {
-      const s = SERVICES_CATALOG[Math.floor(rng() * SERVICES_CATALOG.length)];
+      const pricedServices = SERVICES_CATALOG.filter(
+        (service) => service.rate != null && service.rate > 0 && !service.requires_quote,
+      );
+      const s = pricedServices[Math.floor(rng() * pricedServices.length)];
       const qty = s.unit === "mes" ? 1 : 1 + Math.floor(rng() * 8);
       services.push({
         service_slug: s.slug,
         label: s.label,
         qty,
         unit: s.unit,
-        rate: s.rate,
-        subtotal: qty * s.rate,
+        rate: s.rate!,
+        subtotal: qty * s.rate!,
       });
     }
     const dateOff = Math.floor(rng() * 18);

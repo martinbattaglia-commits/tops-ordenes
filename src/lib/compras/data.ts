@@ -16,6 +16,7 @@ import type {
   POEmailSend,
 } from "@/lib/types-po";
 import type { Depot } from "@/lib/types";
+import { realPurchaseAmount, summarizePurchaseAmounts } from "./order-amounts";
 
 /**
  * Data accessors del módulo OC. Patrón idéntico a `src/lib/data/orders.ts`
@@ -37,10 +38,75 @@ export interface PoListResult {
   rows: PurchaseOrder[];
   total: number;
   counts: Record<string, number>;
+  /** Suma exclusiva de importes reales conocidos o conciliados. */
   sumTotal: number;
+  /** Órdenes excluidas de la suma por precio estimado o pendiente. */
+  nonRealAmountCount: number;
 }
 
 const PAGE_DEFAULT = 18;
+
+export class PurchaseAccessError extends Error {
+  readonly status: 401 | 403 | 503;
+
+  constructor(code: "PURCHASE_AUTH_REQUIRED" | "PURCHASE_FORBIDDEN" | "PURCHASE_AUTH_UNAVAILABLE", status: 401 | 403 | 503) {
+    super(code);
+    this.name = "PurchaseAccessError";
+    this.status = status;
+  }
+}
+
+type PurchasePermission = "compras.view" | "compras.export";
+type UserSupabaseClient = NonNullable<ReturnType<typeof createClient>>;
+
+async function assertPurchasePermission(
+  supabase: UserSupabaseClient,
+  permission: PurchasePermission,
+): Promise<void> {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) {
+    throw new PurchaseAccessError("PURCHASE_AUTH_REQUIRED", 401);
+  }
+  const { data: allowed, error: permissionError } = await supabase.rpc("has_permission", {
+    p_slug: permission,
+  });
+  if (permissionError) {
+    throw new PurchaseAccessError("PURCHASE_AUTH_UNAVAILABLE", 503);
+  }
+  if (allowed !== true) {
+    throw new PurchaseAccessError("PURCHASE_FORBIDDEN", 403);
+  }
+}
+
+/** Frontera reutilizable por route handlers; nunca entrega datos ni errores internos. */
+export async function requirePurchasePermission(permission: PurchasePermission): Promise<void> {
+  if (env.app.demoMode) return;
+  const supabase = createClient();
+  if (!supabase) {
+    throw new PurchaseAccessError("PURCHASE_AUTH_UNAVAILABLE", 503);
+  }
+  await assertPurchasePermission(supabase, permission);
+}
+
+/**
+ * La identidad documental de una OC sale del snapshot inmutable. El join al
+ * maestro conserva sólo campos auxiliares de UI; nunca puede reemplazar razón,
+ * CUIT, contacto, email ni condiciones congeladas al emitir.
+ */
+function withDocumentVendor(row: PurchaseOrder): PurchaseOrder {
+  const snapshot = row.vendor_snapshot;
+  if (!snapshot?.id || !snapshot.razon || !snapshot.cuit) return row;
+  return {
+    ...row,
+    vendor: {
+      ...(row.vendor ?? snapshot),
+      ...snapshot,
+      tags: row.vendor?.tags ?? snapshot.tags ?? [],
+      active: snapshot.active ?? true,
+      created_at: row.vendor?.created_at ?? snapshot.created_at ?? row.date,
+    },
+  };
+}
 
 function isMock(): boolean {
   return env.app.demoMode || env.app.needsSupabase;
@@ -55,6 +121,7 @@ export async function listPurchaseOrders(filters: PoFilters = {}): Promise<PoLis
 
   const supabase = createClient();
   if (!supabase) return listMock(filters);
+  await assertPurchasePermission(supabase, "compras.view");
 
   const page = filters.page ?? 1;
   const pageSize = filters.pageSize ?? PAGE_DEFAULT;
@@ -81,26 +148,39 @@ export async function listPurchaseOrders(filters: PoFilters = {}): Promise<PoLis
   if (filters.to) q = q.lte("date", filters.to);
 
   const { data, error, count } = await q;
-  if (error) throw new Error(`listPurchaseOrders: ${error.message}`);
+  if (error) throw new Error("LIST_PURCHASE_ORDERS_FAILED");
 
-  // counts por estado para los tabs
-  const { data: countsData, error: cErr } = await supabase
-    .from("purchase_orders")
-    .select("status, total");
-  if (cErr) throw new Error(`listPurchaseOrders.counts: ${cErr.message}`);
-
-  const counts: Record<string, number> = { todas: countsData?.length ?? 0 };
-  let sumTotal = 0;
-  countsData?.forEach((r) => {
-    counts[r.status] = (counts[r.status] ?? 0) + 1;
-    sumTotal += Number(r.total ?? 0);
-  });
+  // El resumen económico se agrega en PostgreSQL sobre el MISMO universo U
+  // filtrado, antes de paginar. Así no queda truncado por el max-rows de
+  // PostgREST y nunca presenta una fila pendiente como importe cero.
+  const { data: metricsRaw, error: metricsError } = await supabase.rpc(
+    "purchase_order_list_metrics",
+    {
+      p_status: filters.status && filters.status !== "todas" ? filters.status : null,
+      p_depot: filters.depot && filters.depot !== "todos" ? filters.depot : null,
+      p_vendor_id: filters.vendor_id ?? null,
+      p_search: filters.search ? sanitize(filters.search) || null : null,
+      p_from: filters.from ?? null,
+      p_to: filters.to ?? null,
+    },
+  );
+  if (metricsError || !metricsRaw || Array.isArray(metricsRaw)) {
+    throw new Error("LIST_PURCHASE_ORDER_METRICS_FAILED");
+  }
+  const metrics = metricsRaw as {
+    counts?: Record<string, number>;
+    total?: number;
+    real_total?: number | string;
+    non_real_count?: number;
+  };
+  const counts: Record<string, number> = { todas: 0, ...(metrics.counts ?? {}) };
 
   return {
-    rows: (data ?? []) as PurchaseOrder[],
-    total: count ?? 0,
+    rows: ((data ?? []) as PurchaseOrder[]).map(withDocumentVendor),
+    total: count ?? metrics.total ?? 0,
     counts,
-    sumTotal,
+    sumTotal: Number(metrics.real_total ?? 0),
+    nonRealAmountCount: Number(metrics.non_real_count ?? 0),
   };
 }
 
@@ -115,6 +195,7 @@ export async function getPurchaseOrder(idOrPublic: string): Promise<PurchaseOrde
 
   const supabase = createClient();
   if (!supabase) return null;
+  await assertPurchasePermission(supabase, "compras.view");
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     idOrPublic
@@ -131,8 +212,8 @@ export async function getPurchaseOrder(idOrPublic: string): Promise<PurchaseOrde
   q = isUuid ? q.eq("id", idOrPublic) : q.eq("public_id", idOrPublic);
 
   const { data, error } = await q.maybeSingle();
-  if (error) throw new Error(`getPurchaseOrder: ${error.message}`);
-  return (data as PurchaseOrder) ?? null;
+  if (error) throw new Error("GET_PURCHASE_ORDER_FAILED");
+  return data ? withDocumentVendor(data as PurchaseOrder) : null;
 }
 
 export async function listRecentPurchaseOrders(limit = 6): Promise<PurchaseOrder[]> {
@@ -160,33 +241,33 @@ export async function listVendors(): Promise<Vendor[]> {
 
   if (!withStats.error) {
     return ((withStats.data ?? []) as Array<
-      Vendor & { stats?: { oc_count: number; ytd_spend: number; last_oc_at: string | null }[] }
+      Vendor & { stats?: { oc_count: number; ytd_spend: number | null; last_oc_at: string | null }[] }
     >).map((v) => ({
       ...v,
       oc_count: v.stats?.[0]?.oc_count ?? 0,
-      ytd_spend: v.stats?.[0]?.ytd_spend ?? 0,
+      // `null` significa que no existe importe real YTD; no se representa como $0.
+      ytd_spend: v.stats?.[0]?.ytd_spend ?? undefined,
       last_oc_at: v.stats?.[0]?.last_oc_at ?? null,
     })) as Vendor[];
   }
 
-  console.warn(
-    "[compras] vendor_stats embed falló, usando fallback sin stats:",
-    withStats.error.message
-  );
+  console.warn("[compras] vendor_stats embed falló, usando fallback sin stats", {
+    code: "VENDOR_STATS_EMBED_FAILED",
+  });
 
-  // Fallback: select plano. Stats quedan en 0 hasta que la vista resuelva.
+  // Fallback: select plano. El monto queda desconocido, nunca $0 aparente.
   const plain = await supabase
     .from("vendors")
     .select("*")
     .eq("active", true)
     .order("razon");
   if (plain.error) {
-    throw new Error(`listVendors: ${plain.error.message}`);
+    throw new Error("LIST_VENDORS_FAILED");
   }
   return ((plain.data ?? []) as Vendor[]).map((v) => ({
     ...v,
     oc_count: 0,
-    ytd_spend: 0,
+    ytd_spend: undefined,
     last_oc_at: null,
   }));
 }
@@ -200,7 +281,7 @@ export async function getVendor(id: string): Promise<Vendor | null> {
     .select("*")
     .eq("id", id)
     .maybeSingle();
-  if (error) throw new Error(`getVendor: ${error.message}`);
+  if (error) throw new Error("GET_VENDOR_FAILED");
   return (data as Vendor) ?? null;
 }
 
@@ -223,7 +304,7 @@ export async function searchVendors(q: string, limit = 10): Promise<Vendor[]> {
     .select("*")
     .or(`razon.ilike.%${sanitize(term)}%,cuit.ilike.%${sanitize(term)}%`)
     .limit(limit);
-  if (error) throw new Error(`searchVendors: ${error.message}`);
+  if (error) throw new Error("SEARCH_VENDORS_FAILED");
   return (data ?? []) as Vendor[];
 }
 
@@ -240,7 +321,7 @@ export async function listProducts(): Promise<Product[]> {
     .select("*")
     .eq("active", true)
     .order("label");
-  if (error) throw new Error(`listProducts: ${error.message}`);
+  if (error) throw new Error("LIST_PRODUCTS_FAILED");
   return (data ?? []) as Product[];
 }
 
@@ -260,7 +341,7 @@ export async function searchProducts(q: string, limit = 10): Promise<Product[]> 
     .select("*")
     .or(`label.ilike.%${sanitize(term)}%,sku.ilike.%${sanitize(term)}%`)
     .limit(limit);
-  if (error) throw new Error(`searchProducts: ${error.message}`);
+  if (error) throw new Error("SEARCH_PRODUCTS_FAILED");
   return (data ?? []) as Product[];
 }
 
@@ -280,7 +361,7 @@ export async function listOrderEvents(orderId: string): Promise<POEvent[]> {
     .select("*")
     .eq("order_id", orderId)
     .order("ts", { ascending: true });
-  if (error) throw new Error(`listOrderEvents: ${error.message}`);
+  if (error) throw new Error("LIST_PURCHASE_ORDER_EVENTS_FAILED");
   return (data ?? []) as POEvent[];
 }
 
@@ -296,7 +377,7 @@ export async function listOrderEmails(orderId: string): Promise<POEmailSend[]> {
     .select("*")
     .eq("order_id", orderId)
     .order("sent_at", { ascending: true });
-  if (error) throw new Error(`listOrderEmails: ${error.message}`);
+  if (error) throw new Error("LIST_PURCHASE_ORDER_EMAILS_FAILED");
   return (data ?? []) as POEmailSend[];
 }
 
@@ -309,6 +390,8 @@ export interface PoKpis {
   ocDelta: string;
   spendThisMonth: number;
   spendDelta: string;
+  /** OCs del mes sin importe real; no se computan como cero. */
+  nonRealThisMonth: number;
   reconciledPct: number;
   reconciledDelta: string;
   signaturePct: number;
@@ -338,29 +421,35 @@ export async function getDashboardKpis(): Promise<PoKpis> {
         .select("*, vendor:vendors(razon, categoria)")
         .gte("date", since.toISOString())
         .order("date", { ascending: false });
-      if (error) throw new Error(`getDashboardKpis: ${error.message}`);
-      orders = (data ?? []) as PurchaseOrder[];
+      if (error) throw new Error("PURCHASE_DASHBOARD_KPIS_FAILED");
+      orders = ((data ?? []) as PurchaseOrder[]).map(withDocumentVendor);
     }
   }
   return computeKpis(orders);
 }
 
-function computeKpis(orders: PurchaseOrder[]): PoKpis {
-  const now = new Date("2026-05-25T11:30:00");
+export function computeKpis(orders: PurchaseOrder[], now = new Date()): PoKpis {
   const month = now.getMonth();
-  const lastMonth = month === 0 ? 11 : month - 1;
+  const year = now.getFullYear();
+  const previous = new Date(year, month - 1, 1);
   const filterActive = (o: PurchaseOrder) =>
     !(["borrador", "anulada"] as PoStatus[]).includes(o.status);
+  const inMonth = (o: PurchaseOrder, targetYear: number, targetMonth: number) => {
+    const date = new Date(o.date);
+    return date.getFullYear() === targetYear && date.getMonth() === targetMonth;
+  };
 
   const thisMonth = orders.filter(
-    (o) => filterActive(o) && new Date(o.date).getMonth() === month
+    (o) => filterActive(o) && inMonth(o, year, month)
   );
   const prevMonth = orders.filter(
-    (o) => filterActive(o) && new Date(o.date).getMonth() === lastMonth
+    (o) => filterActive(o) && inMonth(o, previous.getFullYear(), previous.getMonth())
   );
 
-  const spend = thisMonth.reduce((a, o) => a + Number(o.total ?? 0), 0);
-  const prevSpend = prevMonth.reduce((a, o) => a + Number(o.total ?? 0), 0);
+  const thisMonthAmounts = summarizePurchaseAmounts(thisMonth);
+  const prevMonthAmounts = summarizePurchaseAmounts(prevMonth);
+  const spend = thisMonthAmounts.realTotal;
+  const prevSpend = prevMonthAmounts.realTotal;
   const reconciledThis = thisMonth.filter((o) => o.status === "conciliada").length;
   const reconciledPrev = prevMonth.filter((o) => o.status === "conciliada").length;
   const signedThis = thisMonth.filter((o) => o.signed_at).length;
@@ -391,23 +480,25 @@ function computeKpis(orders: PurchaseOrder[]): PoKpis {
   const emitidas: number[] = [];
   const conciliadas: number[] = [];
   for (let i = 5; i >= 0; i--) {
-    const m = (month - i + 12) % 12;
-    months.push(MONTH_LABELS[m]);
+    const target = new Date(year, month - i, 1);
+    const targetMonth = target.getMonth();
+    months.push(MONTH_LABELS[targetMonth]);
     const inM = orders.filter(
-      (o) => filterActive(o) && new Date(o.date).getMonth() === m
+      (o) => filterActive(o) && inMonth(o, target.getFullYear(), targetMonth)
     );
-    emitidas.push(inM.reduce((a, o) => a + Number(o.total ?? 0), 0));
-    conciliadas.push(
-      inM.filter((o) => o.status === "conciliada").reduce((a, o) => a + Number(o.total ?? 0), 0)
-    );
+    emitidas.push(summarizePurchaseAmounts(inM).realTotal);
+    conciliadas.push(summarizePurchaseAmounts(
+      inM.filter((o) => o.status === "conciliada"),
+    ).realTotal);
   }
 
   // Mix categorías
   const catMap = new Map<string, number>();
-  orders.forEach((o) => {
-    if (!filterActive(o)) return;
+  thisMonth.forEach((o) => {
+    const amount = realPurchaseAmount(o);
+    if (amount === null) return;
     const cat = o.vendor?.categoria || o.categoria || "Otros";
-    catMap.set(cat, (catMap.get(cat) ?? 0) + Number(o.total ?? 0));
+    catMap.set(cat, (catMap.get(cat) ?? 0) + amount);
   });
   const totalMix = Array.from(catMap.values()).reduce((a, b) => a + b, 0) || 1;
   const categoryMix = Array.from(catMap.entries())
@@ -424,8 +515,10 @@ function computeKpis(orders: PurchaseOrder[]): PoKpis {
   const vMap = new Map<string, number>();
   orders.forEach((o) => {
     if (!filterActive(o)) return;
+    const amount = realPurchaseAmount(o);
+    if (amount === null) return;
     const name = o.vendor?.razon ?? "—";
-    vMap.set(name, (vMap.get(name) ?? 0) + Number(o.total ?? 0));
+    vMap.set(name, (vMap.get(name) ?? 0) + amount);
   });
   const vTotal = Array.from(vMap.values()).reduce((a, b) => a + b, 0) || 1;
   const byVendor = Array.from(vMap.entries())
@@ -442,6 +535,7 @@ function computeKpis(orders: PurchaseOrder[]): PoKpis {
     ocDelta: deltaPct(thisMonth.length, prevMonth.length),
     spendThisMonth: spend,
     spendDelta: deltaPct(spend, prevSpend),
+    nonRealThisMonth: thisMonthAmounts.nonRealOrders,
     reconciledPct,
     reconciledDelta: `${reconciledPct >= reconciledPrevPct ? "+" : ""}${
       reconciledPct - reconciledPrevPct
@@ -462,27 +556,24 @@ function computeKpis(orders: PurchaseOrder[]): PoKpis {
 // ------------------------------------------------------------------
 
 function listMock(filters: PoFilters): PoListResult {
-  let rows = MOCK_PURCHASE_ORDERS;
+  let facetRows = MOCK_PURCHASE_ORDERS;
+  if (filters.depot && filters.depot !== "todos") {
+    facetRows = facetRows.filter((o) => o.depot === filters.depot);
+  }
+  if (filters.vendor_id) facetRows = facetRows.filter((o) => o.vendor_id === filters.vendor_id);
+  if (filters.search) {
+    const q = sanitize(filters.search).toLowerCase();
+    facetRows = facetRows.filter((o) => o.public_id.toLowerCase().includes(q));
+  }
+  if (filters.from) facetRows = facetRows.filter((o) => o.date >= filters.from!);
+  if (filters.to) facetRows = facetRows.filter((o) => o.date <= filters.to!);
+
+  let rows = facetRows;
   if (filters.status && filters.status !== "todas") {
     rows = rows.filter((o) => o.status === filters.status);
   }
-  if (filters.depot && filters.depot !== "todos") {
-    rows = rows.filter((o) => o.depot === filters.depot);
-  }
-  if (filters.vendor_id) rows = rows.filter((o) => o.vendor_id === filters.vendor_id);
-  if (filters.search) {
-    const q = filters.search.toLowerCase();
-    rows = rows.filter(
-      (o) =>
-        o.public_id.toLowerCase().includes(q) ||
-        (o.vendor?.razon.toLowerCase().includes(q) ?? false) ||
-        (o.vendor?.cuit.includes(q) ?? false)
-    );
-  }
-  if (filters.from) rows = rows.filter((o) => o.date >= filters.from!);
-  if (filters.to) rows = rows.filter((o) => o.date <= filters.to!);
 
-  const counts: Record<string, number> = { todas: MOCK_PURCHASE_ORDERS.length };
+  const counts: Record<string, number> = { todas: facetRows.length };
   const allStatuses: PoStatus[] = [
     "borrador",
     "pendiente",
@@ -494,10 +585,10 @@ function listMock(filters: PoFilters): PoListResult {
     "anulada",
   ];
   allStatuses.forEach((s) => {
-    counts[s] = MOCK_PURCHASE_ORDERS.filter((o) => o.status === s).length;
+    counts[s] = facetRows.filter((o) => o.status === s).length;
   });
 
-  const sumTotal = rows.reduce((a, o) => a + Number(o.total ?? 0), 0);
+  const amountSummary = summarizePurchaseAmounts(rows);
 
   const page = filters.page ?? 1;
   const pageSize = filters.pageSize ?? PAGE_DEFAULT;
@@ -505,7 +596,8 @@ function listMock(filters: PoFilters): PoListResult {
     rows: rows.slice((page - 1) * pageSize, page * pageSize),
     total: rows.length,
     counts,
-    sumTotal,
+    sumTotal: amountSummary.realTotal,
+    nonRealAmountCount: amountSummary.nonRealOrders,
   };
 }
 

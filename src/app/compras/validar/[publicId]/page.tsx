@@ -51,7 +51,11 @@ export default async function ValidarPage({ params }: { params: { publicId: stri
           <KV label="Categoría" value={po.vendor?.categoria ?? po.categoria ?? "—"} />
           <KV label="Cond. pago" value={po.cond_pago} />
           <KV label="Items" value={String(po.items?.length ?? 0)} />
-          <KV label="Total" value={fmtCurrency(po.total)} accent />
+          <KV
+            label={po.price_state === "estimated" ? "Total estimado" : po.price_state === "pending" ? "Importe" : "Total"}
+            value={po.price_state === "pending" ? "Pendiente de precio" : fmtCurrency(po.total ?? po.planning_total)}
+            accent
+          />
         </div>
         <div className="rounded-md p-3 bg-neutral-50 text-[11px] text-fg-muted font-mono break-all">
           <div className="font-bold uppercase tracking-wide text-fg-secondary mb-1">Integridad</div>

@@ -9,6 +9,7 @@ import { ReconActions } from "./ReconActions";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 import type { PurchaseOrder } from "@/lib/types-po";
 import type { SupplierInvoice } from "@/lib/erp/types";
+import { PriceReconciliationForm } from "./PriceReconciliationForm";
 
 interface Props {
   po: PurchaseOrder;
@@ -63,6 +64,8 @@ export function ReconDetail({ po, invoice, recon, poId, canApprove = false }: Pr
     <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
       {/* Main panel */}
       <div className="space-y-6">
+
+        <PriceReconciliationForm po={po} invoiceId={invoice.id} />
 
         {/* Score + header */}
         <div className="nx-surface rounded-xl p-6">

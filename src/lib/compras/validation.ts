@@ -29,21 +29,26 @@ const esErrorMap: z.ZodErrorMap = (issue, ctx) => {
 
 z.setErrorMap(esErrorMap);
 
-const numOr0 = z.preprocess((v) => {
-  if (v === "" || v === null || v === undefined) return 0;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : 0;
-}, z.number().nonnegative());
+const nullablePrice = z.preprocess((v) => {
+  if (v === "" || v === null || v === undefined) return null;
+  if (typeof v === "string" && v.trim() !== "") return Number(v);
+  return v;
+}, z.number().finite().nonnegative().max(999_999_999_999.99).refine(
+  (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-7,
+  "Máximo dos decimales",
+).nullable());
 
 const qtyPositive = z.preprocess((v) => {
-  if (v === "" || v === null || v === undefined) return 1;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) && n > 0 ? n : 1;
-}, z.number().positive("Cantidad debe ser mayor a 0"));
+  if (typeof v === "string" && v.trim() !== "") return Number(v);
+  return v;
+}, z.number().finite().positive("Cantidad debe ser mayor a 0").max(9_999_999_999.99).refine(
+  (value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-7,
+  "Máximo dos decimales",
+));
 
 export const CreatePurchaseOrderSchema = z.object({
   vendor: z.object({
-    id: z.string().nullable(),
+    id: z.string().uuid("Seleccioná un proveedor del maestro"),
     razon: z.string().min(2, "Razón social muy corta").max(200),
     cuit: z
       .string()
@@ -67,18 +72,39 @@ export const CreatePurchaseOrderSchema = z.object({
         label: z.string().min(2, "Producto sin descripción").max(200),
         unit: z.string().min(1).max(20),
         qty: qtyPositive,
-        price: numOr0,
-        subtotal: numOr0,
+        price: nullablePrice,
+        subtotal: nullablePrice,
+        price_state: z.enum(["known", "estimated", "pending"]),
+        price_reason: z.string().max(500).nullable(),
         pos: z.number().int().nonnegative(),
+      }).superRefine((item, ctx) => {
+        const reason = item.price_reason?.trim() ?? "";
+        if (item.price_state === "pending" && item.price !== null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["price"], message: "Debe quedar vacío si está pendiente" });
+        }
+        if (item.price_state !== "pending" && item.price === null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["price"], message: "Ingresá un precio" });
+        }
+        if (item.price_state !== "known" && reason.length < 3) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["price_reason"], message: "Indicá el motivo" });
+        }
       })
     )
-    .min(1, "Cargá al menos un producto"),
+    .min(1, "Cargá al menos un producto")
+    .max(500, "La orden supera el máximo de 500 productos"),
   observ: z.string().max(2000),
   signature: z.object({
+    // Compatibilidad de wire con el canvas actual. Ninguno de estos dos
+    // campos es autoritativo: PostgreSQL deriva el firmante de auth.uid() y
+    // recalcula SHA-256 sobre los bytes PNG validados.
     signed_by: z.string().min(2).max(120),
     data_url: z
       .string()
-      .startsWith("data:image/png;base64,", "Firma no capturada correctamente"),
+      .max(700_022, "Firma demasiado grande")
+      .regex(
+        /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/,
+        "Firma no capturada correctamente",
+      ),
     hash: z.string().length(64, "Hash de firma inválido"),
   }),
 });
@@ -115,9 +141,11 @@ function labelFor(path: (string | number)[]): string {
         ? "Cantidad"
         : last === "price"
           ? "Precio"
-          : last === "subtotal"
+        : last === "subtotal"
             ? "Subtotal"
-            : last === "label"
+            : last === "price_reason"
+              ? "Motivo"
+              : last === "label"
               ? "Producto"
               : String(last);
     return `Item #${idx} · ${lastLabel}`;

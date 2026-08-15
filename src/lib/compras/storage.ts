@@ -1,18 +1,14 @@
+import { createHash } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/server";
 
 /**
- * Storage layer para PDFs y firmas de OC.
+ * Storage layer para PDFs de OC.
  *
- * Usa Supabase Storage como backend principal (buckets `po-pdfs` y
- * `po-signatures` creados en migration 0008). Drive queda como sync
- * secundario opcional (ver `src/lib/drive/client.ts`).
- *
- * Estructura del path en `po-pdfs`:
- *   {year}/{month}/{public_id}.pdf
- *
- * Ejemplo: `2026/05/OC-2026-0349.pdf`
- *
- * Las firmas (PNG) van en `po-signatures` con path simple `{order_id}.png`.
+ * Usa Supabase Storage como backend principal (`po-pdfs-private`, creado por
+ * 0243). El bucket público legado `po-pdfs` no se modifica. Drive queda como sync
+ * secundario opcional (ver `src/lib/drive/client.ts`). La firma primaria
+ * queda custodiada como bytes append-only en PostgreSQL; no se mantiene una
+ * segunda copia mutable en Storage.
  */
 
 export interface UploadResult {
@@ -21,96 +17,62 @@ export interface UploadResult {
   size: number;
 }
 
-const MONTHS = [
-  "01-enero",
-  "02-febrero",
-  "03-marzo",
-  "04-abril",
-  "05-mayo",
-  "06-junio",
-  "07-julio",
-  "08-agosto",
-  "09-septiembre",
-  "10-octubre",
-  "11-noviembre",
-  "12-diciembre",
-];
+export const PO_PDF_BUCKET = "po-pdfs-private";
 
-function pathForPdf(publicId: string, date: Date): string {
-  const year = date.getFullYear();
-  const month = MONTHS[date.getMonth()];
-  return `${year}/${month}/${publicId}.pdf`;
+/** Lee el PDF inmutable ya materializado; nunca lo regenera sin la firma. */
+export async function downloadPoPdf(opts: {
+  path: string;
+  expectedSha256: string;
+  expectedSize: number;
+}): Promise<Buffer | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data, error } = await admin.storage
+    .from(PO_PDF_BUCKET)
+    .download(opts.path);
+  if (error || !data) return null;
+  const buffer = Buffer.from(await data.arrayBuffer());
+  if (
+    buffer.byteLength !== opts.expectedSize
+    || createHash("sha256").update(buffer).digest("hex") !== opts.expectedSha256
+  ) return null;
+  return buffer;
 }
 
 /**
- * Sube el PDF firmado al bucket `po-pdfs`. Devuelve la URL pública.
- * Idempotente: si ya existe en ese path, lo sobrescribe (upsert).
+ * Sube el PDF firmado al bucket privado dedicado con path por contenido.
+ * Una colisión sólo es idempotente si hash y tamaño coinciden exactamente.
  */
 export async function uploadPoPdf(opts: {
-  publicId: string;
-  date: Date;
+  orderId: string;
+  pdfSha256: string;
   pdfBuffer: Buffer;
 }): Promise<UploadResult> {
   const admin = createAdminClient();
   if (!admin) throw new Error("Supabase admin client no disponible (falta SERVICE_ROLE_KEY)");
 
-  const path = pathForPdf(opts.publicId, opts.date);
+  const actualSha = createHash("sha256").update(opts.pdfBuffer).digest("hex");
+  if (actualSha !== opts.pdfSha256) throw new Error("PO_PDF_HASH_MISMATCH");
+  const path = `${opts.orderId}/${actualSha}.pdf`;
   const { error } = await admin.storage
-    .from("po-pdfs")
+    .from(PO_PDF_BUCKET)
     .upload(path, opts.pdfBuffer, {
       contentType: "application/pdf",
-      upsert: true,
+      upsert: false,
       cacheControl: "3600",
     });
 
-  if (error) throw new Error(`uploadPoPdf: ${error.message}`);
-
-  const { data: pub } = admin.storage.from("po-pdfs").getPublicUrl(path);
+  if (error) {
+    const existing = await downloadPoPdf({
+      path,
+      expectedSha256: actualSha,
+      expectedSize: opts.pdfBuffer.byteLength,
+    });
+    if (!existing) throw new Error("PO_PDF_IMMUTABLE_COLLISION");
+  }
   return {
     path,
-    publicUrl: pub?.publicUrl ?? null,
+    publicUrl: null,
     size: opts.pdfBuffer.byteLength,
   };
-}
-
-/**
- * Sube el PNG de firma al bucket privado `po-signatures`.
- * Acceso solo vía signed URLs con expiración.
- */
-export async function uploadSignature(opts: {
-  orderId: string;
-  pngBuffer: Buffer;
-}): Promise<UploadResult> {
-  const admin = createAdminClient();
-  if (!admin) throw new Error("Supabase admin client no disponible (falta SERVICE_ROLE_KEY)");
-
-  const path = `${opts.orderId}.png`;
-  const { error } = await admin.storage
-    .from("po-signatures")
-    .upload(path, opts.pngBuffer, {
-      contentType: "image/png",
-      upsert: true,
-    });
-
-  if (error) throw new Error(`uploadSignature: ${error.message}`);
-
-  return {
-    path,
-    publicUrl: null, // bucket privado
-    size: opts.pngBuffer.byteLength,
-  };
-}
-
-/**
- * Genera signed URL de corta duración para descargar una firma.
- * Default: 1 hora.
- */
-export async function signedSignatureUrl(orderId: string, expiresInSec = 3600): Promise<string | null> {
-  const admin = createAdminClient();
-  if (!admin) return null;
-  const { data, error } = await admin.storage
-    .from("po-signatures")
-    .createSignedUrl(`${orderId}.png`, expiresInSec);
-  if (error) return null;
-  return data?.signedUrl ?? null;
 }

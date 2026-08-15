@@ -5,6 +5,7 @@
  */
 
 import type { Depot } from "./types";
+import type { POPriceState } from "./compras/pricing";
 
 export type { Depot } from "./types";
 
@@ -58,6 +59,21 @@ export interface Vendor {
   last_oc_at?: string | null;
 }
 
+/** Identidad/contacto congelados al emitir; no hereda cambios del maestro. */
+export type PurchaseOrderVendorSnapshot = Pick<
+  Vendor,
+  | "id"
+  | "razon"
+  | "cuit"
+  | "domicilio"
+  | "telefono"
+  | "contacto"
+  | "email"
+  | "categoria"
+  | "cond_pago"
+  | "active"
+> & Partial<Pick<Vendor, "tags" | "created_at">>;
+
 /** Concepto habitual de retención de Ganancias del proveedor (mig 0100, CHECK). */
 export type VendorConceptoGanancias =
   | "honorarios"
@@ -102,8 +118,17 @@ export interface POItem {
   label: string;
   unit: string;
   qty: number;
-  price: number;
-  subtotal: number;
+  /** null significa precio pendiente; nunca se reemplaza por cero. */
+  price: number | null;
+  subtotal: number | null;
+  price_state: POPriceState;
+  price_reason: string | null;
+  price_responsible_user_id?: string | null;
+  price_responsible_name?: string | null;
+  actual_unit_price?: number | null;
+  actual_subtotal?: number | null;
+  price_reconciled_at?: string | null;
+  price_reconciled_by?: string | null;
   pos: number;
 }
 
@@ -121,9 +146,10 @@ export interface POEvent {
 export interface POEmailSend {
   id?: string;
   order_id: string;
+  attempt_key?: string | null;
   to_email: string;
   tag: string | null;
-  status: "queued" | "sent" | "failed" | "opened" | "bounced";
+  status: "queued" | "unknown" | "sent" | "failed" | "opened" | "bounced";
   provider_id: string | null;
   error: string | null;
   sent_at: string;
@@ -146,15 +172,32 @@ export interface PurchaseOrder {
   emisor_email: string;
   emisor_role: string;
   observ: string | null;
-  neto: number;
-  iva: number;
-  total: number;
+  /** Importes reales: null mientras exista estimación o pendiente. */
+  neto: number | null;
+  iva: number | null;
+  total: number | null;
+  price_state: POPriceState;
+  planning_neto: number | null;
+  planning_iva: number | null;
+  planning_total: number | null;
+  known_partial_neto: number;
+  pending_price_lines: number;
+  issued_neto: number | null;
+  issued_iva: number | null;
+  issued_total: number | null;
+  price_reconciled_at: string | null;
+  price_reconciled_by: string | null;
+  price_reconciled_invoice_id: string | null;
+  price_reconciliation_reason: string | null;
   signed_by: string | null;
   signed_at: string | null;
   signature_url: string | null;
   signature_hash: string | null;
   integrity_hash: string | null;
   pdf_url: string | null;
+  pdf_sha256: string | null;
+  pdf_size_bytes: number | null;
+  vendor_snapshot: PurchaseOrderVendorSnapshot | null;
   drive_folder: string | null;
   drive_file_id: string | null;
   factura_id: string | null;           // número de comprobante ARCA (texto libre)

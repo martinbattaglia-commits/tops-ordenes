@@ -2,7 +2,11 @@
  * Formato moneda ARS sin decimales — coincide con la convención del PDF
  * histórico ("$ 18.400" con punto como separador de miles).
  */
-export function fmtCurrency(n: number | null | undefined): string {
+export function fmtCurrency(
+  n: number | null | undefined,
+  currency: "ARS" | "USD" = "ARS",
+): string {
+  if (currency === "USD") return fmtCurrencyUsd(n);
   if (n == null || Number.isNaN(n)) return "$ 0";
   return "$ " + Math.round(n).toLocaleString("es-AR", { maximumFractionDigits: 0 });
 }

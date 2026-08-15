@@ -13,7 +13,7 @@ export default async function NuevaRecepcionPage() {
   let clients: Awaited<ReturnType<typeof listActiveClientRefs>>;
   try {
     positions = await listPositionOptions();
-    clients = await listActiveClientRefs();
+    clients = await listActiveClientRefs("wms");
   } catch (e) {
     return (
       <ModuleUnavailable

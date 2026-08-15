@@ -6,6 +6,8 @@ import { listChartOfAccounts, getAccountByCode } from "@/lib/erp/accounting-data
 import type { ChartAccount } from "@/lib/erp/types";
 import { ProveedorFiscalEditor } from "@/components/compras/ProveedorFiscalEditor";
 import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
+import { purchaseOrderAmount } from "@/lib/compras/order-amounts";
+import type { PurchaseOrder } from "@/lib/types-po";
 
 export const metadata = { title: "Ficha de proveedor" };
 export const dynamic = "force-dynamic";
@@ -96,7 +98,7 @@ export default async function ProveedorFichaPage({ params }: { params: { id: str
                   <td className="py-2"><Link href={`/compras/ordenes/${o.public_id}`} className="order-num">{o.public_id}</Link></td>
                   <td className="py-2">{fmtDate(o.created_at)}</td>
                   <td className="py-2">{o.status}</td>
-                  <td className="py-2 text-right tabular">{fmtCurrency(o.total ?? 0)}</td>
+                  <td className="py-2 text-right tabular">{formatOrderAmount(o)}</td>
                 </tr>
               ))}
             </tbody>
@@ -151,4 +153,12 @@ export default async function ProveedorFichaPage({ params }: { params: { id: str
       </section>
     </div>
   );
+}
+
+function formatOrderAmount(order: PurchaseOrder): string {
+  const amount = purchaseOrderAmount(order);
+  if (amount.kind === "pending") return "Precio pendiente · sin importe real";
+  return amount.kind === "estimated"
+    ? `${fmtCurrency(amount.amount)} · estimado`
+    : fmtCurrency(amount.amount);
 }

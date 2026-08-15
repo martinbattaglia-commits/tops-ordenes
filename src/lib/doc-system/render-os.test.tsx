@@ -38,6 +38,7 @@ const ORDER_FIXTURE = {
   km: 0,
   observ: "DEPOSITO DE ANMAT · ALMACENAJE DE MERCADERIA JUNIO Y JULIO: DEPOSITO DE ANMAT",
   total: 1139046,
+  pricing_currency: "ARS",
   signed_by: "Operador Demo",
   signed_doc: null,
   signed_at: "2026-07-24T10:32:00-03:00",
@@ -84,5 +85,42 @@ describe("doc-system render OS", () => {
     expect(hasPhrase(txt, "SEGURO DE LAS MERCADERÍAS")).toBe(true);
     expect(hasPhrase(txt, "192.0.2.10")).toBe(true);
     maybeWrite("os-sample.pdf", buf);
+  });
+
+  it("rotula y formatea USD sin presentarlo como ARS", async () => {
+    const qr = await QRCode.toDataURL("https://example.test/orders/OS-USD", { margin: 1 });
+    const usdOrder = {
+      ...ORDER_FIXTURE,
+      public_id: "OS-USD",
+      pricing_currency: "USD" as const,
+      services: ORDER_FIXTURE.services?.map((service) => ({
+        ...service,
+        currency_snapshot: "USD" as const,
+      })),
+    } as Order;
+    const buf = await renderToBuffer(<OrderPdfDocument order={usdOrder} qrDataUrl={qr} />);
+    const txt = await pdfText(buf);
+    expect(hasPhrase(txt, "USD")).toBe(true);
+    expect(hasPhrase(txt, "OS-USD")).toBe(true);
+  });
+
+  it("no atribuye ARS a una orden legada sin snapshot de moneda", async () => {
+    const qr = await QRCode.toDataURL("https://example.test/orders/OS-SIN-MONEDA", { margin: 1 });
+    const orderWithoutCurrency = {
+      ...ORDER_FIXTURE,
+      public_id: "OS-SIN-MONEDA",
+      pricing_currency: undefined,
+      services: ORDER_FIXTURE.services?.map((service) => ({
+        ...service,
+        currency_snapshot: undefined,
+      })),
+    } as unknown as Order;
+    const buf = await renderToBuffer(
+      <OrderPdfDocument order={orderWithoutCurrency} qrDataUrl={qr} />,
+    );
+    const txt = await pdfText(buf);
+
+    expect(hasPhrase(txt, "NO INFORMADA")).toBe(true);
+    expect(hasPhrase(txt, "OS-SIN-MONEDA")).toBe(true);
   });
 });
