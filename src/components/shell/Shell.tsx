@@ -10,6 +10,7 @@ import { VoiceOverlay } from "@/components/voice/VoiceOverlay";
 
 interface ShellProps {
   user: { name: string; role: string; avatar: string };
+  initialNowIso: string;
   canViewExecutive?: boolean;
   canViewSistema?: boolean;
   canViewRrhhDocs?: boolean;
@@ -20,7 +21,18 @@ interface ShellProps {
   children: ReactNode;
 }
 
-export default function Shell({ user, canViewExecutive, canViewSistema, canViewRrhhDocs, canViewKnowledge, canViewConnect, canViewCopilot, canViewContabilidad, children }: ShellProps) {
+export default function Shell({
+  user,
+  initialNowIso,
+  canViewExecutive,
+  canViewSistema,
+  canViewRrhhDocs,
+  canViewKnowledge,
+  canViewConnect,
+  canViewCopilot,
+  canViewContabilidad,
+  children,
+}: ShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
@@ -36,7 +48,7 @@ export default function Shell({ user, canViewExecutive, canViewSistema, canViewR
       </MobileDrawer>
 
       <div className="flex-1 min-w-0 flex flex-col print-shell">
-        <Topbar onMenuClick={() => setDrawerOpen(true)} />
+        <Topbar initialNowIso={initialNowIso} onMenuClick={() => setDrawerOpen(true)} />
         <main className="flex-1 min-h-0 scroll-area pb-[calc(80px+var(--safe-bottom))] lg:pb-0 nx-page-fade">
           {children}
           <VoiceOverlay />
