@@ -114,6 +114,7 @@ export function ThreadView({
   currentUserId,
   readOnly = false,
   mentionables = [],
+  initialNowIso,
 }: {
   conversationId: string;
   /**
@@ -129,6 +130,8 @@ export function ThreadView({
   readOnly?: boolean;
   /** F4.1B: miembros mencionables (@) — la FK de menciones exige miembros (D-F41-8). */
   mentionables?: MentionPick[];
+  /** Snapshot temporal del Server Component para un primer render idéntico. */
+  initialNowIso?: string;
 }) {
   /**
    * WA-8R3 · B · la hidratación pasa por la MISMA política que realtime. Sin
@@ -165,6 +168,10 @@ export function ThreadView({
   const recorder = useAudioRecorder(audioRecorderOptionsFor(kind));
   const [audioBusy, setAudioBusy] = useState(false);
   const [audioErr, setAudioErr] = useState<string | null>(null);
+  // El primer render nunca consulta el reloj del proceso/navegador por su cuenta.
+  // La ruta SSR entrega un ISO común; otros call-sites usan el sentinel estable
+  // `null` y muestran fecha absoluta hasta que el efecto post-mount toma el reloj.
+  const [labelNowIso, setLabelNowIso] = useState<string | null>(() => initialNowIso ?? null);
 
   // WA-8 · capacidades efectivas. Se consultan para PINTAR y se vuelven a exigir
   // antes de EJECUTAR: ocultar un botón no impide que un atajo, un dictado o un
@@ -239,6 +246,14 @@ export function ThreadView({
   }, [conversationId]);
 
   useEffect(() => scrollToEnd(), [messages.length, scrollToEnd]);
+
+  useEffect(() => {
+    const refreshLabels = () => setLabelNowIso(new Date().toISOString());
+
+    refreshLabels();
+    const intervalId = window.setInterval(refreshLabels, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   // VOICE-002: autosize del composer. `draft` es la única fuente de cambios del
   // contenido (tipeo, dictado —insertAtCursor despacha `input` real→onChange—,
@@ -477,7 +492,7 @@ export function ThreadView({
             <div key={`day-${m.id}`} className="flex items-center gap-2 py-1">
               <span className="h-px flex-1 bg-stroke-soft" />
               <span className="rounded-full bg-bg-surface-alt px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg-muted">
-                {dayLabel(m.createdAt)}
+                {dayLabel(m.createdAt, labelNowIso === null ? null : new Date(labelNowIso))}
               </span>
               <span className="h-px flex-1 bg-stroke-soft" />
             </div>
