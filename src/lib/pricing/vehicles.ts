@@ -103,13 +103,8 @@ export function getVehicleZone(
   return getVehicle(vehicleSlug)?.zones.find((z) => z.zone === zone);
 }
 
-/** Reglas operativas del tarifario que conviene mostrar al usuario. */
-export const TRANSPORT_RULES = [
-  "Precios expresados por viaje completo (no por hora).",
-  "Segundo viaje al 50% del valor original.",
-  "Reparto hasta 4 clientes. Si supera, queda sujeto a cotización.",
-  "Recargo fuera de horario (camión): 17–19 hs +25%, 19–21 hs +50%, después de 21 hs +100%.",
-  "Recargo hora extra (peón): 17–19 hs +50%, después de 19 hs +100%.",
-  "Peajes se cotizan aparte cuando aplican.",
-  "Los valores NO incluyen IVA.",
-] as const;
+// Las reglas operativas del tarifario viven en `pricing/service-ui.ts`, que es
+// el módulo libre de tarifas que consume el wizard. Mantenerlas también acá
+// dejaba dos definiciones vivas y divergentes —esta completa pero sin ningún
+// consumidor, aquella truncada y sí consumida—, que es la forma en que el
+// contenido comercial se perdió sin que nadie lo notara.

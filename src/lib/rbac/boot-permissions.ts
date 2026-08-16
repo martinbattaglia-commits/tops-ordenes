@@ -237,8 +237,9 @@ async function withBudget<T>(p: Promise<T>, fallback: T, label: string): Promise
 
 /**
  * Flags RBAC del boot con presupuesto duro (para layout/páginas).
- * Ante timeout → PERMISIVO (= bootstrap; la seguridad por URL directa la
- * garantizan los page guards, que no dependen de esto).
+ * Ante timeout → CERRADO en producción y PERMISIVO en demo o sin Supabase.
+ * La seguridad por URL directa la garantizan los page guards y el middleware,
+ * que no dependen de esto.
  */
 export async function getBootPermissions(): Promise<BootPermissions> {
   const fallback = env.app.demoMode || env.app.needsSupabase ? PERMISSIVE : CLOSED;
@@ -250,14 +251,26 @@ export async function getBootPermissions(): Promise<BootPermissions> {
  * Es lo único que el (app)/layout debe esperar: acotado a BOOT_BUDGET_MS.
  */
 export async function getBootContext(): Promise<BootContext> {
+  // R-8 · Modo de falla del boot, decidido explícitamente.
+  //
+  // Se RATIFICA `perms: CLOSED` en el camino productivo: ante un presupuesto
+  // agotado no se sabe qué puede ver este usuario, y conceder bloques
+  // ejecutivos por defecto contradice el contrato de FASE B.
+  //
+  // Se REVIERTE, en cambio, marcar al sujeto como encargado NO autorizado.
+  // "No pude resolver la identidad" no es lo mismo que "es un encargado
+  // inválido", y el layout traduce ese segundo estado a notFound(): una
+  // latencia transitoria de Supabase dejaba a TODOS los usuarios —incluidos
+  // administración y comercial— con 404 en toda la aplicación. Eso es
+  // exactamente el lockout que la regla del expediente de boot prohíbe.
+  //
+  // Con CLOSED no se filtra nada: todos los flags quedan en false, el
+  // middleware sigue aplicando su allowlist por ruta con 404 propio, los page
+  // guards siguen intactos y la RLS de 0249 le niega las filas a un principal
+  // aunque el shell llegue a renderizar.
   const fallback: BootContext = env.app.demoMode || env.app.needsSupabase
     ? { user: null, profileRole: null, perms: PERMISSIVE, depotManager: STANDARD_DEPOT_MANAGER }
-    : {
-        user: null,
-        profileRole: null,
-        perms: CLOSED,
-        depotManager: { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null },
-      };
+    : { user: null, profileRole: null, perms: CLOSED, depotManager: STANDARD_DEPOT_MANAGER };
   return withBudget(
     (async (): Promise<BootContext> => {
       const [user, profileRole, perms, depotManager] = await Promise.all([

@@ -514,8 +514,15 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
     reason:
       "CLIENTES FASE B: identidad dual y capacidades exactas de los dos encargados, " +
       "aislamiento WMS por sede, wrappers de RPC y ciclo de OS con cotizacion pendiente " +
-      "sin exponer importes. Son cuatro forwards y cuatro inversas exactas, ejercitados " +
-      "en tests/clientes-fase-b-db sobre PostgreSQL 17; no pertenecen al replay WMS vanilla.",
+      "sin exponer importes. Son cuatro forwards y cuatro inversas exactas. " +
+      "Quedan fuera del replay vanilla porque REESCRIBEN su nucleo —policies de la " +
+      "jerarquia fisica, funciones de rol y las quince RPC de fulfillment—, de modo que " +
+      "ejecutarlas dentro de esta suite mediria un sistema distinto del que la suite " +
+      "declara verificar. Su verificacion funcional vive en tests/clientes-fase-b-db, " +
+      "con su propio cluster PostgreSQL 17 efimero (vitest.clientes-fase-b-db.config.ts): " +
+      "replay de la cadena productiva, aplicacion de las cuatro migraciones, sede en el " +
+      "alta de recepciones y pedidos, y frontera RBAC de los dos encargados en sus dos " +
+      "direcciones, valido e invalido.",
   },
   {
     id: "custody-integrity-dedicated-harness",

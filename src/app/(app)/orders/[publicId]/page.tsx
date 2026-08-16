@@ -249,7 +249,18 @@ function PricingLifecycle({
               </div>
             </div>
 
-            {canAdjust && line.id && (
+            {canAdjust && line.id && (() => {
+              // R-3.e · Una bonificación se autoriza CONTRA una base. Si el
+              // snapshot está ausente —la línea todavía no tiene precio— el
+              // `max` colapsaba a 0 y el campo, que es obligatorio, sólo
+              // admitía enviar 0: el único envío posible materializaba un
+              // importe facturado de cero sobre una línea sin cotizar, que es
+              // justo el $0 inventado que el contrato prohíbe.
+              const esBonificacion = line.price_source === "bonification";
+              const baseCruda = line.subtotal_requested ?? line.subtotal;
+              const bonifBase = esBonificacion && baseCruda != null ? Math.abs(baseCruda) : null;
+              const sinBaseBonificable = esBonificacion && bonifBase == null;
+              return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <form action={recordFulfillmentAction} className="rounded-lg border border-stroke-soft p-3 space-y-2">
                   <div className="text-xs font-bold text-fg-brand">Registrar prestación</div>
@@ -271,21 +282,30 @@ function PricingLifecycle({
                       name="billed_amount"
                       type="number"
                       min="0"
-                      max={line.price_source === "bonification" ? Math.abs(line.subtotal_requested ?? line.subtotal ?? 0) : undefined}
+                      max={bonifBase ?? undefined}
                       step="0.01"
                       required
+                      disabled={sinBaseBonificable}
                       defaultValue={line.price_source === "bonification"
-                        ? Math.abs(line.subtotal_billed ?? line.subtotal_requested ?? line.subtotal ?? 0)
+                        ? (bonifBase ?? undefined)
                         : (line.subtotal_billed ?? line.subtotal_provided ?? line.subtotal_requested ?? line.subtotal ?? undefined)}
                       className="input w-full"
                       aria-label={line.price_source === "bonification" ? "Magnitud de bonificación facturada" : "Importe facturado"}
                     />
                   </div>
-                  <input name="reason" required minLength={3} className="input w-full" placeholder="Motivo y autorización" />
-                  <button className="btn btn-primary btn-sm w-full" type="submit">Guardar facturación</button>
+                  <input name="reason" required minLength={3} className="input w-full" placeholder="Motivo y autorización" disabled={sinBaseBonificable} />
+                  <button className="btn btn-primary btn-sm w-full" type="submit" disabled={sinBaseBonificable}>
+                    Guardar facturación
+                  </button>
+                  {sinBaseBonificable && (
+                    <div className="text-[11px] text-fg-muted">
+                      La magnitud se autoriza cuando la línea bonificada tenga precio: hoy está pendiente de cotización.
+                    </div>
+                  )}
                 </form>
               </div>
-            )}
+              );
+            })()}
           </div>
         ))}
       </div>

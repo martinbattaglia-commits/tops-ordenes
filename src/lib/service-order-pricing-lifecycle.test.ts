@@ -5,8 +5,23 @@ import { computeServiceLine, computeTransportLine } from "./pricing/calculator";
 import type { ServiceCatalogItem } from "./types";
 import type { VehicleSpec, VehicleZonePricing } from "./pricing/vehicles";
 
+/**
+ * X-1 · LINAJE. 0249:330 renombra `service_order_issue(jsonb,jsonb)` a
+ * `service_order_issue_0244` y le revoca todo privilegio (0249:331). Desde
+ * entonces la AUTORIDAD del ciclo de precios es 0249, y afirmar sobre el
+ * cuerpo de 0244 describe código que nadie puede invocar.
+ *
+ * `sql` se conserva porque 0244 SIGUE siendo la definición vigente de todo lo
+ * que 0249 no superseded: `service_order_adjust_billing`, los constraint
+ * triggers de continuidad temporal, `_service_pricing_boundary` y el seed del
+ * catálogo. Las aserciones sobre la emisión, en cambio, viven en `sqlFaseB`.
+ */
 const sql = readFileSync(
   resolve(process.cwd(), "supabase/migrations/0244_service_order_pricing_lifecycle.sql"),
+  "utf8"
+);
+const sqlFaseB = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/0249_clientes_fase_b_service_pricing_redaction.sql"),
   "utf8"
 );
 const rollback = readFileSync(
@@ -36,6 +51,14 @@ const ordersList = readFileSync(
   resolve(process.cwd(), "src/app/(app)/orders/page.tsx"),
   "utf8",
 );
+const orderDetail = readFileSync(
+  resolve(process.cwd(), "src/app/(app)/orders/[publicId]/page.tsx"),
+  "utf8",
+);
+const bootPermissions = readFileSync(
+  resolve(process.cwd(), "src/lib/rbac/boot-permissions.ts"),
+  "utf8",
+);
 const commercialWizard = readFileSync(
   resolve(process.cwd(), "src/app/(app)/orders/new/NewOrderWizard.tsx"),
   "utf8",
@@ -60,10 +83,13 @@ const servicesCatalog = readFileSync(
 
 describe("service order pricing lifecycle", () => {
   it("resolves pricing in the atomic issue RPC and rejects a changed signed total", () => {
-    expect(sql).toContain("function public.service_order_issue(p_order jsonb, p_lines jsonb)");
-    expect(sql).toContain("from public.client_service_rates");
-    expect(sql).toContain("from public.service_tariff_rates");
-    expect(sql).toContain("El total firmado no coincide con el calculo autoritativo");
+    expect(sqlFaseB).toContain("create function public.service_order_issue(p_order jsonb,p_lines jsonb)");
+    // El linaje se afirma explícitamente: la de 0244 quedó renombrada y revocada.
+    expect(sqlFaseB).toContain("rename to service_order_issue_0244");
+    expect(sqlFaseB).toContain("revoke all on function public.service_order_issue_0244");
+    expect(sqlFaseB).toContain("from public.client_service_rates");
+    expect(sqlFaseB).toContain("from public.service_tariff_rates");
+    expect(sqlFaseB).toContain("El total firmado no coincide");
   });
 
   it("keeps quoted services null instead of inventing zero", () => {
@@ -80,10 +106,12 @@ describe("service order pricing lifecycle", () => {
   });
 
   it("pins snapshot currency and forbids implicit client-rate currency crossing", () => {
-    expect(sql).toContain("currency = v_version.currency");
-    expect(sql).toContain("currency_snapshot");
-    expect(sql).toContain("pricing_currency");
-    expect(sql).toContain("La moneda % no coincide con el tarifario activo %");
+    // 0249 ya no detecta el cruce de moneda con una excepción: lo IMPIDE por
+    // construcción, filtrando la tarifa del cliente por la moneda del
+    // tarifario. Se afirma el mecanismo vivo, no el superado.
+    expect(sqlFaseB).toContain("currency=v_version.currency");
+    expect(sqlFaseB).toContain("currency_snapshot");
+    expect(sqlFaseB).toContain("pricing_currency");
     expect(issueAction).toContain("pricing_currency: pricingCurrency");
     expect(issueAction).toContain('issued.currency === "ARS" || issued.currency === "USD"');
     expect(pdf).toContain('value={currency ?? "NO INFORMADA"}');
@@ -109,6 +137,23 @@ describe("service order pricing lifecycle", () => {
     // pendientes: esa capacidad es del flujo operativo del encargado, y una OS
     // comercial sin precios no puede alimentar facturación.
     expect(commercialWizard).toContain("!hasPendingPricing && sinCotizacionesPendientes");
+    // R-8 · el fallback de timeout del boot no puede afirmar una identidad que
+    // no resolvió. Marcar al sujeto como encargado NO autorizado hacía que el
+    // layout 404-eara a TODOS los usuarios ante una latencia transitoria.
+    expect(bootPermissions).toContain(
+      "perms: CLOSED, depotManager: STANDARD_DEPOT_MANAGER }",
+    );
+    expect(bootPermissions).not.toContain(
+      "depotManager: { restricted: true, authorized: false",
+    );
+    // R-3.e · una bonificación sin base no se puede autorizar: antes el `max`
+    // colapsaba a 0 y el campo obligatorio sólo admitía enviar 0, que
+    // materializaba un importe facturado de cero sobre una línea sin cotizar.
+    expect(orderDetail).toContain("const sinBaseBonificable =");
+    expect(orderDetail).toContain("disabled={sinBaseBonificable}");
+    expect(orderDetail).not.toContain(
+      "Math.abs(line.subtotal_requested ?? line.subtotal ?? 0)",
+    );
     // El formateador propio del email resuelve el pendiente por su cuenta y
     // debe seguir haciéndolo: es la otra superficie del mismo contrato.
     expect(email).toContain('if (n == null) return "PENDIENTE DE COTIZACIÓN"');
@@ -119,9 +164,9 @@ describe("service order pricing lifecycle", () => {
   });
 
   it("preserves requested, provided and billed values with authorized append-only events", () => {
-    expect(sql).toContain("qty_requested");
-    expect(sql).toContain("qty_provided");
-    expect(sql).toContain("qty_billed");
+    expect(sqlFaseB).toContain("qty_requested");
+    expect(sqlFaseB).toContain("qty_provided");
+    expect(sqlFaseB).toContain("qty_billed");
     expect(sql).toContain("function public.service_order_adjust_billing");
     expect(sql).toContain("Permiso requerido: servicios.edit");
     expect(sql).toContain("El ledger de Ordenes de Servicio es append-only");
@@ -208,8 +253,8 @@ describe("service order pricing lifecycle", () => {
   });
 
   it("requires create and sign capabilities before issuing a priced service order", () => {
-    expect(sql).toContain("has_permission('servicios.create')");
-    expect(sql).toContain("has_permission('servicios.sign')");
+    expect(sqlFaseB).toContain("has_permission('servicios.create')");
+    expect(sqlFaseB).toContain("has_permission('servicios.sign')");
     expect(issueAction).toContain('p_slug: "servicios.create"');
     expect(issueAction).toContain('p_slug: "servicios.sign"');
   });

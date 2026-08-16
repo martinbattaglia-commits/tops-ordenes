@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import {
   createReception,
   addReceptionItem,
+  assertPositionRequired,
   submitReception,
   confirmReception,
   releaseQuarantine,
@@ -34,6 +35,10 @@ export interface CreateReceptionPayload {
 /** Crea cabecera + líneas y deja la recepción en 'pendiente' (lista para confirmar). */
 export async function createReceptionFull(payload: CreateReceptionPayload): Promise<Result> {
   try {
+    // A-6 · Se valida ANTES de crear la cabecera. Si una línea viniera sin
+    // posición a mitad del lote, la cabecera ya existiría y quedaría huérfana
+    // y sin sede: inservible, y sin nada que la limpie.
+    for (const it of payload.items) assertPositionRequired(it);
     const id = await createReception(payload.header);
     for (const it of payload.items) {
       await addReceptionItem({ reception_id: id, ...it });

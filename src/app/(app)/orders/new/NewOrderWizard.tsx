@@ -259,6 +259,9 @@ export default function NewOrderWizard({
     }
     // Multi-vehículo: una línea de transporte por cada vehículo seleccionado.
     let transportSum = 0;
+    // R-5 · distingue "no hay transporte" de "el transporte aún no tiene
+    // precio": el recargo se comporta distinto en cada caso.
+    let transportPendiente = false;
     for (const t of data.transports) {
       const v = pricedVehicles.find((vehicle) => vehicle.slug === t.vehicle_slug);
       const z = v?.zones.find((zone) => zone.zone === t.zone);
@@ -287,6 +290,7 @@ export default function NewOrderWizard({
             client_rate_id: particular?.clientRateId ?? null,
             pricing_status: "pending_quote",
           });
+          transportPendiente = true;
           continue;
         }
         const tl = computeTransportLine({
@@ -309,20 +313,31 @@ export default function NewOrderWizard({
     // Envío urgente (mismo día): recargo del 100% sobre el transporte. Se modela
     // como línea propia para que persista y se refleje en resumen, comprobante,
     // PDF, emails e historial SIN tocar el cálculo de transporte ni migraciones.
-    if (data.transport_urgent && transportSum > 0) {
+    //
+    // R-5 · La base puede estar incompleta. Si algún transporte quedó a
+    // cotizar, el recargo NO se congela sobre lo que ya tiene precio: viaja
+    // pendiente, igual que cualquier otra línea sin cotizar. Y si TODA la base
+    // está pendiente tampoco se omite: antes, con `transportSum > 0`, el
+    // usuario activaba la urgencia, firmaba, y el +100% desaparecía sin dejar
+    // rastro ni forma de recuperarlo.
+    if (data.transport_urgent && (transportSum > 0 || transportPendiente)) {
+      const baseIncompleta = transportPendiente;
       out.push({
         key: URGENT_SERVICE_SLUG,
         label: "🚨 Recargo envío urgente (+100%)",
         qty_requested: 1,
         qty_effective: 1,
-        rate: transportSum,
+        rate: baseIncompleta ? null : transportSum,
         unit: "un",
-        subtotal: transportSum,
+        subtotal: baseIncompleta ? null : transportSum,
         min_applied: false,
-        min_reason: "Despacho prioritario para ejecución el mismo día.",
+        min_reason: baseIncompleta
+          ? "PENDIENTE DE COTIZACIÓN · el transporte base todavía no tiene precio."
+          : "Despacho prioritario para ejecución el mismo día.",
         service_slug: URGENT_SERVICE_SLUG,
         category: "transporte",
         pricing_kind: "urgent",
+        pricing_status: baseIncompleta ? "pending_quote" : "resolved",
         pricing_reason: "Despacho prioritario para ejecucion el mismo dia.",
       });
     }

@@ -150,6 +150,23 @@ declare v_header uuid; v_position uuid;
 begin
   select r.warehouse_id into v_header from public.receptions r where r.id = new.reception_id;
   v_position := public.nexus_wms_position_warehouse(new.position_id);
+
+  -- La cabecera nace sin sede: ningún camino de escritura la provee, y no
+  -- puede tener DEFAULT porque en ese instante todavía no hay posiciones de
+  -- las que derivarla. La PRIMERA línea es el momento exacto en que la sede
+  -- se vuelve demostrable, así que se estampa acá y queda fijada para todas
+  -- las siguientes. Sin esto el guard aborta contra su propia precondición y
+  -- deja al WMS sin altas para todos los roles.
+  --
+  -- No es una vía de escape: la sede sale de la jerarquía física de la
+  -- posición, nunca del payload, y para un encargado
+  -- nexus_wms_position_warehouse devuelve NULL si la posición cae fuera de su
+  -- nave, de modo que la excepción de abajo sigue actuando.
+  if v_header is null and v_position is not null then
+    update public.receptions set warehouse_id = v_position where id = new.reception_id;
+    v_header := v_position;
+  end if;
+
   if v_header is null or v_position is null or v_header is distinct from v_position then
     raise exception 'sede WMS no autorizada' using errcode = 'insufficient_privilege';
   end if;
@@ -164,20 +181,66 @@ for each row execute function public.nexus_reception_site_guard();
 create or replace function public.nexus_allocation_site_guard()
 returns trigger language plpgsql security definer set search_path = public, pg_temp
 as $$
-declare v_order_wh uuid; v_item_wh uuid;
+declare v_order_wh uuid; v_item_wh uuid; v_order_id uuid;
 begin
-  select o.warehouse_id into v_order_wh
+  select o.warehouse_id, o.id into v_order_wh, v_order_id
   from public.logistics_orders o
   join public.logistics_order_items oi on oi.order_id = o.id
   where oi.id = new.order_item_id;
   select public.nexus_wms_position_warehouse(ii.position_id) into v_item_wh
   from public.inventory_items ii where ii.id = new.inventory_item_id;
+
+  -- Un pedido no tiene sede derivable en su alta: sus ítems son sku y
+  -- cantidad, sin posición, y el cliente no aporta autoridad operativa. La
+  -- sede se materializa en la PRIMERA reserva, cuando se elige el stock
+  -- concreto, y desde ahí queda fijada. Para el encargado la sede ya viene
+  -- impuesta desde su identidad por el default de más abajo, de modo que este
+  -- estampado sólo alcanza a los pedidos de perfiles administrativos.
+  if v_order_wh is null and v_item_wh is not null and v_order_id is not null then
+    update public.logistics_orders set warehouse_id = v_item_wh where id = v_order_id;
+    v_order_wh := v_item_wh;
+  end if;
+
   if v_order_wh is null or v_item_wh is null or v_order_wh is distinct from v_item_wh then
     raise exception 'sede WMS no autorizada' using errcode = 'insufficient_privilege';
   end if;
   return new;
 end;
 $$;
+
+-- Sede impuesta por identidad en el alta, para las dos cabeceras.
+--
+-- Un encargado no puede crear una recepción ni un pedido fuera de su nave, y
+-- tampoco elegir la sede: si el payload trae una, se descarta. Los perfiles
+-- administrativos no tienen sede de sesión (getDepotManagerBoot devuelve
+-- warehouseCode nulo), así que para ellos la cabecera nace sin sede y la
+-- resuelve la primera línea, que es cuando existe evidencia.
+create or replace function public.nexus_wms_header_site_default()
+returns trigger language plpgsql security definer set search_path = public, pg_temp
+as $$
+begin
+  if public.nexus_is_depot_manager_principal() then
+    if public.nexus_depot_manager_valid() is distinct from true then
+      raise exception 'sede WMS no autorizada' using errcode = 'insufficient_privilege';
+    end if;
+    new.warehouse_id := (select s.warehouse_id from public.nexus_depot_manager_scope() s);
+    if new.warehouse_id is null then
+      raise exception 'sede WMS no autorizada' using errcode = 'insufficient_privilege';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_nexus_reception_header_site_default on public.receptions;
+create trigger trg_nexus_reception_header_site_default
+before insert on public.receptions
+for each row execute function public.nexus_wms_header_site_default();
+
+drop trigger if exists trg_nexus_logistics_header_site_default on public.logistics_orders;
+create trigger trg_nexus_logistics_header_site_default
+before insert on public.logistics_orders
+for each row execute function public.nexus_wms_header_site_default();
 drop trigger if exists trg_nexus_allocation_site_guard on public.stock_allocations;
 create trigger trg_nexus_allocation_site_guard
 before insert or update of order_item_id, inventory_item_id on public.stock_allocations

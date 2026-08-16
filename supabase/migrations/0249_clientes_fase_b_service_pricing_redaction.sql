@@ -345,6 +345,9 @@ declare
   v_subtotal numeric; v_min_qty numeric; v_min_billing numeric;
   v_total numeric:=0; v_transport_total numeric:=0; v_surcharge numeric;
   v_complete boolean:=true; v_line_sequence integer:=0;
+  -- R-5 · restituidos de 0244: unicidad del recargo, y distincion entre
+  -- "no hubo transporte" y "el transporte todavia no tiene precio".
+  v_urgent_seen boolean:=false; v_transport_pending boolean:=false;
   v_client_id uuid; v_client_total numeric; v_pricing_at timestamptz;
   v_signature_b64 text; v_signature_bytes bytea; v_signature_hash text;
   v_source_row_id uuid; v_formula jsonb; v_key text;
@@ -536,14 +539,42 @@ begin
             coalesce((v_line->>'second_trip_discount')::boolean,false),'surcharge_pct',v_surcharge);
           v_transport_total:=v_transport_total+v_subtotal;
         end if;
-      else v_complete:=false; end if;
+      else v_complete:=false; v_transport_pending:=true; end if;
     elsif v_kind='urgent' then
+      -- R-5 · INVARIANTES RESTITUIDOS de 0244:902-908.
+      --
+      -- 0249 habia dejado este ramo sin ninguna guarda, apoyandose sólo en un
+      -- acumulador forward-only. Como el orden de p_lines lo decide el
+      -- navegador, eso permitia congelar el recargo sobre una base parcial
+      -- —de forma permanente, porque el snapshot es inmutable— o cobrarlo dos
+      -- veces. Se restituyen los cuatro invariantes estructurales con su
+      -- texto: slug canonico, cantidad exacta, unicidad y posicion final en
+      -- el array, que es lo que garantiza que todo el transporte ya fue
+      -- procesado cuando se calcula la base.
+      if v_slug <> 'recargo-envio-urgente'
+         or v_q_req <> 1
+         or v_urgent_seen
+         or v_line_sequence <> jsonb_array_length(p_lines) then
+        raise exception 'Recargo urgente invalido: debe ser unico, cantidad 1 y la ultima linea';
+      end if;
+      v_urgent_seen:=true;
       v_label:='Recargo envio urgente'; v_unit:='un'; v_q_req:=1; v_q_eff:=1;
-      if v_transport_total>0 and v_complete then
+      if v_transport_pending then
+        -- Caso que 0244 no contemplaba, porque antes no existia el transporte
+        -- a cotizar: la base esta incompleta. El recargo NO se resuelve sobre
+        -- lo que ya tiene precio ni se omite: queda pendiente, con la misma
+        -- semantica que cualquier otra linea sin cotizar.
+        v_price:=null; v_subtotal:=null; v_source:='pending_quote';
+        v_base_source:='pending_quote'; v_original:=null;
+        v_formula:='{"kind":"derived_v1","basis":"transport_total","pending":true}'::jsonb;
+        v_complete:=false;
+      elsif v_transport_total>0 then
         v_price:=v_transport_total; v_subtotal:=v_transport_total; v_source:='derived';
         v_base_source:='derived'; v_original:=v_price;
         v_formula:='{"kind":"derived_v1","basis":"transport_total"}'::jsonb;
-      else v_complete:=false; end if;
+      else
+        raise exception 'Recargo urgente sin transporte previo';
+      end if;
     else
       if public.has_permission('servicios.edit') is distinct from true
          or v_reason is null or length(v_reason)<3

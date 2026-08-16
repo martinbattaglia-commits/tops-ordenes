@@ -4,10 +4,17 @@ drop trigger if exists trg_nexus_reception_header_site_guard on public.reception
 drop trigger if exists trg_nexus_logistics_header_site_guard on public.logistics_orders;
 drop trigger if exists trg_nexus_reception_site_guard on public.reception_items;
 drop trigger if exists trg_nexus_allocation_site_guard on public.stock_allocations;
+-- Sede impuesta por identidad en el alta (R-1). Se agregó al forward junto con
+-- el estampado de sede, y su inversa tiene que acompañarla: sin estos tres
+-- drops la reversa dejaba la función y sus triggers activos sobre tablas cuya
+-- columna warehouse_id ya no existe.
+drop trigger if exists trg_nexus_reception_header_site_default on public.receptions;
+drop trigger if exists trg_nexus_logistics_header_site_default on public.logistics_orders;
 drop function if exists public.nexus_reception_header_site_guard();
 drop function if exists public.nexus_logistics_header_site_guard();
 drop function if exists public.nexus_reception_site_guard();
 drop function if exists public.nexus_allocation_site_guard();
+drop function if exists public.nexus_wms_header_site_default();
 
 drop policy if exists "warehouses read" on public.warehouses;
 create policy "warehouses read" on public.warehouses for select using (auth.role()='authenticated');

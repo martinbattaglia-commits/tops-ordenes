@@ -152,7 +152,30 @@ export interface NewReceptionItemInput {
   position_id?: string | null;
 }
 
+/**
+ * A-6 · La posición es obligatoria, y la validación vive acá.
+ *
+ * La sede de la recepción se deriva de la nave a la que pertenece la posición
+ * del primer ítem (0247). Sin posición no hay sede demostrable: el guard de la
+ * base aborta con "sede WMS no autorizada", un mensaje que no le dice al
+ * usuario qué le falta. El tipo la declara opcional y hasta ahora sólo la
+ * exigía el formulario (`NewReceptionForm.tsx:67`), de modo que cualquier
+ * llamador que no fuera esa pantalla —o un payload construido a mano— dejaba
+ * la recepción inservible.
+ *
+ * No se relaja el guard: se hace explícito el requisito antes de escribir.
+ */
+export function assertPositionRequired(item: { sku?: string; position_id?: string | null }): void {
+  if (!item.position_id) {
+    throw new Error(
+      `addReceptionItem: la línea ${item.sku ?? "(sin SKU)"} necesita una posición: ` +
+        "de ella se deriva la sede de la recepción.",
+    );
+  }
+}
+
 export async function addReceptionItem(item: NewReceptionItemInput): Promise<void> {
+  assertPositionRequired(item);
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase no configurado");
   // business_unit lo setea el trigger desde la cabecera; el CHECK ANMAT valida lote/vencimiento.
