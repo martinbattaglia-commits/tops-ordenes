@@ -23,7 +23,7 @@ export default defineConfig({
   },
   esbuild: { jsx: "automatic" },
   test: {
-    include: ["tests/wms-ui/**/*.test.ts"],
+    include: ["tests/wms-ui/**/*.test.ts", "src/lib/custody/**/*.test.ts"],
     environment: "node",
   },
 });

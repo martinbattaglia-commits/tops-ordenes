@@ -91,8 +91,9 @@ export interface RecordAssessmentInput {
 export interface ApplyDecisionCasInput {
   caseId: string;
   clientId: string;
+  scope?: CustodyEntityRef["scope"];
   expectedVersion: number;
-  expectedState: "REVIEW_REQUIRED";
+  expectedState: "REVIEW_REQUIRED" | "HOLD";
   record: HumanDecisionRecord;
   newState: TerminalCaseState;
   updatedAt: string;

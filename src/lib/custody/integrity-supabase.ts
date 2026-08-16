@@ -22,6 +22,11 @@ import type {
   CompleteEvaluationInput,
   CustodyServerEvaluationPort,
 } from "./integrity-evaluation";
+import type {
+  ProductiveVisionEvidenceRow,
+  ProductiveVisionServerPort,
+  ProductiveVisionSessionPort,
+} from "./productive-vision-evaluation";
 
 /** Forma mínima del cliente Supabase que este puerto necesita. */
 export interface CustodyDataClient {
@@ -46,10 +51,21 @@ export interface CustodyDataClient {
   }>;
 }
 
+/** Cliente mínimo para el camino productivo. Sólo se construye en servidor. */
+export interface ProductiveVisionDataClient extends CustodyDataClient {
+  storage: {
+    from(bucket: string): {
+      download(path: string): Promise<{ data: Blob | null; error: unknown }>;
+    };
+  };
+}
+
 const CASE_COLUMNS =
-  "id, public_id, version, client_id, packing_unit_id, shipment_id, state, hold_reasons, " +
+  "id, public_id, version, client_id, physical_unit_id, packing_unit_id, shipment_id, state, hold_reasons, " +
   "ingress_evidence_id, egress_evidence_id, provider, model, prompt_version, execution_mode, " +
-  "outcome, verdict, model_confidence, provider_error, chain_status, chain_events_checked, " +
+  "outcome, verdict, model_confidence, similarity_score, threshold_percent, threshold_policy_version, " +
+  "threshold_result, score_components, packaging_changed, missing_items_suspected, damage_suspected, " +
+  "provider_error, chain_status, chain_events_checked, " +
   "chain_head, chain_attested_at, decision_id, created_at, updated_at";
 
 const DECISION_COLUMNS =
@@ -64,7 +80,7 @@ const DECISION_COLUMNS =
  */
 const EVIDENCE_COLUMNS =
   "id, event_id, kind, sha256, redacted, captured_at, " +
-  "custody_events!inner(packing_unit_id, shipment_id, stage, event_type, occurred_at)";
+  "custody_events!inner(physical_unit_id, packing_unit_id, shipment_id, stage, event_type, occurred_at)";
 
 interface RawEvidenceJoin {
   id: string;
@@ -132,7 +148,9 @@ export function createSupabaseCustodyQueryPort(db: CustodyDataClient): CustodyQu
      * `decide_custody_integrity`, que lo recalcula por su cuenta.
      */
     async verifyChainHead(scope: CustodyEntityScope, entityId: string): Promise<string | null> {
-      const column = scope === "packing_unit" ? "packing_unit_id" : "shipment_id";
+      const column = scope === "physical_unit"
+        ? "physical_unit_id"
+        : scope === "packing_unit" ? "packing_unit_id" : "shipment_id";
       const { data, error } = await db
         .from("custody_events")
         .select("row_hash, chain_seq")
@@ -167,7 +185,10 @@ export function createSupabaseCustodyQueryPort(db: CustodyDataClient): CustodyQu
     },
 
     async decide(input: DecideRpcInput): Promise<string> {
-      const { data, error } = await db.rpc("decide_custody_integrity", {
+      const fn = input.scope === "physical_unit"
+        ? "decide_custody_integrity_v2"
+        : "decide_custody_integrity";
+      const { data, error } = await db.rpc(fn, {
         p_case_id: input.caseId,
         p_expected_version: input.expectedVersion,
         p_decision: input.decision,
@@ -188,13 +209,25 @@ export function createSupabaseCustodyQueryPort(db: CustodyDataClient): CustodyQu
       return data as string;
     },
 
+    async beginProductiveEvaluation(caseId: string, expectedVersion: number): Promise<unknown> {
+      const { data, error } = await db.rpc("begin_custody_integrity_evaluation_v2", {
+        p_case_id: caseId,
+        p_expected_version: expectedVersion,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+
     /**
      * `custody_inspection_candidates` (0224) es SECURITY DEFINER y exige
      * `wms.custody.decide` + tenant. Devuelve SÓLO los ids: ni digest, ni
      * ubicación, ni head. El navegador no participa de esta derivación.
      */
-    async selectInspectionCandidates(caseId: string): Promise<string[]> {
-      const { data, error } = await db.rpc("custody_inspection_candidates", {
+    async selectInspectionCandidates(caseId: string, scope?: CustodyEntityScope): Promise<string[]> {
+      const fn = scope === "physical_unit"
+        ? "custody_inspection_candidates_v2"
+        : "custody_inspection_candidates";
+      const { data, error } = await db.rpc(fn, {
         p_case_id: caseId,
       });
       if (error) throw new Error(error.message);
@@ -271,6 +304,132 @@ export function createSupabaseServerEvaluationPort(
         p_provider_error: input.providerError,
       });
       if (error) throw new Error(error.message);
+    },
+  };
+}
+
+export function createSupabaseProductiveVisionSessionPort(
+  session: CustodyDataClient,
+): ProductiveVisionSessionPort {
+  return {
+    async begin(caseId, expectedVersion) {
+      const { data, error } = await session.rpc("begin_custody_integrity_evaluation_v2", {
+        p_case_id: caseId,
+        p_expected_version: expectedVersion,
+      });
+      if (error) throw new Error(error.message);
+      return data;
+    },
+  };
+}
+
+interface RawProductiveEvidence {
+  id?: unknown;
+  storage_bucket?: unknown;
+  storage_path?: unknown;
+  mime_type?: unknown;
+  size_bytes?: unknown;
+  sha256?: unknown;
+  redacted?: unknown;
+  custody_events?: unknown;
+}
+
+function productiveEvent(value: unknown): Record<string, unknown> | null {
+  const event = Array.isArray(value) ? value[0] : value;
+  return typeof event === "object" && event !== null ? event as Record<string, unknown> : null;
+}
+
+export function createSupabaseProductiveVisionServerPort(
+  admin: ProductiveVisionDataClient,
+): ProductiveVisionServerPort {
+  return {
+    async loadEvidence(evidenceId): Promise<ProductiveVisionEvidenceRow | null> {
+      const { data, error } = await admin
+        .from("custody_evidence")
+        .select("id, storage_bucket, storage_path, mime_type, size_bytes, sha256, redacted, "
+          + "custody_events!inner(physical_unit_id, stage, event_type)")
+        .eq("id", evidenceId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      const row = data as RawProductiveEvidence | null;
+      if (!row) return null;
+      const event = productiveEvent(row.custody_events);
+      if (!event) return null;
+      return {
+        id: String(row.id ?? ""),
+        physicalUnitId: String(event.physical_unit_id ?? ""),
+        stage: String(event.stage ?? "") as ProductiveVisionEvidenceRow["stage"],
+        eventType: String(event.event_type ?? "") as ProductiveVisionEvidenceRow["eventType"],
+        bucket: String(row.storage_bucket ?? ""),
+        path: String(row.storage_path ?? ""),
+        mimeType: typeof row.mime_type === "string" ? row.mime_type : null,
+        sizeBytes: typeof row.size_bytes === "number"
+          ? row.size_bytes
+          : typeof row.size_bytes === "string" && row.size_bytes.trim() !== ""
+            ? Number(row.size_bytes)
+            : null,
+        sha256: String(row.sha256 ?? ""),
+        redacted: row.redacted === true,
+      };
+    },
+
+    async download(bucket, path) {
+      const { data, error } = await admin.storage.from(bucket).download(path);
+      if (error || !data) return null;
+      return new Uint8Array(await data.arrayBuffer());
+    },
+
+    async complete(input) {
+      const result = input.provider.result;
+      const { data, error } = await admin.rpc("complete_custody_integrity_evaluation_v2", {
+        p_attempt_id: input.attemptId,
+        p_case_id: input.caseId,
+        p_expected_version: input.expectedVersion,
+        p_ingress_observed_sha256: input.ingressObservedSha256,
+        p_egress_observed_sha256: input.egressObservedSha256,
+        p_score_components: {
+          identity: result.identity,
+          packaging: result.packaging,
+          quantity: result.quantity,
+          condition: result.condition,
+        },
+        p_model_confidence: result.model_confidence,
+        p_verdict: result.verdict,
+        p_packaging_changed: result.packaging_changed,
+        p_missing_items_suspected: result.missing_items_suspected,
+        p_damage_suspected: result.damage_suspected,
+        p_provider_response_id: input.provider.providerResponseId,
+        p_response_model: input.provider.responseModel,
+        p_system_fingerprint: input.provider.systemFingerprint,
+        p_request_sha256: input.provider.requestSha256,
+        p_response_sha256: input.provider.responseSha256,
+        p_provider_details: {
+          observations: result.observations,
+          zones: result.zones,
+          openai_request_id: input.provider.openaiRequestId,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (typeof data !== "number" || !Number.isSafeInteger(data) || data <= 0) {
+        throw new Error("finalización productiva inválida");
+      }
+      return data;
+    },
+
+    async fail(input) {
+      const { data, error } = await admin.rpc("fail_custody_integrity_evaluation_v2", {
+        p_attempt_id: input.attemptId,
+        p_case_id: input.caseId,
+        p_expected_version: input.expectedVersion,
+        p_failure_code: input.failureCode,
+        p_ingress_observed_sha256: input.ingressObservedSha256,
+        p_egress_observed_sha256: input.egressObservedSha256,
+      });
+      if (error) throw new Error(error.message);
+      if (typeof data !== "number" || !Number.isSafeInteger(data) || data <= 0) {
+        throw new Error("fallo productivo inválido");
+      }
+      return data;
     },
   };
 }

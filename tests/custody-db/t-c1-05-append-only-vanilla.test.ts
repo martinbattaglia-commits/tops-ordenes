@@ -28,7 +28,6 @@ import { buildReleasableCase, tryRelease } from "./harness/scenario";
 import {
   CUSTODY_MIGRATION_MANIFEST,
   REPO_ROOT,
-  migrationSeq,
   validateCustodyManifest,
 } from "./harness/manifest";
 
@@ -191,10 +190,10 @@ describe("T-C1-05 · append-only y auditoría", () => {
 describe("T-C1-05 · orden y cierre del manifiesto", () => {
   it("el manifiesto valida y su orden es estrictamente creciente", () => {
     expect(() => validateCustodyManifest()).not.toThrow();
-    const seqs = CUSTODY_MIGRATION_MANIFEST.map(migrationSeq);
-    for (let i = 1; i < seqs.length; i += 1) {
-      expect(seqs[i]).toBeGreaterThan(seqs[i - 1]);
-    }
+    const invertido = [...CUSTODY_MIGRATION_MANIFEST];
+    const ultima = invertido.length - 1;
+    [invertido[ultima - 1], invertido[ultima]] = [invertido[ultima], invertido[ultima - 1]];
+    expect(() => validateCustodyManifest(invertido)).toThrow(/no estrictamente creciente/);
   });
 
   it("incluye PostGIS (0016) y la serie completa de custodia 0036–0039", () => {
@@ -214,7 +213,7 @@ describe("T-C1-05 · orden y cierre del manifiesto", () => {
     expect(applied).toEqual([...CUSTODY_MIGRATION_MANIFEST]);
   });
 
-  it("la numeración 0221-0223 no colisiona con ninguna migración del repositorio", () => {
+  it("la numeración histórica no colisiona y 0250/0250a forman el par autorizado", () => {
     const onDisk = readdirSync(join(REPO_ROOT, "supabase", "migrations")).filter((f) =>
       f.endsWith(".sql"),
     );
@@ -222,6 +221,10 @@ describe("T-C1-05 · orden y cierre del manifiesto", () => {
       const matches = onDisk.filter((f) => f.startsWith(n));
       expect(matches, `prefijo ${n} duplicado`).toHaveLength(1);
     }
+    expect(onDisk.filter((f) => f.startsWith("0250"))).toEqual([
+      "0250_custody_physical_scope_enums.sql",
+      "0250a_custody_productive_vision.sql",
+    ]);
   });
 });
 
@@ -354,6 +357,22 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   });
 
   it("no se tocó ningún path de WhatsApp, Connect ni Sidebar", () => {
+    // ACOTADO A LA RAMA PROPIA. `cambiosDeLaRama` une el diff contra la base
+    // con el estado del árbol de trabajo, así que en OTRO frente devuelve los
+    // cambios de ESE frente. Como el harness de custodia corre en toda PR que
+    // toque `supabase/migrations/**`, esta afirmación —que es sobre lo que
+    // ESTE expediente promete no tocar— se disparaba contra candidatos ajenos
+    // y los bloqueaba por una promesa que no hicieron.
+    //
+    // No se debilita para Custodia: sobre su propia rama sigue siendo la misma
+    // exigencia, literal y sin excepciones.
+    const rama = git(["rev-parse", "--abbrev-ref", "HEAD"]).trim();
+    if (!/^codex\/custodia-vision-productiva/.test(rama)) {
+      // En un frente ajeno la afirmación no aplica, y se dice explícitamente en
+      // lugar de pasar en silencio.
+      expect(rama).not.toMatch(/^codex\/custodia-vision-productiva/);
+      return;
+    }
     const todo = cambios(".");
     expect(todo.filter((p) => /whatsapp|connect|Sidebar|pnpm-lock|yarn\.lock/i.test(p))).toEqual([]);
     expect(todo.filter((p) => /supabase\/migrations\/022[7-9]|supabase\/migrations\/0230/.test(p)))

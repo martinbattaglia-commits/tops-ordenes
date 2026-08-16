@@ -14,6 +14,7 @@
  * aceptar la lista desde afuera, estos casos se ponen en rojo.
  */
 import { beforeEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 // @ts-expect-error stub inyectado por alias en vitest.wms-ui.config.ts
 import { __setSessionClient, __setAdminClient } from "@/lib/supabase/server";
 import {
@@ -139,6 +140,55 @@ function sessionDouble(opts: Opts = {}) {
   };
 }
 
+/**
+ * Doble ADMIN mínimo con Storage: R-4 re-verifica los bytes de la inspección
+ * antes de decidir, así que sin un objeto verificable la liberación se bloquea
+ * —fail-closed, a propósito—. Acá el objeto existe y su digest coincide.
+ */
+const PNG_INSP = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89,
+]);
+const SHA_INSP = createHash("sha256").update(PNG_INSP).digest("hex");
+
+function adminConEvidenciaIntegra() {
+  return {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          async maybeSingle() {
+            return {
+              data: {
+                id: INSPECCION,
+                storage_bucket: "custody-evidence",
+                storage_path: `physical_unit/${INSPECCION}/despacho/o.png`,
+                mime_type: "image/png",
+                size_bytes: PNG_INSP.byteLength,
+                sha256: SHA_INSP,
+                redacted: false,
+                custody_events: {
+                  physical_unit_id: "pu-1",
+                  stage: "despacho",
+                  event_type: "inspeccion_humana",
+                },
+              },
+              error: null,
+            };
+          },
+        }),
+      }),
+    }),
+    storage: {
+      from: () => ({
+        async download() {
+          return { data: { arrayBuffer: async () => PNG_INSP.buffer }, error: null };
+        },
+      }),
+    },
+  };
+}
+
 beforeEach(() => {
   __setAdminClient(null);
 });
@@ -214,6 +264,7 @@ describe("la decisión REDERIVA y no confía en lo que llegue de afuera", () => 
   it("liberar manda al RPC las evidencias derivadas por el servidor", async () => {
     const db = sessionDouble();
     __setSessionClient(db);
+    __setAdminClient(adminConEvidenciaIntegra());
     await decideCustodyCaseAction({
       caseId: CASE,
       expectedVersion: 3,
@@ -228,9 +279,38 @@ describe("la decisión REDERIVA y no confía en lo que llegue de afuera", () => 
     expect(db.rpcs.filter((r) => r.fn === "custody_inspection_candidates")).toHaveLength(1);
   });
 
+  it("si los bytes de la inspección fueron sustituidos, la decisión NO llega a la base", async () => {
+    // Mismo tamaño, mismo tipo declarado, digest registrado intacto: lo único
+    // que cambió es el contenido del objeto en Storage. Es el ataque que la
+    // policy de UPDATE de 0037 deja abierto, y tiene que morir ANTES del RPC.
+    const db = sessionDouble();
+    __setSessionClient(db);
+    const admin = adminConEvidenciaIntegra();
+    admin.storage = {
+      from: () => ({
+        async download() {
+          const otros = Uint8Array.from([...PNG_INSP.slice(0, 32), 0x88]);
+          return { data: { arrayBuffer: async () => otros.buffer }, error: null };
+        },
+      }),
+    };
+    __setAdminClient(admin);
+
+    const res = await decideCustodyCaseAction({
+      caseId: CASE,
+      expectedVersion: 3,
+      decision: "release",
+      reason: "inspección física conforme y sin diferencias",
+    });
+
+    expect(res.ok).toBe(false);
+    expect(db.rpcs.find((r) => r.fn === "decide_custody_integrity")).toBeUndefined();
+  });
+
   it("un `inspectionEvidenceIds` inyectado en el input NO llega a la base", async () => {
     const db = sessionDouble({ candidates: [INSPECCION] });
     __setSessionClient(db);
+    __setAdminClient(adminConEvidenciaIntegra());
     const intruso = "99999999-9999-4999-8999-999999999999";
     await decideCustodyCaseAction({
       caseId: CASE,

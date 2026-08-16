@@ -37,8 +37,9 @@ export const CUSTODY_BOOTSTRAP_DIR = resolve(__dirname, "..", "bootstrap");
  *   + 0226                         = 42 (W22-TER-C: M-2 atestación de contenido)
  *   + 0231                         = 43 (UI/E2E: lectura de custodia acotada por tenant)
  *   + 0232                         = 44 (remediación: reserva exclusiva de evaluación)
+ *   + 0250 + 0250a                = 46 (scope físico + visión productiva)
  */
-export const EXPECTED_CUSTODY_MANIFEST_SIZE = 44;
+export const EXPECTED_CUSTODY_MANIFEST_SIZE = 46;
 
 /** Cierre inventariado ANTES de D1–D3. Se conserva para poder afirmarlo. */
 export const CUSTODY_CLOSURE_SIZE = 36;
@@ -107,6 +108,10 @@ export const CUSTODY_MIGRATION_MANIFEST: readonly string[] = [
 
   // ── Remediación consolidada · exclusividad de la reserva de evaluación ──
   "0232_custody_evaluation_lease_exclusive.sql", // begin exclusivo + abandono explícito
+
+  // ── Visión productiva · enum aislado + núcleo transaccional ──
+  "0250_custody_physical_scope_enums.sql",
+  "0250a_custody_productive_vision.sql",
 ];
 
 export class CustodyManifestError extends Error {
@@ -136,15 +141,21 @@ export function validateCustodyManifest(
   }
 
   let prev = -1;
+  let prevSuffix = -1;
   for (const m of manifest) {
     const seq = migrationSeq(m);
     if (!Number.isInteger(seq)) {
       throw new CustodyManifestError(`"${m}" no tiene prefijo numérico de 4 dígitos.`);
     }
-    if (seq <= prev) {
-      throw new CustodyManifestError(`orden no estrictamente creciente en "${m}" (${seq} <= ${prev}).`);
+    const suffix = /^(\d{4})([a-z])?_/.exec(m)?.[2];
+    const suffixOrder = suffix ? suffix.charCodeAt(0) - 96 : 0;
+    if (seq < prev || (seq === prev && suffixOrder <= prevSuffix)) {
+      throw new CustodyManifestError(
+        `orden no estrictamente creciente en "${m}" (${seq}${suffix ?? ""} <= ${prev}${prevSuffix > 0 ? String.fromCharCode(96 + prevSuffix) : ""}).`,
+      );
     }
     prev = seq;
+    prevSuffix = suffixOrder;
   }
 
   const onDisk = new Set(readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")));
@@ -178,6 +189,13 @@ export const CUSTODY_REQUIRED_OBJECTS = {
     "custody_integrity_decisions",
     "custody_integrity_inspection_evidence",
     "custody_integrity_evaluation_attempts",
+    "custody_physical_units",
+    "custody_allocation_physical_units",
+    "custody_integrity_policies",
+    "custody_integrity_policy_activations",
+    "custody_release_certificates",
+    "custody_legacy_release_allocation_coverage",
+    "custody_productive_installations",
     // W22-TER-C · M-2
     "custody_content_attestations",
     "custody_inspection_content_claims",
@@ -211,6 +229,28 @@ export const CUSTODY_REQUIRED_OBJECTS = {
     // W22-TER-C · M-2
     "attest_custody_content",
     "revoke_custody_content_attestation",
+    // Visión productiva 0250a.
+    "verify_custody_chain_v2",
+    "custody_materialize_reception_item_row",
+    "custody_bind_allocation",
+    "attest_custody_physical_content",
+    "attach_custody_physical_evidence",
+    "begin_custody_integrity_evaluation_v2",
+    "complete_custody_integrity_evaluation_v2",
+    "fail_custody_integrity_evaluation_v2",
+    "is_custody_inspection_evidence_v2",
+  "custody_inspection_candidates_v2",
+  "get_custody_physical_timeline",
+  "get_custody_physical_token",
+  "get_custody_physical_by_token",
+    "decide_custody_integrity_v2",
+    "custody_assert_physical_unit_released",
+    "custody_assert_allocation_released",
+    "custody_assert_packing_unit_released",
+    "custody_assert_shipment_released",
+    "custody_assert_release_certificate",
+    "enforce_custody_release_certificate",
+    "enforce_custody_packing_content_freeze",
   ],
   /**
    * §2 · `record_custody_integrity_evaluation` NO figura acá y no es un olvido:
@@ -230,6 +270,32 @@ export const CUSTODY_REQUIRED_OBJECTS = {
     "trg_profiles_authority_guard",
     // W22-TER-C · M-2: el ledger de contenido reclamado es append-only.
     "trg_custody_claims_immutable",
+    // Visión productiva 0250a.
+    "trg_custody_physical_units_immutable",
+    "trg_custody_physical_units_no_truncate",
+    "trg_custody_materialize_reception_item",
+    "trg_custody_lock_reception_identity",
+    "trg_custody_allocation_physical_immutable",
+    "trg_custody_allocation_physical_no_truncate",
+    "trg_custody_allocation_physical_coherence",
+    "trg_custody_productive_installations_immutable",
+    "trg_custody_productive_installations_no_truncate",
+    "trg_custody_bind_stock_allocation",
+    "trg_custody_integrity_policies_immutable",
+    "trg_custody_integrity_policies_no_truncate",
+    "trg_custody_policy_activations_immutable",
+    "trg_custody_policy_activations_no_truncate",
+    "trg_custody_release_certificates_immutable",
+    "trg_custody_release_certificates_no_truncate",
+    "trg_custody_release_certificate_coherence",
+    "trg_custody_legacy_coverage_immutable",
+    "trg_custody_legacy_coverage_no_truncate",
+    "trg_stock_allocations_custody_release",
+    "trg_packing_units_custody_release",
+    "trg_packing_unit_items_custody_freeze",
+    "trg_shipments_custody_release",
+    "trg_delivery_pods_custody_release",
+    "trg_shipments_custody_final_state",
   ],
   /** D1: el enum debe contener el valor canónico de inspección humana. */
   enumValues: {

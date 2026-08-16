@@ -544,7 +544,7 @@ export async function captureCustodyEvidence(
   const sessionId = parseCanonicalUuid(input.actor?.sessionId);
 
   if (
-    !pair || !scope || !entityId || !bucket || !storagePath || !kind ||
+    !pair || !scope || scope === "physical_unit" || !entityId || !bucket || !storagePath || !kind ||
     !declaredSha256 || !declaredSizeBytes || !actorId || !sessionId ||
     // La clave tiene que pertenecer a ESTA entidad y a ESTA etapa: si no, un
     // caller podría depositar el objeto bajo el prefijo de otro despacho.
@@ -863,6 +863,26 @@ export async function getCustodyTimeline(
   return data as CustodyTimeline;
 }
 
+export async function getCustodyPhysicalTimeline(physicalUnitId: string): Promise<CustodyTimeline> {
+  if (isMock()) return { ...MOCK_TIMELINE, scope: "physical_unit", entity_id: physicalUnitId };
+  const supabase = requireCustodyClient(createClient(), "timeline físico de custodia");
+  const { data, error } = await supabase.rpc("get_custody_physical_timeline", {
+    p_physical_unit_id: physicalUnitId,
+  });
+  if (error) throw new Error(`getCustodyPhysicalTimeline: ${error.message}`);
+  return data as CustodyTimeline;
+}
+
+export async function getPhysicalUnitToken(physicalUnitId: string): Promise<string | null> {
+  if (isMock()) return "11111111-1111-4111-8111-111111111111";
+  const supabase = requireCustodyClient(createClient(), "token físico de custodia");
+  const { data, error } = await supabase.rpc("get_custody_physical_token", {
+    p_physical_unit_id: physicalUnitId,
+  });
+  if (error) throw new Error(`getPhysicalUnitToken: ${error.message}`);
+  return typeof data === "string" ? data : null;
+}
+
 export async function getCustodyByToken(token: string): Promise<CustodyTokenResult | null> {
   if (isMock()) {
     return {
@@ -872,6 +892,11 @@ export async function getCustodyByToken(token: string): Promise<CustodyTokenResu
   }
   const supabase = createClient();
   if (!supabase) return null;
+  const physical = await supabase.rpc("get_custody_physical_by_token", { p_token: token });
+  if (!physical.error) return physical.data as CustodyTokenResult;
+  if (!(physical.error.message?.includes("no resuelto") || physical.error.code === "P0002")) {
+    throw new Error(`getCustodyByToken: ${physical.error.message}`);
+  }
   const { data, error } = await supabase.rpc("get_custody_by_token", { p_token: token });
   if (error) {
     if (error.message?.includes("no resuelto") || error.code === "P0002") return null;

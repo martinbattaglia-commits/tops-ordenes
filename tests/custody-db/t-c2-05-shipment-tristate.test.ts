@@ -409,6 +409,55 @@ describe("T-C2-05 · M5 · la superficie no se amplió", () => {
   });
 });
 
+/**
+ * 0250a angostó dos gates de contenedor para que el despacho vacío —y el bulto
+ * vacío ya vinculado— sigan siendo representables: sin eso, el caso 7 de este
+ * mismo archivo («vacío ⇒ unverifiable, nunca válido») quedaba fuera del
+ * modelo. Ese angostamiento sólo es legítimo si lo que protege el contrato
+ * sigue cerrado, así que se afirma acá: el contenedor vacío no puede entregarse,
+ * no puede emitir POD y no puede llenarse después.
+ */
+describe("T-C2-05 · M5 · el contenedor vacío existe pero no libera nada", () => {
+  it("12 · un despacho sin bultos NO puede pasar a entregado", async () => {
+    const s = await baseScenario(db);
+    await actAs(db, s.staff);
+    const { shipmentId: sh } = await newShipment(s);
+
+    const msg = await expectFailure(() =>
+      db.query(`update public.shipments set status = 'entregado' where id = $1`, [sh]),
+    );
+    expect(msg).toMatch(/CUSTODY_ZERO_APPLICABLE_CASES/);
+
+    const { rows } = await db.query<{ status: string }>(
+      `select status::text as status from public.shipments where id = $1`,
+      [sh],
+    );
+    expect(rows[0].status).toBe("despachado");
+  });
+
+  it("13 · un bulto vinculado vacío no puede recibir contenido después", async () => {
+    const s = await baseScenario(db);
+    await actAs(db, s.staff);
+    const { shipmentId: sh, orderId: ord } = await newShipment(s);
+    const pu = await createPackingUnit(db, ord, sh);
+
+    const msg = await expectFailure(() =>
+      db.query(
+        `insert into public.packing_unit_items (packing_unit_id, allocation_id, quantity)
+         values ($1, gen_random_uuid(), 1)`,
+        [pu],
+      ),
+    );
+    expect(msg).toMatch(/CUSTODY_PACKING_CONTENT_FROZEN/);
+
+    const { rows } = await db.query<{ n: string }>(
+      `select count(*)::text as n from public.packing_unit_items where packing_unit_id = $1`,
+      [pu],
+    );
+    expect(rows[0].n).toBe("0");
+  });
+});
+
 describe("T-C2-05 · M5 · las cuatro RPC de 0039 siguen operativas", () => {
   it("11 · generate_delivery_pod · get_custody_timeline · get_custody_by_token · get_shipment_custody_summary", async () => {
     const s = await baseScenario(db);
@@ -417,12 +466,18 @@ describe("T-C2-05 · M5 · las cuatro RPC de 0039 siguen operativas", () => {
     await packingUnitWithEvents(sh_ord, sh, 2);
     await attachEvidence(db, { shipmentId: sh, stage: "entrega", eventType: "firmado" });
 
-    // 1) generate_delivery_pod — firma de 0039 intacta.
-    const { rows: pod } = await db.query<{ r: Record<string, unknown> }>(
-      `select public.generate_delivery_pod($1, 'Receptor Sintético', 'DNI', '00000000', null, null, null) as r`,
-      [sh],
+    // 1) generate_delivery_pod — la firma de 0039 sigue intacta, pero 0250a le
+    // antepuso el gate contractual «POD sólo post-entrega»: sobre un despacho
+    // que todavía no está `entregado` la RPC existe y se invoca igual, y es el
+    // gate el que la rechaza. Que el POD ya no se emita antes de la entrega es
+    // el comportamiento exigido, no una regresión.
+    const pod = await expectFailure(() =>
+      db.query(
+        `select public.generate_delivery_pod($1, 'Receptor Sintético', 'DNI', '00000000', null, null, null) as r`,
+        [sh],
+      ),
     );
-    expect(pod[0].r).toBeTruthy();
+    expect(pod).toMatch(/CUSTODY_POD_REQUIRES_DELIVERED_SHIPMENT/);
 
     // 2) get_custody_timeline
     const { rows: tl } = await db.query<{ r: { nodes: unknown[] } }>(
@@ -459,6 +514,9 @@ describe("T-C2-05 · M5 · las cuatro RPC de 0039 siguen operativas", () => {
     ]) {
       expect(Object.keys(r)).toContain(k);
     }
-    expect(r.pod_present).toBe(true);
+    // Coherente con el gate de arriba: si el POD no pudo emitirse antes de la
+    // entrega, el resumen tampoco puede declararlo presente. `pod_present`
+    // sigue siendo un dato real del resumen, no un literal.
+    expect(r.pod_present).toBe(false);
   });
 });
