@@ -44,7 +44,7 @@
 import type { CustodyBucket, CustodyEventType, CustodyStage, EvidenceKind } from "./types";
 
 /** Alcance de una captura: la entidad a la que se adosa la evidencia. */
-export type CustodyScope = "packing_unit" | "shipment";
+export type CustodyScope = "physical_unit" | "packing_unit" | "shipment";
 
 /** Forma EXACTA que emite `uuid_out`. Sin trim, sin mayúsculas, sin llaves. */
 const CANONICAL_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -100,7 +100,7 @@ export function parsePositiveSize(value: unknown): number | null {
   return value;
 }
 
-const SCOPES: ReadonlySet<string> = new Set<CustodyScope>(["packing_unit", "shipment"]);
+const SCOPES: ReadonlySet<string> = new Set<CustodyScope>(["physical_unit", "packing_unit", "shipment"]);
 
 export function parseCustodyScope(value: unknown): CustodyScope | null {
   return typeof value === "string" && SCOPES.has(value) ? (value as CustodyScope) : null;
@@ -131,8 +131,9 @@ export function parseEvidenceKind(value: unknown): EvidenceKind | null {
  * para dejar un objeto huérfano que después hay que compensar.
  */
 const STAGE_EVENT_PAIRS: ReadonlyMap<CustodyStage, ReadonlySet<CustodyEventType>> = new Map([
+  ["recepcion", new Set<CustodyEventType>(["foto_ingreso"])],
   ["packing", new Set<CustodyEventType>(["foto_packing"])],
-  ["despacho", new Set<CustodyEventType>(["cargado", "inspeccion_humana"])],
+  ["despacho", new Set<CustodyEventType>(["foto_egreso", "cargado", "inspeccion_humana"])],
   ["transporte", new Set<CustodyEventType>(["en_transito"])],
   ["entrega", new Set<CustodyEventType>(["foto_entrega", "firmado"])],
   ["pod", new Set<CustodyEventType>(["pod"])],
@@ -171,7 +172,7 @@ export function parseObjectExtension(value: unknown): string | null {
  * prefijo arbitrario del bucket.
  */
 const STORAGE_PATH_RE =
-  /^(packing_unit|shipment)\/[0-9a-f-]{36}\/(packing|despacho|transporte|entrega|pod)\/[0-9a-f-]{36}\.[a-z0-9]{1,8}$/;
+  /^(physical_unit|packing_unit|shipment)\/[0-9a-f-]{36}\/(recepcion|packing|despacho|transporte|entrega|pod)\/[0-9a-f-]{36}\.[a-z0-9]{1,8}$/;
 
 export interface CustodyStoragePathInput {
   scope: CustodyScope;
@@ -235,3 +236,11 @@ export function parseAttachResult(value: unknown): CanonicalAttachResult | null 
   if (eventId === evidenceId) return null;
   return { eventId, evidenceId, eventPublicId };
 }
+
+/**
+ * Tope real del bucket `custody-evidence` (0037_custody_storage.sql: 8 MiB).
+ * Vive acá, junto al resto del contrato canónico, para que la app, la RPC y el
+ * bucket no puedan volver a discrepar en silencio.
+ */
+export const CUSTODY_EVIDENCE_MAX_BYTES = 8_388_608;
+

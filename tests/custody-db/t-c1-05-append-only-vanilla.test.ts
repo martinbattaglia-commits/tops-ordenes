@@ -15,6 +15,7 @@ import {
   detectarArchiveReingresado,
   evaluarInvarianciaVanilla,
   evaluarTamanoManifiesto,
+  rutasPropiasDeCustodia,
   type GitRunner,
 } from "./harness/vanilla-guard";
 import { Client } from "pg";
@@ -28,7 +29,6 @@ import { buildReleasableCase, tryRelease } from "./harness/scenario";
 import {
   CUSTODY_MIGRATION_MANIFEST,
   REPO_ROOT,
-  migrationSeq,
   validateCustodyManifest,
 } from "./harness/manifest";
 
@@ -42,6 +42,26 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.end();
 });
+
+/**
+ * ¿El diff bajo revisión es de ESTE expediente?
+ *
+ * El harness corre en toda PR que toque `supabase/migrations/**`, así que las
+ * afirmaciones que son PROMESAS DE CUSTODIA —qué rutas no toca, qué archivo del
+ * harness vanilla cambia, qué líneas de `package.json` autoriza, qué 0250*
+ * existen en disco— se ejecutan también sobre candidatos ajenos y los bloquean
+ * por algo que nunca prometieron.
+ *
+ * El acotamiento es por RUTAS DEL DIFF y no por nombre de rama: en CI
+ * `actions/checkout` deja el HEAD detached y `rev-parse --abbrev-ref HEAD`
+ * devuelve la cadena "HEAD", de modo que acotar por nombre dejaba el gate
+ * inerte justo donde único se aplica solo. `rutasPropiasDeCustodia` es pura y
+ * está probada en T-C5-03 sobre diffs simulados de ambos frentes.
+ */
+function diffEsDeCustodia(): boolean {
+  const g: GitRunner = (args) => execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" });
+  return rutasPropiasDeCustodia(cambiosDeLaRama(g, baseDeRama(g), ".")).length > 0;
+}
 
 describe("T-C1-05 · append-only y auditoría", () => {
   it("las decisiones no se pueden modificar ni borrar", async () => {
@@ -191,10 +211,10 @@ describe("T-C1-05 · append-only y auditoría", () => {
 describe("T-C1-05 · orden y cierre del manifiesto", () => {
   it("el manifiesto valida y su orden es estrictamente creciente", () => {
     expect(() => validateCustodyManifest()).not.toThrow();
-    const seqs = CUSTODY_MIGRATION_MANIFEST.map(migrationSeq);
-    for (let i = 1; i < seqs.length; i += 1) {
-      expect(seqs[i]).toBeGreaterThan(seqs[i - 1]);
-    }
+    const invertido = [...CUSTODY_MIGRATION_MANIFEST];
+    const ultima = invertido.length - 1;
+    [invertido[ultima - 1], invertido[ultima]] = [invertido[ultima], invertido[ultima - 1]];
+    expect(() => validateCustodyManifest(invertido)).toThrow(/no estrictamente creciente/);
   });
 
   it("incluye PostGIS (0016) y la serie completa de custodia 0036–0039", () => {
@@ -214,13 +234,22 @@ describe("T-C1-05 · orden y cierre del manifiesto", () => {
     expect(applied).toEqual([...CUSTODY_MIGRATION_MANIFEST]);
   });
 
-  it("la numeración 0221-0223 no colisiona con ninguna migración del repositorio", () => {
+  it("la numeración histórica no colisiona y 0250/0250a forman el par autorizado", () => {
     const onDisk = readdirSync(join(REPO_ROOT, "supabase", "migrations")).filter((f) =>
       f.endsWith(".sql"),
     );
     for (const n of ["0221", "0222", "0223"]) {
       const matches = onDisk.filter((f) => f.startsWith(n));
       expect(matches, `prefijo ${n} duplicado`).toHaveLength(1);
+    }
+    // Sólo exigible sobre el diff propio: un frente ajeno no tiene ninguna
+    // migración 0250* en disco, y esta igualdad lo bloquearía por una promesa
+    // que nunca hizo.
+    if (diffEsDeCustodia()) {
+      expect(onDisk.filter((f) => f.startsWith("0250"))).toEqual([
+        "0250_custody_physical_scope_enums.sql",
+        "0250a_custody_productive_vision.sql",
+      ]);
     }
   });
 });
@@ -251,6 +280,8 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
 
   const BASE = baseDeRama(git);
   const cambios = (ruta: string) => cambiosDeLaRama(git, BASE, ruta);
+  /** Alcance del bloque: por rutas del diff, nunca por nombre de rama. */
+  const propioDeCustodia = rutasPropiasDeCustodia(cambiosDeLaRama(git, BASE, ".")).length > 0;
   const enLaBase = (ruta: string): string => git(["show", `${BASE}:${ruta}`]);
 
   const VANILLA_AUTHORIZED_CHANGES = ["tests/db/harness/manifest.ts"];
@@ -265,7 +296,13 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   });
 
   it("sólo cambia el ÚNICO archivo autorizado del harness vanilla", () => {
+    // La primera mitad es segura para cualquier frente: un diff que no toca
+    // `tests/db` produce `[]` y `[]` no viola nada. La SEGUNDA exige presencia
+    // —que el conjunto sea exactamente el autorizado— y por eso sólo se le
+    // pide al diff propio: un frente que agrega una migración sin tocar el
+    // harness vanilla produce `[]` y quedaba bloqueado por esta igualdad.
     expect(evaluarInvarianciaVanilla(cambios("tests/db"), VANILLA_AUTHORIZED_CHANGES)).toEqual([]);
+    if (!propioDeCustodia) return;
     expect(cambios("tests/db")).toEqual([...VANILLA_AUTHORIZED_CHANGES].sort());
   });
 
@@ -322,6 +359,10 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   });
 
   it("package.json cambia SÓLO por lo autorizado: script de Custodia + jsdom", () => {
+    // La lista blanca es de Custodia. Un frente ajeno que edite `package.json`
+    // —que además es uno de los disparadores del workflow— no tiene por qué
+    // ajustarse a ella.
+    if (!propioDeCustodia) return;
     const diff = git(["diff", "--unified=0", `${BASE}..HEAD`, "--", "package.json"]) +
       git(["diff", "--unified=0", "--", "package.json"]);
     const changed = diff
@@ -354,7 +395,20 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   });
 
   it("no se tocó ningún path de WhatsApp, Connect ni Sidebar", () => {
+    // ACOTADO POR LAS RUTAS DEL DIFF. Es una promesa de ESTE expediente, así
+    // que sólo se le exige a un diff que contenga rutas propias de Custodia.
+    // Sobre el diff propio la exigencia es la de siempre, literal y sin
+    // excepciones; sobre uno ajeno se declara no aplicable con el motivo a la
+    // vista, y ese motivo se verifica en vez de restated.
     const todo = cambios(".");
+    const propias = rutasPropiasDeCustodia(todo);
+    if (propias.length === 0) {
+      // No es una tautología: se afirma que el diff REALMENTE no trae ninguna
+      // ruta del expediente, que es la condición que habilita el salteo.
+      expect(todo.filter((p) => /^supabase\/migrations\/(?:ROLLBACK_)?0250[a-z]?_/.test(p)))
+        .toEqual([]);
+      return;
+    }
     expect(todo.filter((p) => /whatsapp|connect|Sidebar|pnpm-lock|yarn\.lock/i.test(p))).toEqual([]);
     expect(todo.filter((p) => /supabase\/migrations\/022[7-9]|supabase\/migrations\/0230/.test(p)))
       .toEqual([]);

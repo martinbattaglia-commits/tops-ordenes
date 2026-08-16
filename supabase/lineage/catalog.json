@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 209,
-  "no_ejecutables": 21,
+  "ejecutables": 211,
+  "no_ejecutables": 22,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2631,6 +2631,45 @@
       "ledger_name": "ROLLBACK_20260815002807_service_tariff_m2_rates",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
       "motivo": "Inversa de 20260815002807: elimina solamente los dos conceptos m2 A COTIZAR antes de ejecutar el rollback logico del enum. NO es forward."
+    },
+    {
+      "id": "0250_custody_physical_scope_enums.sql",
+      "filename": "0250_custody_physical_scope_enums.sql",
+      "sha256": "1d030044f6b168acf3793e1d588cbd5ab1449c0301f13908d739d6ae5ece8a15",
+      "orden": 231,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00231",
+      "ledger_name": "0250_custody_physical_scope_enums",
+      "provenance": "repo (codex/custodia-vision-productiva-001-r2)",
+      "motivo": "Vocabulario fisico aislado: stage recepcion y tipos foto_ingreso / foto_egreso. Va en archivo propio porque PostgreSQL no permite consumir un valor de enum recien agregado en la misma transaccion."
+    },
+    {
+      "id": "0250a_custody_productive_vision.sql",
+      "filename": "0250a_custody_productive_vision.sql",
+      "sha256": "7dffb89f0a095773d59618ed1480599cdbd0cb70d13e22eec1e25ceb4f866822",
+      "orden": 232,
+      "requires": [
+        "0232_custody_evaluation_lease_exclusive.sql",
+        "0250_custody_physical_scope_enums.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00232",
+      "ledger_name": "0250a_custody_productive_vision",
+      "provenance": "repo (codex/custodia-vision-productiva-001-r2)",
+      "motivo": "Nucleo transaccional de CUSTODIA VISION PRODUCTIVA 001: unidades fisicas, politica de similitud con umbral 90, evaluacion v2 begin/complete/fail, certificados de liberacion y gates de despacho y POD. RIESGO DE DESPLIEGUE DECLARADO: el sufijo de letra hace que este archivo NO matchee el patron de nombres del CLI de Supabase, de modo que `supabase db push` aplicaria 0250 (cambio de enum irreversible) y SALTARIA este nucleo completo. La ventana de migracion productiva debe aplicar 0250 y 0250a A MANO, en ese orden, y verificar la fila de custody_productive_installations antes de dar por instalada la migracion."
+    },
+    {
+      "id": "ROLLBACK_0250a_custody_productive_vision.sql",
+      "filename": "ROLLBACK_0250a_custody_productive_vision.sql",
+      "sha256": "07344ba09dc2214279cd558c3a2f30af746793a3b94ad54d432505fa349a6d4d",
+      "orden": 233,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00233",
+      "ledger_name": "ROLLBACK_0250a_custody_productive_vision",
+      "provenance": "repo (codex/custodia-vision-productiva-001-r2)",
+      "motivo": "Inversa logica e idempotente de 0250 / 0250a: desactiva la politica y retira superficies y gates sin borrar identidades, eventos, decisiones ni auditoria. NO es forward."
     }
   ]
 }

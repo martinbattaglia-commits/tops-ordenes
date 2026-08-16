@@ -7,10 +7,12 @@
  */
 
 /** Etapa de la cadena (espejo de custody_stage_t, 0036). */
-export type CustodyStage = "packing" | "despacho" | "transporte" | "entrega" | "pod";
+export type CustodyStage = "recepcion" | "packing" | "despacho" | "transporte" | "entrega" | "pod";
 
 /** Tipo de evento (espejo de custody_event_type_t, 0036). */
 export type CustodyEventType =
+  | "foto_ingreso"
+  | "foto_egreso"
   | "foto_packing"
   | "cargado"
   | "en_transito"
@@ -39,6 +41,7 @@ export type EvidenceKind = "foto" | "firma" | "documento";
 export type CustodyBucket = "custody-evidence" | "custody-pii" | "custody-pod";
 
 export const STAGE_META: Record<CustodyStage, { label: string; color: string }> = {
+  recepcion: { label: "Recepción", color: "#0f766e" },
   packing: { label: "Packing", color: "#ea580c" },
   despacho: { label: "Despacho", color: "#7c3aed" },
   transporte: { label: "Transporte", color: "#2563eb" },
@@ -47,6 +50,8 @@ export const STAGE_META: Record<CustodyStage, { label: string; color: string }> 
 };
 
 export const EVENT_TYPE_META: Record<CustodyEventType, { label: string }> = {
+  foto_ingreso: { label: "Foto de ingreso" },
+  foto_egreso: { label: "Foto de egreso" },
   foto_packing: { label: "Foto de packing" },
   cargado: { label: "Cargado al vehículo" },
   en_transito: { label: "En tránsito" },
@@ -105,17 +110,23 @@ export interface CustodyTimelinePod {
 export type CustodyTimelineNode = CustodyTimelineEvent | CustodyTimelinePod;
 
 export interface CustodyTimeline {
-  scope: "packing_unit" | "shipment";
+  scope: "physical_unit" | "packing_unit" | "shipment";
   entity_id: string;
   nodes: CustodyTimelineNode[];
 }
 
 /** Resultado de get_custody_by_token (QR · SIN PII). */
 export interface CustodyTokenResult {
-  scope: "packing_unit" | "shipment";
+  scope: "physical_unit" | "packing_unit" | "shipment";
   public_id: string; // BLT- / DSP-
   status: string;
-  pod_present: boolean;
+  /**
+   * OPCIONAL a propósito: la resolución de una UNIDAD FÍSICA ya no lo informa.
+   * Una unidad puede repartirse entre varias allocations, así que no existe una
+   * respuesta correcta de sí/no a nivel de unidad sin noción de cantidad. Se
+   * prefiere el dato ausente antes que una afirmación falsa sobre el bien.
+   */
+  pod_present?: boolean;
   events: { stage: CustodyStage; event_type: CustodyEventType; occurred_at: string }[];
 }
 

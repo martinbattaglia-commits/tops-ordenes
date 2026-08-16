@@ -2,7 +2,13 @@
 
 import { createHash, randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
-import { createAdminClient, createClient } from "@/lib/supabase/server";
+import {
+  createAdminClient,
+  createClient,
+  createCustodyAdminMutationClient,
+  createCustodyMutationClient,
+  noRetryTransport,
+} from "@/lib/supabase/server";
 import {
   attachCustodyEvidence,
   attestCustodyContent,
@@ -17,6 +23,8 @@ import {
 } from "@/lib/custody/custody";
 import {
   buildCustodyStoragePath,
+  CUSTODY_EVIDENCE_MAX_BYTES,
+  parseAttachResult,
   parseCanonicalUuid,
   parseCustodyScope,
   parseCustodyStagePair,
@@ -25,6 +33,7 @@ import {
 } from "@/lib/custody/canonical-contract";
 import {
   buildCustodyCaseView,
+  CUSTODY_CAPTURE_PERMISSION,
   leaksSensitiveData,
   type CustodyCaseView,
 } from "@/lib/custody/case-presentation";
@@ -37,8 +46,10 @@ import {
 } from "@/lib/custody/integrity-adapters";
 import {
   createSupabaseCustodyQueryPort,
+  createSupabaseProductiveVisionServerPort,
   createSupabaseServerEvaluationPort,
   type CustodyDataClient,
+  type ProductiveVisionDataClient,
 } from "@/lib/custody/integrity-supabase";
 import {
   CUSTODY_DECISION_PERMISSION,
@@ -49,6 +60,13 @@ import {
   createEvaluationComposition,
   runCustodyReevaluation,
 } from "@/lib/custody/integrity-evaluation";
+import {
+  runProductiveCustodyVisionEvaluation,
+  verifyInspectionEvidenceIntegrity,
+} from "@/lib/custody/productive-vision-evaluation";
+import { OpenAICustodyVisionProvider } from "@/lib/custody/openai-vision-provider";
+import { sniffCustodyVisionMime } from "@/lib/custody/productive-vision-evaluation";
+import { env } from "@/lib/env";
 import { generateAndStorePodPdf, getPodPdfEvidenceId } from "@/lib/custody/pod-pdf";
 import type {
   CustodyBucket,
@@ -74,9 +92,145 @@ function revalidate(extra?: string): void {
   if (extra) revalidatePath(extra);
 }
 
+async function attachPhysicalEvidenceAction(
+  form: FormData,
+): Promise<Result<{ evidence_id: string; event_public_id: string }>> {
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size < 1) {
+    return { ok: false, error: "Foto física requerida" };
+  }
+  // El bucket `custody-evidence` corta en 8 MiB (0037). Aceptar 12 acá hacía
+  // que una foto de teléfono de 8–12 MiB pasara toda la validación y muriera
+  // recién en Storage, con un error que no le decía nada al operario.
+  if (file.size > CUSTODY_EVIDENCE_MAX_BYTES) {
+    return {
+      ok: false,
+      error: "La foto supera los 8 MB: sacala de nuevo con menor resolución",
+    };
+  }
+  const physicalUnitId = parseCanonicalUuid(form.get("entity_id"));
+  const pair = parseCustodyStagePair(form.get("stage"), form.get("event_type"));
+  if (!physicalUnitId || !pair || !(
+    (pair.stage === "recepcion" && pair.eventType === "foto_ingreso")
+    || (pair.stage === "despacho" && ["foto_egreso", "inspeccion_humana"].includes(pair.eventType))
+  )) return { ok: false, error: "Solicitud de captura física inválida" };
+
+  const session = createClient();
+  const admin = createAdminClient();
+  if (!session || !admin) return { ok: false, error: "Operación administrativa no disponible" };
+  const actor = await resolveTrustedActor(session);
+
+  // R-6 · La autorización COMPLETA va ANTES del upload. `resolveTrustedActor`
+  // sólo acredita la sesión; el permiso y el tenant los verificaba recién el
+  // attach, tres pasos después de haber escrito en el bucket con service role,
+  // de modo que un usuario sin `wms.edit` conseguía igual un objeto huérfano y
+  // una fila de atestación a nombre del tenant ajeno.
+  //
+  // Son DOS comprobaciones distintas y hacen falta las dos:
+  //  · la lectura por el cliente de SESIÓN somete la unidad a su RLS, que
+  //    resuelve el TENANT;
+  //  · el perfil y sus permisos resuelven la CAPACIDAD de escribir evidencia.
+  const visible = await session
+    .from("custody_physical_units")
+    .select("id, client_id")
+    .eq("id", physicalUnitId)
+    .maybeSingle();
+  if (visible.error || !visible.data) {
+    return { ok: false, error: "Unidad física no disponible para tu usuario" };
+  }
+  const unitClientId = String((visible.data as { client_id?: unknown }).client_id ?? "");
+  const authz = createActorAuthorizationPort(
+    createSupabaseCustodyQueryPort(session as unknown as CustodyDataClient),
+    { actorId: actor.actorId, sessionId: actor.sessionId },
+    unitClientId,
+  );
+  const verified = await authz.resolveActor();
+  if (!verified || !verified.permissions.includes(CUSTODY_CAPTURE_PERMISSION)) {
+    return { ok: false, error: "No tenés permiso para registrar evidencia" };
+  }
+
+  const supplied = new Uint8Array(await file.arrayBuffer());
+  const suppliedMime = sniffCustodyVisionMime(supplied);
+  if (!suppliedMime) return { ok: false, error: "Formato de foto no admitido" };
+  const extension = suppliedMime === "image/jpeg" ? "jpg" : suppliedMime === "image/png" ? "png" : "webp";
+  const storagePath = buildCustodyStoragePath({
+    scope: "physical_unit",
+    entityId: physicalUnitId,
+    stage: pair.stage,
+    objectId: randomUUID(),
+    extension,
+  });
+  if (!storagePath) return { ok: false, error: "Solicitud de captura física inválida" };
+
+  const storage = supabaseStoragePort(admin);
+  await storage.upload("custody-evidence", storagePath, supplied, suppliedMime);
+  let attestationId: string | null = null;
+  try {
+    const stored = await storage.download("custody-evidence", storagePath);
+    if (!stored || stored.byteLength !== supplied.byteLength) {
+      await storage.remove("custody-evidence", storagePath);
+      return { ok: false, error: "La foto almacenada no pudo verificarse" };
+    }
+    const observedMime = sniffCustodyVisionMime(stored);
+    const suppliedSha = createHash("sha256").update(supplied).digest("hex");
+    const observedSha = createHash("sha256").update(stored).digest("hex");
+    if (!observedMime || observedMime !== suppliedMime || observedSha !== suppliedSha) {
+      await storage.remove("custody-evidence", storagePath);
+      return { ok: false, error: "La foto almacenada no coincide con los bytes recibidos" };
+    }
+
+    const adminTransport = noRetryTransport();
+    const adminMutation = createCustodyAdminMutationClient(adminTransport);
+    const sessionMutation = createCustodyMutationClient(noRetryTransport());
+    if (!adminMutation || !sessionMutation) throw new Error("clientes de mutación no disponibles");
+    const attested = await adminMutation.rpc("attest_custody_physical_content", {
+      p_bucket: "custody-evidence",
+      p_storage_path: storagePath,
+      p_sha256: observedSha,
+      p_size_bytes: stored.byteLength,
+      p_observed_mime_type: observedMime,
+      p_actor_id: actor.actorId,
+      p_session_id: actor.sessionId,
+      p_physical_unit_id: physicalUnitId,
+      p_stage: pair.stage,
+      p_event_type: pair.eventType,
+      p_ttl_seconds: 900,
+    });
+    if (attested.error || typeof attested.data !== "string") throw new Error("atestación rechazada");
+    attestationId = attested.data;
+
+    const attached = await sessionMutation.rpc("attach_custody_physical_evidence", {
+      p_physical_unit_id: physicalUnitId,
+      p_stage: pair.stage,
+      p_event_type: pair.eventType,
+      p_storage_path: storagePath,
+      p_attestation_id: attestationId,
+      p_file_name: file.name || null,
+      p_captured_at: null,
+      p_exif: null,
+      p_notes: (form.get("notes") as string | null) || null,
+    });
+    if (attached.error) throw new Error("adjunto físico rechazado");
+    const canonical = parseAttachResult(attached.data);
+    if (!canonical) return { ok: false, error: "reconciliation_required" };
+    revalidate((form.get("revalidate") as string | null) || undefined);
+    return {
+      ok: true,
+      data: { evidence_id: canonical.evidenceId, event_public_id: canonical.eventPublicId },
+    };
+  } catch {
+    // Si la respuesta de attach fue ambigua no se elimina: podría haber
+    // confirmado. En fallos anteriores, la atestación expira y el objeto queda
+    // identificado para reconciliación; nunca se borra a ciegas.
+    void attestationId;
+    return { ok: false, error: "reconciliation_required" };
+  }
+}
+
 /** Sube un archivo de evidencia a Storage (service-role) y lo adjunta vía attach RPC. */
 export async function attachEvidenceAction(form: FormData): Promise<Result<{ evidence_id: string; event_public_id: string }>> {
   try {
+    if (form.get("scope") === "physical_unit") return attachPhysicalEvidenceAction(form);
     const file = form.get("file");
     if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Archivo requerido" };
 
@@ -96,7 +250,7 @@ export async function attachEvidenceAction(form: FormData): Promise<Result<{ evi
     const entityId = parseCanonicalUuid(form.get("entity_id"));
     const pair = parseCustodyStagePair(form.get("stage"), form.get("event_type"));
     const kind = parseEvidenceKind(form.get("kind") ?? "foto");
-    if (!scope || !entityId || !pair || !kind) {
+    if (!scope || scope === "physical_unit" || !entityId || !pair || !kind) {
       // Etiqueta única: no se devuelve cuál campo falló ni con qué valor.
       return { ok: false, error: "Solicitud de captura inválida" };
     }
@@ -351,10 +505,11 @@ async function deriveInspectionEvidence(
   caseId: string,
   actor: { permissions: readonly string[] } | null,
   decided: boolean,
+  scope?: "physical_unit" | "packing_unit" | "shipment",
 ): Promise<string[]> {
   if (decided || !actor || !actor.permissions.includes(CUSTODY_DECISION_PERMISSION)) return [];
   try {
-    return await query.selectInspectionCandidates(caseId);
+    return await query.selectInspectionCandidates(caseId, scope);
   } catch {
     return [];
   }
@@ -394,6 +549,7 @@ export async function loadCustodyCaseAction(
       id,
       verified,
       decided,
+      found.entity.scope,
     );
     // Reserva de evaluación viva: también server-side, y sólo como booleano.
     let evaluationInFlight = false;
@@ -497,8 +653,22 @@ export async function decideCustodyCaseAction(
     const verified = await auth.resolveActor();
     const inspectionEvidenceIds =
       input.decision === "release"
-        ? await deriveInspectionEvidence(query, id, verified, false)
+        ? await deriveInspectionEvidence(query, id, verified, false, (await query.selectCase(id))?.physical_unit_id ? "physical_unit" : undefined)
         : [];
+
+    // R-4 · Los BYTES de la inspección se re-verifican acá, contra su digest
+    // registrado, justo antes de decidir. La comparación ingreso/egreso ya lo
+    // hacía; la inspección no, y es la que sostiene el certificado. Postgres no
+    // puede leer Storage, así que el control tiene que estar de este lado.
+    if (inspectionEvidenceIds.length > 0) {
+      const admin = createAdminClient();
+      if (!admin) return caseFail("UNAVAILABLE");
+      const integrity = await verifyInspectionEvidenceIntegrity(
+        createSupabaseProductiveVisionServerPort(admin as unknown as ProductiveVisionDataClient),
+        inspectionEvidenceIds,
+      );
+      if (!integrity.ok) return { ok: false, error: "EVIDENCE_TAMPERED" };
+    }
 
     const outcome = await decideIntegrityCase(
       {
@@ -550,6 +720,57 @@ export async function registerHumanInspectionAction(
   }
   forced.set("stage", "despacho");
   forced.set("event_type", "inspeccion_humana");
+  forced.set("kind", "foto");
+  return attachEvidenceAction(forced);
+}
+
+/**
+ * Copia sólo lo que el navegador puede aportar: el archivo y a qué unidad va.
+ * Deliberadamente NO fija el par canónico — cada acción declara el suyo
+ * completo, para que leerla alcance para saber qué registra.
+ */
+function physicalCaptureForm(form: FormData): FormData {
+  const forced = new FormData();
+  for (const key of ["file", "entity_id", "notes", "revalidate"]) {
+    const v = form.get(key);
+    if (v !== null) forced.set(key, v);
+  }
+  return forced;
+}
+
+/**
+ * Registra la FOTO DE INGRESO de la unidad física (Adenda N.º 2 §4.2).
+ *
+ * Mismo forzado que la inspección humana y por la misma razón: el par canónico
+ * es del servidor. El navegador manda el archivo y la unidad; etapa, tipo,
+ * soporte y scope los pone acá, de modo que un formulario manipulado no puede
+ * hacer pasar una foto de ingreso por otra cosa —ni al revés—.
+ */
+export async function registerPhysicalIngressAction(
+  form: FormData,
+): Promise<Result<{ evidence_id: string; event_public_id: string }>> {
+  const forced = physicalCaptureForm(form);
+  forced.set("scope", "physical_unit");
+  forced.set("stage", "recepcion");
+  forced.set("event_type", "foto_ingreso");
+  forced.set("kind", "foto");
+  return attachEvidenceAction(forced);
+}
+
+/**
+ * Registra la FOTO DE EGRESO obligatoria de la unidad física.
+ *
+ * Es la contraparte del ingreso y la que habilita la comparación visual: sin
+ * ella el caso no sale de `PENDING_EVIDENCE` y los gates de despacho y POD
+ * permanecen cerrados, que es exactamente lo que el contrato pide.
+ */
+export async function registerPhysicalEgressAction(
+  form: FormData,
+): Promise<Result<{ evidence_id: string; event_public_id: string }>> {
+  const forced = physicalCaptureForm(form);
+  forced.set("scope", "physical_unit");
+  forced.set("stage", "despacho");
+  forced.set("event_type", "foto_egreso");
   forced.set("kind", "foto");
   return attachEvidenceAction(forced);
 }
@@ -612,6 +833,34 @@ export async function reevaluateCustodyCaseAction(
     // el intento. Nunca se expone ni se devuelve.
     const admin = createAdminClient();
     if (!admin) return caseFail("UNAVAILABLE");
+
+    if (found.entity.scope === "physical_unit") {
+      const outcome = await runProductiveCustodyVisionEvaluation(
+        {
+          session: {
+            begin: (c, v) => {
+              if (!ctx.query.beginProductiveEvaluation) {
+                throw new Error("camino productivo no disponible");
+              }
+              return ctx.query.beginProductiveEvaluation(c, v);
+            },
+          },
+          server: createSupabaseProductiveVisionServerPort(
+            admin as unknown as ProductiveVisionDataClient,
+          ),
+          provider: new OpenAICustodyVisionProvider({ apiKey: env.openai.apiKey }),
+        },
+        { caseId: id, expectedVersion: found.version },
+      );
+      if (outcome.status === "in_flight") {
+        return { ok: false, error: REEVAL_ERROR.LEASE_HELD };
+      }
+      if (outcome.status === "cooldown") {
+        return { ok: false, error: `El caso está en cooldown (${outcome.retryAfterSeconds} s)` };
+      }
+      revalidate(`/wms/custody/${id}`);
+      return loadCustodyCaseAction(id);
+    }
 
     const outcome = await runCustodyReevaluation(
       {

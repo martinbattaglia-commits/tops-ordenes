@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
-import { getCustodyTimeline, getShipmentToken } from "@/lib/custody/custody";
+import {
+  getCustodyPhysicalTimeline,
+  getCustodyTimeline,
+  getPhysicalUnitToken,
+  getShipmentToken,
+} from "@/lib/custody/custody";
 import { custodyQrDataUrl } from "@/lib/custody/qr";
 import { fmtDateTime } from "@/lib/utils";
 import type { CustodyEvidenceRef, CustodyTimeline as Timeline } from "@/lib/custody/types";
@@ -8,6 +13,7 @@ import { loadCustodyCaseAction } from "../actions";
 import { CaseAiPanel } from "../_components/CaseAiPanel";
 import { CaseDecisionPanel } from "../_components/CaseDecisionPanel";
 import { CaseInspectionPanel } from "../_components/CaseInspectionPanel";
+import { PhysicalCapturePanel } from "../_components/PhysicalCapturePanel";
 import { CaseReevaluatePanel } from "../_components/CaseReevaluatePanel";
 import { CasePodGate } from "../_components/CasePodGate";
 import { CustodyTimeline } from "../_components/CustodyTimeline";
@@ -76,20 +82,25 @@ export default async function CustodyCasePage({ params }: { params: { id: string
 
   const view = res.data;
   const isShipment = view.scope === "shipment";
+  const isPhysical = view.scope === "physical_unit";
   const shipmentId = isShipment ? view.entityId : null;
 
-  const timeline = await getCustodyTimeline(
-    isShipment ? null : view.entityId,
-    shipmentId,
-  );
+  const timeline = isPhysical
+    ? await getCustodyPhysicalTimeline(view.entityId)
+    : await getCustodyTimeline(isShipment ? null : view.entityId, shipmentId);
 
-  const token = shipmentId ? await getShipmentToken(shipmentId) : null;
+  const token = isPhysical
+    ? await getPhysicalUnitToken(view.entityId)
+    : shipmentId ? await getShipmentToken(shipmentId) : null;
   const qr = token ? await custodyQrDataUrl(token) : null;
 
 
-  const ingreso = firstEvidence(timeline, (e) => e.stage === "packing");
+  const ingreso = firstEvidence(timeline, (e) =>
+    isPhysical ? e.event_type === "foto_ingreso" : e.stage === "packing",
+  );
   const egreso =
     firstEvidence(timeline, (e) => e.event_type === "inspeccion_humana") ??
+    firstEvidence(timeline, (e) => e.event_type === "foto_egreso") ??
     firstEvidence(timeline, (e) => e.stage === "entrega");
 
   return (
@@ -151,7 +162,9 @@ export default async function CustodyCasePage({ params }: { params: { id: string
             </>
           ) : (
             <p className="mt-2 text-sm text-fg-muted">
-              Falta la fotografía de egreso: escaneá el mismo QR y registrala.
+              {isPhysical
+                ? "Falta la fotografía de egreso: registrala en «Fotografías de la unidad»."
+                : "Falta la fotografía de egreso."}
             </p>
           )}
         </section>
@@ -160,6 +173,14 @@ export default async function CustodyCasePage({ params }: { params: { id: string
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <CaseAiPanel view={view} />
         <div className="flex flex-col gap-3">
+          {/* Las dos fotos del contrato (§4.2) se capturan acá, en la vista
+              autenticada de la unidad. El QR es de sólo lectura y no puede
+              serlo: no hay sesión que atribuir a la captura. */}
+          <PhysicalCapturePanel
+            view={view}
+            tieneIngreso={ingreso !== null}
+            tieneEgreso={egreso !== null}
+          />
           <CaseInspectionPanel view={view} />
           <CaseReevaluatePanel view={view} />
           <CaseDecisionPanel view={view} />

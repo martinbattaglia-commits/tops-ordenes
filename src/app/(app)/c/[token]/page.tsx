@@ -32,7 +32,15 @@ export default async function CustodyTokenPage({ params }: { params: { token: st
     );
   }
 
-  const scopeLabel = result.scope === "packing_unit" ? "Bulto" : "Despacho";
+  // El QR es el artefacto de identidad del bien (Adenda §4.2), así que el
+  // rótulo tiene que nombrar lo que el token resuelve. El ternario anterior no
+  // contemplaba `physical_unit` y la unidad caía en "Despacho": una afirmación
+  // positiva equivocada sobre la unidad de custodia —un despacho agrupa muchos
+  // bienes; una unidad física es uno— en la pantalla que el contrato designa
+  // para identificarlo.
+  const scopeLabel =
+    result.scope === "physical_unit" ? "Unidad" :
+    result.scope === "packing_unit" ? "Bulto" : "Despacho";
 
   return (
     <div className="p-4 lg:p-8 nx-page-fade max-w-lg mx-auto">

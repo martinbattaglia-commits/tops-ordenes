@@ -33,6 +33,7 @@ import {
   evaluateCertificateEligibility,
   evaluateIntegrityCase,
   evaluateReleaseEligibility,
+  MIN_OVERRIDE_REASON_LENGTH,
   formatModelConfidence,
   holdsOperations,
   isAttestationCurrent,
@@ -277,7 +278,11 @@ describe("F-1 · frontera de liberación", () => {
 
   it("el conjunto liberable es exactamente NO_CALIBRATED_THRESHOLD", () => {
     expect(RELEASABLE_HOLD_SET).toEqual(["NO_CALIBRATED_THRESHOLD"]);
-    expect(evaluateReleaseEligibility(base)).toEqual({ allowed: true, blockers: [] });
+    expect(evaluateReleaseEligibility(base)).toEqual({
+      allowed: true,
+      blockers: [],
+      overrideReasons: [],
+    });
   });
 
   it.each([
@@ -332,6 +337,125 @@ describe("F-1 · frontera de liberación", () => {
 // ===========================================================================
 // F-1.3 · El repositorio no es una vía alternativa
 // ===========================================================================
+
+// ===========================================================================
+// F-1.2 · R-5 · El umbral de 90 bloquea TAMBIÉN en HOLD
+//
+// El caso por debajo del umbral no queda en REVIEW_REQUIRED: la DB lo deja en
+// HOLD con `BELOW_SIMILARITY_THRESHOLD`. Como el chequeo de score vivía dentro
+// de `state === "REVIEW_REQUIRED"`, ese caso devolvía `blockers: []` —botón
+// habilitado, sin ninguna señal de que liberar ahí es un override—. La base
+// igual exige admin y motivo reforzado, así que no era escalada de privilegio;
+// era el control que justifica la feature sin bloquear en la capa que lo
+// muestra.
+// ===========================================================================
+
+describe("F-1.2 · el umbral productivo bloquea en cualquier estado decidible", () => {
+  const productivo = (over: Record<string, unknown> = {}) => ({
+    ...realAssessment(),
+    similarityScore: 84.25,
+    thresholdPercent: 90,
+    thresholdResult: "BELOW" as const,
+    packagingChanged: false,
+    missingItemsSuspected: false,
+    damageSuspected: false,
+    ...over,
+  });
+
+  const ctxHold = (over: Record<string, unknown> = {}) => ({
+    state: "HOLD" as const,
+    ...RELEASE_CTX_OK,
+    holdReasons: ["BELOW_SIMILARITY_THRESHOLD"] as never,
+    assessment: productivo(),
+    reason: "motivo reforzado de override con longitud suficiente",
+    ...over,
+  });
+
+  it("bajo el umbral en REVIEW_REQUIRED la liberación limpia está bloqueada", () => {
+    // Rama estricta, la misma que exige la RPC en 0250a:2079-2087.
+    const r = evaluateReleaseEligibility({ ...ctxHold(), state: "REVIEW_REQUIRED" });
+    expect(r.allowed).toBe(false);
+    expect(r.blockers).toContain("SCORE_BELOW_THRESHOLD");
+  });
+
+  it("en HOLD la liberación es posible pero queda DECLARADA como override", () => {
+    // El inspector tiene que poder liberar bajo el umbral: si no pudiera, sería
+    // la IA la que decide por omisión, que es exactamente lo que el contrato
+    // prohíbe. Lo que no puede es que el override sea indistinguible de una
+    // liberación limpia.
+    const r = evaluateReleaseEligibility(ctxHold());
+    expect(r.allowed).toBe(true);
+    expect(r.blockers).toEqual([]);
+    expect(r.overrideReasons).toContain("SCORE_BELOW_THRESHOLD");
+
+    // Y en REVIEW_REQUIRED con score suficiente no hay override: no es ruido fijo.
+    const limpio = evaluateReleaseEligibility({
+      state: "REVIEW_REQUIRED",
+      ...RELEASE_CTX_OK,
+      assessment: productivo({ similarityScore: 96, thresholdResult: "ABOVE_OR_EQUAL" }),
+      reason: "motivo suficiente aquí",
+    });
+    expect(limpio.allowed).toBe(true);
+    expect(limpio.overrideReasons).toEqual([]);
+  });
+
+  it("las banderas de daño también se declaran al liberar desde HOLD", () => {
+    // El estado se construye como la BASE lo produce: 0250a declara
+    // incompatibles `coincide` y cualquier bandera de daño, así que un caso con
+    // daño llega SIEMPRE con veredicto distinto de `coincide`. La versión
+    // anterior de este caso combinaba ambos y afirmaba sobre un estado que la
+    // base no puede emitir.
+    const r = evaluateReleaseEligibility(
+      ctxHold({ assessment: productivo({ damageSuspected: true, verdict: "posible_dano" }) }),
+    );
+    expect(r.overrideReasons).toContain("DAMAGE_FLAGS_PRESENT");
+  });
+
+  it("el veredicto NO coincidente se declara como override, no bloquea", () => {
+    // Sin este caso, revertir el arreglo de F-1 —volver `VERDICT_NOT_MATCHING` a
+    // bloqueo duro— pasaba en verde: ningún otro caso usa un veredicto distinto
+    // de `coincide`. Y con el bloqueo duro, toda unidad que la IA marca queda
+    // inliberable, o sea que la IA decide la cuarentena por omisión.
+    const r = evaluateReleaseEligibility(
+      ctxHold({ assessment: productivo({ verdict: "diferencias" }) }),
+    );
+    expect(r.allowed).toBe(true);
+    expect(r.blockers).toEqual([]);
+    expect(r.overrideReasons).toContain("VERDICT_NOT_MATCHING");
+  });
+
+  it("fuera del override, el veredicto NO coincidente sigue bloqueando", () => {
+    // La rama estricta y la legada conservan la exigencia intacta.
+    const enRevision = evaluateReleaseEligibility({
+      ...ctxHold(),
+      state: "REVIEW_REQUIRED",
+      assessment: productivo({ verdict: "diferencias" }),
+    });
+    expect(enRevision.blockers).toContain("VERDICT_NOT_MATCHING");
+
+    const legado = evaluateReleaseEligibility({
+      state: "REVIEW_REQUIRED",
+      ...RELEASE_CTX_OK,
+      assessment: realAssessment({ verdict: "diferencias" }),
+      reason: "motivo suficiente aquí",
+    });
+    expect(legado.allowed).toBe(false);
+    expect(legado.blockers).toContain("VERDICT_NOT_MATCHING");
+  });
+
+  it("el motivo mínimo del override iguala el que exige la RPC: 20", () => {
+    // 19 caracteres: la UI lo aceptaba y la RPC lo rechazaba con un error crudo.
+    const corto = evaluateReleaseEligibility(ctxHold({ reason: "diecinueve caracte" }));
+    expect(corto.blockers).toContain("REASON_TOO_SHORT");
+    expect(MIN_OVERRIDE_REASON_LENGTH).toBe(20);
+    // Y una liberación limpia conserva su piso de 10: el refuerzo es del override.
+    expect(evaluateReleaseEligibility({
+      state: "REVIEW_REQUIRED",
+      ...RELEASE_CTX_OK,
+      reason: "diez chars",
+    }).blockers).not.toContain("REASON_TOO_SHORT");
+  });
+});
 
 describe("F-1.3 · repositorio", () => {
   async function seeded() {
