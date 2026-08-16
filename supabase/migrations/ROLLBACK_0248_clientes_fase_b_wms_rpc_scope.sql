@@ -36,6 +36,8 @@ grant execute on function public.confirm_reception(uuid), public.release_quarant
 
 drop function if exists public.nexus_wms_end_scope();
 drop function if exists public.nexus_wms_begin_scope(boolean);
+-- H-1 · la tabla de concesión y nexus_wms_scope_active() se crean en 0246,
+-- porque current_role() las consume: su reversa vive en ROLLBACK_0246.
 drop function if exists public.nexus_wms_inventory_item_allowed(uuid);
 drop function if exists public.nexus_wms_shipment_allowed(uuid);
 drop function if exists public.nexus_wms_packing_unit_allowed(uuid);

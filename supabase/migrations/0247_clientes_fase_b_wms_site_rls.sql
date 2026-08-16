@@ -167,8 +167,17 @@ begin
     v_header := v_position;
   end if;
 
-  if v_header is null or v_position is null or v_header is distinct from v_position then
-    raise exception 'sede WMS no autorizada' using errcode = 'insufficient_privilege';
+  -- B-1 · El guard es del ENCARGADO, no del sistema. Para un rol global el
+  -- comportamiento es el previo a 0247: una recepción puede tener líneas de
+  -- más de una nave, igual que antes. Se copia el patrón que esta misma
+  -- migración ya usa en nexus_wms_row_allowed.
+  if public.nexus_is_depot_manager_principal() then
+    if v_position is null
+       or v_header is distinct from v_position then
+      raise exception
+        'La posición indicada no corresponde a tu sede. Esa línea la tiene que cargar un rol operativo global.'
+        using errcode = 'insufficient_privilege';
+    end if;
   end if;
   return new;
 end;
@@ -201,8 +210,19 @@ begin
     v_order_wh := v_item_wh;
   end if;
 
-  if v_order_wh is null or v_item_wh is null or v_order_wh is distinct from v_item_wh then
-    raise exception 'sede WMS no autorizada' using errcode = 'insufficient_privilege';
+  -- B-1 · Mismo criterio que en recepciones, y acá el costo de no acotarlo era
+  -- mayor: `allocate_order` elige candidatos por (cliente, sku) en orden FEFO
+  -- SIN filtrar por nave —la reserva del WMS es cliente-céntrica—, no tiene
+  -- handler, y aborta la transacción entera. Un pedido con stock repartido
+  -- entre las dos naves, que antes de 0247 se reservaba bien, quedaba sin
+  -- ninguna reserva para admin, operaciones y supervisor.
+  if public.nexus_is_depot_manager_principal() then
+    if v_item_wh is null
+       or v_order_wh is distinct from v_item_wh then
+      raise exception
+        'Este pedido toma stock de una nave que no es la tuya. Lo tiene que reservar un rol operativo global.'
+        using errcode = 'insufficient_privilege';
+    end if;
   end if;
   return new;
 end;

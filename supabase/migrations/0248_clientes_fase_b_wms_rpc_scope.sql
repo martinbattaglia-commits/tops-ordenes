@@ -25,6 +25,9 @@ create or replace function public.nexus_wms_inventory_item_allowed(p_id uuid)
 returns boolean language sql stable security definer set search_path=public,pg_temp
 as $$ select coalesce((select public.nexus_wms_row_allowed(public.nexus_wms_position_warehouse(ii.position_id)) from public.inventory_items ii where ii.id=p_id), false) $$;
 
+-- H-1 · la tabla de concesión y nexus_wms_scope_active() se crean en 0246,
+-- porque current_role() los consume y PostgreSQL valida el cuerpo de una
+-- funcion SQL al crearla.
 create or replace function public.nexus_wms_begin_scope(p_allowed boolean)
 returns void language plpgsql security definer set search_path=public,pg_temp
 as $$
@@ -35,13 +38,22 @@ begin
        or public.nexus_depot_manager_valid() is distinct from true then
       raise exception 'no autorizado' using errcode='insufficient_privilege';
     end if;
-    perform set_config('nexus.wms_scope', 'fase-b-0248', true);
+    insert into public.nexus_wms_scope_grants (xid8_txn, granted_to)
+    values (pg_current_xact_id()::text, auth.uid())
+    on conflict (xid8_txn) do update set granted_to = excluded.granted_to;
   end if;
 end;
 $$;
 create or replace function public.nexus_wms_end_scope()
 returns void language plpgsql security definer set search_path=public,pg_temp
-as $$ begin if public.nexus_is_depot_manager_principal() then perform set_config('nexus.wms_scope','',true); end if; end $$;
+as $$
+begin
+  if public.nexus_is_depot_manager_principal() then
+    delete from public.nexus_wms_scope_grants
+     where xid8_txn = pg_current_xact_id_if_assigned()::text;
+  end if;
+end;
+$$;
 
 revoke all on function public.nexus_wms_reception_allowed(uuid) from public,anon,authenticated;
 revoke all on function public.nexus_wms_order_allowed(uuid) from public,anon,authenticated;

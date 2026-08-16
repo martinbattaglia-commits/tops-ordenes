@@ -125,7 +125,7 @@ describe("T-FB-01 · R-1 · sede en el alta de recepciones", () => {
            values ($1,'SKU-X','Item ajeno',1,$2,'pendiente')`,
           [receptionId, posMagaldi],
         ),
-      ).rejects.toThrow(/sede WMS no autorizada/);
+      ).rejects.toThrow(/no corresponde a tu sede/);
     });
   });
 
@@ -156,9 +156,11 @@ describe("T-FB-01 · R-1 · sede en el alta de recepciones", () => {
     });
   });
 
-  it("una segunda línea no puede mover la sede ya fijada", async () => {
-    await comoUsuario(db, ADMIN.id, ADMIN.email, async () => {
-      const receptionId = await crearRecepcion(ADMIN.id);
+  it("B-1 · un encargado no puede sumar una línea de otra nave a su recepción", async () => {
+    // La restricción de sede es del ENCARGADO y sigue intacta: acotar el guard
+    // a principales no la relajó.
+    await comoUsuario(db, JORGE.id, JORGE.email, async () => {
+      const receptionId = await crearRecepcion(JORGE.id);
       await db.query(
         `insert into public.reception_items
            (reception_id, sku, description, quantity, position_id, status)
@@ -172,7 +174,36 @@ describe("T-FB-01 · R-1 · sede en el alta de recepciones", () => {
            values ($1,'SKU-4','Segunda, otra nave',1,$2,'pendiente')`,
           [receptionId, posMagaldi],
         ),
-      ).rejects.toThrow(/sede WMS no autorizada/);
+      ).rejects.toThrow(/no corresponde a tu sede/);
+      expect(await sedeDe(receptionId)).toBe(JORGE.warehouse);
+    });
+  });
+
+  it("B-1 · un rol global recupera el comportamiento previo a 0247", async () => {
+    // Antes de 0247 una recepción podía tener líneas de más de una nave. El
+    // guard incondicional se lo había quitado a admin/operaciones/supervisor
+    // sin que eso fuera una decisión: era alcance colateral.
+    //
+    // CONSECUENCIA DECLARADA: la cabecera conserva la sede que fijó su primera
+    // línea, de modo que una recepción así queda en el mismo estado que las
+    // históricas multi-nave de A-7. Es el precio de no perder la capacidad, y
+    // queda explícito acá en vez de descubrirse en producción.
+    await comoUsuario(db, ADMIN.id, ADMIN.email, async () => {
+      const receptionId = await crearRecepcion(ADMIN.id);
+      await db.query(
+        `insert into public.reception_items
+           (reception_id, sku, description, quantity, position_id, status)
+         values ($1,'SKU-G1','Primera',1,$2,'pendiente')`,
+        [receptionId, posLujan],
+      );
+      await expect(
+        db.query(
+          `insert into public.reception_items
+             (reception_id, sku, description, quantity, position_id, status)
+           values ($1,'SKU-G2','Segunda, otra nave',1,$2,'pendiente')`,
+          [receptionId, posMagaldi],
+        ),
+      ).resolves.toBeTruthy();
       expect(await sedeDe(receptionId)).toBe(JORGE.warehouse);
     });
   });

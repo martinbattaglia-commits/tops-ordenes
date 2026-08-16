@@ -335,6 +335,41 @@ grant execute on function public.has_permission(text) to authenticated, service_
 
 -- Un profiles.role manipulado nunca devuelve staff/admin para los encargados.
 -- El único ascenso temporal a operaciones ocurre dentro de wrappers WMS 0248.
+-- H-1 · La elevación transaccional NO puede apoyarse en una GUC.
+--
+-- `nexus.wms_scope` es una GUC placeholder, es decir PGC_USERSET: cualquier rol
+-- puede setearla con SET o set_config. Un centinela así sirve para RESTRINGIR
+-- —como treasury.via_rpc, que deniega mientras no esté puesta— pero no para
+-- CONCEDER, porque lo que concede es `current_role() = 'operaciones'`, la llave
+-- de ciento sesenta cláusulas de policy. Que hoy no exista un camino desde
+-- PostgREST para ejecutar SET no cierra el punto: la seguridad no puede
+-- depender de que ese camino no aparezca.
+--
+-- La concesión pasa a exigir una fila que SÓLO este definer puede escribir:
+-- la tabla no tiene policies y está revocada, de modo que un `SET` a mano ya
+-- no eleva nada.
+create table if not exists public.nexus_wms_scope_grants (
+  xid8_txn text primary key,
+  granted_to uuid not null,
+  granted_at timestamptz not null default now()
+);
+alter table public.nexus_wms_scope_grants enable row level security;
+revoke all on table public.nexus_wms_scope_grants from public, anon, authenticated;
+
+
+/** Verdadero sólo dentro de una transacción que pasó por begin_scope. */
+create or replace function public.nexus_wms_scope_active()
+returns boolean language sql stable security definer set search_path=public,pg_temp
+as $$
+  select exists (
+    select 1 from public.nexus_wms_scope_grants g
+    where g.xid8_txn = pg_current_xact_id_if_assigned()::text
+      and g.granted_to = auth.uid()
+  );
+$$;
+revoke all on function public.nexus_wms_scope_active() from public, anon;
+grant execute on function public.nexus_wms_scope_active() to authenticated, service_role;
+
 create or replace function public.current_role()
 returns public.user_role_t
 language sql stable security definer set search_path = public, pg_temp
@@ -342,7 +377,11 @@ as $$
   select case
     when public.nexus_is_depot_manager_principal() then
       case
-        when current_setting('nexus.wms_scope', true) = 'fase-b-0248'
+        -- H-1 · La elevación ya no depende de una GUC que el propio usuario
+        -- puede setear: exige una concesión escrita por nexus_wms_begin_scope
+        -- en una tabla sin policies y revocada, dentro de esta misma
+        -- transacción. Sin esa fila, un principal es 'cliente'.
+        when public.nexus_wms_scope_active()
          and public.nexus_depot_manager_valid() is not distinct from true
         then 'operaciones'::public.user_role_t
         else 'cliente'::public.user_role_t

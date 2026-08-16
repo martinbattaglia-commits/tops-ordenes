@@ -190,6 +190,9 @@ where p.id=u.id and (u.id,lower(u.email)) in (
 );
 
 drop function if exists public.nexus_depot_manager_valid();
+-- H-1 · concesión transaccional no falsificable, neta de 0246.
+drop function if exists public.nexus_wms_scope_active();
+drop table if exists public.nexus_wms_scope_grants;
 drop function if exists public.nexus_depot_manager_scope();
 drop function if exists public.nexus_is_depot_manager_principal();
 
