@@ -205,13 +205,20 @@ export async function emitInvoiceAction(
  * NO altera el payload a ARCA (los renglones no se transmiten al WS).
  */
 function buildOrderItems(o: Order) {
+  if (
+    o.pricing_complete === false
+    || o.total === null
+    || (o.services ?? []).some((service) => service.rate === null || service.subtotal === null)
+  ) {
+    throw new Error(`La OS ${o.public_id} tiene precios pendientes y no puede alimentar facturación.`);
+  }
   const servicios = (o.services ?? []).filter((s) => Number(s.qty) > 0);
   if (servicios.length === 0) {
     return [
       {
         descripcion: "Servicios de logística",
         cantidad: 1,
-        precio_unitario: Number(o.total ?? 0),
+        precio_unitario: o.total,
         alicuota_iva: 21,
         order_id: o.id,
       },
@@ -220,7 +227,8 @@ function buildOrderItems(o: Order) {
   return servicios.map((s) => ({
     descripcion: s.label,
     cantidad: Number(s.qty),
-    precio_unitario: Number(s.rate),
+    // El guard anterior garantiza que no se materializa null como cero.
+    precio_unitario: s.rate as number,
     alicuota_iva: 21,
     order_id: o.id,
   }));

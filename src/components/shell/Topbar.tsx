@@ -22,9 +22,11 @@ export function formatTopbarDate(now: Date): string {
 export default function Topbar({
   onMenuClick,
   initialNowIso,
+  operationalOnly = false,
 }: {
   onMenuClick: () => void;
   initialNowIso: string;
+  operationalOnly?: boolean;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -41,7 +43,9 @@ export default function Topbar({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!search.trim()) return;
-    router.push(`/compras/ordenes?search=${encodeURIComponent(search.trim())}`);
+    router.push(
+      `${operationalOnly ? "/orders" : "/compras/ordenes"}?search=${encodeURIComponent(search.trim())}`,
+    );
   };
 
   const fechaHoy = formatTopbarDate(now);
@@ -59,7 +63,7 @@ export default function Topbar({
         <Icon name="menu" size={20} />
       </button>
 
-      <Link href="/ejecutivo" className="flex items-center lg:hidden">
+      <Link href={operationalOnly ? "/dashboard" : "/ejecutivo"} className="flex items-center lg:hidden">
         <Image
           src="/icons/logo-isologo-primary.png"
           alt="Logística TOPS"
@@ -88,7 +92,7 @@ export default function Topbar({
         />
         <input
           className="input nx-search pl-9 pr-12 h-10"
-          placeholder="Buscar OC, OS, proveedor, cliente, CUIT…"
+          placeholder={operationalOnly ? "Buscar orden de servicio…" : "Buscar OC, OS, proveedor, cliente, CUIT…"}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -98,7 +102,7 @@ export default function Topbar({
       </form>
 
       <div className="ml-auto flex items-center gap-2">
-        <TopsConnectButton />
+        {!operationalOnly && <TopsConnectButton />}
         <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs text-fg-secondary border border-stroke-soft rounded-pill bg-bg-surface">
           <span className="nx-live-dot" />
           <span className="capitalize">{fechaHoy}</span>

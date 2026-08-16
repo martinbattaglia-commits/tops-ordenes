@@ -3,6 +3,7 @@ import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { MOCK_CLIENTS, MOCK_OPERATORS, MOCK_ORDERS } from "@/lib/mock-data";
 import type { Order, OrderStatus, Depot, Client, Operator } from "@/lib/types";
+import { getDepotManagerBoot } from "@/lib/rbac/boot-permissions";
 
 export type OrderClientOption = Pick<Client, "id" | "razon" | "cuit" | "tags" | "activo">;
 
@@ -47,6 +48,24 @@ export async function listOrders(filters: OrderFilters = {}): Promise<OrdersResu
   const pageSize = filters.pageSize ?? PAGE_DEFAULT;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+
+  const manager = await getDepotManagerBoot();
+  if (manager.restricted) {
+    if (!manager.authorized) throw new Error("listOrders: acceso denegado");
+    const { data, error } = await supabase.rpc("nexus_depot_manager_orders", {
+      p_status: filters.status && filters.status !== "todas" ? filters.status : null,
+      p_search: filters.search ?? null,
+      p_limit: pageSize,
+      p_offset: from,
+    });
+    if (error || !data || typeof data !== "object") throw new Error("listOrders: acceso denegado");
+    const payload = data as unknown as { rows?: Order[]; total?: number; counts?: Record<string, number> };
+    return {
+      rows: payload.rows ?? [],
+      total: Number(payload.total ?? 0),
+      counts: payload.counts ?? { todas: 0 },
+    };
+  }
 
   let q = supabase
     .from("orders")
@@ -96,6 +115,16 @@ export async function getOrder(idOrPublicId: string): Promise<Order | null> {
 
   const supabase = createClient();
   if (!supabase) return null;
+
+  const manager = await getDepotManagerBoot();
+  if (manager.restricted) {
+    if (!manager.authorized) return null;
+    const { data, error } = await supabase.rpc("nexus_depot_manager_order", {
+      p_identifier: idOrPublicId,
+    });
+    if (error || !data || typeof data !== "object") return null;
+    return hydrateOrderSignature(data as unknown as Order);
+  }
 
   const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     idOrPublicId
@@ -230,7 +259,7 @@ export async function getDashboardKpis(): Promise<DashboardKpis> {
 
 // ---------------- helpers ----------------
 
-function buildKpisFromOrders(orders: Order[]): DashboardKpis {
+export function buildKpisFromOrders(orders: Order[]): DashboardKpis {
   const now = new Date();
   const month = now.getMonth();
   const lastMonth = month === 0 ? 11 : month - 1;
@@ -242,8 +271,15 @@ function buildKpisFromOrders(orders: Order[]): DashboardKpis {
   // La tarjeta historica se expresa exclusivamente en ARS. Las OS USD y las
   // filas legacy sin moneda demostrable se excluyen: sumar monedas o asumir
   // una moneda seria una metrica ficticia.
-  const thisMonthArs = thisMonth.filter((o) => o.pricing_currency === "ARS");
-  const prevMonthArs = prevMonth.filter((o) => o.pricing_currency === "ARS");
+  // Una OS sin cotizar tampoco entra: nace con importes NULL pero con la
+  // moneda del tarifario (0249:431), así que pasaba el filtro de arriba y su
+  // ausencia de precio se sumaba como cero, invisible en el contador de
+  // excluidas. Se la excluye con el mismo criterio que reportes y
+  // facturación (pricing_complete !== false && total != null).
+  const isQuoted = (o: Order) =>
+    o.pricing_complete !== false && (o.issued_total ?? o.total) != null;
+  const thisMonthArs = thisMonth.filter((o) => o.pricing_currency === "ARS" && isQuoted(o));
+  const prevMonthArs = prevMonth.filter((o) => o.pricing_currency === "ARS" && isQuoted(o));
   const revenue = thisMonthArs.reduce((a, o) => a + Number(o.issued_total ?? o.total ?? 0), 0);
   const signed = thisMonth.filter((o) => o.signed_by).length;
   const signatureRate = thisMonth.length ? (signed / thisMonth.length) * 100 : 0;

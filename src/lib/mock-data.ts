@@ -134,7 +134,7 @@ function makeMockOrders(): Order[] {
     const d = new Date(today.getTime() - dateOff * 86400000 - rng() * 18000000);
     const hStart = 7 + Math.floor(rng() * 9);
     const dur = 1 + Math.floor(rng() * 6);
-    const total = services.reduce((a, b) => a + b.subtotal, 0);
+    const total = services.reduce((a, b) => a + (b.subtotal ?? 0), 0);
     const op = MOCK_OPERATORS[Math.floor(rng() * MOCK_OPERATORS.length)];
     const shortId = 201518 + 48 - i;
 

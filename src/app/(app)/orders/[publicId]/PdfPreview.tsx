@@ -1,6 +1,7 @@
 import { Icon } from "@/components/Icon";
-import { fmtCurrency, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
+import { fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
 import { ivaEstimate } from "@/lib/pricing/calculator";
+import { fmtMoneyOrPending } from "@/lib/pricing/money-display";
 import type { Order } from "@/lib/types";
 
 export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
@@ -12,9 +13,9 @@ export function PdfPreview({ order, qrSvg }: { order: Order; qrSvg: string }) {
   const fmtOrderMoney = (
     amount: number | null | undefined,
     amountCurrency: OrderCurrency | null = currency,
-  ) => (amountCurrency ? fmtCurrency(amount, amountCurrency) : "— · MONEDA NO INFORMADA");
-  const ivaMonto = ivaEstimate(order.total);
-  const totalConIva = order.total + ivaMonto;
+  ) => fmtMoneyOrPending(amount, amountCurrency);
+  const ivaMonto = order.total == null ? null : ivaEstimate(order.total);
+  const totalConIva = order.total == null || ivaMonto == null ? null : order.total + ivaMonto;
   return (
     <div
       className="pdf-paper card bg-white shadow-md mx-auto"

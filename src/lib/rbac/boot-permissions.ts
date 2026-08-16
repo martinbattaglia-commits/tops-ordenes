@@ -24,10 +24,15 @@
  *   · Los PAGE GUARDS (canAccess en /settings/*, /rrhh/documentos, …) NO cambian:
  *     el enforcement real por URL directa sigue intacto página por página.
  */
-import { cache } from "react";
+import * as React from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
+import {
+  depotManagerIdentity,
+  depotManagerRpcRowValid,
+  type DepotManagerRpcRow,
+} from "@/lib/rbac/depot-manager";
 
 export interface BootPermissions {
   /** Bloques ejecutivos/financieros del Cockpit (cockpit.view). */
@@ -51,13 +56,37 @@ export interface BootContext {
   user: User | null;
   profileRole: string | null;
   perms: BootPermissions;
+  depotManager: BootDepotManager;
 }
+
+export type BootDepotManager =
+  | { restricted: false; authorized: true; depot: null; warehouseCode: null; siteLabel: null }
+  | { restricted: true; authorized: false; depot: null; warehouseCode: null; siteLabel: null }
+  | { restricted: true; authorized: true; depot: string; warehouseCode: string; siteLabel: string };
 
 const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true, copilot: true, contabilidad: true };
 const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false, copilot: false, contabilidad: false };
+const STANDARD_DEPOT_MANAGER: BootDepotManager = {
+  restricted: false,
+  authorized: true,
+  depot: null,
+  warehouseCode: null,
+  siteLabel: null,
+};
 
 /** Presupuesto máximo de awaits del boot (F2). */
 const BOOT_BUDGET_MS = 3000;
+
+/**
+ * `cache()` sólo existe en el React que Next vendorea para el App Router
+ * (18.3.0-canary); el `react` de node_modules (18.3.1 estable) no lo exporta.
+ * En SSR se usa el real y la deduplicación por request queda intacta; fuera de
+ * Next se degrada a identidad. Es memoización, no un control de autorización:
+ * sin ella cada lectura vuelve a consultar, nunca concede permisos.
+ */
+const cache: <T extends (...args: never[]) => unknown>(fn: T) => T =
+  (React as { cache?: <T extends (...args: never[]) => unknown>(fn: T) => T }).cache ??
+  ((fn) => fn);
 
 /** Usuario de sesión — 1 sola llamada a Supabase Auth por request (cache). */
 export const getSessionUser = cache(async (): Promise<User | null> => {
@@ -81,6 +110,33 @@ export const getProfileRole = cache(async (): Promise<string | null> => {
     .eq("id", user.id)
     .maybeSingle();
   return (data?.role as string | undefined) ?? null;
+});
+
+/** Frontera exacta para las dos identidades de encargado; todo error deniega. */
+export const getDepotManagerBoot = cache(async (): Promise<BootDepotManager> => {
+  const user = await getSessionUser();
+  const identity = depotManagerIdentity(user?.id, user?.email);
+  if (!identity.principal) return STANDARD_DEPOT_MANAGER;
+  if (!identity.exact || !identity.site) {
+    return { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null };
+  }
+  const expected = identity.site;
+  const supabase = createClient();
+  if (!supabase) {
+    return { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null };
+  }
+  const { data, error } = await supabase.rpc("nexus_depot_manager_scope").single();
+  const row = data as DepotManagerRpcRow | null;
+  if (error || !depotManagerRpcRowValid(row, expected)) {
+    return { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null };
+  }
+  return {
+    restricted: true,
+    authorized: true,
+    depot: expected.depot,
+    warehouseCode: expected.warehouseCode,
+    siteLabel: expected.siteLabel,
+  };
 });
 
 /** Resolución real de los 3 flags — deduplicada por request (cache). */
@@ -185,7 +241,8 @@ async function withBudget<T>(p: Promise<T>, fallback: T, label: string): Promise
  * garantizan los page guards, que no dependen de esto).
  */
 export async function getBootPermissions(): Promise<BootPermissions> {
-  return withBudget(resolveBootPermissions(), PERMISSIVE, "boot-permissions");
+  const fallback = env.app.demoMode || env.app.needsSupabase ? PERMISSIVE : CLOSED;
+  return withBudget(resolveBootPermissions(), fallback, "boot-permissions");
 }
 
 /**
@@ -193,16 +250,25 @@ export async function getBootPermissions(): Promise<BootPermissions> {
  * Es lo único que el (app)/layout debe esperar: acotado a BOOT_BUDGET_MS.
  */
 export async function getBootContext(): Promise<BootContext> {
+  const fallback: BootContext = env.app.demoMode || env.app.needsSupabase
+    ? { user: null, profileRole: null, perms: PERMISSIVE, depotManager: STANDARD_DEPOT_MANAGER }
+    : {
+        user: null,
+        profileRole: null,
+        perms: CLOSED,
+        depotManager: { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null },
+      };
   return withBudget(
     (async (): Promise<BootContext> => {
-      const [user, profileRole, perms] = await Promise.all([
+      const [user, profileRole, perms, depotManager] = await Promise.all([
         getSessionUser(),
         getProfileRole(),
         resolveBootPermissions(),
+        getDepotManagerBoot(),
       ]);
-      return { user, profileRole, perms };
+      return { user, profileRole, perms, depotManager };
     })(),
-    { user: null, profileRole: null, perms: PERMISSIVE },
+    fallback,
     "boot-context"
   );
 }

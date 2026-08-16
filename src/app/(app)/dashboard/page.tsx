@@ -8,11 +8,29 @@ import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { CountUp } from "@/components/CountUp";
 import { OperationalStatus } from "@/components/dashboard/OperationalStatus";
 import { getDashboardKpis, listRecentOrders } from "@/lib/data/orders";
+import { listOrders } from "@/lib/data/orders";
+import { getDepotManagerBoot } from "@/lib/rbac/boot-permissions";
 import { monthName } from "@/lib/utils";
+import type { Depot, Order } from "@/lib/types";
 
 export const metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
+  const depotManager = await getDepotManagerBoot();
+  if (depotManager.restricted) {
+    if (!depotManager.authorized || !depotManager.depot || !depotManager.siteLabel) return null;
+    const { rows, total } = await listOrders({
+      depot: depotManager.depot as Depot,
+      pageSize: 8,
+    });
+    return (
+      <DepotManagerDashboard
+        siteLabel={depotManager.siteLabel}
+        recent={rows}
+        orderCount={total}
+      />
+    );
+  }
   const [kpis, recent] = await Promise.all([getDashboardKpis(), listRecentOrders(6)]);
   const now = new Date();
   const greeting = greetingFor(now);
@@ -158,6 +176,72 @@ export default async function DashboardPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function DepotManagerDashboard({
+  siteLabel,
+  recent,
+  orderCount,
+}: {
+  siteLabel: string;
+  recent: Order[];
+  orderCount: number;
+}) {
+  return (
+    <div className="p-4 lg:p-8 nx-page-fade">
+      <RealtimeRefresher />
+      <div className="page-header">
+        <div>
+          <div className="eyebrow-tiny">Cockpit exclusivamente operativo · {siteLabel}</div>
+          <h1 className="page-title">Operación de depósito</h1>
+          <p className="page-subtitle">Órdenes, WMS y chat interno de tu sede asignada.</p>
+        </div>
+        <Link href="/orders/new" className="btn btn-primary btn-sm nx-cta">
+          <Icon name="plus" size={14} stroke={2.2} /> Nueva orden
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <OperationalLauncher href="/orders" icon="orders" label="Órdenes de Servicio" detail={`${orderCount} en la sede`} />
+        <OperationalLauncher href="/wms" icon="package" label="WMS de mi sede" detail="Inventario y movimientos" />
+        <OperationalLauncher href="/connect" icon="bell" label="Chat interno" detail="Mensajes y alertas internas" />
+      </div>
+
+      <div className="card nx-surface mt-4">
+        <div className="flex items-end justify-between p-5 border-b border-stroke-soft">
+          <div>
+            <div className="text-base font-bold text-fg-brand">Órdenes recientes</div>
+            <div className="text-xs text-fg-secondary mt-0.5">Actividad operativa de {siteLabel}</div>
+          </div>
+          <Link href="/orders" className="btn btn-ghost btn-sm">Ver todas</Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="tbl">
+            <thead><tr><th>Orden</th><th>Servicio</th><th>Horas</th><th>Estado</th></tr></thead>
+            <tbody>
+              {recent.map((order) => (
+                <tr key={order.id}>
+                  <td><Link href={`/orders/${order.public_id}`} className="order-num">{order.public_id}</Link></td>
+                  <td>{order.services?.slice(0, 2).map((service) => service.label).join(" · ") || "—"}</td>
+                  <td>{order.hours} hs</td>
+                  <td><StatusBadge status={order.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OperationalLauncher({ href, icon, label, detail }: { href: string; icon: "orders" | "package" | "bell"; label: string; detail: string }) {
+  return (
+    <Link href={href} className="card card-pad nx-interactive flex items-center gap-3">
+      <span className="w-10 h-10 rounded-md bg-tops-blue-50 text-fg-brand grid place-items-center"><Icon name={icon} size={20} /></span>
+      <span><span className="block font-bold text-fg-brand">{label}</span><span className="text-xs text-fg-secondary">{detail}</span></span>
+    </Link>
   );
 }
 

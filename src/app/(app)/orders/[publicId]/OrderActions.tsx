@@ -58,6 +58,7 @@ export function OrderActions({ order, publicUrl }: { order: Order; publicUrl: st
         <Icon name="download" size={13} />
         <span className="hidden sm:inline">PDF</span>
       </a>
+      {order.prices_hidden ? null : <>
       <button onClick={onWhatsapp} className="btn btn-ghost btn-sm" title="WhatsApp">
         <Icon name="whatsapp" size={13} />
         <span className="hidden sm:inline">WhatsApp</span>
@@ -73,8 +74,9 @@ export function OrderActions({ order, publicUrl }: { order: Order; publicUrl: st
       <button onClick={onCopy} className="btn btn-ghost btn-sm" title="Copiar link">
         <Icon name="copy" size={13} />
       </button>
+      </>}
 
-      {shareOpen && (
+      {!order.prices_hidden && shareOpen && (
         <div
           className="fixed inset-0 z-50 grid place-items-end sm:place-items-center bg-black/40"
           onClick={() => setShareOpen(false)}

@@ -58,6 +58,13 @@ const numAny = z.preprocess((v) => {
   return Number.isFinite(n) ? n : 0;
 }, z.number());
 
+/** Precio ausente permanece null; nunca se transforma en cero. */
+const nullableMoney = z.preprocess((v) => {
+  if (v === "" || v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : v;
+}, z.number().finite().nullable());
+
 /** Igual que `numOr0` pero entero (Math.trunc). */
 const intOr0 = z.preprocess((v) => {
   if (v === "" || v === null || v === undefined) return 0;
@@ -101,8 +108,9 @@ export const CreateOrderSchema = z.object({
           label: z.string(),
           qty: qtyPositive,
           unit: z.string(),
-          rate: numAny,
-          subtotal: numAny,
+          rate: nullableMoney,
+          subtotal: nullableMoney,
+          pricing_status: z.enum(["resolved", "pending_quote"]).default("resolved"),
           qty_requested: qtyPositive.optional(),
           pricing_kind: z
             .enum(["catalog", "transport", "urgent", "manual", "bonification"])
@@ -120,6 +128,19 @@ export const CreateOrderSchema = z.object({
         // por error de cálculo). El signo se valida acá, por slug.
         .superRefine((s, ctx) => {
           const isBonif = s.service_slug.startsWith("bonif:");
+          if (s.pricing_status === "pending_quote") {
+            if (s.rate !== null || s.subtotal !== null) {
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate"], message: "Una cotización pendiente no lleva importe" });
+            }
+            if (s.manual_rate !== undefined || s.manual_subtotal !== undefined) {
+              ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["manual_rate"], message: "Una cotización pendiente no lleva precio manual" });
+            }
+            return;
+          }
+          if (s.rate === null || s.subtotal === null) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate"], message: "El precio resuelto es obligatorio" });
+            return;
+          }
           if (isBonif) {
             if (s.subtotal > 0)
               ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subtotal"], message: "Bonificación debe ser ≤ 0" });
@@ -132,7 +153,7 @@ export const CreateOrderSchema = z.object({
               ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["rate"], message: "Debe ser ≥ 0" });
           }
           if (
-            (s.pricing_kind === "manual" || s.pricing_kind === "bonification") &&
+            (s.pricing_kind === "manual" || s.pricing_kind === "bonification" || s.manual_rate !== undefined) &&
             s.pricing_reason.trim().length < 3
           ) {
             ctx.addIssue({
@@ -150,7 +171,7 @@ export const CreateOrderSchema = z.object({
   units: intOr0,
   km: intOr0,
   observ: z.string().max(2000),
-  total: numOr0,
+  total: nullableMoney,
   signature: z.object({
     signed_by: z.string().min(2, "Nombre del firmante muy corto").max(120),
     signed_doc: z

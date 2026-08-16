@@ -26,6 +26,20 @@ const issueAction = readFileSync(
   "utf8",
 );
 const pdf = readFileSync(resolve(process.cwd(), "src/lib/pdf/OrderPdfDocument.tsx"), "utf8");
+// R-3: la decisión "importe ausente vs. moneda ausente" se centralizó acá para
+// que PDF, preview y listado no la reimplementen cada uno a su manera.
+const moneyDisplay = readFileSync(
+  resolve(process.cwd(), "src/lib/pricing/money-display.ts"),
+  "utf8",
+);
+const ordersList = readFileSync(
+  resolve(process.cwd(), "src/app/(app)/orders/page.tsx"),
+  "utf8",
+);
+const commercialWizard = readFileSync(
+  resolve(process.cwd(), "src/app/(app)/orders/new/NewOrderWizard.tsx"),
+  "utf8",
+);
 const onlinePreview = readFileSync(
   resolve(process.cwd(), "src/app/(app)/orders/[publicId]/PdfPreview.tsx"),
   "utf8",
@@ -73,7 +87,31 @@ describe("service order pricing lifecycle", () => {
     expect(issueAction).toContain("pricing_currency: pricingCurrency");
     expect(issueAction).toContain('issued.currency === "ARS" || issued.currency === "USD"');
     expect(pdf).toContain('value={currency ?? "NO INFORMADA"}');
-    expect(pdf).toContain('"— · MONEDA NO INFORMADA"');
+    // La señal de moneda ausente sigue existiendo; vive en el formateador
+    // compartido y ambas superficies delegan en él en vez de duplicarlo.
+    expect(moneyDisplay).toContain('"— · MONEDA NO INFORMADA"');
+    // R-3.d · exigir USO, no import: afirmar sólo el nombre se satisface con
+    // la línea de import, de modo que revertir la delegación real dejaría
+    // este test igual de verde. Se fija el cuerpo del helper y que ninguna
+    // superficie vuelva a llamar a fmtCurrency para importes que pueden ser
+    // NULL.
+    expect(pdf).toContain(") => fmtMoneyOrPending(amount, amountCurrency)");
+    expect(onlinePreview).toContain(") => fmtMoneyOrPending(amount, amountCurrency)");
+    expect(pdf).not.toContain("fmtCurrency(");
+    expect(onlinePreview).not.toContain("fmtCurrency(");
+    // R-3.b · el listado no puede inventar pesos cuando la moneda no consta:
+    // una OS anterior a 0244 tiene pricing_currency NULL y con `?? "ARS"` se
+    // mostraba "$ 18.400" mientras el PDF de la MISMA orden decía
+    // "— · MONEDA NO INFORMADA".
+    expect(ordersList).not.toContain('pricing_currency ?? "ARS"');
+    expect(ordersList).toContain("o.pricing_currency ?? null");
+    // R-7 · el wizard COMERCIAL no habilita avanzar con cotizaciones
+    // pendientes: esa capacidad es del flujo operativo del encargado, y una OS
+    // comercial sin precios no puede alimentar facturación.
+    expect(commercialWizard).toContain("!hasPendingPricing && sinCotizacionesPendientes");
+    // El formateador propio del email resuelve el pendiente por su cuenta y
+    // debe seguir haciéndolo: es la otra superficie del mismo contrato.
+    expect(email).toContain('if (n == null) return "PENDIENTE DE COTIZACIÓN"');
     expect(onlinePreview).toContain('value={currency ?? "NO INFORMADA"}');
     expect(onlinePreview).toContain("s.currency_snapshot ?? currency");
     expect(email).toContain('`Moneda: ${currency ?? "NO INFORMADA"}`');

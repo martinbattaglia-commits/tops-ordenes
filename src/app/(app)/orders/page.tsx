@@ -3,9 +3,11 @@ import { Icon } from "@/components/Icon";
 import { StatusBadge } from "@/components/StatusBadge";
 import { RealtimeRefresher } from "@/components/RealtimeRefresher";
 import { listOrders } from "@/lib/data/orders";
-import { fmtCurrency, fmtDate, isUrgentOrder } from "@/lib/utils";
+import { fmtDate, isUrgentOrder } from "@/lib/utils";
+import { PENDING_MONEY_LABEL_SHORT, fmtMoneyOrPending } from "@/lib/pricing/money-display";
 import type { OrderStatus, Depot } from "@/lib/types";
 import { OrdersToolbar } from "./OrdersToolbar";
+import { getDepotManagerBoot } from "@/lib/rbac/boot-permissions";
 
 export const metadata = { title: "Órdenes" };
 
@@ -27,6 +29,8 @@ const STATUS_TABS: Array<{ key: OrderStatus | "todas"; label: string }> = [
 ];
 
 export default async function OrdersPage({ searchParams }: PageProps) {
+  const manager = await getDepotManagerBoot();
+  const pricesHidden = manager.restricted;
   const status = (searchParams?.status as OrderStatus | "todas") ?? "todas";
   const depot = (searchParams?.depot as Depot | "todos") ?? "todos";
   const search = searchParams?.search ?? "";
@@ -57,14 +61,14 @@ export default async function OrdersPage({ searchParams }: PageProps) {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href="/orders/tarifas" className="btn btn-ghost btn-sm">
+          {!pricesHidden && <Link href="/orders/tarifas" className="btn btn-ghost btn-sm">
             <Icon name="calculator" size={14} />
             <span className="hidden sm:inline">Tarifas</span>
-          </Link>
-          <Link href="/api/orders/export" className="btn btn-ghost btn-sm">
+          </Link>}
+          {!pricesHidden && <Link href="/api/orders/export" className="btn btn-ghost btn-sm">
             <Icon name="export" size={14} />
             <span className="hidden sm:inline">Exportar CSV</span>
-          </Link>
+          </Link>}
           <Link href="/orders/new" className="btn btn-primary btn-sm">
             <Icon name="plus" size={14} stroke={2.2} />
             <span>Nueva orden</span>
@@ -110,7 +114,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
                 <th>Depósito</th>
                 <th>Servicios</th>
                 <th className="text-right">Horas</th>
-                <th className="text-right">Total</th>
+                {!pricesHidden && <th className="text-right">Total</th>}
                 <th>Estado</th>
                 <th>Firma</th>
               </tr>
@@ -148,9 +152,9 @@ export default async function OrdersPage({ searchParams }: PageProps) {
                     </span>
                   </td>
                   <td className="text-right tabular font-semibold">{o.hours} hs</td>
-                  <td className="text-right tabular font-bold text-fg-brand">
-                    {fmtCurrency(o.total)}
-                  </td>
+                  {!pricesHidden && <td className="text-right tabular font-bold text-fg-brand">
+                    {fmtMoneyOrPending(o.total, o.pricing_currency ?? null, PENDING_MONEY_LABEL_SHORT)}
+                  </td>}
                   <td>
                     <StatusBadge status={o.status} />
                   </td>
@@ -168,7 +172,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-fg-muted">
+                  <td colSpan={pricesHidden ? 8 : 9} className="text-center py-8 text-fg-muted">
                     No hay órdenes que coincidan con los filtros.
                   </td>
                 </tr>
@@ -206,7 +210,7 @@ export default async function OrdersPage({ searchParams }: PageProps) {
                   {o.depot === "MAGALDI" ? "Magaldi" : "Luján"}
                 </span>
                 <span>{fmtDate(o.date)}</span>
-                <span className="font-bold text-fg-brand tabular">{fmtCurrency(o.total)}</span>
+                {!pricesHidden && <span className="font-bold text-fg-brand tabular">{fmtMoneyOrPending(o.total, o.pricing_currency ?? null, PENDING_MONEY_LABEL_SHORT)}</span>}
               </div>
             </Link>
           ))}
