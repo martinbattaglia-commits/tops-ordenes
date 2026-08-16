@@ -333,61 +333,31 @@ $$;
 revoke all on function public.has_permission(text) from public, anon;
 grant execute on function public.has_permission(text) to authenticated, service_role;
 
--- Un profiles.role manipulado nunca devuelve staff/admin para los encargados.
--- El único ascenso temporal a operaciones ocurre dentro de wrappers WMS 0248.
--- H-1 · La elevación transaccional NO puede apoyarse en una GUC.
+-- RETIRO DEL AISLAMIENTO POR SEDE · current_role() vuelve a 8f538a7.
 --
--- `nexus.wms_scope` es una GUC placeholder, es decir PGC_USERSET: cualquier rol
--- puede setearla con SET o set_config. Un centinela así sirve para RESTRINGIR
--- —como treasury.via_rpc, que deniega mientras no esté puesta— pero no para
--- CONCEDER, porque lo que concede es `current_role() = 'operaciones'`, la llave
--- de ciento sesenta cláusulas de policy. Que hoy no exista un camino desde
--- PostgREST para ejecutar SET no cierra el punto: la seguridad no puede
--- depender de que ese camino no aparezca.
+-- El override que devolvía 'cliente' fuera de un scope WMS y 'operaciones'
+-- dentro existía para sostener el aislamiento por nave. Dirección lo retiró:
+-- Magaldi y Luján están a cincuenta metros, los encargados se cubren entre sí
+-- todos los días y los documentos multi-nave son la operatoria normal. Con
+-- 0247 y 0248 fuera, la tabla de concesión y nexus_wms_scope_active() se
+-- quedaban sin quién las escribiera: todo principal habría sido 'cliente'
+-- para siempre.
 --
--- La concesión pasa a exigir una fila que SÓLO este definer puede escribir:
--- la tabla no tiene policies y está revocada, de modo que un `SET` a mano ya
--- no eleva nada.
-create table if not exists public.nexus_wms_scope_grants (
-  xid8_txn text primary key,
-  granted_to uuid not null,
-  granted_at timestamptz not null default now()
-);
-alter table public.nexus_wms_scope_grants enable row level security;
-revoke all on table public.nexus_wms_scope_grants from public, anon, authenticated;
-
-
-/** Verdadero sólo dentro de una transacción que pasó por begin_scope. */
-create or replace function public.nexus_wms_scope_active()
-returns boolean language sql stable security definer set search_path=public,pg_temp
-as $$
-  select exists (
-    select 1 from public.nexus_wms_scope_grants g
-    where g.xid8_txn = pg_current_xact_id_if_assigned()::text
-      and g.granted_to = auth.uid()
-  );
-$$;
-revoke all on function public.nexus_wms_scope_active() from public, anon;
-grant execute on function public.nexus_wms_scope_active() to authenticated, service_role;
-
+-- La función se RESTITUYE byte a byte desde 0005_fix_rls_recursion.sql en
+-- 8f538a7 —no se reescribe— porque la consumen 117 policies vivas sobre 70
+-- tablas y cualquier variante propia sería un sistema distinto.
+--
+-- La neutralización del rol legacy SÍ se mantiene: is_staff() e is_admin()
+-- siguen devolviendo false para los principales, de modo que un profiles.role
+-- manipulado no los convierte en staff ni en admin.
 create or replace function public.current_role()
 returns public.user_role_t
-language sql stable security definer set search_path = public, pg_temp
+language sql
+stable
+security definer
+set search_path = public, pg_temp
 as $$
-  select case
-    when public.nexus_is_depot_manager_principal() then
-      case
-        -- H-1 · La elevación ya no depende de una GUC que el propio usuario
-        -- puede setear: exige una concesión escrita por nexus_wms_begin_scope
-        -- en una tabla sin policies y revocada, dentro de esta misma
-        -- transacción. Sin esa fila, un principal es 'cliente'.
-        when public.nexus_wms_scope_active()
-         and public.nexus_depot_manager_valid() is not distinct from true
-        then 'operaciones'::public.user_role_t
-        else 'cliente'::public.user_role_t
-      end
-    else (select p.role from public.profiles p where p.id = auth.uid())
-  end;
+  select role from public.profiles where id = auth.uid()
 $$;
 
 create or replace function public.is_staff()

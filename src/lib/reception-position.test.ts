@@ -1,14 +1,13 @@
 /**
- * A-6 · Sin posición no hay sede, y sin sede la recepción nace inservible.
+ * A-6 · Sin posición no hay nave, y sin nave la línea no se puede ubicar.
  *
  * `reception_items.position_id` es nullable en el esquema (0025:92) y el
- * contrato de TypeScript lo declara opcional, pero 0247 deriva la sede de la
- * recepción justamente de la nave a la que pertenece esa posición. Una línea
- * sin posición hace que el guard de la base aborte con "sede WMS no
- * autorizada", un mensaje que no le dice al usuario qué falta.
+ * contrato de TypeScript lo declara opcional. Retirado el aislamiento por
+ * sede, la jerarquía física que cuelga de esa posición es el ÚNICO lugar donde
+ * vive la nave de la línea: ya no hay columna de cabecera que la supla.
  *
  * Hasta ahora el requisito lo sostenía sólo el formulario. Cualquier otro
- * llamador —o un payload construido a mano— dejaba la recepción bloqueada.
+ * llamador —o un payload construido a mano— dejaba la línea sin ubicar.
  */
 import { describe, expect, it } from "vitest";
 import { assertPositionRequired } from "@/lib/wms/receptions";
@@ -40,7 +39,7 @@ describe("A-6 · la posición es obligatoria en el servidor", () => {
     } catch (e) {
       const msg = (e as Error).message;
       expect(msg).toContain("SKU-CAFE");
-      expect(msg).toContain("sede");
+      expect(msg).toContain("nave");
       expect(msg).not.toContain("sede WMS no autorizada");
     }
   });

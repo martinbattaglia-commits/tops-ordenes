@@ -57,17 +57,19 @@ afterAll(async () => {
 });
 
 describe("T-FB-02 · identidad y alcance del encargado", () => {
-  it("el encargado canónico queda AUTORIZADO con su sede exacta", async () => {
+  it("el encargado canónico queda AUTORIZADO, con su sede como identidad", async () => {
+    // `depot` identifica y rotula; ya no acota sobre qué nave puede operar.
+    // La columna `warehouse_code` que la función sigue proyectando quedó sin
+    // consumidor al retirarse el aislamiento y no se afirma acá.
     for (const p of [JORGE, JUAN]) {
       const scope = await comoUsuario(db, p.id, p.email, async () =>
-        db.query<{ is_principal: boolean; is_authorized: boolean; depot: string; warehouse_code: string }>(
+        db.query<{ is_principal: boolean; is_authorized: boolean; depot: string }>(
           `select * from public.nexus_depot_manager_scope()`,
         ),
       );
       expect(scope.rows[0].is_principal).toBe(true);
       expect(scope.rows[0].is_authorized).toBe(true);
       expect(scope.rows[0].depot).toBe(p.depot);
-      expect(scope.rows[0].warehouse_code).toBe(p.warehouse);
     }
   });
 
@@ -110,18 +112,25 @@ describe("T-FB-02 · identidad y alcance del encargado", () => {
     }
   });
 
-  it("profiles.role manipulado a admin no concede privilegios", async () => {
+  it("profiles.role manipulado a admin no convierte al encargado en staff", async () => {
+    // RECORTE POR EL RETIRO DEL AISLAMIENTO. La neutralización del rol legacy
+    // sobrevive en is_staff() e is_admin(), que 0246 sigue cerrando para los
+    // principales. NO sobrevive en current_role(): esa función se restituyó
+    // byte a byte desde 8f538a7 y vuelve a devolver profiles.role tal cual,
+    // de modo que con el perfil manipulado devuelve 'admin'.
+    //
+    // No es una regresión introducida acá: es EXACTAMENTE el comportamiento
+    // del baseline 8f538a7, donde current_role() nunca tuvo override. Queda
+    // asentado en el informe como consecuencia declarada de la restitución.
     await db.query(`update public.profiles set role = 'admin' where id = $1`, [JORGE.id]);
     try {
       const r = await comoUsuario(db, JORGE.id, JORGE.email, async () =>
-        db.query<{ is_admin: boolean; is_staff: boolean; current_role: string }>(
-          `select public.is_admin() as is_admin, public.is_staff() as is_staff,
-                  public.current_role() as current_role`,
+        db.query<{ is_admin: boolean; is_staff: boolean }>(
+          `select public.is_admin() as is_admin, public.is_staff() as is_staff`,
         ),
       );
       expect(r.rows[0].is_admin).toBe(false);
       expect(r.rows[0].is_staff).toBe(false);
-      expect(r.rows[0].current_role).toBe("cliente");
     } finally {
       await db.query(`update public.profiles set role = 'operaciones' where id = $1`, [JORGE.id]);
     }

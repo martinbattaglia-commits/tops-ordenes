@@ -60,9 +60,9 @@ export interface BootContext {
 }
 
 export type BootDepotManager =
-  | { restricted: false; authorized: true; depot: null; warehouseCode: null; siteLabel: null }
-  | { restricted: true; authorized: false; depot: null; warehouseCode: null; siteLabel: null }
-  | { restricted: true; authorized: true; depot: string; warehouseCode: string; siteLabel: string };
+  | { restricted: false; authorized: true; depot: null; siteLabel: null }
+  | { restricted: true; authorized: false; depot: null; siteLabel: null }
+  | { restricted: true; authorized: true; depot: string; siteLabel: string };
 
 const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true, copilot: true, contabilidad: true };
 const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false, copilot: false, contabilidad: false };
@@ -70,7 +70,6 @@ const STANDARD_DEPOT_MANAGER: BootDepotManager = {
   restricted: false,
   authorized: true,
   depot: null,
-  warehouseCode: null,
   siteLabel: null,
 };
 
@@ -118,23 +117,22 @@ export const getDepotManagerBoot = cache(async (): Promise<BootDepotManager> => 
   const identity = depotManagerIdentity(user?.id, user?.email);
   if (!identity.principal) return STANDARD_DEPOT_MANAGER;
   if (!identity.exact || !identity.site) {
-    return { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null };
+    return { restricted: true, authorized: false, depot: null, siteLabel: null };
   }
   const expected = identity.site;
   const supabase = createClient();
   if (!supabase) {
-    return { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null };
+    return { restricted: true, authorized: false, depot: null, siteLabel: null };
   }
   const { data, error } = await supabase.rpc("nexus_depot_manager_scope").single();
   const row = data as DepotManagerRpcRow | null;
   if (error || !depotManagerRpcRowValid(row, expected)) {
-    return { restricted: true, authorized: false, depot: null, warehouseCode: null, siteLabel: null };
+    return { restricted: true, authorized: false, depot: null, siteLabel: null };
   }
   return {
     restricted: true,
     authorized: true,
     depot: expected.depot,
-    warehouseCode: expected.warehouseCode,
     siteLabel: expected.siteLabel,
   };
 });

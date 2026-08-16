@@ -1,11 +1,15 @@
 /**
  * T-FB-00 · El harness arranca de verdad.
  *
- * Antes de afirmar nada sobre RBAC o sede hay que probar que las cuatro
- * migraciones de FASE B APLICAN sobre la cadena productiva real. Si el guard
- * de precondición de 0246 aborta, todo lo que viniera después mediría un
- * esquema que no existe: un verde vacío, que es exactamente lo que este
- * expediente vino a corregir.
+ * Antes de afirmar nada sobre RBAC hay que probar que las dos migraciones
+ * supervivientes de FASE B —0246 recortada y 0249 entera— APLICAN sobre la
+ * cadena productiva real. Si el guard de precondición de 0246 aborta, todo lo
+ * que viniera después mediría un esquema que no existe: un verde vacío, que es
+ * exactamente lo que este expediente vino a corregir.
+ *
+ * Retirado el aislamiento por sede, dos casos cambian de signo: la ausencia de
+ * `warehouse_id` en las cabeceras y la ausencia del mecanismo de elevación
+ * pasan a ser el contrato, no su violación.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
@@ -55,31 +59,47 @@ afterAll(async () => {
 });
 
 describe("T-FB-00 · arranque del harness de FASE B", () => {
-  it("las cuatro migraciones de FASE B están aplicadas y sus objetos existen", async () => {
+  it("las dos migraciones de FASE B están aplicadas y sus objetos existen", async () => {
     const { rows } = await db.query<{ proname: string }>(
       `select proname from pg_proc p
        join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and proname in (
          'nexus_is_depot_manager_principal','nexus_depot_manager_scope',
-         'nexus_depot_manager_valid','nexus_wms_row_allowed','nexus_wms_begin_scope'
+         'nexus_depot_manager_valid'
        )`,
     );
     const nombres = rows.map((r) => r.proname).sort();
     expect(nombres).toContain("nexus_is_depot_manager_principal");
     expect(nombres).toContain("nexus_depot_manager_scope");
     expect(nombres).toContain("nexus_depot_manager_valid");
-    expect(nombres).toContain("nexus_wms_row_allowed");
-    expect(nombres).toContain("nexus_wms_begin_scope");
   });
 
-  it("la columna de sede existe en los dos caminos de escritura del WMS", async () => {
+  it("retirado el aislamiento, la sede NO vive en la cabecera del WMS", async () => {
+    // La columna `warehouse_id` de 0247 era un artefacto de permiso. Su
+    // ausencia es ahora parte del contrato: si reapareciera, algo estaría
+    // volviendo a acotar por nave.
     const { rows } = await db.query<{ table_name: string }>(
       `select table_name from information_schema.columns
        where table_schema='public' and column_name='warehouse_id'
          and table_name in ('receptions','logistics_orders')
        order by table_name`,
     );
-    expect(rows.map((r) => r.table_name)).toEqual(["logistics_orders", "receptions"]);
+    expect(rows.map((r) => r.table_name)).toEqual([]);
+  });
+
+  it("el mecanismo de elevación transaccional ya no existe", async () => {
+    const { rows } = await db.query<{ n: string }>(
+      `select count(*)::text as n from pg_proc p
+       join pg_namespace nsp on nsp.oid = p.pronamespace
+       where nsp.nspname='public'
+         and p.proname in ('nexus_wms_row_allowed','nexus_wms_begin_scope','nexus_wms_scope_active')`,
+    );
+    expect(Number(rows[0].n)).toBe(0);
+    const { rows: tablas } = await db.query<{ n: string }>(
+      `select count(*)::text as n from information_schema.tables
+       where table_schema='public' and table_name='nexus_wms_scope_grants'`,
+    );
+    expect(Number(tablas[0].n)).toBe(0);
   });
 
   it("A-4 · el conjunto de migraciones omitidas es EXACTAMENTE el declarado", () => {
@@ -91,7 +111,7 @@ describe("T-FB-00 · arranque del harness de FASE B", () => {
     expect(yaNoOmitidas).toEqual([]);
   });
 
-  it("A-8 · las cuatro migraciones de FASE B se aplicaron SIN red de contención", async () => {
+  it("A-8 · las dos migraciones de FASE B se aplicaron SIN red de contención", async () => {
     // El test anterior filtraba 0246-0249 sobre `omitidas`, que proviene de
     // cadenaHasta(245) y por definición no puede contenerlas: la garantía se
     // declaraba sin ejercerse. La garantía real es que `aplicar` no atrapa
@@ -102,11 +122,9 @@ describe("T-FB-00 · arranque del harness de FASE B", () => {
        join pg_namespace nsp on nsp.oid = p.pronamespace
        where nsp.nspname='public' and p.proname in (
          'nexus_depot_manager_scope',        -- 0246
-         'nexus_wms_position_warehouse',     -- 0247
-         'nexus_wms_begin_scope',            -- 0248
          'service_order_issue_0244'          -- 0249 (el rename es su huella)
        )`,
     );
-    expect(Number(rows[0].n)).toBe(4);
+    expect(Number(rows[0].n)).toBe(2);
   });
 });

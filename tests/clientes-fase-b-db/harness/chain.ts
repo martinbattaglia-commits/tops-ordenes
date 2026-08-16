@@ -16,18 +16,23 @@ export const ROOT = resolve(__dirname, "..", "..", "..");
 export const MIGRATIONS = resolve(ROOT, "supabase", "migrations");
 export const BOOTSTRAP = resolve(ROOT, "tests", "db", "bootstrap", "00-platform-stub.sql");
 
-/** Los cuatro artefactos bajo prueba y sus inversas exactas. */
+/**
+ * Los dos artefactos bajo prueba y sus inversas exactas.
+ *
+ * Eran cuatro. 0247 (RLS por nave) y 0248 (wrappers de RPC con scope) se
+ * retiraron enteras al eliminarse el aislamiento por sede: Magaldi y Luján
+ * están a cincuenta metros y los encargados se cubren entre sí, de modo que
+ * los documentos multi-nave son la operatoria normal y no había requisito que
+ * sostener. Quedan 0246 recortada —principales, capacidades y neutralización
+ * del rol legacy— y 0249 entera.
+ */
 export const FASE_B_FORWARDS = [
   "0246_clientes_fase_b_principals_capabilities.sql",
-  "0247_clientes_fase_b_wms_site_rls.sql",
-  "0248_clientes_fase_b_wms_rpc_scope.sql",
   "0249_clientes_fase_b_service_pricing_redaction.sql",
 ] as const;
 
 export const FASE_B_ROLLBACKS = [
   "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
-  "ROLLBACK_0248_clientes_fase_b_wms_rpc_scope.sql",
-  "ROLLBACK_0247_clientes_fase_b_wms_site_rls.sql",
   "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
 ] as const;
 

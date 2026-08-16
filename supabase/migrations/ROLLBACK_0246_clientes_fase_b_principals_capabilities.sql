@@ -1,5 +1,6 @@
 -- Inversa exacta de 0246 sobre el estado preflight de origin/main 8f538a7.
--- Debe ejecutarse después de 0249, 0248 y 0247.
+-- Debe ejecutarse después de 0249. Retirado el aislamiento por sede, 0247 y
+-- 0248 ya no existen y no hay nada que deshacer antes.
 
 do $$
 declare v_role uuid; v_count integer;
@@ -139,9 +140,8 @@ grant execute on function public.connect_search_profiles(text,int) to authentica
 
 drop function if exists public.nexus_depot_manager_internal_conversation_allowed(uuid,text);
 
-create or replace function public.current_role()
-returns public.user_role_t language sql stable security definer set search_path=public,pg_temp
-as $$ select role from public.profiles where id=auth.uid() $$;
+-- current_role() NO se toca: retirado el aislamiento, 0246 ya no la modifica,
+-- así que su inversa tampoco. Sigue siendo la de 0005_fix_rls_recursion.sql.
 create or replace function public.is_staff()
 returns boolean language sql stable security definer set search_path=public,pg_temp
 as $$ select coalesce((select role in ('admin','operaciones','supervisor') from public.profiles where id=auth.uid()),false) $$;
@@ -190,9 +190,6 @@ where p.id=u.id and (u.id,lower(u.email)) in (
 );
 
 drop function if exists public.nexus_depot_manager_valid();
--- H-1 · concesión transaccional no falsificable, neta de 0246.
-drop function if exists public.nexus_wms_scope_active();
-drop table if exists public.nexus_wms_scope_grants;
 drop function if exists public.nexus_depot_manager_scope();
 drop function if exists public.nexus_is_depot_manager_principal();
 

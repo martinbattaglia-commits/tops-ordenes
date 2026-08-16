@@ -360,17 +360,15 @@ const PR66_PHASE_A_MIGRATION_FILES: ReadonlySet<string> = new Set([
 
 /** CLIENTES FASE B · RBAC de encargados y correctivo operativo de OS.
  *
- * Ocho artefactos exactos, fuera del replay WMS vanilla. La verificación
- * funcional vive en su harness PG17 dedicado; no se amplía ningún rango ni
- * se altera el conjunto congelado de FASE A/Custodia.
+ * Cuatro artefactos exactos, fuera del replay WMS vanilla. Eran ocho: 0247
+ * (RLS por nave) y 0248 (wrappers de RPC con scope) se retiraron enteras al
+ * eliminarse el aislamiento por sede, que la operación nunca pidió. La
+ * verificación funcional vive en su harness PG17 dedicado; no se amplía ningún
+ * rango ni se altera el conjunto congelado de FASE A/Custodia.
  */
 export const CLIENTES_PHASE_B_MIGRATION_FILES: ReadonlySet<string> = new Set([
   "0246_clientes_fase_b_principals_capabilities.sql",
   "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
-  "0247_clientes_fase_b_wms_site_rls.sql",
-  "ROLLBACK_0247_clientes_fase_b_wms_site_rls.sql",
-  "0248_clientes_fase_b_wms_rpc_scope.sql",
-  "ROLLBACK_0248_clientes_fase_b_wms_rpc_scope.sql",
   "0249_clientes_fase_b_service_pricing_redaction.sql",
   "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
 ]);

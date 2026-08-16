@@ -1,14 +1,15 @@
 /**
- * T-FB-05 · A-9 · Las cuatro inversas son ejecutables de verdad.
+ * T-FB-05 · A-9 · Las dos inversas son ejecutables de verdad.
  *
  * `FASE_B_ROLLBACKS` estaba declarado en el harness y no lo usaba nadie,
- * mientras el manifiesto insistía en "cuatro inversas exactas". Una promesa
- * de reversibilidad que ningún test ejerce vale lo mismo que ninguna: la
- * primera vez que se necesite, se descubre si era cierta.
+ * mientras el manifiesto insistía en inversas exactas. Una promesa de
+ * reversibilidad que ningún test ejerce vale lo mismo que ninguna: la primera
+ * vez que se necesite, se descubre si era cierta.
  *
- * Acá se aplican las cuatro en orden inverso sobre el mismo cluster donde
- * acaban de aplicarse los forwards, y se comprueba que los objetos que
- * introdujeron desaparecen y que los que reemplazaron vuelven.
+ * Retirado el aislamiento por sede quedan dos: ROLLBACK_0249 y ROLLBACK_0246.
+ * Se aplican en orden inverso sobre el mismo cluster donde acaban de aplicarse
+ * los forwards, y se comprueba que los objetos que introdujeron desaparecen y
+ * que los que reemplazaron vuelven.
  *
  * ROLLBACK_0249 aborta si `service_order_price_audit` tiene una sola fila —no
  * destruye evidencia firmada—, de modo que esta corrida es válida sólo antes
@@ -72,36 +73,42 @@ afterAll(async () => {
 
 describe("T-FB-05 · A-9 · reversibilidad de FASE B", () => {
   it("antes de revertir, los objetos de FASE B están presentes", async () => {
+    expect(await existeFuncion("nexus_is_depot_manager_principal")).toBe(true);
     expect(await existeFuncion("nexus_depot_manager_scope")).toBe(true);
-    expect(await existeFuncion("nexus_wms_position_warehouse")).toBe(true);
-    expect(await existeFuncion("nexus_wms_begin_scope")).toBe(true);
+    expect(await existeFuncion("nexus_depot_manager_valid")).toBe(true);
     expect(await existeFuncion("service_order_issue_0244")).toBe(true);
-    expect(await existeColumna("receptions", "warehouse_id")).toBe(true);
-    expect(await existeColumna("logistics_orders", "warehouse_id")).toBe(true);
   });
 
-  it("las cuatro inversas se aplican en orden 0249→0246 sin error", async () => {
-    // Sin try/catch: si alguna falla, el test cae con su error de PostgreSQL,
-    // que es exactamente lo que hay que saber.
-    for (const f of FASE_B_ROLLBACKS) await aplicar(db, f);
-    expect(FASE_B_ROLLBACKS).toHaveLength(4);
-  });
-
-  it("después de revertir, los objetos netos de FASE B ya no existen", async () => {
-    expect(await existeFuncion("nexus_depot_manager_scope")).toBe(false);
+  it("retirado el aislamiento, tampoco están los objetos de 0247/0248", async () => {
+    // El forward ya no los crea. Se afirma acá para que una reaparición —por
+    // un merge o un archivo revivido— ponga el harness en rojo.
     expect(await existeFuncion("nexus_wms_position_warehouse")).toBe(false);
     expect(await existeFuncion("nexus_wms_begin_scope")).toBe(false);
-    expect(await existeFuncion("nexus_wms_header_site_default")).toBe(false);
+    expect(await existeFuncion("nexus_wms_scope_active")).toBe(false);
     expect(await existeColumna("receptions", "warehouse_id")).toBe(false);
     expect(await existeColumna("logistics_orders", "warehouse_id")).toBe(false);
   });
 
+  it("las dos inversas se aplican en orden 0249→0246 sin error", async () => {
+    // Sin try/catch: si alguna falla, el test cae con su error de PostgreSQL,
+    // que es exactamente lo que hay que saber.
+    expect([...FASE_B_ROLLBACKS]).toEqual([
+      "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
+      "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
+    ]);
+    for (const f of FASE_B_ROLLBACKS) await aplicar(db, f);
+  });
+
+  it("después de revertir, los objetos netos de FASE B ya no existen", async () => {
+    expect(await existeFuncion("nexus_is_depot_manager_principal")).toBe(false);
+    expect(await existeFuncion("nexus_depot_manager_scope")).toBe(false);
+    expect(await existeFuncion("nexus_depot_manager_valid")).toBe(false);
+  });
+
   it("y las funciones que FASE B había renombrado vuelven a su nombre", async () => {
-    // 0249 renombró service_order_issue y 0248 las quince RPC de WMS. Si la
-    // reversa no las devolviera, el sistema quedaría sin su camino de escritura.
+    // 0249 renombró service_order_issue. Si la reversa no lo devolviera, el
+    // sistema quedaría sin su camino de escritura de órdenes de servicio.
     expect(await existeFuncion("service_order_issue")).toBe(true);
     expect(await existeFuncion("service_order_issue_0244")).toBe(false);
-    expect(await existeFuncion("confirm_reception")).toBe(true);
-    expect(await existeFuncion("confirm_reception_unscoped_0248")).toBe(false);
   });
 });

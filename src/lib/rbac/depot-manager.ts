@@ -1,14 +1,24 @@
+/**
+ * Los dos encargados y su sede de pertenencia.
+ *
+ * `depot` y `siteLabel` son PROYECCIÓN: identifican al usuario y rotulan
+ * documentos y pantallas. No acotan sobre qué nave puede operar. Magaldi y
+ * Luján están a cincuenta metros, los encargados se cubren entre sí todos los
+ * días y cargar recepciones, pedidos, reservas y despachos de la otra nave es
+ * la operatoria normal. Por eso ya no hay `warehouseCode`: era el ancla del
+ * aislamiento por sede, que Dirección retiró.
+ *
+ * Lo que sí sigue acotado es el MÓDULO: ver `depotManagerRouteAllowed`.
+ */
 export const DEPOT_MANAGER_EMAILS = {
   "despachos-lujan@logisticatops.com": {
     userId: "4cf9b607-36bb-4ed9-ab31-82823d625b8d",
     depot: "LUJAN",
-    warehouseCode: "PEDRO_LUJAN_3159",
     siteLabel: "Luján",
   },
   "despachos-magaldi@logisticatops.com": {
     userId: "3873f156-02de-4424-af48-3e590536cc1d",
     depot: "MAGALDI",
-    warehouseCode: "MAGALDI_1765",
     siteLabel: "Agustín Magaldi 765",
   },
 } as const;
@@ -97,20 +107,19 @@ export interface DepotManagerRpcRow {
   is_principal?: boolean | null;
   is_authorized?: boolean | null;
   depot?: string | null;
-  warehouse_id?: string | null;
-  warehouse_code?: string | null;
 }
 
+/**
+ * La fila de `nexus_depot_manager_scope()` se valida por IDENTIDAD, no por
+ * nave: principal, autorizada y con la sede que le corresponde al usuario. Ya
+ * no se compara `warehouse_id` ni `warehouse_code`; con el aislamiento por
+ * sede retirado, esas columnas no acotan nada.
+ */
 export function depotManagerRpcRowValid(
   row: DepotManagerRpcRow | null | undefined,
   expected: DepotManagerSite,
 ): boolean {
   return (
-    row?.is_principal === true &&
-    row.is_authorized === true &&
-    row.depot === expected.depot &&
-    typeof row.warehouse_id === "string" &&
-    row.warehouse_id.length > 0 &&
-    row.warehouse_code === expected.warehouseCode
+    row?.is_principal === true && row.is_authorized === true && row.depot === expected.depot
   );
 }

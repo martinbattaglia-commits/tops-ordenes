@@ -135,24 +135,20 @@ describe("H-3 · identidad exacta, UUID y email a la vez", () => {
   });
 });
 
-describe("H-3 · la fila de la RPC se valida contra la sede esperada", () => {
+describe("H-3 · la fila de la RPC se valida por identidad, no por nave", () => {
   const site = depotManagerIdentity(JORGE.id, JORGE.email).site!;
 
-  it("una fila completa y coincidente vale", () => {
+  it("principal, autorizada y con su sede: vale", () => {
     expect(
-      depotManagerRpcRowValid(
-        { is_principal: true, is_authorized: true, depot: "LUJAN", warehouse_id: "w-1", warehouse_code: site.warehouseCode },
-        site,
-      ),
+      depotManagerRpcRowValid({ is_principal: true, is_authorized: true, depot: "LUJAN" }, site),
     ).toBe(true);
   });
 
-  it("no autorizada, sede ajena, código ajeno o warehouse vacío: todas rechazan", () => {
-    const base = { is_principal: true, is_authorized: true, depot: "LUJAN", warehouse_id: "w-1", warehouse_code: site.warehouseCode };
+  it("no principal, no autorizada, sede ajena o fila ausente: todas rechazan", () => {
+    const base = { is_principal: true, is_authorized: true, depot: "LUJAN" };
+    expect(depotManagerRpcRowValid({ ...base, is_principal: false }, site)).toBe(false);
     expect(depotManagerRpcRowValid({ ...base, is_authorized: false }, site)).toBe(false);
     expect(depotManagerRpcRowValid({ ...base, depot: "MAGALDI" }, site)).toBe(false);
-    expect(depotManagerRpcRowValid({ ...base, warehouse_code: "OTRO" }, site)).toBe(false);
-    expect(depotManagerRpcRowValid({ ...base, warehouse_id: "" }, site)).toBe(false);
     expect(depotManagerRpcRowValid(null, site)).toBe(false);
     expect(depotManagerRpcRowValid(undefined, site)).toBe(false);
   });
