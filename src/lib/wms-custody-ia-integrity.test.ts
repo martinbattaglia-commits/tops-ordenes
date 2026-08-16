@@ -400,10 +400,47 @@ describe("F-1.2 · el umbral productivo bloquea en cualquier estado decidible", 
   });
 
   it("las banderas de daño también se declaran al liberar desde HOLD", () => {
+    // El estado se construye como la BASE lo produce: 0250a declara
+    // incompatibles `coincide` y cualquier bandera de daño, así que un caso con
+    // daño llega SIEMPRE con veredicto distinto de `coincide`. La versión
+    // anterior de este caso combinaba ambos y afirmaba sobre un estado que la
+    // base no puede emitir.
     const r = evaluateReleaseEligibility(
-      ctxHold({ assessment: productivo({ damageSuspected: true }) }),
+      ctxHold({ assessment: productivo({ damageSuspected: true, verdict: "posible_dano" }) }),
     );
     expect(r.overrideReasons).toContain("DAMAGE_FLAGS_PRESENT");
+  });
+
+  it("el veredicto NO coincidente se declara como override, no bloquea", () => {
+    // Sin este caso, revertir el arreglo de F-1 —volver `VERDICT_NOT_MATCHING` a
+    // bloqueo duro— pasaba en verde: ningún otro caso usa un veredicto distinto
+    // de `coincide`. Y con el bloqueo duro, toda unidad que la IA marca queda
+    // inliberable, o sea que la IA decide la cuarentena por omisión.
+    const r = evaluateReleaseEligibility(
+      ctxHold({ assessment: productivo({ verdict: "diferencias" }) }),
+    );
+    expect(r.allowed).toBe(true);
+    expect(r.blockers).toEqual([]);
+    expect(r.overrideReasons).toContain("VERDICT_NOT_MATCHING");
+  });
+
+  it("fuera del override, el veredicto NO coincidente sigue bloqueando", () => {
+    // La rama estricta y la legada conservan la exigencia intacta.
+    const enRevision = evaluateReleaseEligibility({
+      ...ctxHold(),
+      state: "REVIEW_REQUIRED",
+      assessment: productivo({ verdict: "diferencias" }),
+    });
+    expect(enRevision.blockers).toContain("VERDICT_NOT_MATCHING");
+
+    const legado = evaluateReleaseEligibility({
+      state: "REVIEW_REQUIRED",
+      ...RELEASE_CTX_OK,
+      assessment: realAssessment({ verdict: "diferencias" }),
+      reason: "motivo suficiente aquí",
+    });
+    expect(legado.allowed).toBe(false);
+    expect(legado.blockers).toContain("VERDICT_NOT_MATCHING");
   });
 
   it("el motivo mínimo del override iguala el que exige la RPC: 20", () => {

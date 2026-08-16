@@ -2268,7 +2268,6 @@ declare
   c public.custody_integrity_cases;
   v_role text;
   v_summary jsonb;
-  v_pod boolean;
 begin
   select a.actor_role into v_role from public.assert_custody_access('wms.view') a;
   select * into u from public.custody_physical_units where custody_token=p_token;
@@ -2283,22 +2282,21 @@ begin
   insert into public.audit_log(user_id,entity,entity_id,action,payload)
   values(auth.uid(),'physical_unit',u.id,'custody.token_resolve',
     jsonb_build_object('public_id',u.public_id,'scope','physical_unit'));
-  -- `pod_present` es un DATO, no un literal. Antes devolvía siempre `false`, de
-  -- modo que la vista del QR —el artefacto de identidad del bien según la
-  -- Adenda §4.2— era estructuralmente incapaz de expresar un POD existente:
-  -- para una unidad efectivamente entregada seguía informando que no lo había.
-  -- Se deriva por la cadena real: unidad → genealogía → allocation → bulto →
-  -- despacho → POD.
-  select exists(
-    select 1
-      from public.custody_allocation_physical_units g
-      join public.packing_unit_items pui on pui.allocation_id=g.allocation_id
-      join public.packing_units pk on pk.id=pui.packing_unit_id
-      join public.delivery_pods dp on dp.shipment_id=pk.shipment_id
-     where g.physical_unit_id=u.id
-  ) into v_pod;
+  -- La vista del QR NO afirma nada sobre el POD de una unidad física.
+  --
+  -- El literal `false` que había antes era una afirmación positiva equivocada:
+  -- una unidad efectivamente entregada seguía informando que no tenía POD. La
+  -- derivación que lo reemplazó era peor: una unidad física puede repartirse
+  -- entre varias allocations, así que un solo despacho entregado marcaba POD
+  -- para toda la unidad mientras el resto seguía en depósito. Ninguna de las
+  -- dos podía sostenerse en la pantalla que la Adenda §4.2 designa como
+  -- artefacto de identidad del bien.
+  --
+  -- Se retira la clave hasta que exista una definición correcta —con noción de
+  -- cantidad, o acotada a la allocation—. Un dato ausente es admisible; una
+  -- afirmación falsa sobre la unidad de custodia, no.
   return jsonb_build_object('scope','physical_unit','public_id',u.public_id,
-    'status',c.state,'pod_present',v_pod,'events',v_summary);
+    'status',c.state,'events',v_summary);
 end;
 $$;
 revoke all on function public.get_custody_physical_by_token(uuid) from public,anon;
@@ -2549,23 +2547,6 @@ create constraint trigger trg_shipments_custody_final_state
   after insert or update on public.shipments
   deferrable initially deferred for each row
   execute function public.enforce_custody_shipment_final_state();
-
--- RECONSTRUCCIÓN DE GENEALOGÍA. `custody_bind_allocation` sólo se dispara al
--- INSERTAR una allocation, así que las creadas mientras el rollback estuvo
--- vigente —con el trigger caído— quedaban con cobertura cero y no había forma
--- de recuperarlas: stock permanentemente indespachable. Se re-vinculan acá.
--- Es seguro por construcción: la vinculación es un top-up idempotente, acotado
--- a la cantidad de la allocation, que no toca las que ya están completas y que
--- deja como está a la que no tiene unidades físicas disponibles.
-do $$ declare a record; begin
-  for a in select sa.id from public.stock_allocations sa
-            where sa.status<>'liberada'
-              and coalesce((select sum(g.quantity)
-                              from public.custody_allocation_physical_units g
-                             where g.allocation_id=sa.id),0)<sa.quantity
-            order by sa.created_at,sa.id
-  loop perform public.custody_bind_allocation(a.id); end loop;
-end $$;
 
 insert into public.custody_productive_installations(installation)
 values('0250a_custody_productive_vision')

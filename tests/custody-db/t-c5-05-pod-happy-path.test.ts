@@ -207,13 +207,20 @@ describe("T-C5-05 · el POD se emite cuando corresponde", () => {
 });
 
 /**
- * F-4 · El QR es el artefacto de identidad del bien según la Adenda §4.2, así
- * que lo que informa tiene que ser un dato y no un literal. `pod_present`
- * devolvía siempre `false`: una unidad realmente entregada seguía anunciando
- * que no tenía POD, y la vista era estructuralmente incapaz de decir otra cosa.
+ * Z-2 · El QR de una unidad física NO afirma nada sobre el POD.
+ *
+ * Hubo dos intentos y los dos eran insostenibles: el literal `false` negaba el
+ * POD de una unidad realmente entregada, y la derivación que lo reemplazó lo
+ * afirmaba para toda la unidad cuando una sola de sus allocations llegaba a un
+ * despacho entregado —una unidad física puede repartirse entre varias—. En la
+ * pantalla que la Adenda §4.2 designa como artefacto de identidad del bien, una
+ * afirmación positiva falsa es peor que el silencio.
+ *
+ * Esta prueba fija el silencio: si alguien vuelve a agregar la clave sin una
+ * definición con noción de cantidad, cae en rojo.
  */
-describe("T-C5-05 · el QR de la unidad informa su POD real", () => {
-  it("3 · antes del POD dice que no lo hay; después, que sí", async () => {
+describe("T-C5-05 · el QR de la unidad no afirma POD", () => {
+  it("3 · la resolución por token no informa pod_present, ni antes ni después", async () => {
     const { shipmentId, unitId } = await despachoEntregado();
 
     await actAsServer(db);
@@ -229,7 +236,7 @@ describe("T-C5-05 · el QR de la unidad informa su POD real", () => {
     await grantPermission(db, s.staff, "wms.view");
     await actAs(db, s.staff);
     const leer = async () => {
-      const { rows } = await db.query<{ r: { pod_present: boolean; scope: string } }>(
+      const { rows } = await db.query<{ r: { scope: string; status: string } }>(
         `select public.get_custody_physical_by_token($1::uuid) as r`, [tok[0].t],
       );
       return rows[0].r;
@@ -237,7 +244,7 @@ describe("T-C5-05 · el QR de la unidad informa su POD real", () => {
 
     const antes = await leer();
     expect(antes.scope).toBe("physical_unit");
-    expect(antes.pod_present).toBe(false);
+    expect("pod_present" in antes).toBe(false);
 
     await db.query(
       `select public.generate_delivery_pod(
@@ -245,6 +252,10 @@ describe("T-C5-05 · el QR de la unidad informa su POD real", () => {
       [shipmentId],
     );
 
-    expect((await leer()).pod_present).toBe(true);
+    // Tampoco después: la vista no pasa a afirmar lo contrario, calla en ambos
+    // casos. Lo que sí sigue informando es el estado del caso.
+    const despues = await leer();
+    expect("pod_present" in despues).toBe(false);
+    expect(despues.status).toBe("RELEASED");
   });
 });

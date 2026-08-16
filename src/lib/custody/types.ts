@@ -120,7 +120,13 @@ export interface CustodyTokenResult {
   scope: "physical_unit" | "packing_unit" | "shipment";
   public_id: string; // BLT- / DSP-
   status: string;
-  pod_present: boolean;
+  /**
+   * OPCIONAL a propósito: la resolución de una UNIDAD FÍSICA ya no lo informa.
+   * Una unidad puede repartirse entre varias allocations, así que no existe una
+   * respuesta correcta de sí/no a nivel de unidad sin noción de cantidad. Se
+   * prefiere el dato ausente antes que una afirmación falsa sobre el bien.
+   */
+  pod_present?: boolean;
   events: { stage: CustodyStage; event_type: CustodyEventType; occurred_at: string }[];
 }
 
