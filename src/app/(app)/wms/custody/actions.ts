@@ -33,6 +33,7 @@ import {
 } from "@/lib/custody/canonical-contract";
 import {
   buildCustodyCaseView,
+  CUSTODY_CAPTURE_PERMISSION,
   leaksSensitiveData,
   type CustodyCaseView,
 } from "@/lib/custody/case-presentation";
@@ -119,19 +120,33 @@ async function attachPhysicalEvidenceAction(
   if (!session || !admin) return { ok: false, error: "Operación administrativa no disponible" };
   const actor = await resolveTrustedActor(session);
 
-  // R-6 · La autorización va ANTES del upload. `resolveTrustedActor` sólo
-  // acredita la sesión; el permiso y el tenant los verificaba recién el attach,
-  // tres pasos después de haber escrito en el bucket con service role. Esta
-  // lectura va por el cliente de SESIÓN, así que la RLS de
-  // `custody_physical_units` aplica rol y tenant: si el usuario no puede ver la
-  // unidad, tampoco puede dejar un objeto ni una atestación colgando de ella.
+  // R-6 · La autorización COMPLETA va ANTES del upload. `resolveTrustedActor`
+  // sólo acredita la sesión; el permiso y el tenant los verificaba recién el
+  // attach, tres pasos después de haber escrito en el bucket con service role,
+  // de modo que un usuario sin `wms.edit` conseguía igual un objeto huérfano y
+  // una fila de atestación a nombre del tenant ajeno.
+  //
+  // Son DOS comprobaciones distintas y hacen falta las dos:
+  //  · la lectura por el cliente de SESIÓN somete la unidad a su RLS, que
+  //    resuelve el TENANT;
+  //  · el perfil y sus permisos resuelven la CAPACIDAD de escribir evidencia.
   const visible = await session
     .from("custody_physical_units")
-    .select("id")
+    .select("id, client_id")
     .eq("id", physicalUnitId)
     .maybeSingle();
   if (visible.error || !visible.data) {
     return { ok: false, error: "Unidad física no disponible para tu usuario" };
+  }
+  const unitClientId = String((visible.data as { client_id?: unknown }).client_id ?? "");
+  const authz = createActorAuthorizationPort(
+    createSupabaseCustodyQueryPort(session as unknown as CustodyDataClient),
+    { actorId: actor.actorId, sessionId: actor.sessionId },
+    unitClientId,
+  );
+  const verified = await authz.resolveActor();
+  if (!verified || !verified.permissions.includes(CUSTODY_CAPTURE_PERMISSION)) {
+    return { ok: false, error: "No tenés permiso para registrar evidencia" };
   }
 
   const supplied = new Uint8Array(await file.arrayBuffer());

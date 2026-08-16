@@ -94,7 +94,17 @@ export function evaluateReleaseEligibility(ctx: ReleaseEligibilityContext): Rele
     blockers.push("ASSESSMENT_NOT_OK");
   } else {
     if (ctx.assessment.provenance.executionMode !== "real") blockers.push("EXECUTION_NOT_REAL");
-    if (ctx.assessment.verdict !== "coincide") blockers.push("VERDICT_NOT_MATCHING");
+    // El veredicto sigue el mismo reparto que el umbral y las banderas. Dejarlo
+    // como bloqueo duro hacía IMPOSIBLE el override justo donde el contrato lo
+    // exige: la base declara incompatibles `coincide` y cualquier bandera de
+    // daño, así que toda unidad que la IA marca llega a HOLD con veredicto
+    // distinto de `coincide`. Con el bloqueo duro, un admin con motivo
+    // reforzado y foto de inspección fresca sólo podía cuarentenar — es decir,
+    // la IA decidía por omisión, que es lo que la Adenda §4.2 prohíbe. La rama
+    // `human_override` de `decide_custody_integrity_v2` nunca pidió `coincide`.
+    if (ctx.assessment.verdict !== "coincide") {
+      (isOverride ? overrideReasons : blockers).push("VERDICT_NOT_MATCHING");
+    }
     if (!isFiniteInRange(ctx.assessment.modelConfidence, 0, 1)) {
       blockers.push("CONFIDENCE_NOT_NUMERIC");
     }
