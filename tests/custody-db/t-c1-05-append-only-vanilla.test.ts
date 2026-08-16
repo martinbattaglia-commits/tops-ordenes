@@ -63,6 +63,58 @@ function diffEsDeCustodia(): boolean {
   return rutasPropiasDeCustodia(cambiosDeLaRama(g, baseDeRama(g), ".")).length > 0;
 }
 
+/**
+ * ─── EXCEPCIÓN EXPLÍCITA AL APPEND-ONLY DE MIGRACIONES ────────────────────
+ *
+ * La regla por defecto no cambia: una migración que ya está en la BASE es
+ * INEDITABLE. Se agregan archivos, no se reescribe la historia.
+ *
+ * Pero existe un caso que la regla absoluta no podía resolver: una migración
+ * MERGEADA y NUNCA APLICADA cuyo defecto ABORTA su propia transacción. Ahí una
+ * migración posterior no sirve como reparación, porque nunca llega a correr:
+ * la transacción defectuosa se cae antes. Editar el archivo no es lo
+ * preferible, es lo único que existe.
+ *
+ * Por eso la excepción es una LISTA nombrada y no un waiver: queda a la vista,
+ * dice su motivo, dice cuándo se retira, y —esto es lo que impide que sea una
+ * puerta abierta— sólo vale si el diff RE-REGISTRA el sha256 de esa migración
+ * en `supabase/lineage/catalog.json`. Editar sin re-registrar sigue siendo
+ * violación, porque dejaría el linaje mintiendo sobre lo que hay en disco.
+ */
+const MIGRACIONES_EDITABLES: readonly string[] = [
+  // Mergeada en main pero NUNCA aplicada a ninguna base. Su backfill corría
+  // antes de tres ALTER TABLE sobre `custody_integrity_cases`, que tiene un
+  // constraint trigger diferido: con filas reales la migración entera aborta
+  // con 55006, así que ninguna migración posterior podía repararla.
+  // RETIRAR esta entrada en cuanto 0250a quede aplicada en producción.
+  "supabase/migrations/0250a_custody_productive_vision.sql",
+];
+
+/**
+ * Violaciones de la regla de edición. PURA a propósito: es lo que permite
+ * ejercitarla con entradas sintéticas en vez de afirmar sobre literales.
+ */
+export function evaluarEdicionDeMigraciones(
+  editadas: readonly string[],
+  autorizadas: readonly string[],
+  registrada: (ruta: string) => string | null,
+  enDisco: (ruta: string) => string | null,
+): Array<{ codigo: string; detalle: string }> {
+  const v: Array<{ codigo: string; detalle: string }> = [];
+  for (const ruta of editadas) {
+    if (!autorizadas.includes(ruta)) {
+      v.push({ codigo: "MIGRACION_EDITADA_NO_AUTORIZADA", detalle: ruta });
+      continue;
+    }
+    const r = registrada(ruta);
+    const d = enDisco(ruta);
+    if (r === null || d === null || r !== d) {
+      v.push({ codigo: "EDICION_SIN_REGISTRO_EN_CATALOGO", detalle: ruta });
+    }
+  }
+  return v;
+}
+
 describe("T-C1-05 · append-only y auditoría", () => {
   it("las decisiones no se pueden modificar ni borrar", async () => {
     const s = await baseScenario(db);
@@ -296,14 +348,18 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   });
 
   it("sólo cambia el ÚNICO archivo autorizado del harness vanilla", () => {
-    // La primera mitad es segura para cualquier frente: un diff que no toca
-    // `tests/db` produce `[]` y `[]` no viola nada. La SEGUNDA exige presencia
-    // —que el conjunto sea exactamente el autorizado— y por eso sólo se le
-    // pide al diff propio: un frente que agrega una migración sin tocar el
-    // harness vanilla produce `[]` y quedaba bloqueado por esta igualdad.
+    // El invariante REAL es éste y vale para cualquier frente: bajo `tests/db`
+    // no puede aparecer ningún cambio fuera de lo autorizado. Un diff que no
+    // toca `tests/db` produce `[]`, y `[]` no viola nada.
+    //
+    // Acá había una segunda aserción que exigía IGUALDAD con el conjunto
+    // autorizado, es decir que el cambio ESTUVIERA PRESENTE. Eso no acotaba
+    // nada: era un accidente del candidato original, que sí tocaba ese
+    // archivo. Cualquier rama de seguimiento de Custodia que no necesite
+    // tocar `tests/db` quedaba bloqueada de forma permanente por no haber
+    // hecho un cambio que nadie le pedía. Se elimina; la línea de arriba
+    // cubre lo que importa.
     expect(evaluarInvarianciaVanilla(cambios("tests/db"), VANILLA_AUTHORIZED_CHANGES)).toEqual([]);
-    if (!propioDeCustodia) return;
-    expect(cambios("tests/db")).toEqual([...VANILLA_AUTHORIZED_CHANGES].sort());
   });
 
   it("EXPECTED_MANIFEST_SIZE del vanilla sigue siendo 31", () => {
@@ -419,7 +475,23 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
       git(["ls-tree", "--name-only", BASE, "supabase/migrations/"])
         .split("\n").map((l) => l.trim()).filter(Boolean),
     );
-    expect(cambios("supabase/migrations").filter((p) => enLaBaseSet.has(p))).toEqual([]);
+    const editadas = cambios("supabase/migrations").filter((p) => enLaBaseSet.has(p));
+
+    const catalogo = JSON.parse(
+      readFileSync(join(REPO_ROOT, "supabase", "lineage", "catalog.json"), "utf8"),
+    ) as { entries: Array<{ filename: string; sha256: string }> };
+    const registrada = (ruta: string): string | null =>
+      catalogo.entries.find((e) => e.filename === ruta.split("/").pop())?.sha256 ?? null;
+    const enDisco = (ruta: string): string | null => {
+      try {
+        return createHash("sha256").update(readFileSync(join(REPO_ROOT, ruta))).digest("hex");
+      } catch {
+        return null;
+      }
+    };
+
+    expect(evaluarEdicionDeMigraciones(editadas, MIGRACIONES_EDITABLES, registrada, enDisco))
+      .toEqual([]);
   });
 
   it("0205-0218 no entran al árbol ejecutable ni a ningún manifiesto", () => {
@@ -556,5 +628,61 @@ describe("T-C1-05 · MUTANTES: el guard se ejecuta y rechaza", () => {
     expect(baseDeRama(g, { WMS_VANILLA_BASE: "main" })).toMatch(/^[0-9a-f]{40}$/);
     expect(() => baseDeRama(g, { WMS_VANILLA_BASE: "no-existe-este-ref" }))
       .toThrow(BaseIndeterminadaError);
+  });
+});
+
+/**
+ * La excepción del append-only, ejercitada. Sin esto la lista sería una puerta
+ * abierta: bastaría con agregar un nombre para poder reescribir cualquier
+ * migración ya aplicada en producción.
+ */
+describe("T-C1-05 · la excepción de edición no es una puerta abierta", () => {
+  const SHA_OK = "a".repeat(64);
+  const listada = "supabase/migrations/0250a_custody_productive_vision.sql";
+  const ajena = "supabase/migrations/0222_custody_integrity_foundation.sql";
+
+  it("editar una migración NO listada sigue siendo violación", () => {
+    const v = evaluarEdicionDeMigraciones(
+      [ajena], MIGRACIONES_EDITABLES, () => SHA_OK, () => SHA_OK,
+    );
+    expect(v.map((x) => x.codigo)).toEqual(["MIGRACION_EDITADA_NO_AUTORIZADA"]);
+    expect(v[0].detalle).toBe(ajena);
+  });
+
+  it("listarla NO alcanza: sin re-registrar el sha256 en el catálogo, falla", () => {
+    // El archivo cambió en disco pero el catálogo quedó con el hash viejo.
+    const v = evaluarEdicionDeMigraciones(
+      [listada], MIGRACIONES_EDITABLES, () => "b".repeat(64), () => SHA_OK,
+    );
+    expect(v.map((x) => x.codigo)).toEqual(["EDICION_SIN_REGISTRO_EN_CATALOGO"]);
+  });
+
+  it("y tampoco si la migración desapareció del catálogo", () => {
+    const v = evaluarEdicionDeMigraciones(
+      [listada], MIGRACIONES_EDITABLES, () => null, () => SHA_OK,
+    );
+    expect(v.map((x) => x.codigo)).toEqual(["EDICION_SIN_REGISTRO_EN_CATALOGO"]);
+  });
+
+  it("listada Y re-registrada: pasa, que es el único camino admitido", () => {
+    expect(
+      evaluarEdicionDeMigraciones([listada], MIGRACIONES_EDITABLES, () => SHA_OK, () => SHA_OK),
+    ).toEqual([]);
+  });
+
+  it("sin ediciones no hay nada que autorizar", () => {
+    expect(evaluarEdicionDeMigraciones([], MIGRACIONES_EDITABLES, () => null, () => null))
+      .toEqual([]);
+  });
+
+  it("la lista es explícita, acotada y dice cuándo se retira", () => {
+    expect(MIGRACIONES_EDITABLES).toEqual([
+      "supabase/migrations/0250a_custody_productive_vision.sql",
+    ]);
+    const src = readFileSync(
+      join(REPO_ROOT, "tests", "custody-db", "t-c1-05-append-only-vanilla.test.ts"),
+      "utf8",
+    );
+    expect(src).toMatch(/RETIRAR esta entrada en cuanto 0250a quede aplicada/);
   });
 });
