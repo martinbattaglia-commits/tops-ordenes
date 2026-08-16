@@ -492,17 +492,6 @@ create trigger trg_custody_lock_reception_identity
   before update or delete on public.reception_items
   for each row execute function public.custody_lock_reception_identity();
 
--- Backfill idempotente y determinista sobre filas ya confirmadas.
-do $$ declare x record; begin
-  for x in
-    select id from public.reception_items
-     where status in ('recibido','cuarentena') and inventory_item_id is not null
-     order by created_at,id
-  loop
-    perform public.custody_materialize_reception_item_row(x.id);
-  end loop;
-end $$;
-
 -- Coherencia de caso ampliada a scope físico y comparación explícita de scope.
 create or replace function public.assert_custody_integrity_case_coherence()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -2547,6 +2536,17 @@ create constraint trigger trg_shipments_custody_final_state
   after insert or update on public.shipments
   deferrable initially deferred for each row
   execute function public.enforce_custody_shipment_final_state();
+
+-- Backfill idempotente y determinista sobre filas ya confirmadas.
+do $$ declare x record; begin
+  for x in
+    select id from public.reception_items
+     where status in ('recibido','cuarentena') and inventory_item_id is not null
+     order by created_at,id
+  loop
+    perform public.custody_materialize_reception_item_row(x.id);
+  end loop;
+end $$;
 
 insert into public.custody_productive_installations(installation)
 values('0250a_custody_productive_vision')
