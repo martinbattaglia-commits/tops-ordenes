@@ -31,6 +31,10 @@ const UI_FILES = [
   "src/app/(app)/wms/custody/_components/CaseInspectionPanel.tsx",
   "src/app/(app)/wms/custody/_components/CasePodGate.tsx",
   "src/app/(app)/wms/custody/_components/CaseReevaluatePanel.tsx",
+  // S1-3 · el panel de captura quedaba fuera del guard y ahora escribe clases
+  // propias (dos slots, avisos por botón). Sin esto, una clase inventada acá
+  // seguiría pasando en verde.
+  "src/app/(app)/wms/custody/_components/PhysicalCapturePanel.tsx",
 ];
 
 /** Clases escritas en `className`, incluidas las de expresiones con template. */

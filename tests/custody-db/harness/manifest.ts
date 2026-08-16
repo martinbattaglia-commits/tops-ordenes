@@ -39,7 +39,7 @@ export const CUSTODY_BOOTSTRAP_DIR = resolve(__dirname, "..", "bootstrap");
  *   + 0232                         = 44 (remediación: reserva exclusiva de evaluación)
  *   + 0250 + 0250a                = 46 (scope físico + visión productiva)
  */
-export const EXPECTED_CUSTODY_MANIFEST_SIZE = 46;
+export const EXPECTED_CUSTODY_MANIFEST_SIZE = 47;
 
 /** Cierre inventariado ANTES de D1–D3. Se conserva para poder afirmarlo. */
 export const CUSTODY_CLOSURE_SIZE = 36;
@@ -112,6 +112,9 @@ export const CUSTODY_MIGRATION_MANIFEST: readonly string[] = [
   // ── Visión productiva · enum aislado + núcleo transaccional ──
   "0250_custody_physical_scope_enums.sql",
   "0250a_custody_productive_vision.sql",
+
+  // ── Cierre del circuito · S1-1 autoridad de decisión + S1-4 evidencia ──
+  "0251_custody_decide_authority.sql",
 ];
 
 export class CustodyManifestError extends Error {

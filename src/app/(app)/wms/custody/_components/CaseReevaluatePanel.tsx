@@ -49,6 +49,13 @@ export function CaseReevaluatePanel({
     } catch {
       setError("No se pudo completar el análisis");
       setEstado("fallo");
+    } finally {
+      // S1-3 · El guard de un solo vuelo devuelve `null` cuando descarta una
+      // segunda pulsación, y ese `return` temprano dejaba el panel en
+      // «evaluando» PARA SIEMPRE: el botón quedaba muerto y la única salida era
+      // recargar. Es el mismo patrón que ya usa `CaseDecisionPanel` (I6): el
+      // `finally` garantiza que nunca se queda en el estado ocupado.
+      setEstado((s) => (s === "evaluando" ? "pendiente" : s));
     }
   }, [guard, onEvaluated, view.caseId, view.version]);
 

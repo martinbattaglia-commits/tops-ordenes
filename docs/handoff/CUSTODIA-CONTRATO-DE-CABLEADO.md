@@ -1,7 +1,8 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
-**Expediente:** CUSTODIA-CIERRE-CIRCUITO-S0 · **Sesión 0** · 16-08-2026
-**Estado:** emitido · sin cambios de producto
+**Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
+**Última actualización:** **Sesión 1** — circuito recorrible de punta a punta
+**Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
 
@@ -68,18 +69,18 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 
 | # | Dato / capacidad | Base | RPC/lectura | Adapter | View-model | UI | Permiso | Estado |
 |---|---|---|---|---|---|---|---|---|
-| 1a | Razón social del cliente | `clients.razon` · `0001_init.sql:40` · FK `custody_integrity_cases.client_id` `0222:601` | **no se pide**: `CASE_COLUMNS` `integrity-supabase.ts:63-69` trae `client_id` pero no hace join a `clients` | — | — | — | RLS de tenant + `assert_custody_tenant` | **CORTADO EN lectura** |
-| 1b | `client_id` del caso (UUID) | `custody_integrity_cases.client_id` `0222:601` | `integrity-supabase.ts:64` (dentro de `CASE_COLUMNS`) | `integrity-adapters.ts:359` → `entity.clientId` | **descartado** · `case-presentation.ts:433-434` copia sólo `scope` y `entityId` | — | idem | **CORTADO EN view-model** |
-| 2a | `public_id` del caso (CINT-) · **detalle** | `custody_integrity_cases.public_id` · generado en `0250a:433` y `0223:130` | `integrity-supabase.ts:64` lo pide; tipado en `integrity-adapters.ts:102` | **descartado** · `buildIntegrityCase` `integrity-adapters.ts:355-375` no lo copia a `IntegrityCase` | no existe el campo en `CustodyCaseView` `case-presentation.ts:203-240` | — | idem | **CORTADO EN adapter** |
+| 1a | Razón social del cliente | `clients.razon` · `0001_init.sql:40` · depositante asentado en `receptions.client_name` `0025:41` | `CASE_COLUMNS` embebe `clients(razon)` y `receptions(client_name)` · `integrity-supabase.ts:88-92` | `mapCaseIdentity` `integrity-adapters.ts:172-186` | `identity.clientLabel` · `case-presentation.ts:buildIdentityView` | encabezado `[id]/page.tsx` · `data-cliente` | RLS de tenant; `clients.razon` exige `clientes.view`, y por eso cae al depositante de recepción | **CABLEADO** |
+| 1b | `client_id` del caso (UUID) | `custody_integrity_cases.client_id` `0222:601` | `CASE_COLUMNS` | `entity.clientId` + `mapCaseIdentity` | `identity` (no se pinta el UUID: se pinta el nombre) | encabezado | idem | **CABLEADO** |
+| 2a | `public_id` del caso (CINT-) · **detalle** | `custody_integrity_cases.public_id` · generado en `0250a:433` y `0223:130` | `CASE_COLUMNS` | `mapCaseIdentity` (el dominio `IntegrityCase` sigue puro: la identidad viaja aparte) | `identity.casePublicId` | chip `data-cint` en el encabezado | idem | **CABLEADO** |
 | 2b | `public_id` del caso (CINT-) · **listado** | idem | `custody.ts:1048` lo selecciona | `custody.ts:1054` lo mapea | `CustodyIntegrityCaseRow` | listado `wms/custody/page.tsx:30` | `wms.view` | **CABLEADO** |
-| 2c | `public_id` de la unidad (CPU-) | `custody_physical_units.public_id` `0250a:24` · generado en `0250a:415` | **no se pide** en ninguna lectura del caso · `CASE_COLUMNS` trae `physical_unit_id` pero no hace join a `custody_physical_units` | — | — | — | `wms.view` | **CORTADO EN lectura** |
-| 2d | SKU, cantidad, lote, vencimiento | `custody_physical_units.sku / quantity / lot_number / expiration_date` `0250a:30-33` | **no se pide** (mismo join ausente) | — | — | — | `wms.view` | **CORTADO EN lectura** |
-| 2e | Recepción de origen + enlace | `custody_physical_units.reception_id / reception_item_id` `0250a:26-27` | **no se pide** (mismo join ausente) | — | — | — | `wms.view` | **CORTADO EN lectura** |
-| 3 | `similarityScore`, `thresholdResult`, `scoreComponents` | `0250a` · columnas del caso; `score_components` escrito en `integrity-supabase.ts:390-395` | `integrity-supabase.ts:65-67` | `integrity-adapters.ts:304-317` | `case-presentation.ts:291-295` (llegan enteros a `AiPanelView`) | **ningún JSX los dibuja** · `CaseAiPanel.tsx` 1-60 sólo pinta `confidencePercent` (`:19-26`) y `verdictLabel` (`:27-29`) | informativo, sin permiso propio | **CORTADO EN UI** |
-| 4 | `thresholdPercent` | `custody_integrity_cases.threshold_percent` · usado como criterio en `0250a:2114-2116` | `integrity-supabase.ts:66` | `integrity-adapters.ts:305` | `case-presentation.ts:292` | **no se renderiza** — y **así debe quedar** (§I3 / regla de borrado) | — | **CORTADO EN UI · CONFORME** |
-| 5a | `damageFlags` (embalaje / faltante / daño) | `packaging_changed`, `missing_items_suspected`, `damage_suspected` · escritos en `integrity-supabase.ts:397-399` | `integrity-supabase.ts:67` | `integrity-adapters.ts:318-320` | `case-presentation.ts:296-305` | **ningún JSX** (ver fila 3) | — | **CORTADO EN UI** |
-| 5b | `provider_details` (observations, zones) | escrito en `integrity-supabase.ts:406-410` (`p_provider_details`) | `CASE_COLUMNS` `integrity-supabase.ts:63-69` **no pide `provider_details`** | `integrity-adapters.ts:294` fija `observations: []` y `zones: []` — **dos arrays vacíos literales** | siempre vacío | — | — | **CORTADO EN adapter** (y antes, en lectura) |
-| 6a | `quarantine.blockers` | `0250a:2088-2099` (las reglas que producen el bloqueo) | — | — | `case-presentation.ts:380-389`, expuesto en `:444` | **ningún JSX lo lee** · `CaseDecisionPanel.tsx` sólo usa `view.quarantine.enabled` en `:150-151` | `wms.custody.decide` | **CORTADO EN UI** |
+| 2c | `public_id` de la unidad (CPU-) | `custody_physical_units.public_id` `0250a:24` | `CASE_COLUMNS` embebe `custody_physical_units(...)` | `mapCaseIdentity` | `identity.unitPublicId` | chip `data-cpu` en el encabezado | `wms.view` + RLS `custody_physical_units_read` `0250a:68-73` | **CABLEADO** |
+| 2d | SKU, cantidad, lote, vencimiento | `custody_physical_units.sku / quantity / lot_number / expiration_date` `0250a:30-33` | `CASE_COLUMNS` | `mapCaseIdentity` | `identity.sku / quantity / lotNumber` | línea del bien en el encabezado | `wms.view` | **CABLEADO** |
+| 2e | Recepción de origen + enlace | `custody_physical_units.reception_id` `0250a:26` → `receptions(public_id)` | `CASE_COLUMNS` (embed anidado) | `mapCaseIdentity` | `identity.receptionPublicId / receptionId` | enlace `data-recepcion` en el encabezado | `wms.view` + RLS de `receptions` | **CABLEADO** |
+| 3 | `similarityScore`, `thresholdResult`, `scoreComponents` | `0250a` · columnas del caso; `score_components` escrito en `integrity-supabase.ts:390-395` | `integrity-supabase.ts:65-67` | `integrity-adapters.ts:304-317` | `similarityScore` + `concordance` derivado (`deriveConcordance`) | `CaseAiPanel.tsx` · número de concordancia, veredicto cualitativo, barra SIN marca de umbral y los cuatro componentes | informativo, sin permiso propio | **CABLEADO** |
+| 4 | `thresholdPercent` | `custody_integrity_cases.threshold_percent` · criterio en `0250a:2114-2116` | se sigue leyendo | `integrity-adapters.ts` → `IntegrityAssessment` | **NO EXISTE en `AiPanelView`**: se consume para derivar `concordance` y no viaja | nada que renderizar, por construcción | — | **NO VIAJA · CONFORME (I3)** |
+| 5a | `damageFlags` (embalaje / faltante / daño) | `packaging_changed`, `missing_items_suspected`, `damage_suspected` | `CASE_COLUMNS` | `integrity-adapters.ts` | `ai.damageFlags` | chips `data-banderas` en `CaseAiPanel` | — | **CABLEADO** |
+| 5b | `provider_details` (observations, zones) | escrito en `integrity-supabase.ts:406-410` (`p_provider_details`) | `CASE_COLUMNS` ahora **sí** pide `provider_details` | `boundedStrings` en `mapAssessment` (recorta a 6 × 240/120) | `ai.observations` / `ai.zones` | bloque «Observaciones del análisis» en `CaseAiPanel` | — | **CABLEADO** |
+| 6a | `quarantine.blockers` | `0250a:2088-2099` (las reglas que producen el bloqueo) | — | — | `case-presentation.ts` · habilitado también en `HOLD` (S1-5) | `CaseDecisionPanel` · bloque «Por qué no se puede enviar a cuarentena» (`data-cuarentena-blockers`) | `wms.custody.decide` + rol `admin`/`operaciones`/`supervisor` (0251) | **CABLEADO** |
 | 6b | `release.blockers` | `0250a:2108-2150` | — | — | `case-presentation.ts:325-377`, expuesto en `:438-443` | `CaseDecisionPanel.tsx:172-179` · encabezado «Por qué no se puede liberar» | `wms.custody.decide` + rol `admin` | **CABLEADO** |
 | 7 | Certificado de liberación | tabla `custody_release_certificates` `0250a:1742-1794` · insertado en `0250a:2182-2186` · validador `custody_assert_release_certificate` `0250a:1796` · `grant select ... to authenticated` `0250a:1786` | **cero lecturas** · `grep -rn "custody_release_certificates" src/` → 0 resultados | — | — | — | SELECT concedido a `authenticated`, sin consumidor | **CORTADO EN lectura** |
 | 8 | Códigos de gate de despacho (los seis `CUSTODY_*`) | `CUSTODY_CASE_MISSING` `0250a:2304` · `CUSTODY_HOLD` `0250a:2307` · `CUSTODY_RELEASE_CERTIFICATE_MISSING` `0250a:2312` · `CUSTODY_CHAIN_ADVANCED_AFTER_RELEASE` `0250a:2316` · `CUSTODY_GENEALOGY_MISSING` `0250a:2361` · `CUSTODY_ZERO_APPLICABLE_CASES` `0250a:2401` | **ningún traductor** · `grep -rn "CUSTODY_HOLD\|CUSTODY_GENEALOGY_MISSING\|..." src/` → 0 resultados | — | — | el error crudo de PostgreSQL sube tal cual al despachante | — | **CORTADO EN lectura** |
@@ -87,9 +88,13 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 10 | Puerta de la foto de egreso en el flujo de salida | gates disparados por trigger en `0250a:2417 / 2486 / 2507 / 2529` | — | — | — | **cero menciones de custodia** en picking y packing (`grep -rniE "custod\|CPU-\|physical_unit"` sobre `wms/picking` y `wms/packing` → 0 resultados); en despachos sólo `CustodyShipmentSection` (`despachos/[id]/page.tsx:172-175`), que es scope `shipment` | — | **NO EXISTE** |
 | 11a | Resolución del token del QR | `get_custody_physical_by_token` `0250a:2253-2289` · `revoke ... from public,anon` `:2291` · `grant ... to authenticated` `:2292` | `getCustodyByToken` (`custody.ts`), consumido en `c/[token]/page.tsx:18` | — | — | `c/[token]/page.tsx:41-84` | `assert_custody_access('wms.view')` `0250a:2261` | **CABLEADO** (autenticado) |
 | 11b | Compuerta del POD para unidad física | POD ligado a `shipment` | `actions.ts:568` sólo calcula `podPdfReady` cuando `scope === "shipment"` | — | `case-presentation.ts:462-468` | `[id]/page.tsx:86` fija `shipmentId = isShipment ? view.entityId : null`; `CasePodGate.tsx:19` bloquea con `view.podBlocked \|\| !shipmentId` → **la unidad física queda bloqueada siempre**, y con el caso ya `RELEASED` el motivo es `null` (`case-presentation.ts:464`) y cae al literal por defecto `CasePodGate.tsx:24` | — | **CORTADO EN view-model** |
+| 13 | Decisión de casos **no** físicos (`packing_unit` / `shipment`) | `decide_custody_integrity` (v1) **revocada** para `authenticated` · `0250a:2199-2200` | `integrity-supabase.ts:263-265` sigue enrutando ahí todo scope no físico | — | — | el botón existe y la RPC rechaza por privilegio | `wms.custody.decide` | **CORTADO EN lectura · HN-1, determinado y NO remediado** |
 | 12 | Firma de quien retira | — | — | — | — | — | — | **NO EXISTE** |
 
-**Recuento:** 20 filas · **CABLEADO 4** · **CORTADO 14** · **NO EXISTE 2**.
+**Recuento tras la Sesión 1:** 21 filas · **CABLEADO 14** · **CORTADO 4** ·
+**NO EXISTE 2** · **NO VIAJA por diseño 1**.
+
+*(Al cerrar la Sesión 0 eran 20 filas: 4 CABLEADO, 14 CORTADO, 2 NO EXISTE.)*
 
 ---
 
@@ -436,7 +441,87 @@ pasó a `CABLEADO` sin que su ancla de UI apunte a JSX real es una fila mentida.
 
 ---
 
-## 8 · LO QUE ESTA SESIÓN NO HIZO
+## 9 · SESIÓN 1 · QUÉ CAMBIÓ Y QUÉ QUEDÓ ABIERTO
+
+### 9.1 · Lo que se cerró
+
+| Punto | Qué se hizo | Dónde |
+|---|---|---|
+| S1-1 | REVOCAR el comodín + guarda estructural · OTORGAR a `operaciones` · lista de roles de cuarentena (`cliente` excluido) | `0251_custody_decide_authority.sql` + su ROLLBACK + catálogo |
+| S1-2 | Los DOS cortes de identidad y C5 en los dos listados | `integrity-supabase.ts` · `integrity-adapters.ts` · `case-presentation.ts` · `custody.ts` |
+| S1-3 | Tres `finally` · conjunción con el permiso · **un input por slot** · traducción de rechazos de regla | los tres paneles + `classifyPhysicalAttachRejection` |
+| S1-4 | Análisis automático al completarse el par · fin del `EVIDENCE_MISSING` incondicional · egreso e inspección separados | `actions.ts` · `0251` acto 4 · `[id]/page.tsx` |
+| S1-5 | Cuarentena habilitada en `HOLD` · `quarantine.blockers` pintados | `case-presentation.ts` · `CaseDecisionPanel` |
+| S1-6 | La UI espeja la exclusión de `inspeccion_humana` que la base ya aplicaba | `integrity-supabase.ts` · `actions.ts` |
+| S1-7 | Concordancia + veredicto cualitativo + componentes + banderas + observaciones · umbral eliminado de toda superficie | `CaseAiPanel` · `case-presentation.ts` |
+
+### 9.2 · El umbral, en concreto
+
+Tres cadenas de cara al usuario nombraban el umbral y ya no lo hacen:
+
+- `BELOW_SIMILARITY_THRESHOLD` decía «El score está por debajo del umbral del 90 %»
+  → **«Requiere inspección física antes de decidir»**;
+- `SCORE_BELOW_THRESHOLD` decía «El score no alcanza el umbral productivo»
+  → **«La concordancia exige inspección física adicional»**;
+- `NO_CALIBRATED_THRESHOLD` decía «No hay umbral calibrado aprobado»
+  → **«El criterio automático no está configurado: revisión humana completa»**.
+
+El bloque `referenceThreshold` de `CaseAiPanel` se borró y el campo salió del
+view-model. `thresholdPercent` **tampoco viaja**: se consume server-side para
+derivar el veredicto. La garantía es estructural, no una convención de render.
+
+### 9.3 · Costura 13 · HN-1, determinado y NO remediado
+
+**(a) ¿`decide_custody_integrity_v2` acepta scopes no físicos?** **No, y los
+rechaza explícitamente.** `0251:161` (equivalente a `0250a:2094`):
+
+```sql
+if c.physical_unit_id is null then
+  raise exception 'decisión v2 exige scope physical_unit' using errcode='check_violation';
+end if;
+```
+
+Y no es sólo esa guarda: el cuerpo es físico de punta a punta —
+`custody_chain_lock('physical_unit', …)` `0251:167`,
+`custody_chain_attestation('physical_unit', …)` `0251:168` e
+`is_custody_inspection_evidence_v2` `0251:239`. **Enrutar todo a la v2 no es un
+cambio de una línea:** exige un cuerpo genérico por scope, o una v3.
+
+**(b) ¿Qué otras rutas enrutan a la v1?** Una sola, y es la rota:
+`integrity-supabase.ts:263-265`, el ternario de `decide()`. La otra superficie
+v1 del módulo —`custody_inspection_candidates`, elegida en
+`integrity-supabase.ts:302-304`— **no está rota**: `0224:313` la mantiene
+concedida a `authenticated`.
+
+**Conclusión:** el único eslabón cortado es la llamada de decisión, y la salida
+—re-otorgar la v1 o generalizar la v2— es **decisión de base, de Dirección**.
+No se tocó el ruteo, ni los grants, ni se escribió migración para esto.
+
+### 9.4 · Lo que la Sesión 1 NO cerró y no le correspondía
+
+- Costuras 7, 8, 10, 11b y 12 (certificado visible, traductor de códigos
+  `CUSTODY_*`, puerta de egreso en picking/packing, POD de unidad física, firma
+  de quien retira): son **Sesión 2**.
+- **Del §7 quedan sin implementar** la barra de progreso de cinco pasos, el
+  bloque `▶ AHORA` con una sola acción viva y el reordenamiento mobile-first, y
+  el render de imagen grande lado a lado en `EvidenceViewer`. No están en
+  ninguno de los siete puntos de la Sesión 1; se hizo el encabezado de
+  identidad, el banner de consecuencia y el panel de análisis, que sí lo están.
+- **C8 (fallback silencioso a `MOCK_CASES`)** sigue vivo en
+  `custody.ts:1043-1045`, fuera de alcance por §8.
+
+### 9.5 · Verificación pendiente de Dirección
+
+**No se comprobó, y no se podía:** que Martin Battaglia, José Luis Rodríguez y
+Martín Rinas —y sólo ellos— tengan hoy rol `admin`. Es una lectura de base
+productiva y ninguna sesión está autorizada a conectarse. **Queda PENDIENTE DE
+DIRECCIÓN.** Mientras no se responda, el reparto de autoridad está escrito en el
+código pero no verificado contra la realidad: cada `admin` de más es alguien que
+puede liberar mercadería de un cliente.
+
+---
+
+## 8 · LO QUE LA SESIÓN 0 NO HIZO (histórico)
 
 - Cero cambios en `src/`, `supabase/` o `tests/`.
 - Ninguna migración creada; `supabase/lineage/catalog.json` intacto.

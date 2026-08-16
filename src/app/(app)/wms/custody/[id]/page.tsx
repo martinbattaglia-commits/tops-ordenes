@@ -98,10 +98,26 @@ export default async function CustodyCasePage({ params }: { params: { id: string
   const ingreso = firstEvidence(timeline, (e) =>
     isPhysical ? e.event_type === "foto_ingreso" : e.stage === "packing",
   );
+  /**
+   * S1-4 · EGRESO E INSPECCIÓN SON DOS EVENTOS DISTINTOS.
+   *
+   * Antes `inspeccion_humana` ganaba sobre `foto_egreso`, así que la tarjeta de
+   * egreso mostraba la foto de la inspección y `tieneEgreso` declaraba egreso
+   * registrado cuando no lo había: el checklist del operario mentía y el panel
+   * de captura se apagaba con un slot vacío. Se separan.
+   */
   const egreso =
-    firstEvidence(timeline, (e) => e.event_type === "inspeccion_humana") ??
     firstEvidence(timeline, (e) => e.event_type === "foto_egreso") ??
-    firstEvidence(timeline, (e) => e.stage === "entrega");
+    (isPhysical ? null : firstEvidence(timeline, (e) => e.stage === "entrega"));
+  const inspeccion = firstEvidence(timeline, (e) => e.event_type === "inspeccion_humana");
+
+  // Las clases condicionales se calculan en variables, no con template
+  // literals dentro de `className`: es el patrón que ya usa `StateBadge` en
+  // este mismo archivo, y el que el guard de clases sabe leer (I6).
+  const bannerCard = view.podBlocked ? "card mt-3 p-3" : "card mt-3 p-3 border-status-success";
+  const bannerText = view.podBlocked
+    ? "flex items-center gap-2 text-sm text-status-danger"
+    : "flex items-center gap-2 text-sm text-status-success";
 
   return (
     <main className="p-4 lg:p-8 nx-page-fade">
@@ -112,6 +128,67 @@ export default async function CustodyCasePage({ params }: { params: { id: string
         <h1 className="page-title">Custodia Digital</h1>
         <StateBadge label={view.stateLabel} tone={view.tone} />
       </header>
+
+      {/* ── IDENTIDAD ─────────────────────────────────────────────────────
+          §7.2 · La pantalla arranca diciendo DE QUIÉN ES el bien y CUÁL es.
+          Antes el encabezado decía «Custodia Digital» y nada más: el
+          inspector estaba por liberar mercadería sin saber de qué cliente.  */}
+      <section className="card mt-4 p-4" aria-labelledby="identidad-title" data-identidad="true">
+        <p id="identidad-title" className="eyebrow-tiny">Caso de custodia</p>
+        <h2 className="mt-1 text-xl font-bold" data-cliente="true">
+          {view.identity.clientLabel ?? "Depositante no disponible"}
+        </h2>
+        {view.identity.clientFromReception && (
+          <p className="mt-0.5 text-xs text-fg-muted">
+            Depositante asentado en la recepción
+          </p>
+        )}
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          {view.identity.unitPublicId && (
+            <span className="badge font-mono" data-cpu="true">{view.identity.unitPublicId}</span>
+          )}
+          {view.identity.casePublicId && (
+            <span className="badge font-mono" data-cint="true">{view.identity.casePublicId}</span>
+          )}
+        </div>
+
+        <p className="mt-2 text-sm text-fg-secondary">
+          {[
+            view.identity.sku ? `SKU ${view.identity.sku}` : null,
+            view.identity.quantity !== null ? `${view.identity.quantity} un.` : null,
+            view.identity.lotNumber ? `lote ${view.identity.lotNumber}` : "sin lote",
+          ]
+            .filter((x): x is string => x !== null)
+            .join(" · ")}
+          {view.identity.receptionPublicId && view.identity.receptionId && (
+            <>
+              {" · recepción "}
+              <Link
+                href={`/wms/recepciones?id=${view.identity.receptionId}`}
+                className="underline"
+                data-recepcion="true"
+              >
+                {view.identity.receptionPublicId}
+              </Link>
+            </>
+          )}
+        </p>
+      </section>
+
+      {/* ── BANNER DE CONSECUENCIA ────────────────────────────────────────
+          §7.2 · Arriba, nunca al pie. El operario tiene que saber qué está
+          bloqueado ANTES de mirar la evidencia.                            */}
+      <div className={bannerCard} role="status" data-banner="true">
+        <p className={bannerText}>
+          <Icon name={view.podBlocked ? "lock" : "check-circle"} size={14} aria-hidden="true" />
+          <span>
+            {view.podBlocked
+              ? (view.podBlockedReason ?? "Despacho y POD bloqueados")
+              : "Despacho habilitado · decisión humana registrada"}
+          </span>
+        </p>
+      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         {/* ── INGRESO ────────────────────────────────────────────────── */}
@@ -161,11 +238,23 @@ export default async function CustodyCasePage({ params }: { params: { id: string
               </p>
             </>
           ) : (
+            // §7.5 · Ningún texto manda al operario a otro panel. Antes decía
+            // «registrala en "Fotografías de la unidad"»: si el sistema sabe
+            // dónde está la acción, la ofrece como botón — y el panel de
+            // captura está justo abajo, con su propio slot de egreso.
             <p className="mt-2 text-sm text-fg-muted">
-              {isPhysical
-                ? "Falta la fotografía de egreso: registrala en «Fotografías de la unidad»."
-                : "Falta la fotografía de egreso."}
+              Esperando la fotografía de egreso.
             </p>
+          )}
+
+          {inspeccion && (
+            <div className="mt-3 border-t border-stroke-soft pt-3">
+              <p className="eyebrow-tiny">Inspección física</p>
+              <div className="mt-2">
+                <EvidenceViewer evidence={inspeccion.evidence} />
+              </div>
+              <p className="mt-1 text-xs text-fg-muted">{fmtDateTime(inspeccion.occurredAt)}</p>
+            </div>
           )}
         </section>
       </div>

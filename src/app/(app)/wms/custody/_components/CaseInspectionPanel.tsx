@@ -86,6 +86,11 @@ export function CaseInspectionPanel({
     } catch {
       setError("No se pudo registrar la fotografía");
       setEstado("fallo");
+    } finally {
+      // S1-3 · Sin este `finally`, el `return` temprano del guard de un solo
+      // vuelo dejaba el panel en «subiendo» y el botón muerto. Patrón copiado
+      // de `CaseDecisionPanel` (I6), no inventado.
+      setEstado((s) => (s === "subiendo" ? "pendiente" : s));
     }
   }, [archivo, guard, onRegistered, view.caseId, view.entityId, view.scope]);
 

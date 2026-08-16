@@ -48,7 +48,9 @@ function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
     version: 3,
     scope: "shipment",
     entityId: SHIPMENT,
-    holdLabels: ["No hay umbral calibrado aprobado"],
+    // Regla de borrado (I3): la etiqueta ya no nombra el umbral. Decía «No hay
+    // umbral calibrado aprobado» y se pintaba al operario bajo «Retenciones».
+    holdLabels: ["El criterio automático no está configurado: revisión humana completa"],
     ai: {
       executed: true,
       verdictLabel: "Coincide con el ingreso",
@@ -57,7 +59,17 @@ function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
       note: "La IA informa y alerta. La decisión es humana.",
       failureLabel: null,
     },
-    referenceThreshold: null,
+    identity: {
+      clientLabel: "Laboratorio Fénix S.A.",
+      clientFromReception: false,
+      casePublicId: "CINT-2026-000451",
+      unitPublicId: "CPU-2026-000123",
+      sku: "MUEBLE-DEMO-01",
+      quantity: 1,
+      lotNumber: null,
+      receptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      receptionPublicId: "REC-2026-0088",
+    },
     release: { enabled: false, blockers: ["Falta la foto de inspección humana"] },
     quarantine: { enabled: true, blockers: [] },
     reevaluation: { analysis: "current", inFlight: false, enabled: true, required: false, blockers: [], reason: null },
@@ -157,7 +169,9 @@ describe("la pantalla del caso se renderiza completa", () => {
   it("sin foto de egreso lo dice explícitamente", async () => {
     timelineMock.mockResolvedValue({ ...TIMELINE, nodes: [TIMELINE.nodes[0]] });
     const { container, unmount } = await renderPage();
-    expect(byText(container, /Falta la fotografía de egreso/)).not.toBeNull();
+    // §7.5 · el texto ya no manda al operario a otro panel («registrala en
+    // "Fotografías de la unidad"»): el slot de captura está en la pantalla.
+    expect(byText(container, /Esperando la fotografía de egreso/)).not.toBeNull();
     await unmount();
   });
 });
@@ -169,7 +183,9 @@ describe("panel de IA: informa, no decide", () => {
     // texto renderizado del panel, no sobre un nodo hoja.
     expect(container.textContent).toMatch(/87\s*%/);
     expect(byText(container, /confianza informada/)).not.toBeNull();
-    expect(byText(container, /Revisión humana obligatoria/)).not.toBeNull();
+    // §7.6 fija la leyenda exacta del panel: «La IA informa y alerta. La
+    // decisión es humana.». Es el mismo mensaje, en las palabras normativas.
+    expect(byText(container, /La IA informa y alerta\. La decisión es humana\./)).not.toBeNull();
     await unmount();
   });
 
@@ -190,14 +206,16 @@ describe("panel de IA: informa, no decide", () => {
     await unmount();
   });
 
-  it("si el servidor informa la referencia, se muestra rotulada como no aprobada", async () => {
-    loadMock.mockResolvedValue({
-      ok: true,
-      data: view({ referenceThreshold: { percent: 90, approved: false } }),
-    });
+  // I3 · el bloque «Referencia operativa» SE BORRÓ. No es que el servidor no
+  // lo pueble: no existe la superficie. Poblarlo habría impreso «Referencia
+  // operativa 90 %», que es exactamente la cadena que la regla de borrado
+  // manda eliminar.
+  it("la superficie del umbral no existe ni siquiera con un análisis completo", async () => {
     const { container, unmount } = await renderPage();
-    expect(byText(container, /Referencia operativa 90%.*por aprobar/)).not.toBeNull();
-    expect(byText(container, /no es criterio de liberación automática/)).not.toBeNull();
+    const texto = container.textContent ?? "";
+    expect(texto).not.toMatch(/Referencia operativa/i);
+    expect(texto).not.toMatch(/umbral/i);
+    expect(texto).not.toMatch(/≥/);
     await unmount();
   });
 });

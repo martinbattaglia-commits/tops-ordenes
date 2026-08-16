@@ -35,7 +35,17 @@ function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
       note: "La IA informa y alerta. La decisión es humana.",
       failureLabel: null,
     },
-    referenceThreshold: null,
+    identity: {
+      clientLabel: "Laboratorio Fénix S.A.",
+      clientFromReception: false,
+      casePublicId: "CINT-2026-000451",
+      unitPublicId: "CPU-2026-000123",
+      sku: "MUEBLE-DEMO-01",
+      quantity: 1,
+      lotNumber: null,
+      receptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      receptionPublicId: "REC-2026-0088",
+    },
     release: { enabled: true, blockers: [] },
     quarantine: { enabled: true, blockers: [] },
     reevaluation: { analysis: "current", inFlight: false, enabled: true, required: false, blockers: [], reason: null },
@@ -216,6 +226,30 @@ describe("accesibilidad", () => {
     expect(container.querySelector('label[for="decision-reason"]')?.textContent).toMatch(/Motivo/);
     expect(container.querySelector(`#${motivo.getAttribute("aria-describedby")}`)?.textContent)
       .toMatch(/mínimo 10 caracteres/);
+    await unmount();
+  });
+});
+
+describe("S1-5 · por qué no se puede cuarentenar también se dice", () => {
+  it("los blockers de cuarentena se PINTAN, simétricos a los de liberación", async () => {
+    // `view.quarantine.blockers` se calculaba, viajaba al cliente y NO había
+    // JSX que lo dibujara: el botón se apagaba sin decir por qué. En el caso
+    // retenido eso dejaba al operario sin ninguna acción y sin explicación.
+    const { container, unmount } = await render(
+      <CaseDecisionPanel
+        view={view({
+          quarantine: { enabled: false, blockers: ["El caso todavía no está listo para decidir"] },
+        })}
+      />,
+    );
+    expect(byText(container, /Por qué no se puede enviar a cuarentena/)).not.toBeNull();
+    expect(byText(container, /El caso todavía no está listo para decidir/)).not.toBeNull();
+    await unmount();
+  });
+
+  it("sin blockers de cuarentena no se dibuja el bloque", async () => {
+    const { container, unmount } = await render(<CaseDecisionPanel view={view()} />);
+    expect(byText(container, /Por qué no se puede enviar a cuarentena/)).toBeNull();
     await unmount();
   });
 });

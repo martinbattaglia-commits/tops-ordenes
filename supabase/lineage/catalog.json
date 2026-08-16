@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 211,
-  "no_ejecutables": 22,
+  "ejecutables": 212,
+  "no_ejecutables": 23,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2670,6 +2670,32 @@
       "ledger_name": "ROLLBACK_0250a_custody_productive_vision",
       "provenance": "repo (codex/custodia-vision-productiva-001-r2)",
       "motivo": "Inversa logica e idempotente de 0250 / 0250a: desactiva la politica y retira superficies y gates sin borrar identidades, eventos, decisiones ni auditoria. NO es forward."
+    },
+    {
+      "id": "0251_custody_decide_authority.sql",
+      "filename": "0251_custody_decide_authority.sql",
+      "sha256": "80bf70bf0defb780be77791d24c0d6a0e7590684a98aabf1144c83389e672e4e",
+      "orden": 234,
+      "requires": [
+        "0250a_custody_productive_vision.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00234",
+      "ledger_name": "0251_custody_decide_authority",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "CUSTODIA CIERRE CIRCUITO S1-1 y S1-4. Cuatro actos: revoca wms.custody.decide de gerencia_comercial y administracion_finanzas y deja la exclusion estructural con una guarda sobre role_permissions; otorga el permiso a operaciones; agrega a decide_custody_integrity_v2 la lista de roles de cuarentena que 0250a no tenia, con cliente excluido; y corrige attach_custody_physical_evidence, que declaraba EVIDENCE_MISSING incluso cuando el adjunto completaba el par. ORDEN DECLARADO: el comodin 20260811230310 es orden 76 por ledger pero ordena DESPUES de 0251 por nombre de archivo, que es lo que aplica supabase db reset; por eso la revocacion no es un DELETE de una sola vez sino un DELETE mas una guarda que omite la fila sin abortar la transaccion del comodin."
+    },
+    {
+      "id": "ROLLBACK_0251_custody_decide_authority.sql",
+      "filename": "ROLLBACK_0251_custody_decide_authority.sql",
+      "sha256": "cf9c1449f765019a196033d07708f709d1c40d11cd9d4ca6bc1a10653a7d33e2",
+      "orden": 235,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00235",
+      "ledger_name": "ROLLBACK_0251_custody_decide_authority",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "Inversa logica e idempotente de 0251: retira la guarda de delegacion y la concesion a operaciones, y devuelve decide_custody_integrity_v2 y attach_custody_physical_evidence a su cuerpo de 0250a. NO es forward. NO vuelve a conceder wms.custody.decide a gerencia_comercial ni a administracion_finanzas: un rollback retira un cambio, no reinstala una escalada de privilegio."
     }
   ]
 }
