@@ -929,6 +929,11 @@ correspondió en 2-C-1 para el puente de genealogía— porque el certificado es
 código, justo en el artefacto cuyo valor es probatorio, sería el error. El
 criterio se copió de `custody_physical_units_read` (`0250a:68-73`).
 
+**R-19 · la política está MEDIDA**, no sólo leída: `t-c7-04-certificado-legible`
+la ejercita con `set role authenticated` —sin eso RLS no aplica y el test no
+mide nada— en sus dos lados, y sin la migración el rol operativo y el cliente
+dueño leen CERO.
+
 ### 11.3 · Cómo se extrajo el disparo sin arrastrar el proveedor
 
 | Módulo | Peso | Qué hace |
