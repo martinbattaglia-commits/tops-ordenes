@@ -1,9 +1,9 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-B** — la PUERTA DE EGRESO construida, los
-códigos de bloqueo traducidos y el 404 retirado (§10). Antes: juntura 2-A/2-B
-reconciliada con `main 9da9f04` (§9.7)
+**Última actualización:** **Bloque 2-C-1** — la puerta de egreso quedó OPERABLE:
+la foto se saca en despachos, inmediatamente antes de `confirmDispatchAction`
+(§10.8). Antes: 2-B construyó la puerta y tradujo los bloqueos (§10)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -773,9 +773,51 @@ comprobar, y **no es un defecto de `certificate-policy.ts`**.
 - Ninguna migración fuera de `0253`. `0251` y `0252` y sus ROLLBACK, verificados
   byte-idénticos a `acf090d1`.
 - El §7 visual, HN-1 y la sesión de UI siguen abiertos.
-- `registerEgressEvidence` y `custody_egress_gate_status` quedan **escritos y
-  probados pero sin consumidor en picking/packing/despachos**: cablear esa
-  superficie es trabajo de la sesión de UI, no de este bloque.
+- ~~`registerEgressEvidence` y `custody_egress_gate_status` quedan **escritos y
+  probados pero sin consumidor en picking/packing/despachos**~~ → **CERRADO por
+  2-C-1**, ver §10.8.
+
+### 10.8 · 2-C-1 · LA PUERTA DE EGRESO QUEDÓ OPERABLE
+
+La costura de §10.7 está cerrada: `registerEgressEvidence` y
+`custody_egress_gate_status` tienen consumidor.
+
+**Dónde quedó la captura, exactamente.** En `/wms/despachos/[id]`,
+**inmediatamente antes de `<DispatchActions>`** — el componente que contiene
+`confirmDispatchAction`, que es la acción que descuenta stock reservado, lotes y
+ledger. Es el momento que Dirección definió: entre el packing y el despacho, con
+el bulto cerrado y el bien todavía bajo control del depósito.
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Datos | `src/lib/custody/dispatch-egress.ts` | resuelve pedido → unidades → estado de la puerta |
+| Acción | `wms/despachos/actions.ts` · `registerDispatchEgressAction` | fuerza el par canónico, lee el NIVEL de la base y llama a `registerEgressEvidence` |
+| Pantalla | `wms/despachos/_components/DispatchEgressPanel.tsx` | un input por unidad, `capture="environment"`, guard de un solo vuelo |
+
+**El nivel 1 no ve nada, y no por una condición del componente.** El servidor
+devuelve `applies: false` y la página no monta el panel: sin panel, sin aviso y
+sin botón apagado. Un `if (level < 2) return null` adentro habría dejado el
+componente en el árbol, que es justo lo que el bloque prohíbe.
+
+**Por qué hizo falta una lectura administrativa, y por qué no es un atajo.**
+`custody_egress_gate_status` es POR UNIDAD y la pantalla es POR PEDIDO. El puente
+es `custody_allocation_physical_units`, que tiene **RLS habilitada y ninguna
+política de SELECT**: con el cliente de sesión devuelve cero filas aunque el
+grant exista. Las allocations salen de la SESIÓN, la lectura admin es un mapeo
+cerrado sobre esas allocations, y el estado de cada unidad se pide otra vez por
+SESIÓN con la RPC, que exige `wms.view` y compara el tenant. La autorización
+está ahí, no en el mapeo.
+
+**Sin migración.** La cadena de compuertas de 0253 ya muerde; no se agregó
+ninguna. El lease `0254` quedó **sin usar**.
+
+**Lo que este bloque NO hace, y hay que saberlo:** la captura desde despacho
+**no dispara el análisis**. El camino del caso
+(`registerPhysicalEgressAction`) sí lo hace, pero ese disparo arrastra
+`OpenAICustodyVisionProvider` al grafo de despachos — la misma clase de
+acoplamiento que obligó a extraer `physical-ingress.ts` en 2-A. La evaluación y
+la decisión humana siguen viviendo en `/wms/custody/[id]`, que es donde trabaja
+el inspector.
 
 ---
 
