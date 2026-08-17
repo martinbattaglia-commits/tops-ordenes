@@ -29,6 +29,7 @@
  * de módulos, que es la propiedad que 2-A perdió.
  */
 import { describe, expect, it } from "vitest";
+import ts from "typescript";
 import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
@@ -81,16 +82,86 @@ function archivosDe(rel: string): string[] {
 }
 
 /**
- * Imports ESTÁTICOS de un archivo. Deliberadamente NO cuenta `import(` —el
- * dinámico— porque es la costura que separa los dos grafos.
+ * ─── H-1 · POR QUÉ ESTO YA NO ES UNA REGEX ───────────────────────────────
+ *
+ * La primera versión usaba `/(?:import|export)\s+(?!type\s)[^;\n]*?from .../`.
+ * Ese `[^;\n]` EXCLUYE el salto de línea, así que **todo import multilínea era
+ * invisible**:
+ *
+ *     import {
+ *       OpenAICustodyVisionProvider,
+ *     } from "@/lib/custody/openai-vision-provider";
+ *
+ * No hace falta mala fe para producirlo: Prettier envuelve solo cualquier import
+ * que pase el ancho de línea, y ese formato abunda en el repositorio. C4 lo
+ * reprodujo inyectando exactamente eso en una de las cinco semillas y el guard
+ * siguió devolviendo `ofensores = []`.
+ *
+ * Un instrumento también es código. Se reemplaza por el AST del compilador de
+ * TypeScript, que es lo que ya usa `clients-native-only.test.ts` —el otro guard
+ * de clausura del repositorio— y que no tiene forma de equivocarse con el
+ * formato. El control de abajo demuestra el falso negativo del parser viejo.
  */
-function importsEstaticos(fuente: string): string[] {
+function parsear(nombre: string, fuente: string): ts.SourceFile {
+  return ts.createSourceFile(
+    nombre,
+    fuente,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+    /\.tsx$/.test(nombre) ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+}
+
+function recorrer(nodo: ts.Node, visita: (n: ts.Node) => void): void {
+  visita(nodo);
+  nodo.forEachChild((h) => recorrer(h, visita));
+}
+
+/**
+ * ¿La cláusula importa SÓLO tipos? TypeScript los borra y no llegan al bundle,
+ * así que no son aristas del grafo que este guard mide. Cubre las dos formas:
+ * `import type { A } from` y `import { type A, type B } from`.
+ */
+function soloTipos(clause: ts.ImportClause | undefined): boolean {
+  if (!clause) return false; // `import "x"` es efecto de módulo: SÍ es arista.
+  if (clause.isTypeOnly) return true;
+  const b = clause.namedBindings;
+  if (b && ts.isNamedImports(b) && b.elements.length > 0 && !clause.name) {
+    return b.elements.every((e) => e.isTypeOnly);
+  }
+  return false;
+}
+
+/**
+ * Imports ESTÁTICOS de un archivo, por AST. El `import()` DINÁMICO se excluye a
+ * propósito: es la costura que separa los dos grafos.
+ */
+function importsEstaticos(fuente: string, nombre = "m.ts"): string[] {
   const out: string[] = [];
-  // `import ... from "x"` y `export ... from "x"`, en cualquier forma.
-  // `import type` / `export type` NO son aristas: TypeScript las borra y no
-  // llegan al bundle. Contarlas mediría un grafo que no existe en ejecución.
+  recorrer(parsear(nombre, fuente), (n) => {
+    if (ts.isImportDeclaration(n)) {
+      if (soloTipos(n.importClause)) return;
+      if (ts.isStringLiteralLike(n.moduleSpecifier)) out.push(n.moduleSpecifier.text);
+    } else if (ts.isExportDeclaration(n)) {
+      if (n.isTypeOnly || !n.moduleSpecifier) return;
+      if (ts.isStringLiteralLike(n.moduleSpecifier)) out.push(n.moduleSpecifier.text);
+    } else if (ts.isImportEqualsDeclaration(n) && ts.isExternalModuleReference(n.moduleReference)) {
+      const e = n.moduleReference.expression;
+      if (ts.isStringLiteralLike(e)) out.push(e.text);
+    }
+    // `import()` es CallExpression con ImportKeyword: NO se cuenta.
+  });
+  return out;
+}
+
+/**
+ * El parser VIEJO, conservado ÚNICAMENTE para el control rojo→verde de H-1. No
+ * lo usa el guard: si alguien lo llamara desde la clausura, el falso negativo
+ * volvería.
+ */
+function importsEstaticosRegexLegacy(fuente: string): string[] {
+  const out: string[] = [];
   const re = /(?:^|\n)\s*(?:import|export)\s+(?!type\s)[^;\n]*?from\s*["']([^"']+)["']/g;
-  // `import "x"` sin cláusula (efecto de módulo).
   const reBare = /(?:^|\n)\s*import\s*["']([^"']+)["']/g;
   for (const m of fuente.matchAll(re)) out.push(m[1]);
   for (const m of fuente.matchAll(reBare)) out.push(m[1]);
@@ -125,7 +196,7 @@ function clausura(semillas: string[]): Set<string> {
     } catch {
       continue;
     }
-    for (const spec of importsEstaticos(src)) {
+    for (const spec of importsEstaticos(src, f)) {
       const r = resolver(f, spec);
       if (r && !vistos.has(r)) cola.push(r);
     }
@@ -178,7 +249,11 @@ describe("2-C-2 · el proveedor de visión NO entra al grafo estático de despac
       f.replace(`${RAIZ}/`, ""),
     );
     const ofensores = alcanzados.filter((f) => PROHIBIDOS.some((p) => f.includes(p)));
-    // Está — y es exactamente la que se documentó, ni una más.
+    // Está, y son exactamente los dos módulos prohibidos que se documentaron.
+    // `ofensores` cuenta MÓDULOS ALCANZADOS, no rutas de importación: una
+    // segunda vía hacia los mismos dos módulos NO cambiaría este arreglo. Lo
+    // que sí detecta es un módulo prohibido NUEVO, y la aserción de la cadena
+    // de abajo fija por dónde entra la que ya se conoce.
     expect(ofensores.sort()).toEqual([
       "src/lib/custody/openai-vision-provider.ts",
       "src/lib/custody/productive-vision-evaluation.ts",
@@ -200,5 +275,62 @@ describe("2-C-2 · el proveedor de visión NO entra al grafo estático de despac
       .filter((f) => /new\s+OpenAICustodyVisionProvider\s*\(/.test(readFileSync(f, "utf8")))
       .map((f) => f.replace(`${RAIZ}/`, ""));
     expect(instancian).toEqual(["src/lib/custody/vision-evaluation-composition.ts"]);
+  });
+});
+
+describe("H-1 · el parser del guard, con su propio control rojo→verde", () => {
+  /**
+   * El import multilínea EXACTO que C4 inyectó en `dispatch-egress.ts` —una de
+   * las cinco semillas— y que el guard viejo no vio. No es una forma rebuscada:
+   * es lo que Prettier produce solo al pasar el ancho de línea.
+   */
+  const MULTILINEA = [
+    "import {",
+    "  OpenAICustodyVisionProvider,",
+    '} from "@/lib/custody/openai-vision-provider";',
+    "",
+    "export const x = OpenAICustodyVisionProvider;",
+  ].join("\n");
+
+  it("ROJO · el parser VIEJO no ve el import multilínea (el falso negativo)", () => {
+    expect(importsEstaticosRegexLegacy(MULTILINEA)).not.toContain(
+      "@/lib/custody/openai-vision-provider",
+    );
+  });
+
+  it("VERDE · el parser NUEVO sí lo ve", () => {
+    expect(importsEstaticos(MULTILINEA)).toContain("@/lib/custody/openai-vision-provider");
+  });
+
+  /**
+   * Y el guard COMPLETO lo caza: se inyecta el import en una copia de una
+   * semilla real y se comprueba que la clausura lo alcanza. Es la propiedad que
+   * importa — que el parser mejore no sirve si el walker no lo usa.
+   */
+  it("VERDE · la clausura del guard alcanza el módulo prohibido inyectado", () => {
+    const semilla = join(RAIZ, "src/lib/custody/dispatch-egress.ts");
+    const original = readFileSync(semilla, "utf8");
+    // No se toca el archivo: se parsea el contenido mutado EN MEMORIA.
+    const mutado = `${MULTILINEA}\n${original}`;
+    expect(importsEstaticos(mutado, semilla)).toContain(
+      "@/lib/custody/openai-vision-provider",
+    );
+    expect(importsEstaticosRegexLegacy(mutado)).not.toContain(
+      "@/lib/custody/openai-vision-provider",
+    );
+  });
+
+  it("el import DINÁMICO sigue sin contar, que es la costura de 2-C-2", () => {
+    const din = 'const m = await import("@/lib/custody/vision-evaluation-composition");';
+    expect(importsEstaticos(din)).toEqual([]);
+  });
+
+  it("los imports SÓLO de tipo no son aristas, en sus dos formas", () => {
+    expect(importsEstaticos('import type { A } from "@/x";')).toEqual([]);
+    expect(importsEstaticos('import { type A, type B } from "@/x";')).toEqual([]);
+    // Pero uno MIXTO sí lo es: importa un valor.
+    expect(importsEstaticos('import { A, type B } from "@/x";')).toEqual(["@/x"]);
+    // Y `import "x"` es efecto de módulo: cuenta.
+    expect(importsEstaticos('import "server-only";')).toEqual(["server-only"]);
   });
 });

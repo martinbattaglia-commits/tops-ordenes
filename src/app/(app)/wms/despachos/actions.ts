@@ -93,6 +93,18 @@ export async function confirmDeliveryAction(
  * pasó nada. La DECISIÓN humana sigue viviendo en `/wms/custody/[id]`: acá se
  * captura y se evalúa, no se decide.
  *
+ * ─── D-3 · Y ESO AMPLÍA LA SUPERFICIE · APROBADO POR DIRECCIÓN ───────────
+ *
+ * Un comentario anterior decía que «las condiciones no cambiaron». Cambió una:
+ * **quién puede causar un disparo**. Esta acción exige
+ * `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`), no `wms.custody.decide`, así que
+ * ahora el operario de depósito dispara el análisis de su propio caso.
+ *
+ * Dirección lo asentó como D-3, «al servicio de D-2, con techo de gasto por caso
+ * conservado». El techo se verificó y está intacto: lease exclusivo y cooldown
+ * viven en `begin_custody_integrity_evaluation_v2` —que ya exigía `wms.edit`— y
+ * corren bajo la sesión del usuario. Ver el docblock de `analysis-trigger.ts`.
+ *
  * ─── F-1 · LA UNIDAD TIENE QUE SER DE ESTE PEDIDO ────────────────────────
  *
  * Hasta la remediación de C4 1/2, `orderId` entraba a esta acción y **sólo se

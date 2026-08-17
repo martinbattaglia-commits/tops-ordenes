@@ -947,6 +947,28 @@ Lo que la extracción garantiza, con precisión y sin prometer de más: el grafo
 `productive-vision-evaluation`. **No** vuelve inalcanzable al proveedor en
 ejecución, ni debe: el objetivo del bloque es que el análisis corra.
 
+**D-3 · la superficie de disparo SE AMPLIÓ, y está aprobado.** Antes el análisis
+se disparaba sólo desde el camino del caso; ahora también desde la captura de
+egreso en despachos, que exige `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`,
+`case-presentation.ts:423`) y **no** `CUSTODY_DECISION_PERMISSION`
+(`wms.custody.decide`). El operario que saca la foto ya no necesita el permiso de
+DECIDIR para que su caso se analice.
+
+Dirección lo asentó así: «La ampliación de quién dispara el análisis es decisión
+de Dirección al servicio de D-2, con techo de gasto por caso conservado.»
+
+**El techo por caso se VERIFICÓ, no se supuso:**
+
+| Control | Dónde vive | Estado |
+|---|---|---|
+| permiso para abrir la evaluación | `begin_custody_integrity_evaluation_v2` exige `assert_custody_access('wms.edit')` (`0250a`) | **ya era `wms.edit`** — la base admitía este disparo antes que la aplicación |
+| lease exclusivo | 0232 · `status='pending' for update` ⇒ `in_flight` + `retry_after_seconds` | intacto |
+| cooldown («techo de gasto») | `0250a` ⇒ `cooldown` + espera | intacto |
+
+Los tres corren dentro de esa función, invocada con el puerto construido sobre el
+cliente de **sesión**. Duplicar la superficie de disparo no duplica las llamadas
+pagas de un caso: el segundo disparo se encuentra el lease o el cooldown.
+
 ### 11.4 · 🔴 La fuga que el guard nuevo encontró · PREEXISTENTE
 
 El master dice que «el boundary guard lo va a cazar». **Medido: no lo cazaba.**
@@ -954,8 +976,20 @@ El master dice que «el boundary guard lo va a cazar». **Medido: no lo cazaba.*
 **no figura** ahí: ese guard protege el maestro de clientes. La propiedad que
 Dirección puso como causal de detención estaba **sin medir**.
 
-`custody-analysis-boundary.test.ts` la mide, y en su primera corrida encontró dos
-fugas reales:
+`custody-analysis-boundary.test.ts` la mide —**y en su primera versión la medía
+mal**—. C4 1/2 encontró que su parser usaba `[^;\n]`, que excluye el salto de
+línea, de modo que **todo import multilínea le era invisible**: justamente el
+formato que Prettier produce solo al pasar el ancho de línea. Reproducido
+inyectando un import multilínea del proveedor en una de las cinco semillas, el
+guard seguía devolviendo `ofensores = []`.
+
+El parser se reemplazó por el **AST del compilador de TypeScript**, que es el
+instrumento que ya usa `clients-native-only.test.ts` y que no puede equivocarse
+con el formato. Y el guard tiene ahora **su propio control rojo→verde**: el
+parser viejo se conserva en el archivo, usado ÚNICAMENTE por el test que
+demuestra el falso negativo. Un instrumento también es código.
+
+En su primera corrida el guard encontró dos fugas reales:
 
 1. **`sniffCustodyVisionMime`** vivía en `productive-vision-evaluation.ts`, y
    `physical-ingress.ts` lo importaba. **Todo el que registraba evidencia

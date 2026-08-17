@@ -69,10 +69,44 @@ interface CaseRow {
 /**
  * Dispara el análisis si el par de fotos quedó completo y el caso sigue abierto.
  *
- * Las condiciones son las MISMAS que las del camino del caso, copiadas y no
- * reinterpretadas: par completo, sin decisión registrada y estado no terminal.
- * Dos criterios distintos para el mismo disparo divergen, y entonces la foto
- * sacada desde despachos evaluaría en casos donde la sacada desde el caso no.
+ * Las condiciones DEL CASO son las mismas que las del camino del caso, copiadas
+ * y no reinterpretadas: par completo, sin decisión registrada y estado no
+ * terminal. Dos criterios distintos para el mismo disparo divergen, y entonces
+ * la foto sacada desde despachos evaluaría en casos donde la sacada desde el
+ * caso no.
+ *
+ * ─── D-3 · LA SUPERFICIE SÍ SE AMPLIÓ · DECISIÓN DE DIRECCIÓN ────────────
+ *
+ * Lo que CAMBIÓ, y hay que decirlo porque antes este comentario afirmaba que no
+ * cambiaba nada: **quién puede causar un disparo**.
+ *
+ * Antes el análisis se disparaba sólo desde el camino del caso. Ahora también
+ * lo dispara la captura de egreso en despachos, que está gobernada por
+ * `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`, `case-presentation.ts:423`) y no por
+ * `CUSTODY_DECISION_PERMISSION` (`wms.custody.decide`). El operario que saca la
+ * foto ya no necesita el permiso de DECIDIR para que su caso se analice.
+ *
+ * Dirección lo aprobó y lo asentó como D-3: «La ampliación de quién dispara el
+ * análisis es decisión de Dirección al servicio de D-2, con techo de gasto por
+ * caso conservado.»
+ *
+ * ─── EL TECHO POR CASO NO SE MUEVE · VERIFICADO, NO SUPUESTO ─────────────
+ *
+ * La superficie se amplía; el techo por caso, no. Y no porque este módulo se
+ * abstenga, sino porque el techo nunca vivió acá:
+ *
+ *   · `begin_custody_integrity_evaluation_v2` exige `assert_custody_access(
+ *     'wms.edit')` (`0250a`), **el mismo permiso** que la captura — o sea que la
+ *     base ya admitía este disparo antes de que la aplicación lo ofreciera;
+ *   · el LEASE EXCLUSIVO de 0232 toma la fila `status='pending' for update` y
+ *     devuelve `in_flight` con `retry_after_seconds` si hay una viva;
+ *   · el COOLDOWN —comentado en la propia migración como «techo de gasto»—
+ *     devuelve `cooldown` con su espera.
+ *
+ * Los tres corren DENTRO de esa función, y este módulo la invoca con el puerto
+ * construido sobre el cliente de SESIÓN, así que se aplican bajo el usuario.
+ * Duplicar la superficie de disparo no duplica las llamadas pagas de un caso:
+ * el segundo disparo se encuentra el lease o el cooldown.
  */
 export async function triggerAnalysisIfPairComplete(
   physicalUnitId: string | null | undefined,
