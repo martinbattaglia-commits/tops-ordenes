@@ -179,6 +179,19 @@ export const env = {
     mapEnabled: Boolean(process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim()),
     /** True si la ingesta está habilitada (token presente). */
     configured: Boolean(process.env.TRACKING_INGEST_TOKEN?.trim()),
+    /**
+     * PILOTO HARDWARE (FMC130 vía Traccar Server → forward).
+     * Secreto Bearer que Traccar Server envía a /api/tracking/traccar-forward.
+     * Se configura en .env.local / Netlify — NUNCA hardcodeado en repo.
+     */
+    forwardSecret: process.env.TRACKING_FORWARD_SECRET?.trim() ?? "",
+    /** True si el endpoint de forward está habilitado (secreto presente). */
+    forwardConfigured: Boolean(process.env.TRACKING_FORWARD_SECRET?.trim()),
+    /**
+     * Mapa JSON IMEI → { device_identifier, vehicle_code } del forward de
+     * hardware. String crudo; se parsea con validación en device-map.ts.
+     */
+    deviceMapRaw: process.env.TRACCAR_DEVICE_MAP?.trim() ?? "",
   },
   arca: {
     /**
