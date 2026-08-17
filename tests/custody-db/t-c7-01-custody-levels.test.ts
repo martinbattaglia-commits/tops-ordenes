@@ -10,13 +10,20 @@
  *
  * ─── LO QUE ESTE ARCHIVO PRUEBA Y POR QUÉ IMPORTA ────────────────────────
  *
- * Que el nivel 1 NO abre caso es la mitad fácil. La mitad que cuesta cara es
- * que el nivel 1 siga siendo DESPACHABLE: `custody_bind_allocation` vinculaba
- * cualquier unidad del ítem a la genealogía, y al despachar
- * `custody_assert_physical_unit_released` exige caso y certificado. Una unidad
- * de nivel 1 —que por definición no los tiene— habría quedado indespachable
- * para siempre. Por eso 0252 corrige tres funciones y no una, y por eso acá se
- * prueban las tres.
+ * Este archivo prueba las PREMISAS del nivel 1 por separado: que no abre caso,
+ * que el gate por unidad lo exceptúa, que el régimen queda estampado.
+ *
+ * ⚠ LAS PREMISAS NO ALCANZAN, Y ESTE ARCHIVO ES LA PRUEBA DE ELLO.
+ *
+ * Una versión anterior afirmaba acá que la genealogía quedaba VACÍA para el
+ * nivel 1 —`expect(gen.n).toBe("0")`— y lo presentaba como corrección. Era la
+ * PRECONDICIÓN DEL FALLO: con la tabla vacía,
+ * `custody_assert_allocation_released` entra por la rama `v_n=0` y levanta
+ * `CUSTODY_GENEALOGY_MISSING` antes de llegar al gate por unidad. El nivel 1
+ * quedaba indespachable y estos tests seguían en verde.
+ *
+ * La composición —recorrer hasta DESPACHAR de verdad— vive en `t-c7-03`. Este
+ * archivo se queda con lo que sí sabe probar, y lo dice.
  */
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { Client } from "pg";
@@ -134,8 +141,10 @@ describe("T-C7-01 · el trigger dejó de ser incondicional", () => {
   });
 });
 
-describe("T-C7-01 · el nivel 1 SIGUE SIENDO DESPACHABLE", () => {
-  it("no entra a la genealogía: `custody_bind_allocation` lo ignora", async () => {
+describe("T-C7-01 · premisas del nivel 1 · la composición está en t-c7-03", () => {
+  it("SÍ entra a la genealogía, como cualquier unidad: el nivel se juzga en el gate", async () => {
+    // Excluirlo del vínculo fue el blocker: destruía la información que el gate
+    // necesita para distinguir «no hay custodia contratada» de «falta cobertura».
     const clientId = await cliente(1);
     const m = await recibir(clientId);
     expect(m.caseId).toBeNull();
@@ -167,18 +176,19 @@ describe("T-C7-01 · el nivel 1 SIGUE SIENDO DESPACHABLE", () => {
         where allocation_id = $1`,
       [alloc[0].id],
     );
-    // ANTES de 0252 esto era 1, y esa fila condenaba la allocation: al
-    // despachar, el gate habría exigido un caso que el nivel 1 no tiene.
-    expect(gen[0].n).toBe("0");
+    // La fila EXISTE. Que exista es lo que permite a
+    // `custody_assert_allocation_released` ver que todas las unidades que
+    // cubren la allocation son de nivel 1 y no exigir nada.
+    expect(gen[0].n).toBe("1");
   });
 
-  it("el gate exceptúa explícitamente al nivel 1 en vez de exigirle un caso", async () => {
+  it("el gate POR UNIDAD exceptúa al nivel 1 · premisa, no composición", async () => {
     const m = await recibir(await cliente(1));
     await actAsServer(db);
-    // `custody_assert_physical_unit_released` está revocada para todos los
-    // roles, así que se ejerce por el mismo camino que la usa la base: una
-    // función SECURITY DEFINER. Acá se invoca directamente como superusuario
-    // del harness, que es el dueño.
+    // OJO: esto invoca la función DIRECTAMENTE y se saltea
+    // `custody_assert_allocation_released`, que es quien la antecede en el
+    // camino real. Es una premisa útil y NO prueba que el nivel 1 despache:
+    // eso lo prueba `t-c7-03`, que pasa la allocation a 'despachada'.
     await expect(
       db.query(`select public.custody_assert_physical_unit_released($1::uuid)`, [m.unitId]),
     ).resolves.toBeDefined();

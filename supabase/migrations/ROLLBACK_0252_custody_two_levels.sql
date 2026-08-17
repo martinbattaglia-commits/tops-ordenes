@@ -3,9 +3,10 @@
 --
 -- Inversa lógica e IDEMPOTENTE de 0252. NO es forward.
 --
--- Devuelve las tres funciones a su cuerpo de 0250a —materialización
--- incondicional, genealogía sin filtro de nivel y gate sin excepción— y retira
--- las dos superficies de lectura que 0252 agregó.
+-- Devuelve las CINCO funciones a su cuerpo previo —materialización
+-- incondicional, genealogía de 0250a, los dos gates sin excepción de nivel y el
+-- adjunto de evidencia de 0251— y retira las tres superficies de lectura que
+-- 0252 agregó.
 --
 -- ─── LO QUE NO DESHACE, A PROPÓSITO ──────────────────────────────────────
 --
@@ -203,6 +204,61 @@ end;
 $$;
 revoke all on function public.custody_assert_physical_unit_released(uuid)
   from public,anon,authenticated,service_role;
+
+-- -------------------------------------------------------------------------
+-- 4b. `custody_assert_allocation_released` vuelve al cuerpo de 0250a
+--     (sin condición de nivel: toda allocation exige cobertura exacta)
+-- -------------------------------------------------------------------------
+
+create or replace function public.custody_assert_allocation_released(p_allocation_id uuid)
+returns void language plpgsql security definer set search_path=public as $$
+declare
+  a public.stock_allocations;
+  lc public.custody_legacy_release_allocation_coverage;
+  v_sum numeric;
+  v_n int;
+  x record;
+begin
+  select * into a from public.stock_allocations where id=p_allocation_id for share;
+  if not found then raise exception 'allocation inexistente' using errcode='no_data_found'; end if;
+  select coalesce(sum(g.quantity),0),count(distinct g.physical_unit_id)
+    into v_sum,v_n from public.custody_allocation_physical_units g
+   where g.allocation_id=a.id;
+  if v_n=0 or v_sum<>a.quantity then
+    select coverage.* into lc
+      from public.custody_legacy_release_allocation_coverage coverage
+      join public.packing_unit_items pui
+        on pui.id=coverage.packing_unit_item_id
+       and pui.allocation_id=coverage.allocation_id
+       and pui.packing_unit_id=coverage.packing_unit_id
+       and pui.quantity=coverage.quantity
+      join public.packing_units pu on pu.id=coverage.packing_unit_id
+      join public.custody_release_certificates rc
+        on rc.id=coverage.certificate_id
+       and rc.basis='legacy_human'
+       and rc.chain_head_at_release=coverage.chain_head_at_release
+       and (
+         (rc.packing_unit_id is not null and rc.packing_unit_id=coverage.packing_unit_id)
+         or (rc.shipment_id is not null and rc.shipment_id=pu.shipment_id)
+       )
+      join public.custody_integrity_cases c
+        on c.id=rc.case_id and c.state='RELEASED' and c.decision_id=rc.decision_id
+     where coverage.allocation_id=a.id;
+    if found then
+      perform public.custody_assert_release_certificate(lc.certificate_id);
+      return;
+    end if;
+    raise exception 'CUSTODY_GENEALOGY_MISSING: allocation sin cobertura física exacta'
+      using errcode='check_violation';
+  end if;
+  for x in select physical_unit_id from public.custody_allocation_physical_units
+            where allocation_id=a.id order by physical_unit_id
+  loop perform public.custody_assert_physical_unit_released(x.physical_unit_id); end loop;
+end;
+$$;
+revoke all on function public.custody_assert_allocation_released(uuid)
+  from public,anon,authenticated,service_role;
+
 
 -- -------------------------------------------------------------------------
 -- 5. `attach_custody_physical_evidence` vuelve al cuerpo de 0251

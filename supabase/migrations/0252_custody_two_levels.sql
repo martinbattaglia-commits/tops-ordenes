@@ -250,13 +250,28 @@ revoke all on function public.custody_materialize_reception_item_row(uuid)
 
 
 -- -------------------------------------------------------------------------
--- 6. La genealogía sólo vincula unidades de NIVEL 2
+-- 6. La genealogía vincula TODAS las unidades · como en 0250a
 --
--- Vincular una unidad de nivel 1 la sometería a `custody_assert_allocation_released`,
--- que exige caso y certificado. El nivel 1 no los tiene por definición, así que
--- entraría a la genealogía sólo para volverse indespachable.
+-- ⚠ ACÁ ESTUVO EL BLOCKER, Y LA PROTECCIÓN FUE LA TRAMPA.
 --
--- El resto del cuerpo se reproduce sin cambios respecto de 0250a.
+-- Una versión anterior de esta migración excluía el nivel 1 del vínculo
+-- (`and pu.custody_level >= 2`) razonando que entrar a la genealogía lo
+-- sometería a `custody_assert_allocation_released`, que exige caso y
+-- certificado. El razonamiento era correcto en la premisa y catastrófico en la
+-- conclusión: **estar AUSENTE de la genealogía es exactamente lo que dispara el
+-- rechazo**. Con la tabla vacía, esa misma función entra por la rama `v_n=0`,
+-- busca cobertura legacy —que una recepción nueva no tiene— y levanta
+-- `CUSTODY_GENEALOGY_MISSING`. El nivel 1 quedaba indespachable.
+--
+-- Peor: excluirlo DESTRUÍA la información necesaria para razonar. Sin las filas
+-- no hay forma de saber qué parte de una allocation es nivel 1 y qué parte es
+-- nivel 2, y las allocations MIXTAS son posibles: `inventory_items` se resuelve
+-- por (client_name, sku, position_id), así que dos recepciones del mismo bien
+-- —una nivel 1 y otra elevada a nivel 2— acumulan en el mismo ítem.
+--
+-- Se restituye el cuerpo de 0250a, sin filtro. La condición por nivel va donde
+-- corresponde: en los GATES (§7 y §7a), que es donde se decide qué se exige, no
+-- en el vínculo, que es donde se registra qué cubre a qué.
 -- -------------------------------------------------------------------------
 
 create or replace function public.custody_bind_allocation(p_allocation_id uuid)
@@ -286,8 +301,6 @@ begin
       ),0) as available
     from public.custody_physical_units pu
     where pu.inventory_item_id=a.inventory_item_id
-      -- 0252 · D3. El nivel 1 no entra a la genealogía: no tiene gate.
-      and pu.custody_level >= 2
       and not exists(
         select 1 from public.custody_allocation_physical_units g2
          where g2.allocation_id=a.id and g2.physical_unit_id=pu.id
@@ -312,13 +325,20 @@ revoke all on function public.custody_bind_allocation(uuid)
 
 
 -- -------------------------------------------------------------------------
--- 7. El gate reconoce el nivel 1 — defensa en profundidad
+-- 7. El gate POR UNIDAD reconoce el nivel 1
 --
--- Con el punto 6 una unidad de nivel 1 no debería llegar acá. Si llegara por
--- una genealogía anterior a 0252 o por un camino futuro, el gate tiene que
--- decir la verdad —el nivel 1 no tiene gate— en vez de levantar
--- `CUSTODY_CASE_MISSING`, que sería culpar a la unidad de no tener algo que su
--- régimen no contempla.
+-- Con §6 restituido, toda unidad —de cualquier nivel— entra a la genealogía y
+-- `custody_assert_allocation_released` la recorre. Esta función es entonces el
+-- gate OPERATIVO, no una defensa en profundidad: es la que decide, unidad por
+-- unidad, si hay que exigir caso y certificado.
+--
+-- (Una versión anterior de este comentario la describía como defensa en
+-- profundidad «por si una unidad de nivel 1 llegara acá». Era al revés: era la
+-- única corregida y, con la exclusión de §6, la única INALCANZABLE.)
+--
+-- Es también lo que resuelve la allocation MIXTA sin ningún caso especial: cada
+-- unidad se juzga por el régimen con el que ENTRÓ. La de nivel 2 pasa los cinco
+-- chequeos completos; la de nivel 1 no tiene nada que pasar.
 --
 -- El resto del cuerpo se reproduce sin cambios respecto de 0250a.
 -- -------------------------------------------------------------------------
@@ -361,6 +381,102 @@ revoke all on function public.custody_assert_physical_unit_released(uuid)
   from public,anon,authenticated,service_role;
 
 
+
+
+-- -------------------------------------------------------------------------
+-- 7a. El gate de ALLOCATION, condicionado por nivel · QUINTA función
+--
+-- Es la que faltaba, y es la de afuera: `trg_stock_allocations_custody_release`
+-- llama a ÉSTA, y ÉSTA llama a la de §7. Corregir sólo la de adentro dejó el
+-- nivel 1 muriendo en la de afuera, antes de llegar.
+--
+-- ─── LA REGLA, Y CÓMO RESUELVE LA ALLOCATION MIXTA ───────────────────────
+--
+-- Se mira si ALGUNA de las unidades que cubren la allocation es de nivel 2:
+--
+--   · ninguna, y hay genealogía  ⇒ mercadería sin servicio de custodia digital.
+--     No se exige cobertura exacta ni certificado: no hay nada contratado que
+--     exigir. Sale por acá y no frena nada.
+--
+--   · alguna de nivel 2  ⇒ se aplican los CINCO chequeos de 0250a, sin una coma
+--     de diferencia. En una allocation MIXTA las unidades de nivel 1 cuentan
+--     para la cobertura —están en la genealogía, §6— y el recorrido por unidad
+--     las exceptúa una por una en §7, mientras cada unidad de nivel 2 pasa su
+--     gate completo. El nivel 2 no se afloja: se juzga cada bien por el régimen
+--     con el que entró.
+--
+--   · sin genealogía en absoluto (`v_n=0`)  ⇒ NO se puede conocer el nivel,
+--     porque el nivel vive en la unidad física y no hay ninguna. Se conserva
+--     EXACTAMENTE el camino de 0250a: cobertura legacy y, si no la hay,
+--     `CUSTODY_GENEALOGY_MISSING`. Fail-closed. Es el caso del stock ingresado
+--     por ajuste de inventario, que 0250a ya declaraba imposible de satisfacer
+--     y que esta migración no cambia.
+--
+-- El resto del cuerpo se reproduce sin cambios respecto de 0250a.
+-- -------------------------------------------------------------------------
+
+create or replace function public.custody_assert_allocation_released(p_allocation_id uuid)
+returns void language plpgsql security definer set search_path=public as $$
+declare
+  a public.stock_allocations;
+  lc public.custody_legacy_release_allocation_coverage;
+  v_sum numeric;
+  v_n int;
+  v_n2 int;
+  x record;
+begin
+  select * into a from public.stock_allocations where id=p_allocation_id for share;
+  if not found then raise exception 'allocation inexistente' using errcode='no_data_found'; end if;
+  select coalesce(sum(g.quantity),0),count(distinct g.physical_unit_id)
+    into v_sum,v_n from public.custody_allocation_physical_units g
+   where g.allocation_id=a.id;
+
+  -- 0252 · D3. ¿Hay custodia digital CONTRATADA en esta allocation?
+  select count(*) into v_n2
+    from public.custody_allocation_physical_units g
+    join public.custody_physical_units u on u.id=g.physical_unit_id
+   where g.allocation_id=a.id and u.custody_level>=2;
+
+  if v_n>0 and v_n2=0 then
+    -- Mercadería sin servicio de custodia digital: nada que exigir, nada que
+    -- frenar. La foto de ingreso, si existe, quedó en la cadena de la unidad.
+    return;
+  end if;
+
+  if v_n=0 or v_sum<>a.quantity then
+    select coverage.* into lc
+      from public.custody_legacy_release_allocation_coverage coverage
+      join public.packing_unit_items pui
+        on pui.id=coverage.packing_unit_item_id
+       and pui.allocation_id=coverage.allocation_id
+       and pui.packing_unit_id=coverage.packing_unit_id
+       and pui.quantity=coverage.quantity
+      join public.packing_units pu on pu.id=coverage.packing_unit_id
+      join public.custody_release_certificates rc
+        on rc.id=coverage.certificate_id
+       and rc.basis='legacy_human'
+       and rc.chain_head_at_release=coverage.chain_head_at_release
+       and (
+         (rc.packing_unit_id is not null and rc.packing_unit_id=coverage.packing_unit_id)
+         or (rc.shipment_id is not null and rc.shipment_id=pu.shipment_id)
+       )
+      join public.custody_integrity_cases c
+        on c.id=rc.case_id and c.state='RELEASED' and c.decision_id=rc.decision_id
+     where coverage.allocation_id=a.id;
+    if found then
+      perform public.custody_assert_release_certificate(lc.certificate_id);
+      return;
+    end if;
+    raise exception 'CUSTODY_GENEALOGY_MISSING: allocation sin cobertura física exacta'
+      using errcode='check_violation';
+  end if;
+  for x in select physical_unit_id from public.custody_allocation_physical_units
+            where allocation_id=a.id order by physical_unit_id
+  loop perform public.custody_assert_physical_unit_released(x.physical_unit_id); end loop;
+end;
+$$;
+revoke all on function public.custody_assert_allocation_released(uuid)
+  from public,anon,authenticated,service_role;
 
 -- -------------------------------------------------------------------------
 -- 7b. El adjunto de evidencia acepta el NIVEL 1
@@ -425,14 +541,30 @@ begin
    where physical_unit_id=p_physical_unit_id for update;
   v_con_caso := found;
 
-  -- 0252 · NIVEL 1. Sin caso no hay aparato que actualizar, pero la foto sí se
-  -- registra: es la evidencia defensiva que el nivel 1 contrata.
+  -- 0252 · NIVEL 1. Sin caso no hay aparato que actualizar, pero la foto de
+  -- INGRESO sí se registra: es la evidencia defensiva que el nivel 1 contempla.
   if not v_con_caso then
     if v_level >= 2 then
       raise exception 'CUSTODY_CASE_MISSING' using errcode='integrity_constraint_violation';
     end if;
     if p_event_type='inspeccion_humana' then
       raise exception 'la inspección humana exige un caso de integridad'
+        using errcode='object_not_in_prerequisite_state';
+    end if;
+    -- RESOLUCIÓN DE DIRECCIÓN · el nivel 1 NO TIENE foto de egreso.
+    --
+    -- No se construye una guarda antirreuso para este nivel, y el motivo es que
+    -- por ese mecanismo el nivel 1 NO ES GUARDABLE: la guarda de 0250a se ancla
+    -- en `v_case.ingress_evidence_id`, y sin caso ese campo es nulo, así que la
+    -- comparación jamás da verdadera. Cualquier arreglo por ahí sería un no-op
+    -- con aspecto de arreglo.
+    --
+    -- La pregunta correcta no era cómo vigilar el reuso, sino por qué la base
+    -- aceptaba una foto de egreso sobre una unidad que no tiene circuito de
+    -- egreso. Se rechaza, y el mensaje dice QUÉ PASA, no un código.
+    if p_event_type='foto_egreso' then
+      raise exception
+        'esta unidad no está bajo custodia digital y no lleva foto de egreso'
         using errcode='object_not_in_prerequisite_state';
     end if;
   else

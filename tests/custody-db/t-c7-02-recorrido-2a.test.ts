@@ -129,7 +129,8 @@ async function recorrido2A(opts: {
   let ingressSha256: string | null = null;
   if (conFoto) {
     const contenido = uid("ING");
-    ingressSha256 = sha(contenido);
+    // El digest que se ENVÍA: la atestación lo exige por adelantado.
+    const enviado = sha(contenido);
     const path = `physical_unit/${u.physical_unit_id}/recepcion/${uid("obj")}.png`;
 
     await actAsServer(db);
@@ -137,7 +138,7 @@ async function recorrido2A(opts: {
       `select public.attest_custody_physical_content(
          'custody-evidence', $1, $2, $3, 'image/png', $4::uuid, $5::uuid, $6::uuid,
          'recepcion'::public.custody_stage_t, 'foto_ingreso'::public.custody_event_type_t, 900) as id`,
-      [path, ingressSha256, contenido.length, staff.userId, staff.sessionId, u.physical_unit_id],
+      [path, enviado, contenido.length, staff.userId, staff.sessionId, u.physical_unit_id],
     );
     await actAsWithSession(db, staff, staff.sessionId);
     await db.query(
@@ -146,6 +147,21 @@ async function recorrido2A(opts: {
          'foto_ingreso'::public.custody_event_type_t, $2, $3::uuid, 'ingreso.png', null, null, null)`,
       [u.physical_unit_id, path, att[0].id],
     );
+
+    // El contrato de enganche devuelve lo que la BASE registró, no lo que el
+    // fixture calculó. 2-B construye sobre esto: si alguna vez el digest
+    // almacenado dejara de coincidir con los bytes, el enganche tiene que
+    // reflejarlo en vez de repetir el valor esperado.
+    await actAsServer(db);
+    const { rows: reg } = await db.query<{ evidence_sha256: string }>(
+      `select evidence_sha256 from public.custody_events
+        where physical_unit_id = $1 and event_type = 'foto_ingreso'
+        order by chain_seq desc limit 1`,
+      [u.physical_unit_id],
+    );
+    ingressSha256 = reg[0]?.evidence_sha256 ?? null;
+    // Y se comprueba acá, una vez, que coincide con los bytes enviados.
+    expect(ingressSha256).toBe(enviado);
   }
 
   return {

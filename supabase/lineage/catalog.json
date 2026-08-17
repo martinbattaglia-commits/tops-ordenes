@@ -2700,7 +2700,7 @@
     {
       "id": "0252_custody_two_levels.sql",
       "filename": "0252_custody_two_levels.sql",
-      "sha256": "27ca09b91046e2f3f8c8b73dc34feef36ca7253eb3a4fe7aa483fd18877ad266",
+      "sha256": "427900064bbc7695c1073348de70d09240754abf226b2e1195a7681ae0a8d85c",
       "orden": 236,
       "requires": [
         "0251_custody_decide_authority.sql"
@@ -2714,7 +2714,7 @@
     {
       "id": "ROLLBACK_0252_custody_two_levels.sql",
       "filename": "ROLLBACK_0252_custody_two_levels.sql",
-      "sha256": "f2de23997eb918a5ed5bb0440a8d3bfde35533ee0893ec0c85d8e2ab7797441c",
+      "sha256": "9a56dcd763f1bfc1e8e2538bf526907dcba8cdc416f8e548c3578e70f0e76442",
       "orden": 237,
       "requires": [],
       "estado": "rollback",

@@ -1,8 +1,8 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-A** — la foto de ingreso se toma en la
-recepción y la custodia tiene dos niveles
+**Última actualización:** **Bloque 2-A · remediación** — el nivel 1 despacha, con
+y sin foto
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -560,20 +560,40 @@ hizo falta ninguna RPC nueva de materialización, y por eso no se escribió.** E
 emparejamiento foto↔unidad es por `reception_item_id`, que es UNIQUE: por SKU y
 lote habría fallado con dos líneas iguales.
 
-**Los dos niveles exigieron corregir CUATRO funciones, no una.** Hacer
-condicional sólo la materialización dejaba el nivel 1 peor que antes:
+**Los dos niveles tocan CINCO funciones**, y la quinta llegó tarde:
 
-| Función | Por qué también |
+| Función | Qué hace por nivel |
 |---|---|
 | `custody_materialize_reception_item_row` | el caso es aparato de nivel 2 |
-| `custody_bind_allocation` | vinculaba cualquier unidad a la genealogía |
-| `custody_assert_physical_unit_released` | exigía caso ⇒ nivel 1 indespachable |
-| `attach_custody_physical_evidence` | exigía caso ⇒ **el nivel 1 no podía registrar su foto**, que es su única razón de ser |
+| `custody_bind_allocation` | **vincula TODAS las unidades**, como 0250a |
+| `custody_assert_allocation_released` | sin unidades de nivel 2 ⇒ no exige nada |
+| `custody_assert_physical_unit_released` | exceptúa la unidad de nivel 1 |
+| `attach_custody_physical_evidence` | acepta la foto de ingreso del nivel 1 y **rechaza** su foto de egreso |
 
-Las tres primeras salieron de leer el camino entero; **la cuarta la encontró la
-prueba de recorrido**, no una lectura.
+⚠ **La primera versión de 2-A excluía el nivel 1 de la genealogía, y eso era el
+blocker.** El razonamiento —«entrar a la genealogía lo sometería al gate»— era
+correcto en la premisa y catastrófico en la conclusión: **estar AUSENTE de la
+genealogía es exactamente lo que dispara `CUSTODY_GENEALOGY_MISSING`**. Además
+destruía la información necesaria para razonar sobre allocations MIXTAS, que son
+posibles porque `inventory_items` se resuelve por (client_name, sku, position_id).
 
-### 9.7 · Verificación pendiente de Dirección
+La corrección revierte la exclusión y pone la condición en el GATE, no en el
+vínculo. La allocation mixta se resuelve sin caso especial: cada bien se juzga
+por el régimen con el que ENTRÓ.
+
+### 9.7 · Definición de negocio de los dos niveles (Dirección)
+
+**NIVEL 1 — sin servicio de custodia digital.** La foto de ingreso es OPCIONAL;
+su ausencia **no bloquea nada**: ni recepción, ni carga, ni reserva, ni despacho.
+No pasa por IA, cuarentena, foto de egreso ni certificado. **No lleva foto de
+egreso**: la base la rechaza con motivo legible, no con un código.
+
+**NIVEL 2 — custodia contratada.** Todo obligatorio, sin aflojar nada.
+
+**Línea roja:** ninguna excepción del nivel 1 afloja el nivel 2. Toda excepción
+va acotada por nivel.
+
+### 9.8 · Verificación pendiente de Dirección
 
 **No se comprobó, y no se podía:** que Martin Battaglia, José Luis Rodríguez y
 Martín Rinas —y sólo ellos— tengan hoy rol `admin`. Es una lectura de base
