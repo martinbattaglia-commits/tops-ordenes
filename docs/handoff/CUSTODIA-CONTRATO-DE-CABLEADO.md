@@ -1,8 +1,9 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-A · remediación 2** — la cobertura se
-controla ANTES de la salida temprana; fail-closed restituido (§9.6.1)
+**Última actualización:** **Juntura 2-A/2-B** — reconciliado con `main 9da9f04`
+(§9.7). Antes: bloque 2-A · remediación 2 — la cobertura se controla ANTES de la
+salida temprana; fail-closed restituido (§9.6.1)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -87,7 +88,7 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 8 | Códigos de gate de despacho (los seis `CUSTODY_*`) | `CUSTODY_CASE_MISSING` `0250a:2304` · `CUSTODY_HOLD` `0250a:2307` · `CUSTODY_RELEASE_CERTIFICATE_MISSING` `0250a:2312` · `CUSTODY_CHAIN_ADVANCED_AFTER_RELEASE` `0250a:2316` · `CUSTODY_GENEALOGY_MISSING` `0250a:2361` · `CUSTODY_ZERO_APPLICABLE_CASES` `0250a:2401` | **ningún traductor** · `grep -rn "CUSTODY_HOLD\|CUSTODY_GENEALOGY_MISSING\|..." src/` → 0 resultados | — | — | el error crudo de PostgreSQL sube tal cual al despachante | — | **CORTADO EN lectura** |
 | 9 | Puente recepción → caso de custodia | mismo trigger, con `custody_materialize_reception_item_row` **condicional** (0252 §5): la unidad siempre, el caso sólo en nivel 2 | `custody_reception_units` (0252 §8) | — | `ReceptionCustodyUnit` en `recepciones/actions.ts` | lista posterior a confirmar, con enlace a cada caso | la función sigue revocada para todos los roles: corre **sólo** como trigger | **CABLEADO** |
 | 15 | Nivel de custodia contratado (D3) | `clients.custody_level` (default 1) · `receptions.custody_reforzada` (eleva, nunca degrada) · `custody_physical_units.custody_level` (default 2: preserva lo ya materializado) · 0252 §1-§4 | `custody_client_level` (SECURITY DEFINER, exige `wms.view`) — `clients` pide `clientes.view` por RLS y un encargado de depósito no lo tiene | — | estado local del formulario | casilla «esta mercadería ingresa por custodia digital reforzada» · `data-custodia="reforzada"` | `wms.view` para leer el nivel | **CABLEADO** |
-| 16 | Foto de ingreso tomada en la RECEPCIÓN (I4) | `attach_custody_physical_evidence`, ahora también para nivel 1 (0252 §7b) | `attachPhysicalEvidence` en `src/lib/custody/physical-ingress.ts` | — | `createConfirmAndCaptureAction` | input por ítem con `capture="environment"` en `NewReceptionForm` · `data-foto-ingreso` | `wms.edit` | **CABLEADO** |
+| 16 | Foto de ingreso tomada en la RECEPCIÓN (I4) | `attach_custody_physical_evidence`, ahora también para nivel 1 (0252 §7b) | `attachPhysicalEvidence` en `src/lib/custody/physical-ingress.ts` | — | `createConfirmAndCaptureAction`, con la guarda `assertPositionRequired` de Fase B **antes** de crear la cabecera | input por ítem con `capture="environment"` en `NewReceptionForm` · `data-foto-ingreso` | `wms.edit` + posición obligatoria por línea (A-6) | **CABLEADO** |
 | 17 | Señal de custodia en el listado de recepciones | `custody_physical_units` + `custody_events` | embed en `listReceptions` | — | `ReceptionRow.custody_units / custody_units_con_foto / custody_reforzada` | insignia `data-custodia="unidades"` en `recepciones/page.tsx` | `wms.view` | **CABLEADO** |
 | 10 | Puerta de la foto de egreso en el flujo de salida | gates disparados por trigger en `0250a:2417 / 2486 / 2507 / 2529` | — | — | — | **cero menciones de custodia** en picking y packing (`grep -rniE "custod\|CPU-\|physical_unit"` sobre `wms/picking` y `wms/packing` → 0 resultados); en despachos sólo `CustodyShipmentSection` (`despachos/[id]/page.tsx:172-175`), que es scope `shipment` | — | **NO EXISTE** |
 | 11a | Resolución del token del QR | `get_custody_physical_by_token` `0250a:2253-2289` · `revoke ... from public,anon` `:2291` · `grant ... to authenticated` `:2292` | `getCustodyByToken` (`custody.ts`), consumido en `c/[token]/page.tsx:18` | — | — | `c/[token]/page.tsx:41-84` | `assert_custody_access('wms.view')` `0250a:2261` | **CABLEADO** (autenticado) |
@@ -608,7 +609,28 @@ El comentario anterior de §7a afirmaba que el stock por ajuste aparece siempre
 con `v_n=0`. Era falso, y ahí se colaba: convive con unidades físicas y deja la
 genealogía PARCIAL con `v_n>0`.
 
-### 9.7 · Definición de negocio de los dos niveles (Dirección)
+### 9.7 · Juntura 2-A/2-B · reconciliación con main
+
+Custodia se reconcilió con `main 9da9f04` en la ventana que la directiva
+reservó. Seis solapamientos; **ninguno de los dos frentes perdió nada.**
+
+Lo que cambia para Custodia, y hay que saberlo antes de 2-B:
+
+- **La posición de cada línea de recepción es obligatoria** (Fase B · A-6): de
+  ella se deriva la nave, ahora que el aislamiento por sede se retiró.
+  `addReceptionItem` la exige como primera sentencia y sigue devolviendo el id
+  que la captura de foto necesita para emparejar por `reception_item_id`.
+- **`createConfirmAndCaptureAction` valida las posiciones ANTES de crear la
+  cabecera.** El merge mecánico no lo hacía: Fase B había puesto esa guarda sólo
+  en `createReceptionFull`, porque esta acción no existía de su lado. El motivo
+  vale más acá, porque además de crear CONFIRMA: una línea sin posición habría
+  dejado una cabecera huérfana con unidades de custodia ya materializadas.
+- **El linaje pasó a 241 entradas.** Las cuatro de Custodia se renumeraron a
+  238-241 (`L00238`-`L00241`) porque los dos frentes habían usado 234 y 236.
+- **El ancla `ROLLBACKS` de `t-c4-01` tiene 23**, y no se deriva del catálogo a
+  propósito: es lo que sobrevive a un catálogo que miente.
+
+### 9.8 · Definición de negocio de los dos niveles (Dirección)
 
 **NIVEL 1 — sin servicio de custodia digital.** La foto de ingreso es OPCIONAL;
 su ausencia **no bloquea nada**: ni recepción, ni carga, ni reserva, ni despacho.
@@ -620,7 +642,7 @@ egreso**: la base la rechaza con motivo legible, no con un código.
 **Línea roja:** ninguna excepción del nivel 1 afloja el nivel 2. Toda excepción
 va acotada por nivel.
 
-### 9.8 · Verificación pendiente de Dirección
+### 9.9 · Verificación pendiente de Dirección
 
 **No se comprobó, y no se podía:** que Martin Battaglia, José Luis Rodríguez y
 Martín Rinas —y sólo ellos— tengan hoy rol `admin`. Es una lectura de base
