@@ -5,7 +5,13 @@ import {
   getCustodyTimeline,
   getPhysicalUnitToken,
   getShipmentToken,
+  resolveActorNames,
 } from "@/lib/custody/custody";
+import {
+  deriveCaseProgress,
+  deriveDecisionChecklist,
+  deriveNowAction,
+} from "@/lib/custody/case-progress";
 import { custodyQrDataUrl } from "@/lib/custody/qr";
 import { fmtDateTime } from "@/lib/utils";
 import type { CustodyEvidenceRef, CustodyTimeline as Timeline } from "@/lib/custody/types";
@@ -18,6 +24,10 @@ import { CaseReevaluatePanel } from "../_components/CaseReevaluatePanel";
 import { CasePodGate } from "../_components/CasePodGate";
 import { CaseDocumentCard } from "../_components/CaseDocumentCard";
 import { CustodyTimeline } from "../_components/CustodyTimeline";
+import { CaseProgressBar } from "../_components/CaseProgressBar";
+import { CaseNowBlock } from "../_components/CaseNowBlock";
+import { CaseEvidencePanel, type EvidenceSlot } from "../_components/CaseEvidencePanel";
+import { CaseChecklist } from "../_components/CaseChecklist";
 import { EvidenceViewer } from "../_components/EvidenceViewer";
 import { PrintButton } from "../_components/PrintButton";
 import { QrCard } from "../_components/QrCard";
@@ -38,13 +48,13 @@ type EventNode = Extract<Timeline["nodes"][number], { type: "event" }>;
 function firstEvidence(
   timeline: Timeline,
   match: (n: EventNode) => boolean,
-): { evidence: CustodyEvidenceRef; occurredAt: string } | null {
+): { evidence: CustodyEvidenceRef; occurredAt: string; actorId: string | null } | null {
   for (const node of timeline.nodes) {
     if (node.type !== "event") continue;
     const ev = node as EventNode;
     if (!match(ev)) continue;
     const first = ev.evidences?.[0];
-    if (first) return { evidence: first, occurredAt: ev.occurred_at };
+    if (first) return { evidence: first, occurredAt: ev.occurred_at, actorId: ev.actor_id };
   }
   return null;
 }
@@ -117,6 +127,26 @@ export default async function CustodyCasePage({ params }: { params: { id: string
     (isPhysical ? null : firstEvidence(timeline, (e) => e.stage === "entrega"));
   const inspeccion = firstEvidence(timeline, (e) => e.event_type === "inspeccion_humana");
 
+  // §7 · QUIÉN. El nombre se resuelve en la aplicación desde `profiles_public`
+  // (vista sin PII, `grant select to authenticated`), no por migración: el
+  // timeline viene de una RPC. Ver el docblock de `resolveActorNames`.
+  const nombres = await resolveActorNames([
+    ingreso?.actorId ?? null,
+    egreso?.actorId ?? null,
+    inspeccion?.actorId ?? null,
+  ]);
+  const slot = (
+    e: { evidence: CustodyEvidenceRef; occurredAt: string; actorId: string | null } | null,
+  ): EvidenceSlot | null =>
+    e ? { evidence: e.evidence, occurredAt: e.occurredAt, actorName: e.actorId ? nombres[e.actorId] ?? null : null } : null;
+
+  // §7 · las tres derivaciones puras: dónde está parado, qué hacer ahora y qué
+  // falta para decidir. Viven en `case-progress.ts` para poder probarse sin DOM.
+  const progresoInput = { view, tieneIngreso: ingreso !== null, tieneEgreso: egreso !== null };
+  const progreso = deriveCaseProgress(progresoInput);
+  const ahora = deriveNowAction(progresoInput);
+  const checklist = deriveDecisionChecklist(progresoInput);
+
   // Las clases condicionales se calculan en variables, no con template
   // literals dentro de `className`: es el patrón que ya usa `StateBadge` en
   // este mismo archivo, y el que el guard de clases sabe leer (I6).
@@ -180,6 +210,8 @@ export default async function CustodyCasePage({ params }: { params: { id: string
             </>
           )}
         </p>
+
+        <CaseProgressBar progress={progreso} />
       </section>
 
       {/* ── BANNER DE CONSECUENCIA ────────────────────────────────────────
@@ -196,91 +228,54 @@ export default async function CustodyCasePage({ params }: { params: { id: string
         </p>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        {/* ── INGRESO ────────────────────────────────────────────────── */}
-        <section className="card p-4" aria-labelledby="ingreso-title">
-          <h2 id="ingreso-title" className="eyebrow-tiny">Ingreso · recepción</h2>
-          {ingreso ? (
-            <>
-              <div className="mt-2">
-                <EvidenceViewer evidence={ingreso.evidence} />
-              </div>
-              <p className="mt-2 flex items-center gap-2 text-xs text-status-success">
-                <Icon name="check-circle" size={12} aria-hidden="true" />
-                <span>Foto vinculada · hash verificado por el servidor</span>
-              </p>
-              <p className="text-xs text-fg-muted">{fmtDateTime(ingreso.occurredAt)}</p>
-            </>
-          ) : (
-            <p className="mt-2 text-sm text-fg-muted">Sin fotografía de ingreso registrada.</p>
-          )}
+      {/* ── ▸ AHORA · UNA SOLA ACCIÓN VIVA ───────────────────────────────
+          §7 · lo primero después del bloqueo. El resto de la pantalla sigue
+          existiendo, atenuado: el operario ve UNA cosa para hacer.          */}
+      <CaseNowBlock action={ahora} />
 
-          {qr && token && (
-            <div className="mt-3">
-              <QrCard dataUrl={qr} url={`/c/${token}`} publicId={view.caseId.slice(0, 8)} label="QR de la unidad" />
-              <div className="mt-2"><PrintButton label="Imprimir etiqueta" /></div>
-            </div>
-          )}
-        </section>
-
-        {/* ── CUSTODIA · timeline ────────────────────────────────────── */}
-        <section className="card p-4" aria-labelledby="timeline-title">
-          <h2 id="timeline-title" className="eyebrow-tiny">Custodia · movimientos</h2>
-          <div className="mt-2">
-            <CustodyTimeline timeline={timeline} revalidate={`/wms/custody/${view.caseId}`} />
-          </div>
-        </section>
-
-        {/* ── EGRESO ─────────────────────────────────────────────────── */}
-        <section className="card p-4" aria-labelledby="egreso-title">
-          <h2 id="egreso-title" className="eyebrow-tiny">Preparación de egreso</h2>
-          {egreso ? (
-            <>
-              <div className="mt-2">
-                <EvidenceViewer evidence={egreso.evidence} />
-              </div>
-              <p className="mt-2 text-xs text-fg-muted">
-                Fotografía nueva obligatoria · {fmtDateTime(egreso.occurredAt)}
-              </p>
-            </>
-          ) : (
-            // §7.5 · Ningún texto manda al operario a otro panel. Antes decía
-            // «registrala en "Fotografías de la unidad"»: si el sistema sabe
-            // dónde está la acción, la ofrece como botón — y el panel de
-            // captura está justo abajo, con su propio slot de egreso.
-            <p className="mt-2 text-sm text-fg-muted">
-              Esperando la fotografía de egreso.
-            </p>
-          )}
-
-          {inspeccion && (
-            <div className="mt-3 border-t border-stroke-soft pt-3">
-              <p className="eyebrow-tiny">Inspección física</p>
-              <div className="mt-2">
-                <EvidenceViewer evidence={inspeccion.evidence} />
-              </div>
-              <p className="mt-1 text-xs text-fg-muted">{fmtDateTime(inspeccion.occurredAt)}</p>
-            </div>
-          )}
-        </section>
-      </div>
-
+      {/* ── MOBILE-FIRST ──────────────────────────────────────────────────
+          Una sola columna en el teléfono, en el orden en que el operario del
+          depósito la necesita: análisis y decisión ARRIBA, porque decide desde
+          el piso. Desde `lg` se abre en dos columnas para escritorio.        */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <CaseAiPanel view={view} />
-        <div className="flex flex-col gap-3">
-          {/* Las dos fotos del contrato (§4.2) se capturan acá, en la vista
-              autenticada de la unidad. El QR es de sólo lectura y no puede
-              serlo: no hay sesión que atribuir a la captura. */}
+        <div className="flex flex-col gap-4">
+          <CaseAiPanel view={view} />
+          <CaseEvidencePanel
+            ingreso={slot(ingreso)}
+            egreso={slot(egreso)}
+            inspeccion={slot(inspeccion)}
+          />
           <PhysicalCapturePanel
             view={view}
             tieneIngreso={ingreso !== null}
             tieneEgreso={egreso !== null}
           />
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <CaseChecklist items={checklist} />
           <CaseInspectionPanel view={view} />
           <CaseReevaluatePanel view={view} />
           <CaseDecisionPanel view={view} />
           <CasePodGate view={view} shipmentId={shipmentId} hasPdf={view.podPdfReady} />
           {documento && <CaseDocumentCard doc={documento} />}
+
+          <section className="card p-4" aria-labelledby="timeline-title">
+            <h2 id="timeline-title" className="eyebrow-tiny">Cadena de custodia</h2>
+            <div className="mt-2">
+              <CustodyTimeline timeline={timeline} revalidate={`/wms/custody/${view.caseId}`} />
+            </div>
+          </section>
+
+          {qr && token && (
+            <section className="card p-4" aria-labelledby="identificacion-title">
+              <h2 id="identificacion-title" className="eyebrow-tiny">Identificación física</h2>
+              <div className="mt-2">
+                <QrCard dataUrl={qr} url={`/c/${token}`} publicId={view.identity.unitPublicId ?? view.caseId.slice(0, 8)} label="QR de la unidad" />
+                <div className="mt-2"><PrintButton label="Imprimir etiqueta" /></div>
+              </div>
+            </section>
+          )}
         </div>
       </div>
 

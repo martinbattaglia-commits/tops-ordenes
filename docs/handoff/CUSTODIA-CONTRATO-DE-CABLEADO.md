@@ -79,7 +79,7 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 2d | SKU, cantidad, lote, vencimiento | `custody_physical_units.sku / quantity / lot_number / expiration_date` `0250a:30-33` | `CASE_COLUMNS` | `mapCaseIdentity` | `identity.sku / quantity / lotNumber` | línea del bien en el encabezado | `wms.view` | **CABLEADO** |
 | 2e | Recepción de origen + enlace | `custody_physical_units.reception_id` `0250a:26` → `receptions(public_id)` | `CASE_COLUMNS` (embed anidado) | `mapCaseIdentity` | `identity.receptionPublicId / receptionId` | enlace `data-recepcion` en el encabezado | `wms.view` + RLS de `receptions` | **CABLEADO** |
 | 3 | `similarityScore`, `thresholdResult`, `scoreComponents` | `0250a` · columnas del caso; `score_components` escrito en `integrity-supabase.ts:390-395` | `integrity-supabase.ts:65-67` | `integrity-adapters.ts:304-317` | `similarityScore` + `concordance` derivado (`deriveConcordance`) | `CaseAiPanel.tsx` · número de concordancia, veredicto cualitativo, barra SIN marca de umbral y los cuatro componentes | informativo, sin permiso propio | **CABLEADO** |
-| 4 | `thresholdPercent` | `custody_integrity_cases.threshold_percent` · criterio en `0250a:2114-2116` | se sigue leyendo | `integrity-adapters.ts` → `IntegrityAssessment` | **NO EXISTE en `AiPanelView`**: se consume para derivar `concordance` y no viaja | nada que renderizar, por construcción | — | **NO VIAJA · CONFORME (I3)** |
+| 4 | `thresholdPercent` | `custody_integrity_cases.threshold_percent` · criterio en `0250a:2114-2116` | se sigue leyendo | `integrity-adapters.ts` → `IntegrityAssessment` | **NO EXISTE en `AiPanelView`**: se consume para derivar `concordance` y no viaja | nada que renderizar, por construcción | — | **NO VIAJA · CONFORME (I3 + D-4)** · la especificación visual del §7 se implementó BAJO D-4: las capturas mostraban el umbral en siete lugares y ninguno se implementó así. No es incumplimiento de la spec: es la política de empresa por encima de ella. Ver §13 |
 | 5a | `damageFlags` (embalaje / faltante / daño) | `packaging_changed`, `missing_items_suspected`, `damage_suspected` | `CASE_COLUMNS` | `integrity-adapters.ts` | `ai.damageFlags` | chips `data-banderas` en `CaseAiPanel` | — | **CABLEADO** |
 | 5b | `provider_details` (observations, zones) | escrito en `integrity-supabase.ts:406-410` (`p_provider_details`) | `CASE_COLUMNS` ahora **sí** pide `provider_details` | `boundedStrings` en `mapAssessment` (recorta a 6 × 240/120) | `ai.observations` / `ai.zones` | bloque «Observaciones del análisis» en `CaseAiPanel` | — | **CABLEADO** |
 | 6a | `quarantine.blockers` | `0250a:2088-2099` (las reglas que producen el bloqueo) | — | — | `case-presentation.ts` · habilitado también en `HOLD` (S1-5) | `CaseDecisionPanel` · bloque «Por qué no se puede enviar a cuarentena» (`data-cuarentena-blockers`) | `wms.custody.decide` + rol `admin`/`operaciones`/`supervisor` (0251) | **CABLEADO** |
@@ -508,9 +508,11 @@ No se tocó el ruteo, ni los grants, ni se escribió migración para esto.
 - Costuras 7, 8, 10, 11b y 12 (certificado visible, traductor de códigos
   `CUSTODY_*`, puerta de egreso en picking/packing, POD de unidad física, firma
   de quien retira): son **Sesión 2**.
-- **Del §7 quedan sin implementar** la barra de progreso de cinco pasos, el
+- ~~**Del §7 quedan sin implementar** la barra de progreso de cinco pasos, el
   bloque `▶ AHORA` con una sola acción viva y el reordenamiento mobile-first, y
-  el render de imagen grande lado a lado en `EvidenceViewer`. No están en
+  el render de imagen grande lado a lado en `EvidenceViewer`.~~
+  **IMPLEMENTADO · ver §13**, con el puntero a las ocho capturas que son su
+  especificación. No están en
   ninguno de los siete puntos de la Sesión 1; se hizo el encabezado de
   identidad, el banner de consecuencia y el panel de análisis, que sí lo están.
 - **C8 (fallback silencioso a `MOCK_CASES`)** sigue vivo en
@@ -1088,6 +1090,99 @@ reforzada.
 
 Por eso se publica declarado y no se corrige acá: corregirlo bien es un
 expediente, y corregirlo mal —capa por capa— es peor que declararlo.
+
+---
+
+
+## 13 · §7 VISUAL · LA EXPERIENCIA DE USUARIO · IMPLEMENTADO
+
+### 13.1 · 🔴 DÓNDE VIVE LA ESPECIFICACIÓN — el puntero que faltaba
+
+```
+~/Desktop/Custodia Digital Nexus/
+    UI-1.png · UI-2.png · UI-3.png · UI-4.png · UI-5.png · UI-6.png
+    UI-MOBILE1.png · UI-MOBILE2.png
+```
+
+**Ocho capturas, tomadas por Dirección, que SON la especificación.** Este
+puntero es la razón de ser de esta sección: el §7 quedó registrado como
+pendiente en §9.4 pero **sin decir dónde estaba especificado**, y por eso las
+sesiones siguientes no supieron que existía. Que no se pierda otra vez.
+
+| Captura | Qué cubre |
+|---|---|
+| UI-6 | portada + leyenda de colores + **Estado 1** · falta foto de ingreso |
+| UI-5 | **Estado 2** · falta foto de egreso |
+| UI-4 | **Estado 3** · concordancia alta, decisión habilitada |
+| UI-2 / UI-3 | **Estado 4** · retenido, concordancia baja |
+| UI-1 | **Estado 5** · liberado, documento y POD |
+| UI-MOBILE2 | estados 1, 2 y 3 en teléfono |
+| UI-MOBILE1 | estados 4 y 5 en teléfono |
+
+### 13.2 · Lo que se implementó
+
+| Pieza | Dónde |
+|---|---|
+| Barra de cinco pasos | `case-progress.ts` · `deriveCaseProgress` → `CaseProgressBar.tsx` |
+| Bloque `▸ AHORA`, una sola acción viva | `deriveNowAction` → `CaseNowBlock.tsx` |
+| Comparación visual lado a lado | `CaseEvidencePanel.tsx` |
+| Checklist «para poder decidir» | `deriveDecisionChecklist` → `CaseChecklist.tsx` |
+| Reordenamiento mobile-first | `[id]/page.tsx` · una columna que se abre en `lg` |
+| Nombre del operario en la evidencia | `custody.ts` · `resolveActorNames` |
+
+**Regla del bloque, firmada por Dirección:** *las capturas mandan sobre la lista
+de cuatro piezas del §9.4*. Esa lista se escribió desde el contrato, no desde la
+especificación. Única excepción: el umbral, donde manda D-4.
+
+### 13.3 · ⚠ D-4 · EL UMBRAL NO SALE A PANTALLA
+
+> «El umbral de detección no viaja al cliente ni a la pantalla del operario:
+>  publicar el corte enseña a operar por debajo de él.»
+
+**No se revirtió I3: se fue más lejos que ella.** Las capturas mostraban el
+umbral en siete lugares. Los siete se implementaron sin él:
+
+| La captura decía | Se implementó |
+|---|---|
+| «similitud 94,2% ≥ umbral 90%» | «Concordancia 94,2% · conforme» |
+| «BAJO UMBRAL 90%» | «No conforme» |
+| «POR DEBAJO DEL UMBRAL» | «Requiere revisión» |
+| «Análisis · 94,2% sobre umbral 90%» | «Análisis · concordancia 94,2%» |
+| barra con marca en 90 | barra sin marca |
+
+El fundamento se expresa como **estándar** —«según los estándares
+internacionales de medición del mercado»—, y lo que sí sale es la
+**concordancia** con su número real y el veredicto cualitativo, que ya venían
+resueltos server-side en `ConcordanceView`.
+
+**La garantía es estructural y está probada.** `case-progress.ts` no puede
+nombrar el umbral porque no lo recibe: `AiPanelView` no tiene
+`thresholdPercent` por construcción. Y `case-progress.test.ts` recorre las
+cadenas de los siete estados comprobando que ninguna dice «umbral», «90%», «por
+encima» ni «por debajo».
+
+### 13.4 · El nombre del operario · la única pieza fuera de presentación
+
+La cadena respondía QUÉ y CUÁNDO desde 0222; **QUIÉN** no llegaba a ninguna capa.
+
+| | |
+|---|---|
+| **Capa tocada** | `src/lib/custody/custody.ts` — `resolveActorNames` |
+| **Superficie leída** | `profiles_public(id, full_name)` (0046) |
+| **Permiso** | `grant select ... to authenticated` · vista `security definer` **sin email ni rol** |
+| **Por qué no es migración** | el timeline viene de una RPC; el nombre se resuelve en la aplicación con una segunda lectura acotada |
+
+No se lee `profiles` —que `0040` restringió a uno mismo o admin—, no se usa
+`service_role`, y es el mismo patrón que ya usa el módulo comercial. Ante
+cualquier error devuelve un mapa vacío: la evidencia queda sin nombre y la
+pantalla no se cae.
+
+### 13.5 · El documento muestra lo que haya
+
+Se implementó la estructura de UI-1. **Hoy mostrará siempre ACTA**, por las tres
+capas preexistentes de §12, que este bloque no toca. El día que el certificado
+sea emisible, la misma pantalla lo muestra sin tocar presentación. El campo
+«Base» va sin el umbral, por D-4.
 
 ---
 

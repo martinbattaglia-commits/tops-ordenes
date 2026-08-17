@@ -35,6 +35,14 @@ const UI_FILES = [
   // propias (dos slots, avisos por botón). Sin esto, una clase inventada acá
   // seguiría pasando en verde.
   "src/app/(app)/wms/custody/_components/PhysicalCapturePanel.tsx",
+  // §7 VISUAL · las cuatro piezas nuevas escriben clases propias. Sin esto, una
+  // clase inventada acá seguiría pasando en verde — el mismo motivo por el que
+  // S1-3 incorporó el panel de captura.
+  "src/app/(app)/wms/custody/_components/CaseProgressBar.tsx",
+  "src/app/(app)/wms/custody/_components/CaseNowBlock.tsx",
+  "src/app/(app)/wms/custody/_components/CaseEvidencePanel.tsx",
+  "src/app/(app)/wms/custody/_components/CaseChecklist.tsx",
+  "src/app/(app)/wms/custody/_components/CaseDocumentCard.tsx",
 ];
 
 /** Clases escritas en `className`, incluidas las de expresiones con template. */

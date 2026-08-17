@@ -863,6 +863,57 @@ export async function getCustodyTimeline(
   return data as CustodyTimeline;
 }
 
+/**
+ * §7 · QUIÉN · el nombre del operario detrás de cada `actor_id`.
+ *
+ * ─── POR QUÉ EXISTE, Y POR QUÉ NO ES UNA MIGRACIÓN ───────────────────────
+ *
+ * La cadena de custodia responde QUÉ y CUÁNDO desde 0222, y `actor_id` viaja en
+ * cada evento del timeline. El NOMBRE no llegaba a ninguna capa, así que la
+ * pantalla mostraba un UUID o nada. Una cadena de custodia que no dice QUIÉN
+ * prueba dos tercios de lo que promete.
+ *
+ * El timeline viene de una RPC (`get_custody_physical_timeline`), de modo que
+ * agregar la columna ahí sería una migración — fuera del alcance de este bloque
+ * y, sobre todo, innecesaria: el nombre se resuelve en la APLICACIÓN con una
+ * segunda lectura acotada.
+ *
+ * ─── LA SUPERFICIE, Y POR QUÉ ES LA CORRECTA ─────────────────────────────
+ *
+ * `profiles_public` (0046) es una vista `(id, full_name)` SIN email, creada por
+ * mandato de 0040 exactamente para esto: resolver un nombre sin exponer PII. Es
+ * `security definer`, tiene `grant select ... to authenticated` y ya la usa el
+ * módulo comercial (`leads-supabase.ts`) con este mismo patrón.
+ *
+ * No se lee `profiles` —que 0040 dejó restringida a uno mismo o admin—, no se
+ * usa `service_role`, y no se expone rol, email ni ninguna otra columna.
+ *
+ * Devuelve un mapa vacío ante cualquier error: un nombre que no se pudo
+ * resolver deja el pie de la evidencia sin nombre, y nunca tumba la pantalla.
+ */
+export async function resolveActorNames(
+  actorIds: readonly (string | null)[],
+): Promise<Record<string, string>> {
+  const ids = [...new Set(actorIds.filter((v): v is string => typeof v === "string" && v.length > 0))];
+  if (ids.length === 0) return {};
+  try {
+    const supabase = createClient();
+    if (!supabase) return {};
+    const { data, error } = await supabase
+      .from("profiles_public")
+      .select("id, full_name")
+      .in("id", ids);
+    if (error) return {};
+    const out: Record<string, string> = {};
+    for (const r of (data ?? []) as Array<{ id: string; full_name: string | null }>) {
+      if (r.full_name && r.full_name.trim().length > 0) out[r.id] = r.full_name.trim();
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 export async function getCustodyPhysicalTimeline(physicalUnitId: string): Promise<CustodyTimeline> {
   if (isMock()) return { ...MOCK_TIMELINE, scope: "physical_unit", entity_id: physicalUnitId };
   const supabase = requireCustodyClient(createClient(), "timeline físico de custodia");
