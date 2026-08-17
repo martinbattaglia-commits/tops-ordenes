@@ -521,6 +521,13 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_20260815002748_service_unit_m2.sql",
     "ROLLBACK_20260815002807_service_tariff_m2_rates.sql",
     "ROLLBACK_0250a_custody_productive_vision.sql",
+    // CLIENTES FASE B: las dos inversas que sobreviven al retiro del aislamiento
+    // por nave. Entran por la CONVENCIÓN de nombre, no por una excepción, y van
+    // en el MISMO merge que sus entradas de catálogo: la aserción de abajo es una
+    // igualdad estricta, así que agregar a un lado sin el otro rompe en alguno de
+    // los dos sentidos.
+    "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
+    "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 
