@@ -47,12 +47,14 @@ const CUSTODY_FORWARD_FILES = [
   "0250_custody_physical_scope_enums.sql",
   "0250a_custody_productive_vision.sql",
   "0251_custody_decide_authority.sql",
+  "0252_custody_two_levels.sql",
 ];
 
 const CUSTODY_ARTIFACT_FILES = [
   ...CUSTODY_FORWARD_FILES,
   "ROLLBACK_0250a_custody_productive_vision.sql",
   "ROLLBACK_0251_custody_decide_authority.sql",
+  "ROLLBACK_0252_custody_two_levels.sql",
 ];
 
 const dedicated = () =>
@@ -70,18 +72,18 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
 
   it("cierre HISTÓRICO de custodia: 36", () => {
     const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_FORWARD_FILES.includes(m));
-    expect(d1d3).toHaveLength(11);
+    expect(d1d3).toHaveLength(12);
     expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(36);
     expect(CUSTODY_CLOSURE_SIZE).toBe(36);
   });
 
-  it("manifiesto DEDICADO actual: 47", () => {
-    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(47);
-    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(47);
+  it("manifiesto DEDICADO actual: 48", () => {
+    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(48);
+    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(48);
     expect(() => validateCustodyManifest()).not.toThrow();
   });
 
-  it("36 + 11 = 47, y los once forwards NO están en el vanilla", () => {
+  it("36 + 12 = 48, y los doce forwards NO están en el vanilla", () => {
     expect(CUSTODY_CLOSURE_SIZE + CUSTODY_FORWARD_FILES.length).toBe(
       EXPECTED_CUSTODY_MANIFEST_SIZE,
     );
@@ -94,6 +96,9 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
     );
     expect(CUSTODY_MIGRATION_MANIFEST).not.toContain(
       "ROLLBACK_0251_custody_decide_authority.sql",
+    );
+    expect(CUSTODY_MIGRATION_MANIFEST).not.toContain(
+      "ROLLBACK_0252_custody_two_levels.sql",
     );
   });
 });
@@ -119,7 +124,7 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(frozen()!.matches(f)).toBe(false);
   });
 
-  it("cubre EXACTAMENTE los trece artefactos del árbol y ninguno más", () => {
+  it("cubre EXACTAMENTE los quince artefactos del árbol y ninguno más", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
     const cubiertos = onDisk.filter((f) => dedicated()!.matches(f)).sort();
     expect(cubiertos).toEqual([...CUSTODY_ARTIFACT_FILES].sort());

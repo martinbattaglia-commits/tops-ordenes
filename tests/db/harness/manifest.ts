@@ -320,6 +320,11 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // 0036-0039 (PostGIS), fuera del vanilla.
   "0251_custody_decide_authority.sql",
   "ROLLBACK_0251_custody_decide_authority.sql",
+  // CUSTODIA CIERRE CIRCUITO · 2-A · los dos niveles (D3), con su rollback
+  // lógico. Misma decisión explícita: redefine funciones de 0250a que se apoyan
+  // en `custody_events` y en la serie 0036-0039 (PostGIS), fuera del vanilla.
+  "0252_custody_two_levels.sql",
+  "ROLLBACK_0252_custody_two_levels.sql",
 ]);
 
 /**
@@ -513,8 +518,9 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "0224 contención de autoridad y cota temporal · 0225 tri-state 0039 · " +
       "0226 atestación de contenido · 0231 lectura tenant · 0232 lease exclusivo · " +
       "0250/0250a scope físico y visión productiva · 0251 autoridad de decisión y " +
-      "evidencia completa, las dos últimas con rollback lógico). " +
-      "Los once forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
+      "evidencia completa · 0252 los dos niveles de custodia, las tres últimas con " +
+      "rollback lógico). " +
+      "Los doce forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
       "clasifican y prueban aparte y nunca integran un manifiesto forward. " +
       "Se excluye del cierre WMS vanilla porque su cierre de dependencias exige " +
       "PostGIS y la serie 0036-0039, que este manifiesto excluye por diseño para " +
@@ -524,7 +530,7 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "ADVERTENCIA: 0222 modifica `custody_events` (CHECK stage/event_type) y " +
       "reemplaza `attach_custody_evidence`, objetos del dominio de custodia; se " +
       "excluye por la dependencia de PostGIS, NO porque sea ajena. La exclusión " +
-      "es por los TRECE filenames exactos de esta serie; cualquier migración que " +
+      "es por los QUINCE filenames exactos de esta serie; cualquier migración que " +
       "no enumere ninguna regla queda sin clasificar y rompe la suite hasta una " +
       "decisión explícita.",
   },

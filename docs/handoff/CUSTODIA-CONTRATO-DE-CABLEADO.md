@@ -1,8 +1,8 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Sesión 1 · remediación post-C4 1/2** — el permiso de
-captura se separa del estado de inspección
+**Última actualización:** **Bloque 2-A** — la foto de ingreso se toma en la
+recepción y la custodia tiene dos niveles
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -85,7 +85,10 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 6b | `release.blockers` | `0250a:2108-2150` | — | — | `case-presentation.ts:325-377`, expuesto en `:438-443` | `CaseDecisionPanel.tsx:172-179` · encabezado «Por qué no se puede liberar» | `wms.custody.decide` + rol `admin` | **CABLEADO** |
 | 7 | Certificado de liberación | tabla `custody_release_certificates` `0250a:1742-1794` · insertado en `0250a:2182-2186` · validador `custody_assert_release_certificate` `0250a:1796` · `grant select ... to authenticated` `0250a:1786` | **cero lecturas** · `grep -rn "custody_release_certificates" src/` → 0 resultados | — | — | — | SELECT concedido a `authenticated`, sin consumidor | **CORTADO EN lectura** |
 | 8 | Códigos de gate de despacho (los seis `CUSTODY_*`) | `CUSTODY_CASE_MISSING` `0250a:2304` · `CUSTODY_HOLD` `0250a:2307` · `CUSTODY_RELEASE_CERTIFICATE_MISSING` `0250a:2312` · `CUSTODY_CHAIN_ADVANCED_AFTER_RELEASE` `0250a:2316` · `CUSTODY_GENEALOGY_MISSING` `0250a:2361` · `CUSTODY_ZERO_APPLICABLE_CASES` `0250a:2401` | **ningún traductor** · `grep -rn "CUSTODY_HOLD\|CUSTODY_GENEALOGY_MISSING\|..." src/` → 0 resultados | — | — | el error crudo de PostgreSQL sube tal cual al despachante | — | **CORTADO EN lectura** |
-| 9 | Puente recepción → caso de custodia | trigger `trg_custody_materialize_reception_item` `0250a:460-464` → `custody_materialize_reception_item_row` `0250a:380-448`; crea unidad (`:411-418`) y caso (`:430-435`) | — | — | — | — | función `revoke all ... from public,anon,authenticated,service_role` `0250a:449-450` — corre **sólo** como trigger | **CABLEADO** |
+| 9 | Puente recepción → caso de custodia | mismo trigger, con `custody_materialize_reception_item_row` **condicional** (0252 §5): la unidad siempre, el caso sólo en nivel 2 | `custody_reception_units` (0252 §8) | — | `ReceptionCustodyUnit` en `recepciones/actions.ts` | lista posterior a confirmar, con enlace a cada caso | la función sigue revocada para todos los roles: corre **sólo** como trigger | **CABLEADO** |
+| 15 | Nivel de custodia contratado (D3) | `clients.custody_level` (default 1) · `receptions.custody_reforzada` (eleva, nunca degrada) · `custody_physical_units.custody_level` (default 2: preserva lo ya materializado) · 0252 §1-§4 | `custody_client_level` (SECURITY DEFINER, exige `wms.view`) — `clients` pide `clientes.view` por RLS y un encargado de depósito no lo tiene | — | estado local del formulario | casilla «esta mercadería ingresa por custodia digital reforzada» · `data-custodia="reforzada"` | `wms.view` para leer el nivel | **CABLEADO** |
+| 16 | Foto de ingreso tomada en la RECEPCIÓN (I4) | `attach_custody_physical_evidence`, ahora también para nivel 1 (0252 §7b) | `attachPhysicalEvidence` en `src/lib/custody/physical-ingress.ts` | — | `createConfirmAndCaptureAction` | input por ítem con `capture="environment"` en `NewReceptionForm` · `data-foto-ingreso` | `wms.edit` | **CABLEADO** |
+| 17 | Señal de custodia en el listado de recepciones | `custody_physical_units` + `custody_events` | embed en `listReceptions` | — | `ReceptionRow.custody_units / custody_units_con_foto / custody_reforzada` | insignia `data-custodia="unidades"` en `recepciones/page.tsx` | `wms.view` | **CABLEADO** |
 | 10 | Puerta de la foto de egreso en el flujo de salida | gates disparados por trigger en `0250a:2417 / 2486 / 2507 / 2529` | — | — | — | **cero menciones de custodia** en picking y packing (`grep -rniE "custod\|CPU-\|physical_unit"` sobre `wms/picking` y `wms/packing` → 0 resultados); en despachos sólo `CustodyShipmentSection` (`despachos/[id]/page.tsx:172-175`), que es scope `shipment` | — | **NO EXISTE** |
 | 11a | Resolución del token del QR | `get_custody_physical_by_token` `0250a:2253-2289` · `revoke ... from public,anon` `:2291` · `grant ... to authenticated` `:2292` | `getCustodyByToken` (`custody.ts`), consumido en `c/[token]/page.tsx:18` | — | — | `c/[token]/page.tsx:41-84` | `assert_custody_access('wms.view')` `0250a:2261` | **CABLEADO** (autenticado) |
 | 11b | Compuerta del POD para unidad física | POD ligado a `shipment` | `actions.ts:568` sólo calcula `podPdfReady` cuando `scope === "shipment"` | — | `case-presentation.ts:462-468` | `[id]/page.tsx:86` fija `shipmentId = isShipment ? view.entityId : null`; `CasePodGate.tsx:19` bloquea con `view.podBlocked \|\| !shipmentId` → **la unidad física queda bloqueada siempre**, y con el caso ya `RELEASED` el motivo es `null` (`case-presentation.ts:464`) y cae al literal por defecto `CasePodGate.tsx:24` | — | **CORTADO EN view-model** |
@@ -93,7 +96,7 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 13 | Decisión de casos **no** físicos (`packing_unit` / `shipment`) | `decide_custody_integrity` (v1) **revocada** para `authenticated` · `0250a:2199-2200` | `integrity-supabase.ts:263-265` sigue enrutando ahí todo scope no físico | — | — | el botón existe y la RPC rechaza por privilegio | `wms.custody.decide` | **CORTADO EN lectura · HN-1, determinado y NO remediado** |
 | 12 | Firma de quien retira | — | — | — | — | — | — | **NO EXISTE** |
 
-**Recuento tras la remediación:** 22 filas · **CABLEADO 15** · **CORTADO 4** ·
+**Recuento tras el bloque 2-A:** 25 filas · **CABLEADO 18** · **CORTADO 4** ·
 **NO EXISTE 2** · **NO VIAJA por diseño 1**.
 
 *(Al cerrar la Sesión 0 eran 20 filas: 4 CABLEADO, 14 CORTADO, 2 NO EXISTE.)*
@@ -545,7 +548,32 @@ Medía el literal, no el sistema: 221 verdes con el circuito roto. Ahora los sei
 archivos derivan de `buildCustodyCaseView`, el mismo builder que corre en
 producción (`tests/wms-dom/_view.ts`).
 
-### 9.6 · Verificación pendiente de Dirección
+### 9.6 · Bloque 2-A · el circuito nace donde debe
+
+**Paso Cero, resuelto por la PRIMERA salida que el master admite: coordinar el
+orden.** `custody_materialize_reception_item_row` está revocada para todos los
+roles, incluido `service_role`, y no se puede invocar; materializa únicamente el
+trigger, que es SECURITY DEFINER y dispara al pasar el ítem a `recibido`, es
+decir AL CONFIRMAR. Por eso `createConfirmAndCaptureAction` hace crear →
+confirmar → leer las unidades recién creadas → ligar cada foto a la suya. **No
+hizo falta ninguna RPC nueva de materialización, y por eso no se escribió.** El
+emparejamiento foto↔unidad es por `reception_item_id`, que es UNIQUE: por SKU y
+lote habría fallado con dos líneas iguales.
+
+**Los dos niveles exigieron corregir CUATRO funciones, no una.** Hacer
+condicional sólo la materialización dejaba el nivel 1 peor que antes:
+
+| Función | Por qué también |
+|---|---|
+| `custody_materialize_reception_item_row` | el caso es aparato de nivel 2 |
+| `custody_bind_allocation` | vinculaba cualquier unidad a la genealogía |
+| `custody_assert_physical_unit_released` | exigía caso ⇒ nivel 1 indespachable |
+| `attach_custody_physical_evidence` | exigía caso ⇒ **el nivel 1 no podía registrar su foto**, que es su única razón de ser |
+
+Las tres primeras salieron de leer el camino entero; **la cuarta la encontró la
+prueba de recorrido**, no una lectura.
+
+### 9.7 · Verificación pendiente de Dirección
 
 **No se comprobó, y no se podía:** que Martin Battaglia, José Luis Rodríguez y
 Martín Rinas —y sólo ellos— tengan hoy rol `admin`. Es una lectura de base

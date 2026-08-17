@@ -89,6 +89,12 @@ export interface ReceptionRow {
   item_count: number;
   /** Líneas ya recibidas (para derivar "parcial"). */
   received_count: number;
+  /** D3 · esta recepción se elevó a custodia reforzada (nivel 2). */
+  custody_reforzada: boolean;
+  /** Unidades de custodia que la recepción ya materializó (0 antes de confirmar). */
+  custody_units: number;
+  /** Unidades con su foto de ingreso ya registrada. */
+  custody_units_con_foto: number;
 }
 
 export interface PositionOption {

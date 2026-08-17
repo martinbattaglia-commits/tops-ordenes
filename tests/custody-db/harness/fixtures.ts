@@ -51,10 +51,25 @@ export interface Scenario {
 }
 
 /** Cliente ERP. */
-export async function createClient(db: Client, razon = uid("CLI")): Promise<string> {
+/**
+ * Cliente del escenario.
+ *
+ * `custodyLevel` por defecto **2** porque toda esta batería prueba el APARATO
+ * de custodia reforzada —caso, IA, inspección, certificado, gate—, que 0252
+ * condiciona al nivel contratado. Antes de 0252 la materialización era
+ * incondicional y el parámetro no existía; dejarlo en 1 haría que estas pruebas
+ * midieran un cliente sin custodia contratada, que no es lo que afirman.
+ *
+ * El nivel 1 tiene su propia batería en `t-c7-01-custody-levels`.
+ */
+export async function createClient(
+  db: Client,
+  razon = uid("CLI"),
+  custodyLevel: 1 | 2 = 2,
+): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `insert into public.clients (razon, cuit) values ($1, $2) returning id`,
-    [razon, `30${Math.floor(Math.random() * 1e9).toString().padStart(9, "0")}`],
+    `insert into public.clients (razon, cuit, custody_level) values ($1, $2, $3) returning id`,
+    [razon, `30${Math.floor(Math.random() * 1e9).toString().padStart(9, "0")}`, custodyLevel],
   );
   return rows[0].id;
 }

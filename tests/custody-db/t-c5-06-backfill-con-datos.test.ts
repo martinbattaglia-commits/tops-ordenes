@@ -39,9 +39,26 @@ import {
   REPO_ROOT,
 } from "./harness/manifest";
 
-/** El manifiesto completo MENOS el núcleo: se aplica a mano y al final. */
+/**
+ * El manifiesto completo MENOS el núcleo, que se aplica a mano y al final.
+ *
+ * También se excluyen las migraciones POSTERIORES que dependen de él: 0251
+ * redefine funciones que 0250a crea y 0252 hace DDL sobre
+ * `custody_physical_units`, que 0250a es quien la crea. Aplicarlas antes que su
+ * dependencia no reproduce ningún escenario real; sólo rompe el arranque.
+ *
+ * Este escenario mide el BACKFILL de 0250a con datos productivos, así que lo
+ * que importa es que 0250a entre última respecto de su base y primera respecto
+ * de sus dependientes.
+ */
+const DEPENDIENTES_DE_0250A = [
+  "0250a_custody_productive_vision.sql",
+  "0251_custody_decide_authority.sql",
+  "0252_custody_two_levels.sql",
+];
+
 const MANIFIESTO_SIN_0250A = CUSTODY_MIGRATION_MANIFEST.filter(
-  (m) => m !== "0250a_custody_productive_vision.sql",
+  (m) => !DEPENDIENTES_DE_0250A.includes(m),
 );
 
 const SQL_0250A = readFileSync(
