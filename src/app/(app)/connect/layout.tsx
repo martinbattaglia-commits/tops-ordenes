@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { canAccess } from "@/lib/rbac/guard";
+import { canReadInternalChat } from "@/lib/rbac/internal-chat";
 import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 import { listInbox } from "@/lib/connect/read/inbox-data";
 import { InboxPanel } from "./_components/InboxPanel";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * (fail-closed). RC1.1: la bandeja se alimenta de v_connect_inbox (o seeds en demo).
  */
 export default async function ConnectLayout({ children }: { children: ReactNode }) {
-  if (!(await canAccess("connect.view"))) {
+  if (!(await canReadInternalChat())) {
     return <AccesoRestringido modulo="Nexus Link" />;
   }
   const inbox = await listInbox();

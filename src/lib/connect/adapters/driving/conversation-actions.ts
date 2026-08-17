@@ -6,6 +6,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { canAccess } from "@/lib/rbac/guard";
+import { canSendInternalChat } from "@/lib/rbac/internal-chat";
+import { getDepotManagerBoot } from "@/lib/rbac/boot-permissions";
 import { createClient } from "@/lib/supabase/server";
 import { CreateConversationUseCase, LinkEntityUseCase } from "../../application/use-cases";
 import { ConnectRpcAdapter, type RpcCapableClient } from "../supabase/connect-rpc.adapter";
@@ -40,11 +42,36 @@ export async function createConversationAction(raw: unknown): Promise<CreateConv
   if (!supabase) return { ok: false, message: "Modo demo: no se crea la conversación (sin Supabase)." };
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Sesión no autenticada." };
-  if (!(await canAccess("connect.create"))) {
+  if (!(await canSendInternalChat())) {
     return { ok: false, message: "Sin permiso para crear conversaciones (connect.create)." };
   }
   const parsed = CreateConversationSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: "Datos inválidos." };
+  const managerScope = await getDepotManagerBoot();
+  if (managerScope.restricted && (
+    !managerScope.authorized
+    || !["dm", "group"].includes(parsed.data.kind)
+    || parsed.data.entityType != null
+    || parsed.data.entityId != null
+    || parsed.data.entityIdText != null
+    || parsed.data.visibility === "public"
+  )) {
+    return { ok: false, message: "La cuenta sólo puede crear chats internos privados." };
+  }
+  if (managerScope.restricted) {
+    const { data, error } = await supabase.rpc("nexus_depot_manager_connect_create_conversation", {
+      p_kind: parsed.data.kind,
+      p_title: parsed.data.title ?? null,
+      p_slug: parsed.data.slug ?? null,
+      p_visibility: parsed.data.visibility ?? "private",
+      p_member_profile_ids: parsed.data.memberProfileIds,
+    });
+    if (error || typeof data !== "string") {
+      return { ok: false, message: "No se pudo crear el chat interno." };
+    }
+    revalidatePath("/connect");
+    return { ok: true, conversationId: data };
+  }
 
   const useCase = new CreateConversationUseCase(
     new ConnectRpcAdapter(supabase as unknown as RpcCapableClient),

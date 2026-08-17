@@ -18,6 +18,8 @@ interface ShellProps {
   canViewConnect?: boolean;
   canViewCopilot?: boolean;
   canViewContabilidad?: boolean;
+  operationalOnly?: boolean;
+  operationalSiteLabel?: string | null;
   children: ReactNode;
 }
 
@@ -31,6 +33,8 @@ export default function Shell({
   canViewConnect,
   canViewCopilot,
   canViewContabilidad,
+  operationalOnly = false,
+  operationalSiteLabel = null,
   children,
 }: ShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -39,22 +43,22 @@ export default function Shell({
     <div className="h-[100dvh] flex bg-bg-page overflow-hidden print-shell">
       {/* Sidebar fijo desktop */}
       <aside className="hidden lg:flex w-[248px] shrink-0 h-full no-print">
-        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} canViewContabilidad={canViewContabilidad} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} canViewContabilidad={canViewContabilidad} operationalOnly={operationalOnly} operationalSiteLabel={operationalSiteLabel} />
       </aside>
 
       {/* Drawer mobile */}
       <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} canViewContabilidad={canViewContabilidad} onNavigate={() => setDrawerOpen(false)} />
+        <Sidebar user={user} canViewExecutive={canViewExecutive} canViewSistema={canViewSistema} canViewRrhhDocs={canViewRrhhDocs} canViewKnowledge={canViewKnowledge} canViewConnect={canViewConnect} canViewCopilot={canViewCopilot} canViewContabilidad={canViewContabilidad} operationalOnly={operationalOnly} operationalSiteLabel={operationalSiteLabel} onNavigate={() => setDrawerOpen(false)} />
       </MobileDrawer>
 
       <div className="flex-1 min-w-0 flex flex-col print-shell">
-        <Topbar initialNowIso={initialNowIso} onMenuClick={() => setDrawerOpen(true)} />
+        <Topbar initialNowIso={initialNowIso} onMenuClick={() => setDrawerOpen(true)} operationalOnly={operationalOnly} />
         <main className="flex-1 min-h-0 scroll-area pb-[calc(80px+var(--safe-bottom))] lg:pb-0 nx-page-fade">
           {children}
           <VoiceOverlay />
         </main>
         <div className="lg:hidden no-print">
-          <MobileBottomNav />
+          <MobileBottomNav operationalOnly={operationalOnly} />
         </div>
       </div>
     </div>

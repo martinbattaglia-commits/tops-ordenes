@@ -4,6 +4,7 @@ import { VEHICLES } from "@/lib/pricing/vehicles";
 import { createClient } from "@/lib/supabase/server";
 import type { ServiceCatalogItem, ServiceUnit } from "@/lib/types";
 import type { VehicleSpec, VehicleZoneKey } from "@/lib/pricing/vehicles";
+import type { DepotManagerRpcRow } from "@/lib/rbac/depot-manager";
 
 export interface ServiceRatePayload {
   tariffRateId: string;
@@ -33,6 +34,7 @@ export interface ServicePricingPayload {
   generalRates: Record<string, ServiceRatePayload>;
   clientRates: Record<string, Record<string, ClientServiceRatePayload>>;
   canAdjust: boolean;
+  pricesVisible: boolean;
 }
 
 function legacyPayload(): ServicePricingPayload {
@@ -78,6 +80,7 @@ function legacyPayload(): ServicePricingPayload {
     generalRates,
     clientRates: {},
     canAdjust: true,
+    pricesVisible: true,
   };
 }
 
@@ -90,6 +93,41 @@ export async function loadServicePricing(): Promise<ServicePricingPayload> {
   if (env.app.demoMode) return legacyPayload();
   const supabase = createClient();
   if (!supabase) throw new Error("loadServicePricing: backend no disponible");
+
+  const { data: depotScope, error: depotScopeError } = await supabase
+    .rpc("nexus_depot_manager_scope")
+    .maybeSingle();
+  if (depotScopeError) throw new Error("loadServicePricing.scope: acceso denegado");
+  const typedDepotScope = depotScope as DepotManagerRpcRow | null;
+  if (typedDepotScope?.is_principal === true) {
+    if (typedDepotScope.is_authorized !== true) {
+      throw new Error("loadServicePricing.scope: acceso denegado");
+    }
+    const catalog: ServiceCatalogItem[] = SERVICES_CATALOG.filter((service) => service.active).map(
+      (service) => ({
+        id: service.slug,
+        slug: service.slug,
+        label: service.label,
+        category: service.category,
+        unit: service.unit,
+        icon: service.icon ?? null,
+        active: true,
+        rate: null,
+        requires_quote: true,
+      }),
+    );
+    return {
+      versionId: null,
+      versionCode: "OPERATIVO-SIN-PRECIOS",
+      currency: "ARS",
+      catalog,
+      vehicles: [],
+      generalRates: {},
+      clientRates: {},
+      canAdjust: false,
+      pricesVisible: false,
+    };
+  }
 
   const asOf = new Date().toISOString();
   const { data: version, error: versionError } = await supabase
@@ -213,6 +251,7 @@ export async function loadServicePricing(): Promise<ServicePricingPayload> {
     generalRates,
     clientRates,
     canAdjust: canAdjust === true,
+    pricesVisible: true,
   };
 }
 

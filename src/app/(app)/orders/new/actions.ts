@@ -111,7 +111,25 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
   if (!admin) {
     return { ok: false, error: "Backend no disponible para emitir la orden." };
   }
-  if (!data.pricing_version_id) {
+  const { data: managerScopeRaw, error: managerScopeError } = await supabase
+    .rpc("nexus_depot_manager_scope")
+    .maybeSingle();
+  const managerScope = managerScopeRaw as {
+    is_principal?: boolean;
+    is_authorized?: boolean;
+    depot?: "MAGALDI" | "LUJAN" | null;
+  } | null;
+  if (managerScopeError) {
+    return { ok: false, error: "No se pudo verificar el alcance operativo." };
+  }
+  // El alcance se verifica por IDENTIDAD, no por nave: la sede de la orden ya
+  // no tiene que coincidir con la de la cuenta. Magaldi y Luján se cubren
+  // entre sí y emitir una OS de la otra nave es operatoria normal.
+  const isDepotManager = managerScope?.is_principal === true;
+  if (isDepotManager && managerScope?.is_authorized !== true) {
+    return { ok: false, error: "Tu cuenta operativa no está habilitada para emitir órdenes." };
+  }
+  if (!data.pricing_version_id && !isDepotManager) {
     return {
       ok: false,
       error: "No hay una versión tarifaria firmable. Recargá la orden antes de continuar.",
@@ -214,6 +232,7 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
       label: service.label,
       unit: service.unit,
       qty_requested: service.qty_requested ?? service.qty,
+      pricing_status: service.pricing_status,
       pricing_kind: service.pricing_kind,
       pricing_reason: service.pricing_reason,
       second_trip_discount: service.second_trip_discount,
@@ -234,6 +253,7 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
         tariff_version_id?: string;
         currency?: "ARS" | "USD";
         signature_hash?: string;
+        pricing_complete?: boolean;
       }
     | null;
   if (
@@ -247,6 +267,12 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
       ok: false,
       error: safeServiceIssueError(issueError?.message),
     };
+  }
+  if (issued.pricing_complete === false) {
+    revalidatePath("/orders");
+    revalidatePath("/dashboard");
+    revalidatePath(`/orders/${issued.public_id}`);
+    return { ok: true, id: issued.id, public_id: issued.public_id };
   }
   const { data: issuedServices, error: issuedServicesError } = await admin
     .from("order_services")
@@ -283,8 +309,8 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
     depot: data.depot,
     short_id: Number(issued.short_id ?? 0),
     date: issued.date ?? issuedAt,
-    total: Number(issued.total ?? data.total),
-    issued_total: Number(issued.total ?? data.total),
+    total: issued.total == null ? null : Number(issued.total),
+    issued_total: issued.total == null ? null : Number(issued.total),
     pricing_currency: pricingCurrency,
     tariff_version_id: issued.tariff_version_id ?? data.pricing_version_id,
     pricing_snapshot_at: issuedAt,

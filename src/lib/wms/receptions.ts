@@ -152,7 +152,31 @@ export interface NewReceptionItemInput {
   position_id?: string | null;
 }
 
+/**
+ * A-6 · La posición es obligatoria, y la validación vive acá.
+ *
+ * La nave de cada línea se deriva de la posición por la jerarquía física
+ * posición → rack → zona → sector → piso → depósito. Retirado el aislamiento
+ * por sede, la columna `warehouse_id` de la cabecera desapareció y esa
+ * jerarquía pasó a ser el ÚNICO lugar donde vive la nave: una línea sin
+ * posición ya no queda mal permisada, queda sin nave, y el stock por depósito
+ * deja de poder contarla.
+ *
+ * El tipo la declara opcional y hasta ahora sólo la exigía el formulario
+ * (`NewReceptionForm.tsx:67`), de modo que cualquier llamador que no fuera esa
+ * pantalla —o un payload construido a mano— dejaba la línea sin ubicar.
+ */
+export function assertPositionRequired(item: { sku?: string; position_id?: string | null }): void {
+  if (!item.position_id) {
+    throw new Error(
+      `addReceptionItem: la línea ${item.sku ?? "(sin SKU)"} necesita una posición: ` +
+        "de ella se deriva la nave y la sede de la línea.",
+    );
+  }
+}
+
 export async function addReceptionItem(item: NewReceptionItemInput): Promise<void> {
+  assertPositionRequired(item);
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase no configurado");
   // business_unit lo setea el trigger desde la cabecera; el CHECK ANMAT valida lote/vencimiento.

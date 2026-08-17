@@ -15,7 +15,7 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { canAccess } from "@/lib/rbac/guard";
+import { canReadInternalChat } from "@/lib/rbac/internal-chat";
 import { canChannel } from "@/lib/rbac/nexus-link";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { validateAudio, AUDIO_LIMITS } from "../../audio/validate";
@@ -33,7 +33,7 @@ async function guardSession(): Promise<SessionGuard> {
   if (!supabase) return { ok: false, message: "Modo demo: audio deshabilitado." };
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Sesión no autenticada." };
-  if (!(await canAccess("connect.view"))) return { ok: false, message: "Sin permiso (connect.view)." };
+  if (!(await canReadInternalChat())) return { ok: false, message: "Sin permiso de chat interno." };
   return { ok: true, userId: user.id };
 }
 

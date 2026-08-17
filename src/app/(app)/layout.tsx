@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { notFound } from "next/navigation";
 import Shell from "@/components/shell/Shell";
 import { env } from "@/lib/env";
 import { getBootContext } from "@/lib/rbac/boot-permissions";
@@ -17,7 +18,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const initialNowIso = new Date().toISOString();
 
   // ÚNICO await del boot — acotado por BOOT_BUDGET_MS (anti-cuelgue).
-  const { user, profileRole, perms } = await getBootContext();
+  const { user, profileRole, perms, depotManager } = await getBootContext();
+  if (depotManager.restricted && !depotManager.authorized) notFound();
 
   // Datos de usuario para mostrar en el sidebar / topbar
   let userMeta = {
@@ -41,7 +43,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     const role = ROLE_LABELS[profileRole ?? ""] || meta.role || "Operaciones";
     userMeta = {
       name,
-      role,
+      role: depotManager.restricted
+        ? `Encargado operativo · ${depotManager.siteLabel}`
+        : role,
       avatar: name
         .split(" ")
         .map((p) => p[0])
@@ -66,6 +70,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       canViewConnect={perms.connect}
       canViewCopilot={perms.copilot}
       canViewContabilidad={perms.contabilidad}
+      operationalOnly={depotManager.restricted}
+      operationalSiteLabel={depotManager.siteLabel}
     >
       {children}
     </Shell>

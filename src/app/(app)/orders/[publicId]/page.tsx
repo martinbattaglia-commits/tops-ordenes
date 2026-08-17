@@ -57,7 +57,7 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
         <span className="text-fg-muted text-xs">/</span>
         <span className="text-xs text-fg-secondary font-mono">{order.public_id}</span>
         <div className="ml-auto flex items-center gap-2">
-          <EntityConversationButton entityType="orders" entityId={order.id} />
+          {!order.prices_hidden && <EntityConversationButton entityType="orders" entityId={order.id} />}
           <OrderActions order={order} publicUrl={publicUrl} />
         </div>
       </div>
@@ -139,7 +139,9 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
 
         {/* Right column — PDF Preview */}
         <div className="space-y-5">
-          <PricingLifecycle order={order} canAdjust={canAdjustPricing} />
+          {order.prices_hidden
+            ? <OperationalLifecycle order={order} />
+            : <PricingLifecycle order={order} canAdjust={canAdjustPricing} />}
           <div>
           <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
             <div>
@@ -154,12 +156,37 @@ export default async function OrderDetailPage({ params, searchParams }: Props) {
               <Icon name="download" size={13} /> Descargar PDF
             </Link>
           </div>
-          <PdfPreview order={order} qrSvg={qrSvg} />
+          {!order.prices_hidden && <PdfPreview order={order} qrSvg={qrSvg} />}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function OperationalLifecycle({ order }: { order: NonNullable<Awaited<ReturnType<typeof getOrder>>> }) {
+  return <div className="card overflow-hidden">
+    <div className="card-pad border-b border-stroke-soft">
+      <div className="eyebrow-tiny">Registro operativo</div>
+      <div className="text-base font-bold text-fg-brand">Servicios y cantidades</div>
+      <div className="text-xs text-fg-muted mt-1">Los importes comerciales se resuelven fuera de esta cuenta.</div>
+    </div>
+    <div className="divide-y divide-stroke-soft">
+      {(order.services ?? []).map((line, index) => <div key={line.id ?? index} className="p-4">
+        <div className="font-bold text-sm">{line.label}</div>
+        <div className="text-xs text-fg-muted mt-1">
+          Solicitado: {line.qty_requested ?? line.qty} {line.unit} · {line.qty_provided == null ? "Prestación pendiente" : `Prestado: ${line.qty_provided} ${line.unit}`}
+        </div>
+        {line.id && <form action={recordFulfillmentAction} className="grid sm:grid-cols-[140px_1fr_auto] gap-2 mt-3">
+          <input type="hidden" name="public_id" value={order.public_id} />
+          <input type="hidden" name="line_id" value={line.id} />
+          <input name="qty_provided" type="number" min="0" step="0.01" required defaultValue={line.qty_provided ?? line.qty_requested ?? line.qty} className="input" aria-label="Cantidad prestada" />
+          <input name="reason" required minLength={3} className="input" placeholder="Motivo / evidencia operativa" />
+          <button className="btn btn-primary btn-sm" type="submit">Guardar prestación</button>
+        </form>}
+      </div>)}
+    </div>
+  </div>;
 }
 
 function PricingLifecycle({
@@ -222,7 +249,18 @@ function PricingLifecycle({
               </div>
             </div>
 
-            {canAdjust && line.id && (
+            {canAdjust && line.id && (() => {
+              // R-3.e · Una bonificación se autoriza CONTRA una base. Si el
+              // snapshot está ausente —la línea todavía no tiene precio— el
+              // `max` colapsaba a 0 y el campo, que es obligatorio, sólo
+              // admitía enviar 0: el único envío posible materializaba un
+              // importe facturado de cero sobre una línea sin cotizar, que es
+              // justo el $0 inventado que el contrato prohíbe.
+              const esBonificacion = line.price_source === "bonification";
+              const baseCruda = line.subtotal_requested ?? line.subtotal;
+              const bonifBase = esBonificacion && baseCruda != null ? Math.abs(baseCruda) : null;
+              const sinBaseBonificable = esBonificacion && bonifBase == null;
+              return (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <form action={recordFulfillmentAction} className="rounded-lg border border-stroke-soft p-3 space-y-2">
                   <div className="text-xs font-bold text-fg-brand">Registrar prestación</div>
@@ -244,21 +282,30 @@ function PricingLifecycle({
                       name="billed_amount"
                       type="number"
                       min="0"
-                      max={line.price_source === "bonification" ? Math.abs(line.subtotal_requested ?? line.subtotal) : undefined}
+                      max={bonifBase ?? undefined}
                       step="0.01"
                       required
+                      disabled={sinBaseBonificable}
                       defaultValue={line.price_source === "bonification"
-                        ? Math.abs(line.subtotal_billed ?? line.subtotal_requested ?? line.subtotal)
-                        : (line.subtotal_billed ?? line.subtotal_provided ?? line.subtotal_requested ?? line.subtotal)}
+                        ? (bonifBase ?? undefined)
+                        : (line.subtotal_billed ?? line.subtotal_provided ?? line.subtotal_requested ?? line.subtotal ?? undefined)}
                       className="input w-full"
                       aria-label={line.price_source === "bonification" ? "Magnitud de bonificación facturada" : "Importe facturado"}
                     />
                   </div>
-                  <input name="reason" required minLength={3} className="input w-full" placeholder="Motivo y autorización" />
-                  <button className="btn btn-primary btn-sm w-full" type="submit">Guardar facturación</button>
+                  <input name="reason" required minLength={3} className="input w-full" placeholder="Motivo y autorización" disabled={sinBaseBonificable} />
+                  <button className="btn btn-primary btn-sm w-full" type="submit" disabled={sinBaseBonificable}>
+                    Guardar facturación
+                  </button>
+                  {sinBaseBonificable && (
+                    <div className="text-[11px] text-fg-muted">
+                      La magnitud se autoriza cuando la línea bonificada tenga precio: hoy está pendiente de cotización.
+                    </div>
+                  )}
                 </form>
               </div>
-            )}
+              );
+            })()}
           </div>
         ))}
       </div>

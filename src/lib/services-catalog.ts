@@ -305,15 +305,11 @@ export const SERVICES_CATALOG: ServiceCatalogItem[] = [
   },
 ];
 
-export const SERVICE_CATEGORIES = [
-  { key: "personal", label: "Personal", icon: "user" },
-  { key: "especial", label: "Servicios especiales", icon: "forklift" },
-  { key: "carga", label: "Carga, descarga, picking", icon: "package" },
-  { key: "desconsolidado", label: "Desconsolidado", icon: "package" },
-  { key: "almacenamiento", label: "Almacenamiento", icon: "building" },
-  { key: "coworking", label: "Oficinas y coworking", icon: "building" },
-  { key: "admin", label: "Administrativos", icon: "bill" },
-] as const;
+// SERVICE_CATEGORIES y unitLabel viven en `pricing/service-ui.ts`, que es el
+// módulo de presentación libre de tarifas. Mantener acá una segunda copia
+// dejaba dos definiciones vivas del mismo concepto: la de allá se consumía y
+// divergió —clave `admin` renombrada, unidades pluralizadas mal—, mientras
+// ésta quedaba correcta pero sin ningún consumidor que lo revelara.
 
 export function getService(slug: string): ServiceCatalogItem | undefined {
   return SERVICES_CATALOG.find((s) => s.slug === slug);
@@ -323,16 +319,3 @@ export function servicesByCategory(category: string): ServiceCatalogItem[] {
   return SERVICES_CATALOG.filter((s) => s.category === category && s.active);
 }
 
-/** Etiqueta human-readable de la unidad para mostrar en UI. */
-export function unitLabel(unit: ServiceUnit | string): string {
-  const map: Record<string, string> = {
-    hs: "hs",
-    km: "km",
-    pal: "pal",
-    mes: "mes",
-    un: "un",
-    m3: "m³",
-    m2: "m²",
-  };
-  return map[unit] ?? unit;
-}

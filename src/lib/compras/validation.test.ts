@@ -109,6 +109,16 @@ describe("cantidades y precios fail-closed", () => {
     if (parsed.success) expect(parsed.data.items[0].price).toBeNull();
   });
 
+  it("rechaza subtotal manipulado en una línea pendiente", () => {
+    const manipulated = purchaseInput(1, null);
+    manipulated.items[0].subtotal = 1;
+    const parsed = CreatePurchaseOrderSchema.safeParse(manipulated);
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((issue) => issue.path.at(-1) === "subtotal")).toBe(true);
+    }
+  });
+
   it("rechaza firma que no sea base64 PNG acotado antes de llegar a PostgreSQL", () => {
     const malformed = purchaseInput(1) as ReturnType<typeof purchaseInput>;
     malformed.signature.data_url = "data:image/png;base64,***";

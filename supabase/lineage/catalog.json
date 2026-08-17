@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 211,
-  "no_ejecutables": 22,
+  "ejecutables": 213,
+  "no_ejecutables": 24,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2670,6 +2670,54 @@
       "ledger_name": "ROLLBACK_0250a_custody_productive_vision",
       "provenance": "repo (codex/custodia-vision-productiva-001-r2)",
       "motivo": "Inversa logica e idempotente de 0250 / 0250a: desactiva la politica y retira superficies y gates sin borrar identidades, eventos, decisiones ni auditoria. NO es forward."
+    },
+    {
+      "id": "0246_clientes_fase_b_principals_capabilities.sql",
+      "filename": "0246_clientes_fase_b_principals_capabilities.sql",
+      "sha256": "5fbdd469e6a8afc0cfed88bb789393fd16a8ee8d5d3b9dd61f5d1599bcaa46bc",
+      "orden": 234,
+      "requires": ["0001_init.sql", "0009_rbac.sql", "0020_wms_physical_model.sql", "0237_nexus_link_channel_rls.sql"],
+      "estado": "active",
+      "ledger_version": "L00234",
+      "ledger_name": "0246_clientes_fase_b_principals_capabilities",
+      "provenance": "repo (codex/clientes-fase-b-rbac-encargados)",
+      "motivo": "CLIENTES FASE B: los dos encargados de deposito como principales, con un conjunto CERRADO de nueve capacidades, identidad por par UUID+email y Nexus Link habilitado por capacidad de canal en vez de los permisos coarse connect.*. Neutraliza el rol legacy: is_staff() e is_admin() devuelven false para los principales, de modo que un profiles.role manipulado no los convierte en staff. current_role() NO se modifica: queda la de 0005_fix_rls_recursion, restituida byte a byte al retirarse el aislamiento por nave."
+    },
+    {
+      "id": "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
+      "filename": "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
+      "sha256": "43b2669993a5caf992ec8518101514893486370bd6404a11e935c17db7f862a5",
+      "orden": 235,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00235",
+      "ledger_name": "ROLLBACK_0246_clientes_fase_b_principals_capabilities",
+      "provenance": "repo (codex/clientes-fase-b-rbac-encargados)",
+      "motivo": "Inversa exacta de 0246 sobre el estado preflight de 8f538a7: restituye las policies y las RPC de Connect renombradas, devuelve el conjunto previo de catorce capacidades del rol jefe_deposito y anula la proyeccion de sede. Se ejecuta despues de ROLLBACK_0249. NO es forward."
+    },
+    {
+      "id": "0249_clientes_fase_b_service_pricing_redaction.sql",
+      "filename": "0249_clientes_fase_b_service_pricing_redaction.sql",
+      "sha256": "64b4c137e7f912ad45e8b79e29236322a545f7089bca1813be4d8e473b7728aa",
+      "orden": 236,
+      "requires": ["0244_service_order_pricing_lifecycle.sql", "0246_clientes_fase_b_principals_capabilities.sql"],
+      "estado": "active",
+      "ledger_version": "L00236",
+      "ledger_name": "0249_clientes_fase_b_service_pricing_redaction",
+      "provenance": "repo (codex/clientes-fase-b-rbac-encargados)",
+      "motivo": "CLIENTES FASE B: ciclo operativo de Ordenes de Servicio con precios REDACTADOS para el encargado. Restituye los cuatro invariantes estructurales del recargo de urgencia de 0244 y agrega la rama de transporte a cotizar, que congela el recargo como PENDIENTE en vez de sobre base parcial. RIESGO DE DESPLIEGUE DECLARADO: renombra funciones VIVAS -service_order_issue y service_order_record_fulfillment pasan a *_0244 y se crean las nuevas en su lugar-, de modo que la migracion productiva exige ventana con verificacion posterior y no aplicacion al vuelo."
+    },
+    {
+      "id": "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
+      "filename": "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
+      "sha256": "d3f5f4a337a055ef10db4bc404f3ba48bb7c58dffe638d8b7b00d587886a3c2e",
+      "orden": 237,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00237",
+      "ledger_name": "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction",
+      "provenance": "repo (codex/clientes-fase-b-rbac-encargados)",
+      "motivo": "Inversa de 0249: devuelve service_order_issue y service_order_record_fulfillment a su nombre productivo, restituye la policy abierta de operators y retira las RPC de listado y detalle del encargado. Aborta si service_order_price_audit tiene una sola fila: no destruye evidencia firmada. NO es forward."
     }
   ]
 }

@@ -10,21 +10,17 @@ import { canCreateClientFromOrder, createClient } from "../../clients/actions";
 import type { Client, Operator, ServiceCatalogItem } from "@/lib/types";
 import type { OrderClientOption } from "@/lib/data/orders";
 import { DEPOT_META } from "@/lib/types";
-import {
-  VEHICLES,
-  TRANSPORT_RULES,
-  type VehicleZoneKey,
-  type VehicleSpec,
-} from "@/lib/pricing/vehicles";
+import type { VehicleZoneKey, VehicleSpec } from "@/lib/pricing/vehicles";
 import type { ServicePricingPayload } from "@/lib/data/service-pricing";
 import {
   computeServiceLine,
   computeTransportLine,
+  pendingServiceLine,
   sumLines,
   ivaEstimate,
   type LineItem,
 } from "@/lib/pricing/calculator";
-import { SERVICE_CATEGORIES, unitLabel } from "@/lib/services-catalog";
+import { SERVICE_CATEGORIES, TRANSPORT_RULES, unitLabel } from "@/lib/pricing/service-ui";
 
 type PricingCurrency = ServicePricingPayload["currency"];
 
@@ -35,37 +31,16 @@ interface Props {
   pricing?: ServicePricingPayload;
 }
 
-const FALLBACK_GENERAL_RATES: ServicePricingPayload["generalRates"] = Object.fromEntries(
-  VEHICLES.flatMap((vehicle) =>
-    vehicle.zones.map((zone) => {
-      const slug = `transporte:${vehicle.slug}:${zone.zone}`;
-      return [
-        slug,
-        {
-          tariffRateId: slug,
-          label: `${vehicle.label} · ${zone.label}`,
-          category: "transporte",
-          unit: "viaje" as const,
-          rate: zone.price,
-          minQty: 0,
-          minBilling: 0,
-          requiresQuote: zone.price == null,
-          metadata: { vehicle: vehicle.slug, zone: zone.zone },
-        },
-      ];
-    })
-  )
-);
-
 const FALLBACK_PRICING: ServicePricingPayload = {
   versionId: null,
   versionCode: "COMPAT",
   currency: "ARS",
   catalog: [],
-  vehicles: VEHICLES,
-  generalRates: FALLBACK_GENERAL_RATES,
+  vehicles: [],
+  generalRates: {},
   clientRates: {},
-  canAdjust: true,
+  canAdjust: false,
+  pricesVisible: false,
 };
 
 interface ConceptoLibre {
@@ -73,6 +48,11 @@ interface ConceptoLibre {
   label: string;
   price: number;
   observ: string;
+}
+
+interface PriceOverride {
+  rate: string;
+  reason: string;
 }
 
 interface TransportSelection {
@@ -110,6 +90,7 @@ interface WizardState {
   operator_id: string;
   services: string[];
   qty: Record<string, number>;
+  price_overrides: Record<string, PriceOverride>;
   /** Transportes seleccionados (multi-vehículo: cada uno con su zona/viajes/recargo). */
   transports: TransportSelection[];
   /** Envío urgente (mismo día): aplica recargo del 100% sobre el transporte. */
@@ -257,12 +238,30 @@ export default function NewOrderWizard({
     const out: LineItem[] = [];
     for (const slug of data.services) {
       const svc = pricedCatalog.find((c) => c.slug === slug);
-      if (!svc?.active || svc.requires_quote || svc.rate == null || svc.rate <= 0) continue;
+      if (!svc?.active) continue;
       const q = data.qty[slug] ?? 1;
-      out.push(computeServiceLine(svc, q, pricing.currency));
+      const override = data.price_overrides[slug];
+      const overrideRate = override?.rate.trim() ? Number(override.rate) : null;
+      if (
+        pricing.canAdjust && overrideRate != null && Number.isFinite(overrideRate)
+        && overrideRate > 0 && (override?.reason.trim().length ?? 0) >= 3
+      ) {
+        out.push({
+          ...computeServiceLine({ ...svc, rate: overrideRate, requires_quote: false }, q, pricing.currency),
+          manual_rate: overrideRate,
+          pricing_reason: override.reason.trim(),
+        });
+      } else if (!svc.requires_quote && svc.rate != null && svc.rate > 0) {
+        out.push(computeServiceLine(svc, q, pricing.currency));
+      } else {
+        out.push(pendingServiceLine(svc, q));
+      }
     }
     // Multi-vehículo: una línea de transporte por cada vehículo seleccionado.
     let transportSum = 0;
+    // R-5 · distingue "no hay transporte" de "el transporte aún no tiene
+    // precio": el recargo se comporta distinto en cada caso.
+    let transportPendiente = false;
     for (const t of data.transports) {
       const v = pricedVehicles.find((vehicle) => vehicle.slug === t.vehicle_slug);
       const z = v?.zones.find((zone) => zone.zone === t.zone);
@@ -270,7 +269,30 @@ export default function NewOrderWizard({
         const slug = `transporte:${v.slug}:${z.zone}`;
         const particular = clientPriceMap[slug];
         const general = pricing.generalRates[slug];
-        if (z.price == null || z.price <= 0 || (!particular && general?.requiresQuote)) continue;
+        if (z.price == null || z.price <= 0 || (!particular && general?.requiresQuote)) {
+          out.push({
+            key: `trip:${v.slug}:${z.zone}`,
+            label: `${v.label} · ${z.label}`,
+            qty_requested: t.trips,
+            qty_effective: t.trips,
+            rate: null,
+            unit: "viaje",
+            subtotal: null,
+            min_applied: false,
+            min_reason: "PENDIENTE DE COTIZACIÓN",
+            vehicle_slug: v.slug,
+            service_slug: slug,
+            category: "transporte",
+            pricing_kind: "transport",
+            second_trip_discount: t.second_trip_discount,
+            surcharge: t.surcharge,
+            tariff_rate_id: general?.tariffRateId,
+            client_rate_id: particular?.clientRateId ?? null,
+            pricing_status: "pending_quote",
+          });
+          transportPendiente = true;
+          continue;
+        }
         const tl = computeTransportLine({
           vehicle: v,
           zone: z,
@@ -280,7 +302,7 @@ export default function NewOrderWizard({
           minQty: particular?.minQty ?? general?.minQty ?? 0,
           minBilling: particular?.minBilling ?? general?.minBilling ?? 0,
         });
-        transportSum += tl.subtotal;
+        transportSum += tl.subtotal ?? 0;
         out.push({
           ...tl,
           tariff_rate_id: pricing.generalRates[slug]?.tariffRateId,
@@ -291,20 +313,31 @@ export default function NewOrderWizard({
     // Envío urgente (mismo día): recargo del 100% sobre el transporte. Se modela
     // como línea propia para que persista y se refleje en resumen, comprobante,
     // PDF, emails e historial SIN tocar el cálculo de transporte ni migraciones.
-    if (data.transport_urgent && transportSum > 0) {
+    //
+    // R-5 · La base puede estar incompleta. Si algún transporte quedó a
+    // cotizar, el recargo NO se congela sobre lo que ya tiene precio: viaja
+    // pendiente, igual que cualquier otra línea sin cotizar. Y si TODA la base
+    // está pendiente tampoco se omite: antes, con `transportSum > 0`, el
+    // usuario activaba la urgencia, firmaba, y el +100% desaparecía sin dejar
+    // rastro ni forma de recuperarlo.
+    if (data.transport_urgent && (transportSum > 0 || transportPendiente)) {
+      const baseIncompleta = transportPendiente;
       out.push({
         key: URGENT_SERVICE_SLUG,
         label: "🚨 Recargo envío urgente (+100%)",
         qty_requested: 1,
         qty_effective: 1,
-        rate: transportSum,
+        rate: baseIncompleta ? null : transportSum,
         unit: "un",
-        subtotal: transportSum,
+        subtotal: baseIncompleta ? null : transportSum,
         min_applied: false,
-        min_reason: "Despacho prioritario para ejecución el mismo día.",
+        min_reason: baseIncompleta
+          ? "PENDIENTE DE COTIZACIÓN · el transporte base todavía no tiene precio."
+          : "Despacho prioritario para ejecución el mismo día.",
         service_slug: URGENT_SERVICE_SLUG,
         category: "transporte",
         pricing_kind: "urgent",
+        pricing_status: baseIncompleta ? "pending_quote" : "resolved",
         pricing_reason: "Despacho prioritario para ejecucion el mismo dia.",
       });
     }
@@ -330,13 +363,13 @@ export default function NewOrderWizard({
     // servicio original queda intacto y visible → trazabilidad total. El
     // descuento se topea al subtotal del destino (nunca deja la línea < $0).
     for (const b of pricing.canAdjust ? data.bonifications : []) {
-      const target = out.find((l) => l.key === b.target_key && l.subtotal > 0);
+      const target = out.find((l) => l.key === b.target_key && (l.subtotal ?? 0) > 0);
       if (!target) continue;
       const raw =
         b.type === "pct"
-          ? Math.round(target.subtotal * (b.value / 100))
+          ? Math.round((target.subtotal as number) * (b.value / 100))
           : Math.round(b.value);
-      const amount = Math.min(Math.max(0, raw), target.subtotal);
+      const amount = Math.min(Math.max(0, raw), target.subtotal as number);
       if (amount <= 0) continue;
       out.push({
         key: `bonif:${b.target_key}`,
@@ -364,6 +397,7 @@ export default function NewOrderWizard({
   }, [
     data.services,
     data.qty,
+    data.price_overrides,
     data.transports,
     data.transport_urgent,
     data.concepto_libre,
@@ -376,22 +410,13 @@ export default function NewOrderWizard({
     pricing.canAdjust,
   ]);
 
-  const hasPendingPricing = useMemo(() => {
-    const servicePending = data.services.some((slug) => {
-      const service = pricedCatalog.find((item) => item.slug === slug);
-      return !service?.active || service.requires_quote || service.rate == null || service.rate <= 0;
-    });
-    const transportPending = data.transports.some((selection) => {
-      const slug = `transporte:${selection.vehicle_slug}:${selection.zone}`;
-      const particular = clientPriceMap[slug];
-      const general = pricing.generalRates[slug];
-      return !particular && (!general || general.requiresQuote || general.rate == null || general.rate <= 0);
-    });
-    return servicePending || transportPending;
-  }, [clientPriceMap, data.services, data.transports, pricedCatalog, pricing.generalRates]);
+  const hasPendingPricing = useMemo(
+    () => lines.some((line) => line.pricing_status === "pending_quote"),
+    [lines],
+  );
 
   const total = useMemo(() => sumLines(lines), [lines]);
-  const ivaEst = useMemo(() => ivaEstimate(total), [total]);
+  const ivaEst = useMemo(() => (total == null ? null : ivaEstimate(total)), [total]);
 
   const canAdvance = () => {
     if (stepIdx === 0) {
@@ -411,10 +436,14 @@ export default function NewOrderWizard({
         pricing.canAdjust &&
         cl.enabled && cl.label.trim().length > 0 && cl.price > 0 && cl.observ.trim().length >= 3;
       const haySeleccion = data.services.length > 0 || data.transports.length > 0 || conceptoOk;
+      // R-7 · Este es el wizard COMERCIAL. La cotización pendiente pertenece al
+      // flujo operativo del encargado, que usa OperationalOrderWizard: una OS
+      // comercial con líneas sin precio queda inservible para facturación,
+      // porque buildOrderItems la rechaza (billing/actions.ts:207-213).
       const sinCotizacionesPendientes = lines
         .filter((line) => line.pricing_kind === "catalog" || line.pricing_kind === "transport")
-        .every((line) => line.rate > 0 && line.subtotal > 0);
-      return haySeleccion && !hasPendingPricing && sinCotizacionesPendientes;
+        .every((line) => (line.rate ?? 0) > 0 && (line.subtotal ?? 0) > 0);
+      return haySeleccion && lines.length > 0 && !hasPendingPricing && sinCotizacionesPendientes;
     }
     return true;
   };
@@ -465,12 +494,16 @@ export default function NewOrderWizard({
           // se perdería el descuento). El resto de los servicios sí (no admiten
           // importes negativos por error de cálculo).
           const isBonif = slug.startsWith("bonif:");
-          const rate = isBonif
-            ? numOrDefault(ln.rate, 0)
-            : Math.max(0, numOrDefault(ln.rate, 0));
-          const subtotal = isBonif
-            ? numOrDefault(ln.subtotal, 0)
-            : Math.max(0, numOrDefault(ln.subtotal, 0));
+          const rate = ln.rate == null
+            ? null
+            : isBonif
+              ? numOrDefault(ln.rate, 0)
+              : Math.max(0, numOrDefault(ln.rate, 0));
+          const subtotal = ln.subtotal == null
+            ? null
+            : isBonif
+              ? numOrDefault(ln.subtotal, 0)
+              : Math.max(0, numOrDefault(ln.subtotal, 0));
           return {
             service_slug: slug,
             label,
@@ -478,6 +511,7 @@ export default function NewOrderWizard({
             unit: normalizeUnit(realUnit),
             rate,
             subtotal,
+            pricing_status: ln.pricing_status ?? (rate == null ? "pending_quote" : "resolved"),
             qty_requested: Math.max(0.01, numOrDefault(ln.qty_requested, 1)),
             pricing_kind: ln.pricing_kind ?? "catalog",
             pricing_reason: ln.pricing_reason ?? ln.min_reason ?? "",
@@ -485,13 +519,14 @@ export default function NewOrderWizard({
             surcharge: ln.surcharge ?? "none",
             expected_tariff_rate_id: ln.tariff_rate_id ?? null,
             expected_client_rate_id: ln.client_rate_id ?? null,
-            manual_rate:
+            manual_rate: ln.manual_rate ?? (
               ln.pricing_kind === "manual" || ln.pricing_kind === "bonification"
-                ? rate
-                : undefined,
+                ? rate ?? undefined
+                : undefined
+            ),
             manual_subtotal:
               ln.pricing_kind === "manual" || ln.pricing_kind === "bonification"
-                ? subtotal
+                ? subtotal ?? undefined
                 : undefined,
           };
         });
@@ -544,7 +579,7 @@ export default function NewOrderWizard({
         units: numOr0(data.units),
         km: numOr0(data.km),
         observ: combinedObserv,
-        total: Math.max(0, numOrDefault(total, 0)),
+        total,
         signature: {
           signed_by: signerName,
           signed_doc: data.signer_doc?.trim() || null,
@@ -612,6 +647,7 @@ export default function NewOrderWizard({
               lines={lines}
               ivaEst={ivaEst}
               currency={pricing.currency}
+              pricesVisible={pricing.pricesVisible}
             />
           )}
           {stepIdx === 3 && (
@@ -1263,16 +1299,18 @@ function StepServicio({
   lines,
   ivaEst,
   currency,
+  pricesVisible,
 }: {
   catalog: ServiceCatalogItem[];
   vehicles: VehicleSpec[];
   canAdjust: boolean;
   data: WizardState;
   update: (p: Partial<WizardState>) => void;
-  total: number;
+  total: number | null;
   lines: LineItem[];
-  ivaEst: number;
+  ivaEst: number | null;
   currency: PricingCurrency;
+  pricesVisible: boolean;
 }) {
   const patchConceptoLibre = (patch: Partial<ConceptoLibre>) =>
     update({ concepto_libre: { ...data.concepto_libre, ...patch } });
@@ -1287,6 +1325,16 @@ function StepServicio({
 
   const setQty = (slug: string, qty: number) => {
     update({ qty: { ...data.qty, [slug]: Math.max(1, qty) } });
+  };
+
+  const setPriceOverride = (slug: string, patch: Partial<PriceOverride>) => {
+    const current = data.price_overrides[slug] ?? { rate: "", reason: "" };
+    update({
+      price_overrides: {
+        ...data.price_overrides,
+        [slug]: { ...current, ...patch },
+      },
+    });
   };
 
   // Servicios agrupados por categoría visible.
@@ -1331,6 +1379,10 @@ function StepServicio({
             onToggle={toggle}
             onQty={setQty}
             currency={currency}
+            canAdjust={canAdjust}
+            pricesVisible={pricesVisible}
+            priceOverrides={data.price_overrides}
+            onPriceOverride={setPriceOverride}
           />
         );
       })}
@@ -1348,7 +1400,7 @@ function StepServicio({
       {/* ============ BONIFICACIONES (al final del acordeón) ============ */}
       {canAdjust && (
         <BonificacionesSection
-          bonifiableLines={lines.filter((l) => l.subtotal > 0 && l.category !== "bonificacion")}
+          bonifiableLines={lines.filter((l) => (l.subtotal ?? 0) > 0 && l.category !== "bonificacion")}
           bonifications={data.bonifications}
           onChange={(next) => update({ bonifications: next })}
           currency={currency}
@@ -1534,7 +1586,6 @@ function TransportSection({
                     type="button"
                     key={v.slug}
                     onClick={() => toggleVehicle(v.slug)}
-                    disabled={!hasPrice}
                     className={cn(
                       "p-3 rounded-lg border text-left transition-all duration-200 relative disabled:cursor-not-allowed disabled:opacity-55",
                       sel
@@ -1664,7 +1715,6 @@ function TransportSection({
                           type="button"
                           key={z.zone}
                           onClick={() => patchVehicle(t.vehicle_slug, { zone: z.zone })}
-                          disabled={z.price === null}
                           className={cn(
                             "p-2.5 rounded-md border text-left transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-55",
                             isSel
@@ -1839,6 +1889,10 @@ function CategorySection({
   onToggle,
   onQty,
   currency,
+  canAdjust,
+  pricesVisible,
+  priceOverrides,
+  onPriceOverride,
 }: {
   title: string;
   iconName: "user" | "forklift" | "package" | "bill" | "building";
@@ -1848,6 +1902,10 @@ function CategorySection({
   onToggle: (slug: string) => void;
   onQty: (slug: string, qty: number) => void;
   currency: PricingCurrency;
+  canAdjust: boolean;
+  pricesVisible: boolean;
+  priceOverrides: Record<string, PriceOverride>;
+  onPriceOverride: (slug: string, patch: Partial<PriceOverride>) => void;
 }) {
   const selectedCount = items.filter((i) => selected.includes(i.slug)).length;
   const [open, setOpen] = useState<boolean>(selectedCount > 0);
@@ -1910,8 +1968,7 @@ function CategorySection({
               <button
                 type="button"
                 onClick={() => onToggle(s.slug)}
-                disabled={Boolean(s.requires_quote) && !isSel}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-70"
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
               >
                 <div
                   className={cn(
@@ -1924,7 +1981,11 @@ function CategorySection({
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-fg-primary truncate">{s.label}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    {s.requires_quote || s.rate == null ? (
+                    {!pricesVisible ? (
+                      <span className="text-[11px] text-status-warning font-bold">
+                        Precio reservado · quedará pendiente de cotización
+                      </span>
+                    ) : s.requires_quote || s.rate == null ? (
                       <span className="text-[11px] text-status-warning font-bold">
                         A cotizar · requiere precio particular vigente
                       </span>
@@ -1950,10 +2011,34 @@ function CategorySection({
                 </div>
               </button>
               {isSel && (
-                <div className="px-3 pb-2.5 flex items-center gap-3 border-t border-stroke-soft pt-2">
-                  <div className="text-[11px] text-fg-muted font-bold uppercase">Cantidad</div>
-                  <QtyStepper value={q} onChange={(n) => onQty(s.slug, n)} />
-                  <div className="text-[11px] text-fg-muted">{unitLabel(s.unit)}</div>
+                <div className="px-3 pb-2.5 border-t border-stroke-soft pt-2 space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="text-[11px] text-fg-muted font-bold uppercase">Cantidad</div>
+                    <QtyStepper value={q} onChange={(n) => onQty(s.slug, n)} />
+                    <div className="text-[11px] text-fg-muted">{unitLabel(s.unit)}</div>
+                  </div>
+                  {canAdjust && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        className="input"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        aria-label={`Precio unitario ${s.label}`}
+                        placeholder="Precio unitario"
+                        value={priceOverrides[s.slug]?.rate ?? (s.rate == null ? "" : String(s.rate))}
+                        onChange={(event) => onPriceOverride(s.slug, { rate: event.target.value })}
+                      />
+                      <input
+                        className="input"
+                        maxLength={500}
+                        aria-label={`Motivo de precio ${s.label}`}
+                        placeholder="Motivo obligatorio si modifica"
+                        value={priceOverrides[s.slug]?.reason ?? ""}
+                        onChange={(event) => onPriceOverride(s.slug, { reason: event.target.value })}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2154,8 +2239,8 @@ function BonificacionesSection({
 
   const computeAmount = (line: LineItem, b: Bonification) => {
     const raw =
-      b.type === "pct" ? Math.round(line.subtotal * (b.value / 100)) : Math.round(b.value);
-    return Math.min(Math.max(0, raw), line.subtotal);
+      b.type === "pct" ? Math.round((line.subtotal ?? 0) * (b.value / 100)) : Math.round(b.value);
+    return Math.min(Math.max(0, raw), line.subtotal ?? 0);
   };
 
   return (
@@ -2210,7 +2295,7 @@ function BonificacionesSection({
                   const b = getBonif(line.key);
                   const sel = Boolean(b);
                   const amount = b ? computeAmount(line, b) : 0;
-                  const net = line.subtotal - amount;
+                  const net = (line.subtotal ?? 0) - amount;
                   return (
                     <div
                       key={line.key}
@@ -2321,8 +2406,8 @@ function BreakdownCard({
   currency,
 }: {
   lines: LineItem[];
-  total: number;
-  ivaEst: number;
+  total: number | null;
+  ivaEst: number | null;
   currency: PricingCurrency;
 }) {
   return (
@@ -2362,7 +2447,7 @@ function BreakdownCard({
                   {ln.label}
                 </div>
                 <div className="text-[11px] text-fg-muted flex items-center gap-1.5 flex-wrap mt-0.5">
-                  {!isBonif && (
+                  {!isBonif && ln.rate != null && (
                     <span>
                       {ln.qty_effective} {unitLabel(ln.unit)} × {fmtCurrency(ln.rate, currency)}
                     </span>
@@ -2385,9 +2470,11 @@ function BreakdownCard({
                   isBonif ? "text-status-success" : "text-fg-brand"
                 )}
               >
-                {isBonif
-                  ? `− ${fmtCurrency(Math.abs(ln.subtotal), currency)}`
-                  : fmtCurrency(ln.subtotal, currency)}
+                {ln.subtotal == null
+                  ? "PENDIENTE DE COTIZACIÓN"
+                  : isBonif
+                    ? `− ${fmtCurrency(Math.abs(ln.subtotal), currency)}`
+                    : fmtCurrency(ln.subtotal, currency)}
               </div>
             </div>
             );
@@ -2397,14 +2484,14 @@ function BreakdownCard({
 
       <div className="px-4 py-3 border-t border-stroke-soft bg-bg-surface flex items-center justify-between">
         <div className="text-xs text-fg-secondary">
-          IVA estimado (21%): <strong className="text-fg-primary">{fmtCurrency(ivaEst, currency)}</strong>
+          IVA estimado (21%): <strong className="text-fg-primary">{ivaEst == null ? "Pendiente" : fmtCurrency(ivaEst, currency)}</strong>
         </div>
         <div className="text-right">
           <div className="text-[10px] uppercase tracking-wider text-fg-muted font-bold">
             Total neto
           </div>
           <div className="text-2xl font-bold text-fg-brand tabular -tracking-[0.01em]">
-            {fmtCurrency(total, currency)}
+            {total == null ? "PENDIENTE" : fmtCurrency(total, currency)}
           </div>
           <div className="text-[10px] uppercase tracking-wider text-fg-muted">+ IVA</div>
         </div>
@@ -2423,7 +2510,7 @@ function StepFirma({
 }: {
   data: WizardState;
   update: (p: Partial<WizardState>) => void;
-  total: number;
+  total: number | null;
   onConfirm: (sig: { data: string; hash: string }) => void;
   submitting: boolean;
   currency: PricingCurrency;
@@ -2617,7 +2704,7 @@ function StepFirma({
       <div className="flex flex-col sm:flex-row gap-3 justify-between items-stretch sm:items-center mt-6 pt-5 border-t border-stroke-soft">
         <div className="text-xs text-fg-secondary">
           Total estimado:{" "}
-          <strong className="text-fg-brand text-base tabular">{fmtCurrency(total, currency)}</strong>
+          <strong className="text-fg-brand text-base tabular">{total == null ? "PENDIENTE DE COTIZACIÓN" : fmtCurrency(total, currency)}</strong>
         </div>
         <button
           type="button"
@@ -2650,7 +2737,7 @@ function SummaryCard({
   currency,
 }: {
   data: WizardState;
-  total: number;
+  total: number | null;
   lines: LineItem[];
   operator?: Operator;
   currency: PricingCurrency;
@@ -2701,9 +2788,11 @@ function SummaryCard({
               )}
             </span>
             <span className={cn("font-bold tabular shrink-0", isBonif && "text-status-success")}>
-              {isBonif
-                ? `− ${fmtCurrency(Math.abs(ln.subtotal), currency)}`
-                : fmtCurrency(ln.subtotal, currency)}
+              {ln.subtotal == null
+                ? "PENDIENTE"
+                : isBonif
+                  ? `− ${fmtCurrency(Math.abs(ln.subtotal), currency)}`
+                  : fmtCurrency(ln.subtotal, currency)}
             </span>
           </div>
           );
@@ -2717,7 +2806,7 @@ function SummaryCard({
           </div>
           <div className="text-xs text-white/70">+ IVA</div>
         </div>
-        <div className="text-2xl font-bold tabular">{fmtCurrency(total, currency)}</div>
+        <div className="text-2xl font-bold tabular">{total == null ? "PENDIENTE" : fmtCurrency(total, currency)}</div>
       </div>
 
       {data.observ && (
@@ -2778,6 +2867,7 @@ function initial(firstClient?: OrderClientOption): WizardState {
     operator_id: "",
     services: [],
     qty: {},
+    price_overrides: {},
     transports: [],
     transport_urgent: false,
     bonifications: [],

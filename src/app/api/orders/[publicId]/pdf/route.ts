@@ -6,6 +6,7 @@ import { safeFilename } from "@/lib/doc-system/filename";
 import { getOrder } from "@/lib/data/orders";
 import { env } from "@/lib/env";
 import { OrderPdfDocument } from "@/lib/pdf/OrderPdfDocument";
+import { OperationalOrderPdfDocument } from "@/lib/pdf/OperationalOrderPdfDocument";
 
 /**
  * Orden de Servicio on-demand. Acepta id (uuid) o public_id (OS-2026-0001).
@@ -56,7 +57,9 @@ export async function GET(
       width: 280,
     });
 
-    const doc = OrderPdfDocument({ order, qrDataUrl });
+    const doc = order.prices_hidden
+      ? OperationalOrderPdfDocument({ order })
+      : OrderPdfDocument({ order, qrDataUrl });
     const stream = await renderToStream(doc);
 
     const chunks: Buffer[] = [];

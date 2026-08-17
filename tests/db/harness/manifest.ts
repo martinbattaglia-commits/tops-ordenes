@@ -364,6 +364,21 @@ const PR66_PHASE_A_MIGRATION_FILES: ReadonlySet<string> = new Set([
   "ROLLBACK_20260815002807_service_tariff_m2_rates.sql",
 ]);
 
+/** CLIENTES FASE B · RBAC de encargados y correctivo operativo de OS.
+ *
+ * Cuatro artefactos exactos, fuera del replay WMS vanilla. Eran ocho: 0247
+ * (RLS por nave) y 0248 (wrappers de RPC con scope) se retiraron enteras al
+ * eliminarse el aislamiento por sede, que la operación nunca pidió. La
+ * verificación funcional vive en su harness PG17 dedicado; no se amplía ningún
+ * rango ni se altera el conjunto congelado de FASE A/Custodia.
+ */
+export const CLIENTES_PHASE_B_MIGRATION_FILES: ReadonlySet<string> = new Set([
+  "0246_clientes_fase_b_principals_capabilities.sql",
+  "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
+  "0249_clientes_fase_b_service_pricing_redaction.sql",
+  "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
+]);
+
 export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
   id: string;
   matches: (file: string) => boolean;
@@ -496,6 +511,22 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "se ejecutan contra PostgreSQL 17 real en t-cli-a1-01, t-cli-a1-02, " +
       "t-cli-a2-01, t-pr66-a1-purchase-order-integrity y t-pr66-01-order-pricing. " +
       "La clasificacion enumera exactamente siete forwards y siete rollbacks.",
+  },
+  {
+    id: "clientes-phase-b-depot-managers",
+    matches: (f) => CLIENTES_PHASE_B_MIGRATION_FILES.has(f),
+    reason:
+      "CLIENTES FASE B: identidad dual y capacidades exactas de los dos encargados, " +
+      "aislamiento WMS por sede, wrappers de RPC y ciclo de OS con cotizacion pendiente " +
+      "sin exponer importes. Son cuatro forwards y cuatro inversas exactas. " +
+      "Quedan fuera del replay vanilla porque REESCRIBEN su nucleo —policies de la " +
+      "jerarquia fisica, funciones de rol y las quince RPC de fulfillment—, de modo que " +
+      "ejecutarlas dentro de esta suite mediria un sistema distinto del que la suite " +
+      "declara verificar. Su verificacion funcional vive en tests/clientes-fase-b-db, " +
+      "con su propio cluster PostgreSQL 17 efimero (vitest.clientes-fase-b-db.config.ts): " +
+      "replay de la cadena productiva, aplicacion de las cuatro migraciones, sede en el " +
+      "alta de recepciones y pedidos, y frontera RBAC de los dos encargados en sus dos " +
+      "direcciones, valido e invalido.",
   },
   {
     id: "custody-integrity-dedicated-harness",
