@@ -17,7 +17,10 @@ export interface FleetLastPosition {
   speed: number | null;
   battery: number | null;
   heading: number | null;
+  /** Captura del dispositivo (GPS) → frescura de la POSICIÓN. */
   recorded_at: string;
+  /** Recepción en el servidor (INSERT) → frescura de la COMUNICACIÓN. */
+  created_at: string;
 }
 
 export interface FleetVehicleRow {

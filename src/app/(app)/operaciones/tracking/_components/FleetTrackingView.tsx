@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import type { FleetVehicle, FleetLastPosition } from "@/lib/tracking/types";
-import { deriveMotionStatus, type LiveVehicle } from "@/lib/tracking/live";
+import { deriveFleetState, type LiveVehicle } from "@/lib/tracking/live";
 import type { MapVehicle } from "@/lib/tracking/map/types";
 import { useFleetRealtime } from "@/lib/tracking/realtime/useFleetRealtime";
 import { FleetKpis, type FleetCounts } from "./FleetKpis";
@@ -17,7 +17,8 @@ import { RealtimeStatusBadge } from "./RealtimeStatusBadge";
  *
  * · Siembra el estado con el snapshot SSR (initialVehicles) → sin flash de vacío.
  * · Mergea posiciones en vivo vía Supabase Realtime (useFleetRealtime).
- * · Re-deriva estado live/offline con un tick periódico (recency).
+ * · Re-deriva el estado de 4 valores con un tick periódico (recency de
+ *   comunicación + frescura del fix GPS).
  * · El mapa es agnóstico del motor: delega en FleetMapCanvas (Mapbox/MapLibre/…).
  */
 
@@ -38,7 +39,7 @@ export function FleetTrackingView({ initialVehicles, mapToken, serverNowMs }: Fl
   const [lastEventMs, setLastEventMs] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Tick de recency: refresca "ahora" para re-derivar offline aunque no lleguen pings.
+  // Tick de recency: refresca "ahora" para re-derivar estado aunque no lleguen pings.
   useEffect(() => {
     setNowMs(Date.now());
     const t = setInterval(() => setNowMs(Date.now()), 15_000);
@@ -55,6 +56,7 @@ export function FleetTrackingView({ initialVehicles, mapToken, serverNowMs }: Fl
       battery: number | null;
       heading: number | null;
       recordedAt: string;
+      createdAt: string;
     }) => {
       setLivePositions((prev) => ({
         ...prev,
@@ -65,6 +67,7 @@ export function FleetTrackingView({ initialVehicles, mapToken, serverNowMs }: Fl
           battery: e.battery,
           heading: e.heading,
           recorded_at: e.recordedAt,
+          created_at: e.createdAt,
         },
       }));
       const t = Date.now();
@@ -80,7 +83,7 @@ export function FleetTrackingView({ initialVehicles, mapToken, serverNowMs }: Fl
     () =>
       initialVehicles.map((v) => {
         const pos = livePositions[v.id] ?? v.last_position;
-        return { ...v, last_position: pos, motion: deriveMotionStatus(pos, nowMs) };
+        return { ...v, last_position: pos, motion: deriveFleetState(pos, nowMs) };
       }),
     [initialVehicles, livePositions, nowMs]
   );
@@ -90,6 +93,7 @@ export function FleetTrackingView({ initialVehicles, mapToken, serverNowMs }: Fl
       total: liveVehicles.length,
       moving: liveVehicles.filter((v) => v.motion === "moving").length,
       idle: liveVehicles.filter((v) => v.motion === "idle").length,
+      degraded: liveVehicles.filter((v) => v.motion === "degraded").length,
       offline: liveVehicles.filter((v) => v.motion === "offline").length,
     }),
     [liveVehicles]
