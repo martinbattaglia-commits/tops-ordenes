@@ -49,14 +49,16 @@ export async function listFleet(): Promise<FleetListResult> {
   const rows = (vehicleData ?? []) as FleetVehicleRow[];
   if (rows.length === 0) return { ok: true, vehicles: [] };
 
-  // Última posición por vehículo: traemos ordenado desc y nos quedamos con la
-  // primera de cada vehicle_id (el índice fleet_positions_vehicle_recorded_idx
-  // hace esto barato).
+  // Última posición por vehículo: ordenada por recorded_at desc (fix GPS más
+  // fresco) y, ante empate, por created_at desc (entrega más reciente → la
+  // comunicación queda fiel cuando el device reenvía el mismo fix). El índice
+  // fleet_positions_vehicle_recorded_idx hace esto barato.
   const { data: positionData } = await supabase
     .from("fleet_positions")
-    .select("vehicle_id,latitude,longitude,speed,battery,heading,recorded_at")
+    .select("vehicle_id,latitude,longitude,speed,battery,heading,recorded_at,created_at")
     .in("vehicle_id", rows.map((v) => v.id))
-    .order("recorded_at", { ascending: false });
+    .order("recorded_at", { ascending: false })
+    .order("created_at", { ascending: false });
 
   const latest = new Map<string, FleetLastPosition>();
   for (const p of positionData ?? []) {
@@ -68,6 +70,7 @@ export async function listFleet(): Promise<FleetListResult> {
         battery: p.battery,
         heading: p.heading,
         recorded_at: p.recorded_at,
+        created_at: p.created_at,
       });
     }
   }
