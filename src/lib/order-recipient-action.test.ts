@@ -212,6 +212,7 @@ function validInput(overrides: Partial<CreateOrderInput> = {}): CreateOrderInput
         rate: 100,
         subtotal: 100,
         pricing_kind: "catalog",
+        pricing_status: "resolved",
         pricing_reason: "",
         second_trip_discount: false,
         surcharge: "none",
@@ -257,10 +258,17 @@ beforeEach(() => {
     contactError: null,
     contactThrows: false,
   };
-  harness.rpc.mockImplementation(async (name: string) => {
-    if (name === "has_permission") return { data: true, error: null };
+  harness.rpc.mockImplementation((name: string) => {
+    // `nexus_depot_manager_scope` (0246) se consume encadenando `.maybeSingle()`.
+    // Devolver la promesa pelada dejaba a la acción lanzando TypeError, y el
+    // catch de createOrder convertía cada caso de esta suite en el error
+    // genérico, tapando justo los controles que acá se verifican.
+    if (name === "nexus_depot_manager_scope") {
+      return { maybeSingle: async () => ({ data: null, error: null }) };
+    }
+    if (name === "has_permission") return Promise.resolve({ data: true, error: null });
     if (name === "service_order_prepare_email_delivery") {
-      return {
+      return Promise.resolve({
         data: {
           attempt_key: "service-order/order-1/cliente",
           status: "queued",
@@ -268,12 +276,12 @@ beforeEach(() => {
           provider_id: null,
         },
         error: null,
-      };
+      });
     }
     if (name === "service_order_finalize_email_delivery") {
-      return { data: 1, error: null };
+      return Promise.resolve({ data: 1, error: null });
     }
-    return {
+    return Promise.resolve({
       data: {
         id: "order-1",
         public_id: "OS-000001",
@@ -285,7 +293,7 @@ beforeEach(() => {
         signature_hash: "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
       },
       error: null,
-    };
+    });
   });
   harness.plan.mockReturnValue([]);
   harness.failureNotification.mockReturnValue({});

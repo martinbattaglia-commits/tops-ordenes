@@ -176,10 +176,42 @@ const RUTAS_CUSTODIA: readonly RegExp[] = [
 ];
 
 /**
+ * ─── EL ANCLA DE LINAJE COMPARTIDA · EXCLUIDA POR ARCHIVO ──────────────────
+ *
+ * `t-c4-01-lineage-catalog.test.ts` vive bajo `tests/custody-db/`, pero NO es
+ * un archivo de Custodia: es el ANCLA DE LINAJE DE TODO EL REPOSITORIO. Su
+ * aserción sobre los rollbacks es una IGUALDAD ESTRICTA entre lo que el
+ * catálogo declara y una lista literal, así que **todo frente que agregue una
+ * migración con su ROLLBACK está obligado a editarla en el MISMO merge**. No
+ * puede diferirlo ni partirlo en dos PR: separarlos rompe la igualdad en uno u
+ * otro sentido.
+ *
+ * Por eso tocarla NO identifica un expediente de Custodia. Sin esta exclusión,
+ * un frente ajeno queda atrapado entre dos invariantes mutuamente excluyentes
+ * —con las entradas nuevas en la lista falla `t-c1-05`, sin ellas falla
+ * `t-c4-01`—, y ninguno de los dos está mal: la clasificación lo estaba.
+ *
+ * LA EXCLUSIÓN ES POR ARCHIVO, NO POR CARPETA, y ahí está su seguridad: un
+ * expediente REAL de Custodia siempre porta otros marcadores propios —sus
+ * migraciones del lease, su `src/lib/custody/`, sus tests de custodia—, así que
+ * sacar este único archivo no lo saca de alcance. Excluir la carpeta entera sí
+ * lo haría, y por eso no se hace.
+ *
+ * MEDIDO sobre el candidato vivo de Custodia (2-A, `a98f08e`, 47 paths): tiene
+ * 17 marcadores propios; sacando `t-c4-01` le quedan 16. Sigue en alcance, y el
+ * guardián le sigue exigiendo todo lo que promete.
+ */
+const RUTAS_CUSTODIA_EXCLUIDAS: readonly string[] = [
+  "tests/custody-db/t-c4-01-lineage-catalog.test.ts",
+];
+
+/**
  * Las rutas del diff que pertenecen a Custodia, en el orden en que llegaron.
  * Vacío ⇒ lo que se está revisando no es de este expediente y sus promesas no
  * son exigibles. Función PURA: no consulta git, entorno ni disco.
  */
 export function rutasPropiasDeCustodia(cambios: readonly string[]): string[] {
-  return cambios.filter((p) => RUTAS_CUSTODIA.some((re) => re.test(p)));
+  return cambios.filter(
+    (p) => !RUTAS_CUSTODIA_EXCLUIDAS.includes(p) && RUTAS_CUSTODIA.some((re) => re.test(p)),
+  );
 }

@@ -479,6 +479,20 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
    * de filename, el ancla exacta de rollbacks conocidos y el recálculo de
    * contadores desde `entries`.
    */
+  /**
+   * ─── `ROLLBACKS` NO SE DERIVA DEL CATÁLOGO · ES DELIBERADO ────────────────
+   *
+   * Los TOTALES de este bloque sí se derivan (ver abajo): un número fijo era un
+   * cable trampa que disparaba con cada migración legítima. Esta lista es otra
+   * cosa: es un ANCLA INDEPENDIENTE, y su trabajo —el mutante de rename
+   * coordinado, más abajo— es sobrevivir a un catálogo que miente. Derivarla de
+   * `entries` la volvería un espejo de aquello que audita: el rename se
+   * renombraría también en el ancla y el gate quedaría CIEGO.
+   *
+   * Su modo de falla, además, es el contrario al de los totales: dos frentes
+   * que agregan inversas DISTINTAS producen un conflicto VISIBLE en estas
+   * líneas, no una auto-resolución silenciosa. No hay nada que arreglar acá.
+   */
   const ROLLBACKS = [
     "0083_cash_box_rollback.sql",
     "0091_prospeccion_rollback.sql",
@@ -507,34 +521,77 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_20260815002748_service_unit_m2.sql",
     "ROLLBACK_20260815002807_service_tariff_m2_rates.sql",
     "ROLLBACK_0250a_custody_productive_vision.sql",
-    // CUSTODIA CIERRE CIRCUITO · inversa de 0251. Misma convención de nombre.
+    // CLIENTES FASE B: las dos inversas que sobreviven al retiro del aislamiento
+    // por nave. Entran por la CONVENCIÓN de nombre, no por una excepción, y van
+    // en el MISMO merge que sus entradas de catálogo: la aserción de abajo es una
+    // igualdad estricta, así que agregar a un lado sin el otro rompe en alguno de
+    // los dos sentidos.
+    "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
+    "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
+    // CUSTODIA CIERRE CIRCUITO · las dos inversas de la serie de custodia
+    // digital: 0251 (autoridad de decisión y evidencia completa) y 0252 (los
+    // dos niveles). Misma convención de nombre y mismo commit que sus entradas
+    // de catálogo, por el motivo que el comentario de arriba explica.
+    //
+    // Y el docblock del ancla acertó: los dos frentes agregaron inversas
+    // DISTINTAS y esto produjo un conflicto VISIBLE en estas líneas, no una
+    // auto-resolución silenciosa. Se resolvió por UNIÓN.
     "ROLLBACK_0251_custody_decide_authority.sql",
-    // 2-A · inversa de 0252. Misma convención de nombre.
     "ROLLBACK_0252_custody_two_levels.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 
-  it("control sano: 237 entradas, 213 ejecutables y 24 no ejecutables, recalculados", () => {
-    // +4 en FASE A (0234/0235 y sus inversas) y +6 en FASE B (0236, 0237 y
-    // 0238 con sus inversas), sobre la línea previa 200/194/6; +4 en el
-    // hallazgo de C5 (0235a y 0239, cada una con su inversa) sobre la línea
-    // 210/199/11; +2 por el correctivo ACL 0239a y su rollback documental;
-    // +14 por PR #66 FASE A (siete forwards y siete rollbacks), sobre la base
-    // viva 216/202/14; +3 por CUSTODIA VISIÓN PRODUCTIVA 001 (0250 y 0250a
-    // como forwards, más la inversa lógica de 0250a), sobre 230/209/21;
-    // +2 por CUSTODIA CIERRE CIRCUITO (0251 forward más su inversa lógica),
-    // sobre 233/211/22; +2 por el bloque 2-A (0252 y su inversa), sobre
-    // 235/212/23. Las cifras se contrastan contra el recálculo desde
-    // `entries`, así que no pueden quedar desfasadas en silencio.
-    expect(REAL.entries).toHaveLength(237);
+  /**
+   * ─── TOTALES DERIVADOS DEL CATÁLOGO ──────────────────────────────────────
+   *
+   * Antes eran literales (`233`, `211`, `22`). Eso no era una compuerta sobre
+   * la integridad del linaje: era un cable trampa que se disparaba con CADA
+   * migración legítima, de cualquier frente, para siempre. Y peor: dos frentes
+   * que suman la misma cantidad de entradas escribirían el MISMO número en la
+   * MISMA línea para contenido distinto, así que Git los auto-resuelve SIN
+   * conflicto y el segundo merge deja `main` con un total falso, descubierto
+   * recién cuando CI se pone rojo DESPUÉS del merge.
+   *
+   * Se derivan del recálculo desde `entries`. Lo que sigue probándose es la
+   * INTEGRIDAD —que lo declarado coincida con lo recalculado y que la partición
+   * cierre contra el largo del array—, no que el catálogo tenga un tamaño
+   * particular.
+   */
+  const EJECUTABLES = REAL.entries.filter(
+    (e) => e.estado === "active" || e.estado === "corrective",
+  ).length;
+  const NO_EJECUTABLES = REAL.entries.length - EJECUTABLES;
+  /**
+   * Maquillaje de los contadores cuando un rollback se reclasifica a `active`:
+   * la entrada cruza el borde, así que es EXACTAMENTE `+1` / `−1`. No es una
+   * aproximación — si dejara de ser exacto, los mutantes dejarían de morder y
+   * cambiaríamos el cable trampa por un gate ciego.
+   */
+  const EJECUTABLES_MAQUILLADOS = EJECUTABLES + 1;
+  const NO_EJECUTABLES_MAQUILLADOS = NO_EJECUTABLES - 1;
+
+  it(`control sano: ${REAL.entries.length} entradas, ${EJECUTABLES} ejecutables y ${NO_EJECUTABLES} no ejecutables, recalculados`, () => {
+    // El título informa el tamaño del día; las afirmaciones NO dependen de él.
+    // La partición cierra contra el largo del array: ningún estado queda afuera
+    // ni se cuenta dos veces.
+    expect(REAL.entries).toHaveLength(REAL.ejecutables + REAL.no_ejecutables);
     const ejec = REAL.entries.filter(
       (e) => e.estado === "active" || e.estado === "corrective",
     );
-    expect(ejec).toHaveLength(213);
-    expect(REAL.entries.length - ejec.length).toBe(24);
-    // Y los contadores declarados coinciden con lo recalculado.
-    expect(REAL.ejecutables).toBe(213);
-    expect(REAL.no_ejecutables).toBe(24);
+    // Lo declarado en el top-level contra el recálculo desde `entries`: es la
+    // defensa que mataba el maquillaje de contadores, y sigue intacta.
+    expect(ejec).toHaveLength(REAL.ejecutables);
+    expect(REAL.entries.length - ejec.length).toBe(REAL.no_ejecutables);
+    // Y las constantes sobre las que pivotean los MUTANTES D y E son las
+    // reales: si se desfasaran, el maquillaje `+1`/`−1` dejaría de ser exacto.
+    expect(REAL.ejecutables).toBe(EJECUTABLES);
+    expect(REAL.no_ejecutables).toBe(NO_EJECUTABLES);
+    // Guarda de no-vacuidad: un catálogo degenerado volvería vacuas las
+    // igualdades de arriba. La derivación reemplaza un total fijo por una
+    // relación, no por la nada.
+    expect(REAL.entries.length).toBeGreaterThan(0);
+    expect(EJECUTABLES).toBeGreaterThan(0);
+    expect(NO_EJECUTABLES).toBeGreaterThan(0);
   });
 
   it("la convención cerrada identifica exactamente todos los rollbacks del árbol", () => {
@@ -561,8 +618,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 214;
-    c.no_ejecutables = 23;
+    c.ejecutables = EJECUTABLES_MAQUILLADOS;
+    c.no_ejecutables = NO_EJECUTABLES_MAQUILLADOS;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     // Los contadores ahora «cuadran» con las entries mutadas: si el rechazo
     // dependiera de ellos, este mutante viajaría en verde.
@@ -576,8 +633,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     const c = clon();
     const i = c.entries.findIndex((e) => e.filename === OBJETIVO);
     c.entries[i].estado = "active";
-    c.ejecutables = 214;
-    c.no_ejecutables = 23;
+    c.ejecutables = EJECUTABLES_MAQUILLADOS;
+    c.no_ejecutables = NO_EJECUTABLES_MAQUILLADOS;
     expect(() => construirPlan({ catalogo: c })).toThrow(/CATALOGO_INVALIDO/);
     expect(() => construirPlan({ catalogo: c })).toThrow(/ROLLBACK_RECLASIFICADO/);
   });
@@ -607,24 +664,24 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
       estado: "active",
       ledger_name: "0233b_wa_make_relay_outbox_redo",
     };
-    c.ejecutables = 214;
-    c.no_ejecutables = 23;
+    c.ejecutables = EJECUTABLES_MAQUILLADOS;
+    c.no_ejecutables = NO_EJECUTABLES_MAQUILLADOS;
     const v = verificarCatalogo({ catalogo: c, dirMigraciones: dir });
     expect(codigos(v)).toEqual(["ROLLBACK_CONOCIDO_AUSENTE"]);
     expect(v[0].detalle).toBe(OBJETIVO);
   });
 
-  it("MUTANTE D · contador ejecutables 213→214 sin tocar entries → CONTADOR_EJECUTABLES_INCOHERENTE", () => {
+  it(`MUTANTE D · contador ejecutables ${EJECUTABLES}→${EJECUTABLES_MAQUILLADOS} sin tocar entries → CONTADOR_EJECUTABLES_INCOHERENTE`, () => {
     const c = clon();
-    c.ejecutables = 214;
+    c.ejecutables = EJECUTABLES_MAQUILLADOS;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     expect(cods).toContain("CONTADOR_EJECUTABLES_INCOHERENTE");
     expect(cods).not.toContain("CONTADOR_NO_EJECUTABLES_INCOHERENTE");
   });
 
-  it("MUTANTE E · contador no_ejecutables 24→23 sin tocar entries → CONTADOR_NO_EJECUTABLES_INCOHERENTE", () => {
+  it(`MUTANTE E · contador no_ejecutables ${NO_EJECUTABLES}→${NO_EJECUTABLES_MAQUILLADOS} sin tocar entries → CONTADOR_NO_EJECUTABLES_INCOHERENTE`, () => {
     const c = clon();
-    c.no_ejecutables = 23;
+    c.no_ejecutables = NO_EJECUTABLES_MAQUILLADOS;
     const cods = codigos(verificarCatalogo({ catalogo: c }));
     expect(cods).toContain("CONTADOR_NO_EJECUTABLES_INCOHERENTE");
     expect(cods).not.toContain("CONTADOR_EJECUTABLES_INCOHERENTE");

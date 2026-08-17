@@ -4,6 +4,7 @@
 
 import { env } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { getDepotManagerBoot } from "@/lib/rbac/boot-permissions";
 import { MOCK_CONVERSATIONS, MOCK_MESSAGES, MOCK_LINKS } from "../mock";
 
 export type SearchResultType = "conversation" | "erp_context" | "message" | "attachment";
@@ -32,7 +33,12 @@ export async function searchConnect(query: string, limit = 30): Promise<SearchRe
   const supabase = createClient();
   if (!supabase) return mockSearch(q, limit);
 
-  const { data, error } = await supabase.rpc("connect_search", { p_query: q, p_limit: limit });
+  const managerScope = await getDepotManagerBoot();
+  if (managerScope.restricted && !managerScope.authorized) return [];
+  const rpc = managerScope.restricted
+    ? "nexus_depot_manager_connect_search"
+    : "connect_search";
+  const { data, error } = await supabase.rpc(rpc, { p_query: q, p_limit: limit });
   if (error) {
     console.error("[connect/searchConnect] rpc error:", error.message);
     return [];

@@ -10,6 +10,7 @@ import { attachPhysicalEvidence } from "@/lib/custody/physical-ingress";
 import {
   createReception,
   addReceptionItem,
+  assertPositionRequired,
   submitReception,
   confirmReception,
   releaseQuarantine,
@@ -60,6 +61,10 @@ export interface CreateReceptionPayload {
 /** Crea cabecera + líneas y deja la recepción en 'pendiente' (lista para confirmar). */
 export async function createReceptionFull(payload: CreateReceptionPayload): Promise<Result> {
   try {
+    // A-6 · Se valida ANTES de crear la cabecera. Si una línea viniera sin
+    // posición a mitad del lote, la cabecera ya existiría y quedaría huérfana
+    // y sin sede: inservible, y sin nada que la limpie.
+    for (const it of payload.items) assertPositionRequired(it);
     const id = await createReception(payload.header);
     for (const it of payload.items) {
       await addReceptionItem({ reception_id: id, ...it });
@@ -181,6 +186,15 @@ export async function createConfirmAndCaptureAction(
     const raw = form.get("payload");
     if (typeof raw !== "string") return { ok: false, error: "Solicitud inválida" };
     const payload = JSON.parse(raw) as CreateReceptionPayload;
+
+    // JUNTURA 2-A/2-B · A-6, la misma guarda previa que `createReceptionFull`.
+    //
+    // Fase B la puso allá porque esta acción no existía de su lado. El motivo
+    // vale igual acá, y más: si una línea viniera sin posición a mitad del
+    // lote, la cabecera ya estaría creada, quedaría huérfana y sin sede, y
+    // ADEMÁS esta acción CONFIRMA —así que el trigger de custodia habría
+    // materializado unidades colgando de una recepción inservible.
+    for (const it of payload.items) assertPositionRequired(it);
 
     // 1 · cabecera + líneas, guardando el id de cada línea
     const receptionId = await createReception(payload.header);

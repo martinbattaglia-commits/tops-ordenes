@@ -40,8 +40,8 @@ export default async function BillingPage() {
     );
   }
 
-  const facturables = rows.filter((o) => o.status === "FIRMADA");
-  const total = facturables.reduce((a, b) => a + b.total, 0);
+  const facturables = rows.filter((o) => o.status === "FIRMADA" && o.pricing_complete !== false && o.total != null);
+  const total = facturables.reduce((a, b) => a + (b.total ?? 0), 0);
   const byClient = new Map<
     string,
     { total: number; count: number; razon: string; cuit: string }
@@ -54,7 +54,7 @@ export default async function BillingPage() {
       razon: o.client?.razon ?? "—",
       cuit: o.client?.cuit ?? "",
     };
-    cur.total += o.total;
+    cur.total += o.total ?? 0;
     cur.count += 1;
     byClient.set(k, cur);
   });

@@ -91,15 +91,24 @@ export interface OrderService {
   label: string;
   qty: number;
   unit: ServiceUnit;
-  rate: number;
-  subtotal: number;
+  rate: number | null;
+  subtotal: number | null;
   currency_snapshot?: "ARS" | "USD";
   tariff_rate_id?: string | null;
   client_rate_id?: string | null;
-  price_source?: "legacy" | "general_tariff" | "client_rate" | "derived" | "manual" | "bonification";
+  // Debe reflejar order_services_price_source_ck (0249:26-31). 'manual_override'
+  // lo escribe la RPC cuando hay precio previo que se sobrescribe (0249:517);
+  // omitirlo acá hacía que el tipo negara un estado que la base sí persiste.
+  price_source?: "legacy" | "general_tariff" | "client_rate" | "client_rate_historical" | "derived" | "manual" | "manual_override" | "bonification" | "pending_quote";
+  pricing_status?: "resolved" | "pending_quote";
+  original_rate_snapshot?: number | null;
+  modified_rate_snapshot?: number | null;
+  price_modified_by?: string | null;
+  price_modified_at?: string | null;
+  price_modification_reason?: string | null;
   pricing_reason?: string | null;
   pricing_formula_snapshot?: {
-    kind: "legacy" | "catalog_v1" | "transport_v1" | "derived_v1" | "manual_v1" | "bonification_v1";
+    kind: "legacy" | "catalog_v1" | "transport_v1" | "derived_v1" | "manual_v1" | "bonification_v1" | "historical_v1" | "pending_quote_v1";
     second_trip_discount?: boolean;
     surcharge_pct?: number;
     basis?: string;
@@ -108,8 +117,8 @@ export interface OrderService {
   min_billing_snapshot?: number;
   qty_requested?: number;
   qty_effective?: number;
-  rate_snapshot?: number;
-  subtotal_requested?: number;
+  rate_snapshot?: number | null;
+  subtotal_requested?: number | null;
   qty_provided?: number | null;
   subtotal_provided?: number | null;
   qty_billed?: number | null;
@@ -134,11 +143,13 @@ export interface Order {
   units: number;
   km: number;
   observ: string | null;
-  total: number;
+  total: number | null;
+  pricing_complete?: boolean;
+  prices_hidden?: boolean;
   pricing_currency?: "ARS" | "USD";
   tariff_version_id?: string | null;
   pricing_snapshot_at?: string;
-  issued_total?: number;
+  issued_total?: number | null;
   provided_total?: number | null;
   billed_total?: number | null;
   signed_by: string | null;

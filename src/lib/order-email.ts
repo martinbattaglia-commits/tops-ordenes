@@ -123,7 +123,8 @@ function orderCurrency(order: Order): OrderCurrency | null {
   );
 }
 
-function fmtMoney(n: number, currency: OrderCurrency | null): string {
+function fmtMoney(n: number | null | undefined, currency: OrderCurrency | null): string {
+  if (n == null) return "PENDIENTE DE COTIZACIÓN";
   if (!currency) return "IMPORTE SIN MONEDA";
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -162,6 +163,9 @@ function servicesRows(order: Order): string {
  */
 function totalsRows(order: Order): string {
   const currency = orderCurrency(order);
+  if (order.total == null) {
+    return `<tr><td colspan="2" style="padding:8px 0;border-top:2px solid ${DOC.navy};font-weight:700;color:${DOC.navy};">PENDIENTE DE COTIZACIÓN</td></tr>`;
+  }
   const iva = Math.round(order.total * 0.21);
   const total = order.total + iva;
   return (
@@ -298,6 +302,7 @@ function servicesText(order: Order): string[] {
 /** Totales discriminados en texto plano (misma fórmula que totalsRows). */
 function totalsText(order: Order): string[] {
   const currency = orderCurrency(order);
+  if (order.total == null) return ["PENDIENTE DE COTIZACIÓN · sin importe inventado"];
   const iva = Math.round(order.total * 0.21);
   return [
     `Moneda: ${currency ?? "NO INFORMADA"}`,

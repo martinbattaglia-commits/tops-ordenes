@@ -1,6 +1,12 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import {
+  depotManagerIdentity,
+  depotManagerRouteAllowed,
+  depotManagerRpcRowValid,
+  type DepotManagerRpcRow,
+} from "@/lib/rbac/depot-manager";
 
 /**
  * Mantiene la sesión refrescada en cada request y bloquea las rutas
@@ -130,6 +136,32 @@ export async function updateSession(request: NextRequest) {
     url.pathname = "/login";
     url.searchParams.set("from", pathname);
     return NextResponse.redirect(url);
+  }
+
+  // FASE B · Encargados de depósito. Esta frontera no usa profiles.role ni
+  // permisos legacy connect.*. La identidad viene de Auth y la autorización
+  // completa de una RPC fail-closed: perfil activo + rol canónico + sede +
+  // capacidades exactas. Error, fila ausente o payload incompleto => 404.
+  if (user) {
+    const identity = depotManagerIdentity(user.id, user.email);
+    if (identity.principal) {
+      if (!identity.exact || !identity.site) {
+        return new NextResponse("Not Found", {
+          status: 404,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
+      const { data, error } = await supabase
+        .rpc("nexus_depot_manager_scope")
+        .single();
+      const scope = data as DepotManagerRpcRow | null;
+      if (error || !depotManagerRpcRowValid(scope, identity.site) || !depotManagerRouteAllowed(pathname)) {
+        return new NextResponse("Not Found", {
+          status: 404,
+          headers: { "Content-Type": "text/plain; charset=utf-8" },
+        });
+      }
+    }
   }
 
   if (user && pathname === "/login") {

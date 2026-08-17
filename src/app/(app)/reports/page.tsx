@@ -6,8 +6,8 @@ export const metadata = { title: "Reportes" };
 export default async function ReportsPage() {
   const { rows } = await listOrders({ pageSize: 1000 });
   const totalFacturado = rows
-    .filter((o) => o.status === "FIRMADA" || o.status === "FACTURADA")
-    .reduce((a, b) => a + b.total, 0);
+    .filter((o) => (o.status === "FIRMADA" || o.status === "FACTURADA") && o.pricing_complete !== false && o.total != null)
+    .reduce((a, b) => a + (b.total ?? 0), 0);
   const byDepot = {
     MAGALDI: rows.filter((o) => o.depot === "MAGALDI").length,
     LUJAN: rows.filter((o) => o.depot === "LUJAN").length,

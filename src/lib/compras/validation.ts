@@ -82,6 +82,9 @@ export const CreatePurchaseOrderSchema = z.object({
         if (item.price_state === "pending" && item.price !== null) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["price"], message: "Debe quedar vacío si está pendiente" });
         }
+        if (item.price_state === "pending" && item.subtotal !== null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["subtotal"], message: "Debe quedar vacío si está pendiente" });
+        }
         if (item.price_state !== "pending" && item.price === null) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["price"], message: "Ingresá un precio" });
         }

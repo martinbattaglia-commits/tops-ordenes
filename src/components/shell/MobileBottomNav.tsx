@@ -37,9 +37,19 @@ const ITEMS_OC: Item[] = [
   { href: "/compras/drive", label: "Drive", icon: "drive" },
 ];
 
-export default function MobileBottomNav() {
+const ITEMS_OPERATIONAL: Item[] = [
+  { href: "/dashboard", label: "Inicio", icon: "dashboard" },
+  { href: "/orders", label: "Órdenes", icon: "orders" },
+  { href: "/orders/new", label: "Nueva", icon: "plus", fab: true },
+  { href: "/connect", label: "Chat", icon: "bell" },
+  { href: "/wms", label: "WMS", icon: "package" },
+];
+
+export default function MobileBottomNav({ operationalOnly = false }: { operationalOnly?: boolean }) {
   const pathname = usePathname();
-  const items = pathname.startsWith("/compras")
+  const items = operationalOnly
+    ? ITEMS_OPERATIONAL
+    : pathname.startsWith("/compras")
     ? ITEMS_OC
     : pathname.startsWith("/orders") || pathname.startsWith("/dashboard") || pathname.startsWith("/clients")
       ? ITEMS_OS

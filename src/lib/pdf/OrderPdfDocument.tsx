@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
-import { fmtCurrency, fmtCuit, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
+import { fmtCuit, fmtDate, fmtDateTime, isUrgentOrder } from "@/lib/utils";
 import { ivaEstimate } from "@/lib/pricing/calculator";
+import { fmtMoneyOrPending } from "@/lib/pricing/money-display";
 import type { Order } from "@/lib/types";
 import { ORG } from "@/lib/org";
 import { registerDocFonts } from "@/lib/doc-system/fonts";
@@ -131,11 +132,11 @@ export function OrderPdfDocument({ order, qrDataUrl }: Props) {
   const fmtOrderMoney = (
     amount: number | null | undefined,
     amountCurrency: OrderCurrency | null = currency,
-  ) => (amountCurrency ? fmtCurrency(amount, amountCurrency) : "— · MONEDA NO INFORMADA");
+  ) => fmtMoneyOrPending(amount, amountCurrency);
   // order.total es NETO (sin IVA). Discriminamos IVA 21% (estimación; la
   // facturación fiscal real corre por el módulo de Facturación/ARCA).
-  const ivaMonto = ivaEstimate(order.total);
-  const totalConIva = order.total + ivaMonto;
+  const ivaMonto = order.total == null ? null : ivaEstimate(order.total);
+  const totalConIva = order.total == null || ivaMonto == null ? null : order.total + ivaMonto;
   const year = order.date ? String(new Date(order.date).getFullYear()) : "";
   const hasObserv = Boolean(order.observ);
 

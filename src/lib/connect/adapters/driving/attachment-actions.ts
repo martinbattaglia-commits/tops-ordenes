@@ -34,6 +34,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { canAccess } from "@/lib/rbac/guard";
+import { canReadInternalChat } from "@/lib/rbac/internal-chat";
 import { canChannel } from "@/lib/rbac/nexus-link";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { validateAttachment } from "../../attachments/validate";
@@ -162,7 +163,7 @@ async function guardSession(): Promise<Guard> {
   if (!supabase) return { ok: false, message: "Modo demo: adjuntos deshabilitados." };
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Sesión no autenticada." };
-  if (!(await canAccess("connect.view"))) return { ok: false, message: "Sin permiso (connect.view)." };
+  if (!(await canReadInternalChat())) return { ok: false, message: "Sin permiso de chat interno." };
   return { ok: true, userId: user.id };
 }
 

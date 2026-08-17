@@ -171,6 +171,29 @@ export interface NewReceptionItemInput {
 }
 
 /**
+ * A-6 · La posición es obligatoria, y la validación vive acá.
+ *
+ * La nave de cada línea se deriva de la posición por la jerarquía física
+ * posición → rack → zona → sector → piso → depósito. Retirado el aislamiento
+ * por sede, la columna `warehouse_id` de la cabecera desapareció y esa
+ * jerarquía pasó a ser el ÚNICO lugar donde vive la nave: una línea sin
+ * posición ya no queda mal permisada, queda sin nave, y el stock por depósito
+ * deja de poder contarla.
+ *
+ * El tipo la declara opcional y hasta ahora sólo la exigía el formulario
+ * (`NewReceptionForm.tsx:67`), de modo que cualquier llamador que no fuera esa
+ * pantalla —o un payload construido a mano— dejaba la línea sin ubicar.
+ */
+export function assertPositionRequired(item: { sku?: string; position_id?: string | null }): void {
+  if (!item.position_id) {
+    throw new Error(
+      `addReceptionItem: la línea ${item.sku ?? "(sin SKU)"} necesita una posición: ` +
+        "de ella se deriva la nave y la sede de la línea.",
+    );
+  }
+}
+
+/**
  * Devuelve el id del ítem creado.
  *
  * Antes no devolvía nada. Hace falta para 2-A: la foto de ingreso se liga a la
@@ -178,8 +201,14 @@ export interface NewReceptionItemInput {
  * ambigua de saber qué unidad corresponde a qué foto es
  * `custody_physical_units.reception_item_id`, que es único. Emparejar por SKU y
  * lote fallaría en cuanto una recepción trajera dos líneas iguales.
+ *
+ * JUNTURA 2-A/2-B · las dos cosas conviven: Fase B exige la posición ANTES de
+ * escribir —de ella se deriva la nave— y Custodia necesita el id de vuelta. Ni
+ * la guarda se pierde ni el retorno: la guarda es la primera sentencia y el id
+ * sale al final.
  */
 export async function addReceptionItem(item: NewReceptionItemInput): Promise<string> {
+  assertPositionRequired(item);
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase no configurado");
   // business_unit lo setea el trigger desde la cabecera; el CHECK ANMAT valida lote/vencimiento.

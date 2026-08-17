@@ -37,6 +37,46 @@ interface Domain {
   gate?: "sistema" | "knowledge" | "connect" | "contabilidad";
 }
 
+const OPERATIONAL_DOMAINS: Domain[] = [
+  {
+    id: "operational-cockpit",
+    label: "Cockpit operativo",
+    items: [{ href: "/dashboard", label: "Inicio operativo", icon: "dashboard" }],
+  },
+  {
+    id: "operational-link",
+    label: "Nexus Link · Interno",
+    items: [
+      { href: "/connect", label: "Chat interno", icon: "home" },
+      { href: "/connect/buscar", label: "Buscar en chat", icon: "search" },
+      { href: "/connect/notificaciones", label: "Notificaciones", icon: "bell" },
+    ],
+  },
+  {
+    id: "operational-orders",
+    label: "Órdenes de Servicio",
+    items: [
+      { href: "/orders", label: "Órdenes de servicio", icon: "orders" },
+      { href: "/orders/new", label: "Nueva OS", icon: "plus", accent: true },
+    ],
+  },
+  {
+    id: "operational-wms",
+    label: "WMS · Mi sede",
+    items: [
+      { href: "/wms", label: "Dashboard WMS", icon: "dashboard" },
+      { href: "/wms/inventario", label: "Inventario", icon: "package" },
+      { href: "/wms/recepciones", label: "Recepciones", icon: "download" },
+      { href: "/wms/movimientos", label: "Movimientos", icon: "refresh" },
+      { href: "/wms/picking", label: "Picking", icon: "qr" },
+      { href: "/wms/packing", label: "Packing", icon: "folder" },
+      { href: "/wms/despachos", label: "Despachos", icon: "truck" },
+      { href: "/wms/lotes", label: "Lotes", icon: "tag-alt" },
+      { href: "/wms/vencimientos", label: "Vencimientos", icon: "clock" },
+    ],
+  },
+];
+
 /**
  * Dominios del Operating System. Cada dominio agrupa rutas relacionadas
  * y se renderea como una sección colapsable del sidebar.
@@ -240,6 +280,9 @@ interface Props {
   canViewCopilot?: boolean;
   /** ¿Mostrar Contabilidad (requiere contabilidad.view)? (default: sí). */
   canViewContabilidad?: boolean;
+  /** Menú cerrado para Jorge/Juan: sólo superficies expresamente autorizadas. */
+  operationalOnly?: boolean;
+  operationalSiteLabel?: string | null;
   onNavigate?: () => void;
 }
 
@@ -252,6 +295,8 @@ export default function Sidebar({
   canViewConnect = true,
   canViewCopilot = false, // piloto cerrado: por defecto NO se muestra (fail-closed en display)
   canViewContabilidad = true,
+  operationalOnly = false,
+  operationalSiteLabel = null,
   onNavigate,
 }: Props) {
   // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
@@ -269,6 +314,7 @@ export default function Sidebar({
               ? canViewContabilidad
               : canViewKnowledge);
   const pathname = usePathname();
+  const visibleDomains = operationalOnly ? OPERATIONAL_DOMAINS : DOMAINS;
 
   const isActive = (href: string) => {
     // Rutas exactas (no usar prefix match — evita colisiones tipo /compras y /compras/ordenes)
@@ -331,12 +377,12 @@ export default function Sidebar({
   // dónde está parado el usuario). El resto arranca colapsado; las aperturas
   // manuales se recuerdan en localStorage entre sesiones.
   const activeDomainId = useMemo(() => {
-    for (const d of DOMAINS) {
+    for (const d of visibleDomains) {
       if (d.items.some((it) => isActive(it.href))) return d.id;
     }
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, visibleDomains]);
 
   // Estado inicial determinista (SSR-safe): sólo el dominio activo abierto.
   const [openDomains, setOpenDomains] = useState<Record<string, boolean>>(() =>
@@ -395,11 +441,24 @@ export default function Sidebar({
     } catch {}
   };
 
+  const userCard = (
+    <>
+      <div className="w-9 h-9 rounded-full bg-tops-red text-white grid place-items-center font-bold text-xs">
+        {user.avatar}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold text-white truncate">{user.name}</div>
+        <div className="text-[10px] text-white/55 truncate">{user.role}</div>
+      </div>
+      <Icon name="chevron-down" size={14} className="text-white/40" />
+    </>
+  );
+
   return (
     <div className="sidebar w-full h-full flex flex-col px-3 pb-3 overflow-y-auto">
       {/* Brand block */}
       <Link
-        href="/ejecutivo"
+        href={operationalOnly ? "/dashboard" : "/ejecutivo"}
         onClick={onNavigate}
         className="flex flex-col items-center mt-2 mb-5 hover:opacity-95 transition-opacity"
       >
@@ -417,7 +476,7 @@ export default function Sidebar({
 
       {/* Domain sections — Accordion Tree */}
       <div className="flex flex-col gap-0.5">
-        {DOMAINS.map((domain) => {
+        {visibleDomains.map((domain) => {
           // Dominio gateado completo (ej. Sistema) sin permiso → no renderizar.
           if (!gateAllowed(domain.gate)) return null;
           const items = domain.items.filter(
@@ -450,26 +509,29 @@ export default function Sidebar({
       {/* Footer: depots + user */}
       <div className="mt-auto pt-4">
         <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/40 px-1.5 mb-2">
-          Locaciones · CABA
+          {operationalOnly ? "Sede asignada" : "Locaciones · CABA"}
         </div>
         <div className="flex flex-col gap-1.5 mb-3">
-          <DepotPing name="Magaldi · ANMAT" online ops={6} />
-          <DepotPing name="Luján · BsAs" online ops={3} />
+          {operationalOnly ? (
+            <DepotPing name={operationalSiteLabel ?? "Sede no verificable"} online ops={1} />
+          ) : (
+            <>
+              <DepotPing name="Magaldi · ANMAT" online ops={6} />
+              <DepotPing name="Luján · BsAs" online ops={3} />
+            </>
+          )}
         </div>
-        <Link
-          href="/settings"
-          onClick={onNavigate}
-          className="flex items-center gap-2.5 p-2 rounded-md bg-white/5 hover:bg-white/10 transition-colors"
-        >
-          <div className="w-9 h-9 rounded-full bg-tops-red text-white grid place-items-center font-bold text-xs">
-            {user.avatar}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-semibold text-white truncate">{user.name}</div>
-            <div className="text-[10px] text-white/55 truncate">{user.role}</div>
-          </div>
-          <Icon name="chevron-down" size={14} className="text-white/40" />
-        </Link>
+        {operationalOnly ? (
+          <div className="flex items-center gap-2.5 p-2 rounded-md bg-white/5">{userCard}</div>
+        ) : (
+          <Link
+            href="/settings"
+            onClick={onNavigate}
+            className="flex items-center gap-2.5 p-2 rounded-md bg-white/5 hover:bg-white/10 transition-colors"
+          >
+            {userCard}
+          </Link>
+        )}
         <form action="/api/auth/signout" method="post" className="mt-2">
           <button
             type="submit"

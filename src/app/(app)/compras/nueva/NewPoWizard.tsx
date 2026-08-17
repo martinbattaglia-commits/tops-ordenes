@@ -20,6 +20,11 @@ import { POSITIVE_CATEGORIES, COND_PAGO_OPTIONS, ORG } from "@/lib/org";
 import type { Vendor, Product, POItem } from "@/lib/types-po";
 import type { Depot } from "@/lib/types";
 import { createPurchaseOrderAction } from "./actions";
+import {
+  purchaseItemFromCatalog,
+  validatePurchaseItemsForContinue,
+  type PurchaseLineErrors,
+} from "@/lib/compras/wizard-validation";
 
 interface Draft {
   vendor: {
@@ -67,6 +72,7 @@ export function NewPoWizard({ vendors, products }: Props) {
   const [stepIdx, setStepIdx] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [productValidationShown, setProductValidationShown] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => ({
     vendor: {
       id: null,
@@ -115,26 +121,22 @@ export function NewPoWizard({ vendors, products }: Props) {
     draft.vendor.email.includes("@");
   const canStep2 =
     !!draft.depot && !!draft.categoria && !!draft.cond_pago && !!draft.entrega;
-  const canStep3 =
-    draft.items.length > 0 && draft.items.every((it) => {
-      if (
-        it.label.trim().length === 0 ||
-        !Number.isFinite(it.qty) ||
-        it.qty <= 0 ||
-        Math.abs(it.qty * 100 - Math.round(it.qty * 100)) >= 1e-7
-      ) return false;
-      if (it.price_state === "pending") {
-        return it.price === null && (it.price_reason?.trim().length ?? 0) >= 3;
-      }
-      if (it.price === null || it.price < 0) return false;
-      return it.price_state === "known" || (it.price_reason?.trim().length ?? 0) >= 3;
-    });
+  const productValidation = useMemo(
+    () => validatePurchaseItemsForContinue(draft.items),
+    [draft.items],
+  );
+  const canStep3 = productValidation.valid;
   const canStep4 = draft.signed;
 
   const stepReady = [canStep1, canStep2, canStep3, canStep4];
 
   const next = () => {
+    if (stepIdx === 2 && !productValidation.valid) {
+      setProductValidationShown(true);
+      return;
+    }
     if (!stepReady[stepIdx]) return;
+    setProductValidationShown(false);
     if (stepIdx < STEPS.length - 1) setStepIdx(stepIdx + 1);
   };
   const prev = () => stepIdx > 0 && setStepIdx(stepIdx - 1);
@@ -210,7 +212,13 @@ export function NewPoWizard({ vendors, products }: Props) {
             )}
             {stepIdx === 1 && <GeneralStep draft={draft} setDraft={setDraft} />}
             {stepIdx === 2 && (
-              <ProductsStep products={products} draft={draft} setDraft={setDraft} totals={totals} />
+              <ProductsStep
+                products={products}
+                draft={draft}
+                setDraft={setDraft}
+                totals={totals}
+                lineErrors={productValidationShown ? productValidation.errors : {}}
+              />
             )}
             {stepIdx === 3 && (
               <SignatureStep
@@ -244,7 +252,7 @@ export function NewPoWizard({ vendors, products }: Props) {
               <button
                 type="button"
                 onClick={next}
-                disabled={!stepReady[stepIdx]}
+                disabled={stepIdx === 2 ? false : !stepReady[stepIdx]}
                 className="btn btn-primary btn-sm"
               >
                 Continuar
@@ -771,11 +779,13 @@ function ProductsStep({
   draft,
   setDraft,
   totals,
+  lineErrors,
 }: {
   products: Product[];
   draft: Draft;
   setDraft: (next: Draft | ((d: Draft) => Draft)) => void;
   totals: ReturnType<typeof computeTotals>;
+  lineErrors: Record<number, PurchaseLineErrors>;
 }) {
   const [pickerForIdx, setPickerForIdx] = useState<number | null>(null);
 
@@ -843,6 +853,7 @@ function ProductsStep({
                     onFocus={() => setPickerForIdx(i)}
                     onChange={(e) => updateItem(i, { label: e.target.value, sku: null })}
                   />
+                  {lineErrors[i]?.label && <div className="px-2 text-[11px] text-tops-red">{lineErrors[i].label}</div>}
                   <div className="grid grid-cols-[150px_minmax(180px,1fr)] gap-2 px-1 pb-1">
                     <select
                       className="input input-sm text-xs"
@@ -858,6 +869,7 @@ function ProductsStep({
                       <option value="pending">Pendiente</option>
                     </select>
                     {it.price_state !== "known" && (
+                      <div>
                       <input
                         className="input input-sm text-xs"
                         value={it.price_reason ?? ""}
@@ -866,6 +878,8 @@ function ProductsStep({
                         onChange={(e) => updateItem(i, { price_reason: e.target.value })}
                         aria-label={`Motivo de precio, línea ${i + 1}`}
                       />
+                      {lineErrors[i]?.price_reason && <div className="mt-1 text-[11px] text-tops-red">{lineErrors[i].price_reason}</div>}
+                      </div>
                     )}
                   </div>
                   {pickerForIdx === i && (
@@ -874,13 +888,7 @@ function ProductsStep({
                       query={it.label}
                       onPick={(p) => {
                         updateItem(i, {
-                          sku: p.sku,
-                          label: p.label,
-                          unit: p.unit,
-                          price: p.price > 0 ? p.price : null,
-                          price_state: p.price > 0 ? "known" : "pending",
-                          price_reason: null,
-                          qty: it.qty || 1,
+                          ...purchaseItemFromCatalog(p, it.qty),
                         });
                         setPickerForIdx(null);
                       }}
@@ -898,6 +906,7 @@ function ProductsStep({
                     value={it.qty || ""}
                     onChange={(e) => updateItem(i, { qty: Number(e.target.value) || 0 })}
                   />
+                  {lineErrors[i]?.qty && <div className="text-[10px] text-tops-red">{lineErrors[i].qty}</div>}
                 </td>
                 <td className="px-1 py-1">
                   <input
@@ -905,6 +914,7 @@ function ProductsStep({
                     value={it.unit}
                     onChange={(e) => updateItem(i, { unit: e.target.value })}
                   />
+                  {lineErrors[i]?.unit && <div className="text-[10px] text-tops-red">{lineErrors[i].unit}</div>}
                 </td>
                 <td className="px-1 py-1">
                   <input
@@ -921,9 +931,10 @@ function ProductsStep({
                       updateItem(i, { price: raw === "" ? null : Number(raw) });
                     }}
                   />
+                  {lineErrors[i]?.price && <div className="text-[10px] text-tops-red">{lineErrors[i].price}</div>}
                 </td>
                 <td className="px-2 py-2 text-right tabular font-bold text-fg-brand">
-                  {it.subtotal === null ? "—" : fmtCurrency(it.subtotal)}
+                  {it.subtotal === null ? "Precio pendiente" : fmtCurrency(it.subtotal)}
                 </td>
                 <td className="px-1 py-1">
                   <button
@@ -962,7 +973,9 @@ function ProductsStep({
         </div>
         {totals.state === "pending" ? (
           <div className="rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-3 text-sm text-fg-primary">
-            Hay {totals.pendingLines} {totals.pendingLines === 1 ? "línea" : "líneas"} sin precio. La OC puede emitirse, pero no informará un total ficticio ni alimentará métricas monetarias.
+            Hay {totals.pendingLines} {totals.pendingLines === 1 ? "línea" : "líneas"} sin precio. {validatePurchaseItemsForContinue(draft.items).valid
+              ? "La OC puede emitirse, pero no informará un total ficticio ni alimentará métricas monetarias."
+              : "Completá el motivo y los datos obligatorios de cada línea para continuar."}
             {totals.knownPartialNeto > 0 && (
               <div className="mt-1 text-xs text-fg-secondary">Parcial conocido: {fmtCurrency(totals.knownPartialNeto)} neto.</div>
             )}
@@ -1080,14 +1093,7 @@ function SmartSuggestion({
       items: [
         ...d.items.filter((it) => it.label),
         {
-          sku: tape.sku,
-          label: tape.label,
-          unit: tape.unit,
-          qty: 24,
-          price: tape.price,
-          subtotal: lineSubtotal(24, tape.price),
-          price_state: tape.price > 0 ? "known" : "pending",
-          price_reason: null,
+          ...purchaseItemFromCatalog(tape, 24),
           pos: d.items.length,
         },
       ],

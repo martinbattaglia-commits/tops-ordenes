@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { canAccess } from "@/lib/rbac/guard";
+import { canReadInternalChat } from "@/lib/rbac/internal-chat";
 import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import type { InboxItem } from "../../types";
@@ -53,7 +54,7 @@ export async function listArchivedInboxAction(): Promise<ArchivedInboxResult> {
   if (!demo && supabase) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { ok: false, message: "Sesión no autenticada." };
-    if (!(await canAccess("connect.view"))) {
+    if (!(await canReadInternalChat())) {
       return { ok: false, message: "Sin permiso (connect.view)." };
     }
   }

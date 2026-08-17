@@ -23,11 +23,11 @@ export interface LineItem {
   /** Cantidad efectiva después de aplicar min_qty. */
   qty_effective: number;
   /** Tarifa unitaria. */
-  rate: number;
+  rate: number | null;
   /** Unidad legible (hs, m³, un, viaje, etc.). */
   unit: string;
   /** Subtotal final aplicando todas las reglas. */
-  subtotal: number;
+  subtotal: number | null;
   /** True si se aplicó algún mínimo (qty o billing). */
   min_applied: boolean;
   /** Mensaje del mínimo aplicado para mostrar al usuario. */
@@ -48,6 +48,8 @@ export interface LineItem {
   /** Tokens de consentimiento económico que la RPC compara con su resolución. */
   tariff_rate_id?: string;
   client_rate_id?: string | null;
+  manual_rate?: number;
+  pricing_status?: "resolved" | "pending_quote";
 }
 
 /**
@@ -102,6 +104,34 @@ export function computeServiceLine(
     pricing_kind: "catalog",
     tariff_rate_id: service.tariff_rate_id,
     client_rate_id: service.client_rate_id ?? null,
+    pricing_status: "resolved",
+  };
+}
+
+/** Línea operativa firmable sin convertir la ausencia de precio en cero. */
+export function pendingServiceLine(
+  service: ServiceCatalogItem,
+  qtyRequested: number,
+): LineItem {
+  if (!service.active || !Number.isFinite(qtyRequested) || qtyRequested <= 0) {
+    throw new Error("Cantidad de servicio inválida");
+  }
+  return {
+    key: `svc:${service.slug}`,
+    label: service.label,
+    qty_requested: qtyRequested,
+    qty_effective: qtyRequested,
+    rate: null,
+    unit: service.unit,
+    subtotal: null,
+    min_applied: false,
+    min_reason: "PENDIENTE DE COTIZACIÓN",
+    service_slug: service.slug,
+    category: service.category,
+    pricing_kind: "catalog",
+    tariff_rate_id: service.tariff_rate_id,
+    client_rate_id: service.client_rate_id ?? null,
+    pricing_status: "pending_quote",
   };
 }
 
@@ -196,8 +226,9 @@ export function computeTransportLine(input: TransportLineInput): LineItem {
 }
 
 /** Suma los subtotales de una lista de líneas. */
-export function sumLines(lines: LineItem[]): number {
-  return roundMoney(lines.reduce((acc, l) => acc + l.subtotal, 0));
+export function sumLines(lines: LineItem[]): number | null {
+  if (lines.some((line) => line.subtotal == null)) return null;
+  return roundMoney(lines.reduce((acc, line) => acc + (line.subtotal as number), 0));
 }
 
 function roundMoney(value: number): number {
