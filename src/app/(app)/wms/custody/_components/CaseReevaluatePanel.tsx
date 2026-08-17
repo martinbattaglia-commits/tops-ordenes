@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { reevaluateCustodyCaseAction } from "../actions";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
+import { guidance } from "@/lib/custody/blocker-guidance";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
 export type ReevaluationUiState = "pendiente" | "evaluando" | "evaluado" | "fallo";
@@ -110,7 +111,7 @@ export function CaseReevaluatePanel({
 
       {view.reevaluation.blockers.length > 0 && (
         <ul className="mt-2 list-disc pl-4 text-xs text-fg-muted">
-          {view.reevaluation.blockers.map((b) => <li key={b}>{b}</li>)}
+          {view.reevaluation.blockers.map((b) => <li key={b}>{guidance(b)}</li>)}
         </ul>
       )}
     </section>

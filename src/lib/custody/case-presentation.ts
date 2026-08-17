@@ -14,6 +14,7 @@
  *     nunca del veredicto ni de la confianza del modelo.
  */
 
+import { guidance } from "./blocker-guidance";
 import type { CustodyCaseIdentity } from "./integrity-adapters";
 import {
   CUSTODY_DECISION_PERMISSION,
@@ -126,8 +127,18 @@ export function holdLabel(reason: HoldReason | string): string {
   return HOLD_LABEL[reason] ?? "Retención registrada por el servidor";
 }
 
+/**
+ * S2-6 · El respaldo dejó de ser mudo.
+ *
+ * Antes, todo código sin entrada en `BLOCKER_LABEL` salía como «Requisito de
+ * liberación no cumplido»: una frase que no dice qué falta ni qué hacer, y que
+ * ante los 22 códigos del certificado —ninguno de los cuales está en ese
+ * mapa— habría respondido siempre lo mismo. Ahora el respaldo delega en el
+ * traductor guía, que sí los cubre y que, ante un código que tampoco conozca,
+ * lo declara como tal en vez de esconderlo.
+ */
 export function blockerLabel(blocker: ReleaseBlocker | string): string {
-  return BLOCKER_LABEL[blocker] ?? "Requisito de liberación no cumplido";
+  return BLOCKER_LABEL[blocker] ?? guidance(blocker);
 }
 
 const VERDICT_LABEL: Record<string, string> = {

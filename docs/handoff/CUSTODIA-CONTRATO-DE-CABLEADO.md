@@ -1,9 +1,9 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Juntura 2-A/2-B** — reconciliado con `main 9da9f04`
-(§9.7). Antes: bloque 2-A · remediación 2 — la cobertura se controla ANTES de la
-salida temprana; fail-closed restituido (§9.6.1)
+**Última actualización:** **Bloque 2-B** — la PUERTA DE EGRESO construida, los
+códigos de bloqueo traducidos y el 404 retirado (§10). Antes: juntura 2-A/2-B
+reconciliada con `main 9da9f04` (§9.7)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -650,6 +650,132 @@ productiva y ninguna sesión está autorizada a conectarse. **Queda PENDIENTE DE
 DIRECCIÓN.** Mientras no se responda, el reparto de autoridad está escrito en el
 código pero no verificado contra la realidad: cada `admin` de más es alguien que
 puede liberar mercadería de un cliente.
+
+---
+
+## 10 · BLOQUE 2-B · LA PUERTA DE EGRESO
+
+### 10.1 · Las costuras que cambiaron de estado
+
+| # | Dato / capacidad | Antes | Ahora | Ancla |
+|---|---|---|---|---|
+| 10 | Puerta de la foto de egreso en el flujo de salida | **NO EXISTE** | **CABLEADO** | máquina de estados en `src/lib/custody/egress-gate.ts`; lado servidor en `physical-egress.ts`; gate de base en `0253` §1-§2; lectura para pantalla en `0253` §3 |
+| 8 | Códigos de gate de despacho (los seis `CUSTODY_*`) | **CORTADO EN lectura** · «el error crudo de PostgreSQL sube tal cual al despachante» | **CABLEADO** | `src/lib/custody/blocker-guidance.ts` · los seis, más `CUSTODY_EGRESS_PHOTO_MISSING` y `CUSTODY_EGRESS_NOT_APPLICABLE` de 0253 |
+| — | Los 22 códigos de `CertificateBlocker` | sin ningún traductor | **traducidos y guiados** | `blocker-guidance.ts`; llegan a pantalla recién cuando 2-C cablee el certificado, y ya no llegarán crudos |
+| — | Acceso del encargado de depósito a `/wms/custody` | **404** en dos renglones | **entra** | `src/lib/rbac/depot-manager.ts:94-102`; prueba rojo→verde en `depot-manager-routes.test.ts` |
+
+**Recuento tras el bloque 2-B:** 25 filas · **CABLEADO 20** · **CORTADO 2** ·
+**NO EXISTE 2** · **NO VIAJA por diseño 1**.
+
+Las dos filas que siguen **CORTADAS** son la 7 (certificado sin lecturas) y la
+11b (POD de unidad física), y las dos **NO EXISTE** son la 12 (firma de quien
+retira) y la 13/HN-1. **Las tres primeras son de 2-C y no se tocaron.**
+
+### 10.2 · La máquina de estados del egreso
+
+`evaluateEgressGate` es pura —sin base, sin sesión, sin Storage— y tiene **dos
+ramas disjuntas**, no una lista de condiciones con excepciones:
+
+| Nivel | Qué exige | Resultado |
+|---|---|---|
+| **1** | nada | `dispatchAllowed: true` siempre; sin foto de egreso, sin IA, sin cuarentena, sin certificado |
+| **2** | caso + las dos fotos + decisión humana + certificado + cadena no avanzada | `dispatchAllowed` sólo con todo cumplido |
+
+Para el nivel 2, el orden de los motivos es deliberado: **la foto de egreso se
+reclama primero**, porque es lo único que el operario puede resolver parado en el
+depósito. Antes recibía `CUSTODY_HOLD` —«unidad no liberada»— y salía a buscar a
+un inspector cuando lo que faltaba era sacar una foto.
+
+### 10.3 · «La IA alerta; no decide» · dónde está escrito
+
+La concordancia **nunca** habilita ni bloquea por sí misma:
+
+- con concordancia suficiente, el caso **igual** queda en
+  `awaitingHumanDecision: true` — el bloqueo `CUSTODY_HOLD` sigue puesto;
+- con concordancia insuficiente o banderas de daño, se enciende
+  `reinforcedInspectionRequired`, que **no** impide liberar: agrega la foto de
+  inspección física y el motivo reforzado. Es una ALERTA, no un veredicto.
+
+La prueba que lo fija es `«el CAMINO FELIZ sin decisión humana NO despacha»`
+(`src/lib/custody-egress-gate.test.ts`). Si esa prueba se pusiera verde con
+`decision: null`, la IA estaría liberando mercadería sola.
+
+### 10.4 · La línea roja, probada
+
+`«el MISMO input en nivel 2 NO despacha»` toma exactamente el input que el nivel
+1 despacha y le cambia **una sola cosa** —el nivel— para comprobar que el nivel 2
+lo rechaza. La excepción del nivel 1 no puede escaparse a nivel 2 porque no es
+una excepción dentro de una lista: es una rama que retorna antes.
+
+En la base, lo mismo: `custody_assert_egress_evidence` (0253 §1) sale por nivel
+antes de mirar nada, y el `perform` que 0253 §2 agrega al gate va **después** de
+`if v_level < 2 then return`.
+
+### 10.5 · Lo que el harness encontró, y que no se parcheó
+
+La batería pasó de verde a rojo cuatro veces durante el bloque. Ninguna se
+resolvió aflojando una aserción:
+
+1. **`vitest.config.ts` tocado.** Se agregó `src/lib/custody/**` al `include`
+   para que la prueba pura corriera, y el vanilla-guard de T-C1-05 lo cazó. **Se
+   revirtió el config** y la prueba se movió a `src/lib/custody-egress-gate.test.ts`,
+   que cae bajo el patrón `src/lib/*.test.ts` ya existente — el mismo lugar donde
+   vive `depot-manager-routes.test.ts`. El guard quedó intacto.
+2. **0253 no aplicaba** en `t-c5-06`, que carga el esquema **sin 0250a** a
+   propósito. Era un defecto real de declaración de dependencia: 0253 lee
+   `custody_release_certificates`, que crea 0250a. Se declaró en
+   `DEPENDIENTES_DE_0250A`.
+3. **Manifiesto y conteos.** El guard P3-N1A0 exige decisión explícita y visible
+   por migración nueva, y `EXPECTED_CUSTODY_MANIFEST_SIZE` exige moverse en el
+   mismo commit. Se clasificó 0253 en los dos manifiestos y se movieron los
+   conteos: forwards 12→13, manifiesto dedicado 48→49. **El cierre histórico
+   sigue en 36**: no se mueve, es el pasado.
+4. **Tres aserciones de nivel 2 esperaban `CUSTODY_HOLD`.** El gate ahora informa
+   `CUSTODY_EGRESS_PHOTO_MISSING` primero. La invariancia que esas pruebas
+   protegen —**el nivel 2 no despacha**— se mantiene intacta; lo que cambió es
+   cuál de sus propios motivos informa, y el nuevo es más accionable. Se extendió
+   el patrón, no se relajó la aserción.
+
+### 10.6 · HALLAZGO FORMAL PARA 2-C · el certificado NO necesita cambio
+
+`certificate-policy.ts:107` exige
+`d.newState === "RELEASED" && d.previousState === "REVIEW_REQUIRED"`.
+
+**Esa condición es correcta y debe quedarse.** No es una restricción de más: es
+el espejo de un CHECK que la base tiene desde 0222 —
+`0222_custody_integrity_foundation.sql:778`:
+
+```sql
+constraint custody_integrity_decisions_prev_state_chk check (previous_state = 'REVIEW_REQUIRED'),
+```
+
+**Ninguna decisión —de liberación o de cuarentena— puede existir en la base sin
+venir de `REVIEW_REQUIRED`.** No hay margen de diseño: el camino feliz pasa por
+revisión humana porque no hay ningún otro camino por el que una decisión pueda
+registrarse.
+
+Y coincide con lo que la máquina de estados del egreso concluyó por su cuenta,
+desde el requisito textual: si con concordancia alta el caso se liberara sin
+persona, quien libera es la IA.
+
+**Para 2-C:** al cablear el certificado, la condición de `:107` no se toca. Lo
+que sí hay que verificar en 2-C es que exista una transición que lleve el caso a
+`REVIEW_REQUIRED` cuando el par de fotos se completa **también en el camino
+feliz** — si el caso quedara en `PENDING_EVIDENCE` con concordancia alta, no
+habría decisión posible y el certificado sería inemitible. Ese es el punto a
+comprobar, y **no es un defecto de `certificate-policy.ts`**.
+
+### 10.7 · Lo que 2-B NO hizo, por alcance
+
+- Nada de 2-C: certificado, POD, historial de QR, firma de quien retira.
+  `certificate-policy.ts`, `pod-pdf.ts` y `qr.ts` quedaron **byte-idénticos** a
+  `acf090d1`.
+- Ninguna migración fuera de `0253`. `0251` y `0252` y sus ROLLBACK, verificados
+  byte-idénticos a `acf090d1`.
+- El §7 visual, HN-1 y la sesión de UI siguen abiertos.
+- `registerEgressEvidence` y `custody_egress_gate_status` quedan **escritos y
+  probados pero sin consumidor en picking/packing/despachos**: cablear esa
+  superficie es trabajo de la sesión de UI, no de este bloque.
 
 ---
 

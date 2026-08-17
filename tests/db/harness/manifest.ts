@@ -325,6 +325,12 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // en `custody_events` y en la serie 0036-0039 (PostGIS), fuera del vanilla.
   "0252_custody_two_levels.sql",
   "ROLLBACK_0252_custody_two_levels.sql",
+  // CUSTODIA CIERRE CIRCUITO · 2-B · la puerta de egreso (Adenda §4.2), con su
+  // rollback lógico. Misma decisión explícita: redefine
+  // `custody_assert_physical_unit_released`, que se apoya en `custody_events` y
+  // en la serie 0036-0039 (PostGIS), fuera del vanilla.
+  "0253_custody_egress_gate.sql",
+  "ROLLBACK_0253_custody_egress_gate.sql",
 ]);
 
 /**

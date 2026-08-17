@@ -295,7 +295,7 @@ describe("T-C7-03 · el NIVEL 2 sigue bloqueado · la línea roja se respeta", (
     expect(e.caseId).not.toBeNull();
 
     // Si el nivel 2 pasara, la condición por nivel habría aflojado el contrato.
-    await expect(despachar(e.allocationId)).rejects.toThrow(/CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
+    await expect(despachar(e.allocationId)).rejects.toThrow(/CUSTODY_EGRESS_PHOTO_MISSING|CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
 
     await actAsServer(db);
     const { rows } = await db.query<{ status: string }>(
@@ -387,7 +387,7 @@ describe("T-C7-03 · allocation MIXTA REAL · cada bien por el régimen con el q
     expect(g.suma).toBe(4);
 
     // ASERCIÓN ÚNICA · la unidad de nivel 1 no afloja nada de la de nivel 2.
-    await expect(despachar(allocationId)).rejects.toThrow(/CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
+    await expect(despachar(allocationId)).rejects.toThrow(/CUSTODY_EGRESS_PHOTO_MISSING|CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
 
     await actAsServer(db);
     const { rows } = await db.query<{ status: string }>(

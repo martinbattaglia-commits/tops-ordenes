@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { registerPhysicalIngressAction, registerPhysicalEgressAction } from "../actions";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
+import { guidance } from "@/lib/custody/blocker-guidance";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
 export type CapturaUiState = "pendiente" | "subiendo" | "registrada" | "fallo";
@@ -144,7 +145,7 @@ export function PhysicalCapturePanel({
    * poder capturar Y que ese slot concreto siga vacío.
    */
   const puedeCapturar = view.capture.enabled;
-  const motivoBloqueo = view.capture.blockers[0] ?? null;
+  const motivoBloqueo = view.capture.blockers[0] ? guidance(view.capture.blockers[0]) : null;
 
   return (
     <section className="card p-4" aria-labelledby="captura-fisica-title">

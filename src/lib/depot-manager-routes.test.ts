@@ -30,10 +30,33 @@ describe("H-3 · rutas permitidas al encargado", () => {
     expect(depotManagerRouteAllowed("/orders/OS-000123")).toBe(true);
   });
 
-  it("el WMS de su sede, salvo custodia", () => {
+  it("el WMS de su sede, custodia INCLUIDA", () => {
     expect(depotManagerRouteAllowed("/wms")).toBe(true);
     expect(depotManagerRouteAllowed("/wms/recepciones")).toBe(true);
     expect(depotManagerRouteAllowed("/wms/recepciones/nueva")).toBe(true);
+  });
+
+  /**
+   * S2-B · EL 404 RETIRADO.
+   *
+   * La allowlist excluía `/wms/custody` en DOS renglones —el corte explícito y
+   * la doble negación del último `return`— y el encargado recibía un 404 en el
+   * módulo donde saca las fotos. Eso convertía la custodia digital en una
+   * función que la persona que la ejecuta no puede abrir: el mismo usuario que
+   * carga la recepción y saca la foto de ingreso no podía ver el caso que esa
+   * foto abre, ni sacar la de egreso.
+   *
+   * Retirar las dos líneas no afloja nada más: `/wms/custody` queda gobernada
+   * por lo mismo que gobierna al resto del WMS —RLS de tenant, `wms.view` para
+   * mirar, `wms.edit` para capturar y `wms.custody.decide` con rol `admin`
+   * para liberar—, que es donde la autoridad estaba escrita desde 0251.
+   */
+  it("custodia: el encargado ENTRA · las dos líneas del 404 retiradas", () => {
+    expect(depotManagerRouteAllowed("/wms/custody")).toBe(true);
+    expect(depotManagerRouteAllowed("/wms/custody/evento")).toBe(true);
+    // La ruta que sólo comparte prefijo cae bajo la misma regla del WMS: ya no
+    // hay un renglón que la trate distinto.
+    expect(depotManagerRouteAllowed("/wms/custody-extra")).toBe(true);
   });
 
   it("el chat interno: sólo las rutas exactas y una conversación", () => {
@@ -65,14 +88,6 @@ describe("H-3 · rutas denegadas al encargado", () => {
     expect(depotManagerRouteAllowed("/api/orders/export")).toBe(false);
     expect(depotManagerRouteAllowed("/api/analytics/resumen")).toBe(false);
     expect(depotManagerRouteAllowed("/api/orders/OS-1/pdf/extra")).toBe(false);
-  });
-
-  it("custodia, incluida la ruta que sólo comparte prefijo", () => {
-    expect(depotManagerRouteAllowed("/wms/custody")).toBe(false);
-    expect(depotManagerRouteAllowed("/wms/custody/evento")).toBe(false);
-    // La doble negación del último renglón: no debe dejar pasar nada que
-    // empiece con /wms/custody.
-    expect(depotManagerRouteAllowed("/wms/custody-extra")).toBe(false);
   });
 
   it("los módulos prohibidos por contrato", () => {

@@ -39,7 +39,10 @@ export const CUSTODY_BOOTSTRAP_DIR = resolve(__dirname, "..", "bootstrap");
  *   + 0232                         = 44 (remediación: reserva exclusiva de evaluación)
  *   + 0250 + 0250a                = 46 (scope físico + visión productiva)
  */
-export const EXPECTED_CUSTODY_MANIFEST_SIZE = 48;
+// 2-B · 48 → 49 con `0253_custody_egress_gate.sql`. El guard exige que este
+// número se mueva en el MISMO commit que el manifiesto: una migración nueva es
+// una decisión explícita y visible en el diff, nunca un arrastre silencioso.
+export const EXPECTED_CUSTODY_MANIFEST_SIZE = 49;
 
 /** Cierre inventariado ANTES de D1–D3. Se conserva para poder afirmarlo. */
 export const CUSTODY_CLOSURE_SIZE = 36;
@@ -118,6 +121,9 @@ export const CUSTODY_MIGRATION_MANIFEST: readonly string[] = [
 
   // ── 2-A · los dos niveles de custodia (D3) ──
   "0252_custody_two_levels.sql",
+
+  // ── 2-B · la puerta de egreso (Adenda §4.2) ──
+  "0253_custody_egress_gate.sql",
 ];
 
 export class CustodyManifestError extends Error {

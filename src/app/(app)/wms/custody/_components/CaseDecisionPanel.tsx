@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { decideCustodyCaseAction } from "../actions";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
+import { guidance } from "@/lib/custody/blocker-guidance";
 import { MIN_REASON_LENGTH } from "@/lib/custody/integrity";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
@@ -173,7 +174,7 @@ export function CaseDecisionPanel({
         <div className="mt-3">
           <p className="eyebrow-tiny">Por qué no se puede liberar</p>
           <ul className="mt-1 list-disc pl-4 text-xs text-fg-muted">
-            {view.release.blockers.map((b) => <li key={b}>{b}</li>)}
+            {view.release.blockers.map((b) => <li key={b}>{guidance(b)}</li>)}
           </ul>
         </div>
       )}
@@ -187,7 +188,7 @@ export function CaseDecisionPanel({
         <div className="mt-3" data-cuarentena-blockers="true">
           <p className="eyebrow-tiny">Por qué no se puede enviar a cuarentena</p>
           <ul className="mt-1 list-disc pl-4 text-xs text-fg-muted">
-            {view.quarantine.blockers.map((b) => <li key={b}>{b}</li>)}
+            {view.quarantine.blockers.map((b) => <li key={b}>{guidance(b)}</li>)}
           </ul>
         </div>
       )}

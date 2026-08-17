@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { registerHumanInspectionAction } from "../actions";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
+import { guidance } from "@/lib/custody/blocker-guidance";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
 export type InspectionUiState = "pendiente" | "subiendo" | "registrada" | "fallo";
@@ -180,7 +181,7 @@ export function CaseInspectionPanel({
 
       {view.inspection.blockers.length > 0 && (
         <ul className="mt-2 list-disc pl-4 text-xs text-fg-muted">
-          {view.inspection.blockers.map((b) => <li key={b}>{b}</li>)}
+          {view.inspection.blockers.map((b) => <li key={b}>{guidance(b)}</li>)}
         </ul>
       )}
     </section>

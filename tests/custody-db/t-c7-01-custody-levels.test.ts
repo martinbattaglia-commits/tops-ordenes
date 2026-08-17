@@ -200,7 +200,7 @@ describe("T-C7-01 · premisas del nivel 1 · la composición está en t-c7-03", 
     // Sin decisión ni certificado, el nivel 2 tiene que seguir fallando.
     await expect(
       db.query(`select public.custody_assert_physical_unit_released($1::uuid)`, [m.unitId]),
-    ).rejects.toThrow(/CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
+    ).rejects.toThrow(/CUSTODY_EGRESS_PHOTO_MISSING|CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
   });
 
   it("una unidad inexistente sigue siendo un error, no un permiso tácito", async () => {
