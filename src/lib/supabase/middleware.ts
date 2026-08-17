@@ -75,6 +75,14 @@ export async function updateSession(request: NextRequest) {
     pathname === "/api/clientify/webhook" ||
     pathname.startsWith("/api/clientify/webhook/") ||
     pathname === "/api/tracking/ingest" || // Traccar Client postea sin sesión; protegido por token propio
+    // Forward del Traccar Server para el GPS de hardware (FMC130). El server postea
+    // sin cookie de sesión; la auth se valida DENTRO del handler con un Bearer propio
+    // (TRACKING_FORWARD_SECRET, timing-safe). Sólo la ruta exacta.
+    pathname === "/api/tracking/traccar-forward" ||
+    // Alerta diaria de silencio de tracking: el cron (GitHub Actions) postea con
+    // `Authorization: Bearer CRON_SECRET` sin cookie; la auth se valida DENTRO del
+    // handler (503 sin secret / 401 mismatch). Sólo la ruta exacta.
+    pathname === "/api/tracking/cron/silence-alert" ||
     // Sync diario del Compliance Cockpit: el cron (GitHub Actions) postea con
     // `Authorization: Bearer CRON_SECRET` sin cookie de sesión. La auth se valida
     // DENTRO del handler (CRON_SECRET). Sólo la ruta exacta — no /api/compliance/*.
