@@ -43,7 +43,7 @@ import {
   createSupabaseCustodyQueryPort,
   type CustodyDataClient,
 } from "@/lib/custody/integrity-supabase";
-import { sniffCustodyVisionMime } from "@/lib/custody/productive-vision-evaluation";
+import { sniffCustodyVisionMime } from "@/lib/custody/vision-mime";
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 

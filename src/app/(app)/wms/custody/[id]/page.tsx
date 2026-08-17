@@ -9,13 +9,14 @@ import {
 import { custodyQrDataUrl } from "@/lib/custody/qr";
 import { fmtDateTime } from "@/lib/utils";
 import type { CustodyEvidenceRef, CustodyTimeline as Timeline } from "@/lib/custody/types";
-import { loadCustodyCaseAction } from "../actions";
+import { loadCustodyCaseAction, loadCustodyDocumentAction } from "../actions";
 import { CaseAiPanel } from "../_components/CaseAiPanel";
 import { CaseDecisionPanel } from "../_components/CaseDecisionPanel";
 import { CaseInspectionPanel } from "../_components/CaseInspectionPanel";
 import { PhysicalCapturePanel } from "../_components/PhysicalCapturePanel";
 import { CaseReevaluatePanel } from "../_components/CaseReevaluatePanel";
 import { CasePodGate } from "../_components/CasePodGate";
+import { CaseDocumentCard } from "../_components/CaseDocumentCard";
 import { CustodyTimeline } from "../_components/CustodyTimeline";
 import { EvidenceViewer } from "../_components/EvidenceViewer";
 import { PrintButton } from "../_components/PrintButton";
@@ -81,6 +82,11 @@ export default async function CustodyCasePage({ params }: { params: { id: string
   }
 
   const view = res.data;
+  // 2-C-2 · el documento probatorio. Best-effort: si no se puede resolver, la
+  // pantalla no muestra la tarjeta y todo lo demás sigue igual — el documento
+  // no puede tumbar el caso.
+  const docRes = await loadCustodyDocumentAction(params.id);
+  const documento = docRes.ok ? docRes.data : null;
   const isShipment = view.scope === "shipment";
   const isPhysical = view.scope === "physical_unit";
   const shipmentId = isShipment ? view.entityId : null;
@@ -274,6 +280,7 @@ export default async function CustodyCasePage({ params }: { params: { id: string
           <CaseReevaluatePanel view={view} />
           <CaseDecisionPanel view={view} />
           <CasePodGate view={view} shipmentId={shipmentId} hasPdf={view.podPdfReady} />
+          {documento && <CaseDocumentCard doc={documento} />}
         </div>
       </div>
 

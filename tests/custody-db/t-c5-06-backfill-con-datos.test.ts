@@ -58,6 +58,7 @@ const DEPENDIENTES_DE_0250A = [
   // 2-B · la puerta de egreso redefine `custody_assert_physical_unit_released`
   // y lee `custody_release_certificates`: sin 0250a esas tablas no existen.
   "0253_custody_egress_gate.sql",
+  "0254_custody_certificate_read.sql",
 ];
 
 const MANIFIESTO_SIN_0250A = CUSTODY_MIGRATION_MANIFEST.filter(

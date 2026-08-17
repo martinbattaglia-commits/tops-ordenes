@@ -63,12 +63,17 @@ import {
   runCustodyReevaluation,
 } from "@/lib/custody/integrity-evaluation";
 import {
-  runProductiveCustodyVisionEvaluation,
   verifyInspectionEvidenceIntegrity,
 } from "@/lib/custody/productive-vision-evaluation";
-import { OpenAICustodyVisionProvider } from "@/lib/custody/openai-vision-provider";
 import { sniffCustodyVisionMime } from "@/lib/custody/productive-vision-evaluation";
 import { env } from "@/lib/env";
+import { runPhysicalUnitVisionEvaluation } from "@/lib/custody/vision-evaluation-composition";
+import { triggerAnalysisIfPairComplete } from "@/lib/custody/analysis-trigger";
+import {
+  resolveCustodyDocument,
+  type CustodyDocument,
+  type PersistedCertificate,
+} from "@/lib/custody/certificate-emission";
 import {
   attachPhysicalEvidence,
   classifyPhysicalAttachRejection,
@@ -498,6 +503,110 @@ export async function loadCustodyCaseAction(
   }
 }
 
+/**
+ * 2-C-2 · EMITE EL DOCUMENTO PROBATORIO DEL CASO.
+ *
+ * `evaluateCertificateEligibility` estaba escrita, completa y verificada, y no
+ * la llamaba NADIE: sus únicos consumidores eran su propio módulo y los tests.
+ * Ésta es la acción que faltaba. **No se tocó la política**: se la consume.
+ *
+ * El contexto se arma con la MISMA lectura que usa `loadCustodyCaseAction` —el
+ * caso de dominio, el head vigente, el conjunto de inspección revalidado— para
+ * que el documento no pueda describir un caso distinto del que muestra la
+ * pantalla.
+ *
+ * La fila de `custody_release_certificates` la escribe la BASE al liberar
+ * (`0251:257`), dentro de la misma transacción que registra la decisión. Acá se
+ * LEE —posible desde 0254, que agregó la política de tenant que faltaba— y se
+ * combina con el veredicto. No se inserta nada: duplicar el asiento probatorio
+ * sobre una tabla inmutable sería un error irreparable.
+ */
+export async function loadCustodyDocumentAction(
+  caseId: string,
+): Promise<Result<CustodyDocument>> {
+  try {
+    const id = parseCanonicalUuid(caseId);
+    if (!id) return caseFail("BAD_ID");
+
+    const ctx = await caseContext(id);
+    if (!ctx) return caseFail("NOT_FOUND");
+
+    const auth = createActorAuthorizationPort(ctx.query, ctx.actor, ctx.clientId);
+    const verified = await auth.resolveActor();
+    if (!verified) return caseFail("SESSION");
+
+    const repo = createIntegrityCaseRepository(ctx.query);
+    const found = await repo.findById(id, verified.clientId);
+    if (!found) return caseFail("NOT_FOUND");
+
+    const currentChainHead = await ctx.query.verifyChainHead(
+      found.entity.scope,
+      found.entity.entityId,
+    );
+
+    // El conjunto de inspección REVALIDADO. Con el caso ya decidido,
+    // `deriveInspectionEvidence` devuelve vacío por diseño, así que para el
+    // documento se toma el que la decisión declaró: es el que la política
+    // tiene que comparar contra el canónico.
+    const canonical = found.decision?.inspectionEvidenceIds ?? [];
+
+    const evidenceEventIds = [found.evidence.ingress?.eventId, found.evidence.egress?.eventId]
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+
+    // La fila persistida. Sin política de lectura (pre-0254) esto devolvía cero
+    // filas y el documento no podía existir.
+    let persisted: PersistedCertificate | null = null;
+    try {
+      const session = createClient();
+      if (session) {
+        const { data } = await session
+          .from("custody_release_certificates")
+          .select("id, basis, chain_head_at_release, issued_at")
+          .eq("case_id", id)
+          .maybeSingle();
+        const row = data as {
+          id: string; basis: string; chain_head_at_release: string; issued_at: string;
+        } | null;
+        if (row) {
+          persisted = {
+            id: row.id,
+            basis: row.basis,
+            chainHeadAtRelease: row.chain_head_at_release,
+            issuedAt: row.issued_at,
+          };
+        }
+      }
+    } catch {
+      persisted = null;
+    }
+
+    return {
+      ok: true,
+      data: resolveCustodyDocument(
+        {
+          state: found.state,
+          caseClientId: found.entity.clientId,
+          requesterClientId: verified.clientId,
+          evidenceOk:
+            found.evidence.ingress !== null &&
+            found.evidence.egress !== null &&
+            !found.holdReasons.some((r) => r.startsWith("EVIDENCE_")),
+          evidenceEventIds,
+          chain: found.chain,
+          assessment: found.assessment,
+          decision: found.decision,
+          canonicalInspectionEvidenceIds: canonical,
+          currentChainHead,
+          issuedAt: new Date().toISOString(),
+        },
+        persisted,
+      ),
+    };
+  } catch {
+    return caseFail("UNAVAILABLE");
+  }
+}
+
 /** Igual que la anterior, pero revalidando la ruta tras una decisión. */
 export async function refreshCustodyCaseAction(
   caseId: string,
@@ -664,60 +773,19 @@ export async function registerPhysicalIngressAction(
   forced.set("event_type", "foto_ingreso");
   forced.set("kind", "foto");
   const res = await attachEvidenceAction(forced);
-  if (res.ok) await triggerAnalysisIfPairComplete(forced.get("entity_id"));
+  if (res.ok) await triggerAnalysisIfPairComplete(String(forced.get("entity_id") ?? ""));
   return res;
 }
 
 /**
  * D2 · EL ANÁLISIS SE DISPARA SOLO AL COMPLETARSE EL PAR (S1-4).
  *
- * Antes había que pedirlo a mano desde un botón que además exigía el permiso
- * de DECIDIR, no el de capturar: el operario que sacaba las dos fotos no podía
- * disparar el análisis de su propio caso, y el caso se quedaba esperando a
- * alguien que ni sabía que existía.
- *
- * Es BEST-EFFORT a propósito. La foto ya quedó registrada y verificada; si el
- * análisis no arranca —lease tomado, cooldown, proveedor caído— eso NO puede
- * convertir una captura exitosa en un error para el operario. El estado del
- * caso lo dice igual, y el panel de análisis ofrece reintentar.
- *
- * EL TECHO DE LLAMADAS PAGAS SE MANTIENE INTACTO: no se agrega ningún control
- * nuevo acá. Quien lo aplica es `begin_custody_integrity_evaluation_v2`, con su
- * lease exclusivo (0232) y su cooldown; este disparo simplemente entra por la
- * misma puerta y acepta un `no` por respuesta.
+ * 2-C-2 · la implementación se movió a `@/lib/custody/analysis-trigger`, para que
+ * la foto de egreso sacada desde `/wms/despachos` dispare EL MISMO análisis sin
+ * arrastrar el proveedor de visión a ese grafo. Las condiciones no cambiaron —par
+ * completo, sin decisión, estado no terminal— y siguen siendo best-effort: la
+ * captura ya salió bien y un análisis que no arranca no la convierte en error.
  */
-async function triggerAnalysisIfPairComplete(entityId: FormDataEntryValue | null): Promise<void> {
-  try {
-    const unitId = parseCanonicalUuid(entityId);
-    if (!unitId) return;
-    const session = createClient();
-    if (!session) return;
-
-    const { data, error } = await session
-      .from("custody_integrity_cases")
-      .select("id, version, state, decision_id, ingress_evidence_id, egress_evidence_id")
-      .eq("physical_unit_id", unitId)
-      .maybeSingle();
-    if (error || !data) return;
-
-    const row = data as {
-      id: string;
-      version: number;
-      state: string | null;
-      decision_id: string | null;
-      ingress_evidence_id: string | null;
-      egress_evidence_id: string | null;
-    };
-    // Sólo con el par COMPLETO y el caso todavía abierto.
-    if (row.decision_id !== null) return;
-    if (!row.ingress_evidence_id || !row.egress_evidence_id) return;
-    if (row.state === "RELEASED" || row.state === "QUARANTINED") return;
-
-    await reevaluateCustodyCaseAction(row.id, row.version);
-  } catch {
-    // Silencio deliberado: ver el comentario de arriba. La captura ya salió bien.
-  }
-}
 
 /**
  * Registra la FOTO DE EGRESO obligatoria de la unidad física.
@@ -736,7 +804,7 @@ export async function registerPhysicalEgressAction(
   forced.set("kind", "foto");
   const res = await attachEvidenceAction(forced);
   // D2 · el egreso es, en el flujo normal, la segunda foto del par.
-  if (res.ok) await triggerAnalysisIfPairComplete(forced.get("entity_id"));
+  if (res.ok) await triggerAnalysisIfPairComplete(String(forced.get("entity_id") ?? ""));
   return res;
 }
 
@@ -800,23 +868,24 @@ export async function reevaluateCustodyCaseAction(
     if (!admin) return caseFail("UNAVAILABLE");
 
     if (found.entity.scope === "physical_unit") {
-      const outcome = await runProductiveCustodyVisionEvaluation(
-        {
-          session: {
-            begin: (c, v) => {
-              if (!ctx.query.beginProductiveEvaluation) {
-                throw new Error("camino productivo no disponible");
-              }
-              return ctx.query.beginProductiveEvaluation(c, v);
-            },
-          },
-          server: createSupabaseProductiveVisionServerPort(
-            admin as unknown as ProductiveVisionDataClient,
-          ),
-          provider: new OpenAICustodyVisionProvider({ apiKey: env.openai.apiKey }),
+      // 2-C-2 · la composición del proveedor se movió a
+      // `vision-evaluation-composition.ts`, que es ahora el ÚNICO lugar donde se
+      // instancia `OpenAICustodyVisionProvider`. Acá no cambia nada de
+      // comportamiento: el lease, el cooldown y el puerto de servidor son los
+      // mismos. Lo que cambia es que el disparo automático desde despachos puede
+      // reusar esa composición por `import()` dinámico sin arrastrar el
+      // proveedor a su grafo estático.
+      const outcome = await runPhysicalUnitVisionEvaluation({
+        caseId: id,
+        expectedVersion: found.version,
+        begin: (c, v) => {
+          if (!ctx.query.beginProductiveEvaluation) {
+            throw new Error("camino productivo no disponible");
+          }
+          return ctx.query.beginProductiveEvaluation(c, v);
         },
-        { caseId: id, expectedVersion: found.version },
-      );
+        admin: admin as unknown as ProductiveVisionDataClient,
+      });
       if (outcome.status === "in_flight") {
         return { ok: false, error: REEVAL_ERROR.LEASE_HELD };
       }

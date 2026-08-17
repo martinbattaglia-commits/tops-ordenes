@@ -1,9 +1,9 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-C-1** — la puerta de egreso quedó OPERABLE:
-la foto se saca en despachos, inmediatamente antes de `confirmDispatchAction`
-(§10.8). Antes: 2-B construyó la puerta y tradujo los bloqueos (§10)
+**Última actualización:** **Bloque 2-C-2** — el CIERRE PROBATORIO: el análisis
+arranca solo desde la foto de egreso y el certificado se emite (§11). Antes:
+2-C-1 dejó la puerta de egreso operable (§10.8)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -894,6 +894,102 @@ caracteres, así que `"XX"` vuelve sin traducir. Los tres archivos involucrados 
 No se remedió acá: está fuera de los dos hallazgos de esta ventana, vive en la
 superficie que 2-B ya cerró, y decidir si corrige el test o el umbral de
 `CODE_SHAPE` es una decisión de alcance. **Queda para Dirección.**
+
+---
+
+
+## 11 · BLOQUE 2-C-2 · EL CIERRE PROBATORIO
+
+### 11.1 · Las costuras que cambiaron de estado
+
+| # | Dato / capacidad | Antes | Ahora | Ancla |
+|---|---|---|---|---|
+| 7 | Certificado de liberación | **CORTADO EN lectura** · «cero lecturas, SELECT concedido sin consumidor» | **CABLEADO** | política de tenant en `0254`; consumidor en `certificate-emission.ts`; acción `loadCustodyDocumentAction`; pantalla `CaseDocumentCard` |
+| — | Disparo del análisis desde despachos | **NO EXISTE** · la foto de egreso no arrancaba nada | **CABLEADO** | `analysis-trigger.ts`, llamado desde `despachos/actions.ts` |
+
+**Recuento tras 2-C-2:** 25 filas · **CABLEADO 21** · **CORTADO 1** ·
+**NO EXISTE 2** · **NO VIAJA por diseño 1**. La única fila que sigue CORTADA es
+la 11b (POD de unidad física); las dos NO EXISTE son la 12 (firma de quien
+retira, que sí existe para el despacho) y la 13/HN-1.
+
+### 11.2 · Por qué hizo falta la migración `0254`
+
+`custody_release_certificates` existe desde 0250a, la fila **se inserta sola** al
+liberar (`0251:257`) y el `grant select ... to authenticated` está puesto. Aun
+así ninguna sesión podía leer una sola fila: la tabla tiene
+`enable row level security` y **ninguna política de `select`**. RLS sin política
+deniega todo, y el `grant` queda por encima de una puerta cerrada.
+
+Ése era el corte de la fila 7, y no se podía resolver en la aplicación: **el
+consumidor no existía porque no podía existir.**
+
+Se resolvió con **política de tenant** y no con lectura `service_role` —como sí
+correspondió en 2-C-1 para el puente de genealogía— porque el certificado es el
+**documento del cliente**: sacar la autorización de la base y ponerla en el
+código, justo en el artefacto cuyo valor es probatorio, sería el error. El
+criterio se copió de `custody_physical_units_read` (`0250a:68-73`).
+
+### 11.3 · Cómo se extrajo el disparo sin arrastrar el proveedor
+
+| Módulo | Peso | Qué hace |
+|---|---|---|
+| `analysis-trigger.ts` | **liviano** | par completo + caso abierto; resuelve lo pesado por `import()` **dinámico** |
+| `vision-evaluation-composition.ts` | pesado | **el único** lugar que instancia `OpenAICustodyVisionProvider` |
+| `vision-mime.ts` | puro | el sniffer de formato, extraído — ver abajo |
+
+Lo que la extracción garantiza, con precisión y sin prometer de más: el grafo
+**estático** del camino de egreso no contiene `openai-vision-provider` ni
+`productive-vision-evaluation`. **No** vuelve inalcanzable al proveedor en
+ejecución, ni debe: el objetivo del bloque es que el análisis corra.
+
+### 11.4 · 🔴 La fuga que el guard nuevo encontró · PREEXISTENTE
+
+El master dice que «el boundary guard lo va a cazar». **Medido: no lo cazaba.**
+`clients-native-only.test.ts` está enraizado en `ORIGENES`, y `wms/despachos`
+**no figura** ahí: ese guard protege el maestro de clientes. La propiedad que
+Dirección puso como causal de detención estaba **sin medir**.
+
+`custody-analysis-boundary.test.ts` la mide, y en su primera corrida encontró dos
+fugas reales:
+
+1. **`sniffCustodyVisionMime`** vivía en `productive-vision-evaluation.ts`, y
+   `physical-ingress.ts` lo importaba. **Todo el que registraba evidencia
+   arrastraba el proveedor**: recepciones desde 2-A, despachos desde 2-C-1. Se
+   extrajo a `vision-mime.ts` —función pura de números mágicos, sin razón para
+   estar ahí— y la arista desapareció para los dos.
+2. **`despachos/[id]/page.tsx → CustodyShipmentSection → CustodyShipmentActions
+   → custody/actions.ts`.** Es la superficie de custodia por scope `shipment`
+   (§2 fila 10), y mete el proveedor en el grafo de la PÁGINA de despacho desde
+   mucho antes de que existiera la puerta de egreso.
+
+**La segunda NO se remedió acá**: es la superficie que arrastra HN-1 y su
+decisión es de Dirección. Queda **fijada por test** con su cadena exacta, de modo
+que no puede crecer en silencio y que quien la corrija se entere.
+
+### 11.5 · El certificado y el POD conviven
+
+No se reemplazan. El **POD** prueba la ENTREGA con la firma de quien recibe; el
+**certificado** prueba la INTEGRIDAD de la unidad bajo custodia. Ninguno bloquea
+al otro.
+
+Y el **acta de inspección no es un error de emisión**: es el documento correcto
+para un caso liberado sin alcanzar la barra probatoria —típicamente un override
+humano—. La pantalla lo nombra así y enumera qué faltó, ya guiado.
+
+**`certificate-policy.ts` no se tocó**: byte-idéntico a `origin/main`. Lo que
+faltaba era un consumidor, y `:107` sigue siendo correcto porque `0222:777` lo
+impone por constraint.
+
+### 11.6 · La secuencia completa, a mano
+
+    foto de ingreso  →  /wms/recepciones/nueva      (nivel 1 y 2)
+    foto de egreso   →  /wms/despachos/[id]         (sólo nivel 2)
+    el análisis      →  arranca SOLO al completarse el par
+    la decisión      →  /wms/custody/[id]           (inspector)
+    el documento     →  /wms/custody/[id]           (certificado o acta)
+
+**El nivel 1 no ve nada de esto**, y sigue despachando por los dos caminos —con
+foto de ingreso y sin ella— con prueba ejecutada: `T-C7-03` (a) y (b), 11/11.
 
 ---
 

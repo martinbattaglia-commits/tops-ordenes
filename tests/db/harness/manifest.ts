@@ -331,6 +331,11 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // en la serie 0036-0039 (PostGIS), fuera del vanilla.
   "0253_custody_egress_gate.sql",
   "ROLLBACK_0253_custody_egress_gate.sql",
+  // CUSTODIA CIERRE CIRCUITO · 2-C-2 · la politica de lectura del certificado,
+  // con su rollback logico. Misma decision explicita: la tabla y sus triggers
+  // viven en 0250a, fuera del vanilla.
+  "0254_custody_certificate_read.sql",
+  "ROLLBACK_0254_custody_certificate_read.sql",
 ]);
 
 /**

@@ -49,6 +49,7 @@ const CUSTODY_FORWARD_FILES = [
   "0251_custody_decide_authority.sql",
   "0252_custody_two_levels.sql",
   "0253_custody_egress_gate.sql",
+  "0254_custody_certificate_read.sql",
 ];
 
 const CUSTODY_ARTIFACT_FILES = [
@@ -57,6 +58,7 @@ const CUSTODY_ARTIFACT_FILES = [
   "ROLLBACK_0251_custody_decide_authority.sql",
   "ROLLBACK_0252_custody_two_levels.sql",
   "ROLLBACK_0253_custody_egress_gate.sql",
+  "ROLLBACK_0254_custody_certificate_read.sql",
 ];
 
 const dedicated = () =>
@@ -74,20 +76,20 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
 
   it("cierre HISTÓRICO de custodia: 36", () => {
     const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_FORWARD_FILES.includes(m));
-    expect(d1d3).toHaveLength(13);
+    expect(d1d3).toHaveLength(14);
     expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(36);
     expect(CUSTODY_CLOSURE_SIZE).toBe(36);
   });
 
-  it("manifiesto DEDICADO actual: 49", () => {
-    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(49);
-    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(49);
+  it("manifiesto DEDICADO actual: 50", () => {
+    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(50);
+    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(50);
     expect(() => validateCustodyManifest()).not.toThrow();
   });
 
   // El cierre HISTÓRICO (36) no se mueve: es el pasado. Lo que crece es la
   // serie de forwards gobernados, que con 0253 pasa de doce a trece.
-  it("36 + 13 = 49, y los trece forwards NO están en el vanilla", () => {
+  it("36 + 14 = 50, y los catorce forwards NO están en el vanilla", () => {
     expect(CUSTODY_CLOSURE_SIZE + CUSTODY_FORWARD_FILES.length).toBe(
       EXPECTED_CUSTODY_MANIFEST_SIZE,
     );
@@ -128,7 +130,7 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(frozen()!.matches(f)).toBe(false);
   });
 
-  it("cubre EXACTAMENTE los diecisiete artefactos del árbol y ninguno más", () => {
+  it("cubre EXACTAMENTE los diecinueve artefactos del árbol y ninguno más", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
     const cubiertos = onDisk.filter((f) => dedicated()!.matches(f)).sort();
     expect(cubiertos).toEqual([...CUSTODY_ARTIFACT_FILES].sort());
