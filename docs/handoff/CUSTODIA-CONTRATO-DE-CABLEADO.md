@@ -819,6 +819,82 @@ acoplamiento que obligó a extraer `physical-ingress.ts` en 2-A. La evaluación 
 la decisión humana siguen viviendo en `/wms/custody/[id]`, que es donde trabaja
 el inspector.
 
+### 10.9 · Remediación consolidada de C4 1/2 · dos hallazgos bloqueantes
+
+C4 1/2 cerró **FAIL con 10 hallazgos**. Se remediaron los **dos bloqueantes**.
+
+#### F-1 · el vínculo pedido ↔ unidad
+
+`registerDispatchEgressAction` recibía `orderId` y **sólo lo usaba para
+revalidar**. Nivel, tenant y permiso se comprobaban; la PERTENENCIA no. Un
+operario con permiso de captura, parado en el pedido A, podía mandar el
+`entity_id` de una unidad del pedido B que seguía en picking, y la foto quedaba
+adjunta a un bulto que estaba en la estantería.
+
+**Lo que se rompía no era un permiso: era el ANCLAJE TEMPORAL de la puerta.**
+`has_egress_photo` es la única condición de `0253` que el operario resuelve por
+sí mismo, y una vez satisfecha lo queda para siempre. Con la foto tomada fuera de
+la ventana que Dirección definió —bulto cerrado, bien todavía bajo control del
+depósito— la compuerta sigue abriéndose pero ya no acredita el momento que tenía
+que acreditar.
+
+**Dónde quedó la validación, y por qué ahí:** en el **servidor**, en la acción,
+antes de leer el nivel y antes de tocar Storage. El componente sólo ofrece las
+unidades correctas, pero la acción es alcanzable sin él. Y resuelve
+pedido→unidades con `resolveDispatchOrderUnits` —extraído de
+`getDispatchEgressGate`—, que es **el mismo camino que usa el panel**: dos formas
+de contestar esa pregunta divergen, y entonces la validación deja de describir lo
+que la pantalla ofrece.
+
+| Capa | Qué agrega |
+|---|---|
+| `dispatch-egress.ts` | `resolveDispatchOrderUnits(orderId)` — el ÚNICO camino pedido→unidades. Devuelve `null` (no lista vacía) cuando no hay genealogía, para que quien llama distinga «pedido sin custodia» de «unidad ajena» |
+| `despachos/actions.ts` | la guarda de pertenencia, primera comprobación de la acción |
+
+La contención triple que el C4 elogió **no cambió**: allocations por SESIÓN,
+puente admin CERRADO sobre esas allocations, identidad por SESIÓN. El resolvedor
+las reproduce en el mismo orden.
+
+#### F-3 · los dobles descartaban argumentos
+
+`dispatch-egress-gate.test.ts` hacía `for (const m of [...]) api[m] = () => api`:
+`select`, `eq`, `in` y `order` ignoraban lo que recibían, y `rpc` no aceptaba
+parámetros. **Borrar `.in("allocation_id", allocationIds)` —el acotamiento del
+`service_role` que Dirección aprobó— dejaba pasar los seis tests idénticos.**
+
+Ahora `eq` e `in` registran su predicado y `then` resuelve las filas filtradas; y
+`rpc` responde POR `p_physical_unit_id`. **Y las fixtures traen filas ajenas a
+propósito** —un pedido, una allocation y una unidad de otro despacho—: sin ellas
+el doble podría respetar los argumentos y los mutantes seguirían vivos, porque no
+habría nada que los filtros tuvieran que excluir. Los datos son la mitad de la
+prueba.
+
+Cinco mutantes, cinco muertos. Ver el informe de la sesión.
+
+#### Lo que esta ventana NO tocó
+
+F-2 (el arnés que no corre en CI) y los siete no bloqueantes quedan abiertos por
+decisión de Dirección. `certificate-policy.ts`, `pod-pdf.ts`,
+`PodPdfDocument.tsx` y `qr.ts` byte-idénticos. **Ninguna migración: el lease
+`0254` sigue sin usar.**
+
+#### 🔴 Rojo preexistente, encontrado al correr el arnés a mano
+
+`tests/wms-ui/presentation.test.ts:348` espera
+`blockerLabel("XX") === "Requisito de liberación no cumplido"` y hoy devuelve
+`"XX"`.
+
+**Es de 2-B y está en `main`.** Lo introdujo el rewire de `blockerLabel` para que
+su respaldo delegue en `guidance()` (§10 · S2-6): `guidance` pasa de largo lo que
+no tiene forma de código, y `CODE_SHAPE = /^[A-Z][A-Z0-9_]{2,}$/` exige tres
+caracteres, así que `"XX"` vuelve sin traducir. Los tres archivos involucrados son
+**byte-idénticos a `origin/main`**, y viajó invisible porque CI no ejecuta
+`vitest.wms-ui.config.ts` — que es exactamente F-2.
+
+No se remedió acá: está fuera de los dos hallazgos de esta ventana, vive en la
+superficie que 2-B ya cerró, y decidir si corrige el test o el umbral de
+`CODE_SHAPE` es una decisión de alcance. **Queda para Dirección.**
+
 ---
 
 ## 8 · LO QUE LA SESIÓN 0 NO HIZO (histórico)

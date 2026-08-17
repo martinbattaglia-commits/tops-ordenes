@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { confirmDispatch, confirmDelivery, revertDispatch } from "@/lib/dispatch/dispatch";
 import { registerEgressEvidence } from "@/lib/custody/physical-egress";
+import { resolveDispatchOrderUnits } from "@/lib/custody/dispatch-egress";
 import { createClient } from "@/lib/supabase/server";
 import { parseCanonicalUuid } from "@/lib/custody/canonical-contract";
 import type { CustodyLevel } from "@/lib/custody/egress-gate";
@@ -85,6 +86,27 @@ export async function confirmDeliveryAction(
  * acoplamiento que obligó a extraer `physical-ingress.ts` en 2-A. La evaluación
  * y la decisión humana viven en `/wms/custody/[id]`, que es donde trabaja el
  * inspector; acá el operario registra la foto y ve qué falta.
+ *
+ * ─── F-1 · LA UNIDAD TIENE QUE SER DE ESTE PEDIDO ────────────────────────
+ *
+ * Hasta la remediación de C4 1/2, `orderId` entraba a esta acción y **sólo se
+ * usaba para revalidar**. Nivel, tenant y permiso se comprobaban; la
+ * PERTENENCIA no. Un operario con permiso de captura, parado en el pedido A,
+ * podía mandar el `entity_id` de una unidad del pedido B que seguía en picking y
+ * la foto quedaba adjunta a un bulto que estaba en la estantería.
+ *
+ * Lo que se rompía no era un permiso: era el ANCLAJE TEMPORAL de la puerta.
+ * `has_egress_photo` es la única condición de `0253` que el operario resuelve por
+ * sí mismo, y una vez satisfecha lo queda para siempre. Si la foto puede tomarse
+ * fuera de la ventana que Dirección definió —bulto cerrado, bien todavía bajo
+ * control del depósito—, la compuerta sigue abriéndose pero ya no acredita el
+ * momento que tenía que acreditar.
+ *
+ * La validación va ACÁ, en el servidor, y no en el componente: el componente sólo
+ * ofrece las unidades correctas, y esta acción es alcanzable sin él. Y resuelve
+ * pedido→unidades con `resolveDispatchOrderUnits`, el MISMO camino que usa el
+ * panel — dos formas de contestar esa pregunta divergen, y entonces la
+ * validación dejaría de describir lo que la pantalla ofrece.
  */
 export async function registerDispatchEgressAction(
   orderId: string,
@@ -93,9 +115,25 @@ export async function registerDispatchEgressAction(
   try {
     const unitId = parseCanonicalUuid(form.get("entity_id"));
     if (!unitId) return { ok: false, error: "Unidad física inválida" };
+    const order = parseCanonicalUuid(orderId);
+    if (!order) return { ok: false, error: "Pedido inválido" };
 
     const supabase = createClient();
     if (!supabase) return { ok: false, error: "Supabase no configurado" };
+
+    // F-1 · PERTENENCIA, antes que nada. `null` es «este pedido no tiene
+    // genealogía de custodia»; una lista que no contiene la unidad es «esta
+    // unidad es de otro pedido». Las dos rechazan, y por eso el mensaje no
+    // distingue: decirle al operario de qué otro pedido es la unidad sería
+    // filtrarle algo que su pantalla no le muestra.
+    const unidades = await resolveDispatchOrderUnits(order);
+    if (!unidades?.some((u) => u.id === unitId)) {
+      return {
+        ok: false,
+        error:
+          "Esa unidad no pertenece a este pedido. Sacá la foto de egreso desde el pedido que la va a despachar.",
+      };
+    }
 
     // El nivel sale de la BASE, sometido a la RLS de la sesión.
     const { data, error } = await supabase

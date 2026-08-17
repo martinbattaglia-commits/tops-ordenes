@@ -88,6 +88,73 @@ interface GateStatusRow {
   chain_advanced_after_release: boolean;
 }
 
+/** Una unidad física que este pedido va a sacar, de CUALQUIER nivel. */
+export interface DispatchOrderUnit {
+  id: string;
+  public_id: string;
+  sku: string;
+  custody_level: number;
+}
+
+/**
+ * PEDIDO → UNIDADES FÍSICAS. **El único camino que resuelve ese vínculo.**
+ *
+ * Se extrajo de `getDispatchEgressGate` porque hay DOS preguntas distintas que
+ * dependen de la misma respuesta, y contestarlas por caminos separados era el
+ * defecto F-1:
+ *
+ *   · la PANTALLA pregunta «qué unidades de nivel 2 tiene este pedido, y qué le
+ *     falta a cada una»;
+ *   · la ACCIÓN de captura pregunta «esta unidad, ¿pertenece a este pedido?».
+ *
+ * Dos implementaciones de la misma pregunta divergen: basta que una filtre por
+ * un estado de allocation que la otra no, y la validación de pertenencia deja de
+ * describir lo que la pantalla ofrece. Por eso hay una sola.
+ *
+ * Devuelve `null` —no lista vacía— cuando no se puede resolver el vínculo, para
+ * que quien llama distinga «este pedido no tiene genealogía de custodia» de
+ * «este pedido tiene unidades y ésta no es una de ellas». La primera no es una
+ * negativa: es un pedido sin custodia. La segunda sí, y es la que F-1 rechaza.
+ *
+ * El orden de las tres lecturas es la contención que el C4 aprobó y no cambia:
+ * allocations por SESIÓN, puente admin CERRADO sobre esas allocations, identidad
+ * por SESIÓN. Ver el docblock del módulo.
+ */
+export async function resolveDispatchOrderUnits(
+  orderId: string,
+): Promise<DispatchOrderUnit[] | null> {
+  const session = createClient();
+  const admin = createAdminClient();
+  if (!session || !admin) return null;
+
+  // 1 · Las allocations del pedido, por el cliente de SESIÓN y su RLS.
+  const { data: allocs, error: aErr } = await session
+    .from("stock_allocations")
+    .select("id, logistics_order_items!inner(order_id)")
+    .eq("logistics_order_items.order_id", orderId)
+    .in("status", ["empacada", "despachada"]);
+  if (aErr || !allocs?.length) return null;
+  const allocationIds = (allocs as { id: string }[]).map((a) => a.id);
+
+  // 2 · El puente. Lectura admin acotada a esas allocations — ver docblock.
+  const { data: bridge, error: bErr } = await admin
+    .from("custody_allocation_physical_units")
+    .select("physical_unit_id")
+    .in("allocation_id", allocationIds);
+  if (bErr || !bridge?.length) return null;
+  const unitIds = [...new Set((bridge as { physical_unit_id: string }[]).map((b) => b.physical_unit_id))];
+
+  // 3 · Identidad legible de cada unidad, por SESIÓN (RLS de tenant).
+  const { data: units, error: uErr } = await session
+    .from("custody_physical_units")
+    .select("id, public_id, sku, custody_level")
+    .in("id", unitIds)
+    .order("public_id", { ascending: true });
+  if (uErr || !units?.length) return null;
+
+  return units as DispatchOrderUnit[];
+}
+
 /**
  * Resuelve la puerta de egreso de un pedido, unidad por unidad.
  *
@@ -98,36 +165,12 @@ interface GateStatusRow {
 export async function getDispatchEgressGate(orderId: string): Promise<DispatchEgressGate> {
   try {
     const session = createClient();
-    const admin = createAdminClient();
-    if (!session || !admin) return NO_APLICA;
+    if (!session) return NO_APLICA;
 
-    // 1 · Las allocations del pedido, por el cliente de SESIÓN y su RLS.
-    const { data: allocs, error: aErr } = await session
-      .from("stock_allocations")
-      .select("id, logistics_order_items!inner(order_id)")
-      .eq("logistics_order_items.order_id", orderId)
-      .in("status", ["empacada", "despachada"]);
-    if (aErr || !allocs?.length) return NO_APLICA;
-    const allocationIds = (allocs as { id: string }[]).map((a) => a.id);
+    const units = await resolveDispatchOrderUnits(orderId);
+    if (!units) return NO_APLICA;
 
-    // 2 · El puente. Lectura admin acotada a esas allocations — ver docblock.
-    const { data: bridge, error: bErr } = await admin
-      .from("custody_allocation_physical_units")
-      .select("physical_unit_id")
-      .in("allocation_id", allocationIds);
-    if (bErr || !bridge?.length) return NO_APLICA;
-    const unitIds = [...new Set((bridge as { physical_unit_id: string }[]).map((b) => b.physical_unit_id))];
-
-    // 3 · Identidad legible de cada unidad, por SESIÓN (RLS de tenant).
-    const { data: units, error: uErr } = await session
-      .from("custody_physical_units")
-      .select("id, public_id, sku, custody_level")
-      .in("id", unitIds)
-      .order("public_id", { ascending: true });
-    if (uErr || !units?.length) return NO_APLICA;
-
-    const nivel2 = (units as { id: string; public_id: string; sku: string; custody_level: number }[])
-      .filter((u) => u.custody_level >= 2);
+    const nivel2 = units.filter((u) => u.custody_level >= 2);
     // El requisito duro del bloque: sin unidades de nivel 2 no se muestra NADA.
     if (nivel2.length === 0) return NO_APLICA;
 
