@@ -15,6 +15,7 @@
 
 export type IntegrityCaseState =
   | "PENDING_EVIDENCE"
+  | "HOLD"
   | "REVIEW_REQUIRED"
   | "RELEASED"
   | "QUARANTINED";
@@ -36,6 +37,10 @@ export type HoldReason =
   | "EVIDENCE_FOREIGN_ENTITY"
   | "EVIDENCE_FOREIGN_CLIENT"
   | "EVIDENCE_REDACTED"
+  | "EVIDENCE_SIZE_MISMATCH"
+  | "EVIDENCE_MIME_MISMATCH"
+  | "EVIDENCE_HASH_MISMATCH"
+  | "EVIDENCE_DOWNLOAD_FAILED"
   | "EVIDENCE_OUT_OF_ORDER"
   | "EVIDENCE_STALE"
   | "EVIDENCE_FUTURE"
@@ -50,11 +55,16 @@ export type HoldReason =
   | "PROVIDER_TIMEOUT"
   | "PROVIDER_UNAVAILABLE"
   | "PROVIDER_INVALID_RESPONSE"
+  | "POLICY_CONTRACT_MISMATCH"
   | "PROVIDER_NOT_EXECUTED"
   | "PROVIDER_THREW"
   | "NON_REAL_EXECUTION"
   | "VERDICT_DIFFERENCES"
   | "VERDICT_POSSIBLE_DAMAGE"
+  | "BELOW_SIMILARITY_THRESHOLD"
+  | "PACKAGING_CHANGED"
+  | "MISSING_ITEMS_SUSPECTED"
+  | "DAMAGE_SUSPECTED"
   | "NO_CALIBRATED_THRESHOLD";
 
 /** Única retención compatible con una liberación. Ver `release-policy.ts`. */
@@ -64,7 +74,7 @@ export const RELEASABLE_HOLD_SET: readonly HoldReason[] = ["NO_CALIBRATED_THRESH
 // Identidad
 // ---------------------------------------------------------------------------
 
-export type CustodyEntityScope = "packing_unit" | "shipment";
+export type CustodyEntityScope = "physical_unit" | "packing_unit" | "shipment";
 
 export interface CustodyEntityRef {
   scope: CustodyEntityScope;
@@ -80,8 +90,10 @@ export function sameEntity(a: CustodyEntityRef, b: CustodyEntityRef): boolean {
 // Evidencia
 // ---------------------------------------------------------------------------
 
-export type CustodyStage = "packing" | "despacho" | "transporte" | "entrega" | "pod";
+export type CustodyStage = "recepcion" | "packing" | "despacho" | "transporte" | "entrega" | "pod";
 export type CustodyEventType =
+  | "foto_ingreso"
+  | "foto_egreso"
   | "foto_packing"
   | "cargado"
   | "en_transito"
@@ -106,9 +118,11 @@ export type CustodyEvidenceKind = "foto" | "firma" | "documento";
  * `custody_events_stage_type_chk` de 0036 y debe rechazarse.
  */
 export const INGRESS_PAIRS: ReadonlyArray<readonly [CustodyStage, CustodyEventType]> = [
+  ["recepcion", "foto_ingreso"],
   ["packing", "foto_packing"],
 ];
 export const EGRESS_PAIRS: ReadonlyArray<readonly [CustodyStage, CustodyEventType]> = [
+  ["despacho", "foto_egreso"],
   ["entrega", "foto_entrega"],
 ];
 
@@ -260,6 +274,19 @@ export interface IntegrityAssessment {
   zones: string[];
   provenance: ProviderProvenance;
   error: string | null;
+  similarityScore?: number | null;
+  thresholdPercent?: number | null;
+  thresholdPolicyVersion?: string | null;
+  thresholdResult?: "ABOVE_OR_EQUAL" | "BELOW" | null;
+  scoreComponents?: {
+    identity: number;
+    packaging: number;
+    quantity: number;
+    condition: number;
+  } | null;
+  packagingChanged?: boolean | null;
+  missingItemsSuspected?: boolean | null;
+  damageSuspected?: boolean | null;
 }
 
 // ---------------------------------------------------------------------------

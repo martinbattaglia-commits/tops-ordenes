@@ -148,3 +148,38 @@ export function detectarArchiveReingresado(
   }
   return v;
 }
+
+/**
+ * RUTAS PROPIAS DE ESTE EXPEDIENTE.
+ *
+ * El harness de Custodia se dispara en toda PR que toque
+ * `supabase/migrations/**`, así que sus invariantes se ejecutan también sobre
+ * candidatos de OTROS frentes. Varias de esas afirmaciones son promesas de
+ * Custodia —qué rutas no toca, qué archivo del harness vanilla cambia, qué
+ * líneas de `package.json` autoriza, qué migraciones 0250* hay en disco—, y
+ * aplicadas a un frente ajeno lo bloquean por algo que nunca prometió.
+ *
+ * El acotamiento se hace por el DIFF bajo revisión y NO por el nombre de la
+ * rama: `rev-parse --abbrev-ref HEAD` devuelve la cadena "HEAD" cuando el
+ * checkout está detached, que es exactamente lo que hace `actions/checkout` en
+ * un `pull_request`. Acotar por nombre dejaba el gate inerte justo donde único
+ * se aplica solo.
+ *
+ * Tocar `supabase/migrations/**` NO alcanza para entrar en alcance: ése es el
+ * disparador del workflow, no la marca del expediente. La marca es el lease
+ * 0250 y los directorios propios.
+ */
+const RUTAS_CUSTODIA: readonly RegExp[] = [
+  /^supabase\/migrations\/(?:ROLLBACK_)?0250[a-z]?_/,
+  /^tests\/custody-db\//,
+  /^src\/lib\/custody\//,
+];
+
+/**
+ * Las rutas del diff que pertenecen a Custodia, en el orden en que llegaron.
+ * Vacío ⇒ lo que se está revisando no es de este expediente y sus promesas no
+ * son exigibles. Función PURA: no consulta git, entorno ni disco.
+ */
+export function rutasPropiasDeCustodia(cambios: readonly string[]): string[] {
+  return cambios.filter((p) => RUTAS_CUSTODIA.some((re) => re.test(p)));
+}

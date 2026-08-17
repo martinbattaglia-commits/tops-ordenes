@@ -29,9 +29,11 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
     expect(CUSTODY_MIGRATION_MANIFEST.length).toBe(EXPECTED_CUSTODY_MANIFEST_SIZE);
   });
 
-  it("el cierre de custodia son 36 archivos + las 8 migraciones D1–D3, W22-BIS/TER, UI/E2E y remediación", () => {
-    const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => /^02(2[1-6]|3[12])_/.test(m));
-    expect(d1d3).toEqual([
+  it("el cierre de custodia son 36 archivos + 10 migraciones gobernadas", () => {
+    const custodyForwards = CUSTODY_MIGRATION_MANIFEST.filter((m) =>
+      /^(?:02(?:2[1-6]|3[12])|0250a?)_/.test(m),
+    );
+    expect(custodyForwards).toEqual([
       "0221_custody_integrity_enums.sql",
       "0222_custody_integrity_foundation.sql",
       "0223_custody_integrity_decision.sql",
@@ -40,8 +42,10 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
       "0226_custody_content_attestation.sql",
       "0231_custody_read_tenant_scope.sql",
       "0232_custody_evaluation_lease_exclusive.sql",
+      "0250_custody_physical_scope_enums.sql",
+      "0250a_custody_productive_vision.sql",
     ]);
-    expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(CUSTODY_CLOSURE_SIZE);
+    expect(CUSTODY_MIGRATION_MANIFEST.length - custodyForwards.length).toBe(CUSTODY_CLOSURE_SIZE);
   });
 
   it("corre sobre PostgreSQL 17", async () => {
@@ -88,17 +92,27 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
     expect(idx[0].indexdef).toContain("gist");
   });
 
-  it("D1 · el enum admite el tipo canónico de inspección humana", async () => {
+  it("D1/0250 · los enums admiten inspección humana y evidencia física", async () => {
     const { rows } = await db.query<{ enumlabel: string }>(
       `select e.enumlabel from pg_type t join pg_enum e on e.enumtypid = t.oid
         where t.typname = 'custody_event_type_t' order by e.enumsortorder`,
     );
     const labels = rows.map((r: { enumlabel: string }) => r.enumlabel);
     expect(labels).toContain("inspeccion_humana");
+    expect(labels).toContain("foto_ingreso");
+    expect(labels).toContain("foto_egreso");
     // No se retiró ninguno de los originales.
     expect(labels).toEqual(
       expect.arrayContaining(["foto_packing", "cargado", "en_transito", "foto_entrega", "firmado", "pod"]),
     );
+  });
+
+  it("0250 · el stage físico de recepción existe", async () => {
+    const { rows } = await db.query<{ enumlabel: string }>(
+      `select e.enumlabel from pg_type t join pg_enum e on e.enumtypid = t.oid
+        where t.typname = 'custody_stage_t' order by e.enumsortorder`,
+    );
+    expect(rows.map((r) => r.enumlabel)).toContain("recepcion");
   });
 
   it("D1 · el CHECK admite (despacho, inspeccion_humana) y sigue rechazando pares inválidos", async () => {
@@ -122,24 +136,41 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
     expect(rows[0].n).toBe("0");
   });
 
-  it("§2 · el flujo de intento existe y su EXECUTE está repartido como corresponde", async () => {
+  it("0250a · el flujo v2 existe, el legacy queda revocado y EXECUTE se reparte", async () => {
     const { rows } = await db.query<{ proname: string; acl: string | null }>(
+      `select p.proname, array_to_string(p.proacl::text[], ' ') as acl
+         from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('begin_custody_integrity_evaluation_v2',
+                            'complete_custody_integrity_evaluation_v2',
+                            'fail_custody_integrity_evaluation_v2')`,
+    );
+    expect(rows).toHaveLength(3);
+
+    const begin = rows.find((r) => r.proname === "begin_custody_integrity_evaluation_v2")!;
+    expect(begin.acl ?? "").toMatch(/authenticated=X/);
+
+    for (const name of [
+      "complete_custody_integrity_evaluation_v2",
+      "fail_custody_integrity_evaluation_v2",
+    ]) {
+      const serverOnly = rows.find((r) => r.proname === name)!;
+      expect(serverOnly.acl ?? "").toMatch(/service_role=X/);
+      expect(serverOnly.acl ?? "").not.toMatch(/(^|\s)authenticated=X/);
+      expect(serverOnly.acl ?? "").not.toMatch(/(^|\s)anon=X/);
+      expect(serverOnly.acl ?? "").not.toMatch(/(^|\s)=X/);
+    }
+
+    const { rows: legacy } = await db.query<{ proname: string; acl: string | null }>(
       `select p.proname, array_to_string(p.proacl::text[], ' ') as acl
          from pg_proc p join pg_namespace n on n.oid = p.pronamespace
         where n.nspname = 'public'
           and p.proname in ('begin_custody_integrity_evaluation',
                             'complete_custody_integrity_evaluation')`,
     );
-    expect(rows).toHaveLength(2);
-
-    const begin = rows.find((r) => r.proname === "begin_custody_integrity_evaluation")!;
-    expect(begin.acl ?? "").toMatch(/authenticated=X/);
-
-    const complete = rows.find((r) => r.proname === "complete_custody_integrity_evaluation")!;
-    // Sólo el rol interno de servidor. Ni authenticated, ni anon, ni PUBLIC.
-    expect(complete.acl ?? "").toMatch(/service_role=X/);
-    expect(complete.acl ?? "").not.toMatch(/(^|\s)authenticated=X/);
-    expect(complete.acl ?? "").not.toMatch(/(^|\s)anon=X/);
-    expect(complete.acl ?? "").not.toMatch(/(^|\s)=X/);
+    expect(legacy).toHaveLength(2);
+    for (const rpc of legacy) {
+      expect(rpc.acl ?? "").not.toMatch(/authenticated=X|service_role=X|anon=X|(^|\s)=X/);
+    }
   });
 });

@@ -230,10 +230,16 @@ describe("T-C1-09 · §4.9 · el head cambiado impide liberar", () => {
     );
     const hashchain = rows.find((r) => r.proname === "custody_event_hashchain")!.src;
     const lock = rows.find((r) => r.proname === "custody_chain_lock")!.src;
+    // El helper es el ÚNICO lugar donde vive la clave: 0250a retiró la copia
+    // que 0036 tenía inlineada en la hash-chain y la hizo delegar. Se exige esa
+    // forma —helper con las claves, hash-chain sin ninguna— porque es más
+    // fuerte que la anterior: con dos copias un typo pasaba, con una no existe
+    // la segunda copia que pueda divergir.
     for (const key of ["custody_chain:pu:", "custody_chain:sh:"]) {
-      expect(hashchain, `hashchain usa ${key}`).toContain(key);
       expect(lock, `el helper usa ${key}`).toContain(key);
+      expect(hashchain, `la hash-chain no reimplementa ${key}`).not.toContain(key);
     }
+    expect(hashchain, "la hash-chain delega en el helper").toContain("custody_chain_lock");
     expect(lock).toContain("pg_advisory_xact_lock");
 
     // Y la RPC de decisión delega en el helper, no reimplementa la clave.

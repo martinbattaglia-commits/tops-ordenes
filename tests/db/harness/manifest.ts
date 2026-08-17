@@ -308,6 +308,12 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // abandono explícito. Misma decisión: redefine funciones de 0223 que se
   // apoyan en `custody_events` y en la serie 0036-0039, fuera del vanilla.
   "0232_custody_evaluation_lease_exclusive.sql",
+  // CUSTODIA VISIÓN PRODUCTIVA 001 · enum aislado, núcleo y rollback lógico.
+  // Dos forwards se cargan sólo en el harness dedicado; el rollback se
+  // clasifica para linaje pero nunca integra un manifiesto ejecutable.
+  "0250_custody_physical_scope_enums.sql",
+  "0250a_custody_productive_vision.sql",
+  "ROLLBACK_0250a_custody_productive_vision.sql",
 ]);
 
 /**
@@ -530,7 +536,10 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
     reason:
       "Serie de Integridad de Custodia (0221 enums · 0222 fundación · 0223 decisión · " +
       "0224 contención de autoridad y cota temporal · 0225 tri-state 0039 · " +
-      "0226 atestación de contenido). " +
+      "0226 atestación de contenido · 0231 lectura tenant · 0232 lease exclusivo · " +
+      "0250/0250a scope físico y visión productiva, con rollback lógico). " +
+      "Los diez forwards se cargan en el harness dedicado; el rollback lógico se " +
+      "clasifica y prueba aparte y nunca integra un manifiesto forward. " +
       "Se excluye del cierre WMS vanilla porque su cierre de dependencias exige " +
       "PostGIS y la serie 0036-0039, que este manifiesto excluye por diseño para " +
       "no convertir una extensión pesada en dependencia obligatoria de toda la " +
@@ -539,7 +548,7 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "ADVERTENCIA: 0222 modifica `custody_events` (CHECK stage/event_type) y " +
       "reemplaza `attach_custody_evidence`, objetos del dominio de custodia; se " +
       "excluye por la dependencia de PostGIS, NO porque sea ajena. La exclusión " +
-      "es por los SEIS filenames exactos de esta serie; cualquier migración que " +
+      "es por los ONCE filenames exactos de esta serie; cualquier migración que " +
       "no enumere ninguna regla queda sin clasificar y rompe la suite hasta una " +
       "decisión explícita.",
   },
@@ -573,17 +582,21 @@ export function validateManifest(
   //    Comprobaciones PURAS antes que las de I/O: un nombre mal formado es un
   //    error de configuración más básico que un archivo ausente.
   let prev = -1;
+  let prevSuffix = -1;
   for (const m of manifest) {
     const seq = migrationSeq(m);
     if (!Number.isInteger(seq)) {
       throw new ManifestIntegrityError(`"${m}" no tiene prefijo numérico de 4 dígitos.`);
     }
-    if (seq <= prev) {
+    const suffix = /^(\d{4})([a-z])?_/.exec(m)?.[2];
+    const suffixOrder = suffix ? suffix.charCodeAt(0) - 96 : 0;
+    if (seq < prev || (seq === prev && suffixOrder <= prevSuffix)) {
       throw new ManifestIntegrityError(
-        `orden no estrictamente creciente en "${m}" (${seq} <= ${prev}).`,
+        `orden no estrictamente creciente en "${m}" (${seq}${suffix ?? ""} <= ${prev}${prevSuffix > 0 ? String.fromCharCode(96 + prevSuffix) : ""}).`,
       );
     }
     prev = seq;
+    prevSuffix = suffixOrder;
   }
 
   // 3) archivos existentes

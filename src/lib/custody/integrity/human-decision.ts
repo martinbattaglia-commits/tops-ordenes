@@ -126,7 +126,9 @@ export function applyHumanDecision(input: ApplyDecisionInput): DecisionResult {
   if (currentState === "RELEASED" || currentState === "QUARANTINED") {
     return { ok: false, rejection: "ALREADY_DECIDED" };
   }
-  if (currentState !== "REVIEW_REQUIRED") return { ok: false, rejection: "STATE_NOT_DECIDABLE" };
+  if (currentState !== "REVIEW_REQUIRED" && currentState !== "HOLD") {
+    return { ok: false, rejection: "STATE_NOT_DECIDABLE" };
+  }
 
   const reason = command.reason.trim();
 

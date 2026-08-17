@@ -17,15 +17,17 @@
 import {
   CUSTODY_DECISION_PERMISSION,
   evaluateReleaseEligibility,
+  MIN_OVERRIDE_REASON_LENGTH,
   MIN_REASON_LENGTH,
   type HoldReason,
+  type IntegrityAssessment,
   type IntegrityCase,
   type IntegrityCaseState,
   type ReleaseBlocker,
   type VerifiedActor,
 } from "./integrity";
 
-export type CaseTone = "pending" | "review" | "released" | "quarantined";
+export type CaseTone = "pending" | "hold" | "review" | "released" | "quarantined";
 
 /**
  * §5 · RELEASE ADMIN-ONLY. No es una regla de UI: la fila de decisión de 0222
@@ -38,6 +40,7 @@ export const QUARANTINE_ROLES: readonly string[] = ["admin", "operaciones", "sup
 
 const STATE_LABEL: Record<IntegrityCaseState, string> = {
   PENDING_EVIDENCE: "Pendiente de evidencia",
+  HOLD: "Retenido — revisión humana obligatoria",
   REVIEW_REQUIRED: "Revisión humana",
   RELEASED: "Liberado",
   QUARANTINED: "En cuarentena",
@@ -45,6 +48,7 @@ const STATE_LABEL: Record<IntegrityCaseState, string> = {
 
 const STATE_TONE: Record<IntegrityCaseState, CaseTone> = {
   PENDING_EVIDENCE: "pending",
+  HOLD: "hold",
   REVIEW_REQUIRED: "review",
   RELEASED: "released",
   QUARANTINED: "quarantined",
@@ -59,6 +63,10 @@ const HOLD_LABEL: Record<string, string> = {
   EVIDENCE_FOREIGN_ENTITY: "La evidencia pertenece a otra unidad",
   EVIDENCE_FOREIGN_CLIENT: "La evidencia pertenece a otro cliente",
   EVIDENCE_REDACTED: "La evidencia fue redactada",
+  EVIDENCE_SIZE_MISMATCH: "El tamaño real de la evidencia no coincide",
+  EVIDENCE_MIME_MISMATCH: "El formato real de la evidencia no es admisible",
+  EVIDENCE_HASH_MISMATCH: "La evidencia almacenada fue alterada",
+  EVIDENCE_DOWNLOAD_FAILED: "No se pudo recuperar la evidencia autenticada",
   EVIDENCE_OUT_OF_ORDER: "Las fotos están fuera de orden temporal",
   EVIDENCE_STALE: "La foto de egreso está vencida",
   EVIDENCE_FUTURE: "La foto tiene fecha futura",
@@ -73,11 +81,16 @@ const HOLD_LABEL: Record<string, string> = {
   PROVIDER_TIMEOUT: "El análisis no respondió a tiempo",
   PROVIDER_UNAVAILABLE: "El análisis no está disponible",
   PROVIDER_INVALID_RESPONSE: "El análisis devolvió un resultado no utilizable",
+  POLICY_CONTRACT_MISMATCH: "La política productiva no coincide con el contrato aprobado",
   PROVIDER_NOT_EXECUTED: "El análisis todavía no se ejecutó",
   PROVIDER_THREW: "El análisis falló",
   NON_REAL_EXECUTION: "El análisis no se ejecutó en modo real",
   VERDICT_DIFFERENCES: "El análisis detectó diferencias",
   VERDICT_POSSIBLE_DAMAGE: "El análisis detectó posible daño",
+  BELOW_SIMILARITY_THRESHOLD: "El score está por debajo del umbral del 90 %",
+  PACKAGING_CHANGED: "El embalaje presenta cambios",
+  MISSING_ITEMS_SUSPECTED: "Se sospechan faltantes",
+  DAMAGE_SUSPECTED: "Se sospecha daño",
   NO_CALIBRATED_THRESHOLD: "No hay umbral calibrado aprobado",
 };
 
@@ -92,6 +105,8 @@ const BLOCKER_LABEL: Record<ReleaseBlocker | string, string> = {
   EXECUTION_NOT_REAL: "El análisis no se ejecutó en modo real",
   VERDICT_NOT_MATCHING: "El análisis no indica coincidencia",
   CONFIDENCE_NOT_NUMERIC: "El análisis no informó confianza",
+  SCORE_BELOW_THRESHOLD: "El score no alcanza el umbral productivo",
+  DAMAGE_FLAGS_PRESENT: "Hay señales de daño o faltantes que exigen revisión",
   NO_HUMAN_INSPECTION_EVIDENCE: "Falta la foto de inspección humana",
   REASON_TOO_SHORT: `El motivo debe tener al menos ${MIN_REASON_LENGTH} caracteres`,
 };
@@ -116,6 +131,17 @@ export interface AiPanelView {
   verdictLabel: string | null;
   /** Autoconfianza del modelo informada por el SERVIDOR, 0..100. */
   confidencePercent: number | null;
+  /** Score de similitud DB-owned; nunca se deriva de confidence. */
+  similarityScore?: number | null;
+  thresholdPercent?: number | null;
+  thresholdPolicyVersion?: string | null;
+  thresholdResult?: "ABOVE_OR_EQUAL" | "BELOW" | null;
+  scoreComponents?: IntegrityAssessment["scoreComponents"];
+  damageFlags?: {
+    packagingChanged: boolean;
+    missingItemsSuspected: boolean;
+    damageSuspected: boolean;
+  } | null;
   /** Invariante del producto: la IA nunca habilita ni ejecuta una decisión. */
   informativeOnly: true;
   note: string;
@@ -163,6 +189,15 @@ export interface DecisionActionView {
   enabled: boolean;
   /** Motivos, ya traducidos. Vacío si `enabled`. */
   blockers: string[];
+  /**
+   * Condiciones que no impiden decidir pero que convierten la liberación en un
+   * override humano: el caso quedó por debajo del umbral o con banderas de
+   * daño. Ya traducidas. El inspector tiene que verlas antes de firmar, no
+   * enterarse por el error crudo de la RPC.
+   */
+  overrideReasons?: string[];
+  /** Longitud mínima del motivo que exigirá la RPC para esta decisión. */
+  minReasonLength?: number;
 }
 
 export interface CustodyCaseView {
@@ -171,7 +206,7 @@ export interface CustodyCaseView {
   stateLabel: string;
   tone: CaseTone;
   version: number;
-  scope: "packing_unit" | "shipment";
+  scope: "physical_unit" | "packing_unit" | "shipment";
   entityId: string;
   holdLabels: string[];
   ai: AiPanelView;
@@ -253,6 +288,21 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
       typeof assessment?.modelConfidence === "number"
         ? Math.round(assessment.modelConfidence * 100)
         : null,
+    similarityScore: assessment?.similarityScore ?? null,
+    thresholdPercent: assessment?.thresholdPercent ?? null,
+    thresholdPolicyVersion: assessment?.thresholdPolicyVersion ?? null,
+    thresholdResult: assessment?.thresholdResult ?? null,
+    scoreComponents: assessment?.scoreComponents ?? null,
+    damageFlags:
+      typeof assessment?.packagingChanged === "boolean"
+      && typeof assessment?.missingItemsSuspected === "boolean"
+      && typeof assessment?.damageSuspected === "boolean"
+        ? {
+            packagingChanged: assessment.packagingChanged,
+            missingItemsSuspected: assessment.missingItemsSuspected,
+            damageSuspected: assessment.damageSuspected,
+          }
+        : null,
     informativeOnly: true,
     note: "La IA informa y alerta. La decisión es humana.",
     failureLabel:
@@ -281,6 +331,8 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
       releaseBlockers.push("La liberación está reservada a Dirección (admin)");
     }
   }
+  let releaseOverrides: string[] = [];
+  let releaseMinReason = MIN_REASON_LENGTH;
   if (!decided) {
     const eligibility = evaluateReleaseEligibility({
       state: c.state,
@@ -305,6 +357,13 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
     for (const b of eligibility.blockers) {
       if (b === "REASON_TOO_SHORT") continue;
       releaseBlockers.push(blockerLabel(b));
+    }
+    // El override no deshabilita el botón —bloquearlo dejaría que la IA decida
+    // por omisión— pero sí se declara, y arrastra el motivo reforzado que la
+    // RPC va a exigir.
+    releaseOverrides = eligibility.overrideReasons.map(blockerLabel);
+    if (eligibility.overrideReasons.length > 0) {
+      releaseMinReason = MIN_OVERRIDE_REASON_LENGTH;
     }
   }
 
@@ -335,7 +394,9 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
   const inFlight = input.evaluationInFlight === true;
   const reevalBlockers: string[] = [];
   if (decided) reevalBlockers.push("El caso ya tiene una decisión registrada");
-  else if (c.state !== "REVIEW_REQUIRED") reevalBlockers.push("El caso no está en revisión humana");
+  else if (!(["PENDING_EVIDENCE", "REVIEW_REQUIRED", "HOLD"] as string[]).includes(c.state)) {
+    reevalBlockers.push("El caso no admite una evaluación");
+  }
   if (!actor) reevalBlockers.push("Sesión no verificada");
   else if (!hasPermission(actor)) reevalBlockers.push("No tenés permiso para decidir");
   if (c.evidence.ingress === null || c.evidence.egress === null) {
@@ -357,8 +418,8 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
   // ── Captura de inspección humana ───────────────────────────────────────
   const inspectionBlockers: string[] = [];
   if (decided) inspectionBlockers.push("El caso ya tiene una decisión registrada");
-  else if (c.state !== "REVIEW_REQUIRED") {
-    inspectionBlockers.push("El caso no está en revisión humana");
+  else if (c.state !== "REVIEW_REQUIRED" && c.state !== "HOLD") {
+    inspectionBlockers.push("El caso todavía no está listo para inspección humana");
   }
   if (!actor) inspectionBlockers.push("Sesión no verificada");
   else if (!mayCapture(actor)) inspectionBlockers.push("No tenés permiso para registrar evidencia");
@@ -374,7 +435,12 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
     holdLabels: c.holdReasons.map(holdLabel),
     ai,
     referenceThreshold: input.referenceThreshold ?? null,
-    release: { enabled: releaseBlockers.length === 0, blockers: dedupe(releaseBlockers) },
+    release: {
+      enabled: releaseBlockers.length === 0,
+      blockers: dedupe(releaseBlockers),
+      overrideReasons: dedupe(releaseOverrides),
+      minReasonLength: releaseMinReason,
+    },
     quarantine: { enabled: quarantineBlockers.length === 0, blockers: dedupe(quarantineBlockers) },
     reevaluation: {
       enabled: reevalBlockers.length === 0,

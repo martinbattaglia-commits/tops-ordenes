@@ -37,7 +37,12 @@ export function CaseDecisionPanel({
   const [submitting, setSubmitting] = useState(false);
   const guard = useMemo(() => createSingleFlightGuard(), []);
 
-  const reasonOk = reason.trim().length >= MIN_REASON_LENGTH;
+  // El override de un caso retenido exige el motivo reforzado que pide la RPC;
+  // el resto conserva el mínimo de siempre. Se toma del view-model para no
+  // duplicar acá la regla del dominio.
+  const minReason = view.release.minReasonLength ?? MIN_REASON_LENGTH;
+  const overrides = view.release.overrideReasons ?? [];
+  const reasonOk = reason.trim().length >= minReason;
   const decided = view.decision !== null;
 
   const decide = useCallback(
@@ -102,7 +107,7 @@ export function CaseDecisionPanel({
           onChange={(e) => setReason(e.target.value)}
         />
         <p id="decision-reason-help" className="mt-1 text-xs text-fg-muted">
-          Obligatorio · mínimo {MIN_REASON_LENGTH} caracteres.
+          Obligatorio · mínimo {minReason} caracteres.
         </p>
       </div>
 
@@ -149,6 +154,20 @@ export function CaseDecisionPanel({
           <Icon name="bolt" size={14} /> Enviar a cuarentena
         </button>
       </div>
+
+      {overrides.length > 0 && (
+        <div className="mt-3 rounded border border-status-warning/40 p-2" data-override="true">
+          <p className="text-xs font-medium text-status-warning">
+            Liberar acá es un override humano
+          </p>
+          <ul className="mt-1 list-disc pl-4 text-xs text-fg-muted">
+            {overrides.map((o) => <li key={o}>{o}</li>)}
+          </ul>
+          <p className="mt-1 text-xs text-fg-muted">
+            Queda registrado como tal en el certificado, con tu rol y tu motivo.
+          </p>
+        </div>
+      )}
 
       {view.release.blockers.length > 0 && (
         <div className="mt-3">

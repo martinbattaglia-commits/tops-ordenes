@@ -69,6 +69,7 @@ export interface RawCaseRow {
   id: string;
   version: number;
   client_id: string;
+  physical_unit_id?: string | null;
   packing_unit_id: string | null;
   shipment_id: string | null;
   state: string;
@@ -82,6 +83,14 @@ export interface RawCaseRow {
   outcome: string | null;
   verdict: string | null;
   model_confidence: number | string | null;
+  similarity_score?: number | string | null;
+  threshold_percent?: number | string | null;
+  threshold_policy_version?: string | null;
+  threshold_result?: string | null;
+  score_components?: Record<string, unknown> | null;
+  packaging_changed?: boolean | null;
+  missing_items_suspected?: boolean | null;
+  damage_suspected?: boolean | null;
   provider_error: string | null;
   chain_status: string | null;
   chain_events_checked: number | null;
@@ -101,6 +110,7 @@ export interface RawEvidenceRow {
   redacted: boolean | null;
   captured_at: string | null;
   event: {
+    physical_unit_id?: string | null;
     packing_unit_id: string | null;
     shipment_id: string | null;
     stage: string;
@@ -131,6 +141,7 @@ export interface DecideRpcInput {
   reason: string;
   observations: string | null;
   inspectionEvidenceIds: readonly string[];
+  scope?: CustodyEntityScope;
 }
 
 /**
@@ -146,6 +157,7 @@ export interface CustodyQueryPort {
   selectPermissions(): Promise<string[]>;
   decide(input: DecideRpcInput): Promise<string>;
   beginEvaluation(caseId: string, expectedVersion: number): Promise<string>;
+  beginProductiveEvaluation?(caseId: string, expectedVersion: number): Promise<unknown>;
   /**
    * Evidencias de inspección humana ELEGIBLES para este caso, derivadas por el
    * servidor. Nunca se recibe una lista del navegador: se pregunta cuáles son.
@@ -158,7 +170,7 @@ export interface CustodyQueryPort {
    * es la que hace que la foto recién tomada no sea elegible hasta volver a
    * evaluar: no es un efecto colateral, es la regla.
    */
-  selectInspectionCandidates(caseId: string): Promise<string[]>;
+  selectInspectionCandidates(caseId: string, scope?: CustodyEntityScope): Promise<string[]>;
   /** Intento de evaluación vigente (pendiente y no vencido), si lo hay. */
   selectActiveAttempt(caseId: string): Promise<ActiveAttempt | null>;
 }
@@ -175,6 +187,7 @@ export interface ActiveAttempt {
 
 const CASE_STATES: readonly string[] = [
   "PENDING_EVIDENCE",
+  "HOLD",
   "REVIEW_REQUIRED",
   "RELEASED",
   "QUARANTINED",
@@ -200,12 +213,23 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-function scopeOf(row: { packing_unit_id: string | null; shipment_id: string | null }): CustodyEntityScope {
+type ScopeRow = {
+  physical_unit_id?: string | null;
+  packing_unit_id: string | null;
+  shipment_id: string | null;
+};
+
+function scopeOf(row: ScopeRow): CustodyEntityScope {
+  const present = [row.physical_unit_id ?? null, row.packing_unit_id, row.shipment_id]
+    .filter((value) => value !== null);
+  if (present.length !== 1) throw new CustodyContractError("scope de custodia ambiguo");
+  if (row.physical_unit_id != null) return "physical_unit";
   return row.packing_unit_id !== null ? "packing_unit" : "shipment";
 }
 
-function entityIdOf(row: { packing_unit_id: string | null; shipment_id: string | null }): string {
-  return (row.packing_unit_id ?? row.shipment_id ?? "") as string;
+function entityIdOf(row: ScopeRow): string {
+  scopeOf(row);
+  return (row.physical_unit_id ?? row.packing_unit_id ?? row.shipment_id) as string;
 }
 
 export function mapEvidenceRow(row: RawEvidenceRow, clientId: string): EvidenceRecord | null {
@@ -277,6 +301,23 @@ function mapAssessment(row: RawCaseRow): IntegrityAssessment | null {
       completedAt: row.updated_at,
     },
     error: row.provider_error,
+    similarityScore: toNumber(row.similarity_score),
+    thresholdPercent: toNumber(row.threshold_percent),
+    thresholdPolicyVersion: row.threshold_policy_version ?? null,
+    thresholdResult:
+      row.threshold_result === "ABOVE_OR_EQUAL" || row.threshold_result === "BELOW"
+        ? row.threshold_result
+        : null,
+    scoreComponents:
+      row.score_components
+      && ["identity", "packaging", "quantity", "condition"].every(
+        (key) => typeof row.score_components?.[key] === "number",
+      )
+        ? row.score_components as IntegrityAssessment["scoreComponents"]
+        : null,
+    packagingChanged: row.packaging_changed ?? null,
+    missingItemsSuspected: row.missing_items_suspected ?? null,
+    damageSuspected: row.damage_suspected ?? null,
   };
 }
 
@@ -481,6 +522,7 @@ export function createIntegrityCaseRepository(query: CustodyQueryPort): Integrit
           reason: input.record.reason,
           observations: input.record.observations,
           inspectionEvidenceIds: input.record.inspectionEvidenceIds,
+          scope: input.scope,
         });
       } catch (e) {
         return classifyDecideFailure(e instanceof Error ? e.message : String(e));

@@ -258,8 +258,9 @@ export async function decideIntegrityCase(
   const persisted = await deps.repository.applyDecision({
     caseId,
     clientId: actor.clientId,
+    scope: found.entity.scope,
     expectedVersion: found.version,
-    expectedState: "REVIEW_REQUIRED",
+    expectedState: found.state === "HOLD" ? "HOLD" : "REVIEW_REQUIRED",
     record: outcome.record,
     newState: outcome.state,
     updatedAt: deps.now(),

@@ -35,7 +35,7 @@ import {
   validateCustodyManifest,
 } from "./harness/manifest";
 
-const CUSTODY_HARNESS_FILES = [
+const CUSTODY_FORWARD_FILES = [
   "0221_custody_integrity_enums.sql",
   "0222_custody_integrity_foundation.sql",
   "0223_custody_integrity_decision.sql",
@@ -44,6 +44,13 @@ const CUSTODY_HARNESS_FILES = [
   "0226_custody_content_attestation.sql",
   "0231_custody_read_tenant_scope.sql",
   "0232_custody_evaluation_lease_exclusive.sql",
+  "0250_custody_physical_scope_enums.sql",
+  "0250a_custody_productive_vision.sql",
+];
+
+const CUSTODY_ARTIFACT_FILES = [
+  ...CUSTODY_FORWARD_FILES,
+  "ROLLBACK_0250a_custody_productive_vision.sql",
 ];
 
 const dedicated = () =>
@@ -60,26 +67,29 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
   });
 
   it("cierre HISTÓRICO de custodia: 36", () => {
-    const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_HARNESS_FILES.includes(m));
-    expect(d1d3).toHaveLength(8);
+    const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_FORWARD_FILES.includes(m));
+    expect(d1d3).toHaveLength(10);
     expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(36);
     expect(CUSTODY_CLOSURE_SIZE).toBe(36);
   });
 
-  it("manifiesto DEDICADO actual: 44", () => {
-    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(44);
-    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(44);
+  it("manifiesto DEDICADO actual: 46", () => {
+    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(46);
+    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(46);
     expect(() => validateCustodyManifest()).not.toThrow();
   });
 
-  it("36 + 8 = 44, y las ocho NO están en el vanilla", () => {
-    expect(CUSTODY_CLOSURE_SIZE + CUSTODY_HARNESS_FILES.length).toBe(
+  it("36 + 10 = 46, y los diez forwards NO están en el vanilla", () => {
+    expect(CUSTODY_CLOSURE_SIZE + CUSTODY_FORWARD_FILES.length).toBe(
       EXPECTED_CUSTODY_MANIFEST_SIZE,
     );
-    for (const f of CUSTODY_HARNESS_FILES) {
+    for (const f of CUSTODY_FORWARD_FILES) {
       expect(CUSTODY_MIGRATION_MANIFEST).toContain(f);
       expect(WMS_MIGRATION_MANIFEST).not.toContain(f);
     }
+    expect(CUSTODY_MIGRATION_MANIFEST).not.toContain(
+      "ROLLBACK_0250a_custody_productive_vision.sql",
+    );
   });
 });
 
@@ -91,21 +101,23 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(dedicated()!.reason.trim().length).toBeGreaterThanOrEqual(20);
     expect(dedicated()!.reason).toMatch(/PostGIS/i);
     expect(dedicated()!.reason).toMatch(/custody-db/);
+    expect(dedicated()!.reason).toMatch(/rollback/i);
+    expect(dedicated()!.reason).toMatch(/nunca integra un manifiesto/i);
     // Honestidad: 0222 toca objetos del dominio de custodia y hay que decirlo.
     expect(dedicated()!.reason).toMatch(/custody_events/);
     expect(dedicated()!.reason).toMatch(/attach_custody_evidence/);
   });
 
-  it.each(CUSTODY_HARNESS_FILES)("clasifica %s por la DEDICADA, no por la congelada", (f) => {
+  it.each(CUSTODY_ARTIFACT_FILES)("clasifica %s por la DEDICADA, no por la congelada", (f) => {
     expect(dedicated()!.matches(f)).toBe(true);
     // El snapshot congelado NO se amplió: sigue sin conocer estos archivos.
     expect(frozen()!.matches(f)).toBe(false);
   });
 
-  it("cubre EXACTAMENTE esos ocho archivos del árbol y ninguno más", () => {
+  it("cubre EXACTAMENTE los once artefactos del árbol y ninguno más", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
     const cubiertos = onDisk.filter((f) => dedicated()!.matches(f)).sort();
-    expect(cubiertos).toEqual([...CUSTODY_HARNESS_FILES].sort());
+    expect(cubiertos).toEqual([...CUSTODY_ARTIFACT_FILES].sort());
   });
 
   it("0227 y cualquier migración futura siguen SIN clasificarse solas", () => {
