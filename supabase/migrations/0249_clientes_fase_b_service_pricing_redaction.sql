@@ -145,10 +145,7 @@ drop policy if exists "ops read all" on public.operators;
 create policy "ops read all" on public.operators for select using (
   auth.role()='authenticated' and (
     public.nexus_is_depot_manager_principal() is distinct from true
-    or (
-      public.nexus_depot_manager_valid() is not distinct from true
-      and depot is not distinct from (select s.depot from public.nexus_depot_manager_scope() s)
-    )
+    or public.nexus_depot_manager_valid() is not distinct from true
   )
 );
 drop policy if exists "orders read" on public.orders;
@@ -245,21 +242,20 @@ create or replace function public.nexus_depot_manager_orders(
   p_status text default null,p_search text default null,p_limit int default 18,p_offset int default 0
 ) returns jsonb
 language plpgsql stable security definer set search_path=public,pg_temp as $$
-declare v_depot public.depot_t; v_rows jsonb; v_total bigint; v_counts jsonb;
+declare v_rows jsonb; v_total bigint; v_counts jsonb;
 begin
   if public.nexus_depot_manager_valid() is distinct from true
      or public.has_permission('servicios.view') is distinct from true then
     raise exception 'no autorizado' using errcode='insufficient_privilege';
   end if;
-  select s.depot into v_depot from public.nexus_depot_manager_scope() s;
   with scoped as (
-    select o.* from public.orders o where o.depot=v_depot
-      and (p_status is null or p_status='todas' or o.status::text=p_status)
+    select o.* from public.orders o
+     where (p_status is null or p_status='todas' or o.status::text=p_status)
       and (nullif(btrim(p_search),'') is null or o.public_id ilike '%'||btrim(p_search)||'%')
   ) select count(*) into v_total from scoped;
   select coalesce(jsonb_object_agg(status,count),'{}'::jsonb)
   into v_counts from (
-    select o.status::text status,count(*) from public.orders o where o.depot=v_depot group by o.status
+    select o.status::text status,count(*) from public.orders o group by o.status
   ) s;
   select coalesce(jsonb_agg(row_data order by row_data->>'date' desc),'[]'::jsonb) into v_rows
   from (
@@ -281,27 +277,25 @@ begin
     ) row_data
     from public.orders o join public.clients c on c.id=o.client_id
     left join public.operators op on op.id=o.operator_id
-    where o.depot=v_depot
-      and (p_status is null or p_status='todas' or o.status::text=p_status)
+    where (p_status is null or p_status='todas' or o.status::text=p_status)
       and (nullif(btrim(p_search),'') is null or o.public_id ilike '%'||btrim(p_search)||'%')
     order by o.date desc limit least(greatest(coalesce(p_limit,18),1),100)
     offset greatest(coalesce(p_offset,0),0)
   ) rows;
   return jsonb_build_object('rows',v_rows,'total',v_total,
-    'counts',v_counts||jsonb_build_object('todas',(select count(*) from public.orders o where o.depot=v_depot)));
+    'counts',v_counts||jsonb_build_object('todas',(select count(*) from public.orders o)));
 end $$;
 revoke all on function public.nexus_depot_manager_orders(text,text,int,int) from public,anon;
 grant execute on function public.nexus_depot_manager_orders(text,text,int,int) to authenticated;
 
 create or replace function public.nexus_depot_manager_order(p_identifier text)
 returns jsonb language plpgsql stable security definer set search_path=public,pg_temp as $$
-declare v_result jsonb; v_depot public.depot_t;
+declare v_result jsonb;
 begin
   if public.nexus_depot_manager_valid() is distinct from true
      or public.has_permission('servicios.view') is distinct from true then
     raise exception 'no autorizado' using errcode='insufficient_privilege';
   end if;
-  select s.depot into v_depot from public.nexus_depot_manager_scope() s;
   select jsonb_build_object(
     'id',o.id,'public_id',o.public_id,'short_id',o.short_id,'date',o.date,
     'depot',o.depot,'status',o.status,'client_id',o.client_id,'operator_id',o.operator_id,
@@ -320,7 +314,7 @@ begin
   ) into v_result
   from public.orders o join public.clients c on c.id=o.client_id
   left join public.operators op on op.id=o.operator_id
-  where o.depot=v_depot and (o.public_id=p_identifier or o.id::text=p_identifier)
+  where (o.public_id=p_identifier or o.id::text=p_identifier)
   limit 1;
   return v_result;
 end $$;
@@ -368,8 +362,7 @@ begin
   v_principal:=public.nexus_is_depot_manager_principal();
   if v_principal then
     select * into v_scope from public.nexus_depot_manager_scope();
-    if v_scope.is_authorized is distinct from true
-       or p_order->>'depot' is distinct from v_scope.depot::text then
+    if v_scope.is_authorized is distinct from true then
       raise exception 'no autorizado' using errcode='42501';
     end if;
     if exists(select 1 from jsonb_array_elements(p_lines) x
@@ -388,9 +381,8 @@ begin
     raise exception 'Cliente inexistente o inactivo';
   end if;
   if not exists(select 1 from public.operators op where op.id=(p_order->>'operator_id')::uuid
-    and coalesce(op.active,true)
-    and (not v_principal or op.depot is not distinct from v_scope.depot)) then
-    raise exception 'Responsable operativo fuera de sede' using errcode='42501';
+    and coalesce(op.active,true)) then
+    raise exception 'Responsable operativo inexistente o inactivo' using errcode='42501';
   end if;
   if length(btrim(coalesce(p_order->>'signed_by',''))) not between 2 and 120
      or coalesce(p_order->>'signature_data_url','') !~ '^data:image/png;base64,[A-Za-z0-9+/]+={0,2}$'
@@ -427,7 +419,7 @@ begin
     pricing_complete,status,signed_by,signed_doc,signed_at,signature_hash,
     geo_lat,geo_lng,ip,created_by
   ) values(
-    case when v_principal then v_scope.depot else (p_order->>'depot')::public.depot_t end,
+    (p_order->>'depot')::public.depot_t,
     v_client_id,(p_order->>'operator_id')::uuid,p_order->>'h_start',p_order->>'h_end',
     (p_order->>'hours')::int,(p_order->>'pallets')::int,(p_order->>'units')::int,
     (p_order->>'km')::int,nullif(p_order->>'observ',''),null,null,v_version.id,
@@ -689,9 +681,6 @@ begin
   select os.* into strict v_line from public.order_services os
   where os.id=p_order_service_id for update;
   select o.* into strict v_order from public.orders o where o.id=v_line.order_id for update;
-  if v_order.depot is distinct from (select s.depot from public.nexus_depot_manager_scope() s) then
-    raise exception 'no autorizado' using errcode='insufficient_privilege';
-  end if;
   perform set_config('app.service_order_mutation','fulfillment',true);
   update public.order_services set qty_provided=p_qty_provided,subtotal_provided=null
   where id=p_order_service_id;

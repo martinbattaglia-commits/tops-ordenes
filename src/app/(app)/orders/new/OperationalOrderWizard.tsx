@@ -18,6 +18,9 @@ interface Props {
 export default function OperationalOrderWizard({ clients, operators, catalog, depot, siteLabel }: Props) {
   const router = useRouter();
   const pad = useRef<SignaturePadHandle>(null);
+  // La sede de la cuenta es el VALOR POR DEFECTO, no un límite: Magaldi y
+  // Luján están a cincuenta metros y los encargados se cubren entre sí.
+  const [orderDepot, setOrderDepot] = useState<Depot>(depot);
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
   const [operatorId, setOperatorId] = useState(operators[0]?.id ?? "");
   const [selected, setSelected] = useState<Record<string, number>>({});
@@ -69,7 +72,7 @@ export default function OperationalOrderWizard({ clients, operators, catalog, de
           contacto: "",
           email: "",
         },
-        depot,
+        depot: orderDepot,
         operator_id: operatorId,
         services: serviceRows.map((service) => ({
           service_slug: service.slug,
@@ -136,9 +139,19 @@ export default function OperationalOrderWizard({ clients, operators, catalog, de
             </select>
           </label>
         </div>
-        <div className="rounded-lg border border-stroke-soft bg-bg-surface-alt px-3 py-2 text-sm">
-          Sede fijada por la cuenta: <strong>{siteLabel}</strong>
-        </div>
+        <label className="space-y-1 text-sm font-semibold">Sede de la orden
+          <select
+            className="input"
+            value={orderDepot}
+            onChange={(event) => setOrderDepot(event.target.value as Depot)}
+          >
+            <option value="LUJAN">Luján</option>
+            <option value="MAGALDI">Agustín Magaldi 765</option>
+          </select>
+          <span className="block text-xs font-normal text-fg-secondary">
+            Tu sede es {siteLabel}. Podés cargar órdenes de la otra nave cuando la cubrís.
+          </span>
+        </label>
       </div>
 
       <div className="card card-pad">

@@ -73,19 +73,17 @@ describe("T-FB-02 · identidad y alcance del encargado", () => {
     }
   });
 
-  it("R-2 · el encargado VÁLIDO lee los operadores de su sede", async () => {
+  it("R-2 · el encargado VÁLIDO lee operadores; el filtro por sede ya no existe", async () => {
+    // RECORTE POR EL RETIRO DEL AISLAMIENTO. Este caso exigía que sólo viera
+    // los de su nave, y su gemelo exigía que no viera ninguno de la otra. Ese
+    // sujeto se fue con la compuerta `depot` de la policy `ops read all`: los
+    // encargados se cubren entre sí y una orden de la otra nave lleva un
+    // responsable de esa nave. Que los vea de las DOS lo afirma T-FB-09; acá
+    // queda lo que sobrevive, que es la autorización por identidad.
     const { rows } = await comoUsuario(db, JORGE.id, JORGE.email, async () =>
       db.query<{ depot: string }>(`select depot from public.operators`),
     );
     expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.depot === JORGE.depot)).toBe(true);
-  });
-
-  it("R-2 · y no ve ni una fila de la otra sede", async () => {
-    const { rows } = await comoUsuario(db, JUAN.id, JUAN.email, async () =>
-      db.query<{ depot: string }>(`select depot from public.operators where depot = 'LUJAN'`),
-    );
-    expect(rows).toEqual([]);
   });
 
   it("R-2 · el encargado INVÁLIDO no lee ningún operador", async () => {

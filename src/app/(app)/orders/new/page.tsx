@@ -17,9 +17,11 @@ export default async function NewOrderPage() {
   ]);
   if (manager.restricted) {
     if (!manager.authorized || !manager.depot || !manager.siteLabel) notFound();
+    // Los operadores NO se filtran por sede: los encargados se cubren entre sí
+    // y una orden de la otra nave lleva un responsable de esa nave.
     return <OperationalOrderWizard
       clients={clients}
-      operators={operators.filter((operator) => operator.depot === manager.depot)}
+      operators={operators}
       catalog={pricing.catalog}
       depot={manager.depot as "MAGALDI" | "LUJAN"}
       siteLabel={manager.siteLabel}

@@ -122,11 +122,12 @@ async function createOrderInner(input: CreateOrderInput): Promise<CreateOrderRes
   if (managerScopeError) {
     return { ok: false, error: "No se pudo verificar el alcance operativo." };
   }
+  // El alcance se verifica por IDENTIDAD, no por nave: la sede de la orden ya
+  // no tiene que coincidir con la de la cuenta. Magaldi y Luján se cubren
+  // entre sí y emitir una OS de la otra nave es operatoria normal.
   const isDepotManager = managerScope?.is_principal === true;
-  if (isDepotManager && (
-    managerScope?.is_authorized !== true || managerScope.depot !== data.depot
-  )) {
-    return { ok: false, error: "La sede de la orden no coincide con la cuenta operativa." };
+  if (isDepotManager && managerScope?.is_authorized !== true) {
+    return { ok: false, error: "Tu cuenta operativa no está habilitada para emitir órdenes." };
   }
   if (!data.pricing_version_id && !isDepotManager) {
     return {
