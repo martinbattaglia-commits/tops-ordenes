@@ -42,6 +42,8 @@ import {
   createChainHeadPort,
   createEvidenceLoaderPort,
   createIntegrityCaseRepository,
+  mapCaseIdentity,
+  type CustodyCaseIdentity,
   type CustodyQueryPort,
 } from "@/lib/custody/integrity-adapters";
 import {
@@ -67,6 +69,10 @@ import {
 import { OpenAICustodyVisionProvider } from "@/lib/custody/openai-vision-provider";
 import { sniffCustodyVisionMime } from "@/lib/custody/productive-vision-evaluation";
 import { env } from "@/lib/env";
+import {
+  attachPhysicalEvidence,
+  classifyPhysicalAttachRejection,
+} from "@/lib/custody/physical-ingress";
 import { generateAndStorePodPdf, getPodPdfEvidenceId } from "@/lib/custody/pod-pdf";
 import type {
   CustodyBucket,
@@ -95,137 +101,13 @@ function revalidate(extra?: string): void {
 async function attachPhysicalEvidenceAction(
   form: FormData,
 ): Promise<Result<{ evidence_id: string; event_public_id: string }>> {
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size < 1) {
-    return { ok: false, error: "Foto física requerida" };
-  }
-  // El bucket `custody-evidence` corta en 8 MiB (0037). Aceptar 12 acá hacía
-  // que una foto de teléfono de 8–12 MiB pasara toda la validación y muriera
-  // recién en Storage, con un error que no le decía nada al operario.
-  if (file.size > CUSTODY_EVIDENCE_MAX_BYTES) {
-    return {
-      ok: false,
-      error: "La foto supera los 8 MB: sacala de nuevo con menor resolución",
-    };
-  }
-  const physicalUnitId = parseCanonicalUuid(form.get("entity_id"));
-  const pair = parseCustodyStagePair(form.get("stage"), form.get("event_type"));
-  if (!physicalUnitId || !pair || !(
-    (pair.stage === "recepcion" && pair.eventType === "foto_ingreso")
-    || (pair.stage === "despacho" && ["foto_egreso", "inspeccion_humana"].includes(pair.eventType))
-  )) return { ok: false, error: "Solicitud de captura física inválida" };
-
-  const session = createClient();
-  const admin = createAdminClient();
-  if (!session || !admin) return { ok: false, error: "Operación administrativa no disponible" };
-  const actor = await resolveTrustedActor(session);
-
-  // R-6 · La autorización COMPLETA va ANTES del upload. `resolveTrustedActor`
-  // sólo acredita la sesión; el permiso y el tenant los verificaba recién el
-  // attach, tres pasos después de haber escrito en el bucket con service role,
-  // de modo que un usuario sin `wms.edit` conseguía igual un objeto huérfano y
-  // una fila de atestación a nombre del tenant ajeno.
-  //
-  // Son DOS comprobaciones distintas y hacen falta las dos:
-  //  · la lectura por el cliente de SESIÓN somete la unidad a su RLS, que
-  //    resuelve el TENANT;
-  //  · el perfil y sus permisos resuelven la CAPACIDAD de escribir evidencia.
-  const visible = await session
-    .from("custody_physical_units")
-    .select("id, client_id")
-    .eq("id", physicalUnitId)
-    .maybeSingle();
-  if (visible.error || !visible.data) {
-    return { ok: false, error: "Unidad física no disponible para tu usuario" };
-  }
-  const unitClientId = String((visible.data as { client_id?: unknown }).client_id ?? "");
-  const authz = createActorAuthorizationPort(
-    createSupabaseCustodyQueryPort(session as unknown as CustodyDataClient),
-    { actorId: actor.actorId, sessionId: actor.sessionId },
-    unitClientId,
-  );
-  const verified = await authz.resolveActor();
-  if (!verified || !verified.permissions.includes(CUSTODY_CAPTURE_PERMISSION)) {
-    return { ok: false, error: "No tenés permiso para registrar evidencia" };
-  }
-
-  const supplied = new Uint8Array(await file.arrayBuffer());
-  const suppliedMime = sniffCustodyVisionMime(supplied);
-  if (!suppliedMime) return { ok: false, error: "Formato de foto no admitido" };
-  const extension = suppliedMime === "image/jpeg" ? "jpg" : suppliedMime === "image/png" ? "png" : "webp";
-  const storagePath = buildCustodyStoragePath({
-    scope: "physical_unit",
-    entityId: physicalUnitId,
-    stage: pair.stage,
-    objectId: randomUUID(),
-    extension,
-  });
-  if (!storagePath) return { ok: false, error: "Solicitud de captura física inválida" };
-
-  const storage = supabaseStoragePort(admin);
-  await storage.upload("custody-evidence", storagePath, supplied, suppliedMime);
-  let attestationId: string | null = null;
-  try {
-    const stored = await storage.download("custody-evidence", storagePath);
-    if (!stored || stored.byteLength !== supplied.byteLength) {
-      await storage.remove("custody-evidence", storagePath);
-      return { ok: false, error: "La foto almacenada no pudo verificarse" };
-    }
-    const observedMime = sniffCustodyVisionMime(stored);
-    const suppliedSha = createHash("sha256").update(supplied).digest("hex");
-    const observedSha = createHash("sha256").update(stored).digest("hex");
-    if (!observedMime || observedMime !== suppliedMime || observedSha !== suppliedSha) {
-      await storage.remove("custody-evidence", storagePath);
-      return { ok: false, error: "La foto almacenada no coincide con los bytes recibidos" };
-    }
-
-    const adminTransport = noRetryTransport();
-    const adminMutation = createCustodyAdminMutationClient(adminTransport);
-    const sessionMutation = createCustodyMutationClient(noRetryTransport());
-    if (!adminMutation || !sessionMutation) throw new Error("clientes de mutación no disponibles");
-    const attested = await adminMutation.rpc("attest_custody_physical_content", {
-      p_bucket: "custody-evidence",
-      p_storage_path: storagePath,
-      p_sha256: observedSha,
-      p_size_bytes: stored.byteLength,
-      p_observed_mime_type: observedMime,
-      p_actor_id: actor.actorId,
-      p_session_id: actor.sessionId,
-      p_physical_unit_id: physicalUnitId,
-      p_stage: pair.stage,
-      p_event_type: pair.eventType,
-      p_ttl_seconds: 900,
-    });
-    if (attested.error || typeof attested.data !== "string") throw new Error("atestación rechazada");
-    attestationId = attested.data;
-
-    const attached = await sessionMutation.rpc("attach_custody_physical_evidence", {
-      p_physical_unit_id: physicalUnitId,
-      p_stage: pair.stage,
-      p_event_type: pair.eventType,
-      p_storage_path: storagePath,
-      p_attestation_id: attestationId,
-      p_file_name: file.name || null,
-      p_captured_at: null,
-      p_exif: null,
-      p_notes: (form.get("notes") as string | null) || null,
-    });
-    if (attached.error) throw new Error("adjunto físico rechazado");
-    const canonical = parseAttachResult(attached.data);
-    if (!canonical) return { ok: false, error: "reconciliation_required" };
-    revalidate((form.get("revalidate") as string | null) || undefined);
-    return {
-      ok: true,
-      data: { evidence_id: canonical.evidenceId, event_public_id: canonical.eventPublicId },
-    };
-  } catch {
-    // Si la respuesta de attach fue ambigua no se elimina: podría haber
-    // confirmado. En fallos anteriores, la atestación expira y el objeto queda
-    // identificado para reconciliación; nunca se borra a ciegas.
-    void attestationId;
-    return { ok: false, error: "reconciliation_required" };
-  }
+  // Implementación ÚNICA en `@/lib/custody/physical-ingress`. Se extrajo para
+  // que el módulo de recepciones pueda registrar la foto de ingreso sin
+  // arrastrar este archivo entero —y con él el proveedor de visión— a su grafo
+  // de dependencias. Ver el encabezado de ese módulo.
+  return attachPhysicalEvidence(form);
 }
+
 
 /** Sube un archivo de evidencia a Storage (service-role) y lo adjunta vía attach RPC. */
 export async function attachEvidenceAction(form: FormData): Promise<Result<{ evidence_id: string; event_public_id: string }>> {
@@ -458,6 +340,12 @@ interface CaseContext {
   query: CustodyQueryPort;
   actor: Awaited<ReturnType<typeof resolveTrustedActor>> | null;
   clientId: string;
+  /**
+   * S1-2 · La identidad sale de la MISMA fila que ya se leyó para resolver el
+   * tenant. Cero viajes extra: el corte no era de disponibilidad, era que la
+   * consulta no pedía las columnas y el adaptador descartaba las que sí venían.
+   */
+  identity: CustodyCaseIdentity;
 }
 
 /**
@@ -479,7 +367,7 @@ async function caseContext(caseId: string): Promise<CaseContext | null> {
   const query = createSupabaseCustodyQueryPort(session as unknown as CustodyDataClient);
   const row = await query.selectCase(caseId);
   if (!row) return null;
-  return { query, actor, clientId: row.client_id };
+  return { query, actor, clientId: row.client_id, identity: mapCaseIdentity(row) };
 }
 
 export interface CustodyCaseViewOptions {
@@ -537,10 +425,29 @@ export async function loadCustodyCaseAction(
 
     // ¿La cadena avanzó desde la atestación? Se compara SERVER-SIDE y sólo
     // viaja el booleano: el head nunca llega a la pantalla.
+    //
+    // S1-6 · EL DEADLOCK ERA DE ESTE LADO, NO DE LA BASE.
+    //
+    // Antes acá se comparaban dos hashes sin mirar el tipo de evento, así que
+    // la foto de inspección humana —que el inspector está OBLIGADO a registrar
+    // para poder liberar— hacía avanzar la cadena y con eso bloqueaba la
+    // liberación que ella misma habilita; reevaluar la invalidaba de nuevo y el
+    // caso no salía nunca. La base NUNCA tuvo ese defecto: `0250a:2129-2133`
+    // excluye `inspeccion_humana` al hacer exactamente esta comprobación.
+    // Acá se copia esa regla (I6); no se escribe una nueva.
     let chainAdvanced = false;
     if (found.chain?.status === "verified") {
-      const head = await ctx.query.verifyChainHead(found.entity.scope, found.entity.entityId);
-      chainAdvanced = head !== null && head !== found.chain.attestation.chainHead;
+      const attestedHead = found.chain.attestation.chainHead;
+      if (ctx.query.chainAdvancedBeyondInspection) {
+        chainAdvanced = await ctx.query.chainAdvancedBeyondInspection(
+          found.entity.scope,
+          found.entity.entityId,
+          attestedHead,
+        );
+      } else {
+        const head = await ctx.query.verifyChainHead(found.entity.scope, found.entity.entityId);
+        chainAdvanced = head !== null && head !== attestedHead;
+      }
     }
 
     const decided = found.decision !== null || found.state === "RELEASED" || found.state === "QUARANTINED";
@@ -576,14 +483,12 @@ export async function loadCustodyCaseAction(
     const view = buildCustodyCaseView({
       case: found,
       actor: verified,
+      identity: ctx.identity,
       chainAdvanced,
       evaluationInFlight,
       podPdfReady,
       draftReason: options.draftReason,
       candidateInspectionEvidenceIds: inspectionEvidenceIds,
-      // Sin configuración aprobada servida por el servidor no se muestra
-      // ningún umbral: la pantalla no inventa un porcentaje de referencia.
-      referenceThreshold: null,
     });
     // Cinturón y tirantes: si algo se colara al view-model, no sale de acá.
     if (leaksSensitiveData(view)) return caseFail("UNAVAILABLE");
@@ -695,7 +600,11 @@ export async function decideCustodyCaseAction(
     }
 
     revalidate(`/wms/custody/${id}`);
-    const view = buildCustodyCaseView({ case: outcome.case, actor: verified });
+    const view = buildCustodyCaseView({
+      case: outcome.case,
+      actor: verified,
+      identity: ctx.identity,
+    });
     if (leaksSensitiveData(view)) return caseFail("UNAVAILABLE");
     return { ok: true, data: view };
   } catch {
@@ -754,7 +663,60 @@ export async function registerPhysicalIngressAction(
   forced.set("stage", "recepcion");
   forced.set("event_type", "foto_ingreso");
   forced.set("kind", "foto");
-  return attachEvidenceAction(forced);
+  const res = await attachEvidenceAction(forced);
+  if (res.ok) await triggerAnalysisIfPairComplete(forced.get("entity_id"));
+  return res;
+}
+
+/**
+ * D2 · EL ANÁLISIS SE DISPARA SOLO AL COMPLETARSE EL PAR (S1-4).
+ *
+ * Antes había que pedirlo a mano desde un botón que además exigía el permiso
+ * de DECIDIR, no el de capturar: el operario que sacaba las dos fotos no podía
+ * disparar el análisis de su propio caso, y el caso se quedaba esperando a
+ * alguien que ni sabía que existía.
+ *
+ * Es BEST-EFFORT a propósito. La foto ya quedó registrada y verificada; si el
+ * análisis no arranca —lease tomado, cooldown, proveedor caído— eso NO puede
+ * convertir una captura exitosa en un error para el operario. El estado del
+ * caso lo dice igual, y el panel de análisis ofrece reintentar.
+ *
+ * EL TECHO DE LLAMADAS PAGAS SE MANTIENE INTACTO: no se agrega ningún control
+ * nuevo acá. Quien lo aplica es `begin_custody_integrity_evaluation_v2`, con su
+ * lease exclusivo (0232) y su cooldown; este disparo simplemente entra por la
+ * misma puerta y acepta un `no` por respuesta.
+ */
+async function triggerAnalysisIfPairComplete(entityId: FormDataEntryValue | null): Promise<void> {
+  try {
+    const unitId = parseCanonicalUuid(entityId);
+    if (!unitId) return;
+    const session = createClient();
+    if (!session) return;
+
+    const { data, error } = await session
+      .from("custody_integrity_cases")
+      .select("id, version, state, decision_id, ingress_evidence_id, egress_evidence_id")
+      .eq("physical_unit_id", unitId)
+      .maybeSingle();
+    if (error || !data) return;
+
+    const row = data as {
+      id: string;
+      version: number;
+      state: string | null;
+      decision_id: string | null;
+      ingress_evidence_id: string | null;
+      egress_evidence_id: string | null;
+    };
+    // Sólo con el par COMPLETO y el caso todavía abierto.
+    if (row.decision_id !== null) return;
+    if (!row.ingress_evidence_id || !row.egress_evidence_id) return;
+    if (row.state === "RELEASED" || row.state === "QUARANTINED") return;
+
+    await reevaluateCustodyCaseAction(row.id, row.version);
+  } catch {
+    // Silencio deliberado: ver el comentario de arriba. La captura ya salió bien.
+  }
 }
 
 /**
@@ -772,7 +734,10 @@ export async function registerPhysicalEgressAction(
   forced.set("stage", "despacho");
   forced.set("event_type", "foto_egreso");
   forced.set("kind", "foto");
-  return attachEvidenceAction(forced);
+  const res = await attachEvidenceAction(forced);
+  // D2 · el egreso es, en el flujo normal, la segunda foto del par.
+  if (res.ok) await triggerAnalysisIfPairComplete(forced.get("entity_id"));
+  return res;
 }
 
 // ===========================================================================

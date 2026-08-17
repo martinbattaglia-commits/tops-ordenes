@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { byText, render } from "./_render";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
+import { derivedView, INSPECCION_ID } from "./_view";
 import type { CustodyTimeline } from "@/lib/custody/types";
 
 const CASE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -39,37 +40,13 @@ vi.mock("@/lib/custody/qr", () => ({
 
 import CustodyCasePage from "@/app/(app)/wms/custody/[id]/page";
 
+/**
+ * View-model DERIVADO del builder real. La página es de scope `shipment`, así
+ * que la base es el caso de despacho; lo que se afirma abajo es el DOM que
+ * produce ese view-model, no un literal escrito para que el DOM coincida.
+ */
 function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
-  return {
-    caseId: CASE_ID,
-    state: "REVIEW_REQUIRED",
-    stateLabel: "Revisión humana",
-    tone: "review",
-    version: 3,
-    scope: "shipment",
-    entityId: SHIPMENT,
-    holdLabels: ["No hay umbral calibrado aprobado"],
-    ai: {
-      executed: true,
-      verdictLabel: "Coincide con el ingreso",
-      confidencePercent: 87,
-      informativeOnly: true,
-      note: "La IA informa y alerta. La decisión es humana.",
-      failureLabel: null,
-    },
-    referenceThreshold: null,
-    release: { enabled: false, blockers: ["Falta la foto de inspección humana"] },
-    quarantine: { enabled: true, blockers: [] },
-    reevaluation: { analysis: "current", inFlight: false, enabled: true, required: false, blockers: [], reason: null },
-    inspection: { enabled: true, blockers: [], eligible: 1 },
-    podPdfReady: false,
-    podBlocked: true,
-    podBlockedReason: "POD y despacho bloqueados hasta registrar la decisión humana",
-    decision: null,
-    createdAt: "2026-08-08T10:15:00.000Z",
-    updatedAt: "2026-08-10T09:42:00.000Z",
-    ...over,
-  };
+  return derivedView({ candidateInspectionEvidenceIds: [INSPECCION_ID] }, over);
 }
 
 const TIMELINE: CustodyTimeline = {
@@ -157,7 +134,9 @@ describe("la pantalla del caso se renderiza completa", () => {
   it("sin foto de egreso lo dice explícitamente", async () => {
     timelineMock.mockResolvedValue({ ...TIMELINE, nodes: [TIMELINE.nodes[0]] });
     const { container, unmount } = await renderPage();
-    expect(byText(container, /Falta la fotografía de egreso/)).not.toBeNull();
+    // §7.5 · el texto ya no manda al operario a otro panel («registrala en
+    // "Fotografías de la unidad"»): el slot de captura está en la pantalla.
+    expect(byText(container, /Esperando la fotografía de egreso/)).not.toBeNull();
     await unmount();
   });
 });
@@ -169,7 +148,9 @@ describe("panel de IA: informa, no decide", () => {
     // texto renderizado del panel, no sobre un nodo hoja.
     expect(container.textContent).toMatch(/87\s*%/);
     expect(byText(container, /confianza informada/)).not.toBeNull();
-    expect(byText(container, /Revisión humana obligatoria/)).not.toBeNull();
+    // §7.6 fija la leyenda exacta del panel: «La IA informa y alerta. La
+    // decisión es humana.». Es el mismo mensaje, en las palabras normativas.
+    expect(byText(container, /La IA informa y alerta\. La decisión es humana\./)).not.toBeNull();
     await unmount();
   });
 
@@ -190,14 +171,16 @@ describe("panel de IA: informa, no decide", () => {
     await unmount();
   });
 
-  it("si el servidor informa la referencia, se muestra rotulada como no aprobada", async () => {
-    loadMock.mockResolvedValue({
-      ok: true,
-      data: view({ referenceThreshold: { percent: 90, approved: false } }),
-    });
+  // I3 · el bloque «Referencia operativa» SE BORRÓ. No es que el servidor no
+  // lo pueble: no existe la superficie. Poblarlo habría impreso «Referencia
+  // operativa 90 %», que es exactamente la cadena que la regla de borrado
+  // manda eliminar.
+  it("la superficie del umbral no existe ni siquiera con un análisis completo", async () => {
     const { container, unmount } = await renderPage();
-    expect(byText(container, /Referencia operativa 90%.*por aprobar/)).not.toBeNull();
-    expect(byText(container, /no es criterio de liberación automática/)).not.toBeNull();
+    const texto = container.textContent ?? "";
+    expect(texto).not.toMatch(/Referencia operativa/i);
+    expect(texto).not.toMatch(/umbral/i);
+    expect(texto).not.toMatch(/≥/);
     await unmount();
   });
 });

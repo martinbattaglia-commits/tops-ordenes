@@ -14,6 +14,8 @@
  *     nunca del veredicto ni de la confianza del modelo.
  */
 
+import { guidance } from "./blocker-guidance";
+import type { CustodyCaseIdentity } from "./integrity-adapters";
 import {
   CUSTODY_DECISION_PERMISSION,
   evaluateReleaseEligibility,
@@ -87,11 +89,20 @@ const HOLD_LABEL: Record<string, string> = {
   NON_REAL_EXECUTION: "El análisis no se ejecutó en modo real",
   VERDICT_DIFFERENCES: "El análisis detectó diferencias",
   VERDICT_POSSIBLE_DAMAGE: "El análisis detectó posible daño",
-  BELOW_SIMILARITY_THRESHOLD: "El score está por debajo del umbral del 90 %",
+  // REGLA DE BORRADO (I3). Esta etiqueta decía «El score está por debajo del
+  // umbral del 90 %» y se pintaba al operario bajo «Retenciones registradas».
+  // No existe norma que fije un umbral porcentual de similitud de imágenes, y
+  // la única que regula esta comparación prohíbe expresar el resultado como
+  // valor numérico de certeza. Además el número no le sirve al operario: lo
+  // que necesita saber es qué tiene que HACER.
+  BELOW_SIMILARITY_THRESHOLD: "Requiere inspección física antes de decidir",
   PACKAGING_CHANGED: "El embalaje presenta cambios",
   MISSING_ITEMS_SUSPECTED: "Se sospechan faltantes",
   DAMAGE_SUSPECTED: "Se sospecha daño",
-  NO_CALIBRATED_THRESHOLD: "No hay umbral calibrado aprobado",
+  // Regla de borrado, tercera aparición: la palabra «umbral» tampoco va acá.
+  // Lo que el operario necesita saber es que el criterio automático no está
+  // disponible y que la revisión queda entera del lado humano.
+  NO_CALIBRATED_THRESHOLD: "El criterio automático no está configurado: revisión humana completa",
 };
 
 /** Bloqueos de liberación, también en lenguaje operativo. */
@@ -105,7 +116,8 @@ const BLOCKER_LABEL: Record<ReleaseBlocker | string, string> = {
   EXECUTION_NOT_REAL: "El análisis no se ejecutó en modo real",
   VERDICT_NOT_MATCHING: "El análisis no indica coincidencia",
   CONFIDENCE_NOT_NUMERIC: "El análisis no informó confianza",
-  SCORE_BELOW_THRESHOLD: "El score no alcanza el umbral productivo",
+  // Misma regla de borrado: sin número y en términos de lo que hay que hacer.
+  SCORE_BELOW_THRESHOLD: "La concordancia exige inspección física adicional",
   DAMAGE_FLAGS_PRESENT: "Hay señales de daño o faltantes que exigen revisión",
   NO_HUMAN_INSPECTION_EVIDENCE: "Falta la foto de inspección humana",
   REASON_TOO_SHORT: `El motivo debe tener al menos ${MIN_REASON_LENGTH} caracteres`,
@@ -115,14 +127,66 @@ export function holdLabel(reason: HoldReason | string): string {
   return HOLD_LABEL[reason] ?? "Retención registrada por el servidor";
 }
 
+/**
+ * S2-6 · El respaldo dejó de ser mudo.
+ *
+ * Antes, todo código sin entrada en `BLOCKER_LABEL` salía como «Requisito de
+ * liberación no cumplido»: una frase que no dice qué falta ni qué hacer, y que
+ * ante los 22 códigos del certificado —ninguno de los cuales está en ese
+ * mapa— habría respondido siempre lo mismo. Ahora el respaldo delega en el
+ * traductor guía, que sí los cubre y que, ante un código que tampoco conozca,
+ * lo declara como tal en vez de esconderlo.
+ */
 export function blockerLabel(blocker: ReleaseBlocker | string): string {
-  return BLOCKER_LABEL[blocker] ?? "Requisito de liberación no cumplido";
+  return BLOCKER_LABEL[blocker] ?? guidance(blocker);
 }
 
 const VERDICT_LABEL: Record<string, string> = {
   coincide: "Coincide con el ingreso",
   diferencias: "Diferencias detectadas",
   posible_dano: "Posible daño detectado",
+};
+
+/**
+ * Veredicto CUALITATIVO de tres categorías (I3).
+ *
+ * OSAC 2022-S-0001 / NIST prohíben expresar el resultado de una comparación de
+ * imágenes como valor numérico de certeza y prescriben una escala cualitativa.
+ * El porcentaje de concordancia SÍ se muestra —es útil y el operario lo
+ * entiende—; lo que se elimina es el umbral y toda expresión de la forma
+ * «X % ≥ Y %». El veredicto determina cuánta verificación se exige, nunca si
+ * el bien sale: eso lo decide una persona (I1).
+ */
+export type ConcordanceVerdict = "ALTA" | "BAJA" | "NO_CONCLUYENTE";
+
+export interface ConcordanceView {
+  verdict: ConcordanceVerdict;
+  label: string;
+  /** Qué exige, en términos de lo que hay que hacer. */
+  requirement: string;
+  /** Token de color del sistema. Nunca `--tops-red`, que es de marca. */
+  tone: "ok" | "danger" | "warn";
+}
+
+const CONCORDANCE: Record<ConcordanceVerdict, ConcordanceView> = {
+  ALTA: {
+    verdict: "ALTA",
+    label: "CONCORDANCIA ALTA",
+    requirement: "no requiere inspección adicional · la decisión sigue siendo tuya",
+    tone: "ok",
+  },
+  BAJA: {
+    verdict: "BAJA",
+    label: "CONCORDANCIA BAJA",
+    requirement: "inspección física obligatoria antes de poder decidir",
+    tone: "danger",
+  },
+  NO_CONCLUYENTE: {
+    verdict: "NO_CONCLUYENTE",
+    label: "NO CONCLUYENTE",
+    requirement: "las fotos no son comparables: repetí la de egreso",
+    tone: "warn",
+  },
 };
 
 export interface AiPanelView {
@@ -133,19 +197,49 @@ export interface AiPanelView {
   confidencePercent: number | null;
   /** Score de similitud DB-owned; nunca se deriva de confidence. */
   similarityScore?: number | null;
-  thresholdPercent?: number | null;
+  /**
+   * ⚠ `thresholdPercent` NO ESTÁ Y NO DEBE ESTAR.
+   *
+   * Se lee de la base para derivar `concordance` y se sigue persistiendo en el
+   * caso, pero no viaja al cliente. Que el campo no exista en este tipo es la
+   * misma clase de garantía que usa el resto del view-model para bucket, path
+   * y digest: no es una promesa del componente, es una imposibilidad
+   * estructural, y por eso se puede probar.
+   */
   thresholdPolicyVersion?: string | null;
-  thresholdResult?: "ABOVE_OR_EQUAL" | "BELOW" | null;
+  /** Veredicto cualitativo ya derivado server-side (I3). */
+  concordance?: ConcordanceView | null;
   scoreComponents?: IntegrityAssessment["scoreComponents"];
   damageFlags?: {
     packagingChanged: boolean;
     missingItemsSuspected: boolean;
     damageSuspected: boolean;
   } | null;
+  /** Observaciones y zonas señaladas por el análisis (`provider_details`). */
+  observations?: string[];
+  zones?: string[];
+  /** Procedencia probatoria: sin esto el documento no es reproducible (I3). */
+  model?: string | null;
+  evaluatedAt?: string | null;
   /** Invariante del producto: la IA nunca habilita ni ejecuta una decisión. */
   informativeOnly: true;
   note: string;
   failureLabel: string | null;
+}
+
+/**
+ * Deriva el veredicto cualitativo. `thresholdResult` lo calcula la base
+ * comparando score contra la política vigente; acá sólo se traduce a la escala
+ * que el operario necesita. Sin resultado de umbral no se inventa uno: las
+ * fotos no son comparables y eso se dice.
+ */
+export function deriveConcordance(
+  assessment: IntegrityAssessment | null,
+): ConcordanceView | null {
+  if (!assessment || assessment.outcome !== "ok") return null;
+  if (assessment.thresholdResult === "ABOVE_OR_EQUAL") return CONCORDANCE.ALTA;
+  if (assessment.thresholdResult === "BELOW") return CONCORDANCE.BAJA;
+  return CONCORDANCE.NO_CONCLUYENTE;
 }
 
 /**
@@ -185,6 +279,45 @@ export interface InspectionCaptureView {
   eligible: number;
 }
 
+/**
+ * Captura del PAR ingreso/egreso (Adenda §4.2). **No es lo mismo que
+ * `inspection`, y confundirlos mató el circuito en su primer paso.**
+ *
+ * ─── QUÉ TRANSPORTA CADA CAMPO ────────────────────────────────────────────
+ *
+ * `inspection.enabled` = permiso de captura **Y** estado `REVIEW_REQUIRED` o
+ * `HOLD`. Esa restricción de estado es correcta para la foto de inspección
+ * humana, que sólo tiene sentido cuando ya hay algo que inspeccionar.
+ *
+ * `capture.enabled` = permiso de captura **Y** caso no terminal. Y nada más.
+ *
+ * ─── POR QUÉ NO SE PUEDE REUSAR `inspection` ──────────────────────────────
+ *
+ * Todo caso nace en `PENDING_EVIDENCE`, que no es ninguno de esos dos
+ * estados. Colgar la captura del par de `inspection.enabled` deja los dos
+ * inputs y los dos botones apagados justo cuando hay que sacar la foto de
+ * ingreso, y encima con un cartel de permiso para un problema de estado.
+ *
+ * ─── DE DÓNDE SALE ESTA REGLA ─────────────────────────────────────────────
+ *
+ * No se inventa: se copia la del servidor, que son dos condiciones y no tres.
+ *
+ *  · `actions.ts` exige `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`) antes de
+ *    tocar Storage;
+ *  · `attach_custody_physical_evidence` (0251) rechaza por estado
+ *    EXCLUSIVAMENTE con `if v_case.state in('RELEASED','QUARANTINED')
+ *    then raise 'caso terminal'`. No mira `PENDING_EVIDENCE`,
+ *    `REVIEW_REQUIRED` ni `HOLD`.
+ *
+ * La pantalla no puede ser más restrictiva que la base: un botón apagado que
+ * la RPC habría aceptado es una función que el operario no tiene.
+ */
+export interface PhysicalCaptureView {
+  enabled: boolean;
+  /** Motivos ya traducidos. Cada uno nombra su causa REAL, no otra. */
+  blockers: string[];
+}
+
 export interface DecisionActionView {
   enabled: boolean;
   /** Motivos, ya traducidos. Vacío si `enabled`. */
@@ -208,18 +341,20 @@ export interface CustodyCaseView {
   version: number;
   scope: "physical_unit" | "packing_unit" | "shipment";
   entityId: string;
+  /**
+   * S1-2 · De quién es el bien y cuál es. Antes este tipo no tenía ningún
+   * campo de cliente ni identificador legible, así que la pantalla no podía
+   * decirlo aunque la base lo supiera.
+   */
+  identity: CustodyCaseIdentityView;
   holdLabels: string[];
   ai: AiPanelView;
-  /**
-   * Referencia operativa. `null` mientras el servidor no informe una
-   * configuración aprobada: la pantalla NO inventa un porcentaje ni lo usa
-   * como criterio. Si llega, se muestra rotulada y con su estado de aprobación.
-   */
-  referenceThreshold: { percent: number; approved: boolean } | null;
   release: DecisionActionView;
   quarantine: DecisionActionView;
   reevaluation: ReevaluationView;
   inspection: InspectionCaptureView;
+  /** Captura del par ingreso/egreso. Distinta de `inspection`: ver el tipo. */
+  capture: PhysicalCaptureView;
   /** El POD permanece bloqueado hasta que exista una decisión humana válida. */
   podBlocked: boolean;
   podBlockedReason: string | null;
@@ -239,11 +374,31 @@ export interface CustodyCaseView {
   updatedAt: string;
 }
 
+/**
+ * Identidad tal como se PINTA. Se separa de `CustodyCaseIdentity` —el mapeo
+ * crudo del adaptador— porque acá ya se resolvió la precedencia entre la razón
+ * social canónica y el depositante asentado en la recepción, y porque el
+ * componente no debe volver a decidir eso.
+ */
+export interface CustodyCaseIdentityView {
+  /** Lo que se muestra como titular del bien. `null` si no hay ninguna fuente. */
+  clientLabel: string | null;
+  /** `true` cuando el label sale de la recepción y no del maestro de clientes. */
+  clientFromReception: boolean;
+  casePublicId: string | null;
+  unitPublicId: string | null;
+  sku: string | null;
+  quantity: number | null;
+  lotNumber: string | null;
+  receptionId: string | null;
+  receptionPublicId: string | null;
+}
+
 export interface BuildCaseViewInput {
   case: IntegrityCase;
   actor: VerifiedActor | null;
-  /** Configuración de referencia servida por el servidor. Nunca del navegador. */
-  referenceThreshold?: { percent: number; approved: boolean } | null;
+  /** Identidad resuelta por el servidor desde la MISMA lectura del caso. */
+  identity?: CustodyCaseIdentity | null;
   /** Evidencia de inspección ya seleccionada por el inspector, si la hubiera. */
   candidateInspectionEvidenceIds?: readonly string[];
   /** Motivo tipeado, para anticipar el bloqueo por motivo corto. */
@@ -289,10 +444,14 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
         ? Math.round(assessment.modelConfidence * 100)
         : null,
     similarityScore: assessment?.similarityScore ?? null,
-    thresholdPercent: assessment?.thresholdPercent ?? null,
     thresholdPolicyVersion: assessment?.thresholdPolicyVersion ?? null,
-    thresholdResult: assessment?.thresholdResult ?? null,
+    // El umbral se LEE para derivar esto y no viaja: ver el comentario del tipo.
+    concordance: deriveConcordance(assessment),
     scoreComponents: assessment?.scoreComponents ?? null,
+    observations: assessment?.observations ?? [],
+    zones: assessment?.zones ?? [],
+    model: assessment?.provenance.model ?? null,
+    evaluatedAt: assessment?.provenance.completedAt ?? null,
     damageFlags:
       typeof assessment?.packagingChanged === "boolean"
       && typeof assessment?.missingItemsSuspected === "boolean"
@@ -379,8 +538,13 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
   // ── Cuarentena ─────────────────────────────────────────────────────────
   const quarantineBlockers: string[] = [];
   if (decided) quarantineBlockers.push("El caso ya tiene una decisión registrada");
-  else if (c.state !== "REVIEW_REQUIRED") {
-    quarantineBlockers.push("El caso no está en revisión humana");
+  // S1-5 · La RPC acepta decidir desde REVIEW_REQUIRED **y desde HOLD**
+  // (`0250a:2096`). El view-model bloqueaba todo estado distinto de
+  // REVIEW_REQUIRED, de modo que el caso retenido —el escenario central del
+  // contrato— era el único sin salida: no se podía liberar por definición y
+  // tampoco cuarentenar. La pantalla ahora refleja la autoridad real.
+  else if (c.state !== "REVIEW_REQUIRED" && c.state !== "HOLD") {
+    quarantineBlockers.push("El caso todavía no está listo para decidir");
   }
   if (!actor) quarantineBlockers.push("Sesión no verificada");
   else {
@@ -416,6 +580,9 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
         : "current";
 
   // ── Captura de inspección humana ───────────────────────────────────────
+  // La restricción de estado es CORRECTA acá: inspeccionar sólo tiene sentido
+  // cuando ya hay un análisis que revisar. Lo que estaba mal era reusar esta
+  // señal para el par ingreso/egreso, que nace mucho antes.
   const inspectionBlockers: string[] = [];
   if (decided) inspectionBlockers.push("El caso ya tiene una decisión registrada");
   else if (c.state !== "REVIEW_REQUIRED" && c.state !== "HOLD") {
@@ -423,6 +590,25 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
   }
   if (!actor) inspectionBlockers.push("Sesión no verificada");
   else if (!mayCapture(actor)) inspectionBlockers.push("No tenés permiso para registrar evidencia");
+
+  // ── Captura del PAR ingreso/egreso ─────────────────────────────────────
+  //
+  // Espeja la RPC, que son DOS condiciones: permiso de captura y caso no
+  // terminal. Cada blocker nombra su causa real — un cartel de permiso para un
+  // problema de estado manda al operario a pedir algo que no lo va a
+  // desbloquear.
+  const captureBlockers: string[] = [];
+  if (!actor) captureBlockers.push("Sesión no verificada");
+  else if (!mayCapture(actor)) {
+    captureBlockers.push("No tenés permiso para registrar evidencia");
+  }
+  if (decided) {
+    captureBlockers.push(
+      c.state === "QUARANTINED"
+        ? "La unidad está en cuarentena: no admite más fotografías"
+        : "El caso ya está liberado: no admite más fotografías",
+    );
+  }
 
   return {
     caseId: c.caseId,
@@ -432,9 +618,9 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
     version: c.version,
     scope: c.entity.scope,
     entityId: c.entity.entityId,
+    identity: buildIdentityView(input.identity ?? null),
     holdLabels: c.holdReasons.map(holdLabel),
     ai,
-    referenceThreshold: input.referenceThreshold ?? null,
     release: {
       enabled: releaseBlockers.length === 0,
       blockers: dedupe(releaseBlockers),
@@ -457,6 +643,10 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
       enabled: inspectionBlockers.length === 0,
       blockers: dedupe(inspectionBlockers),
       eligible: (input.candidateInspectionEvidenceIds ?? []).length,
+    },
+    capture: {
+      enabled: captureBlockers.length === 0,
+      blockers: dedupe(captureBlockers),
     },
     podPdfReady: input.podPdfReady === true,
     podBlocked: c.state !== "RELEASED",
@@ -482,6 +672,33 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
 
 function dedupe(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+/**
+ * Resuelve la identidad que se pinta.
+ *
+ * Precedencia: razón social canónica del maestro de clientes; si el actor no
+ * puede verla —un encargado de depósito no tiene `clientes.view`—, el
+ * depositante asentado en la recepción. Se declara cuál de las dos es con
+ * `clientFromReception`, porque en un módulo probatorio la procedencia del
+ * dato importa tanto como el dato.
+ */
+export function buildIdentityView(
+  identity: CustodyCaseIdentity | null,
+): CustodyCaseIdentityView {
+  const canonical = identity?.clientRazon ?? null;
+  const fromReception = identity?.clientNameAtReception ?? null;
+  return {
+    clientLabel: canonical ?? fromReception,
+    clientFromReception: canonical === null && fromReception !== null,
+    casePublicId: identity?.casePublicId ?? null,
+    unitPublicId: identity?.unitPublicId ?? null,
+    sku: identity?.sku ?? null,
+    quantity: identity?.quantity ?? null,
+    lotNumber: identity?.lotNumber ?? null,
+    receptionId: identity?.receptionId ?? null,
+    receptionPublicId: identity?.receptionPublicId ?? null,
+  };
 }
 
 /**

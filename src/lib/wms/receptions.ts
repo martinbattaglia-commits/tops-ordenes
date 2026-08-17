@@ -25,7 +25,7 @@ const MOCK_RECEPTIONS: ReceptionRow[] = [
     numero_oc: "OC-4471", numero_remito: "R-0099123", transportista: "Andreani",
     patente: "AB123CD", chofer: "J. Pérez", requires_quarantine: true,
     received_at: "2026-06-01T10:00:00Z",
-    created_at: "2026-06-01T09:30:00Z", item_count: 3, received_count: 3,
+    created_at: "2026-06-01T09:30:00Z", item_count: 3, received_count: 3, custody_reforzada: false, custody_units: 0, custody_units_con_foto: 0,
   },
   {
     id: "rec-2", public_id: "REC-2026-0002", client_name: "Farma Sur",
@@ -33,17 +33,21 @@ const MOCK_RECEPTIONS: ReceptionRow[] = [
     numero_oc: null, numero_remito: "R-0099440", transportista: "Cruz del Sur",
     patente: "AD884FF", chofer: "M. Gómez", requires_quarantine: false,
     received_at: null,
-    created_at: "2026-06-02T08:15:00Z", item_count: 2, received_count: 0,
+    created_at: "2026-06-02T08:15:00Z", item_count: 2, received_count: 0, custody_reforzada: false, custody_units: 0, custody_units_con_foto: 0,
   },
 ];
 
 interface RawReceptionItem { status: string }
+/** Unidad de custodia materializada, con sus eventos, para la señal del listado. */
+interface RawCustodyUnit { id: string; custody_events?: Array<{ event_type: string }> | null }
 interface RawReception {
   id: string; public_id: string; client_name: string; business_unit: string; status: string;
   numero_oc: string | null; numero_remito: string | null; transportista: string | null;
   patente: string | null; chofer: string | null; requires_quarantine: boolean;
   received_at: string | null; created_at: string;
   reception_items?: RawReceptionItem[] | null;
+  custody_reforzada?: boolean | null;
+  custody_physical_units?: RawCustodyUnit[] | null;
 }
 
 export async function listReceptions(): Promise<ReceptionRow[]> {
@@ -57,13 +61,16 @@ export async function listReceptions(): Promise<ReceptionRow[]> {
     .select(
       `id, public_id, client_name, business_unit, status, numero_oc, numero_remito,
        transportista, patente, chofer, requires_quarantine, received_at, created_at,
-       reception_items(status)`
+       custody_reforzada,
+       reception_items(status),
+       custody_physical_units(id, custody_events(event_type))`
     )
     .order("created_at", { ascending: false });
   if (error) throw new Error(`listReceptions: ${error.message}`);
 
   return ((data ?? []) as unknown as RawReception[]).map((r): ReceptionRow => {
     const items = Array.isArray(r.reception_items) ? r.reception_items : [];
+    const unidades = Array.isArray(r.custody_physical_units) ? r.custody_physical_units : [];
     return {
       id: r.id,
       public_id: r.public_id,
@@ -80,6 +87,12 @@ export async function listReceptions(): Promise<ReceptionRow[]> {
       created_at: r.created_at,
       item_count: items.length,
       received_count: items.filter((i) => i.status === "recibido" || i.status === "cuarentena").length,
+      // S2-2 · señal visible de que esta recepción tiene custodia.
+      custody_reforzada: r.custody_reforzada ?? false,
+      custody_units: unidades.length,
+      custody_units_con_foto: unidades.filter((u) =>
+        (u.custody_events ?? []).some((e) => e.event_type === "foto_ingreso"),
+      ).length,
     };
   });
 }
@@ -95,6 +108,8 @@ export interface NewReceptionInput extends ClientSelectionInput {
   chofer?: string | null;
   requires_quarantine?: boolean;
   notes?: string | null;
+  /** D3 · eleva este ingreso a custodia reforzada (nivel 2). Nunca degrada. */
+  custody_reforzada?: boolean;
 }
 
 /**
@@ -134,6 +149,9 @@ export async function createReception(input: NewReceptionInput): Promise<string>
       chofer: input.chofer ?? null,
       notes: input.notes ?? null,
       requires_quarantine: input.requires_quarantine ?? false,
+      // D3 · casilla «custodia digital reforzada». ELEVA este ingreso a nivel 2
+      // aunque el cliente no lo tenga contratado. Nunca degrada.
+      custody_reforzada: input.custody_reforzada ?? false,
       status: "borrador",
     })
     .select("id")
@@ -175,13 +193,32 @@ export function assertPositionRequired(item: { sku?: string; position_id?: strin
   }
 }
 
-export async function addReceptionItem(item: NewReceptionItemInput): Promise<void> {
+/**
+ * Devuelve el id del ítem creado.
+ *
+ * Antes no devolvía nada. Hace falta para 2-A: la foto de ingreso se liga a la
+ * unidad física que el trigger materializa AL CONFIRMAR, y la única forma no
+ * ambigua de saber qué unidad corresponde a qué foto es
+ * `custody_physical_units.reception_item_id`, que es único. Emparejar por SKU y
+ * lote fallaría en cuanto una recepción trajera dos líneas iguales.
+ *
+ * JUNTURA 2-A/2-B · las dos cosas conviven: Fase B exige la posición ANTES de
+ * escribir —de ella se deriva la nave— y Custodia necesita el id de vuelta. Ni
+ * la guarda se pierde ni el retorno: la guarda es la primera sentencia y el id
+ * sale al final.
+ */
+export async function addReceptionItem(item: NewReceptionItemInput): Promise<string> {
   assertPositionRequired(item);
   const supabase = createClient();
   if (!supabase) throw new Error("Supabase no configurado");
   // business_unit lo setea el trigger desde la cabecera; el CHECK ANMAT valida lote/vencimiento.
-  const { error } = await supabase.from("reception_items").insert({ ...item, status: "pendiente" });
+  const { data, error } = await supabase
+    .from("reception_items")
+    .insert({ ...item, status: "pendiente" })
+    .select("id")
+    .single();
   if (error) throw new Error(`addReceptionItem: ${error.message}`);
+  return (data as { id: string }).id;
 }
 
 // ── Transiciones de estado ─────────────────────────────────────────────────

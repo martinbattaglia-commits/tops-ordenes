@@ -41,6 +41,8 @@ interface Opts {
   pendingAttempt?: { id: string; status: string; expires_at: string } | null;
   decisionId?: string | null;
   state?: string;
+  /** Cadena de custodia tal como la lee S1-6, con tipo de evento y secuencia. */
+  chainEvents?: Array<{ row_hash: string; chain_seq: number; event_type: string }>;
 }
 
 /**
@@ -86,7 +88,19 @@ function sessionDouble(opts: Opts = {}) {
             if (name === "custody_integrity_evaluation_attempts") {
               return { data: opts.pendingAttempt ? [opts.pendingAttempt] : [], error: null };
             }
-            return { data: [{ row_hash: "head-1" }], error: null };
+            // S1-6 · La lectura de cadena ahora pide `chain_seq` y
+            // `event_type`, porque la UI tiene que distinguir un avance
+            // cualquiera de un avance por INSPECCIÓN HUMANA —que es el único
+            // que no debe bloquear la liberación (`0250a:2129-2133`)—. El
+            // doble modela esas columnas; devolver sólo `row_hash` haría que
+            // el código, correctamente, no pudiera afirmar que la cadena está
+            // al día.
+            return {
+              data: opts.chainEvents ?? [
+                { row_hash: "head-1", chain_seq: 1, event_type: "foto_packing" },
+              ],
+              error: null,
+            };
           },
         }),
       }),
@@ -378,5 +392,76 @@ describe("reserva de evaluación en vuelo", () => {
     if (!res.ok || !res.data) return;
     expect(res.data.reevaluation.inFlight).toBe(false);
     expect(res.data.reevaluation.enabled).toBe(true);
+  });
+});
+
+// =========================================================================
+// S1-6 · EL DEADLOCK DE LA INSPECCIÓN, ROTO DEL LADO DE LA UI
+//
+// La base NUNCA tuvo este defecto: `0250a:2129-2133` excluye
+// `inspeccion_humana` al comprobar si la cadena avanzó respecto del head
+// evaluado. La UI comparaba dos hashes sin mirar el tipo de evento, así que la
+// foto de inspección —el único eslabón que el inspector está OBLIGADO a
+// agregar para poder liberar— bloqueaba la liberación que ella misma habilita,
+// y reevaluar la invalidaba otra vez. El caso no salía nunca.
+// =========================================================================
+
+const BLOQUEO_CADENA = "La cadena avanzó desde el análisis: volvé a evaluar el caso antes de liberar";
+
+describe("S1-6 · la inspección humana no bloquea la liberación que ella habilita", () => {
+  it("con la inspección como ÚNICO avance sobre el head atestado, NO se bloquea", async () => {
+    __setSessionClient(
+      sessionDouble({
+        chainEvents: [
+          // Más nuevo primero, como devuelve la consulta real (desc).
+          { row_hash: "head-2", chain_seq: 2, event_type: "inspeccion_humana" },
+          { row_hash: "head-1", chain_seq: 1, event_type: "foto_egreso" },
+        ],
+      }),
+    );
+    const res = await loadCustodyCaseAction(CASE, {
+      draftReason: "inspección física conforme y sin diferencias",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok || !res.data) return;
+
+    expect(res.data.release.blockers).not.toContain(BLOQUEO_CADENA);
+    expect(res.data.reevaluation.required).toBe(false);
+    expect(res.data.reevaluation.analysis).toBe("current");
+    expect(res.data.release.enabled).toBe(true);
+  });
+
+  it("un avance que NO es inspección sí bloquea: la regla no se aflojó", async () => {
+    __setSessionClient(
+      sessionDouble({
+        chainEvents: [
+          { row_hash: "head-3", chain_seq: 3, event_type: "cargado" },
+          { row_hash: "head-2", chain_seq: 2, event_type: "inspeccion_humana" },
+          { row_hash: "head-1", chain_seq: 1, event_type: "foto_egreso" },
+        ],
+      }),
+    );
+    const res = await loadCustodyCaseAction(CASE, {
+      draftReason: "inspección física conforme y sin diferencias",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok || !res.data) return;
+
+    expect(res.data.release.blockers).toContain(BLOQUEO_CADENA);
+    expect(res.data.reevaluation.required).toBe(true);
+    expect(res.data.reevaluation.analysis).toBe("stale");
+  });
+
+  it("si el head atestado no aparece en la cadena leída, falla CERRADO", async () => {
+    __setSessionClient(
+      sessionDouble({
+        chainEvents: [{ row_hash: "otro-head", chain_seq: 9, event_type: "cargado" }],
+      }),
+    );
+    const res = await loadCustodyCaseAction(CASE, { draftReason: "motivo suficientemente largo" });
+    expect(res.ok).toBe(true);
+    if (!res.ok || !res.data) return;
+    // No se afirma que la cadena esté al día cuando no se puede comprobar.
+    expect(res.data.release.blockers).toContain(BLOQUEO_CADENA);
   });
 });

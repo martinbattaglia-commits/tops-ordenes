@@ -155,18 +155,81 @@ describe("T-C1-08 · §5.11 · RELEASE ADMIN-ONLY", () => {
     await expect(tryRelease(db, built)).resolves.toBeTruthy();
   });
 
-  it("la migración NO siembra `wms.custody.decide` a ningún rol del catálogo", async () => {
-    // 0222 crea el PERMISO y deliberadamente no lo ata a ningún rol. Lo único
-    // que puede aparecer acá son los roles ad-hoc que fabrica el harness.
+  it("`wms.custody.decide` lo tiene EXACTAMENTE `operaciones` y ningún otro rol del catálogo", async () => {
+    // 0222 creó el PERMISO sin atarlo a ningún rol. 0251 lo concede a
+    // `operaciones` (D1 · Jorge Merino y Juan Carlos Reynoso operan bajo ese
+    // rol) y a nadie más. Lo único que además puede aparecer acá son los roles
+    // ad-hoc que fabrica el harness.
+    //
+    // Esto habilita CUARENTENA, no liberación: la liberación sigue reservada a
+    // `admin` por el doble candado que prueban los casos de abajo.
     const { rows } = await db.query<{ slug: string }>(
       `select r.slug from public.role_permissions rp
          join public.permissions p on p.id = rp.permission_id
          join public.roles r on r.id = rp.role_id
         where p.slug = 'wms.custody.decide'`,
     );
-    for (const r of rows) {
-      expect(r.slug, `rol del catálogo con el permiso: ${r.slug}`).toMatch(/^test-role-/);
-    }
+    const catalogo = rows.map((r) => r.slug).filter((s) => !s.startsWith("test-role-")).sort();
+    expect(catalogo).toEqual(["operaciones"]);
+  });
+
+  it("el comodín de RBAC no alcanza a `gerencia_comercial` ni a `administracion_finanzas`", async () => {
+    // `20260811230310_rbac_gerencia_finanzas_constraint_safe.sql` hace un cross
+    // join sobre TODOS los permisos excluyendo sólo `sistema.%` y
+    // `rrhh.documentacion.view`. `wms.custody.decide` no está en ninguna de las
+    // dos exclusiones. 0251 lo revoca Y deja la exclusión estructural, porque
+    // por orden lexicográfico de archivo el comodín corre DESPUÉS de 0251 y un
+    // DELETE de una sola vez quedaría deshecho.
+    //
+    // Decidir sobre un documento probatorio no es función comercial ni contable.
+    const { rows } = await db.query<{ n: string }>(
+      `select count(*)::text as n
+         from public.role_permissions rp
+         join public.permissions p on p.id = rp.permission_id
+         join public.roles r on r.id = rp.role_id
+        where p.slug = 'wms.custody.decide'
+          and r.slug in ('gerencia_comercial', 'administracion_finanzas')`,
+    );
+    expect(rows[0].n).toBe("0");
+  });
+
+  it("la guarda IMPIDE volver a delegar el permiso, sin abortar la transacción", async () => {
+    // Es la mitad que hace durable la revocación. Se reproduce exactamente lo
+    // que hace el comodín —un insert con `on conflict do nothing`— y se exige
+    // que la fila NO quede, y que el insert NO explote: si explotara, el
+    // comodín abortaría y con él el reset entero de una base reconstruida.
+    await db.query(
+      `insert into public.roles (slug, name) values ('gerencia_comercial', 'Gerencia Comercial')
+       on conflict (slug) do nothing`,
+    );
+    await expect(
+      db.query(
+        `insert into public.role_permissions (role_id, permission_id)
+         select r.id, p.id from public.roles r cross join public.permissions p
+          where r.slug = 'gerencia_comercial' and p.slug not like 'sistema.%'
+            and p.slug <> 'rrhh.documentacion.view'
+         on conflict do nothing`,
+      ),
+    ).resolves.toBeDefined();
+
+    const { rows } = await db.query<{ n: string }>(
+      `select count(*)::text as n
+         from public.role_permissions rp
+         join public.permissions p on p.id = rp.permission_id
+         join public.roles r on r.id = rp.role_id
+        where p.slug = 'wms.custody.decide' and r.slug = 'gerencia_comercial'`,
+    );
+    expect(rows[0].n).toBe("0");
+
+    // Y no es una guarda que bloquee todo: los demás permisos del mismo insert
+    // sí entraron. Una guarda que rompe el RBAC entero no serviría.
+    const { rows: otros } = await db.query<{ n: string }>(
+      `select count(*)::text as n
+         from public.role_permissions rp
+         join public.roles r on r.id = rp.role_id
+        where r.slug = 'gerencia_comercial'`,
+    );
+    expect(Number.parseInt(otros[0].n, 10)).toBeGreaterThan(0);
   });
 
   it("el CHECK de la tabla impide siquiera ESCRIBIR una liberación no-admin", async () => {

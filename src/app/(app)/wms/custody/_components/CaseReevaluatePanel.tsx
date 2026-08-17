@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { reevaluateCustodyCaseAction } from "../actions";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
+import { guidance } from "@/lib/custody/blocker-guidance";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
 export type ReevaluationUiState = "pendiente" | "evaluando" | "evaluado" | "fallo";
@@ -49,6 +50,13 @@ export function CaseReevaluatePanel({
     } catch {
       setError("No se pudo completar el análisis");
       setEstado("fallo");
+    } finally {
+      // S1-3 · El guard de un solo vuelo devuelve `null` cuando descarta una
+      // segunda pulsación, y ese `return` temprano dejaba el panel en
+      // «evaluando» PARA SIEMPRE: el botón quedaba muerto y la única salida era
+      // recargar. Es el mismo patrón que ya usa `CaseDecisionPanel` (I6): el
+      // `finally` garantiza que nunca se queda en el estado ocupado.
+      setEstado((s) => (s === "evaluando" ? "pendiente" : s));
     }
   }, [guard, onEvaluated, view.caseId, view.version]);
 
@@ -103,7 +111,7 @@ export function CaseReevaluatePanel({
 
       {view.reevaluation.blockers.length > 0 && (
         <ul className="mt-2 list-disc pl-4 text-xs text-fg-muted">
-          {view.reevaluation.blockers.map((b) => <li key={b}>{b}</li>)}
+          {view.reevaluation.blockers.map((b) => <li key={b}>{guidance(b)}</li>)}
         </ul>
       )}
     </section>

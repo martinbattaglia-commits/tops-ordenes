@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { registerHumanInspectionAction } from "../actions";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
+import { guidance } from "@/lib/custody/blocker-guidance";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
 export type InspectionUiState = "pendiente" | "subiendo" | "registrada" | "fallo";
@@ -86,6 +87,11 @@ export function CaseInspectionPanel({
     } catch {
       setError("No se pudo registrar la fotografía");
       setEstado("fallo");
+    } finally {
+      // S1-3 · Sin este `finally`, el `return` temprano del guard de un solo
+      // vuelo dejaba el panel en «subiendo» y el botón muerto. Patrón copiado
+      // de `CaseDecisionPanel` (I6), no inventado.
+      setEstado((s) => (s === "subiendo" ? "pendiente" : s));
     }
   }, [archivo, guard, onRegistered, view.caseId, view.entityId, view.scope]);
 
@@ -175,7 +181,7 @@ export function CaseInspectionPanel({
 
       {view.inspection.blockers.length > 0 && (
         <ul className="mt-2 list-disc pl-4 text-xs text-fg-muted">
-          {view.inspection.blockers.map((b) => <li key={b}>{b}</li>)}
+          {view.inspection.blockers.map((b) => <li key={b}>{guidance(b)}</li>)}
         </ul>
       )}
     </section>

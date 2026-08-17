@@ -923,6 +923,7 @@ interface RawEvent {
   id: string; public_id: string; stage: string; event_type: string;
   packing_unit_id: string | null; shipment_id: string | null; occurred_at: string;
   custody_evidence?: { id: string }[] | null;
+  physical_unit_id?: string | null;
 }
 
 const MOCK_EVENTS: CustodyEventRow[] = [
@@ -936,7 +937,9 @@ export async function listRecentCustodyEvents(limit = 50): Promise<CustodyEventR
   if (!supabase) return MOCK_EVENTS;
   const { data, error } = await supabase
     .from("custody_events")
-    .select("id, public_id, stage, event_type, packing_unit_id, shipment_id, occurred_at, custody_evidence(id)")
+    // C5 · misma corrección que en el listado de casos: sin la columna, la
+    // tercera rama del ternario no tendría de dónde salir.
+    .select("id, public_id, stage, event_type, physical_unit_id, packing_unit_id, shipment_id, occurred_at, custody_evidence(id)")
     .order("occurred_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`listRecentCustodyEvents: ${error.message}`);
@@ -945,8 +948,12 @@ export async function listRecentCustodyEvents(limit = 50): Promise<CustodyEventR
     public_id: e.public_id,
     stage: e.stage as CustodyStage,
     event_type: e.event_type as CustodyEventType,
-    scope: e.packing_unit_id ? "packing_unit" : "shipment",
-    entity_id: (e.packing_unit_id ?? e.shipment_id) as string,
+    scope: e.physical_unit_id
+      ? "physical_unit"
+      : e.packing_unit_id
+        ? "packing_unit"
+        : "shipment",
+    entity_id: (e.physical_unit_id ?? e.packing_unit_id ?? e.shipment_id) as string,
     occurred_at: e.occurred_at,
     has_evidence: (e.custody_evidence?.length ?? 0) > 0,
   }));
@@ -1026,7 +1033,8 @@ export interface CustodyIntegrityCaseRow {
   id: string;
   public_id: string;
   state: string;
-  scope: "packing_unit" | "shipment";
+  /** C5 · `physical_unit` faltaba en el tipo: por eso el ternario tenía dos ramas. */
+  scope: "physical_unit" | "packing_unit" | "shipment";
   entity_id: string;
   updated_at: string;
 }
@@ -1045,7 +1053,9 @@ export async function listCustodyIntegrityCases(limit = 50): Promise<CustodyInte
   if (!supabase) return MOCK_CASES;
   const { data, error } = await supabase
     .from("custody_integrity_cases")
-    .select("id, public_id, state, packing_unit_id, shipment_id, updated_at")
+    // C5 · `physical_unit_id` no se pedía. Agregar la tercera rama del ternario
+    // sin agregar la columna no arreglaba nada: el corte era de LECTURA.
+    .select("id, public_id, state, physical_unit_id, packing_unit_id, shipment_id, updated_at")
     .order("updated_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`listCustodyIntegrityCases: ${error.message}`);
@@ -1053,8 +1063,16 @@ export async function listCustodyIntegrityCases(limit = 50): Promise<CustodyInte
     id: c.id as string,
     public_id: c.public_id as string,
     state: c.state as string,
-    scope: c.packing_unit_id ? "packing_unit" : "shipment",
-    entity_id: (c.packing_unit_id ?? c.shipment_id) as string,
+    // Ternario de TRES ramas. Con dos, todo caso físico se rotulaba «Despacho»
+    // y su `entity_id` quedaba nulo, que es una afirmación positiva equivocada
+    // sobre la unidad de custodia: un despacho agrupa muchos bienes, una
+    // unidad física es uno.
+    scope: c.physical_unit_id
+      ? "physical_unit"
+      : c.packing_unit_id
+        ? "packing_unit"
+        : "shipment",
+    entity_id: (c.physical_unit_id ?? c.packing_unit_id ?? c.shipment_id) as string,
     updated_at: c.updated_at as string,
   }));
 }

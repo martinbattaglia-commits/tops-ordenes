@@ -238,19 +238,76 @@ describe("la IA informa y nunca decide", () => {
     expect(v.release.blockers).toContain("Falta la foto de inspección humana");
   });
 
-  it("sin umbral servido por el servidor NO se muestra ningún porcentaje de referencia", () => {
+  // ── I3 · REGLA DE BORRADO ────────────────────────────────────────────
+  //
+  // El umbral no se muestra en ninguna superficie. La garantía es
+  // ESTRUCTURAL: el view-model no tiene forma de transportarlo, así que no
+  // hay nada que un componente pueda renderizar aunque quisiera. Antes existía
+  // `referenceThreshold` —código muerto que sólo no se veía porque el servidor
+  // mandaba `null`— y `thresholdPercent`, que sí viajaba.
+
+  it("el view-model NO transporta el umbral en ninguna forma", () => {
     const v = buildCustodyCaseView({ case: caseOf(), actor: actorOf() });
-    expect(v.referenceThreshold).toBeNull();
+    expect(v).not.toHaveProperty("referenceThreshold");
+    expect(v.ai).not.toHaveProperty("thresholdPercent");
+    // Ni el valor, ni el rótulo, ni la expresión «X % ≥ Y %».
+    const serializado = JSON.stringify(v);
+    expect(serializado).not.toContain("90");
+    expect(serializado.toLowerCase()).not.toContain("umbral");
+    expect(serializado).not.toMatch(/≥/);
+  });
+
+  it("el umbral se LEE para derivar el veredicto cualitativo, y sólo eso sale", () => {
+    // El porcentaje de umbral existe en el dominio —hace falta para derivar
+    // esto— y NO llega a la pantalla.
+    const v = buildCustodyCaseView({
+      case: caseOf({
+        assessment: {
+          ...ASSESSMENT,
+          thresholdResult: "ABOVE_OR_EQUAL",
+          thresholdPercent: 90,
+          similarityScore: 94.2,
+        },
+      }),
+      actor: actorOf(),
+    });
+    expect(v.ai.concordance?.verdict).toBe("ALTA");
+    expect(v.ai.concordance?.label).toBe("CONCORDANCIA ALTA");
+    // La concordancia SÍ se muestra: es útil y el operario la entiende.
+    expect(v.ai.similarityScore).toBe(94.2);
+    // El umbral que la derivó, no.
     expect(JSON.stringify(v)).not.toContain("90");
   });
 
-  it("si el servidor informa una referencia, viaja rotulada con su aprobación", () => {
+  it("por debajo del criterio el veredicto exige inspección física, sin decir cuánto midió", () => {
     const v = buildCustodyCaseView({
-      case: caseOf(),
+      case: caseOf({
+        assessment: { ...ASSESSMENT, thresholdResult: "BELOW", thresholdPercent: 90 },
+      }),
       actor: actorOf(),
-      referenceThreshold: { percent: 90, approved: false },
     });
-    expect(v.referenceThreshold).toEqual({ percent: 90, approved: false });
+    expect(v.ai.concordance?.verdict).toBe("BAJA");
+    expect(v.ai.concordance?.requirement).toMatch(/inspección física obligatoria/i);
+    expect(JSON.stringify(v).toLowerCase()).not.toContain("umbral");
+  });
+
+  it("sin resultado de umbral el veredicto es NO CONCLUYENTE, no un falso positivo", () => {
+    const v = buildCustodyCaseView({
+      case: caseOf({ assessment: { ...ASSESSMENT, thresholdResult: null } }),
+      actor: actorOf(),
+    });
+    expect(v.ai.concordance?.verdict).toBe("NO_CONCLUYENTE");
+  });
+
+  it("la retención por score NO nombra el umbral ni su valor", () => {
+    // HN-2 · esta etiqueta decía «El score está por debajo del umbral del 90 %»
+    // y se pintaba bajo «Retenciones registradas».
+    const v = buildCustodyCaseView({
+      case: caseOf({ holdReasons: ["BELOW_SIMILARITY_THRESHOLD"] }),
+      actor: actorOf(),
+    });
+    expect(v.holdLabels).toEqual(["Requiere inspección física antes de decidir"]);
+    expect(v.holdLabels.join(" ")).not.toMatch(/umbral|90/i);
   });
 
   it("un análisis fallido se muestra como estado, no como veredicto", () => {
@@ -289,5 +346,46 @@ describe("serialización segura", () => {
     expect(holdLabel("LO_QUE_SEA")).toBe("Retención registrada por el servidor");
     expect(blockerLabel("NO_HUMAN_INSPECTION_EVIDENCE")).toBe("Falta la foto de inspección humana");
     expect(blockerLabel("XX")).toBe("Requisito de liberación no cumplido");
+  });
+});
+
+// =========================================================================
+// S1-5 · EL CASO EN HOLD TIENE QUE PODER RESOLVERSE
+//
+// Escenario central del contrato y, hasta ahora, el único sin salida: el
+// view-model bloqueaba la cuarentena para todo estado distinto de
+// `REVIEW_REQUIRED`, mientras la RPC acepta explícitamente decidir desde
+// `HOLD` (`0250a:2096`). Un caso retenido no se podía liberar —por
+// definición— y tampoco cuarentenar. No había ninguna acción posible.
+// =========================================================================
+
+describe("S1-5 · el caso retenido se puede cuarentenar", () => {
+  it("en HOLD la cuarentena está habilitada, igual que la acepta la RPC", () => {
+    const v = buildCustodyCaseView({
+      case: caseOf({ state: "HOLD", holdReasons: ["VERDICT_POSSIBLE_DAMAGE"] }),
+      actor: actorOf(),
+    });
+    expect(v.quarantine.enabled).toBe(true);
+    expect(v.quarantine.blockers).toEqual([]);
+  });
+
+  it("en REVIEW_REQUIRED sigue habilitada: no se rompió lo que ya funcionaba", () => {
+    const v = buildCustodyCaseView({ case: caseOf(), actor: actorOf() });
+    expect(v.quarantine.enabled).toBe(true);
+  });
+
+  it("en PENDING_EVIDENCE NO se habilita, y dice por qué", () => {
+    const v = buildCustodyCaseView({
+      case: caseOf({ state: "PENDING_EVIDENCE" }),
+      actor: actorOf(),
+    });
+    expect(v.quarantine.enabled).toBe(false);
+    expect(v.quarantine.blockers).toContain("El caso todavía no está listo para decidir");
+  });
+
+  it("un caso ya decidido no admite otra decisión", () => {
+    const v = buildCustodyCaseView({ case: caseOf({ state: "QUARANTINED" }), actor: actorOf() });
+    expect(v.quarantine.enabled).toBe(false);
+    expect(v.quarantine.blockers).toContain("El caso ya tiene una decisión registrada");
   });
 });

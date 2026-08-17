@@ -60,13 +60,42 @@ export interface ProductiveVisionDataClient extends CustodyDataClient {
   };
 }
 
+/**
+ * S1-2 · La identidad viaja con el caso, en la MISMA lectura.
+ *
+ * El caso no se lee por RPC: se lee por PostgREST, acá abajo. Antes esta lista
+ * traía `client_id` —un UUID— y `physical_unit_id`, y ahí terminaba: la razón
+ * social y los identificadores legibles del bien no se pedían en ninguna capa,
+ * así que no había forma de pintarlos aunque el view-model los hubiera
+ * transportado. Se amplía la consulta, que es donde estaba el corte real.
+ *
+ * Dos fuentes para el nombre del depositante, y las dos son deliberadas:
+ *
+ *  · `clients(razon)` es la razón social CANÓNICA. Su policy (0241) exige
+ *    `clientes.view` o ser el propio cliente, así que para un encargado de
+ *    depósito viene `null`. No es un error: es la frontera de datos maestros.
+ *  · `receptions(client_name)` es el depositante tal como quedó asentado al
+ *    recibir la mercadería. ADR-P3-13 lo conserva como dato descriptivo y su
+ *    RLS sí alcanza al operario de depósito.
+ *
+ * La presentación prefiere la canónica y cae a la de recepción. Un operario
+ * que no puede ver el maestro de clientes igual tiene que saber de quién es el
+ * bien que está por liberar: ésa es la costura C1 entera.
+ *
+ * `provider_details` se agrega acá por la misma razón: se escribía en la base
+ * y no se leía en ningún lado, así que las observaciones y las zonas de daño
+ * del análisis se perdían antes de llegar al adaptador.
+ */
 const CASE_COLUMNS =
   "id, public_id, version, client_id, physical_unit_id, packing_unit_id, shipment_id, state, hold_reasons, " +
   "ingress_evidence_id, egress_evidence_id, provider, model, prompt_version, execution_mode, " +
   "outcome, verdict, model_confidence, similarity_score, threshold_percent, threshold_policy_version, " +
   "threshold_result, score_components, packaging_changed, missing_items_suspected, damage_suspected, " +
-  "provider_error, chain_status, chain_events_checked, " +
-  "chain_head, chain_attested_at, decision_id, created_at, updated_at";
+  "provider_details, provider_error, chain_status, chain_events_checked, " +
+  "chain_head, chain_attested_at, decision_id, created_at, updated_at, " +
+  "clients(razon), " +
+  "custody_physical_units(public_id, sku, quantity, lot_number, expiration_date, " +
+  "receptions(id, public_id, client_name))";
 
 const DECISION_COLUMNS =
   "id, decision, actor_user_id, actor_session_id, actor_role, client_id, reason, observations, " +
@@ -160,6 +189,52 @@ export function createSupabaseCustodyQueryPort(db: CustodyDataClient): CustodyQu
       if (error) throw new Error(error.message);
       const rows = (data ?? []) as Array<{ row_hash: string | null }>;
       return rows[0]?.row_hash ?? null;
+    },
+
+    /**
+     * S1-6 · ¿La cadena avanzó con eventos que NO son inspección humana?
+     *
+     * La base ya aplicaba esta regla y la aplicaba bien: `0250a:2129-2133`
+     * excluye `inspeccion_humana` al comprobar si la cadena se movió respecto
+     * del head evaluado. La UI comparaba dos hashes sin mirar el tipo de
+     * evento, así que la foto de inspección —el único eslabón que el inspector
+     * está OBLIGADO a agregar— bloqueaba la liberación que ella misma
+     * habilita, y reevaluar la invalidaba. El caso no salía nunca.
+     *
+     * Acá no se escribe una regla nueva: se copia la que la base declara (I6).
+     * La autoridad sigue siendo la RPC; esto sólo evita ofrecerle al inspector
+     * un bloqueo que la base no le va a aplicar.
+     */
+    async chainAdvancedBeyondInspection(
+      scope: CustodyEntityScope,
+      entityId: string,
+      attestedHead: string,
+    ): Promise<boolean> {
+      const column = scope === "physical_unit"
+        ? "physical_unit_id"
+        : scope === "packing_unit" ? "packing_unit_id" : "shipment_id";
+      const { data, error } = await db
+        .from("custody_events")
+        .select("row_hash, chain_seq, event_type")
+        .eq(column, entityId)
+        .order("chain_seq", { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      const rows = (data ?? []) as Array<{
+        row_hash: string | null;
+        chain_seq: number | null;
+        event_type: string | null;
+      }>;
+      const attested = rows.find((r) => r.row_hash === attestedHead);
+      // Head atestado fuera de la ventana leída o ajeno al scope: no se afirma
+      // que la cadena esté al día. Fail-closed, igual que el resto del módulo.
+      if (!attested || typeof attested.chain_seq !== "number") return true;
+      return rows.some(
+        (r) =>
+          typeof r.chain_seq === "number"
+          && r.chain_seq > (attested.chain_seq as number)
+          && r.event_type !== "inspeccion_humana",
+      );
     },
 
     async selectProfile(userId: string) {

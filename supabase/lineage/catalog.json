@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 213,
-  "no_ejecutables": 24,
+  "ejecutables": 216,
+  "no_ejecutables": 27,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2486,7 +2486,9 @@
       "filename": "0241_clients_native_master.sql",
       "sha256": "1208fb89d75698f5f7913e1c94adfba5f437868e360bed476ba18fb9df0afc23",
       "orden": 219,
-      "requires": ["0240_clientes_permission_module.sql"],
+      "requires": [
+        "0240_clientes_permission_module.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00219",
       "ledger_name": "0241_clients_native_master",
@@ -2510,7 +2512,9 @@
       "filename": "0242_clients_atomic_mutations.sql",
       "sha256": "8ef941d2a44374cbf33f671a899fa2da768bfed4dec33b10df0ada3357a99993",
       "orden": 221,
-      "requires": ["0241_clients_native_master.sql"],
+      "requires": [
+        "0241_clients_native_master.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00221",
       "ledger_name": "0242_clients_atomic_mutations",
@@ -2565,7 +2569,11 @@
       "filename": "0244_service_order_pricing_lifecycle.sql",
       "sha256": "2f28ede4b04e1b57837bb1f007e7fa82bdc1085cf5f5dd2e58f19e8186a26d31",
       "orden": 225,
-      "requires": ["0001_init.sql", "0007_extend_service_units.sql", "0009_rbac.sql"],
+      "requires": [
+        "0001_init.sql",
+        "0007_extend_service_units.sql",
+        "0009_rbac.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00225",
       "ledger_name": "0244_service_order_pricing_lifecycle",
@@ -2589,7 +2597,9 @@
       "filename": "20260815002748_service_unit_m2.sql",
       "sha256": "e28139762b595f9fab84402fb44106175dda59bfb42592beee32236fdc9c9c36",
       "orden": 227,
-      "requires": ["0244_service_order_pricing_lifecycle.sql"],
+      "requires": [
+        "0244_service_order_pricing_lifecycle.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00227",
       "ledger_name": "20260815002748_service_unit_m2",
@@ -2613,7 +2623,10 @@
       "filename": "20260815002807_service_tariff_m2_rates.sql",
       "sha256": "c0c88a499d7c48d82393783b529fc801c33983cec034ffe487a3d6e1d8526ef3",
       "orden": 229,
-      "requires": ["0244_service_order_pricing_lifecycle.sql", "20260815002748_service_unit_m2.sql"],
+      "requires": [
+        "0244_service_order_pricing_lifecycle.sql",
+        "20260815002748_service_unit_m2.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00229",
       "ledger_name": "20260815002807_service_tariff_m2_rates",
@@ -2676,7 +2689,12 @@
       "filename": "0246_clientes_fase_b_principals_capabilities.sql",
       "sha256": "5fbdd469e6a8afc0cfed88bb789393fd16a8ee8d5d3b9dd61f5d1599bcaa46bc",
       "orden": 234,
-      "requires": ["0001_init.sql", "0009_rbac.sql", "0020_wms_physical_model.sql", "0237_nexus_link_channel_rls.sql"],
+      "requires": [
+        "0001_init.sql",
+        "0009_rbac.sql",
+        "0020_wms_physical_model.sql",
+        "0237_nexus_link_channel_rls.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00234",
       "ledger_name": "0246_clientes_fase_b_principals_capabilities",
@@ -2700,7 +2718,10 @@
       "filename": "0249_clientes_fase_b_service_pricing_redaction.sql",
       "sha256": "64b4c137e7f912ad45e8b79e29236322a545f7089bca1813be4d8e473b7728aa",
       "orden": 236,
-      "requires": ["0244_service_order_pricing_lifecycle.sql", "0246_clientes_fase_b_principals_capabilities.sql"],
+      "requires": [
+        "0244_service_order_pricing_lifecycle.sql",
+        "0246_clientes_fase_b_principals_capabilities.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00236",
       "ledger_name": "0249_clientes_fase_b_service_pricing_redaction",
@@ -2718,6 +2739,84 @@
       "ledger_name": "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction",
       "provenance": "repo (codex/clientes-fase-b-rbac-encargados)",
       "motivo": "Inversa de 0249: devuelve service_order_issue y service_order_record_fulfillment a su nombre productivo, restituye la policy abierta de operators y retira las RPC de listado y detalle del encargado. Aborta si service_order_price_audit tiene una sola fila: no destruye evidencia firmada. NO es forward."
+    },
+    {
+      "id": "0251_custody_decide_authority.sql",
+      "filename": "0251_custody_decide_authority.sql",
+      "sha256": "80bf70bf0defb780be77791d24c0d6a0e7590684a98aabf1144c83389e672e4e",
+      "orden": 238,
+      "requires": [
+        "0250a_custody_productive_vision.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00238",
+      "ledger_name": "0251_custody_decide_authority",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "CUSTODIA CIERRE CIRCUITO S1-1 y S1-4. Cuatro actos: revoca wms.custody.decide de gerencia_comercial y administracion_finanzas y deja la exclusion estructural con una guarda sobre role_permissions; otorga el permiso a operaciones; agrega a decide_custody_integrity_v2 la lista de roles de cuarentena que 0250a no tenia, con cliente excluido; y corrige attach_custody_physical_evidence, que declaraba EVIDENCE_MISSING incluso cuando el adjunto completaba el par. ORDEN DECLARADO: el comodin 20260811230310 es orden 76 por ledger pero ordena DESPUES de 0251 por nombre de archivo, que es lo que aplica supabase db reset; por eso la revocacion no es un DELETE de una sola vez sino un DELETE mas una guarda que omite la fila sin abortar la transaccion del comodin."
+    },
+    {
+      "id": "ROLLBACK_0251_custody_decide_authority.sql",
+      "filename": "ROLLBACK_0251_custody_decide_authority.sql",
+      "sha256": "cf9c1449f765019a196033d07708f709d1c40d11cd9d4ca6bc1a10653a7d33e2",
+      "orden": 239,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00239",
+      "ledger_name": "ROLLBACK_0251_custody_decide_authority",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "Inversa logica e idempotente de 0251: retira la guarda de delegacion y la concesion a operaciones, y devuelve decide_custody_integrity_v2 y attach_custody_physical_evidence a su cuerpo de 0250a. NO es forward. NO vuelve a conceder wms.custody.decide a gerencia_comercial ni a administracion_finanzas: un rollback retira un cambio, no reinstala una escalada de privilegio."
+    },
+    {
+      "id": "0252_custody_two_levels.sql",
+      "filename": "0252_custody_two_levels.sql",
+      "sha256": "52e233b4e91548945e09b99a4ea8e936de49cf3198792c560179c817a0a3648d",
+      "orden": 240,
+      "requires": [
+        "0251_custody_decide_authority.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00240",
+      "ledger_name": "0252_custody_two_levels",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "CUSTODIA CIERRE CIRCUITO bloque 2-A. Implementa D3: los dos niveles de custodia. Agrega clients.custody_level (default 1: la reforzada se contrata, no se presume), receptions.custody_reforzada (eleva un ingreso puntual, nunca degrada) y custody_physical_units.custody_level (default 2, que preserva todo lo ya materializado). Vuelve CONDICIONAL la materializacion del caso de integridad, que en 0250a era incondicional respecto del cliente. TRES FUNCIONES Y NO UNA: custody_bind_allocation deja de vincular unidades de nivel 1 a la genealogia y custody_assert_physical_unit_released las exceptua del gate, porque de lo contrario una unidad de nivel 1 -que por definicion no tiene caso- quedaria indespachable para siempre con CUSTODY_CASE_MISSING. Agrega ademas custody_client_level y custody_reception_units como superficies de lectura para la pantalla de recepcion."
+    },
+    {
+      "id": "ROLLBACK_0252_custody_two_levels.sql",
+      "filename": "ROLLBACK_0252_custody_two_levels.sql",
+      "sha256": "9a56dcd763f1bfc1e8e2538bf526907dcba8cdc416f8e548c3578e70f0e76442",
+      "orden": 241,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00241",
+      "ledger_name": "ROLLBACK_0252_custody_two_levels",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "Inversa logica e idempotente de 0252: devuelve materializacion, genealogia y gate a su cuerpo de 0250a y retira las superficies de lectura. NO es forward. NO borra las columnas de nivel: el regimen con el que cada unidad ingreso es informacion probatoria y no se puede reconstruir desde el cliente, que pudo cambiar de plan."
+    },
+    {
+      "id": "0253_custody_egress_gate.sql",
+      "filename": "0253_custody_egress_gate.sql",
+      "sha256": "34a13e45ae556e67a76785935ac277ce0a6024e3185731d81ef477e3d0165805",
+      "orden": 242,
+      "requires": [
+        "0252_custody_two_levels.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00242",
+      "ledger_name": "0253_custody_egress_gate",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "CUSTODIA CIERRE CIRCUITO bloque 2-B. Construye la PUERTA DE EGRESO que la Adenda N.2 seccion 4.2 exige y que no existia como condicion propia. Agrega custody_assert_egress_evidence, que exige la foto de egreso SOLO en nivel 2 y levanta CUSTODY_EGRESS_PHOTO_MISSING, y la conecta a custody_assert_physical_unit_released inmediatamente despues de la salida por nivel y ANTES de CUSTODY_HOLD, para que el despachante reciba el motivo que el puede resolver. Hasta aqui la foto de egreso era obligatoria solo de manera TRANSITIVA, por via de la evidencia que exige la liberacion, y una condicion transitiva no es una puerta. Agrega ademas custody_egress_gate_status, lectura STABLE que describe la puerta antes de que el trigger la haga valer: no decide, no libera, no escribe y no toca la cadena. El nivel 1 queda fuera de la puerta con salida total, igual que en 0252, y ninguna condicion del nivel 2 se afloja."
+    },
+    {
+      "id": "ROLLBACK_0253_custody_egress_gate.sql",
+      "filename": "ROLLBACK_0253_custody_egress_gate.sql",
+      "sha256": "4e233e63573e924225043e0c2c2b59f6915e8baccd56f779a06ce0c2e7b2ad12",
+      "orden": 243,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00243",
+      "ledger_name": "ROLLBACK_0253_custody_egress_gate",
+      "provenance": "repo (custodia/cierre-circuito)",
+      "motivo": "Inversa logica e idempotente de 0253. Devuelve custody_assert_physical_unit_released a su cuerpo de 0252 seccion 7, sin la exigencia propia de la foto de egreso, y retira custody_egress_gate_status y custody_assert_egress_evidence. NO borra ningun evento foto_egreso ya registrado: la cadena es append-only y una inversa que borrara evidencia seria el ataque del que el modulo protege."
     }
   ]
 }

@@ -46,11 +46,17 @@ const CUSTODY_FORWARD_FILES = [
   "0232_custody_evaluation_lease_exclusive.sql",
   "0250_custody_physical_scope_enums.sql",
   "0250a_custody_productive_vision.sql",
+  "0251_custody_decide_authority.sql",
+  "0252_custody_two_levels.sql",
+  "0253_custody_egress_gate.sql",
 ];
 
 const CUSTODY_ARTIFACT_FILES = [
   ...CUSTODY_FORWARD_FILES,
   "ROLLBACK_0250a_custody_productive_vision.sql",
+  "ROLLBACK_0251_custody_decide_authority.sql",
+  "ROLLBACK_0252_custody_two_levels.sql",
+  "ROLLBACK_0253_custody_egress_gate.sql",
 ];
 
 const dedicated = () =>
@@ -68,18 +74,20 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
 
   it("cierre HISTÓRICO de custodia: 36", () => {
     const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_FORWARD_FILES.includes(m));
-    expect(d1d3).toHaveLength(10);
+    expect(d1d3).toHaveLength(13);
     expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(36);
     expect(CUSTODY_CLOSURE_SIZE).toBe(36);
   });
 
-  it("manifiesto DEDICADO actual: 46", () => {
-    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(46);
-    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(46);
+  it("manifiesto DEDICADO actual: 49", () => {
+    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(49);
+    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(49);
     expect(() => validateCustodyManifest()).not.toThrow();
   });
 
-  it("36 + 10 = 46, y los diez forwards NO están en el vanilla", () => {
+  // El cierre HISTÓRICO (36) no se mueve: es el pasado. Lo que crece es la
+  // serie de forwards gobernados, que con 0253 pasa de doce a trece.
+  it("36 + 13 = 49, y los trece forwards NO están en el vanilla", () => {
     expect(CUSTODY_CLOSURE_SIZE + CUSTODY_FORWARD_FILES.length).toBe(
       EXPECTED_CUSTODY_MANIFEST_SIZE,
     );
@@ -89,6 +97,12 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
     }
     expect(CUSTODY_MIGRATION_MANIFEST).not.toContain(
       "ROLLBACK_0250a_custody_productive_vision.sql",
+    );
+    expect(CUSTODY_MIGRATION_MANIFEST).not.toContain(
+      "ROLLBACK_0251_custody_decide_authority.sql",
+    );
+    expect(CUSTODY_MIGRATION_MANIFEST).not.toContain(
+      "ROLLBACK_0252_custody_two_levels.sql",
     );
   });
 });
@@ -102,7 +116,7 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(dedicated()!.reason).toMatch(/PostGIS/i);
     expect(dedicated()!.reason).toMatch(/custody-db/);
     expect(dedicated()!.reason).toMatch(/rollback/i);
-    expect(dedicated()!.reason).toMatch(/nunca integra un manifiesto/i);
+    expect(dedicated()!.reason).toMatch(/nunca integran? un manifiesto/i);
     // Honestidad: 0222 toca objetos del dominio de custodia y hay que decirlo.
     expect(dedicated()!.reason).toMatch(/custody_events/);
     expect(dedicated()!.reason).toMatch(/attach_custody_evidence/);
@@ -114,7 +128,7 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(frozen()!.matches(f)).toBe(false);
   });
 
-  it("cubre EXACTAMENTE los once artefactos del árbol y ninguno más", () => {
+  it("cubre EXACTAMENTE los diecisiete artefactos del árbol y ninguno más", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
     const cubiertos = onDisk.filter((f) => dedicated()!.matches(f)).sort();
     expect(cubiertos).toEqual([...CUSTODY_ARTIFACT_FILES].sort());

@@ -528,6 +528,20 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     // los dos sentidos.
     "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
     "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
+    // CUSTODIA CIERRE CIRCUITO · las dos inversas de la serie de custodia
+    // digital: 0251 (autoridad de decisión y evidencia completa) y 0252 (los
+    // dos niveles). Misma convención de nombre y mismo commit que sus entradas
+    // de catálogo, por el motivo que el comentario de arriba explica.
+    //
+    // Y el docblock del ancla acertó: los dos frentes agregaron inversas
+    // DISTINTAS y esto produjo un conflicto VISIBLE en estas líneas, no una
+    // auto-resolución silenciosa. Se resolvió por UNIÓN.
+    "ROLLBACK_0251_custody_decide_authority.sql",
+    "ROLLBACK_0252_custody_two_levels.sql",
+    // Bloque 2-B · la inversa de la PUERTA DE EGRESO. Misma convención de
+    // nombre y —R-13— el MISMO commit que sus entradas de catálogo: el ancla
+    // pasa a 24 en el mismo cambio en que el catálogo pasa a 243.
+    "ROLLBACK_0253_custody_egress_gate.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

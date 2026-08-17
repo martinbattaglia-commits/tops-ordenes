@@ -94,13 +94,12 @@ function operationalApiPath(pathname: string): boolean {
 export function depotManagerRouteAllowed(pathname: string): boolean {
   if (pathname === "/api/auth/signout" || pathname === "/api/version") return true;
   if (pathname.startsWith("/api/")) return operationalApiPath(pathname);
-  if (pathname === "/wms/custody" || pathname.startsWith("/wms/custody/")) return false;
   if (pathname.startsWith("/connect")) {
     return CONNECT_EXACT.has(pathname) || /^\/connect\/c\/[^/]+$/.test(pathname);
   }
   if (pathname === "/dashboard") return true;
   if (operationalOrderPath(pathname)) return true;
-  return pathname === "/wms" || (pathname.startsWith("/wms/") && !pathname.startsWith("/wms/custody"));
+  return pathname === "/wms" || pathname.startsWith("/wms/");
 }
 
 export interface DepotManagerRpcRow {

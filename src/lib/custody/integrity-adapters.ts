@@ -91,6 +91,7 @@ export interface RawCaseRow {
   packaging_changed?: boolean | null;
   missing_items_suspected?: boolean | null;
   damage_suspected?: boolean | null;
+  provider_details?: Record<string, unknown> | null;
   provider_error: string | null;
   chain_status: string | null;
   chain_events_checked: number | null;
@@ -100,6 +101,83 @@ export interface RawCaseRow {
   created_at: string;
   updated_at: string;
   public_id?: string | null;
+  /** Embeds de S1-2. PostgREST devuelve objeto o array de uno según la FK. */
+  clients?: RawClientEmbed | RawClientEmbed[] | null;
+  custody_physical_units?: RawPhysicalUnitEmbed | RawPhysicalUnitEmbed[] | null;
+}
+
+export interface RawClientEmbed {
+  razon?: string | null;
+}
+
+export interface RawReceptionEmbed {
+  id?: string | null;
+  public_id?: string | null;
+  client_name?: string | null;
+}
+
+export interface RawPhysicalUnitEmbed {
+  public_id?: string | null;
+  sku?: string | null;
+  quantity?: number | string | null;
+  lot_number?: string | null;
+  expiration_date?: string | null;
+  receptions?: RawReceptionEmbed | RawReceptionEmbed[] | null;
+}
+
+/**
+ * IDENTIDAD DEL CASO Y DEL BIEN · S1-2 (clase C1).
+ *
+ * Vive fuera de `IntegrityCase` a propósito: `src/lib/custody/integrity/**` es
+ * dominio PURO y esto es identidad de presentación. Meterlo ahí volvería
+ * impura la única capa que hoy se puede razonar sin plataforma.
+ *
+ * Ningún campo es obligatorio salvo el `public_id` del caso: un caso de scope
+ * `packing_unit` o `shipment` no tiene unidad física, y decir «sin dato» es
+ * correcto. Lo que NO es correcto es lo que pasaba antes: no decir nada.
+ */
+export interface CustodyCaseIdentity {
+  /** CINT-AAAA-NNNN. */
+  casePublicId: string | null;
+  /** Razón social canónica (`clients.razon`), si el actor puede verla. */
+  clientRazon: string | null;
+  /** Depositante asentado en la recepción. Alcanza al operario de depósito. */
+  clientNameAtReception: string | null;
+  /** CPU-AAAA-NNNNNN. */
+  unitPublicId: string | null;
+  sku: string | null;
+  quantity: number | null;
+  lotNumber: string | null;
+  expirationDate: string | null;
+  receptionId: string | null;
+  receptionPublicId: string | null;
+}
+
+function firstEmbed<T>(v: T | T[] | null | undefined): T | null {
+  if (v === null || v === undefined) return null;
+  return Array.isArray(v) ? v[0] ?? null : v;
+}
+
+function text(v: unknown): string | null {
+  return typeof v === "string" && v.trim() !== "" ? v : null;
+}
+
+/** Mapea la identidad desde la fila que la lectura ya trajo. Sin IO extra. */
+export function mapCaseIdentity(row: RawCaseRow): CustodyCaseIdentity {
+  const unit = firstEmbed(row.custody_physical_units);
+  const reception = firstEmbed(unit?.receptions);
+  return {
+    casePublicId: text(row.public_id),
+    clientRazon: text(firstEmbed(row.clients)?.razon),
+    clientNameAtReception: text(reception?.client_name),
+    unitPublicId: text(unit?.public_id),
+    sku: text(unit?.sku),
+    quantity: toNumber(unit?.quantity),
+    lotNumber: text(unit?.lot_number),
+    expirationDate: text(unit?.expiration_date),
+    receptionId: text(reception?.id),
+    receptionPublicId: text(reception?.public_id),
+  };
 }
 
 export interface RawEvidenceRow {
@@ -153,6 +231,18 @@ export interface CustodyQueryPort {
   selectDecision(decisionId: string): Promise<RawDecisionRow | null>;
   selectEvidence(evidenceIds: readonly string[]): Promise<RawEvidenceRow[]>;
   verifyChainHead(scope: CustodyEntityScope, entityId: string): Promise<string | null>;
+  /**
+   * S1-6 · ¿avanzó la cadena con eventos que NO son inspección humana?
+   *
+   * Espeja `0250a:2129-2133`. Opcional en el tipo para no romper dobles de
+   * prueba existentes; su ausencia se trata como «no se puede afirmar que esté
+   * al día», que es la lectura fail-closed.
+   */
+  chainAdvancedBeyondInspection?(
+    scope: CustodyEntityScope,
+    entityId: string,
+    attestedHead: string,
+  ): Promise<boolean>;
   selectProfile(userId: string): Promise<{ role: string | null; clientId: string | null } | null>;
   selectPermissions(): Promise<string[]>;
   decide(input: DecideRpcInput): Promise<string>;
@@ -284,14 +374,31 @@ function mapChain(row: RawCaseRow): ChainVerification | null {
   };
 }
 
+/**
+ * Cadenas acotadas de `provider_details`. Se recortan y se limitan en cantidad
+ * y longitud: lo que viene del proveedor es texto ajeno y termina en pantalla.
+ */
+function boundedStrings(value: unknown, max: number, maxLen: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    .slice(0, max)
+    .map((v) => v.trim().slice(0, maxLen));
+}
+
 function mapAssessment(row: RawCaseRow): IntegrityAssessment | null {
   if (row.outcome === null) return null;
+  // S1-7 · `provider_details` se guardaba en la base y se descartaba acá con
+  // dos arrays vacíos LITERALES. Las observaciones del análisis y las zonas de
+  // daño señaladas son justamente lo que el inspector necesita para saber
+  // dónde mirar antes de decidir.
+  const details = row.provider_details ?? null;
   return {
     outcome: row.outcome as IntegrityAssessment["outcome"],
     verdict: (row.verdict as IntegrityAssessment["verdict"]) ?? null,
     modelConfidence: toNumber(row.model_confidence),
-    observations: [],
-    zones: [],
+    observations: boundedStrings(details?.observations, 6, 240),
+    zones: boundedStrings(details?.zones, 6, 120),
     provenance: {
       provider: row.provider ?? "",
       model: row.model ?? "",

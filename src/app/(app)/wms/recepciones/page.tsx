@@ -98,6 +98,36 @@ export default async function RecepcionesPage() {
                             <Icon name="lock" size={9} />
                           </span>
                         )}
+                        {/* S2-2 · señal visible de que la recepción tiene
+                            custodia. Antes no había ninguna: el operario
+                            confirmaba y no se enteraba de que había abierto
+                            casos que después bloquean el despacho. */}
+                        {r.custody_units > 0 && (
+                          <span
+                            data-custodia="unidades"
+                            className={
+                              r.custody_units_con_foto === r.custody_units
+                                ? "text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-status-success text-status-success"
+                                : "text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-status-warning text-status-warning"
+                            }
+                            title={
+                              r.custody_units_con_foto === r.custody_units
+                                ? "Todas las unidades tienen su foto de ingreso"
+                                : "Faltan fotos de ingreso"
+                            }
+                          >
+                            <Icon name="shield" size={9} /> {r.custody_units_con_foto}/{r.custody_units}
+                          </span>
+                        )}
+                        {r.custody_reforzada && (
+                          <span
+                            data-custodia="reforzada"
+                            className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-stroke-soft text-fg-secondary"
+                            title="Ingreso elevado a custodia digital reforzada"
+                          >
+                            Reforzada
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="text-xs text-fg-secondary">

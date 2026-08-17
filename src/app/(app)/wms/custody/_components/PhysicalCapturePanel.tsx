@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { registerPhysicalIngressAction, registerPhysicalEgressAction } from "../actions";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
+import { guidance } from "@/lib/custody/blocker-guidance";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
 export type CapturaUiState = "pendiente" | "subiendo" | "registrada" | "fallo";
@@ -39,9 +40,20 @@ export function PhysicalCapturePanel({
 }) {
   const [estado, setEstado] = useState<CapturaUiState>("pendiente");
   const [error, setError] = useState<string | null>(null);
-  const [archivo, setArchivo] = useState<File | null>(null);
+  /**
+   * §7.5 · UN INPUT POR SLOT DE EVIDENCIA.
+   *
+   * Antes había UN solo `<input type="file">` compartido por los dos botones:
+   * el operario elegía una foto y podía registrarla como ingreso o como egreso
+   * indistintamente. En una cadena inmutable, registrar el ingreso como egreso
+   * es irreversible. Dos estados y dos inputs separados eliminan la
+   * posibilidad, no la advierten.
+   */
+  const [archivoIngreso, setArchivoIngreso] = useState<File | null>(null);
+  const [archivoEgreso, setArchivoEgreso] = useState<File | null>(null);
   const [enCurso, setEnCurso] = useState<"ingreso" | "egreso" | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputIngresoRef = useRef<HTMLInputElement | null>(null);
+  const inputEgresoRef = useRef<HTMLInputElement | null>(null);
   const guard = useMemo(() => createSingleFlightGuard(), []);
 
   /**
@@ -60,7 +72,7 @@ export function PhysicalCapturePanel({
 
   const registrar = useCallback(
     async (tipo: "ingreso" | "egreso") => {
-      const file = archivo;
+      const file = tipo === "ingreso" ? archivoIngreso : archivoEgreso;
       if (!file) {
         setError(`Elegí la fotografía de ${tipo}`);
         setEstado("fallo");
@@ -86,17 +98,26 @@ export function PhysicalCapturePanel({
           return;
         }
         setEstado("registrada");
-        setArchivo(null);
-        if (inputRef.current) inputRef.current.value = "";
+        if (tipo === "ingreso") {
+          setArchivoIngreso(null);
+          if (inputIngresoRef.current) inputIngresoRef.current.value = "";
+        } else {
+          setArchivoEgreso(null);
+          if (inputEgresoRef.current) inputEgresoRef.current.value = "";
+        }
         onRegistrada?.();
       } catch {
         setError("No se pudo registrar la fotografía");
         setEstado("fallo");
       } finally {
         setEnCurso(null);
+        // S1-3 · El `finally` limpiaba `enCurso` pero NO `estado`, así que el
+        // `return` temprano del guard de un solo vuelo dejaba `estado` en
+        // «subiendo» y los dos botones muertos. Patrón de `CaseDecisionPanel`.
+        setEstado((s) => (s === "subiendo" ? "pendiente" : s));
       }
     },
-    [archivo, guard, onRegistrada, view.caseId, view.entityId],
+    [archivoIngreso, archivoEgreso, guard, onRegistrada, view.caseId, view.entityId],
   );
 
   // Sólo la unidad física tiene par ingreso/egreso; el resto de los scopes
@@ -105,10 +126,26 @@ export function PhysicalCapturePanel({
   if (view.decision !== null) return null;
 
   const enVuelo = estado === "subiendo";
-  // La captura comparte la frontera de permisos de la inspección: quien no
-  // puede registrar evidencia tampoco puede capturar el par.
-  const permitido = view.inspection.enabled || !tieneIngreso || !tieneEgreso;
-  const sinArchivo = archivo === null;
+  /**
+   * QUÉ SEÑAL GOBIERNA ESTE PANEL, Y CUÁL NO.
+   *
+   * `view.capture` = permiso de captura (`wms.edit`) Y caso no terminal. Es
+   * exactamente lo que exige el servidor: `actions.ts` chequea el permiso
+   * antes de tocar Storage, y `attach_custody_physical_evidence` (0251)
+   * rechaza por estado sólo con `state in('RELEASED','QUARANTINED')`.
+   *
+   * `view.inspection` = ese mismo permiso PERO ADEMÁS estado `REVIEW_REQUIRED`
+   * o `HOLD`. Es del panel de inspección humana y **no sirve acá**: todo caso
+   * nace en `PENDING_EVIDENCE`, así que colgar la captura del par de esa señal
+   * apagaba los dos slots justo cuando había que sacar la foto de ingreso —y
+   * culpaba al permiso de un bloqueo que era de estado—. El circuito quedaba
+   * muerto en su primer paso.
+   *
+   * La habilitación es una CONJUNCIÓN y además por SLOT: cada botón exige
+   * poder capturar Y que ese slot concreto siga vacío.
+   */
+  const puedeCapturar = view.capture.enabled;
+  const motivoBloqueo = view.capture.blockers[0] ? guidance(view.capture.blockers[0]) : null;
 
   return (
     <section className="card p-4" aria-labelledby="captura-fisica-title">
@@ -159,55 +196,99 @@ export function PhysicalCapturePanel({
         </p>
       )}
 
-      <div className="mt-3">
-        <label htmlFor="captura-fisica-foto" className="text-xs font-medium">
-          Fotografía de la unidad <span aria-hidden="true">*</span>
+      {/* ── SLOT DE INGRESO ─────────────────────────────────────────────── */}
+      <div className="mt-4" data-slot-form="ingreso">
+        <label htmlFor="captura-foto-ingreso" className="text-xs font-medium">
+          Fotografía de ingreso <span aria-hidden="true">*</span>
         </label>
         <input
-          id="captura-fisica-foto"
-          ref={inputRef}
+          id="captura-foto-ingreso"
+          ref={inputIngresoRef}
           type="file"
           accept="image/jpeg,image/png,image/webp"
           capture="environment"
           className="input mt-1 w-full"
-          required
-          aria-required="true"
-          aria-describedby="captura-fisica-help"
-          disabled={!permitido || enVuelo}
+          aria-describedby="captura-ingreso-help"
+          disabled={!puedeCapturar || tieneIngreso || enVuelo}
           onChange={(e) => {
-            setArchivo(e.target.files?.[0] ?? null);
+            setArchivoIngreso(e.target.files?.[0] ?? null);
             if (estado !== "subiendo") setEstado("pendiente");
             setError(null);
           }}
         />
-        <p id="captura-fisica-help" className="mt-1 text-xs text-fg-muted">
-          JPEG, PNG o WebP. El servidor la relee, verifica su tipo real y recalcula el hash antes de
-          aceptarla.
+        <p id="captura-ingreso-help" className="mt-1 text-xs text-fg-muted">
+          Fotografiá el embalaje <strong>antes</strong> de abrirlo. Buscá golpes, humedad o
+          aperturas.
         </p>
-      </div>
-
-      <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
-          className="btn btn-primary"
-          disabled={!permitido || enVuelo || sinArchivo}
-          aria-disabled={!permitido || enVuelo || sinArchivo}
+          className="btn btn-primary mt-2"
+          disabled={!puedeCapturar || tieneIngreso || enVuelo || archivoIngreso === null}
+          aria-disabled={!puedeCapturar || tieneIngreso || enVuelo || archivoIngreso === null}
           aria-busy={enCurso === "ingreso"}
           onClick={() => { void registrar("ingreso"); }}
         >
           <Icon name="paperclip" size={14} /> Registrar ingreso
         </button>
+        {/* Todo botón deshabilitado dice por qué EN SU PROPIO CONTEXTO (§7.5).
+            El motivo lo pone el servidor y nombra su causa REAL: si el bloqueo
+            es de estado, no dice «permiso». */}
+        {!puedeCapturar && motivoBloqueo && (
+          <p className="mt-1 text-xs text-fg-muted" data-bloqueo="ingreso">{motivoBloqueo}</p>
+        )}
+        {puedeCapturar && tieneIngreso && (
+          <p className="mt-1 text-xs text-fg-muted">Ya está registrada: no se puede repetir.</p>
+        )}
+      </div>
+
+      {/* ── SLOT DE EGRESO ──────────────────────────────────────────────── */}
+      <div className="mt-4 border-t border-stroke-soft pt-4" data-slot-form="egreso">
+        <label htmlFor="captura-foto-egreso" className="text-xs font-medium">
+          Fotografía de egreso <span aria-hidden="true">*</span>
+        </label>
+        <input
+          id="captura-foto-egreso"
+          ref={inputEgresoRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          capture="environment"
+          className="input mt-1 w-full"
+          aria-describedby="captura-egreso-help"
+          disabled={!puedeCapturar || tieneEgreso || enVuelo}
+          onChange={(e) => {
+            setArchivoEgreso(e.target.files?.[0] ?? null);
+            if (estado !== "subiendo") setEstado("pendiente");
+            setError(null);
+          }}
+        />
+        <p id="captura-egreso-help" className="mt-1 text-xs text-fg-muted">
+          Repetí los <strong>mismos ángulos</strong> de la foto de ingreso, que tenés al lado para
+          comparar. Buena luz y foco. El análisis corre solo cuando la registres.
+        </p>
         <button
           type="button"
-          className="btn btn-secondary"
-          disabled={!permitido || enVuelo || sinArchivo}
-          aria-disabled={!permitido || enVuelo || sinArchivo}
+          className="btn btn-primary mt-2"
+          disabled={!puedeCapturar || tieneEgreso || enVuelo || archivoEgreso === null}
+          aria-disabled={!puedeCapturar || tieneEgreso || enVuelo || archivoEgreso === null}
           aria-busy={enCurso === "egreso"}
           onClick={() => { void registrar("egreso"); }}
         >
           <Icon name="paperclip" size={14} /> Registrar egreso
         </button>
+        {/* PUNTO 3 · simetría con el slot de ingreso: este botón también dice
+            por qué está apagado, en su propio contexto (§7.5). */}
+        {!puedeCapturar && motivoBloqueo && (
+          <p className="mt-1 text-xs text-fg-muted" data-bloqueo="egreso">{motivoBloqueo}</p>
+        )}
+        {puedeCapturar && tieneEgreso && (
+          <p className="mt-1 text-xs text-fg-muted">Ya está registrada: no se puede repetir.</p>
+        )}
       </div>
+
+      <p className="mt-3 text-xs text-fg-muted">
+        JPEG, PNG o WebP. El servidor la relee, verifica su tipo real y recalcula el hash antes de
+        aceptarla.
+      </p>
     </section>
   );
 }

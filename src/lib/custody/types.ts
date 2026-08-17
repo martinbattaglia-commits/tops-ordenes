@@ -218,7 +218,8 @@ export interface CustodyEventRow {
   public_id: string;
   stage: CustodyStage;
   event_type: CustodyEventType;
-  scope: "packing_unit" | "shipment";
+  /** C5 · `physical_unit` faltaba: todo caso físico se rotulaba «Despacho». */
+  scope: "physical_unit" | "packing_unit" | "shipment";
   entity_id: string;
   occurred_at: string;
   has_evidence: boolean;

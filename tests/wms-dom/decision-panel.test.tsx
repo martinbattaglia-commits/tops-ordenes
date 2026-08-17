@@ -14,40 +14,19 @@ vi.mock("@/app/(app)/wms/custody/actions", () => ({
 
 import { CaseDecisionPanel } from "@/app/(app)/wms/custody/_components/CaseDecisionPanel";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
+import { derivedView, fisicoConPar, INSPECCION_ID } from "./_view";
 
 const CASE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
+/**
+ * View-model DERIVADO del builder real, no fabricado a mano. `viewOverrides`
+ * queda sólo para forzar el panel bajo prueba a un estado concreto.
+ */
 function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
-  return {
-    caseId: CASE_ID,
-    state: "REVIEW_REQUIRED",
-    stateLabel: "Revisión humana",
-    tone: "review",
-    version: 3,
-    scope: "shipment",
-    entityId: "11111111-1111-4111-8111-111111111111",
-    holdLabels: [],
-    ai: {
-      executed: true,
-      verdictLabel: "Coincide con el ingreso",
-      confidencePercent: 87,
-      informativeOnly: true,
-      note: "La IA informa y alerta. La decisión es humana.",
-      failureLabel: null,
-    },
-    referenceThreshold: null,
-    release: { enabled: true, blockers: [] },
-    quarantine: { enabled: true, blockers: [] },
-    reevaluation: { analysis: "current", inFlight: false, enabled: true, required: false, blockers: [], reason: null },
-    inspection: { enabled: true, blockers: [], eligible: 1 },
-    podPdfReady: false,
-    podBlocked: true,
-    podBlockedReason: "POD y despacho bloqueados hasta registrar la decisión humana",
-    decision: null,
-    createdAt: "2026-08-08T10:15:00.000Z",
-    updatedAt: "2026-08-10T09:42:00.000Z",
-    ...over,
-  };
+  return derivedView(
+    { base: fisicoConPar, candidateInspectionEvidenceIds: [INSPECCION_ID] },
+    over,
+  );
 }
 
 beforeEach(() => {
@@ -216,6 +195,30 @@ describe("accesibilidad", () => {
     expect(container.querySelector('label[for="decision-reason"]')?.textContent).toMatch(/Motivo/);
     expect(container.querySelector(`#${motivo.getAttribute("aria-describedby")}`)?.textContent)
       .toMatch(/mínimo 10 caracteres/);
+    await unmount();
+  });
+});
+
+describe("S1-5 · por qué no se puede cuarentenar también se dice", () => {
+  it("los blockers de cuarentena se PINTAN, simétricos a los de liberación", async () => {
+    // `view.quarantine.blockers` se calculaba, viajaba al cliente y NO había
+    // JSX que lo dibujara: el botón se apagaba sin decir por qué. En el caso
+    // retenido eso dejaba al operario sin ninguna acción y sin explicación.
+    const { container, unmount } = await render(
+      <CaseDecisionPanel
+        view={view({
+          quarantine: { enabled: false, blockers: ["El caso todavía no está listo para decidir"] },
+        })}
+      />,
+    );
+    expect(byText(container, /Por qué no se puede enviar a cuarentena/)).not.toBeNull();
+    expect(byText(container, /El caso todavía no está listo para decidir/)).not.toBeNull();
+    await unmount();
+  });
+
+  it("sin blockers de cuarentena no se dibuja el bloque", async () => {
+    const { container, unmount } = await render(<CaseDecisionPanel view={view()} />);
+    expect(byText(container, /Por qué no se puede enviar a cuarentena/)).toBeNull();
     await unmount();
   });
 });
