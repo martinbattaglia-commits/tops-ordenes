@@ -390,27 +390,46 @@ revoke all on function public.custody_assert_physical_unit_released(uuid)
 -- llama a ÉSTA, y ÉSTA llama a la de §7. Corregir sólo la de adentro dejó el
 -- nivel 1 muriendo en la de afuera, antes de llegar.
 --
--- ─── LA REGLA, Y CÓMO RESUELVE LA ALLOCATION MIXTA ───────────────────────
+-- ─── LA COBERTURA SE CONTROLA ANTES QUE EL NIVEL ─────────────────────────
 --
--- Se mira si ALGUNA de las unidades que cubren la allocation es de nivel 2:
+-- ⚠ UNA VERSIÓN ANTERIOR PREGUNTABA SI HABÍA GENEALOGÍA, NO SI ESTABA COMPLETA.
 --
---   · ninguna, y hay genealogía  ⇒ mercadería sin servicio de custodia digital.
---     No se exige cobertura exacta ni certificado: no hay nada contratado que
---     exigir. Sale por acá y no frena nada.
+-- La salida temprana por nivel se evaluaba ANTES del control de cobertura, con
+-- la condición `v_n>0 and v_n2=0`. Bastaba UNA unidad de nivel 1 ligada para
+-- que la allocation entera saliera, incluida la parte que ninguna unidad física
+-- cubría. Medido: `n=1 suma=2 cantidad=6` despachaba las seis.
 --
---   · alguna de nivel 2  ⇒ se aplican los CINCO chequeos de 0250a, sin una coma
---     de diferencia. En una allocation MIXTA las unidades de nivel 1 cuentan
---     para la cobertura —están en la genealogía, §6— y el recorrido por unidad
---     las exceptúa una por una en §7, mientras cada unidad de nivel 2 pasa su
---     gate completo. El nivel 2 no se afloja: se juzga cada bien por el régimen
---     con el que entró.
+-- Y el comentario que la acompañaba era falso donde más importaba: afirmaba que
+-- el stock por ajuste aparece siempre con `v_n=0`. NO ES ASÍ. El stock por
+-- ajuste se acumula sobre el MISMO `inventory_item` que una recepción, porque
+-- el ítem se resuelve por (client_name, sku, position_id); convive entonces con
+-- unidades físicas y la genealogía queda PARCIAL, con `v_n>0`. Ahí se colaba.
 --
---   · sin genealogía en absoluto (`v_n=0`)  ⇒ NO se puede conocer el nivel,
---     porque el nivel vive en la unidad física y no hay ninguna. Se conserva
---     EXACTAMENTE el camino de 0250a: cobertura legacy y, si no la hay,
---     `CUSTODY_GENEALOGY_MISSING`. Fail-closed. Es el caso del stock ingresado
---     por ajuste de inventario, que 0250a ya declaraba imposible de satisfacer
---     y que esta migración no cambia.
+-- No es hipotético. La custodia digital arranca de cero: ningún cliente la
+-- tiene hoy, y el escenario se arma solo con el PRIMER cliente que suba de
+-- nivel 1 a nivel 2 —el camino comercial esperado—, porque sus unidades legadas
+-- de nivel 1 quedan conviviendo con el stock nuevo bajo contrato.
+--
+-- ─── LA REGLA, EN SUS CUATRO RAMAS ───────────────────────────────────────
+--
+--   1 · `v_n=0`                        ⇒ sin genealogía. Camino de 0250a
+--       INTACTO: cobertura legacy y, si no la hay, `CUSTODY_GENEALOGY_MISSING`.
+--       Fail-closed. Es el stock por ajuste que nunca pasó por recepción.
+--
+--   2 · `v_n>0` y `v_sum<>a.quantity`  ⇒ cobertura PARCIAL. Mismo raise que
+--       0250a. EL NIVEL NO SE MIRA: cobertura incompleta es incompleta, y lo no
+--       cubierto no tiene régimen conocido que pueda eximirlo.
+--
+--   3 · cobertura completa y `v_n2=0`  ⇒ todas las unidades que cubren son de
+--       nivel 1: mercadería sin servicio de custodia digital contratado. No hay
+--       nada que exigir. Sale por acá y no frena nada.
+--
+--   4 · cobertura completa y `v_n2>0`  ⇒ el recorrido por unidad, con los CINCO
+--       chequeos de 0250a sin una coma de diferencia. Resuelve la allocation
+--       MIXTA sin caso especial: las de nivel 1 cuentan para la cobertura y §7
+--       las exceptúa una por una; cada unidad de nivel 2 pasa su gate completo.
+--       El nivel 2 no se afloja: se juzga cada bien por el régimen con el que
+--       entró.
 --
 -- El resto del cuerpo se reproduce sin cambios respecto de 0250a.
 -- -------------------------------------------------------------------------
@@ -431,18 +450,10 @@ begin
     into v_sum,v_n from public.custody_allocation_physical_units g
    where g.allocation_id=a.id;
 
-  -- 0252 · D3. ¿Hay custodia digital CONTRATADA en esta allocation?
-  select count(*) into v_n2
-    from public.custody_allocation_physical_units g
-    join public.custody_physical_units u on u.id=g.physical_unit_id
-   where g.allocation_id=a.id and u.custody_level>=2;
-
-  if v_n>0 and v_n2=0 then
-    -- Mercadería sin servicio de custodia digital: nada que exigir, nada que
-    -- frenar. La foto de ingreso, si existe, quedó en la cadena de la unidad.
-    return;
-  end if;
-
+  -- 0252 · D3 · RAMAS 1 y 2. La COBERTURA se controla PRIMERO y sin mirar el
+  -- nivel. Sin genealogía, o con genealogía incompleta, no hay régimen que
+  -- pueda eximir a lo que ninguna unidad física cubre: el camino de 0250a
+  -- queda intacto y la allocation muere acá.
   if v_n=0 or v_sum<>a.quantity then
     select coverage.* into lc
       from public.custody_legacy_release_allocation_coverage coverage
@@ -470,6 +481,21 @@ begin
     raise exception 'CUSTODY_GENEALOGY_MISSING: allocation sin cobertura física exacta'
       using errcode='check_violation';
   end if;
+
+  -- 0252 · D3 · RAMA 3. Acá la cobertura ya es EXACTA y `v_n>0`. Recién ahora
+  -- tiene sentido preguntar por el nivel: ¿hay custodia digital CONTRATADA
+  -- entre las unidades que cubren esta allocation?
+  select count(*) into v_n2
+    from public.custody_allocation_physical_units g
+    join public.custody_physical_units u on u.id=g.physical_unit_id
+   where g.allocation_id=a.id and u.custody_level>=2;
+  if v_n2=0 then
+    -- Mercadería sin servicio de custodia digital: nada que exigir, nada que
+    -- frenar. La foto de ingreso, si existe, quedó en la cadena de la unidad.
+    return;
+  end if;
+
+  -- 0252 · D3 · RAMA 4. El recorrido de 0250a, sin cambios.
   for x in select physical_unit_id from public.custody_allocation_physical_units
             where allocation_id=a.id order by physical_unit_id
   loop perform public.custody_assert_physical_unit_released(x.physical_unit_id); end loop;

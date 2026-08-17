@@ -1,8 +1,8 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-A · remediación** — el nivel 1 despacha, con
-y sin foto
+**Última actualización:** **Bloque 2-A · remediación 2** — la cobertura se
+controla ANTES de la salida temprana; fail-closed restituido (§9.6.1)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -566,7 +566,7 @@ lote habría fallado con dos líneas iguales.
 |---|---|
 | `custody_materialize_reception_item_row` | el caso es aparato de nivel 2 |
 | `custody_bind_allocation` | **vincula TODAS las unidades**, como 0250a |
-| `custody_assert_allocation_released` | sin unidades de nivel 2 ⇒ no exige nada |
+| `custody_assert_allocation_released` | **cobertura primero**; con cobertura exacta y sin unidades de nivel 2 ⇒ no exige nada |
 | `custody_assert_physical_unit_released` | exceptúa la unidad de nivel 1 |
 | `attach_custody_physical_evidence` | acepta la foto de ingreso del nivel 1 y **rechaza** su foto de egreso |
 
@@ -580,6 +580,33 @@ posibles porque `inventory_items` se resuelve por (client_name, sku, position_id
 La corrección revierte la exclusión y pone la condición en el GATE, no en el
 vínculo. La allocation mixta se resuelve sin caso especial: cada bien se juzga
 por el régimen con el que ENTRÓ.
+
+#### 9.6.1 · El gate de allocation, en sus CUATRO ramas
+
+⚠ **Segundo defecto del mismo gate: la salida temprana se evaluaba ANTES del
+control de cobertura.** Preguntaba si HABÍA genealogía (`v_n>0 and v_n2=0`), no
+si estaba COMPLETA. Bastaba una unidad de nivel 1 ligada para que la allocation
+entera saliera, incluida la parte que ninguna unidad física cubría.
+
+El orden vigente:
+
+| # | Condición | Qué hace |
+|---|---|---|
+| 1 | `v_n=0` | camino de 0250a INTACTO: cobertura legacy o `CUSTODY_GENEALOGY_MISSING` |
+| 2 | `v_n>0` y `v_sum<>a.quantity` | cobertura PARCIAL ⇒ mismo raise que 0250a. **El nivel no se mira** |
+| 3 | cobertura exacta y `v_n2=0` | todo nivel 1 ⇒ nada que exigir, sale |
+| 4 | cobertura exacta y `v_n2>0` | recorrido por unidad, los cinco chequeos de 0250a |
+
+**Por qué no era teórico.** La custodia digital arranca de cero: ningún cliente
+la tiene hoy. El escenario se arma solo con el **primer cliente que suba de
+nivel 1 a nivel 2** —el camino comercial esperado—, porque sus unidades legadas
+de nivel 1 conviven con stock nuevo bajo contrato, y el stock por ajuste se
+acumula sobre el MISMO `inventory_item`. Medido antes de la corrección: cliente
+nivel 2, `n=1 suma=2 cantidad=6` ⇒ despachaba las seis sin una sola aserción.
+
+El comentario anterior de §7a afirmaba que el stock por ajuste aparece siempre
+con `v_n=0`. Era falso, y ahí se colaba: convive con unidades físicas y deja la
+genealogía PARCIAL con `v_n>0`.
 
 ### 9.7 · Definición de negocio de los dos niveles (Dirección)
 

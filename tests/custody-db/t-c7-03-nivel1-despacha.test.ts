@@ -59,6 +59,8 @@ const sha = (t: string) => createHash("sha256").update(t).digest("hex");
 
 interface Escenario {
   clientId: string;
+  clientName: string;
+  sku: string;
   unitId: string;
   level: number;
   caseId: string | null;
@@ -66,40 +68,63 @@ interface Escenario {
   allocationId: string;
 }
 
-/**
- * Recorre recepción → confirmación → reserva, y deja la allocation lista para
- * despachar. `nivel` es el CONTRATADO por el cliente; `conFoto` decide si se
- * registra la foto de ingreso.
- */
-async function hastaLaReserva(opts: {
-  nivel: 1 | 2;
-  conFoto: boolean;
-  cantidad?: number;
-}): Promise<Escenario> {
-  const cantidad = opts.cantidad ?? 3;
+interface Unidad {
+  unitId: string;
+  level: number;
+  caseId: string | null;
+  inventoryItemId: string;
+}
 
+/** Cliente con su nivel CONTRATADO. */
+async function cliente(nivel: 1 | 2): Promise<string> {
   await actAsServer(db);
-  const { rows: cli } = await db.query<{ id: string }>(
+  const { rows } = await db.query<{ id: string }>(
     `insert into public.clients (razon, cuit, custody_level) values ($1, $2, $3) returning id`,
-    [uid("CLI"), `30${Math.floor(Math.random() * 1e9).toString().padStart(9, "0")}`, opts.nivel],
+    [uid("CLI"), `30${Math.floor(Math.random() * 1e9).toString().padStart(9, "0")}`, nivel],
   );
-  const clientId = cli[0].id;
-  const { rows: pos } = await db.query<{ id: string }>(
+  return rows[0].id;
+}
+
+async function posicion(): Promise<string | null> {
+  await actAsServer(db);
+  const { rows } = await db.query<{ id: string }>(
     `select id from public.warehouse_positions limit 1`,
   );
+  return rows[0]?.id ?? null;
+}
 
-  const { rows: rec } = await db.query<{ id: string; client_name: string }>(
+/**
+ * Recepción → confirmación → unidad materializada, SIN reserva.
+ *
+ * Separada de la reserva a propósito: la allocation MIXTA exige que la unidad
+ * de nivel 1 conserve su disponibilidad, y cualquier reserva intermedia se la
+ * consume —fue exactamente lo que vació la mixta anterior—.
+ *
+ * `clientName`, `sku` y `posId` se reciben porque `inventory_items` se resuelve
+ * por (client_name, sku, position_id): repetirlos es lo que hace que dos
+ * recepciones acumulen en el MISMO ítem.
+ */
+async function recepcionEn(opts: {
+  clientId: string;
+  clientName: string;
+  sku: string;
+  posId: string | null;
+  cantidad: number;
+  lote: string;
+  conFoto: boolean;
+}): Promise<Unidad> {
+  await actAsServer(db);
+  const { rows: rec } = await db.query<{ id: string }>(
     `insert into public.receptions (public_id, client_name, client_id, business_unit, status)
-     values ($1, $2, $3, 'GENERAL', 'pendiente') returning id, client_name`,
-    [uid("REC"), uid("DEP"), clientId],
+     values ($1, $2, $3, 'GENERAL', 'pendiente') returning id`,
+    [uid("REC"), opts.clientName, opts.clientId],
   );
-  const sku = uid("SKU");
   await db.query(
     `insert into public.reception_items
        (reception_id, business_unit, sku, description, lot_number, expiration_date,
         quantity, status, position_id)
-     values ($1, 'GENERAL', $2, 'Bien despachable', 'LOT-D', '2027-12-31', $3, 'pendiente', $4)`,
-    [rec[0].id, sku, cantidad, pos[0]?.id ?? null],
+     values ($1, 'GENERAL', $2, 'Bien despachable', $3, '2027-12-31', $4, 'pendiente', $5)`,
+    [rec[0].id, opts.sku, opts.lote, opts.cantidad, opts.posId],
   );
 
   // CONFIRMAR · el trigger materializa la unidad (y el caso, si es nivel 2).
@@ -120,7 +145,6 @@ async function hastaLaReserva(opts: {
     [u[0].id],
   );
 
-  // La foto de ingreso, si el camino la pide.
   if (opts.conFoto) {
     const contenido = uid("ING");
     const path = `physical_unit/${u[0].id}/recepcion/${uid("obj")}.png`;
@@ -140,32 +164,78 @@ async function hastaLaReserva(opts: {
     );
   }
 
-  // Pedido y RESERVA. El trigger de vínculo corre al insertar la allocation.
-  await actAsServer(db);
-  const { rows: ord } = await db.query<{ id: string }>(
-    `insert into public.logistics_orders (public_id, client_name, client_id, status)
-     values ($1, $2, $3, 'borrador') returning id`,
-    [uid("ORD"), rec[0].client_name, clientId],
-  );
-  const { rows: oi } = await db.query<{ id: string }>(
-    `insert into public.logistics_order_items (order_id, sku, description, quantity_requested)
-     values ($1, $2, 'Bien despachable', $3) returning id`,
-    [ord[0].id, sku, cantidad],
-  );
-  const { rows: alloc } = await db.query<{ id: string }>(
-    `insert into public.stock_allocations (order_item_id, inventory_item_id, quantity, status)
-     values ($1, $2, $3, 'reservada') returning id`,
-    [oi[0].id, u[0].inventory_item_id, cantidad],
-  );
-
   return {
-    clientId,
     unitId: u[0].id,
     level: u[0].custody_level,
     caseId: c[0]?.id ?? null,
     inventoryItemId: u[0].inventory_item_id,
-    allocationId: alloc[0].id,
   };
+}
+
+/** Pedido + reserva sobre un ítem. El trigger de vínculo corre al insertar. */
+async function reservaSobre(opts: {
+  clientId: string;
+  clientName: string;
+  sku: string;
+  inventoryItemId: string;
+  cantidad: number;
+}): Promise<string> {
+  await actAsServer(db);
+  const { rows: ord } = await db.query<{ id: string }>(
+    `insert into public.logistics_orders (public_id, client_name, client_id, status)
+     values ($1, $2, $3, 'borrador') returning id`,
+    [uid("ORD"), opts.clientName, opts.clientId],
+  );
+  const { rows: oi } = await db.query<{ id: string }>(
+    `insert into public.logistics_order_items (order_id, sku, description, quantity_requested)
+     values ($1, $2, 'Bien despachable', $3) returning id`,
+    [ord[0].id, opts.sku, opts.cantidad],
+  );
+  const { rows: alloc } = await db.query<{ id: string }>(
+    `insert into public.stock_allocations (order_item_id, inventory_item_id, quantity, status)
+     values ($1, $2, $3, 'reservada') returning id`,
+    [oi[0].id, opts.inventoryItemId, opts.cantidad],
+  );
+  return alloc[0].id;
+}
+
+/**
+ * Recorre recepción → confirmación → reserva, y deja la allocation lista para
+ * despachar. `nivel` es el CONTRATADO por el cliente; `conFoto` decide si se
+ * registra la foto de ingreso.
+ */
+async function hastaLaReserva(opts: {
+  nivel: 1 | 2;
+  conFoto: boolean;
+  cantidad?: number;
+}): Promise<Escenario> {
+  const cantidad = opts.cantidad ?? 3;
+  const clientId = await cliente(opts.nivel);
+  const clientName = uid("DEP");
+  const sku = uid("SKU");
+  const u = await recepcionEn({
+    clientId, clientName, sku, posId: await posicion(),
+    cantidad, lote: "LOT-D", conFoto: opts.conFoto,
+  });
+  const allocationId = await reservaSobre({
+    clientId, clientName, sku, inventoryItemId: u.inventoryItemId, cantidad,
+  });
+  return { clientId, clientName, sku, ...u, allocationId };
+}
+
+/** Genealogía efectiva de una allocation: unidades ligadas, cuántas de nivel 2, cobertura. */
+async function genealogia(allocationId: string): Promise<{ n: number; n2: number; suma: number }> {
+  await actAsServer(db);
+  const { rows } = await db.query<{ n: string; n2: string; suma: string }>(
+    `select count(distinct g.physical_unit_id)::text as n,
+            count(*) filter (where u.custody_level >= 2)::text as n2,
+            coalesce(sum(g.quantity), 0)::text as suma
+       from public.custody_allocation_physical_units g
+       join public.custody_physical_units u on u.id = g.physical_unit_id
+      where g.allocation_id = $1`,
+    [allocationId],
+  );
+  return { n: Number(rows[0].n), n2: Number(rows[0].n2), suma: Number(rows[0].suma) };
 }
 
 /** DESPACHAR DE VERDAD: pasa la allocation a 'despachada' y deja correr el trigger. */
@@ -267,84 +337,142 @@ describe("T-C7-03 · el NIVEL 2 sigue bloqueado · la línea roja se respeta", (
   });
 });
 
-describe("T-C7-03 · allocation MIXTA · cada bien por el régimen con el que entró", () => {
-  it("nivel 1 + nivel 2 en el mismo ítem: el nivel 2 bloquea, y por su motivo", async () => {
-    // `inventory_items` se resuelve por (client_name, sku, position_id), así que
-    // dos recepciones del mismo bien acumulan en el mismo ítem. Con el cliente
-    // subiendo de nivel entre una y otra, la allocation queda MIXTA.
-    const e1 = await hastaLaReserva({ nivel: 1, conFoto: true, cantidad: 2 });
+describe("T-C7-03 · allocation MIXTA REAL · cada bien por el régimen con el que entró", () => {
+  it("nivel 1 Y nivel 2 ligados a la MISMA allocation: el nivel 2 la detiene", async () => {
+    // ─── POR QUÉ ESTA CONSTRUCCIÓN Y NO LA ANTERIOR ───────────────────────
+    //
+    // La versión previa creaba la unidad de nivel 1 CON su reserva, así que su
+    // disponibilidad quedaba en 0 y el vínculo la salteaba: la allocation
+    // «mixta» terminaba 100 % nivel 2 y no probaba la mezcla. Peor, cerraba con
+    // un `if/else` que aceptaba los dos desenlaces, de modo que pasaba idéntica
+    // contra el 0252 anterior. Un test que acepta ambas salidas no asevera nada.
+    //
+    // Acá las dos unidades se materializan SIN reserva intermedia y una sola
+    // allocation las abarca a las dos. La aserción es ÚNICA.
+    const clientId = await cliente(1);
+    const clientName = uid("DEP");
+    const sku = uid("SKU");
+    const posId = await posicion();
+
+    // `inventory_items` se resuelve por (client_name, sku, position_id): repetir
+    // los tres es lo que hace que las dos recepciones caigan en el MISMO ítem.
+    const u1 = await recepcionEn({
+      clientId, clientName, sku, posId, cantidad: 2, lote: "LOT-M1", conFoto: true,
+    });
+    expect(u1.level).toBe(1);
+    expect(u1.caseId).toBeNull();
+
+    // El mismo cliente contrata custodia reforzada; segunda recepción igual.
+    await actAsServer(db);
+    await db.query(`update public.clients set custody_level = 2 where id = $1`, [clientId]);
+    const u2 = await recepcionEn({
+      clientId, clientName, sku, posId, cantidad: 2, lote: "LOT-M2", conFoto: true,
+    });
+    expect(u2.level).toBe(2);
+    expect(u2.caseId).not.toBeNull();
+    // El mismo ítem, de verdad.
+    expect(u2.inventoryItemId).toBe(u1.inventoryItemId);
+
+    // UNA reserva que abarca las CUATRO unidades de stock.
+    const allocationId = await reservaSobre({
+      clientId, clientName, sku, inventoryItemId: u1.inventoryItemId, cantidad: 4,
+    });
+
+    // La mezcla es REAL y la cobertura EXACTA: dos unidades ligadas, una de
+    // cada nivel. Si esto no se cumple, la allocation no es mixta y el caso que
+    // sigue no probaría lo que dice.
+    const g = await genealogia(allocationId);
+    expect(g.n).toBe(2);
+    expect(g.n2).toBe(1);
+    expect(g.suma).toBe(4);
+
+    // ASERCIÓN ÚNICA · la unidad de nivel 1 no afloja nada de la de nivel 2.
+    await expect(despachar(allocationId)).rejects.toThrow(/CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
 
     await actAsServer(db);
-    // El mismo cliente contrata custodia reforzada.
-    await db.query(`update public.clients set custody_level = 2 where id = $1`, [e1.clientId]);
-    const { rows: nombre } = await db.query<{ client_name: string }>(
-      `select client_name from public.inventory_items where id = $1`,
-      [e1.inventoryItemId],
+    const { rows } = await db.query<{ status: string }>(
+      `select status from public.stock_allocations where id = $1`,
+      [allocationId],
     );
-    const { rows: sku } = await db.query<{ sku: string; position_id: string | null }>(
-      `select sku, position_id from public.inventory_items where id = $1`,
-      [e1.inventoryItemId],
-    );
+    expect(rows[0].status).toBe("reservada");
+  });
+});
 
-    // Segunda recepción del MISMO bien, ya en nivel 2.
-    const { rows: rec2 } = await db.query<{ id: string }>(
-      `insert into public.receptions (public_id, client_name, client_id, business_unit, status)
-       values ($1, $2, $3, 'GENERAL', 'pendiente') returning id`,
-      [uid("REC"), nombre[0].client_name, e1.clientId],
-    );
+describe("T-C7-03 · COBERTURA PARCIAL · la salida temprana no puede saltear el control", () => {
+  it("nivel 1 con cobertura PARCIAL: el resto no cubierto NO sale", async () => {
+    // La salida temprana por nivel preguntaba si HAY genealogía, no si la
+    // cobertura está COMPLETA. Con una unidad de nivel 1 cubriendo parte y el
+    // resto sin unidad física, la allocation salía entera sin exigir nada.
+    // Cobertura incompleta es incompleta, mire el nivel que mire.
+    const clientId = await cliente(1);
+    const clientName = uid("DEP");
+    const sku = uid("SKU");
+    const u = await recepcionEn({
+      clientId, clientName, sku, posId: await posicion(),
+      cantidad: 2, lote: "LOT-P", conFoto: true,
+    });
+    expect(u.level).toBe(1);
+
+    // Reserva por MÁS de lo que la genealogía puede cubrir.
+    const allocationId = await reservaSobre({
+      clientId, clientName, sku, inventoryItemId: u.inventoryItemId, cantidad: 5,
+    });
+    const g = await genealogia(allocationId);
+    expect(g.n).toBe(1);
+    expect(g.n2).toBe(0);
+    expect(g.suma).toBe(2); // 2 de 5: PARCIAL
+
+    await expect(despachar(allocationId)).rejects.toThrow(/CUSTODY_GENEALOGY_MISSING/);
+  });
+
+  it("cliente CON custodia contratada + unidad legada de nivel 1 + stock de ajuste", async () => {
+    // El escenario que la definición de negocio vuelve inevitable: la custodia
+    // digital arranca de cero, así que el PRIMER cliente que suba de nivel 1 a
+    // nivel 2 deja atrás unidades legadas de nivel 1. Si a ese mismo ítem se le
+    // suma stock por ajuste —sin unidad física, sin régimen conocido—, la
+    // allocation cubre sólo una parte.
+    //
+    // Antes de esta corrección despachaba las 6 unidades sin una sola aserción,
+    // con el cliente ya contratante.
+    const clientId = await cliente(1);
+    const clientName = uid("DEP");
+    const sku = uid("SKU");
+    const u = await recepcionEn({
+      clientId, clientName, sku, posId: await posicion(),
+      cantidad: 2, lote: "LOT-L", conFoto: true,
+    });
+    expect(u.level).toBe(1);
+
+    await actAsServer(db);
+    await db.query(`update public.clients set custody_level = 2 where id = $1`, [clientId]);
+    // Stock por ajuste sobre el MISMO ítem: no pasó por recepción.
     await db.query(
-      `insert into public.reception_items
-         (reception_id, business_unit, sku, description, lot_number, expiration_date,
-          quantity, status, position_id)
-       values ($1, 'GENERAL', $2, 'Bien despachable', 'LOT-D2', '2027-12-31', 2, 'pendiente', $3)`,
-      [rec2[0].id, sku[0].sku, sku[0].position_id],
-    );
-    await actAsWithSession(db, staff, staff.sessionId);
-    await db.query(`select public.confirm_reception($1::uuid)`, [rec2[0].id]);
-
-    await actAsServer(db);
-    const { rows: niveles } = await db.query<{ custody_level: number }>(
-      `select custody_level from public.custody_physical_units
-        where inventory_item_id = $1 order by created_at`,
-      [e1.inventoryItemId],
-    );
-    // Confirmado: el mismo ítem tiene unidades de los DOS niveles.
-    expect(niveles.map((n) => n.custody_level).sort()).toEqual([1, 2]);
-
-    // Una reserva nueva que abarque las cuatro unidades queda MIXTA.
-    const { rows: ord } = await db.query<{ id: string }>(
-      `insert into public.logistics_orders (public_id, client_name, client_id, status)
-       values ($1, $2, $3, 'borrador') returning id`,
-      [uid("ORD"), nombre[0].client_name, e1.clientId],
-    );
-    const { rows: oi } = await db.query<{ id: string }>(
-      `insert into public.logistics_order_items (order_id, sku, description, quantity_requested)
-       values ($1, $2, 'Bien despachable', 2) returning id`,
-      [ord[0].id, sku[0].sku],
-    );
-    const { rows: alloc } = await db.query<{ id: string }>(
-      `insert into public.stock_allocations (order_item_id, inventory_item_id, quantity, status)
-       values ($1, $2, 2, 'reservada') returning id`,
-      [oi[0].id, e1.inventoryItemId],
+      `update public.inventory_items
+          set stock_available = coalesce(stock_available, 0) + 8 where id = $1`,
+      [u.inventoryItemId],
     );
 
-    const { rows: gen } = await db.query<{ n2: string }>(
-      `select count(*)::text as n2
-         from public.custody_allocation_physical_units g
-         join public.custody_physical_units u on u.id = g.physical_unit_id
-        where g.allocation_id = $1 and u.custody_level >= 2`,
-      [alloc[0].id],
-    );
+    const allocationId = await reservaSobre({
+      clientId, clientName, sku, inventoryItemId: u.inventoryItemId, cantidad: 6,
+    });
+    const g = await genealogia(allocationId);
+    expect(g.n).toBe(1);
+    expect(g.n2).toBe(0);
+    expect(g.suma).toBe(2); // 2 de 6
 
-    if (Number(gen[0].n2) > 0) {
-      // Hay custodia contratada en la reserva: el gate completo se aplica y el
-      // nivel 2 la detiene. La línea roja se respeta.
-      await expect(despachar(alloc[0].id)).rejects.toThrow(/CUSTODY_HOLD|CUSTODY_CASE_MISSING/);
-    } else {
-      // FEFO tomó sólo unidades de nivel 1: entonces no hay nada contratado que
-      // exigir y tiene que despachar.
-      await expect(despachar(alloc[0].id)).resolves.toBeUndefined();
-    }
+    await expect(despachar(allocationId)).rejects.toThrow(/CUSTODY_GENEALOGY_MISSING/);
+  });
+
+  it("cobertura COMPLETA y toda de nivel 1: sigue despachando", async () => {
+    // La contracara: restituir el control de cobertura no puede romper el nivel
+    // 1 legítimo. Cobertura exacta y sin custodia contratada ⇒ nada que exigir.
+    const e = await hastaLaReserva({ nivel: 1, conFoto: false, cantidad: 3 });
+    const g = await genealogia(e.allocationId);
+    expect(g.n).toBe(1);
+    expect(g.n2).toBe(0);
+    expect(g.suma).toBe(3); // exacta
+
+    await expect(despachar(e.allocationId)).resolves.toBeUndefined();
   });
 });
 

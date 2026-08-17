@@ -2700,7 +2700,7 @@
     {
       "id": "0252_custody_two_levels.sql",
       "filename": "0252_custody_two_levels.sql",
-      "sha256": "427900064bbc7695c1073348de70d09240754abf226b2e1195a7681ae0a8d85c",
+      "sha256": "52e233b4e91548945e09b99a4ea8e936de49cf3198792c560179c817a0a3648d",
       "orden": 236,
       "requires": [
         "0251_custody_decide_authority.sql"
