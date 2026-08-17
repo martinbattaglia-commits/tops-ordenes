@@ -126,20 +126,25 @@ export function PhysicalCapturePanel({
 
   const enVuelo = estado === "subiendo";
   /**
-   * S1-3 · HABILITACIÓN INVERTIDA.
+   * QUÉ SEÑAL GOBIERNA ESTE PANEL, Y CUÁL NO.
    *
-   * Antes esto era `view.inspection.enabled || !tieneIngreso || !tieneEgreso`:
-   * una DISYUNCIÓN con la AUSENCIA de foto. Mientras faltara una, el permiso
-   * nunca llegaba a evaluarse y cualquiera podía capturar; con las dos
-   * cargadas el panel se apagaba solo y nadie podía repetir ninguna. Las dos
-   * mitades estaban al revés.
+   * `view.capture` = permiso de captura (`wms.edit`) Y caso no terminal. Es
+   * exactamente lo que exige el servidor: `actions.ts` chequea el permiso
+   * antes de tocar Storage, y `attach_custody_physical_evidence` (0251)
+   * rechaza por estado sólo con `state in('RELEASED','QUARANTINED')`.
    *
-   * Ahora es una CONJUNCIÓN con el permiso, y además por SLOT: cada botón
-   * exige poder capturar Y que ese slot concreto siga vacío.
-   * `view.inspection.enabled` transporta el permiso de captura resuelto
-   * server-side, que es la misma frontera que exige la RPC.
+   * `view.inspection` = ese mismo permiso PERO ADEMÁS estado `REVIEW_REQUIRED`
+   * o `HOLD`. Es del panel de inspección humana y **no sirve acá**: todo caso
+   * nace en `PENDING_EVIDENCE`, así que colgar la captura del par de esa señal
+   * apagaba los dos slots justo cuando había que sacar la foto de ingreso —y
+   * culpaba al permiso de un bloqueo que era de estado—. El circuito quedaba
+   * muerto en su primer paso.
+   *
+   * La habilitación es una CONJUNCIÓN y además por SLOT: cada botón exige
+   * poder capturar Y que ese slot concreto siga vacío.
    */
-  const puedeCapturar = view.inspection.enabled;
+  const puedeCapturar = view.capture.enabled;
+  const motivoBloqueo = view.capture.blockers[0] ?? null;
 
   return (
     <section className="card p-4" aria-labelledby="captura-fisica-title">
@@ -224,9 +229,11 @@ export function PhysicalCapturePanel({
         >
           <Icon name="paperclip" size={14} /> Registrar ingreso
         </button>
-        {/* Todo botón deshabilitado dice por qué EN SU PROPIO CONTEXTO (§7.5). */}
-        {!puedeCapturar && (
-          <p className="mt-1 text-xs text-fg-muted">No tenés permiso para registrar evidencia.</p>
+        {/* Todo botón deshabilitado dice por qué EN SU PROPIO CONTEXTO (§7.5).
+            El motivo lo pone el servidor y nombra su causa REAL: si el bloqueo
+            es de estado, no dice «permiso». */}
+        {!puedeCapturar && motivoBloqueo && (
+          <p className="mt-1 text-xs text-fg-muted" data-bloqueo="ingreso">{motivoBloqueo}</p>
         )}
         {puedeCapturar && tieneIngreso && (
           <p className="mt-1 text-xs text-fg-muted">Ya está registrada: no se puede repetir.</p>
@@ -267,6 +274,11 @@ export function PhysicalCapturePanel({
         >
           <Icon name="paperclip" size={14} /> Registrar egreso
         </button>
+        {/* PUNTO 3 · simetría con el slot de ingreso: este botón también dice
+            por qué está apagado, en su propio contexto (§7.5). */}
+        {!puedeCapturar && motivoBloqueo && (
+          <p className="mt-1 text-xs text-fg-muted" data-bloqueo="egreso">{motivoBloqueo}</p>
+        )}
         {puedeCapturar && tieneEgreso && (
           <p className="mt-1 text-xs text-fg-muted">Ya está registrada: no se puede repetir.</p>
         )}

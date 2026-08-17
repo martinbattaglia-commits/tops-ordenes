@@ -1,7 +1,8 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Sesión 1** — circuito recorrible de punta a punta
+**Última actualización:** **Sesión 1 · remediación post-C4 1/2** — el permiso de
+captura se separa del estado de inspección
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -88,10 +89,11 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 10 | Puerta de la foto de egreso en el flujo de salida | gates disparados por trigger en `0250a:2417 / 2486 / 2507 / 2529` | — | — | — | **cero menciones de custodia** en picking y packing (`grep -rniE "custod\|CPU-\|physical_unit"` sobre `wms/picking` y `wms/packing` → 0 resultados); en despachos sólo `CustodyShipmentSection` (`despachos/[id]/page.tsx:172-175`), que es scope `shipment` | — | **NO EXISTE** |
 | 11a | Resolución del token del QR | `get_custody_physical_by_token` `0250a:2253-2289` · `revoke ... from public,anon` `:2291` · `grant ... to authenticated` `:2292` | `getCustodyByToken` (`custody.ts`), consumido en `c/[token]/page.tsx:18` | — | — | `c/[token]/page.tsx:41-84` | `assert_custody_access('wms.view')` `0250a:2261` | **CABLEADO** (autenticado) |
 | 11b | Compuerta del POD para unidad física | POD ligado a `shipment` | `actions.ts:568` sólo calcula `podPdfReady` cuando `scope === "shipment"` | — | `case-presentation.ts:462-468` | `[id]/page.tsx:86` fija `shipmentId = isShipment ? view.entityId : null`; `CasePodGate.tsx:19` bloquea con `view.podBlocked \|\| !shipmentId` → **la unidad física queda bloqueada siempre**, y con el caso ya `RELEASED` el motivo es `null` (`case-presentation.ts:464`) y cae al literal por defecto `CasePodGate.tsx:24` | — | **CORTADO EN view-model** |
+| 14 | Permiso de **captura del par** ingreso/egreso | `attach_custody_physical_evidence` (0251) rechaza por estado SÓLO con `state in('RELEASED','QUARANTINED')` | `actions.ts` exige `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`) antes de tocar Storage | — | **`capture`** — campo PROPIO · `PhysicalCaptureView` | `PhysicalCapturePanel` · `view.capture.enabled` + `view.capture.blockers[0]` en los dos slots | `wms.edit` | **CABLEADO** |
 | 13 | Decisión de casos **no** físicos (`packing_unit` / `shipment`) | `decide_custody_integrity` (v1) **revocada** para `authenticated` · `0250a:2199-2200` | `integrity-supabase.ts:263-265` sigue enrutando ahí todo scope no físico | — | — | el botón existe y la RPC rechaza por privilegio | `wms.custody.decide` | **CORTADO EN lectura · HN-1, determinado y NO remediado** |
 | 12 | Firma de quien retira | — | — | — | — | — | — | **NO EXISTE** |
 
-**Recuento tras la Sesión 1:** 21 filas · **CABLEADO 14** · **CORTADO 4** ·
+**Recuento tras la remediación:** 22 filas · **CABLEADO 15** · **CORTADO 4** ·
 **NO EXISTE 2** · **NO VIAJA por diseño 1**.
 
 *(Al cerrar la Sesión 0 eran 20 filas: 4 CABLEADO, 14 CORTADO, 2 NO EXISTE.)*
@@ -510,7 +512,40 @@ No se tocó el ruteo, ni los grants, ni se escribió migración para esto.
 - **C8 (fallback silencioso a `MOCK_CASES`)** sigue vivo en
   `custody.ts:1043-1045`, fuera de alcance por §8.
 
-### 9.5 · Verificación pendiente de Dirección
+### 9.5 · Remediación post-C4 1/2 · la captura tenía su propia costura
+
+C4 1/2 dio FAIL. El revisor encontró que `PhysicalCapturePanel` colgaba su
+habilitación de `view.inspection.enabled`, bajo una premisa que yo mismo había
+escrito en un comentario y que era falsa: ese campo **no** transporta el permiso
+de captura, lo funde con la exigencia de estado `REVIEW_REQUIRED`/`HOLD`.
+
+Todo caso nace en `PENDING_EVIDENCE`. Ese estado no es ninguno de los dos, así
+que los dos slots quedaban apagados justo cuando había que sacar la foto de
+ingreso, con un cartel de permiso para un bloqueo que era de estado. **El
+circuito estaba muerto en su primer paso**, y la UI era más restrictiva que la
+base — que sólo rechaza estados terminales.
+
+**La regla que ahora gobierna la captura**, copiada del servidor y no inventada:
+
+| Condición | De dónde sale |
+|---|---|
+| permiso `wms.edit` | `actions.ts`, antes de tocar Storage |
+| caso NO terminal (`RELEASED` / `QUARANTINED`) | `attach_custody_physical_evidence` en 0251 |
+
+Y nada más. `PENDING_EVIDENCE`, `REVIEW_REQUIRED` y `HOLD` no bloquean la
+captura, ni en la base ni en la pantalla. Cada blocker nombra su causa real: un
+problema de estado nunca se reporta como problema de permiso.
+
+`inspection` **queda igual**: su restricción de estado es correcta para la foto
+de inspección humana, que sólo tiene sentido cuando ya hay algo que inspeccionar.
+
+**Por qué ningún test lo veía.** La batería DOM fabricaba el view-model literal,
+con `state: "REVIEW_REQUIRED"` e `inspection: { enabled: true }` escritos a mano.
+Medía el literal, no el sistema: 221 verdes con el circuito roto. Ahora los seis
+archivos derivan de `buildCustodyCaseView`, el mismo builder que corre en
+producción (`tests/wms-dom/_view.ts`).
+
+### 9.6 · Verificación pendiente de Dirección
 
 **No se comprobó, y no se podía:** que Martin Battaglia, José Luis Rodríguez y
 Martín Rinas —y sólo ellos— tengan hoy rol `admin`. Es una lectura de base

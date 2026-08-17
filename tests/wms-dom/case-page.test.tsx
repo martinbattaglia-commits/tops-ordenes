@@ -8,6 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { byText, render } from "./_render";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
+import { derivedView, INSPECCION_ID } from "./_view";
 import type { CustodyTimeline } from "@/lib/custody/types";
 
 const CASE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -39,49 +40,13 @@ vi.mock("@/lib/custody/qr", () => ({
 
 import CustodyCasePage from "@/app/(app)/wms/custody/[id]/page";
 
+/**
+ * View-model DERIVADO del builder real. La página es de scope `shipment`, así
+ * que la base es el caso de despacho; lo que se afirma abajo es el DOM que
+ * produce ese view-model, no un literal escrito para que el DOM coincida.
+ */
 function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
-  return {
-    caseId: CASE_ID,
-    state: "REVIEW_REQUIRED",
-    stateLabel: "Revisión humana",
-    tone: "review",
-    version: 3,
-    scope: "shipment",
-    entityId: SHIPMENT,
-    // Regla de borrado (I3): la etiqueta ya no nombra el umbral. Decía «No hay
-    // umbral calibrado aprobado» y se pintaba al operario bajo «Retenciones».
-    holdLabels: ["El criterio automático no está configurado: revisión humana completa"],
-    ai: {
-      executed: true,
-      verdictLabel: "Coincide con el ingreso",
-      confidencePercent: 87,
-      informativeOnly: true,
-      note: "La IA informa y alerta. La decisión es humana.",
-      failureLabel: null,
-    },
-    identity: {
-      clientLabel: "Laboratorio Fénix S.A.",
-      clientFromReception: false,
-      casePublicId: "CINT-2026-000451",
-      unitPublicId: "CPU-2026-000123",
-      sku: "MUEBLE-DEMO-01",
-      quantity: 1,
-      lotNumber: null,
-      receptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      receptionPublicId: "REC-2026-0088",
-    },
-    release: { enabled: false, blockers: ["Falta la foto de inspección humana"] },
-    quarantine: { enabled: true, blockers: [] },
-    reevaluation: { analysis: "current", inFlight: false, enabled: true, required: false, blockers: [], reason: null },
-    inspection: { enabled: true, blockers: [], eligible: 1 },
-    podPdfReady: false,
-    podBlocked: true,
-    podBlockedReason: "POD y despacho bloqueados hasta registrar la decisión humana",
-    decision: null,
-    createdAt: "2026-08-08T10:15:00.000Z",
-    updatedAt: "2026-08-10T09:42:00.000Z",
-    ...over,
-  };
+  return derivedView({ candidateInspectionEvidenceIds: [INSPECCION_ID] }, over);
 }
 
 const TIMELINE: CustodyTimeline = {

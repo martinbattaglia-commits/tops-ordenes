@@ -268,6 +268,45 @@ export interface InspectionCaptureView {
   eligible: number;
 }
 
+/**
+ * Captura del PAR ingreso/egreso (Adenda §4.2). **No es lo mismo que
+ * `inspection`, y confundirlos mató el circuito en su primer paso.**
+ *
+ * ─── QUÉ TRANSPORTA CADA CAMPO ────────────────────────────────────────────
+ *
+ * `inspection.enabled` = permiso de captura **Y** estado `REVIEW_REQUIRED` o
+ * `HOLD`. Esa restricción de estado es correcta para la foto de inspección
+ * humana, que sólo tiene sentido cuando ya hay algo que inspeccionar.
+ *
+ * `capture.enabled` = permiso de captura **Y** caso no terminal. Y nada más.
+ *
+ * ─── POR QUÉ NO SE PUEDE REUSAR `inspection` ──────────────────────────────
+ *
+ * Todo caso nace en `PENDING_EVIDENCE`, que no es ninguno de esos dos
+ * estados. Colgar la captura del par de `inspection.enabled` deja los dos
+ * inputs y los dos botones apagados justo cuando hay que sacar la foto de
+ * ingreso, y encima con un cartel de permiso para un problema de estado.
+ *
+ * ─── DE DÓNDE SALE ESTA REGLA ─────────────────────────────────────────────
+ *
+ * No se inventa: se copia la del servidor, que son dos condiciones y no tres.
+ *
+ *  · `actions.ts` exige `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`) antes de
+ *    tocar Storage;
+ *  · `attach_custody_physical_evidence` (0251) rechaza por estado
+ *    EXCLUSIVAMENTE con `if v_case.state in('RELEASED','QUARANTINED')
+ *    then raise 'caso terminal'`. No mira `PENDING_EVIDENCE`,
+ *    `REVIEW_REQUIRED` ni `HOLD`.
+ *
+ * La pantalla no puede ser más restrictiva que la base: un botón apagado que
+ * la RPC habría aceptado es una función que el operario no tiene.
+ */
+export interface PhysicalCaptureView {
+  enabled: boolean;
+  /** Motivos ya traducidos. Cada uno nombra su causa REAL, no otra. */
+  blockers: string[];
+}
+
 export interface DecisionActionView {
   enabled: boolean;
   /** Motivos, ya traducidos. Vacío si `enabled`. */
@@ -303,6 +342,8 @@ export interface CustodyCaseView {
   quarantine: DecisionActionView;
   reevaluation: ReevaluationView;
   inspection: InspectionCaptureView;
+  /** Captura del par ingreso/egreso. Distinta de `inspection`: ver el tipo. */
+  capture: PhysicalCaptureView;
   /** El POD permanece bloqueado hasta que exista una decisión humana válida. */
   podBlocked: boolean;
   podBlockedReason: string | null;
@@ -528,6 +569,9 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
         : "current";
 
   // ── Captura de inspección humana ───────────────────────────────────────
+  // La restricción de estado es CORRECTA acá: inspeccionar sólo tiene sentido
+  // cuando ya hay un análisis que revisar. Lo que estaba mal era reusar esta
+  // señal para el par ingreso/egreso, que nace mucho antes.
   const inspectionBlockers: string[] = [];
   if (decided) inspectionBlockers.push("El caso ya tiene una decisión registrada");
   else if (c.state !== "REVIEW_REQUIRED" && c.state !== "HOLD") {
@@ -535,6 +579,25 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
   }
   if (!actor) inspectionBlockers.push("Sesión no verificada");
   else if (!mayCapture(actor)) inspectionBlockers.push("No tenés permiso para registrar evidencia");
+
+  // ── Captura del PAR ingreso/egreso ─────────────────────────────────────
+  //
+  // Espeja la RPC, que son DOS condiciones: permiso de captura y caso no
+  // terminal. Cada blocker nombra su causa real — un cartel de permiso para un
+  // problema de estado manda al operario a pedir algo que no lo va a
+  // desbloquear.
+  const captureBlockers: string[] = [];
+  if (!actor) captureBlockers.push("Sesión no verificada");
+  else if (!mayCapture(actor)) {
+    captureBlockers.push("No tenés permiso para registrar evidencia");
+  }
+  if (decided) {
+    captureBlockers.push(
+      c.state === "QUARANTINED"
+        ? "La unidad está en cuarentena: no admite más fotografías"
+        : "El caso ya está liberado: no admite más fotografías",
+    );
+  }
 
   return {
     caseId: c.caseId,
@@ -569,6 +632,10 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
       enabled: inspectionBlockers.length === 0,
       blockers: dedupe(inspectionBlockers),
       eligible: (input.candidateInspectionEvidenceIds ?? []).length,
+    },
+    capture: {
+      enabled: captureBlockers.length === 0,
+      blockers: dedupe(captureBlockers),
     },
     podPdfReady: input.podPdfReady === true,
     podBlocked: c.state !== "RELEASED",

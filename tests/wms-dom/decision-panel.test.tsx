@@ -14,50 +14,19 @@ vi.mock("@/app/(app)/wms/custody/actions", () => ({
 
 import { CaseDecisionPanel } from "@/app/(app)/wms/custody/_components/CaseDecisionPanel";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
+import { derivedView, fisicoConPar, INSPECCION_ID } from "./_view";
 
 const CASE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
+/**
+ * View-model DERIVADO del builder real, no fabricado a mano. `viewOverrides`
+ * queda sólo para forzar el panel bajo prueba a un estado concreto.
+ */
 function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
-  return {
-    caseId: CASE_ID,
-    state: "REVIEW_REQUIRED",
-    stateLabel: "Revisión humana",
-    tone: "review",
-    version: 3,
-    scope: "shipment",
-    entityId: "11111111-1111-4111-8111-111111111111",
-    holdLabels: [],
-    ai: {
-      executed: true,
-      verdictLabel: "Coincide con el ingreso",
-      confidencePercent: 87,
-      informativeOnly: true,
-      note: "La IA informa y alerta. La decisión es humana.",
-      failureLabel: null,
-    },
-    identity: {
-      clientLabel: "Laboratorio Fénix S.A.",
-      clientFromReception: false,
-      casePublicId: "CINT-2026-000451",
-      unitPublicId: "CPU-2026-000123",
-      sku: "MUEBLE-DEMO-01",
-      quantity: 1,
-      lotNumber: null,
-      receptionId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      receptionPublicId: "REC-2026-0088",
-    },
-    release: { enabled: true, blockers: [] },
-    quarantine: { enabled: true, blockers: [] },
-    reevaluation: { analysis: "current", inFlight: false, enabled: true, required: false, blockers: [], reason: null },
-    inspection: { enabled: true, blockers: [], eligible: 1 },
-    podPdfReady: false,
-    podBlocked: true,
-    podBlockedReason: "POD y despacho bloqueados hasta registrar la decisión humana",
-    decision: null,
-    createdAt: "2026-08-08T10:15:00.000Z",
-    updatedAt: "2026-08-10T09:42:00.000Z",
-    ...over,
-  };
+  return derivedView(
+    { base: fisicoConPar, candidateInspectionEvidenceIds: [INSPECCION_ID] },
+    over,
+  );
 }
 
 beforeEach(() => {

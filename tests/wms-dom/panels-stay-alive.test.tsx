@@ -19,10 +19,10 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buttonByName, click, render } from "./_render";
+import { derivedView, fisicoConPar } from "./_view";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 
-const CASE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const UNIT = "11111111-1111-4111-8111-111111111111";
+const INSPECCION = "66666666-6666-4666-8666-666666666666";
 
 const ingresoMock = vi.fn();
 const egresoMock = vi.fn();
@@ -40,50 +40,16 @@ import { PhysicalCapturePanel } from "@/app/(app)/wms/custody/_components/Physic
 import { CaseInspectionPanel } from "@/app/(app)/wms/custody/_components/CaseInspectionPanel";
 import { CaseReevaluatePanel } from "@/app/(app)/wms/custody/_components/CaseReevaluatePanel";
 
+/**
+ * View-model DERIVADO del builder real. Antes se fabricaba el objeto literal
+ * —incluido `inspection: { enabled: true }`— y por eso la batería no podía ver
+ * que la captura quedaba muerta en `PENDING_EVIDENCE`.
+ */
 function view(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
-  return {
-    caseId: CASE_ID,
-    state: "REVIEW_REQUIRED",
-    stateLabel: "Revisión humana",
-    tone: "review",
-    version: 3,
-    scope: "physical_unit",
-    entityId: UNIT,
-    identity: {
-      clientLabel: "Laboratorio Fénix S.A.",
-      clientFromReception: false,
-      casePublicId: "CINT-2026-000451",
-      unitPublicId: "CPU-2026-000123",
-      sku: "MUEBLE-DEMO-01",
-      quantity: 1,
-      lotNumber: null,
-      receptionId: null,
-      receptionPublicId: null,
-    },
-    holdLabels: [],
-    ai: {
-      executed: true,
-      verdictLabel: "Coincide con el ingreso",
-      confidencePercent: 87,
-      informativeOnly: true,
-      note: "La IA informa y alerta. La decisión es humana.",
-      failureLabel: null,
-    },
-    release: { enabled: false, blockers: [] },
-    quarantine: { enabled: true, blockers: [] },
-    reevaluation: {
-      analysis: "current", inFlight: false, enabled: true,
-      required: false, blockers: [], reason: null,
-    },
-    inspection: { enabled: true, blockers: [], eligible: 0 },
-    podPdfReady: false,
-    podBlocked: true,
-    podBlockedReason: "POD y despacho bloqueados hasta registrar la decisión humana",
-    decision: null,
-    createdAt: "2026-08-08T10:15:00.000Z",
-    updatedAt: "2026-08-10T09:42:00.000Z",
-    ...over,
-  };
+  return derivedView(
+    { base: fisicoConPar, candidateInspectionEvidenceIds: [INSPECCION] },
+    over,
+  );
 }
 
 /** Elige un archivo en el input indicado, como haría el operario. */
@@ -202,8 +168,13 @@ describe("S1-3 · la habilitación de captura es una CONJUNCIÓN con el permiso"
   it("sin permiso de captura NO se puede capturar, aunque falten las dos fotos", async () => {
     // Éste es el defecto exacto: con `||`, la ausencia de foto habilitaba el
     // panel y el permiso NUNCA llegaba a evaluarse.
-    const sinPermiso = view({
-      inspection: { enabled: false, blockers: ["No tenés permiso para registrar evidencia"], eligible: 0 },
+    //
+    // La condición se expresa en el DOMINIO —un actor sin `wms.edit`— y no
+    // pisando el view-model. Pisarlo era justamente lo que dejaba pasar el
+    // blocker: el literal decía lo que el test quería oír.
+    const sinPermiso = derivedView({
+      base: fisicoConPar,
+      actor: { role: "operaciones", permissions: ["wms.custody.decide"] },
     });
     const { container, unmount } = await render(
       <PhysicalCapturePanel view={sinPermiso} tieneIngreso={false} tieneEgreso={false} />,
