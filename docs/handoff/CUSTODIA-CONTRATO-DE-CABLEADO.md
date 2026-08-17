@@ -1,9 +1,9 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-C-1** — la puerta de egreso quedó OPERABLE:
-la foto se saca en despachos, inmediatamente antes de `confirmDispatchAction`
-(§10.8). Antes: 2-B construyó la puerta y tradujo los bloqueos (§10)
+**Última actualización:** **Bloque 2-C-2** — el CIERRE PROBATORIO: el análisis
+arranca solo desde la foto de egreso y el certificado se emite (§11). Antes:
+2-C-1 dejó la puerta de egreso operable (§10.8)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -894,6 +894,200 @@ caracteres, así que `"XX"` vuelve sin traducir. Los tres archivos involucrados 
 No se remedió acá: está fuera de los dos hallazgos de esta ventana, vive en la
 superficie que 2-B ya cerró, y decidir si corrige el test o el umbral de
 `CODE_SHAPE` es una decisión de alcance. **Queda para Dirección.**
+
+---
+
+
+## 11 · BLOQUE 2-C-2 · EL CIERRE PROBATORIO
+
+### 11.1 · Las costuras que cambiaron de estado
+
+| # | Dato / capacidad | Antes | Ahora | Ancla |
+|---|---|---|---|---|
+| 7 | Certificado de liberación | **CORTADO EN lectura** · «cero lecturas, SELECT concedido sin consumidor» | **CABLEADO** | política de tenant en `0254`; consumidor en `certificate-emission.ts`; acción `loadCustodyDocumentAction`; pantalla `CaseDocumentCard` |
+| — | Disparo del análisis desde despachos | **NO EXISTE** · la foto de egreso no arrancaba nada | **CABLEADO** | `analysis-trigger.ts`, llamado desde `despachos/actions.ts` |
+
+**Recuento tras 2-C-2:** 25 filas · **CABLEADO 21** · **CORTADO 1** ·
+**NO EXISTE 2** · **NO VIAJA por diseño 1**. La única fila que sigue CORTADA es
+la 11b (POD de unidad física); las dos NO EXISTE son la 12 (firma de quien
+retira, que sí existe para el despacho) y la 13/HN-1.
+
+### 11.2 · Por qué hizo falta la migración `0254`
+
+`custody_release_certificates` existe desde 0250a, la fila **se inserta sola** al
+liberar (`0251:257`) y el `grant select ... to authenticated` está puesto. Aun
+así ninguna sesión podía leer una sola fila: la tabla tiene
+`enable row level security` y **ninguna política de `select`**. RLS sin política
+deniega todo, y el `grant` queda por encima de una puerta cerrada.
+
+Ése era el corte de la fila 7, y no se podía resolver en la aplicación: **el
+consumidor no existía porque no podía existir.**
+
+Se resolvió con **política de tenant** y no con lectura `service_role` —como sí
+correspondió en 2-C-1 para el puente de genealogía— porque el certificado es el
+**documento del cliente**: sacar la autorización de la base y ponerla en el
+código, justo en el artefacto cuyo valor es probatorio, sería el error. El
+criterio se copió de `custody_physical_units_read` (`0250a:68-73`).
+
+**R-19 · la política está MEDIDA**, no sólo leída: `t-c7-04-certificado-legible`
+la ejercita con `set role authenticated` —sin eso RLS no aplica y el test no
+mide nada— en sus dos lados, y sin la migración el rol operativo y el cliente
+dueño leen CERO.
+
+### 11.3 · Cómo se extrajo el disparo sin arrastrar el proveedor
+
+| Módulo | Peso | Qué hace |
+|---|---|---|
+| `analysis-trigger.ts` | **liviano** | par completo + caso abierto; resuelve lo pesado por `import()` **dinámico** |
+| `vision-evaluation-composition.ts` | pesado | **el único** lugar que instancia `OpenAICustodyVisionProvider` |
+| `vision-mime.ts` | puro | el sniffer de formato, extraído — ver abajo |
+
+Lo que la extracción garantiza, con precisión y sin prometer de más: el grafo
+**estático** del camino de egreso no contiene `openai-vision-provider` ni
+`productive-vision-evaluation`. **No** vuelve inalcanzable al proveedor en
+ejecución, ni debe: el objetivo del bloque es que el análisis corra.
+
+**D-3 · la superficie de disparo SE AMPLIÓ, y está aprobado.** Antes el análisis
+se disparaba sólo desde el camino del caso; ahora también desde la captura de
+egreso en despachos, que exige `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`,
+`case-presentation.ts:423`) y **no** `CUSTODY_DECISION_PERMISSION`
+(`wms.custody.decide`). El operario que saca la foto ya no necesita el permiso de
+DECIDIR para que su caso se analice.
+
+Dirección lo asentó así: «La ampliación de quién dispara el análisis es decisión
+de Dirección al servicio de D-2, con techo de gasto por caso conservado.»
+
+**El techo por caso se VERIFICÓ, no se supuso:**
+
+| Control | Dónde vive | Estado |
+|---|---|---|
+| permiso para abrir la evaluación | `begin_custody_integrity_evaluation_v2` exige `assert_custody_access('wms.edit')` (`0250a`) | **ya era `wms.edit`** — la base admitía este disparo antes que la aplicación |
+| lease exclusivo | 0232 · `status='pending' for update` ⇒ `in_flight` + `retry_after_seconds` | intacto |
+| cooldown («techo de gasto») | `0250a` ⇒ `cooldown` + espera | intacto |
+
+Los tres corren dentro de esa función, invocada con el puerto construido sobre el
+cliente de **sesión**. Duplicar la superficie de disparo no duplica las llamadas
+pagas de un caso: el segundo disparo se encuentra el lease o el cooldown.
+
+### 11.4 · 🔴 La fuga que el guard nuevo encontró · PREEXISTENTE
+
+El master dice que «el boundary guard lo va a cazar». **Medido: no lo cazaba.**
+`clients-native-only.test.ts` está enraizado en `ORIGENES`, y `wms/despachos`
+**no figura** ahí: ese guard protege el maestro de clientes. La propiedad que
+Dirección puso como causal de detención estaba **sin medir**.
+
+`custody-analysis-boundary.test.ts` la mide —**y en su primera versión la medía
+mal**—. C4 1/2 encontró que su parser usaba `[^;\n]`, que excluye el salto de
+línea, de modo que **todo import multilínea le era invisible**: justamente el
+formato que Prettier produce solo al pasar el ancho de línea. Reproducido
+inyectando un import multilínea del proveedor en una de las cinco semillas, el
+guard seguía devolviendo `ofensores = []`.
+
+El parser se reemplazó por el **AST del compilador de TypeScript**, que es el
+instrumento que ya usa `clients-native-only.test.ts` y que no puede equivocarse
+con el formato. Y el guard tiene ahora **su propio control rojo→verde**: el
+parser viejo se conserva en el archivo, usado ÚNICAMENTE por el test que
+demuestra el falso negativo. Un instrumento también es código.
+
+En su primera corrida el guard encontró dos fugas reales:
+
+1. **`sniffCustodyVisionMime`** vivía en `productive-vision-evaluation.ts`, y
+   `physical-ingress.ts` lo importaba. **Todo el que registraba evidencia
+   arrastraba el proveedor**: recepciones desde 2-A, despachos desde 2-C-1. Se
+   extrajo a `vision-mime.ts` —función pura de números mágicos, sin razón para
+   estar ahí— y la arista desapareció para los dos.
+2. **`despachos/[id]/page.tsx → CustodyShipmentSection → CustodyShipmentActions
+   → custody/actions.ts`.** Es la superficie de custodia por scope `shipment`
+   (§2 fila 10), y mete el proveedor en el grafo de la PÁGINA de despacho desde
+   mucho antes de que existiera la puerta de egreso.
+
+**La segunda NO se remedió acá**: es la superficie que arrastra HN-1 y su
+decisión es de Dirección. Queda **fijada por test** con su cadena exacta, de modo
+que no puede crecer en silencio y que quien la corrija se entere.
+
+### 11.5 · El certificado y el POD conviven
+
+No se reemplazan. El **POD** prueba la ENTREGA con la firma de quien recibe; el
+**certificado** prueba la INTEGRIDAD de la unidad bajo custodia. Ninguno bloquea
+al otro.
+
+Y el **acta de inspección no es un error de emisión**: es el documento correcto
+para un caso liberado sin alcanzar la barra probatoria —típicamente un override
+humano—. La pantalla lo nombra así y enumera qué faltó, ya guiado.
+
+**`certificate-policy.ts` no se tocó**: byte-idéntico a `origin/main`. Lo que
+faltaba era un consumidor, y `:107` sigue siendo correcto porque `0222:777` lo
+impone por constraint.
+
+### 11.6 · La secuencia completa, a mano
+
+    foto de ingreso  →  /wms/recepciones/nueva      (nivel 1 y 2)
+    foto de egreso   →  /wms/despachos/[id]         (sólo nivel 2)
+    el análisis      →  arranca SOLO al completarse el par
+    la decisión      →  /wms/custody/[id]           (inspector)
+    el documento     →  /wms/custody/[id]           (certificado o acta)
+
+**El nivel 1 no ve nada de esto**, y sigue despachando por los dos caminos —con
+foto de ingreso y sin ella— con prueba ejecutada: `T-C7-03` (a) y (b), 11/11.
+
+---
+
+
+## 12 · EL DOCUMENTO PROBATORIO RESUELVE SIEMPRE `acta_inspeccion`
+
+**Estado declarado al cerrar 2-C-2.** El circuito de custodia está completo salvo
+esto: `loadCustodyDocumentAction` **nunca** produce un certificado. Resuelve
+`acta_inspeccion` para todo caso, incluido uno perfecto.
+
+No es un defecto de 2-C-2. Son **tres capas, las tres PREEXISTENTES**, todas
+fuera del diff de este bloque —verificadas contra `origin/main`—, y 2-C-2 las
+expuso porque construyó el primer consumidor productivo del documento. Antes la
+política existía y no la llamaba nadie, así que ninguna de las tres se
+manifestaba.
+
+### 12.1 · Las tres capas
+
+| # | Dónde | Qué hace | Bloqueo |
+|---|---|---|---|
+| **1ª** | `integrity-adapters.ts:443` (`origin/main`) · `mapDecision` | devuelve `inspectionEvidenceIds: []` fijo: la lectura nunca carga el conjunto que la decisión declaró | `NO_INSPECTION_EVIDENCE` |
+| **2ª** | `integrity-adapters.ts:357` (`origin/main`) · `mapChain` | fija `verifiedEventIds: []`, y `certificate-policy.ts:83-86` cruza los eventos de la evidencia comparada contra ese conjunto | `EVIDENCE_NOT_LINKED` |
+| **3ª** | `0250a:2030` · `is_custody_inspection_evidence_v2` | exige `ev.chain_seq > eval_ev.chain_seq`, y `decide_custody_integrity_v2` (`0251:248`) mueve `chain_head` a la punta viva AL DECIDIR: después no hay eventos posteriores a la punta | `INSPECTION_SET_NOT_CANONICAL` |
+
+Sobre la 2ª: **el dominio sí sabe calcularlo** — `chain.ts:137` hace
+`verifiedEventIds: [...covered]`. Lo que falta es que la lectura del caso lo
+recupere.
+
+Sobre la 3ª: la cota es **preexistente** —`0250a` es byte-idéntica a `main`—. Una
+remediación previa la usó como fuente canónica sin medirla, dando por hecho que
+sobrevivía a la decisión. **No sobrevive**: el canónico devuelve vacío siempre,
+después de decidir.
+
+### 12.2 · ⚠ LEVANTAR UNA CAPA NO DESTRABA EL CERTIFICADO
+
+Es lo que hay que saber antes de planificar. Las tres son independientes y las
+tres bloquean por su cuenta: resolver la 1ª deja la 2ª, resolver la 2ª deja la
+3ª, y la 3ª no se resuelve leyendo mejor sino decidiendo qué significa
+«canónico» después de una decisión que movió la punta de la cadena.
+
+**Se resuelven en un expediente ÚNICO**, y ese expediente arranca por una
+decisión de diseño —**R-21**—, no por código:
+
+> ¿La canonicidad del conjunto de inspección se valida **en el momento de
+> decidir**, o se **persiste un testigo** que permita revalidarla al emitir?
+
+Cualquier intento de destrabar capa por capa produce trabajo que la siguiente
+capa invalida. Ya pasó una vez.
+
+### 12.3 · Es FAIL-CLOSED, y por eso no fue urgente
+
+El sistema emite **acta donde correspondía certificado, nunca al revés**. No hay
+riesgo de un documento falso: hay una función que no llega. La mercadería se
+despacha, la puerta de egreso muerde, el POD se emite y la cadena queda íntegra;
+lo que no llega es la pieza que da valor comercial al servicio de custodia
+reforzada.
+
+Por eso se publica declarado y no se corrige acá: corregirlo bien es un
+expediente, y corregirlo mal —capa por capa— es peor que declararlo.
 
 ---
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { confirmDispatch, confirmDelivery, revertDispatch } from "@/lib/dispatch/dispatch";
 import { registerEgressEvidence } from "@/lib/custody/physical-egress";
 import { resolveDispatchOrderUnits } from "@/lib/custody/dispatch-egress";
+import { triggerAnalysisIfPairComplete } from "@/lib/custody/analysis-trigger";
 import { createClient } from "@/lib/supabase/server";
 import { parseCanonicalUuid } from "@/lib/custody/canonical-contract";
 import type { CustodyLevel } from "@/lib/custody/egress-gate";
@@ -78,14 +79,31 @@ export async function confirmDeliveryAction(
  * tomarlo del cliente sería dejar que quien manda el formulario elija si la
  * puerta le aplica.
  *
- * ─── POR QUÉ ACÁ NO SE DISPARA EL ANÁLISIS ───────────────────────────────
+ * ─── EL ANÁLISIS SÍ SE DISPARA ACÁ (2-C-2) ───────────────────────────────
  *
- * El camino del caso (`registerPhysicalEgressAction`) dispara la evaluación al
- * completarse el par. Este NO, y es deliberado: ese disparo arrastra
- * `OpenAICustodyVisionProvider` al grafo de despachos, que es la misma clase de
- * acoplamiento que obligó a extraer `physical-ingress.ts` en 2-A. La evaluación
- * y la decisión humana viven en `/wms/custody/[id]`, que es donde trabaja el
- * inspector; acá el operario registra la foto y ve qué falta.
+ * 2-C-1 lo dejó explícitamente afuera, porque disparar significaba importar
+ * `wms/custody/actions.ts` y con él `OpenAICustodyVisionProvider` al grafo de
+ * despachos — la misma clase de acoplamiento que obligó a extraer
+ * `physical-ingress.ts` en 2-A.
+ *
+ * 2-C-2 lo resuelve extrayendo el disparo a `@/lib/custody/analysis-trigger`,
+ * que es liviano y resuelve la composición pesada por `import()` dinámico. El
+ * grafo ESTÁTICO de despachos sigue sin contener el proveedor de visión, y ahora
+ * además el operario que saca la foto no queda mirando una pantalla donde no
+ * pasó nada. La DECISIÓN humana sigue viviendo en `/wms/custody/[id]`: acá se
+ * captura y se evalúa, no se decide.
+ *
+ * ─── D-3 · Y ESO AMPLÍA LA SUPERFICIE · APROBADO POR DIRECCIÓN ───────────
+ *
+ * Un comentario anterior decía que «las condiciones no cambiaron». Cambió una:
+ * **quién puede causar un disparo**. Esta acción exige
+ * `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`), no `wms.custody.decide`, así que
+ * ahora el operario de depósito dispara el análisis de su propio caso.
+ *
+ * Dirección lo asentó como D-3, «al servicio de D-2, con techo de gasto por caso
+ * conservado». El techo se verificó y está intacto: lease exclusivo y cooldown
+ * viven en `begin_custody_integrity_evaluation_v2` —que ya exigía `wms.edit`— y
+ * corren bajo la sesión del usuario. Ver el docblock de `analysis-trigger.ts`.
  *
  * ─── F-1 · LA UNIDAD TIENE QUE SER DE ESTE PEDIDO ────────────────────────
  *
@@ -155,6 +173,24 @@ export async function registerDispatchEgressAction(
 
     const res = await registerEgressEvidence(forced, level);
     if (!res.ok) return { ok: false, error: res.error };
+
+    // 2-C-2 · EL ANÁLISIS ARRANCA SOLO.
+    //
+    // «Saqué la foto y no pasó nada visible» garantiza reintentos y circuitos a
+    // medias. Con el par completo, el sistema evalúa acá mismo y el inspector
+    // recibe un caso ya analizado.
+    //
+    // `analysis-trigger` es LIVIANO a propósito: resuelve la composición pesada
+    // —proveedor de visión incluido— por `import()` dinámico, de modo que el
+    // grafo ESTÁTICO de despachos no contiene `openai-vision-provider`. Es la
+    // misma clase de acoplamiento que obligó a extraer `physical-ingress.ts` en
+    // 2-A, y acá se paga de entrada. Lo mide
+    // `tests/wms-ui/custody-analysis-boundary.test.ts`.
+    //
+    // Best-effort: la foto ya quedó registrada y verificada. Un análisis que no
+    // arranca no puede convertir una captura exitosa en un error.
+    await triggerAnalysisIfPairComplete(unitId);
+
     revalidate(orderId);
     return { ok: true };
   } catch (e) {

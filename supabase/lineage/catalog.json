@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 216,
-  "no_ejecutables": 27,
+  "ejecutables": 217,
+  "no_ejecutables": 28,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2817,6 +2817,32 @@
       "ledger_name": "ROLLBACK_0253_custody_egress_gate",
       "provenance": "repo (custodia/cierre-circuito)",
       "motivo": "Inversa logica e idempotente de 0253. Devuelve custody_assert_physical_unit_released a su cuerpo de 0252 seccion 7, sin la exigencia propia de la foto de egreso, y retira custody_egress_gate_status y custody_assert_egress_evidence. NO borra ningun evento foto_egreso ya registrado: la cadena es append-only y una inversa que borrara evidencia seria el ataque del que el modulo protege."
+    },
+    {
+      "id": "0254_custody_certificate_read.sql",
+      "filename": "0254_custody_certificate_read.sql",
+      "sha256": "7c1faab802f8c53c2f442f088f6f6ff75de9801cc280f9c3bbd04231df080385",
+      "orden": 244,
+      "requires": [
+        "0253_custody_egress_gate.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00244",
+      "ledger_name": "0254_custody_certificate_read",
+      "provenance": "repo (custodia/cierre-probatorio)",
+      "motivo": "CUSTODIA CIERRE CIRCUITO bloque 2-C-2. Agrega la politica de SELECT que faltaba sobre custody_release_certificates. La tabla existe desde 0250a, la fila se INSERTA sola al liberar (0251) y el grant select a authenticated esta puesto, pero la tabla tiene RLS habilitada y NINGUNA politica de select: RLS sin politica deniega todo y el grant queda por encima de una puerta cerrada, de modo que ninguna sesion podia leer un solo certificado. Ese es el corte que el contrato de cableado registra como CORTADO EN lectura en la fila 7. Se resuelve con politica de tenant y no con lectura service_role porque el certificado es el documento del cliente: sacar la autorizacion de la base y ponerla en el codigo, justo en el artefacto cuyo valor es probatorio, seria el error. Criterio copiado de custody_physical_units_read. No toca la tabla, ni sus constraints, ni sus triggers de inmutabilidad, ni la insercion, ni ninguna funcion custody_assert."
+    },
+    {
+      "id": "ROLLBACK_0254_custody_certificate_read.sql",
+      "filename": "ROLLBACK_0254_custody_certificate_read.sql",
+      "sha256": "657fc55fbed7e59eccb937838c9181f9eece5b3d14c6022139f2e533c7a57d98",
+      "orden": 245,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00245",
+      "ledger_name": "ROLLBACK_0254_custody_certificate_read",
+      "provenance": "repo (custodia/cierre-probatorio)",
+      "motivo": "Inversa logica e idempotente de 0254. Retira la politica y devuelve la tabla a RLS habilitada sin politica. NO borra ningun certificado emitido: la tabla es inmutable por trigger desde 0250a y una inversa que borrara documentos probatorios seria el ataque del que el modulo protege."
     }
   ]
 }

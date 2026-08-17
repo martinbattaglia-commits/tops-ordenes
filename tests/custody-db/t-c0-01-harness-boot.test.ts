@@ -29,9 +29,9 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
     expect(CUSTODY_MIGRATION_MANIFEST.length).toBe(EXPECTED_CUSTODY_MANIFEST_SIZE);
   });
 
-  it("el cierre de custodia son 36 archivos + 13 migraciones gobernadas", () => {
+  it("el cierre de custodia son 36 archivos + 14 migraciones gobernadas", () => {
     const custodyForwards = CUSTODY_MIGRATION_MANIFEST.filter((m) =>
-      /^(?:02(?:2[1-6]|3[12])|0250a?|025[123])_/.test(m),
+      /^(?:02(?:2[1-6]|3[12])|0250a?|025[1234])_/.test(m),
     );
     expect(custodyForwards).toEqual([
       "0221_custody_integrity_enums.sql",
@@ -48,6 +48,8 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
       "0252_custody_two_levels.sql",
       // 2-B · la puerta de egreso (Adenda §4.2).
       "0253_custody_egress_gate.sql",
+      // 2-C-2 · la politica de lectura del certificado.
+      "0254_custody_certificate_read.sql",
     ]);
     expect(CUSTODY_MIGRATION_MANIFEST.length - custodyForwards.length).toBe(CUSTODY_CLOSURE_SIZE);
   });
