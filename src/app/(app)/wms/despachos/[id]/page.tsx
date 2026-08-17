@@ -7,6 +7,8 @@ import { SHIPMENT_STATUS_META } from "@/lib/dispatch/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { fmtDateTime } from "@/lib/utils";
 import { DispatchActions } from "../_components/DispatchActions";
+import { DispatchEgressPanel } from "../_components/DispatchEgressPanel";
+import { getDispatchEgressGate } from "@/lib/custody/dispatch-egress";
 import { CustodyShipmentSection } from "../../custody/_components/CustodyShipmentSection";
 
 export const metadata = { title: "Despacho de pedido · WMS" };
@@ -33,6 +35,11 @@ export default async function DispatchPanelPage({ params }: { params: { id: stri
 
   const meta = ORDER_STATUS_META[panel.status];
   const sm = panel.shipment ? SHIPMENT_STATUS_META[panel.shipment.status] : null;
+
+  // 2-C-1 · La puerta de egreso. Devuelve `applies: false` para el nivel 1, para
+  // la mercadería sin custodia y ante cualquier error de lectura: en esos casos
+  // la pantalla queda EXACTAMENTE igual que antes de este bloque.
+  const egreso = await getDispatchEgressGate(panel.order_id);
 
   return (
     <div className="p-4 lg:p-8 nx-page-fade">
@@ -90,6 +97,17 @@ export default async function DispatchPanelPage({ params }: { params: { id: stri
           color={panel.shipment ? sm!.color : panel.all_closed ? "#0d9488" : "#ea580c"}
         />
       </div>
+
+      {/* Puerta de egreso (2-C-1) — INMEDIATAMENTE ANTES de las acciones, que es
+          donde vive `confirmDispatchAction`. Sólo nivel 2: si no aplica, no se
+          monta nada y la pantalla es la de siempre. */}
+      {egreso.applies && (
+        <DispatchEgressPanel
+          orderId={panel.order_id}
+          units={egreso.units}
+          allAllowed={egreso.allAllowed}
+        />
+      )}
 
       {/* Acciones (cliente) */}
       <div className="mb-4">

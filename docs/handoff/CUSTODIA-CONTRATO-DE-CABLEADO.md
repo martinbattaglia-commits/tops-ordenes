@@ -1,9 +1,9 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-B** — la PUERTA DE EGRESO construida, los
-códigos de bloqueo traducidos y el 404 retirado (§10). Antes: juntura 2-A/2-B
-reconciliada con `main 9da9f04` (§9.7)
+**Última actualización:** **Bloque 2-C-1** — la puerta de egreso quedó OPERABLE:
+la foto se saca en despachos, inmediatamente antes de `confirmDispatchAction`
+(§10.8). Antes: 2-B construyó la puerta y tradujo los bloqueos (§10)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -773,9 +773,127 @@ comprobar, y **no es un defecto de `certificate-policy.ts`**.
 - Ninguna migración fuera de `0253`. `0251` y `0252` y sus ROLLBACK, verificados
   byte-idénticos a `acf090d1`.
 - El §7 visual, HN-1 y la sesión de UI siguen abiertos.
-- `registerEgressEvidence` y `custody_egress_gate_status` quedan **escritos y
-  probados pero sin consumidor en picking/packing/despachos**: cablear esa
-  superficie es trabajo de la sesión de UI, no de este bloque.
+- ~~`registerEgressEvidence` y `custody_egress_gate_status` quedan **escritos y
+  probados pero sin consumidor en picking/packing/despachos**~~ → **CERRADO por
+  2-C-1**, ver §10.8.
+
+### 10.8 · 2-C-1 · LA PUERTA DE EGRESO QUEDÓ OPERABLE
+
+La costura de §10.7 está cerrada: `registerEgressEvidence` y
+`custody_egress_gate_status` tienen consumidor.
+
+**Dónde quedó la captura, exactamente.** En `/wms/despachos/[id]`,
+**inmediatamente antes de `<DispatchActions>`** — el componente que contiene
+`confirmDispatchAction`, que es la acción que descuenta stock reservado, lotes y
+ledger. Es el momento que Dirección definió: entre el packing y el despacho, con
+el bulto cerrado y el bien todavía bajo control del depósito.
+
+| Pieza | Archivo | Qué hace |
+|---|---|---|
+| Datos | `src/lib/custody/dispatch-egress.ts` | resuelve pedido → unidades → estado de la puerta |
+| Acción | `wms/despachos/actions.ts` · `registerDispatchEgressAction` | fuerza el par canónico, lee el NIVEL de la base y llama a `registerEgressEvidence` |
+| Pantalla | `wms/despachos/_components/DispatchEgressPanel.tsx` | un input por unidad, `capture="environment"`, guard de un solo vuelo |
+
+**El nivel 1 no ve nada, y no por una condición del componente.** El servidor
+devuelve `applies: false` y la página no monta el panel: sin panel, sin aviso y
+sin botón apagado. Un `if (level < 2) return null` adentro habría dejado el
+componente en el árbol, que es justo lo que el bloque prohíbe.
+
+**Por qué hizo falta una lectura administrativa, y por qué no es un atajo.**
+`custody_egress_gate_status` es POR UNIDAD y la pantalla es POR PEDIDO. El puente
+es `custody_allocation_physical_units`, que tiene **RLS habilitada y ninguna
+política de SELECT**: con el cliente de sesión devuelve cero filas aunque el
+grant exista. Las allocations salen de la SESIÓN, la lectura admin es un mapeo
+cerrado sobre esas allocations, y el estado de cada unidad se pide otra vez por
+SESIÓN con la RPC, que exige `wms.view` y compara el tenant. La autorización
+está ahí, no en el mapeo.
+
+**Sin migración.** La cadena de compuertas de 0253 ya muerde; no se agregó
+ninguna. El lease `0254` quedó **sin usar**.
+
+**Lo que este bloque NO hace, y hay que saberlo:** la captura desde despacho
+**no dispara el análisis**. El camino del caso
+(`registerPhysicalEgressAction`) sí lo hace, pero ese disparo arrastra
+`OpenAICustodyVisionProvider` al grafo de despachos — la misma clase de
+acoplamiento que obligó a extraer `physical-ingress.ts` en 2-A. La evaluación y
+la decisión humana siguen viviendo en `/wms/custody/[id]`, que es donde trabaja
+el inspector.
+
+### 10.9 · Remediación consolidada de C4 1/2 · dos hallazgos bloqueantes
+
+C4 1/2 cerró **FAIL con 10 hallazgos**. Se remediaron los **dos bloqueantes**.
+
+#### F-1 · el vínculo pedido ↔ unidad
+
+`registerDispatchEgressAction` recibía `orderId` y **sólo lo usaba para
+revalidar**. Nivel, tenant y permiso se comprobaban; la PERTENENCIA no. Un
+operario con permiso de captura, parado en el pedido A, podía mandar el
+`entity_id` de una unidad del pedido B que seguía en picking, y la foto quedaba
+adjunta a un bulto que estaba en la estantería.
+
+**Lo que se rompía no era un permiso: era el ANCLAJE TEMPORAL de la puerta.**
+`has_egress_photo` es la única condición de `0253` que el operario resuelve por
+sí mismo, y una vez satisfecha lo queda para siempre. Con la foto tomada fuera de
+la ventana que Dirección definió —bulto cerrado, bien todavía bajo control del
+depósito— la compuerta sigue abriéndose pero ya no acredita el momento que tenía
+que acreditar.
+
+**Dónde quedó la validación, y por qué ahí:** en el **servidor**, en la acción,
+antes de leer el nivel y antes de tocar Storage. El componente sólo ofrece las
+unidades correctas, pero la acción es alcanzable sin él. Y resuelve
+pedido→unidades con `resolveDispatchOrderUnits` —extraído de
+`getDispatchEgressGate`—, que es **el mismo camino que usa el panel**: dos formas
+de contestar esa pregunta divergen, y entonces la validación deja de describir lo
+que la pantalla ofrece.
+
+| Capa | Qué agrega |
+|---|---|
+| `dispatch-egress.ts` | `resolveDispatchOrderUnits(orderId)` — el ÚNICO camino pedido→unidades. Devuelve `null` (no lista vacía) cuando no hay genealogía, para que quien llama distinga «pedido sin custodia» de «unidad ajena» |
+| `despachos/actions.ts` | la guarda de pertenencia, primera comprobación de la acción |
+
+La contención triple que el C4 elogió **no cambió**: allocations por SESIÓN,
+puente admin CERRADO sobre esas allocations, identidad por SESIÓN. El resolvedor
+las reproduce en el mismo orden.
+
+#### F-3 · los dobles descartaban argumentos
+
+`dispatch-egress-gate.test.ts` hacía `for (const m of [...]) api[m] = () => api`:
+`select`, `eq`, `in` y `order` ignoraban lo que recibían, y `rpc` no aceptaba
+parámetros. **Borrar `.in("allocation_id", allocationIds)` —el acotamiento del
+`service_role` que Dirección aprobó— dejaba pasar los seis tests idénticos.**
+
+Ahora `eq` e `in` registran su predicado y `then` resuelve las filas filtradas; y
+`rpc` responde POR `p_physical_unit_id`. **Y las fixtures traen filas ajenas a
+propósito** —un pedido, una allocation y una unidad de otro despacho—: sin ellas
+el doble podría respetar los argumentos y los mutantes seguirían vivos, porque no
+habría nada que los filtros tuvieran que excluir. Los datos son la mitad de la
+prueba.
+
+Cinco mutantes, cinco muertos. Ver el informe de la sesión.
+
+#### Lo que esta ventana NO tocó
+
+F-2 (el arnés que no corre en CI) y los siete no bloqueantes quedan abiertos por
+decisión de Dirección. `certificate-policy.ts`, `pod-pdf.ts`,
+`PodPdfDocument.tsx` y `qr.ts` byte-idénticos. **Ninguna migración: el lease
+`0254` sigue sin usar.**
+
+#### 🔴 Rojo preexistente, encontrado al correr el arnés a mano
+
+`tests/wms-ui/presentation.test.ts:348` espera
+`blockerLabel("XX") === "Requisito de liberación no cumplido"` y hoy devuelve
+`"XX"`.
+
+**Es de 2-B y está en `main`.** Lo introdujo el rewire de `blockerLabel` para que
+su respaldo delegue en `guidance()` (§10 · S2-6): `guidance` pasa de largo lo que
+no tiene forma de código, y `CODE_SHAPE = /^[A-Z][A-Z0-9_]{2,}$/` exige tres
+caracteres, así que `"XX"` vuelve sin traducir. Los tres archivos involucrados son
+**byte-idénticos a `origin/main`**, y viajó invisible porque CI no ejecuta
+`vitest.wms-ui.config.ts` — que es exactamente F-2.
+
+No se remedió acá: está fuera de los dos hallazgos de esta ventana, vive en la
+superficie que 2-B ya cerró, y decidir si corrige el test o el umbral de
+`CODE_SHAPE` es una decisión de alcance. **Queda para Dirección.**
 
 ---
 
