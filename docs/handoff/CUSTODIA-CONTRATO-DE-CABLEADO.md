@@ -1032,6 +1032,65 @@ foto de ingreso y sin ella— con prueba ejecutada: `T-C7-03` (a) y (b), 11/11.
 
 ---
 
+
+## 12 · EL DOCUMENTO PROBATORIO RESUELVE SIEMPRE `acta_inspeccion`
+
+**Estado declarado al cerrar 2-C-2.** El circuito de custodia está completo salvo
+esto: `loadCustodyDocumentAction` **nunca** produce un certificado. Resuelve
+`acta_inspeccion` para todo caso, incluido uno perfecto.
+
+No es un defecto de 2-C-2. Son **tres capas, las tres PREEXISTENTES**, todas
+fuera del diff de este bloque —verificadas contra `origin/main`—, y 2-C-2 las
+expuso porque construyó el primer consumidor productivo del documento. Antes la
+política existía y no la llamaba nadie, así que ninguna de las tres se
+manifestaba.
+
+### 12.1 · Las tres capas
+
+| # | Dónde | Qué hace | Bloqueo |
+|---|---|---|---|
+| **1ª** | `integrity-adapters.ts:443` (`origin/main`) · `mapDecision` | devuelve `inspectionEvidenceIds: []` fijo: la lectura nunca carga el conjunto que la decisión declaró | `NO_INSPECTION_EVIDENCE` |
+| **2ª** | `integrity-adapters.ts:357` (`origin/main`) · `mapChain` | fija `verifiedEventIds: []`, y `certificate-policy.ts:83-86` cruza los eventos de la evidencia comparada contra ese conjunto | `EVIDENCE_NOT_LINKED` |
+| **3ª** | `0250a:2030` · `is_custody_inspection_evidence_v2` | exige `ev.chain_seq > eval_ev.chain_seq`, y `decide_custody_integrity_v2` (`0251:248`) mueve `chain_head` a la punta viva AL DECIDIR: después no hay eventos posteriores a la punta | `INSPECTION_SET_NOT_CANONICAL` |
+
+Sobre la 2ª: **el dominio sí sabe calcularlo** — `chain.ts:137` hace
+`verifiedEventIds: [...covered]`. Lo que falta es que la lectura del caso lo
+recupere.
+
+Sobre la 3ª: la cota es **preexistente** —`0250a` es byte-idéntica a `main`—. Una
+remediación previa la usó como fuente canónica sin medirla, dando por hecho que
+sobrevivía a la decisión. **No sobrevive**: el canónico devuelve vacío siempre,
+después de decidir.
+
+### 12.2 · ⚠ LEVANTAR UNA CAPA NO DESTRABA EL CERTIFICADO
+
+Es lo que hay que saber antes de planificar. Las tres son independientes y las
+tres bloquean por su cuenta: resolver la 1ª deja la 2ª, resolver la 2ª deja la
+3ª, y la 3ª no se resuelve leyendo mejor sino decidiendo qué significa
+«canónico» después de una decisión que movió la punta de la cadena.
+
+**Se resuelven en un expediente ÚNICO**, y ese expediente arranca por una
+decisión de diseño —**R-21**—, no por código:
+
+> ¿La canonicidad del conjunto de inspección se valida **en el momento de
+> decidir**, o se **persiste un testigo** que permita revalidarla al emitir?
+
+Cualquier intento de destrabar capa por capa produce trabajo que la siguiente
+capa invalida. Ya pasó una vez.
+
+### 12.3 · Es FAIL-CLOSED, y por eso no fue urgente
+
+El sistema emite **acta donde correspondía certificado, nunca al revés**. No hay
+riesgo de un documento falso: hay una función que no llega. La mercadería se
+despacha, la puerta de egreso muerde, el POD se emite y la cadena queda íntegra;
+lo que no llega es la pieza que da valor comercial al servicio de custodia
+reforzada.
+
+Por eso se publica declarado y no se corrige acá: corregirlo bien es un
+expediente, y corregirlo mal —capa por capa— es peor que declararlo.
+
+---
+
 ## 8 · LO QUE LA SESIÓN 0 NO HIZO (histórico)
 
 - Cero cambios en `src/`, `supabase/` o `tests/`.
