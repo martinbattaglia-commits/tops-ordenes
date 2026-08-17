@@ -1,0 +1,57 @@
+name: Tracking · Alerta de silencio (diaria)
+
+# TRACKING-FMC130 · punto 3 — aviso cuando deja de entrar información al tracking.
+#
+# El tracking estuvo 38 días sin recibir una posición y nadie se enteró (última
+# el 10-07-2026, detectado el 17-08-2026). Este workflow pregunta una vez por día
+# si entró algo; si no, el endpoint manda un correo.
+#
+# ⚠️ ACTIVACIÓN: los schedules de GH Actions sólo corren desde la DEFAULT BRANCH.
+# Este archivo queda inerte hasta que Dirección lo lleve a `main`, o se dispare
+# a mano con workflow_dispatch.
+#
+# Secrets requeridos (ya configurados — los usan los workflows existentes):
+#   - CRON_SECRET : mismo valor que la env var CRON_SECRET en Netlify.
+#   - APP_URL     : (opcional) base URL del deploy.
+#
+# Sin estado: una corrida por día ⇒ un correo por día mientras dure el silencio.
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # 12:00 UTC ≈ 09:00 en Argentina, con la operación arrancada
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tracking-silence-alert
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger tracking silence check
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE="${APP_URL:-https://tops-ordenes.netlify.app}"
+          echo "POST $BASE/api/tracking/cron/silence-alert"
+          code=$(curl -sS --max-time 60 -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "$BASE/api/tracking/cron/silence-alert")
+          echo "HTTP $code"
+          cat /tmp/resp.json || true
+          echo
+          test "$code" = "200"
+          alerted=$(jq -r '.alerted // false' /tmp/resp.json)
+          hours=$(jq -r '.hours_silent // "?"' /tmp/resp.json)
+          if [ "$alerted" = "true" ]; then
+            echo "::warning::Tracking en silencio hace $hours h — se envió el aviso por correo."
+          else
+            echo "Tracking recibiendo datos (último hace $hours h)."
+          fi

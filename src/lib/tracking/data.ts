@@ -39,9 +39,15 @@ export async function listFleet(): Promise<FleetListResult> {
   const supabase = createClient();
   if (!supabase) return { ok: true, vehicles: [] };
 
+  // El enum `fleet_vehicle_status_t` tiene tres valores y hasta acá NADIE lo
+  // leía: la pantalla mostraba toda la tabla, incluidos vehículos dados de baja.
+  // Se oculta SÓLO `inactive`. `maintenance` sigue visible a propósito: un camión
+  // en taller sigue siendo parte de la flota y su ausencia se leería como falla
+  // de tracking, que es justamente lo que la pantalla tiene que poder distinguir.
   const { data: vehicleData, error } = await supabase
     .from("fleet_vehicles")
     .select("id,name,plate,type,status,driver_name,device_identifier,updated_at")
+    .neq("status", "inactive")
     .order("name", { ascending: true });
 
   if (error) return { ok: false, error: error.message };
