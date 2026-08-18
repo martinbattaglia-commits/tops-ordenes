@@ -16,6 +16,7 @@ export interface ClienteRow {
   localidad: string | null; activo: boolean | null; created_at: string | null;
   cuenta_contable: string | null; nombre_comercial: string | null; codigo: string | null;
   observaciones: string | null; updated_at: string | null;
+  custody_level: number | null;
 }
 export interface FacturaClienteRow {
   id: string; numero_comprobante: number | null; tipo_comprobante: string | null;
@@ -37,7 +38,7 @@ export async function getClienteFicha(id: string): Promise<ClienteFicha | null> 
   if (!supabase) return null;
   const { data: cliente } = await supabase
     .from("clients")
-    .select("id, razon, cuit, domicilio, telefono, email, contacto, tags, deposito_asignado, condicion_iva, localidad, activo, created_at, cuenta_contable, nombre_comercial, codigo, observaciones, updated_at")
+    .select("id, razon, cuit, domicilio, telefono, email, contacto, tags, deposito_asignado, condicion_iva, localidad, activo, created_at, cuenta_contable, nombre_comercial, codigo, observaciones, updated_at, custody_level")
     .eq("id", id)
     .maybeSingle();
   if (!cliente) return null;

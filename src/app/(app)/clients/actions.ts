@@ -542,6 +542,51 @@ export async function setClientActivo(
 }
 
 // ============================================================================
+// Custodia digital · nivel contratado
+// ============================================================================
+
+/**
+ * Contrata la custodia digital reforzada de un cliente (nivel 1 → 2) vía la
+ * RPC hermana `client_set_custody_level` (0256), nunca vía `client_update`.
+ *
+ * Esta superficie SOLO eleva. La RPC admite el 2→1 con motivo, pero rescindir
+ * un servicio contratado es una decisión de Dirección que no se ofrece desde
+ * esta pantalla; por eso el nivel destino está fijado en 2 y no es parámetro.
+ * El permiso real (`clientes.custody.contract`) lo exige la base fail-closed;
+ * el chequeo previo de acá solo evita un round-trip con error críptico.
+ */
+export async function contractClientCustody(
+  id: string,
+  expectedUpdatedAt: string,
+): Promise<{ ok: true; updated_at: string } | { ok: false; error: string }> {
+  const deny = await requireExactPermission("clientes.custody.contract");
+  if (deny) return { ok: false, error: deny };
+  if (!z.string().uuid().safeParse(id).success) return { ok: false, error: "Cliente inválido." };
+  if (!expectedUpdatedAt?.trim()) {
+    return { ok: false, error: "Falta la versión vigente de la ficha. Recargá la página." };
+  }
+
+  const supabase = createUserClient();
+  if (!supabase) return { ok: false, error: "Sesión no disponible." };
+
+  const { data: updated, error } = await supabase
+    .rpc("client_set_custody_level", {
+      p_id: id,
+      p_level: 2,
+      p_expected_updated_at: expectedUpdatedAt,
+    })
+    .select("updated_at")
+    .single<{ updated_at: string }>();
+  if (error || !updated?.updated_at) {
+    return { ok: false, error: traducirErrorRpc(error?.message) };
+  }
+
+  revalidatePath(`/clientes/${id}`);
+  revalidatePath("/clients");
+  return { ok: true, updated_at: updated.updated_at };
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -560,6 +605,8 @@ function traducirErrorRpc(msg: string | undefined): string {
   if (msg.includes("CLIENT_RAZON_VACIA")) return "La razón social es obligatoria.";
   if (msg.includes("CLIENT_ORIGEN_INVALIDO")) return "El origen del alta no es válido.";
   if (msg.includes("CLIENT_MOTIVO_REQUERIDO")) return "El motivo es obligatorio.";
+  if (msg.includes("CLIENT_SIN_PERFIL_ACTIVO")) return "Tu perfil no está activo. Contactá a un administrador.";
+  if (msg.includes("CLIENT_NIVEL_INVALIDO")) return "El nivel de custodia no es válido.";
   if (msg.includes("CLIENT_INEXISTENTE")) return "El cliente no existe.";
   if (msg.includes("CLIENT_CAMPO_NO_LIMPIABLE")) return "Ese campo no se puede vaciar.";
   if (msg.includes("CLIENT_CONFLICTO_CONCURRENTE")) {

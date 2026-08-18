@@ -336,6 +336,12 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // viven en 0250a, fuera del vanilla.
   "0254_custody_certificate_read.sql",
   "ROLLBACK_0254_custody_certificate_read.sql",
+  // CUSTODIA NIVEL CONTRATADO · la perilla de contratacion. El valor de enum y
+  // la RPC client_set_custody_level se apoyan en 0241/0242 (maestro nativo de
+  // clientes) y en 0252, ninguna de ellas en el snapshot vanilla congelado.
+  "0255_clients_custody_action_enum.sql",
+  "0256_clients_custody_level_rpc.sql",
+  "ROLLBACK_0256_clients_custody_level_rpc.sql",
   // CUSTODIA HN-1 CIERRE · B-1 · se retira EXECUTE a `authenticated` sobre
   // `upsert_custody_integrity_assessment`, con su rollback logico. Misma
   // decision explicita: la funcion nace en 0223, que ya esta excluida por su

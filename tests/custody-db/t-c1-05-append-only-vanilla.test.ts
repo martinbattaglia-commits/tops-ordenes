@@ -336,7 +336,18 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   const propioDeCustodia = rutasPropiasDeCustodia(cambiosDeLaRama(git, BASE, ".")).length > 0;
   const enLaBase = (ruta: string): string => git(["show", `${BASE}:${ruta}`]);
 
-  const VANILLA_AUTHORIZED_CHANGES = ["tests/db/harness/manifest.ts"];
+  // CUSTODIA NIVEL CONTRATADO: 0255/0256 corren en el arnés VANILLA a
+  // propósito —dependen de 0241/0242, que el snapshot congelado de custodia no
+  // tiene (ver t-c1-10)—, así que su prueba y su registro viven bajo
+  // `tests/db`. La lista enumera cada archivo por nombre, igual que la lista
+  // blanca de package.json: nada fuera de ella puede cambiar.
+  const VANILLA_AUTHORIZED_CHANGES = [
+    "tests/db/harness/manifest.ts",
+    "tests/db/harness/custodia-closure.ts",
+    "tests/db/scripts/expected-suite.mjs",
+    "tests/db/t-a0-13-run-report.test.ts",
+    "tests/db/t-cli-a3-01-nivel-contratado.test.ts",
+  ];
 
   it("la base se resuelve a un commit real y NO es HEAD~1 por descarte", () => {
     expect(BASE).toMatch(/^[0-9a-f]{40}$/);
