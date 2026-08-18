@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 219,
-  "no_ejecutables": 29,
+  "ejecutables": 220,
+  "no_ejecutables": 30,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2853,7 +2853,7 @@
         "0252_custody_two_levels.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00246",
+      "ledger_version": "L00248",
       "ledger_name": "0255_clients_custody_action_enum",
       "provenance": "repo (custodia/nivel-contratado)",
       "motivo": "CUSTODIA NIVEL CONTRATADO. SOLO agrega el valor custody_contract al enum permission_action_t y nada mas. PostgreSQL prohibe usar un valor de enum nuevo en la misma transaccion que lo crea y el harness aplica cada archivo como una transaccion implicita, asi que el seed del permiso y la RPC viven en 0256. Precedente identico en 0221, 0164 y 0167. Hace falta una accion nueva porque permissions tiene unique(module,action) y el modulo clientes ya ocupa view create edit delete. Sin rollback: PostgreSQL no admite quitar un valor de un enum, igual que 0221."
@@ -2867,7 +2867,7 @@
         "0255_clients_custody_action_enum.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00247",
+      "ledger_version": "L00249",
       "ledger_name": "0256_clients_custody_level_rpc",
       "provenance": "repo (custodia/nivel-contratado)",
       "motivo": "CUSTODIA NIVEL CONTRATADO. Siembra el permiso clientes.custody.contract SIN asignarlo a ningun rol y crea la RPC client_set_custody_level, gemela de client_set_active: permiso propio, sesion del usuario, CAS obligatorio, motivo obligatorio solo en la baja 2 a 1 y evento de auditoria atomico. NO toca la firma de client_update: agregarle un parametro habria creado una SOBRECARGA con la vieja todavia granteada y sin la guarda del nivel, habria vuelto ambiguas las llamadas con argumentos nombrados y habria debilitado la guarda de orden de ROLLBACK_0241 que identifica client_update por su firma literal. No toca receptions.custody_reforzada ni la regla eleva nunca degrada de 0252, ni custody_physical_units.custody_level, que es columna propia con default 2."
@@ -2879,10 +2879,36 @@
       "orden": 248,
       "requires": [],
       "estado": "rollback",
-      "ledger_version": "L00248",
+      "ledger_version": "L00250",
       "ledger_name": "ROLLBACK_0256_clients_custody_level_rpc",
       "provenance": "repo (custodia/nivel-contratado)",
       "motivo": "Inversa logica e idempotente de 0256. Retira la RPC y el permiso solo si ningun rol lo tiene asignado. NO borra client_events, NO modifica clients.custody_level de ningun cliente y NO quita el valor de enum de 0255, que PostgreSQL no admite retirar. No depende de ninguna otra inversa porque 0256 no toca client_update, client_create ni client_set_active."
+    },
+    {
+      "id": "0257_custody_legacy_creator_revoke.sql",
+      "filename": "0257_custody_legacy_creator_revoke.sql",
+      "sha256": "8df089cec973d494a70e279f687624f61ab2495990d6028e6219b658986a2eec",
+      "orden": 249,
+      "requires": [
+        "0254_custody_certificate_read.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00246",
+      "ledger_name": "0257_custody_legacy_creator_revoke",
+      "provenance": "repo (custodia/hn-1-cierre)",
+      "motivo": "CUSTODIA HN-1 CIERRE bloque B-1, extremo de atras. Retira EXECUTE a authenticated sobre upsert_custody_integrity_assessment, la unica funcion capaz de crear casos de custodia no fisicos. Medido sobre produccion antes de escribirla: los 4 casos existentes son todos physical_unit, casos con packing_unit_id o shipment_id son CERO, el circuito productivo de 0250a y 0252 inserta siempre physical_unit_id por trigger de recepcion, ningun codigo de src la llama y ninguna funcion SQL la invoca internamente, y sin embargo authenticated conservaba EXECUTE desde 0223 linea 160. Era una RPC de escritura alcanzable por PostgREST desde cualquier sesion autenticada, sin consumidor, capaz de crear casos que la pantalla despues no puede decidir porque decide_custody_integrity v1 ya esta revocada desde 0250a lineas 2199-2200. R-22: el privilegio se retira sin esperar a que se demuestre el camino. NO elimina la funcion porque sigue siendo el ingreso legitimo del circuito no fisico bajo el dueno del esquema y sostiene la cobertura D1 a D3 de 0221 a 0224 en tests custody-db. service_role conserva EXECUTE a proposito: el master acota la revocacion a authenticated. No toca decide_custody_integrity_v2 ni su cuerpo, no reconcede decide_custody_integrity v1 a ningun rol, y no toca custody_inspection_candidates que 0224 linea 313 mantiene concedida y que no esta rota."
+    },
+    {
+      "id": "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
+      "filename": "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
+      "sha256": "80a50c7fcfdbee4660df1f73ef66b1696edc4397fcc570c58cece36442406a77",
+      "orden": 250,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00247",
+      "ledger_name": "ROLLBACK_0257_custody_legacy_creator_revoke",
+      "provenance": "repo (custodia/hn-1-cierre)",
+      "motivo": "Inversa logica e idempotente de 0257. Devuelve upsert_custody_integrity_assessment al estado exacto de 0223 lineas 159 y 160: revocada para public y anon, concedida a authenticated. Queda escrito que ejecutarlo REABRE la superficie que 0257 cerro y devuelve la base al estado inconsistente que HN-1 describe, porque decide_custody_integrity v1 sigue revocada y este rollback no la reconcede: no restaura una capacidad de negocio, ya que no hay consumidor, sino un privilegio sin camino. No borra identidades, eventos, evidencias, intentos, decisiones, certificados ni auditoria."
     }
   ]
 }

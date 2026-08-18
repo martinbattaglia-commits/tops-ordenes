@@ -5,7 +5,13 @@ import {
   getCustodyTimeline,
   getPhysicalUnitToken,
   getShipmentToken,
+  resolveActorNames,
 } from "@/lib/custody/custody";
+import {
+  deriveCaseProgress,
+  deriveDecisionChecklist,
+  deriveNowAction,
+} from "@/lib/custody/case-progress";
 import { custodyQrDataUrl } from "@/lib/custody/qr";
 import { fmtDateTime } from "@/lib/utils";
 import type { CustodyEvidenceRef, CustodyTimeline as Timeline } from "@/lib/custody/types";
@@ -18,6 +24,10 @@ import { CaseReevaluatePanel } from "../_components/CaseReevaluatePanel";
 import { CasePodGate } from "../_components/CasePodGate";
 import { CaseDocumentCard } from "../_components/CaseDocumentCard";
 import { CustodyTimeline } from "../_components/CustodyTimeline";
+import { CaseProgressBar } from "../_components/CaseProgressBar";
+import { CaseNowBlock } from "../_components/CaseNowBlock";
+import { CaseEvidencePanel, type EvidenceSlot } from "../_components/CaseEvidencePanel";
+import { CaseChecklist } from "../_components/CaseChecklist";
 import { EvidenceViewer } from "../_components/EvidenceViewer";
 import { PrintButton } from "../_components/PrintButton";
 import { QrCard } from "../_components/QrCard";
@@ -35,34 +45,37 @@ export const metadata = { title: "Custodia Digital · Caso" };
 
 type EventNode = Extract<Timeline["nodes"][number], { type: "event" }>;
 
-function firstEvidence(
-  timeline: Timeline,
-  match: (n: EventNode) => boolean,
-): { evidence: CustodyEvidenceRef; occurredAt: string } | null {
-  for (const node of timeline.nodes) {
-    if (node.type !== "event") continue;
-    const ev = node as EventNode;
-    if (!match(ev)) continue;
-    const first = ev.evidences?.[0];
-    if (first) return { evidence: first, occurredAt: ev.occurred_at };
-  }
-  return null;
+interface EvidenceHit {
+  evidence: CustodyEvidenceRef;
+  occurredAt: string;
+  actorId: string | null;
+  /** Posición del evento en el timeline. La RPC ordena por `chain_seq`
+   *  ascendente (`0250a:2229`), así que el índice ES el orden de cadena. */
+  index: number;
 }
 
-function StateBadge({ label, tone }: { label: string; tone: string }) {
-  const cls =
-    tone === "released"
-      ? "badge badge-success"
-      : tone === "quarantined"
-        ? "badge badge-danger"
-        : tone === "review"
-          ? "badge badge-warning"
-          : "badge";
-  return (
-    <span className={cls} role="status" aria-label={`Estado del caso: ${label}`}>
-      {label}
-    </span>
-  );
+/**
+ * Busca un evento con evidencia. `pick: "last"` devuelve el MÁS RECIENTE en
+ * orden de cadena — imprescindible para egreso e inspección, que pueden
+ * repetirse: tras «repetí la foto de egreso», el primero ya no es el vigente.
+ */
+function scanEvidence(
+  timeline: Timeline,
+  match: (n: EventNode) => boolean,
+  pick: "first" | "last",
+  evidenceOk: (e: CustodyEvidenceRef) => boolean = () => true,
+): EvidenceHit | null {
+  let found: EvidenceHit | null = null;
+  timeline.nodes.forEach((node, index) => {
+    if (node.type !== "event") return;
+    const ev = node as EventNode;
+    if (!match(ev)) return;
+    const evidence = (ev.evidences ?? []).find(evidenceOk);
+    if (!evidence) return;
+    if (pick === "first" && found !== null) return;
+    found = { evidence, occurredAt: ev.occurred_at, actorId: ev.actor_id, index };
+  });
+  return found;
 }
 
 export default async function CustodyCasePage({ params }: { params: { id: string } }) {
@@ -101,8 +114,10 @@ export default async function CustodyCasePage({ params }: { params: { id: string
   const qr = token ? await custodyQrDataUrl(token) : null;
 
 
-  const ingreso = firstEvidence(timeline, (e) =>
-    isPhysical ? e.event_type === "foto_ingreso" : e.stage === "packing",
+  const ingreso = scanEvidence(
+    timeline,
+    (e) => (isPhysical ? e.event_type === "foto_ingreso" : e.stage === "packing"),
+    "first",
   );
   /**
    * S1-4 · EGRESO E INSPECCIÓN SON DOS EVENTOS DISTINTOS.
@@ -111,19 +126,89 @@ export default async function CustodyCasePage({ params }: { params: { id: string
    * egreso mostraba la foto de la inspección y `tieneEgreso` declaraba egreso
    * registrado cuando no lo había: el checklist del operario mentía y el panel
    * de captura se apagaba con un slot vacío. Se separan.
+   *
+   * R-3 · Y de cada uno vale el ÚLTIMO: egreso e inspección se pueden repetir
+   * («repetí la foto de egreso»), y mostrar o computar sobre el primero sería
+   * razonar sobre un ciclo ya superado.
    */
   const egreso =
-    firstEvidence(timeline, (e) => e.event_type === "foto_egreso") ??
-    (isPhysical ? null : firstEvidence(timeline, (e) => e.stage === "entrega"));
-  const inspeccion = firstEvidence(timeline, (e) => e.event_type === "inspeccion_humana");
+    scanEvidence(timeline, (e) => e.event_type === "foto_egreso", "last") ??
+    (isPhysical ? null : scanEvidence(timeline, (e) => e.stage === "entrega", "last"));
+  const inspeccion = scanEvidence(timeline, (e) => e.event_type === "inspeccion_humana", "last");
 
-  // Las clases condicionales se calculan en variables, no con template
-  // literals dentro de `className`: es el patrón que ya usa `StateBadge` en
-  // este mismo archivo, y el que el guard de clases sabe leer (I6).
-  const bannerCard = view.podBlocked ? "card mt-3 p-3" : "card mt-3 p-3 border-status-success";
-  const bannerText = view.podBlocked
-    ? "flex items-center gap-2 text-sm text-status-danger"
-    : "flex items-center gap-2 text-sm text-status-success";
+  /**
+   * R-3 · LA INSPECCIÓN VÁLIDA NO ES «HUBO UNA ALGUNA VEZ».
+   *
+   * El predicado canónico (`is_custody_inspection_evidence`, 0224) exige una
+   * foto NO redactada, posterior estricta al egreso vigente. Contar cualquier
+   * evento del timeline hacía que, tras repetir el egreso, la pantalla
+   * declarara la inspección registrada mientras el servidor la rechazaba. El
+   * índice del nodo es orden de cadena, así que «posterior al último egreso»
+   * se decide sin parsear timestamps. Divergencia residual asumida: el consumo
+   * de la evidencia por una decisión previa no es visible desde el timeline.
+   */
+  const inspeccionValida = scanEvidence(
+    timeline,
+    (e) => e.event_type === "inspeccion_humana",
+    "last",
+    (ev) => ev.kind === "foto" && !ev.redacted,
+  );
+  const tieneInspeccion =
+    inspeccionValida !== null && egreso !== null && inspeccionValida.index > egreso.index;
+
+  // §7 · QUIÉN. El nombre se resuelve en la aplicación desde `profiles_public`
+  // (vista sin PII, `grant select to authenticated`), no por migración: el
+  // timeline viene de una RPC. Ver el docblock de `resolveActorNames`.
+  const nombres = await resolveActorNames([
+    ingreso?.actorId ?? null,
+    egreso?.actorId ?? null,
+    inspeccion?.actorId ?? null,
+  ]);
+  const slot = (
+    e: EvidenceHit | null,
+  ): EvidenceSlot | null =>
+    e ? { evidence: e.evidence, occurredAt: e.occurredAt, actorName: e.actorId ? nombres[e.actorId] ?? null : null } : null;
+
+  // §7 · las tres derivaciones puras: dónde está parado, qué hacer ahora y qué
+  // falta para decidir. Viven en `case-progress.ts` para poder probarse sin DOM.
+  // `tieneInspeccion` sale del TIMELINE, no de `inspection.eligible`: ese campo
+  // se calcula detrás de un guard de `wms.custody.decide`, permiso que el
+  // operario que saca las fotos no tiene, y leerlo como «hay foto» lo dejaba
+  // pidiendo una inspección ya registrada para siempre (remediación C4 · A-2).
+  const progresoInput = {
+    view,
+    tieneIngreso: ingreso !== null,
+    tieneEgreso: egreso !== null,
+    tieneInspeccion,
+  };
+  const progreso = deriveCaseProgress(progresoInput);
+  const ahora = deriveNowAction(progresoInput);
+  const checklist = deriveDecisionChecklist(progresoInput);
+
+  // Las clases condicionales se calculan en variables, no con template literals
+  // dentro de `className`.
+  //
+  // ⚠ R-25 · ESTE COMENTARIO AFIRMABA DOS COSAS FALSAS, y las dos las volvió
+  // falsas el propio commit que lo escribió: citaba un `StateBadge` «en este
+  // mismo archivo» que no existe en ninguna parte del módulo, y sostenía que
+  // era «el patrón que el guard de clases sabe leer» cuando el extractor de
+  // `custody-ui-classes.test.ts` NO leía `className={variable}` — es decir,
+  // justo esta forma. El guard corría en verde sin mirar ninguna de estas
+  // clases. El extractor se corrigió (M-4) y ahora la afirmación es cierta:
+  // hay un mutante que lo prueba en los dos sentidos.
+  const bannerCls = view.podBlocked ? "cd-banner cd-banner--block" : "cd-banner cd-banner--ok";
+
+  // §7 VISUAL · el chip de estado del mockup, por tono del caso.
+  const estadoCls =
+    view.tone === "released"
+      ? "cd-state cd-state--released"
+      : view.tone === "quarantined"
+        ? "cd-state cd-state--quarantined"
+        : view.tone === "review"
+          ? "cd-state cd-state--review"
+          : view.tone === "hold"
+            ? "cd-state cd-state--hold"
+            : "cd-state cd-state--pending";
 
   return (
     <main className="p-4 lg:p-8 nx-page-fade">
@@ -132,156 +217,162 @@ export default async function CustodyCasePage({ params }: { params: { id: string
           <Icon name="arrow-left" size={12} /> Volver
         </Link>
         <h1 className="page-title">Custodia Digital</h1>
-        <StateBadge label={view.stateLabel} tone={view.tone} />
       </header>
 
-      {/* ── IDENTIDAD ─────────────────────────────────────────────────────
-          §7.2 · La pantalla arranca diciendo DE QUIÉN ES el bien y CUÁL es.
-          Antes el encabezado decía «Custodia Digital» y nada más: el
-          inspector estaba por liberar mercadería sin saber de qué cliente.  */}
-      <section className="card mt-4 p-4" aria-labelledby="identidad-title" data-identidad="true">
-        <p id="identidad-title" className="eyebrow-tiny">Caso de custodia</p>
-        <h2 className="mt-1 text-xl font-bold" data-cliente="true">
-          {view.identity.clientLabel ?? "Depositante no disponible"}
-        </h2>
-        {view.identity.clientFromReception && (
-          <p className="mt-0.5 text-xs text-fg-muted">
-            Depositante asentado en la recepción
-          </p>
-        )}
-
-        <div className="mt-2 flex flex-wrap gap-2">
-          {view.identity.unitPublicId && (
-            <span className="badge font-mono" data-cpu="true">{view.identity.unitPublicId}</span>
-          )}
-          {view.identity.casePublicId && (
-            <span className="badge font-mono" data-cint="true">{view.identity.casePublicId}</span>
-          )}
+      {/* ═══ LA TARJETA DEL CASO ══════════════════════════════════════════
+          Un solo objeto continuo, como en el mockup corporativo: barra navy,
+          identidad, aviso, y de ahí para abajo una sección por bloque. No es
+          una grilla de tarjetas sueltas — el circuito se lee de arriba abajo
+          en el orden en que ocurre.                                        */}
+      <div className="cd-shell mt-4" data-caso="true">
+        <div className="cd-topbar">
+          <div className="cd-topbar__left">
+            <span className="cd-topbar__brand">TOPS NEXUS</span>
+            <span className="cd-topbar__crumb">
+              WMS · Custodia Digital
+              {view.identity.unitPublicId && (
+                <> · <span className="cd-topbar__id">{view.identity.unitPublicId}</span></>
+              )}
+            </span>
+          </div>
+          <span className="cd-topbar__who">
+            <span className="cd-dot" aria-hidden="true" />
+            {view.stateLabel}
+          </span>
         </div>
 
-        <p className="mt-2 text-sm text-fg-secondary">
-          {[
-            view.identity.sku ? `SKU ${view.identity.sku}` : null,
-            view.identity.quantity !== null ? `${view.identity.quantity} un.` : null,
-            view.identity.lotNumber ? `lote ${view.identity.lotNumber}` : "sin lote",
-          ]
-            .filter((x): x is string => x !== null)
-            .join(" · ")}
-          {view.identity.receptionPublicId && view.identity.receptionId && (
-            <>
-              {" · recepción "}
-              <Link
-                href={`/wms/recepciones?id=${view.identity.receptionId}`}
-                className="underline"
-                data-recepcion="true"
-              >
-                {view.identity.receptionPublicId}
-              </Link>
-            </>
-          )}
-        </p>
-      </section>
+        {/* ── IDENTIDAD ───────────────────────────────────────────────────
+            §7.2 · La pantalla arranca diciendo DE QUIÉN ES el bien y CUÁL es.
+            Antes el encabezado decía «Custodia Digital» y nada más: el
+            inspector estaba por liberar mercadería sin saber de qué cliente. */}
+        <section className="cd-ident" aria-labelledby="identidad-title" data-identidad="true">
+          <div className="cd-ident__row">
+            <div className="cd-ident__main">
+              <p id="identidad-title" className="cd-eyebrow">
+                Caso de custodia{view.identity.clientFromReception ? " · asentado en la recepción" : ""}
+              </p>
+              <h2 className="cd-title" data-cliente="true">
+                {view.identity.clientLabel ?? "Depositante no disponible"}
+              </h2>
 
-      {/* ── BANNER DE CONSECUENCIA ────────────────────────────────────────
-          §7.2 · Arriba, nunca al pie. El operario tiene que saber qué está
-          bloqueado ANTES de mirar la evidencia.                            */}
-      <div className={bannerCard} role="status" data-banner="true">
-        <p className={bannerText}>
-          <Icon name={view.podBlocked ? "lock" : "check-circle"} size={14} aria-hidden="true" />
+              <div className="cd-chips">
+                {view.identity.unitPublicId && (
+                  <span className="cd-chip" data-cpu="true">{view.identity.unitPublicId}</span>
+                )}
+                {view.identity.casePublicId && (
+                  <span className="cd-chip" data-cint="true">{view.identity.casePublicId}</span>
+                )}
+              </div>
+
+              <p className="cd-meta">
+                {[
+                  view.identity.sku ? `SKU ${view.identity.sku}` : null,
+                  view.identity.quantity !== null ? `${view.identity.quantity} un.` : null,
+                  view.identity.lotNumber ? `lote ${view.identity.lotNumber}` : "sin lote",
+                ]
+                  .filter((x): x is string => x !== null)
+                  .join(" · ")}
+                {view.identity.receptionPublicId && view.identity.receptionId && (
+                  <>
+                    {" · recepción "}
+                    <Link
+                      href={`/wms/recepciones?id=${view.identity.receptionId}`}
+                      data-recepcion="true"
+                    >
+                      {view.identity.receptionPublicId}
+                    </Link>
+                  </>
+                )}
+              </p>
+            </div>
+
+            <span className={estadoCls} role="status" aria-label={`Estado del caso: ${view.stateLabel}`}>
+              {view.stateLabel}
+            </span>
+          </div>
+
+          <CaseProgressBar progress={progreso} />
+        </section>
+
+        {/* ── BANNER DE CONSECUENCIA ──────────────────────────────────────
+            §7.2 · Arriba, nunca al pie. El operario tiene que saber qué está
+            bloqueado ANTES de mirar la evidencia.                          */}
+        <div className={bannerCls} role="status" data-banner="true">
+          <Icon name={view.podBlocked ? "lock" : "check-circle"} size={16} aria-hidden="true" />
           <span>
             {view.podBlocked
               ? (view.podBlockedReason ?? "Despacho y POD bloqueados")
               : "Despacho habilitado · decisión humana registrada"}
           </span>
-        </p>
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        {/* ── INGRESO ────────────────────────────────────────────────── */}
-        <section className="card p-4" aria-labelledby="ingreso-title">
-          <h2 id="ingreso-title" className="eyebrow-tiny">Ingreso · recepción</h2>
-          {ingreso ? (
-            <>
-              <div className="mt-2">
-                <EvidenceViewer evidence={ingreso.evidence} />
-              </div>
-              <p className="mt-2 flex items-center gap-2 text-xs text-status-success">
-                <Icon name="check-circle" size={12} aria-hidden="true" />
-                <span>Foto vinculada · hash verificado por el servidor</span>
-              </p>
-              <p className="text-xs text-fg-muted">{fmtDateTime(ingreso.occurredAt)}</p>
-            </>
-          ) : (
-            <p className="mt-2 text-sm text-fg-muted">Sin fotografía de ingreso registrada.</p>
-          )}
-
-          {qr && token && (
-            <div className="mt-3">
-              <QrCard dataUrl={qr} url={`/c/${token}`} publicId={view.caseId.slice(0, 8)} label="QR de la unidad" />
-              <div className="mt-2"><PrintButton label="Imprimir etiqueta" /></div>
-            </div>
-          )}
-        </section>
-
-        {/* ── CUSTODIA · timeline ────────────────────────────────────── */}
-        <section className="card p-4" aria-labelledby="timeline-title">
-          <h2 id="timeline-title" className="eyebrow-tiny">Custodia · movimientos</h2>
-          <div className="mt-2">
-            <CustodyTimeline timeline={timeline} revalidate={`/wms/custody/${view.caseId}`} />
-          </div>
-        </section>
-
-        {/* ── EGRESO ─────────────────────────────────────────────────── */}
-        <section className="card p-4" aria-labelledby="egreso-title">
-          <h2 id="egreso-title" className="eyebrow-tiny">Preparación de egreso</h2>
-          {egreso ? (
-            <>
-              <div className="mt-2">
-                <EvidenceViewer evidence={egreso.evidence} />
-              </div>
-              <p className="mt-2 text-xs text-fg-muted">
-                Fotografía nueva obligatoria · {fmtDateTime(egreso.occurredAt)}
-              </p>
-            </>
-          ) : (
-            // §7.5 · Ningún texto manda al operario a otro panel. Antes decía
-            // «registrala en "Fotografías de la unidad"»: si el sistema sabe
-            // dónde está la acción, la ofrece como botón — y el panel de
-            // captura está justo abajo, con su propio slot de egreso.
-            <p className="mt-2 text-sm text-fg-muted">
-              Esperando la fotografía de egreso.
-            </p>
-          )}
-
-          {inspeccion && (
-            <div className="mt-3 border-t border-stroke-soft pt-3">
-              <p className="eyebrow-tiny">Inspección física</p>
-              <div className="mt-2">
-                <EvidenceViewer evidence={inspeccion.evidence} />
-              </div>
-              <p className="mt-1 text-xs text-fg-muted">{fmtDateTime(inspeccion.occurredAt)}</p>
-            </div>
-          )}
-        </section>
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <CaseAiPanel view={view} />
-        <div className="flex flex-col gap-3">
-          {/* Las dos fotos del contrato (§4.2) se capturan acá, en la vista
-              autenticada de la unidad. El QR es de sólo lectura y no puede
-              serlo: no hay sesión que atribuir a la captura. */}
-          <PhysicalCapturePanel
-            view={view}
-            tieneIngreso={ingreso !== null}
-            tieneEgreso={egreso !== null}
-          />
-          <CaseInspectionPanel view={view} />
-          <CaseReevaluatePanel view={view} />
-          <CaseDecisionPanel view={view} />
-          <CasePodGate view={view} shipmentId={shipmentId} hasPdf={view.podPdfReady} />
-          {documento && <CaseDocumentCard doc={documento} />}
         </div>
+
+        {/* ── ▸ AHORA · UNA SOLA ACCIÓN VIVA ─────────────────────────────
+            §7 · lo primero después del bloqueo. El resto de la pantalla sigue
+            existiendo, atenuado: el operario ve UNA cosa para hacer.        */}
+        <CaseNowBlock action={ahora} />
+
+        {/* ── EL CIRCUITO, EN ORDEN ──────────────────────────────────────
+            Evidencia → análisis → qué falta → decisión → cierre. Es el orden
+            en que el caso ocurre y en que el operario lo piensa.            */}
+        <CaseEvidencePanel
+          ingreso={slot(ingreso)}
+          egreso={slot(egreso)}
+          inspeccion={slot(inspeccion)}
+        />
+
+        <CaseAiPanel view={view} />
+
+        <CaseChecklist items={checklist} />
+
+        {/* F2-2 · cada panel lleva el id al que ancla el CTA de ▸ AHORA:
+            un botón que parece botón tiene que llevar a alguna parte. */}
+        <div className="cd-sec">
+          <div id="panel-captura">
+            <PhysicalCapturePanel
+              view={view}
+              tieneIngreso={ingreso !== null}
+              tieneEgreso={egreso !== null}
+            />
+          </div>
+          <div id="panel-inspeccion">
+            <CaseInspectionPanel view={view} />
+          </div>
+          <div id="panel-reevaluacion">
+            <CaseReevaluatePanel view={view} />
+          </div>
+          <div id="panel-decision">
+            <CaseDecisionPanel view={view} />
+          </div>
+          <div id="panel-pod">
+            <CasePodGate view={view} shipmentId={shipmentId} hasPdf={view.podPdfReady} />
+          </div>
+        </div>
+
+        {documento && (
+          <div className="cd-sec">
+            <CaseDocumentCard doc={documento} />
+          </div>
+        )}
+
+        <section className="cd-sec" aria-labelledby="timeline-title">
+          <h2 id="timeline-title" className="cd-label">Cadena de custodia</h2>
+          <CustodyTimeline timeline={timeline} revalidate={`/wms/custody/${view.caseId}`} />
+        </section>
+
+        {qr && token && (
+          <section className="cd-sec" aria-labelledby="identificacion-title">
+            <h2 id="identificacion-title" className="cd-label">Identificación física</h2>
+            <div className="cd-idrow">
+              <QrCard
+                dataUrl={qr}
+                url={`/c/${token}`}
+                publicId={view.identity.unitPublicId ?? view.caseId.slice(0, 8)}
+                label="QR de la unidad"
+              />
+              <PrintButton label="Imprimir etiqueta" />
+            </div>
+          </section>
+        )}
       </div>
 
       <footer className="mt-4 text-xs text-fg-muted">

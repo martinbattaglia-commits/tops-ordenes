@@ -10,6 +10,7 @@
  * filas por id y la base aplica su propia frontera.
  */
 
+import { CustodyContractError } from "./integrity-adapters";
 import type {
   CustodyQueryPort,
   DecideRpcInput,
@@ -259,11 +260,27 @@ export function createSupabaseCustodyQueryPort(db: CustodyDataClient): CustodyQu
       return ((data ?? []) as Array<{ slug: string }>).map((r) => r.slug);
     },
 
+    /**
+     * HN-1 · La v1 YA NO ES UN CAMINO, y la pantalla deja de fingir que lo es.
+     *
+     * `decide_custody_integrity` está revocada para `authenticated` desde
+     * `0250a:2199-2200`, así que el ternario que enrutaba ahí todo scope no
+     * físico no elegía entre dos caminos: elegía entre un camino y un `42501`
+     * de PostgreSQL subiendo crudo a la cara del inspector. Y `0257` retira
+     * también `upsert_custody_integrity_assessment`, la única RPC capaz de
+     * fabricar un caso no físico —sin consumidor en `src/`—, con lo que ya no
+     * hay ni siquiera de dónde salga un caso así.
+     *
+     * Se rechaza acá, TIPADO y explícito, antes de tocar la plataforma. El
+     * `scope` ausente cae del mismo lado: fail-closed.
+     */
     async decide(input: DecideRpcInput): Promise<string> {
-      const fn = input.scope === "physical_unit"
-        ? "decide_custody_integrity_v2"
-        : "decide_custody_integrity";
-      const { data, error } = await db.rpc(fn, {
+      if (input.scope !== "physical_unit") {
+        throw new CustodyContractError(
+          "alcance sin camino de decisión: sólo la unidad física se decide desde la pantalla",
+        );
+      }
+      const { data, error } = await db.rpc("decide_custody_integrity_v2", {
         p_case_id: input.caseId,
         p_expected_version: input.expectedVersion,
         p_decision: input.decision,

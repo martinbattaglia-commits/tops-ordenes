@@ -547,6 +547,11 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     // CUSTODIA NIVEL CONTRATADO. 0255 no tiene inversa: PostgreSQL no admite
     // quitar un valor de un enum, igual que 0221.
     "ROLLBACK_0256_clients_custody_level_rpc.sql",
+    // HN-1 · B-1 · la inversa del retiro de la creadora heredada. Misma
+    // convencion de nombre y —R-13— el MISMO commit que su entrada de
+    // catalogo: el ancla pasa a 26 en el mismo cambio en que el catalogo
+    // pasa a 247.
+    "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

@@ -23,8 +23,24 @@ import type { CustodyCaseView } from "@/lib/custody/case-presentation";
  * como valor numérico de certeza. Un número que TOPS no puede defender ante un
  * perito no va impreso en un documento probatorio.
  *
+ * NOTA (C4 · R-6) · La frase de cara al operario «según los estándares
+ * internacionales de medición del mercado» es redacción de Dirección aprobada
+ * bajo D-4, y NO contradice lo anterior: refiere a esos mismos estándares de
+ * EXPRESIÓN de la medición —veredicto cualitativo, sin corte numérico—, no a
+ * una norma que fije un umbral. El fundamento del corte sigue siendo la
+ * política interna, y el corte sigue sin salir a pantalla.
+ *
  * La garantía no depende de este archivo: `thresholdPercent` NO EXISTE en el
  * view-model, así que no hay nada que renderizar aunque alguien lo intente.
+ *
+ * ─── LOS CUATRO COMPONENTES SE LLAMAN COMO LO QUE SE MIDIÓ ────────────────
+ *
+ * El contrato del proveedor dice, textual: «Score identity, packaging,
+ * quantity, and condition independently from 0 to 100». Las cuatro tarjetas
+ * llevan ESOS nombres. Rotular `quantity` como «Textura» —como estaba— hace
+ * que la pantalla declare medida una dimensión que nadie midió, y en un
+ * expediente probatorio eso no es un detalle de diseño: es afirmar un hecho
+ * falso sobre la evidencia.
  *
  * ─── LO QUE ESTABA BIEN Y NO SE TOCA ─────────────────────────────────────
  *
@@ -32,6 +48,14 @@ import type { CustodyCaseView } from "@/lib/custody/case-presentation";
  * autoconfianza del modelo NO es similitud, y llamarla así sería exactamente
  * la confusión que I3 prohíbe. Se conserva tal cual.
  */
+
+const COMPONENTES = [
+  ["Identidad", "identity"],
+  ["Embalaje", "packaging"],
+  ["Cantidad", "quantity"],
+  ["Condición", "condition"],
+] as const;
+
 export function CaseAiPanel({ view }: { view: CustodyCaseView }) {
   const ai = view.ai;
   const concordancia = ai.concordance ?? null;
@@ -39,83 +63,74 @@ export function CaseAiPanel({ view }: { view: CustodyCaseView }) {
   const flags = ai.damageFlags ?? null;
   const score = typeof ai.similarityScore === "number" ? ai.similarityScore : null;
 
-  const tono =
-    concordancia?.tone === "ok"
-      ? "text-status-success"
-      : concordancia?.tone === "danger"
-        ? "text-status-danger"
-        : "text-status-warning";
+  const tono = concordancia?.tone ?? "warn";
+  const numeroCls =
+    tono === "ok" ? "cd-scorenum cd-scorenum--ok"
+      : tono === "danger" ? "cd-scorenum cd-scorenum--bad"
+        : "cd-scorenum cd-scorenum--warn";
+  const rellenoCls = tono === "ok" ? "cd-track__fill cd-track__fill--ok" : "cd-track__fill cd-track__fill--bad";
+  const veredictoCls =
+    tono === "ok" ? "cd-verdict cd-verdict--ok"
+      : tono === "danger" ? "cd-verdict cd-verdict--bad"
+        : "cd-verdict cd-verdict--warn";
 
   return (
-    <section className="card p-4" aria-labelledby="ia-title">
-      <h2 id="ia-title" className="eyebrow-tiny">Análisis de la comparación</h2>
+    <section className="cd-sec" aria-labelledby="ia-title">
+      <h2 id="ia-title" className="cd-label">Análisis visual · concordancia</h2>
 
       {ai.executed ? (
-        <div className="mt-3">
+        <>
           {/* ── CONCORDANCIA + VEREDICTO CUALITATIVO ───────────────────── */}
-          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <div className="cd-score">
             {score !== null && (
-              <p className="text-4xl font-bold leading-none tabular-nums" data-concordancia={score}>
-                {score.toLocaleString("es-AR", { maximumFractionDigits: 1 })}
-                <span className="ml-1 text-lg">%</span>
-                <span className="ml-2 align-middle text-xs font-normal text-fg-muted">
-                  concordancia
-                </span>
-              </p>
+              <div>
+                <p className={numeroCls} data-concordancia={score}>
+                  {score.toLocaleString("es-AR", { maximumFractionDigits: 1 })}
+                  <small>%</small>
+                </p>
+                <p className="cd-scorecap">concordancia</p>
+              </div>
             )}
+
+            {/* Barra SIN marca de umbral. Muestra la concordancia y nada más:
+                dibujar el corte encima es exactamente lo prohibido. */}
+            {score !== null && (
+              <div className="cd-trackwrap">
+                <div
+                  className="cd-track"
+                  role="img"
+                  aria-label={`Concordancia ${score} por ciento`}
+                >
+                  <i
+                    className={rellenoCls}
+                    style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
+                  />
+                </div>
+                <div className="cd-scale"><span>0%</span><span>100%</span></div>
+              </div>
+            )}
+
             {concordancia && (
-              <p className={`text-sm font-semibold ${tono}`} data-veredicto={concordancia.verdict}>
+              <span className={veredictoCls} data-veredicto={concordancia.verdict}>
                 {concordancia.label}
-              </p>
+              </span>
             )}
           </div>
 
-          {/* Barra SIN marca de umbral. La barra muestra la concordancia y
-              nada más: dibujar el umbral encima es exactamente lo prohibido. */}
-          {score !== null && (
-            <div
-              className="mt-2 h-2 w-full overflow-hidden rounded bg-bg-surface-alt"
-              role="img"
-              aria-label={`Concordancia ${score} por ciento`}
-            >
-              <div
-                className={
-                  concordancia?.tone === "ok"
-                    ? "h-full bg-status-success"
-                    : concordancia?.tone === "danger"
-                      ? "h-full bg-status-danger"
-                      : "h-full bg-status-warning"
-                }
-                style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
-              />
-            </div>
-          )}
-
-          {concordancia && (
-            <p className="mt-2 text-xs text-fg-muted">{concordancia.requirement}</p>
-          )}
-
-          {ai.confidencePercent !== null && (
-            <p className="mt-2 text-xs text-fg-muted">
-              {ai.confidencePercent}% confianza informada
-              {ai.verdictLabel ? ` · ${ai.verdictLabel}` : ""}
-            </p>
-          )}
+          {concordancia && <p className="cd-help">{concordancia.requirement}</p>}
 
           {/* ── COMPONENTES DEL SCORE ──────────────────────────────────── */}
+          {/* F2-4 · sin corte de color inventado: la versión anterior pintaba
+              en rojo los componentes bajo 80, un número que NINGUNA política
+              define — un cuasi-umbral de UI que le enseñaba al ojo un corte
+              inexistente. Los cuatro valores se muestran parejos; el juicio
+              sobre ellos es del veredicto, no de un color. */}
           {componentes && (
-            <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" data-componentes="true">
-              {(
-                [
-                  ["Estructura", componentes.identity],
-                  ["Color", componentes.packaging],
-                  ["Textura", componentes.quantity],
-                  ["Contorno", componentes.condition],
-                ] as ReadonlyArray<readonly [string, number]>
-              ).map(([label, valor]) => (
-                <div key={label} className="rounded border border-stroke-soft p-2">
-                  <dt className="eyebrow-tiny">{label}</dt>
-                  <dd className="mt-0.5 text-sm font-semibold tabular-nums">{valor}%</dd>
+            <dl className="cd-metrics" data-componentes="true">
+              {COMPONENTES.map(([label, clave]) => (
+                <div key={label} className="cd-metric">
+                  <dt><span>{label}</span></dt>
+                  <dd><b>{componentes[clave]}%</b></dd>
                 </div>
               ))}
             </dl>
@@ -123,7 +138,7 @@ export function CaseAiPanel({ view }: { view: CustodyCaseView }) {
 
           {/* ── BANDERAS DE DAÑO ───────────────────────────────────────── */}
           {flags && (
-            <ul className="mt-3 flex flex-wrap gap-2" data-banderas="true">
+            <ul className="cd-flags" data-banderas="true">
               {(
                 [
                   ["Embalaje alterado", flags.packagingChanged],
@@ -131,49 +146,27 @@ export function CaseAiPanel({ view }: { view: CustodyCaseView }) {
                   ["Daño visible", flags.damageSuspected],
                 ] as ReadonlyArray<readonly [string, boolean]>
               ).map(([label, activa]) => (
-                <li
-                  key={label}
-                  data-activa={activa}
-                  className={
-                    activa
-                      ? "flex items-center gap-1 rounded border border-status-danger px-2 py-1 text-xs font-medium text-status-danger"
-                      : "rounded border border-stroke-soft px-2 py-1 text-xs text-fg-muted"
-                  }
-                >
-                  {activa && <Icon name="bolt" size={11} aria-hidden="true" />}
-                  {label}
-                  {!activa && " · no"}
+                <li key={label} data-activa={activa} className={activa ? "cd-flag cd-flag--on" : "cd-flag"}>
+                  {activa ? `⚠ ${label}` : `${label} · no`}
                 </li>
               ))}
             </ul>
           )}
 
-          {/* ── OBSERVACIONES Y ZONAS ────────────────────────────────────
-              Sin modificador de opacidad sobre los tokens: en este sistema los
-              colores son variables CSS y `token/60` se degrada en silencio a
-              un gris fijo que además rompe el modo oscuro.                  */}
+          {/* ── OBSERVACIONES Y ZONAS ──────────────────────────────────── */}
           {(ai.observations?.length ?? 0) > 0 && (
-            <div className="mt-3 rounded border border-stroke-soft bg-bg-surface-alt p-2">
-              <p className="text-xs">
-                <span className="font-medium">Observaciones del análisis:</span>{" "}
-                {ai.observations!.join(" · ")}
-              </p>
-              {(ai.zones?.length ?? 0) > 0 && (
-                <p className="mt-1 text-xs text-fg-muted">
-                  Zonas señaladas: {ai.zones!.join(" · ")}
-                </p>
-              )}
-            </div>
+            <p className="cd-obs">
+              <b>Observaciones del análisis:</b> {ai.observations!.join(" · ")}.
+              {(ai.zones?.length ?? 0) > 0 ? ` Zonas señaladas: ${ai.zones!.join(" · ")}.` : null}
+            </p>
           )}
-        </div>
+        </>
       ) : (
-        <p className="mt-2 text-sm text-fg-muted">
-          {ai.failureLabel ?? "El análisis todavía no se ejecutó"}
-        </p>
+        <p className="cd-help">{ai.failureLabel ?? "El análisis todavía no se ejecutó"}</p>
       )}
 
-      <p className="mt-3 flex items-center gap-2 text-xs text-status-warning">
-        <Icon name="bolt" size={12} aria-hidden="true" />
+      <p className="cd-note">
+        <Icon name="bolt" size={13} aria-hidden="true" />
         <span>{ai.note}</span>
       </p>
 
@@ -181,20 +174,18 @@ export function CaseAiPanel({ view }: { view: CustodyCaseView }) {
           modelo: sin versionar, el documento probatorio no es reproducible
           (I3). El NÚMERO de la política va; su VALOR no. */}
       {ai.executed && (ai.model || ai.thresholdPolicyVersion || ai.evaluatedAt) && (
-        <p className="mt-1 font-mono text-[11px] text-fg-muted" data-procedencia="true">
+        <p className="cd-prov" data-procedencia="true">
           {ai.model ? `modelo ${ai.model}` : null}
           {ai.thresholdPolicyVersion ? ` · política ${ai.thresholdPolicyVersion}` : null}
           {ai.evaluatedAt ? ` · evaluado ${fmtDateTime(ai.evaluatedAt)}` : null}
+          {ai.confidencePercent !== null ? ` · ${ai.confidencePercent}% confianza informada` : null}
         </p>
       )}
 
       {view.holdLabels.length > 0 && (
-        <div className="mt-3">
-          <p className="eyebrow-tiny">Retenciones registradas</p>
-          <ul className="mt-1 list-disc pl-4 text-xs text-fg-muted">
-            {view.holdLabels.map((h) => <li key={h}>{h}</li>)}
-          </ul>
-        </div>
+        <ul className="cd-flags">
+          {view.holdLabels.map((h) => <li key={h} className="cd-flag cd-flag--on">{h}</li>)}
+        </ul>
       )}
     </section>
   );

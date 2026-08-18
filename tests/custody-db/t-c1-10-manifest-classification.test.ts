@@ -50,6 +50,7 @@ const CUSTODY_FORWARD_FILES = [
   "0252_custody_two_levels.sql",
   "0253_custody_egress_gate.sql",
   "0254_custody_certificate_read.sql",
+  "0257_custody_legacy_creator_revoke.sql",
 ];
 
 const CUSTODY_ARTIFACT_FILES = [
@@ -64,12 +65,13 @@ const CUSTODY_ARTIFACT_FILES = [
   // no tiene, y corren en el arnes vanilla— pero SI los captura la exclusion
   // dedicada, que es lo unico que este inventario mide: archivos en disco.
   // Por eso van aca y no en CUSTODY_FORWARD_FILES, que es la lista de los que
-  // el manifiesto dedicado si contiene (36 + 14 = 50).
+  // el manifiesto dedicado si contiene (36 + 15 = 51).
   // 0255 no tiene inversa a proposito: PostgreSQL no admite quitar un valor
   // de un enum. Mismo tratamiento que 0221.
   "0255_clients_custody_action_enum.sql",
   "0256_clients_custody_level_rpc.sql",
   "ROLLBACK_0256_clients_custody_level_rpc.sql",
+  "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
 ];
 
 const dedicated = () =>
@@ -87,20 +89,20 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
 
   it("cierre HISTÓRICO de custodia: 36", () => {
     const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_FORWARD_FILES.includes(m));
-    expect(d1d3).toHaveLength(14);
+    expect(d1d3).toHaveLength(15);
     expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(36);
     expect(CUSTODY_CLOSURE_SIZE).toBe(36);
   });
 
-  it("manifiesto DEDICADO actual: 50", () => {
-    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(50);
-    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(50);
+  it("manifiesto DEDICADO actual: 51", () => {
+    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(51);
+    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(51);
     expect(() => validateCustodyManifest()).not.toThrow();
   });
 
   // El cierre HISTÓRICO (36) no se mueve: es el pasado. Lo que crece es la
-  // serie de forwards gobernados, que con 0253 pasa de doce a trece.
-  it("36 + 14 = 50, y los catorce forwards NO están en el vanilla", () => {
+  // serie de forwards gobernados, que con 0257 pasa de catorce a quince.
+  it("36 + 15 = 51, y los quince forwards NO están en el vanilla", () => {
     expect(CUSTODY_CLOSURE_SIZE + CUSTODY_FORWARD_FILES.length).toBe(
       EXPECTED_CUSTODY_MANIFEST_SIZE,
     );
@@ -141,7 +143,7 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(frozen()!.matches(f)).toBe(false);
   });
 
-  it("cubre EXACTAMENTE los veintidós artefactos del árbol y ninguno más", () => {
+  it("cubre EXACTAMENTE los veinticuatro artefactos del árbol y ninguno más", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
     const cubiertos = onDisk.filter((f) => dedicated()!.matches(f)).sort();
     expect(cubiertos).toEqual([...CUSTODY_ARTIFACT_FILES].sort());
