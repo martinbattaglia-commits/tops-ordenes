@@ -21,6 +21,7 @@ import {
   decideCustodyCaseAction,
   loadCustodyCaseAction,
 } from "@/app/(app)/wms/custody/actions";
+import { deriveNowAction, deriveDecisionChecklist } from "@/lib/custody/case-progress";
 
 const CASE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT = "22222222-2222-4222-8222-222222222222";
@@ -43,6 +44,8 @@ interface Opts {
   state?: string;
   /** Cadena de custodia tal como la lee S1-6, con tipo de evento y secuencia. */
   chainEvents?: Array<{ row_hash: string; chain_seq: number; event_type: string }>;
+  /** R-2 · análisis con concordancia resuelta (score + banderas limpias). */
+  concordanciaResuelta?: boolean;
 }
 
 /**
@@ -58,6 +61,18 @@ function sessionDouble(opts: Opts = {}) {
     ingress_evidence_id: ING, egress_evidence_id: EGR,
     provider: "p", model: "m", prompt_version: "v", execution_mode: "real",
     outcome: "ok", verdict: "coincide", model_confidence: "0.870", provider_error: null,
+    // R-2 · con `concordanciaResuelta`, el análisis del doble es UTILIZABLE:
+    // score sobre el corte y banderas de daño limpias. Sin el flag, el doble
+    // queda EXACTAMENTE como estaba —los tests preexistentes dependen de esa
+    // forma—; con él, la derivación de pantalla pisa la rama de inspección en
+    // vez de caer en NO_CONCLUYENTE, que era una igualdad vacía.
+    ...(opts.concordanciaResuelta
+      ? {
+          similarity_score: "94.20", threshold_percent: "90.00",
+          threshold_result: "ABOVE_OR_EQUAL", threshold_policy_version: "v3",
+          packaging_changed: false, missing_items_suspected: false, damage_suspected: false,
+        }
+      : {}),
     chain_status: "verified", chain_events_checked: 4, chain_head: "head-1",
     chain_attested_at: "2026-08-10T11:30:00.000Z",
     decision_id: opts.decisionId ?? null,
@@ -463,5 +478,90 @@ describe("S1-6 · la inspección humana no bloquea la liberación que ella habil
     if (!res.ok || !res.data) return;
     // No se afirma que la cadena esté al día cuando no se puede comprobar.
     expect(res.data.release.blockers).toContain(BLOQUEO_CADENA);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R-2 · LA COMPUERTA DE PERMISO, EJERCITADA (C4 1/2 · ToR-4 · R-19)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// El bucle de A-2 nació de que `inspection.eligible` se computa DETRÁS de un
+// guard de `wms.custody.decide` (`deriveInspectionEvidence`, actions.ts) y la
+// pantalla lo leía como «hay foto». La remediación pasó la señal por el
+// timeline — pero entró sin ninguna prueba que ejercitara la compuerta: un
+// refactor que volviera a `eligible > 0` habría resucitado el bucle con las
+// suites en verde. Estos tests cruzan permiso → eligible → pantalla por la
+// acción REAL (`loadCustodyCaseAction`), no por fixtures armadas a mano.
+//
+// Nota de alcance: `wms.custody.decide` acá es un permiso de APLICACIÓN leído
+// de `my_permissions`; esta compuerta se ejercita entera sin base. (La otra
+// vara —un GRANT de PostgreSQL— exige `set role` explícito en el harness de
+// DB: `actAs` simula sesión por GUC y no cambia de rol. No aplica acá.)
+
+describe("R-2 · la compuerta de permiso sobre la derivación de inspección", () => {
+  it("CON `wms.custody.decide`: la RPC se llama y `eligible` refleja al servidor", async () => {
+    const db = sessionDouble({ permissions: ["wms.custody.decide", "wms.edit"], candidates: [INSPECCION], concordanciaResuelta: true });
+    __setSessionClient(db);
+    const res = await loadCustodyCaseAction(CASE);
+    expect(res.ok).toBe(true);
+    if (!res.ok || !res.data) return;
+    expect(res.data.inspection.eligible).toBe(1);
+    expect(db.rpcs.some((r) => r.fn === "custody_inspection_candidates")).toBe(true);
+  });
+
+  it("SIN `wms.custody.decide`: `eligible` es 0 y la RPC NI SE LLAMA — la compuerta muerde", async () => {
+    const db = sessionDouble({ permissions: ["wms.edit"], candidates: [INSPECCION], concordanciaResuelta: true });
+    __setSessionClient(db);
+    const res = await loadCustodyCaseAction(CASE);
+    expect(res.ok).toBe(true);
+    if (!res.ok || !res.data) return;
+    // El doble TIENE candidatas para dar; si `eligible` fuera 0 sin que la
+    // compuerta corte, la prueba mediría el doble y no el guard.
+    expect(res.data.inspection.eligible).toBe(0);
+    expect(db.rpcs.some((r) => r.fn === "custody_inspection_candidates")).toBe(false);
+  });
+
+  it("LA PANTALLA NO DEPENDE DEL PERMISO: misma exigencia con y sin él", async () => {
+    // El bucle de A-2, imposible por construcción: el operario sin permiso de
+    // decidir (eligible ≡ 0) y el encargado con él tienen que ver LA MISMA
+    // exigencia — mismo kind, mismo label, mismo help y mismo checklist — para
+    // los mismos hechos del caso. Antes divergían: al operario se le pedía la
+    // inspección ya registrada, para siempre.
+    const conPermiso = sessionDouble({ permissions: ["wms.custody.decide", "wms.edit"], candidates: [INSPECCION], concordanciaResuelta: true });
+    __setSessionClient(conPermiso);
+    const resCon = await loadCustodyCaseAction(CASE);
+    const sinPermiso = sessionDouble({ permissions: ["wms.edit"], candidates: [INSPECCION], concordanciaResuelta: true });
+    __setSessionClient(sinPermiso);
+    const resSin = await loadCustodyCaseAction(CASE);
+    expect(resCon.ok && resSin.ok).toBe(true);
+    if (!resCon.ok || !resCon.data || !resSin.ok || !resSin.data) return;
+    // Precondición del test: los dos views DIFIEREN en eligible (1 vs 0). Si
+    // no difirieran, esta prueba no estaría midiendo la independencia.
+    expect(resCon.data.inspection.eligible).toBe(1);
+    expect(resSin.data.inspection.eligible).toBe(0);
+
+    // Precondición: el caso del doble tiene el análisis EJECUTADO — si no,
+    // la derivación se queda en «esperando análisis» para los dos actores y
+    // esta prueba mediría una igualdad vacía sin pisar la rama custodiada.
+    expect(resCon.data.ai.executed).toBe(true);
+
+    for (const tieneInspeccion of [true, false]) {
+      const base = { tieneIngreso: true, tieneEgreso: true, tieneInspeccion };
+      const ahoraCon = deriveNowAction({ view: resCon.data, ...base });
+      const ahoraSin = deriveNowAction({ view: resSin.data, ...base });
+      // El kind ESPERADO, explícito: sin foto se pide la inspección, con foto
+      // se decide. Si `eligible` volviera a colarse en la derivación, el actor
+      // con permiso saltaría la exigencia y esto cae en rojo.
+      expect(ahoraCon.kind).toBe(tieneInspeccion ? "decidir" : "inspeccion");
+      expect(ahoraSin.kind, `kind con tieneInspeccion=${tieneInspeccion}`).toBe(ahoraCon.kind);
+      expect(ahoraSin.label).toBe(ahoraCon.label);
+      expect(ahoraSin.help).toBe(ahoraCon.help);
+
+      const checkCon = deriveDecisionChecklist({ view: resCon.data, ...base });
+      const checkSin = deriveDecisionChecklist({ view: resSin.data, ...base });
+      expect(checkSin).toEqual(checkCon);
+    }
+    // La VIVEZA del botón de decidir sí puede diferir — y DEBE: un rol sin
+    // permiso no recibe un botón vivo. Eso no es el bucle; es la autorización.
   });
 });

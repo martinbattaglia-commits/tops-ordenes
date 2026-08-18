@@ -172,7 +172,10 @@ const CONCORDANCE: Record<ConcordanceVerdict, ConcordanceView> = {
   ALTA: {
     verdict: "ALTA",
     label: "CONCORDANCIA ALTA",
-    requirement: "no requiere inspección adicional · la decisión sigue siendo tuya",
+    // R-1 (C4 1/2) · decía «no requiere inspección adicional», y era FALSO
+    // contra la autoridad: release-policy y la RPC viva exigen la foto de
+    // inspección humana para TODA liberación, con cualquier veredicto.
+    requirement: "conforme · la inspección física y la decisión siguen siendo tuyas",
     tone: "ok",
   },
   BAJA: {

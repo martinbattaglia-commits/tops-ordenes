@@ -6,8 +6,17 @@ import { defineConfig } from "vitest/config";
  *
  * Archivo propio, igual que `vitest.custody.config.ts`: la suite global es de
  * WA-8R9 en esta ventana y no se toca. Entorno `node` porque el proyecto no
- * tiene jsdom/happy-dom instalados; por eso acá no hay pruebas de render y las
- * de DOM/E2E quedan explícitamente diferidas.
+ * tiene jsdom/happy-dom instalados.
+ *
+ * (F2-3 · R-25) Una versión anterior de este encabezado decía «acá no hay
+ * pruebas de render» mientras un comentario de abajo —agregado por el mismo
+ * commit— afirmaba lo contrario. Lo cierto es esto: SÍ hay pruebas de render
+ * ESTÁTICO (`renderToStaticMarkup` sobre los componentes reales, sin DOM), y
+ * lo que sigue diferido son las pruebas de DOM interactivo y E2E, que exigen
+ * jsdom/happy-dom o navegador.
+ *
+ * ⚠ El CI NO corre este config. Correrlo es responsabilidad de la ventana que
+ * toca custodia — y decir «la suite pasa» sin nombrar cuál, está prohibido.
  */
 export default defineConfig({
   resolve: {
@@ -23,7 +32,10 @@ export default defineConfig({
   },
   esbuild: { jsx: "automatic" },
   test: {
-    include: ["tests/wms-ui/**/*.test.ts", "src/lib/custody/**/*.test.ts"],
+    // `.tsx` además de `.ts`: el config ya declara `jsx: "automatic"`, así que
+    // excluir la extensión que lo necesita era una incoherencia. La usa el
+    // render de muestra del §7, que renderiza los componentes reales.
+    include: ["tests/wms-ui/**/*.test.{ts,tsx}", "src/lib/custody/**/*.test.ts"],
     environment: "node",
   },
 });
