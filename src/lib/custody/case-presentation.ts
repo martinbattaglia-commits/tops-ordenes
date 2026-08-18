@@ -477,7 +477,9 @@ function releasedPodReason(c: IntegrityCase, input: BuildCaseViewInput): string 
   }
   const pod = input.physicalUnitPod;
   if (!pod) {
-    return "La unidad está liberada y aún no integra ningún despacho: el POD se emite sobre el despacho";
+    // C4-L1 · «no se encontró» es cierto tanto sin despacho como ante un error
+    // de lectura: el motivo no afirma un hecho que el servidor no verificó.
+    return "La unidad está liberada. El POD se emite sobre el despacho, y no se encontró un despacho de esta unidad";
   }
   if (!pod.delivered) {
     return `El POD es post-entrega: el despacho ${pod.shipmentPublicId} aún no registra la entrega`;

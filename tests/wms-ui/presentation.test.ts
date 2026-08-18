@@ -242,7 +242,7 @@ describe("FILA 11b · POD de la unidad física: estado real y motivo visible", (
     const v = buildCustodyCaseView({ case: unitCase(), actor: actorOf() });
     expect(v.podBlocked).toBe(false);
     expect(v.podShipmentId).toBeNull();
-    expect(v.podBlockedReason).toMatch(/no integra ningún despacho/i);
+    expect(v.podBlockedReason).toMatch(/no se encontró un despacho/i);
   });
 
   it("despacho sin entrega ⇒ el POD es post-entrega y el motivo nombra al despacho", () => {

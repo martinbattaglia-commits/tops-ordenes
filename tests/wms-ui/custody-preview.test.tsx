@@ -230,7 +230,10 @@ const ESCENARIOS: Escenario[] = [
       view: vista({
         state: "RELEASED", stateLabel: "Liberado", tone: "released",
         ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
+        // C4-L3 · un liberado con POD ofrecible lleva su despacho resuelto: el
+        // builder real nunca produce `podBlocked:false` con la compuerta muda.
         podBlocked: false, podBlockedReason: null,
+        podShipmentId: "shp-demo-1", podPdfReady: true,
         inspection: { enabled: false, blockers: ["El caso ya tiene una decisión registrada"], eligible: 1 },
         decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme, embalaje íntegro." },
       }),
@@ -244,14 +247,14 @@ const ESCENARIOS: Escenario[] = [
   // ofrece, DICE POR QUÉ. Los textos son los que produce `releasedPodReason`
   // (case-presentation), verificados en `presentation.test.ts`.
   {
-    titulo: "Estado 6a · liberado · la unidad aún no integra ningún despacho",
+    titulo: "Estado 6a · liberado · sin despacho encontrado para la unidad",
     nota: "FILA 11b · el POD pertenece al despacho: sin despacho, motivo visible.",
     input: {
       view: vista({
         state: "RELEASED", stateLabel: "Liberado", tone: "released",
         ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
         podBlocked: false,
-        podBlockedReason: "La unidad está liberada y aún no integra ningún despacho: el POD se emite sobre el despacho",
+        podBlockedReason: "La unidad está liberada. El POD se emite sobre el despacho, y no se encontró un despacho de esta unidad",
         podShipmentId: null,
         inspection: { enabled: false, blockers: ["El caso ya tiene una decisión registrada"], eligible: 1 },
         decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme." },

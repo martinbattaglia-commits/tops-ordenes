@@ -271,10 +271,16 @@ export async function resolvePhysicalUnitPodShipment(
     const allocationIds = (bridge as { allocation_id: string }[]).map((b) => b.allocation_id);
 
     // 3 · Las allocations por SESIÓN → pedidos que el usuario puede ver.
+    //     C4-M1 · MISMO filtro de estado que `resolveDispatchOrderUnits` y que
+    //     la doctrina `sa.status<>'liberada'` de la base (0250a/0252): una
+    //     reserva LIBERADA persiste en el puente inmutable pero la unidad
+    //     nunca viajó con ese pedido — sin este filtro la pantalla podía
+    //     atribuirle el POD de una entrega ajena.
     const { data: allocs, error: aErr } = await session
       .from("stock_allocations")
       .select("id, logistics_order_items!inner(order_id)")
-      .in("id", allocationIds);
+      .in("id", allocationIds)
+      .in("status", ["empacada", "despachada"]);
     if (aErr || !allocs?.length) return null;
     // El `!inner` garantiza la fila; el tipo generado la modela como arreglo.
     const allocRows = allocs as unknown as { logistics_order_items: { order_id: string } | { order_id: string }[] }[];
@@ -295,7 +301,9 @@ export async function resolvePhysicalUnitPodShipment(
       .select("id, public_id, status, delivered_at, dispatched_at")
       .in("order_id", orderIds)
       .neq("status", "anulado")
-      .order("dispatched_at", { ascending: false });
+      // C4-L2 · sin `nullsFirst:false`, un shipment sin `dispatched_at` quedaba
+      // primero y el motivo podía nombrar un despacho que nunca salió.
+      .order("dispatched_at", { ascending: false, nullsFirst: false });
     if (sErr || !ships?.length) return null;
     type Ship = { id: string; public_id: string; status: string; delivered_at: string | null };
     const rows = ships as Ship[];
