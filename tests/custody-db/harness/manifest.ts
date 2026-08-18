@@ -43,7 +43,8 @@ export const CUSTODY_BOOTSTRAP_DIR = resolve(__dirname, "..", "bootstrap");
 // número se mueva en el MISMO commit que el manifiesto: una migración nueva es
 // una decisión explícita y visible en el diff, nunca un arrastre silencioso.
 // 2-C-2 · 49 → 50 con `0254_custody_certificate_read.sql`.
-export const EXPECTED_CUSTODY_MANIFEST_SIZE = 50;
+// HN-1 · 50 → 51 con `0257_custody_legacy_creator_revoke.sql`.
+export const EXPECTED_CUSTODY_MANIFEST_SIZE = 51;
 
 /** Cierre inventariado ANTES de D1–D3. Se conserva para poder afirmarlo. */
 export const CUSTODY_CLOSURE_SIZE = 36;
@@ -128,6 +129,15 @@ export const CUSTODY_MIGRATION_MANIFEST: readonly string[] = [
 
   // ── 2-C-2 · el certificado se puede leer ──
   "0254_custody_certificate_read.sql",
+
+  // ── HN-1 · se retira la creadora heredada de casos no físicos ──
+  //
+  //   Va en el manifiesto porque la revocación tiene que EJERCITARSE, no
+  //   contarse: `t-c7-05` la prueba llamando la RPC con `set role
+  //   authenticated` y exigiendo `permission denied`. Si la migración no se
+  //   cargara, el test mediría el grant de 0223 y pasaría en verde por el
+  //   motivo equivocado.
+  "0257_custody_legacy_creator_revoke.sql",
 ];
 
 export class CustodyManifestError extends Error {

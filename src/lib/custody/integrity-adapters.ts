@@ -632,6 +632,12 @@ export function createIntegrityCaseRepository(query: CustodyQueryPort): Integrit
           scope: input.scope,
         });
       } catch (e) {
+        // HN-1 · Un rechazo de CONTRATO no es un fallo de la transacción: es
+        // que el camino no existe. No pasa por el clasificador de mensajes,
+        // que adivinaría `RECORD_INCOHERENT` y le mentiría al inspector.
+        if (e instanceof CustodyContractError) {
+          return { ok: false, failure: "SCOPE_NOT_DECIDABLE" };
+        }
         return classifyDecideFailure(e instanceof Error ? e.message : String(e));
       }
       const row = await query.selectCase(input.caseId);

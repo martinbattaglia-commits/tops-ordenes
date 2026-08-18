@@ -333,6 +333,8 @@ const CASE_ERROR: Record<string, string> = {
   VERSION_CONFLICT: "Otra persona decidió primero: recargá el caso",
   ATTESTATION_STALE:
     "La cadena de custodia avanzó desde el análisis: hay que volver a evaluar el caso antes de liberarlo",
+  SCOPE_NOT_DECIDABLE:
+    "Este caso no es de una unidad física: no se decide desde esta pantalla",
   UNAVAILABLE: "La operación no está disponible en este momento",
 };
 
