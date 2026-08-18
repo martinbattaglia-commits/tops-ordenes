@@ -33,41 +33,44 @@ export interface EvidenceSlot {
 
 function Slot({
   titulo,
-  estado,
   slot,
+  esperando,
   placeholder,
+  destacado,
 }: {
   titulo: string;
-  estado: string;
   slot: EvidenceSlot | null;
+  /** El slot que el operario tiene que llenar AHORA: ámbar, no gris. */
+  esperando: boolean;
   placeholder: string;
+  destacado: boolean;
 }) {
   const marco = slot
-    ? "rounded-lg border border-stroke-soft"
-    : "rounded-lg border border-dashed border-stroke-soft";
-  const estadoCls = slot
-    ? "text-[11px] font-bold uppercase tracking-wide text-status-success"
-    : "text-[11px] font-bold uppercase tracking-wide text-fg-muted";
+    ? "cd-slot cd-slot--live"
+    : destacado
+      ? "cd-slot cd-slot--focus"
+      : "cd-slot";
 
   return (
     <div className={marco} data-slot={titulo.toLowerCase()}>
-      <div className="flex items-center justify-between px-3 py-2">
-        <span className="text-[11px] font-bold uppercase tracking-wide">{titulo}</span>
-        <span className={estadoCls}>{estado}</span>
-      </div>
-
-      <div className="flex min-h-24 items-center justify-center bg-bg-surface-alt px-3 py-6">
+      <div className="cd-slot__hd">
+        <span>{titulo}</span>
         {slot ? (
-          <EvidenceViewer evidence={slot.evidence} />
+          <span className="cd-slot__when">{fmtDateTime(slot.occurredAt)}</span>
         ) : (
-          <p className="text-xs text-fg-muted">{placeholder}</p>
+          <span className={esperando ? "cd-slot__wait" : "cd-slot__later"}>
+            {esperando ? "PENDIENTE" : "MÁS ADELANTE"}
+          </span>
         )}
       </div>
 
+      <div className={slot ? "cd-slot__body cd-slot__body--live" : "cd-slot__body"}>
+        {slot ? <EvidenceViewer evidence={slot.evidence} /> : placeholder}
+      </div>
+
       {slot && (
-        <p className="px-3 py-2 font-mono text-[11px] text-fg-muted" data-slot-pie="true">
+        <p className="cd-slot__ft" data-slot-pie="true">
           {[
-            fmtDateTime(slot.occurredAt),
             slot.actorName ?? null,
             `sha256 ${slot.evidence.sha256.slice(0, 4)}…${slot.evidence.sha256.slice(-4)}`,
           ]
@@ -89,32 +92,35 @@ export function CaseEvidencePanel({
   inspeccion: EvidenceSlot | null;
 }) {
   return (
-    <section className="card p-4" aria-labelledby="evidencia-title" data-evidencia="true">
-      <h2 id="evidencia-title" className="eyebrow-tiny">Evidencia · comparación visual</h2>
+    <section className="cd-sec" aria-labelledby="evidencia-title" data-evidencia="true">
+      <h2 id="evidencia-title" className="cd-label">Evidencia · comparación visual</h2>
 
-      {/* Mobile-first: apilado en el teléfono, enfrentado desde `sm`. El
-          operario de depósito trabaja con el teléfono en la mano. */}
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="cd-ev">
         <Slot
           titulo="Ingreso"
-          estado={ingreso ? "Registrada" : "Pendiente"}
           slot={ingreso}
+          esperando={!ingreso}
+          destacado={!ingreso}
           placeholder="Esperando la foto de ingreso"
         />
         <Slot
           titulo="Egreso"
-          estado={egreso ? "Registrada" : ingreso ? "Pendiente" : "Más adelante"}
           slot={egreso}
+          esperando={Boolean(ingreso)}
+          destacado={Boolean(ingreso) && !egreso}
           placeholder={ingreso ? "Esperando la foto de egreso" : "Se habilita al preparar el despacho"}
         />
       </div>
 
       {inspeccion && (
-        <div className="mt-3 border-t border-stroke-soft pt-3">
-          <p className="eyebrow-tiny">Inspección física</p>
-          <div className="mt-2">
-            <Slot titulo="Inspección" estado="Registrada" slot={inspeccion} placeholder="" />
-          </div>
+        <div className="cd-ev cd-mt-inspeccion">
+          <Slot
+            titulo="Inspección física"
+            slot={inspeccion}
+            esperando={false}
+            destacado={false}
+            placeholder=""
+          />
         </div>
       )}
     </section>

@@ -22,25 +22,31 @@ import type { NowAction } from "@/lib/custody/case-progress";
 export function CaseNowBlock({ action }: { action: NowAction }) {
   const icono =
     action.kind === "foto_ingreso" || action.kind === "foto_egreso"
-      ? "eye"
+      ? "camera"
       : action.kind === "pod"
         ? "file-pdf"
         : action.kind === "cerrado"
           ? "lock"
-          : "bolt";
+          : "eye";
 
-  const titulo = action.actionable
-    ? "flex items-center gap-2 text-base font-bold"
-    : "flex items-center gap-2 text-base font-bold text-fg-secondary";
+  // El mockup pinta el botón vivo en azul, salvo el POD final que va en verde
+  // porque cierra el circuito. La acción muerta no simula un botón: se declara.
+  const boton = !action.actionable
+    ? "cd-cta cd-cta--dead"
+    : action.kind === "pod"
+      ? "cd-cta cd-cta--go"
+      : "cd-cta";
+
+  const rotulo = action.actionable ? "cd-nowlabel" : "cd-nowlabel cd-nowlabel--dead";
 
   return (
-    <section className="card mt-3 p-4" aria-labelledby="ahora-title" data-ahora={action.kind}>
-      <p id="ahora-title" className="eyebrow-tiny">▸ Ahora</p>
-      <p className={titulo}>
-        <Icon name={icono as "eye"} size={16} aria-hidden="true" />
+    <section className="cd-sec cd-sec--now" aria-labelledby="ahora-title" data-ahora={action.kind}>
+      <p id="ahora-title" className={rotulo}>▸ Ahora</p>
+      <span className={boton}>
+        <Icon name={icono as "eye"} size={19} aria-hidden="true" />
         <span data-ahora-label="true">{action.label}</span>
-      </p>
-      <p className="mt-1.5 text-sm text-fg-secondary" data-ahora-help="true">
+      </span>
+      <p className="cd-help" data-ahora-help="true">
         {action.help}
       </p>
     </section>

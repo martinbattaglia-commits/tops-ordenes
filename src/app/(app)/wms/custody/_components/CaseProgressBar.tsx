@@ -7,31 +7,34 @@ import type { CaseProgress } from "@/lib/custody/case-progress";
  * especificación visual y la que ordena todo lo demás: sin ella, la pantalla es
  * una lista de paneles sin secuencia.
  *
- * Las clases condicionales se calculan en variables y se pasan como
- * `className={cls}` — el patrón que este módulo ya usa y el que el guard de
- * clases sabe leer (I6).
+ * Estilo tomado literal del mockup corporativo: cinco segmentos de 4px, verde
+ * lo cumplido, azul el actual, ámbar el que espera al operario, y debajo el
+ * rótulo monoespaciado `PASO n DE 5 · …`.
  */
 export function CaseProgressBar({ progress }: { progress: CaseProgress }) {
   return (
-    <div className="mt-3" data-progreso="true" aria-label={progress.caption}>
-      <ol className="flex gap-1.5" role="list">
+    <div data-progreso="true" aria-label={progress.caption}>
+      <ol className="cd-steps" role="list">
         {progress.steps.map((s) => {
-          const barra =
+          const seg =
             s.state === "done"
-              ? "h-1 w-full rounded-full bg-status-success"
+              ? "cd-step cd-step--done"
               : s.state === "current"
-                ? "h-1 w-full rounded-full bg-accent"
+                ? "cd-step cd-step--current"
                 : s.state === "blocked"
-                  ? "h-1 w-full rounded-full bg-status-danger"
-                  : "h-1 w-full rounded-full bg-bg-surface-alt";
+                  ? "cd-step cd-step--blocked"
+                  : "cd-step";
           return (
-            <li key={s.index} className="flex-1" title={s.label} aria-current={s.state === "current" ? "step" : undefined}>
-              <span className={barra} aria-hidden="true" />
-            </li>
+            <li
+              key={s.index}
+              className={seg}
+              title={s.label}
+              aria-current={s.state === "current" ? "step" : undefined}
+            />
           );
         })}
       </ol>
-      <p className="mt-1.5 text-[11px] uppercase tracking-wide text-fg-muted" data-progreso-caption="true">
+      <p className="cd-stepcaption" data-progreso-caption="true">
         {progress.caption}
       </p>
     </div>

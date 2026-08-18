@@ -23,7 +23,10 @@ export default defineConfig({
   },
   esbuild: { jsx: "automatic" },
   test: {
-    include: ["tests/wms-ui/**/*.test.ts", "src/lib/custody/**/*.test.ts"],
+    // `.tsx` además de `.ts`: el config ya declara `jsx: "automatic"`, así que
+    // excluir la extensión que lo necesita era una incoherencia. La usa el
+    // render de muestra del §7, que renderiza los componentes reales.
+    include: ["tests/wms-ui/**/*.test.{ts,tsx}", "src/lib/custody/**/*.test.ts"],
     environment: "node",
   },
 });

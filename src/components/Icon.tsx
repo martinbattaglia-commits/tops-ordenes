@@ -33,6 +33,7 @@ export type IconName =
   | "menu"
   | "menu-dots"
   | "eye"
+  | "camera"
   | "pen"
   | "export"
   | "qr"
@@ -371,6 +372,13 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }: IconProps) {
         <svg {...common}>
           <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12Z" />
           <circle cx="12" cy="12" r="3" />
+        </svg>
+      );
+    case "camera":
+      return (
+        <svg {...common}>
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+          <circle cx="12" cy="13" r="4" />
         </svg>
       );
     case "pen":

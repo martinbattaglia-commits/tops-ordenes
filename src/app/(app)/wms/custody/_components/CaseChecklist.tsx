@@ -1,4 +1,3 @@
-import { Icon } from "@/components/Icon";
 import type { ChecklistItem } from "@/lib/custody/case-progress";
 
 /**
@@ -13,21 +12,18 @@ import type { ChecklistItem } from "@/lib/custody/case-progress";
  */
 export function CaseChecklist({ items }: { items: ChecklistItem[] }) {
   return (
-    <section className="card p-4" aria-labelledby="checklist-title" data-checklist="true">
-      <h2 id="checklist-title" className="eyebrow-tiny">Para poder decidir</h2>
-      <ul className="mt-2 space-y-1.5" role="list">
+    <section className="cd-sec" aria-labelledby="checklist-title" data-checklist="true">
+      <h2 id="checklist-title" className="cd-label">Para poder decidir</h2>
+      <ul className="cd-check" role="list">
         {items.map((it) => {
-          const texto = it.done ? "text-sm text-fg-secondary" : "text-sm font-bold";
-          const icono = it.done ? "check-circle" : "clock";
-          const iconoCls = it.done ? "text-status-success" : "text-status-warning";
+          const fila = it.done ? "cd-check__item" : "cd-check__item cd-check__item--todo";
+          const caja = it.done ? "cd-check__box cd-check__box--ok" : "cd-check__box cd-check__box--todo";
           return (
-            <li key={it.label} className="flex items-start gap-2">
-              <span className={iconoCls} aria-hidden="true">
-                <Icon name={icono as "check-circle"} size={13} />
-              </span>
+            <li key={it.label} className={fila}>
+              <span className={caja} aria-hidden="true">{it.done ? "✓" : "!"}</span>
               <span>
-                <span className={texto}>{it.label}</span>
-                {it.hint && <span className="block text-xs text-fg-muted">{it.hint}</span>}
+                {it.label}
+                {it.hint && <small className="cd-check__hint">{it.hint}</small>}
               </span>
             </li>
           );
