@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 220,
-  "no_ejecutables": 30,
+  "ejecutables": 221,
+  "no_ejecutables": 31,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2909,6 +2909,33 @@
       "ledger_name": "ROLLBACK_0257_custody_legacy_creator_revoke",
       "provenance": "repo (custodia/hn-1-cierre)",
       "motivo": "Inversa logica e idempotente de 0257. Devuelve upsert_custody_integrity_assessment al estado exacto de 0223 lineas 159 y 160: revocada para public y anon, concedida a authenticated. Queda escrito que ejecutarlo REABRE la superficie que 0257 cerro y devuelve la base al estado inconsistente que HN-1 describe, porque decide_custody_integrity v1 sigue revocada y este rollback no la reconcede: no restaura una capacidad de negocio, ya que no hay consumidor, sino un privilegio sin camino. No borra identidades, eventos, evidencias, intentos, decisiones, certificados ni auditoria."
+    },
+    {
+      "id": "0258_custody_evaluated_head_witness.sql",
+      "filename": "0258_custody_evaluated_head_witness.sql",
+      "sha256": "514d44477594a7cb7062f33dda42894520791e1e8e836ffdc7de1c4633edb281",
+      "orden": 251,
+      "requires": [
+        "0251_custody_decide_authority.sql",
+        "0254_custody_certificate_read.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00251",
+      "ledger_name": "0258_custody_evaluated_head_witness",
+      "provenance": "repo (custodia/certificado-emisible)",
+      "motivo": "CUSTODIA-CERTIFICADO-EMISIBLE V4 FASE 1, Opcion 2 firmada (R-21). Agrega la columna testigo chain_head_at_evaluation, redefine complete_custody_integrity_evaluation_v2 (copia exacta de 0250a:1405 mas UNA asignacion del testigo en el mismo punto donde escribe chain_head) e is_custody_inspection_evidence_v2 (copia exacta de 0250a:1999 con el eslabon evaluado resuelto contra coalesce(testigo, chain_head)), y crea la RPC de lectura custody_certificate_document_v2 con la compuerta literal de la politica 0254. Medido contra la base productiva 2026-08-18: wms.custody.decide lo tiene solo operaciones y wms.edit no lo tienen supervisor ni los usuarios de cliente, que SI leen su certificado via 0254; sin la RPC el camino del documento no puede obtener la atestacion viva ni el canonico re-derivado. decide_custody_integrity_v2 NO se toca: no escribe el testigo, y por eso el testigo sobrevive a la decision. Sin backfill para casos ya decididos (decision de Direccion): siguen resolviendo acta, fail-closed."
+    },
+    {
+      "id": "ROLLBACK_0258_custody_evaluated_head_witness.sql",
+      "filename": "ROLLBACK_0258_custody_evaluated_head_witness.sql",
+      "sha256": "4ed414e18cf567ca4096ffb0aac27e303bab3671ac52169e4effa6b6e07ff686",
+      "orden": 252,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00252",
+      "ledger_name": "ROLLBACK_0258_custody_evaluated_head_witness",
+      "provenance": "repo (custodia/certificado-emisible)",
+      "motivo": "Inversa logica e idempotente de 0258. Retira la RPC de lectura, restaura complete_custody_integrity_evaluation_v2 e is_custody_inspection_evidence_v2 a su cuerpo exacto de 0250a y elimina la columna testigo, cuyo contenido es derivado y se regenera con 0258 mas una nueva evaluacion. No borra casos, decisiones, evidencias, certificados ni auditoria. Ejecutarlo devuelve el modulo al estado 0257: la re-derivacion canonica post-decision vuelve a dar vacio y el documento vuelve a resolver acta."
     }
   ]
 }

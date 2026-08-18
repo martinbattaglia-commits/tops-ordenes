@@ -44,7 +44,8 @@ export const CUSTODY_BOOTSTRAP_DIR = resolve(__dirname, "..", "bootstrap");
 // una decisión explícita y visible en el diff, nunca un arrastre silencioso.
 // 2-C-2 · 49 → 50 con `0254_custody_certificate_read.sql`.
 // HN-1 · 50 → 51 con `0257_custody_legacy_creator_revoke.sql`.
-export const EXPECTED_CUSTODY_MANIFEST_SIZE = 51;
+// V4 · 51 → 52 con `0258_custody_evaluated_head_witness.sql`.
+export const EXPECTED_CUSTODY_MANIFEST_SIZE = 52;
 
 /** Cierre inventariado ANTES de D1–D3. Se conserva para poder afirmarlo. */
 export const CUSTODY_CLOSURE_SIZE = 36;
@@ -138,6 +139,12 @@ export const CUSTODY_MIGRATION_MANIFEST: readonly string[] = [
   //   cargara, el test mediría el grant de 0223 y pasaría en verde por el
   //   motivo equivocado.
   "0257_custody_legacy_creator_revoke.sql",
+
+  // ── V4 · el testigo de la punta evaluada + la RPC de lectura del documento ──
+  //
+  //   `t-c8-01` ejercita las tres piezas: el testigo que sobrevive a la
+  //   decisión, el predicado con coalesce y la compuerta de la RPC de lectura.
+  "0258_custody_evaluated_head_witness.sql",
 ];
 
 export class CustodyManifestError extends Error {

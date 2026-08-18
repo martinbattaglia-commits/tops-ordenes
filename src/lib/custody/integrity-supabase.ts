@@ -12,6 +12,7 @@
 
 import { CustodyContractError } from "./integrity-adapters";
 import type {
+  CertificateDocumentContext,
   CustodyQueryPort,
   DecideRpcInput,
   RawCaseRow,
@@ -327,6 +328,59 @@ export function createSupabaseCustodyQueryPort(db: CustodyDataClient): CustodyQu
       return rows
         .map((r) => r?.evidence_id)
         .filter((v): v is string => typeof v === "string" && v.length > 0);
+    },
+
+    /**
+     * V4 · Capa 1. Los ids que la DECISIÓN registró, leídos de la tabla que
+     * 0251 puebla y 0222 concede con su propia RLS. Cliente de sesión: la base
+     * decide qué filas existen para quien pregunta.
+     */
+    async selectDecisionInspectionEvidence(decisionId: string): Promise<string[]> {
+      const { data, error } = await db
+        .from("custody_integrity_inspection_evidence")
+        .select("evidence_id")
+        .in("decision_id", [decisionId]);
+      if (error) throw new Error(error.message);
+      return ((data ?? []) as Array<{ evidence_id?: string | null }>)
+        .map((r) => r?.evidence_id)
+        .filter((v): v is string => typeof v === "string" && v.length > 0);
+    },
+
+    /**
+     * V4 · Capas 2 y 3. Una sola RPC de lectura (0258) devuelve la atestación
+     * VIVA —con `verified_event_ids` y el head vigente— y el canónico
+     * RE-DERIVADO por el predicado único. La compuerta es la política de 0254:
+     * quien puede leer su certificado puede leer su contexto documental.
+     */
+    async selectCertificateDocument(caseId: string): Promise<CertificateDocumentContext | null> {
+      const { data, error } = await db.rpc("custody_certificate_document_v2", {
+        p_case_id: caseId,
+      });
+      if (error) throw new Error(error.message);
+      if (typeof data !== "object" || data === null) return null;
+      const raw = data as {
+        attestation?: {
+          status?: unknown; chain_head?: unknown; events_checked?: unknown;
+          attested_at?: unknown; verified_event_ids?: unknown;
+        } | null;
+        canonical_inspection_evidence_ids?: unknown;
+      };
+      const att = raw.attestation ?? null;
+      if (!att || typeof att.status !== "string") return null;
+      const idList = (v: unknown): string[] =>
+        Array.isArray(v)
+          ? v.filter((x): x is string => typeof x === "string" && x.length > 0)
+          : [];
+      return {
+        attestation: {
+          status: att.status,
+          chainHead: typeof att.chain_head === "string" ? att.chain_head : null,
+          eventsChecked: typeof att.events_checked === "number" ? att.events_checked : null,
+          attestedAt: typeof att.attested_at === "string" ? att.attested_at : null,
+          verifiedEventIds: idList(att.verified_event_ids),
+        },
+        canonicalInspectionEvidenceIds: idList(raw.canonical_inspection_evidence_ids),
+      };
     },
 
     /**

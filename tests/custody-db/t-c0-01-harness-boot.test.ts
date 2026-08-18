@@ -29,9 +29,9 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
     expect(CUSTODY_MIGRATION_MANIFEST.length).toBe(EXPECTED_CUSTODY_MANIFEST_SIZE);
   });
 
-  it("el cierre de custodia son 36 archivos + 15 migraciones gobernadas", () => {
+  it("el cierre de custodia son 36 archivos + 16 migraciones gobernadas", () => {
     const custodyForwards = CUSTODY_MIGRATION_MANIFEST.filter((m) =>
-      /^(?:02(?:2[1-6]|3[12])|0250a?|025[12347])_/.test(m),
+      /^(?:02(?:2[1-6]|3[12])|0250a?|025[123478])_/.test(m),
     );
     expect(custodyForwards).toEqual([
       "0221_custody_integrity_enums.sql",
@@ -52,6 +52,8 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
       "0254_custody_certificate_read.sql",
       // HN-1 · B-1 · se retira la creadora heredada de casos no fisicos.
       "0257_custody_legacy_creator_revoke.sql",
+      // V4 · el testigo de la punta evaluada + RPC de lectura del documento.
+      "0258_custody_evaluated_head_witness.sql",
     ]);
     expect(CUSTODY_MIGRATION_MANIFEST.length - custodyForwards.length).toBe(CUSTODY_CLOSURE_SIZE);
   });

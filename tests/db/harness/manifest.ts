@@ -348,6 +348,12 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // dependencia de PostGIS y de la serie 0036-0039, fuera del vanilla.
   "0257_custody_legacy_creator_revoke.sql",
   "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
+  // CUSTODIA CERTIFICADO EMISIBLE · V4 · el testigo de la punta evaluada y la
+  // RPC de lectura del documento, con su rollback logico. Misma decision
+  // explicita: redefine funciones de 0250a que se apoyan en `custody_events` y
+  // en la serie 0036-0039 (PostGIS), fuera del vanilla.
+  "0258_custody_evaluated_head_witness.sql",
+  "ROLLBACK_0258_custody_evaluated_head_witness.sql",
 ]);
 
 /**
@@ -573,9 +579,9 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "0226 atestación de contenido · 0231 lectura tenant · 0232 lease exclusivo · " +
       "0250/0250a scope físico y visión productiva · 0251 autoridad de decisión y " +
       "evidencia completa · 0252 los dos niveles de custodia · 0253 puerta de egreso · " +
-      "0254 lectura del certificado · 0257 retiro de la creadora heredada, las seis " +
+      "0254 lectura del certificado · 0257 retiro de la creadora heredada · 0258 testigo de la punta evaluada, las siete " +
       "últimas con rollback lógico). " +
-      "Los quince forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
+      "Los dieciseis forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
       "clasifican y prueban aparte y nunca integran un manifiesto forward. " +
       "Se excluye del cierre WMS vanilla porque su cierre de dependencias exige " +
       "PostGIS y la serie 0036-0039, que este manifiesto excluye por diseño para " +
@@ -585,7 +591,7 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "ADVERTENCIA: 0222 modifica `custody_events` (CHECK stage/event_type) y " +
       "reemplaza `attach_custody_evidence`, objetos del dominio de custodia; se " +
       "excluye por la dependencia de PostGIS, NO porque sea ajena. La exclusión " +
-      "es por los VEINTIÚN filenames exactos de esta serie; cualquier migración que " +
+      "es por los VEINTITRÉS filenames exactos de esta serie; cualquier migración que " +
       "no enumere ninguna regla queda sin clasificar y rompe la suite hasta una " +
       "decisión explícita.",
   },
