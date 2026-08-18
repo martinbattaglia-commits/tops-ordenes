@@ -51,6 +51,8 @@ const CUSTODY_FORWARD_FILES = [
   "0253_custody_egress_gate.sql",
   "0254_custody_certificate_read.sql",
   "0257_custody_legacy_creator_revoke.sql",
+  // V4 · el testigo de la punta evaluada + RPC de lectura del documento.
+  "0258_custody_evaluated_head_witness.sql",
 ];
 
 const CUSTODY_ARTIFACT_FILES = [
@@ -65,13 +67,14 @@ const CUSTODY_ARTIFACT_FILES = [
   // no tiene, y corren en el arnes vanilla— pero SI los captura la exclusion
   // dedicada, que es lo unico que este inventario mide: archivos en disco.
   // Por eso van aca y no en CUSTODY_FORWARD_FILES, que es la lista de los que
-  // el manifiesto dedicado si contiene (36 + 15 = 51).
+  // el manifiesto dedicado si contiene (36 + 16 = 52).
   // 0255 no tiene inversa a proposito: PostgreSQL no admite quitar un valor
   // de un enum. Mismo tratamiento que 0221.
   "0255_clients_custody_action_enum.sql",
   "0256_clients_custody_level_rpc.sql",
   "ROLLBACK_0256_clients_custody_level_rpc.sql",
   "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
+  "ROLLBACK_0258_custody_evaluated_head_witness.sql",
 ];
 
 const dedicated = () =>
@@ -89,20 +92,20 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
 
   it("cierre HISTÓRICO de custodia: 36", () => {
     const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_FORWARD_FILES.includes(m));
-    expect(d1d3).toHaveLength(15);
+    expect(d1d3).toHaveLength(16);
     expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(36);
     expect(CUSTODY_CLOSURE_SIZE).toBe(36);
   });
 
-  it("manifiesto DEDICADO actual: 51", () => {
-    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(51);
-    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(51);
+  it("manifiesto DEDICADO actual: 52", () => {
+    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(52);
+    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(52);
     expect(() => validateCustodyManifest()).not.toThrow();
   });
 
   // El cierre HISTÓRICO (36) no se mueve: es el pasado. Lo que crece es la
-  // serie de forwards gobernados, que con 0257 pasa de catorce a quince.
-  it("36 + 15 = 51, y los quince forwards NO están en el vanilla", () => {
+  // serie de forwards gobernados, que con 0258 pasa de quince a dieciséis.
+  it("36 + 16 = 52, y los dieciséis forwards NO están en el vanilla", () => {
     expect(CUSTODY_CLOSURE_SIZE + CUSTODY_FORWARD_FILES.length).toBe(
       EXPECTED_CUSTODY_MANIFEST_SIZE,
     );

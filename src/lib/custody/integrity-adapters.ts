@@ -263,6 +263,32 @@ export interface CustodyQueryPort {
   selectInspectionCandidates(caseId: string, scope?: CustodyEntityScope): Promise<string[]>;
   /** Intento de evaluación vigente (pendiente y no vencido), si lo hay. */
   selectActiveAttempt(caseId: string): Promise<ActiveAttempt | null>;
+  /**
+   * V4 · Los ids de inspección que la DECISIÓN registró
+   * (`custody_integrity_inspection_evidence`, 0251:243-244). Opcional para no
+   * romper dobles existentes; su ausencia se lee como «no se pudo saber» y la
+   * decisión queda sin ids — el lado fail-closed, igual que hasta hoy.
+   */
+  selectDecisionInspectionEvidence?(decisionId: string): Promise<string[]>;
+  /**
+   * V4 · Contexto del DOCUMENTO probatorio: la atestación VIVA y el canónico
+   * RE-DERIVADO, en una sola RPC de lectura (`custody_certificate_document_v2`,
+   * 0258) cuya compuerta es la misma política de tenant de 0254. Opcional por
+   * la misma razón; sin él, el documento resuelve acta — fail-closed.
+   */
+  selectCertificateDocument?(caseId: string): Promise<CertificateDocumentContext | null>;
+}
+
+/** Lo que 0258 devuelve para el documento, ya normalizado. */
+export interface CertificateDocumentContext {
+  attestation: {
+    status: string;
+    chainHead: string | null;
+    eventsChecked: number | null;
+    attestedAt: string | null;
+    verifiedEventIds: readonly string[];
+  };
+  canonicalInspectionEvidenceIds: readonly string[];
 }
 
 /** Reserva de evaluación viva. No transporta proveedor ni resultado. */
@@ -428,7 +454,10 @@ function mapAssessment(row: RawCaseRow): IntegrityAssessment | null {
   };
 }
 
-function mapDecision(row: RawDecisionRow | null): HumanDecisionRecord | null {
+function mapDecision(
+  row: RawDecisionRow | null,
+  inspectionEvidenceIds: readonly string[] = [],
+): HumanDecisionRecord | null {
   if (!row) return null;
   return {
     decision: row.decision === "release" ? "release" : "quarantine",
@@ -440,7 +469,9 @@ function mapDecision(row: RawDecisionRow | null): HumanDecisionRecord | null {
     decidedAt: row.decided_at,
     reason: row.reason ?? "",
     observations: row.observations,
-    inspectionEvidenceIds: [],
+    // V4 · Ya no se fija []: la decisión transporta los ids que la base
+    // registró al decidir. Sin puerto que los lea, se queda en [] (fail-closed).
+    inspectionEvidenceIds: [...inspectionEvidenceIds],
     previousState: toState(row.previous_state),
     newState: row.new_state === "RELEASED" ? "RELEASED" : "QUARANTINED",
     chainHeadAtDecision: row.chain_head_at_decision,
@@ -458,6 +489,16 @@ export async function buildIntegrityCase(
   const rows = ids.length > 0 ? await query.selectEvidence(ids) : [];
   const byId = new Map(rows.map((r) => [r.id, mapEvidenceRow(r, row.client_id)]));
   const decision = row.decision_id ? await query.selectDecision(row.decision_id) : null;
+  // V4 · Los ids registrados por la decisión (0251:243-244). Si el puerto no
+  // sabe leerlos o la lectura falla, la decisión queda sin ids: fail-closed.
+  let decisionEvidenceIds: string[] = [];
+  if (decision && query.selectDecisionInspectionEvidence) {
+    try {
+      decisionEvidenceIds = await query.selectDecisionInspectionEvidence(decision.id);
+    } catch {
+      decisionEvidenceIds = [];
+    }
+  }
 
   return {
     caseId: row.id,
@@ -476,7 +517,7 @@ export async function buildIntegrityCase(
     },
     chain: mapChain(row),
     assessment: mapAssessment(row),
-    decision: mapDecision(decision),
+    decision: mapDecision(decision, decisionEvidenceIds),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

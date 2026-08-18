@@ -552,6 +552,7 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     // catalogo: el ancla pasa a 26 en el mismo cambio en que el catalogo
     // pasa a 247.
     "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
+    "ROLLBACK_0258_custody_evaluated_head_witness.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

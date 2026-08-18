@@ -59,6 +59,9 @@ const DEPENDIENTES_DE_0250A = [
   // y lee `custody_release_certificates`: sin 0250a esas tablas no existen.
   "0253_custody_egress_gate.sql",
   "0254_custody_certificate_read.sql",
+  // V4 · 0258 redefine funciones de 0250a y agrega una columna a
+  // `custody_integrity_cases`: sin 0250a no compila ni aplica.
+  "0258_custody_evaluated_head_witness.sql",
 ];
 
 const MANIFIESTO_SIN_0250A = CUSTODY_MIGRATION_MANIFEST.filter(

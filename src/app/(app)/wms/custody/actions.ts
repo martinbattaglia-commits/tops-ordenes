@@ -73,6 +73,7 @@ import {
   type CustodyDocument,
   type PersistedCertificate,
 } from "@/lib/custody/certificate-emission";
+import { buildDocumentChain } from "@/lib/custody/integrity/certificate-document";
 import {
   attachPhysicalEvidence,
   classifyPhysicalAttachRejection,
@@ -543,16 +544,39 @@ export async function loadCustodyDocumentAction(
     const found = await repo.findById(id, verified.clientId);
     if (!found) return caseFail("NOT_FOUND");
 
-    const currentChainHead = await ctx.query.verifyChainHead(
-      found.entity.scope,
-      found.entity.entityId,
-    );
+    // V4 · Capas 2 y 3. El contexto documental sale de la RPC de lectura de
+    // 0258: atestación VIVA —con `verified_event_ids` reales y el head
+    // vigente— y canónico RE-DERIVADO por el predicado único, que desde 0258
+    // resuelve el eslabón evaluado contra el testigo y por eso sobrevive a la
+    // decisión. Si la RPC no responde, el documento se resuelve con lo
+    // almacenado, cuya atestación vacía degrada a acta: fail-closed, nunca un
+    // certificado que la base no acredite.
+    let docContext = null;
+    if (ctx.query.selectCertificateDocument) {
+      try {
+        docContext = await ctx.query.selectCertificateDocument(id);
+      } catch {
+        docContext = null;
+      }
+    }
 
-    // El conjunto de inspección REVALIDADO. Con el caso ya decidido,
-    // `deriveInspectionEvidence` devuelve vacío por diseño, así que para el
-    // documento se toma el que la decisión declaró: es el que la política
-    // tiene que comparar contra el canónico.
-    const canonical = found.decision?.inspectionEvidenceIds ?? [];
+    const liveAtt = docContext?.attestation ?? null;
+    const liveVerified =
+      liveAtt !== null &&
+      liveAtt.status === "verified" &&
+      typeof liveAtt.chainHead === "string" &&
+      liveAtt.chainHead.length > 0;
+
+    const documentChain = buildDocumentChain(found.chain, liveAtt);
+
+    const currentChainHead = liveVerified
+      ? (liveAtt.chainHead as string)
+      : await ctx.query.verifyChainHead(found.entity.scope, found.entity.entityId);
+
+    // El conjunto de inspección CANÓNICO: re-derivación desde la base, nunca
+    // un alias del declarado. Sin contexto documental queda vacío y una
+    // decisión con ids declarados no cierra la comparación: acta, fail-closed.
+    const canonical = docContext?.canonicalInspectionEvidenceIds ?? [];
 
     const evidenceEventIds = [found.evidence.ingress?.eventId, found.evidence.egress?.eventId]
       .filter((v): v is string => typeof v === "string" && v.length > 0);
@@ -596,7 +620,7 @@ export async function loadCustodyDocumentAction(
             found.evidence.egress !== null &&
             !found.holdReasons.some((r) => r.startsWith("EVIDENCE_")),
           evidenceEventIds,
-          chain: found.chain,
+          chain: documentChain,
           assessment: found.assessment,
           decision: found.decision,
           canonicalInspectionEvidenceIds: canonical,
