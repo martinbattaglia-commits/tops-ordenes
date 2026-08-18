@@ -3,7 +3,7 @@
  *
  * El doble clic tiene dos defensas y las dos importan:
  *
- *  1. **Servidor (autoritativa).** `decide_custody_integrity` recibe
+ *  1. **Servidor (autoritativa).** `decide_custody_integrity_v2` recibe
  *     `p_expected_version` y hace CAS: la segunda llamada choca con conflicto
  *     de versión y no produce una segunda decisión. Aunque la UI fallara, la
  *     base no se deja duplicar.

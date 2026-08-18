@@ -1,0 +1,78 @@
+-- =========================================================================
+-- 0257 · CUSTODIA DIGITAL · SE RETIRA LA CREADORA HEREDADA DE CASOS
+--
+-- Expediente CUSTODIA-HN-1-CIERRE · bloque B-1.
+-- Aditiva y forward-only. No edita ninguna migración anterior.
+--
+-- UN SOLO ACTO: se le retira `EXECUTE` a `authenticated` sobre
+-- `public.upsert_custody_integrity_assessment(text,uuid,int,uuid,uuid,text,text[])`.
+--
+-- ─── POR QUÉ, MEDIDO Y NO SUPUESTO ───────────────────────────────────────
+--
+-- HN-1 dejó a la vista una superficie sin camino. Los hechos, todos medidos
+-- sobre la base productiva antes de escribir esta migración:
+--
+--   · hay 4 casos de custodia y los CUATRO tienen `physical_unit_id`;
+--     casos con `packing_unit_id` o `shipment_id`: CERO;
+--   · el circuito productivo —`0250a:430`, `0252:228`— inserta SIEMPRE
+--     `physical_unit_id`, por el trigger de recepción: no existe hoy un
+--     camino productivo que fabrique un caso no físico;
+--   · la ÚNICA función capaz de fabricarlo es esta, que arma
+--     `packing_unit_id` o `shipment_id` según `p_scope` (0223:78-160);
+--   · NINGÚN código de `src/` la llama: cero llamadas;
+--   · NINGUNA función SQL la invoca internamente: `pg_proc.prosrc` en
+--     producción devuelve cero filas fuera de la propia definición;
+--   · y sin embargo `authenticated` conservaba `EXECUTE`, de modo que
+--     cualquier sesión autenticada podía llamarla por PostgREST.
+--
+-- Es decir: una RPC de ESCRITURA, alcanzable desde el navegador, sin ningún
+-- consumidor, capaz de crear casos que la pantalla después NO puede decidir
+-- —porque `decide_custody_integrity` (v1) ya está revocada desde
+-- `0250a:2199-2200`—. Eso no es una costura rota: es un privilegio vivo sin
+-- camino que lo justifique. R-22: se retira sin esperar a que se demuestre
+-- el camino.
+--
+-- ─── POR QUÉ SE REVOCA Y NO SE ELIMINA LA FUNCIÓN ────────────────────────
+--
+-- `0223` sí eliminó `record_custody_integrity_evaluation`, y con razón: era
+-- una vía de escritura de las columnas de evaluación que no exigía intento
+-- previo. Acá el caso es distinto y la diferencia importa.
+--
+-- Esta función es todavía el ingreso legítimo del circuito NO físico bajo el
+-- dueño del esquema: la batería `tests/custody-db/**` la usa para construir
+-- casos `packing_unit` y sostener sobre ellos las pruebas D1–D3 de 0221–0224,
+-- que siguen siendo la garantía de esas migraciones. Eliminarla borraría esa
+-- cobertura sin haber decidido nada sobre el circuito no físico, que no es
+-- lo que este bloque vino a resolver.
+--
+-- Lo que se retira es la ALCANZABILIDAD desde una sesión de usuario, que es
+-- exactamente el privilegio sin camino. El cuerpo, la firma, los gates de
+-- `assert_custody_access` y `assert_custody_tenant` y el comportamiento
+-- quedan intactos.
+--
+-- ─── ALCANCE EXACTO ──────────────────────────────────────────────────────
+--
+-- Se revoca a `public`, `anon` y `authenticated`. `public` y `anon` ya
+-- estaban revocados desde `0223:159`: se los repite porque la sentencia es
+-- idempotente y porque dejar el estado escrito completo es preferible a
+-- confiar en que nadie los reconceda.
+--
+-- `service_role` CONSERVA `EXECUTE`, y eso es deliberado: es el rol interno
+-- de servidor, no una sesión de navegador, y el master de este bloque acota
+-- la revocación a `authenticated`. Cambiarlo de paso sería ampliar el alcance
+-- por cuenta propia.
+--
+-- NO se toca `decide_custody_integrity_v2` ni su cuerpo.
+-- NO se re-otorga `decide_custody_integrity` (v1) a ningún rol.
+-- NO se toca `custody_inspection_candidates`, que `0224:313` mantiene
+--    concedida a `authenticated` y que NO está rota.
+-- No se crea, borra ni modifica ninguna tabla, política, trigger o función.
+-- No se toca ninguna identidad, evento, evidencia, decisión, certificado ni
+--    registro de auditoría.
+-- =========================================================================
+
+revoke all on function public.upsert_custody_integrity_assessment(
+  text, uuid, int, uuid, uuid, text, text[]
+) from public, anon, authenticated;
+
+notify pgrst, 'reload schema';

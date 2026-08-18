@@ -544,6 +544,11 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0253_custody_egress_gate.sql",
     // 2-C-2 · la inversa de la politica de lectura del certificado.
     "ROLLBACK_0254_custody_certificate_read.sql",
+    // HN-1 · B-1 · la inversa del retiro de la creadora heredada. Misma
+    // convencion de nombre y —R-13— el MISMO commit que su entrada de
+    // catalogo: el ancla pasa a 26 en el mismo cambio en que el catalogo
+    // pasa a 247.
+    "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

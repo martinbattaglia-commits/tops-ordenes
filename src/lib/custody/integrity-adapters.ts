@@ -18,7 +18,7 @@
  *   · lectura de evidencia    → select sobre `custody_evidence` + `custody_events`
  *   · head vigente de cadena  → `verify_custody_chain` (0222)
  *   · candidatos a inspección → `custody_inspection_candidates` (0224)
- *   · decisión humana         → `decide_custody_integrity` (0224)
+ *   · decisión humana         → `decide_custody_integrity_v2` (0250a/0251)
  *   · reserva de evaluación   → `begin_custody_integrity_evaluation` (0223)
  *
  * `complete_custody_integrity_evaluation` es del ROL INTERNO DE SERVIDOR: no se
@@ -618,9 +618,13 @@ export function createIntegrityCaseRepository(query: CustodyQueryPort): Integrit
     },
 
     async applyDecision(input): Promise<CasResult> {
-      // La DB es la autoridad: `decide_custody_integrity` revalida sesión,
+      // La DB es la autoridad: `decide_custody_integrity_v2` revalida sesión,
       // permiso, tenant, estado, CAS de versión, cadena viva y evidencia de
       // inspección. Acá NO se reescribe el registro local como si fuera verdad.
+      //
+      // HN-1 · la v1 ya no es un camino: ningún scope llega a ella. El puerto
+      // rechaza tipado antes de tocar la plataforma, y eso es lo que el `catch`
+      // de abajo distingue por TIPO.
       try {
         await query.decide({
           caseId: input.caseId,
@@ -632,6 +636,12 @@ export function createIntegrityCaseRepository(query: CustodyQueryPort): Integrit
           scope: input.scope,
         });
       } catch (e) {
+        // HN-1 · Un rechazo de CONTRATO no es un fallo de la transacción: es
+        // que el camino no existe. No pasa por el clasificador de mensajes,
+        // que adivinaría `RECORD_INCOHERENT` y le mentiría al inspector.
+        if (e instanceof CustodyContractError) {
+          return { ok: false, failure: "SCOPE_NOT_DECIDABLE" };
+        }
         return classifyDecideFailure(e instanceof Error ? e.message : String(e));
       }
       const row = await query.selectCase(input.caseId);
