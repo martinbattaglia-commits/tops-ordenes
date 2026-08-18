@@ -50,6 +50,12 @@ jobs:
       - name: Tests (suite general, sin el benchmark)
         run: npm test -- --exclude='src/lib/doc-system/remito-capacidad.test.tsx'
 
+      # `tests/wms-ui/**` vive en su propio config (alias con stubs de
+      # Supabase) y quedaba FUERA del include de vitest.config.ts: sus rojos
+      # entraban invisibles. Desde acá el CI lo corre siempre.
+      - name: Tests WMS UI (vitest.wms-ui.config.ts)
+        run: npm run test:wms-ui
+
       - name: Benchmark remito-capacidad (aislado, presupuesto original)
         run: npm test -- src/lib/doc-system/remito-capacidad.test.tsx --no-file-parallelism --maxWorkers=1 --minWorkers=1
 

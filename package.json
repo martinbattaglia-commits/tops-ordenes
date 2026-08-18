@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "env:check": "node scripts/env-check.mjs",
     "test": "vitest run",
+    "test:wms-ui": "vitest run --config vitest.wms-ui.config.ts",
     "test:db": "node tests/db/scripts/run-db-gates.mjs",
     "test:custody:db": "vitest run --config vitest.custody.config.ts",
     "lint:boundaries": "node scripts/prospeccion-boundaries.mjs",

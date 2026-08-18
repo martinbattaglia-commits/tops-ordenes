@@ -1266,33 +1266,30 @@ La única fila que sigue **CORTADA** es la **11b** (POD de unidad física).
 - **No** aplicó `0257` a producción, ni `supabase db push`, ni merge, ni deploy.
 - **No** usó números de migración fuera del lease `0257`.
 
-### 13.7 · 🟠 MEDIUM ABIERTO · HN-1 vive en la PUERTA, no en el MODELO
+### 13.7 · 🟢 CERRADO · HN-1 vive en el MODELO (V5 · CUSTODIA-DEUDAS-DE-INSTRUMENTACION)
 
-La C4 lo encontró y Dirección resolvió **no tocarlo en esta ventana**, porque
-toca comportamiento y este bloque estaba acotado a dos piezas. Queda acá con su
-propio bloque para que no se entierre.
+**Cerrado en la ventana V5.** La regla se movió al modelo con su prueba:
 
-`integrity/in-memory-repository.ts:152` —el repositorio de referencia del
-dominio— **no** tiene rama de scope: sigue aceptando una decisión sobre un caso
-`packing_unit` y devolviendo `{ ok: true }`. Y la suite de dominio
-`wms-custody-ia-integrity.test.ts:90` sigue fijando `scope: "packing_unit"` como
-operación válida y exitosa.
+- `integrity/in-memory-repository.ts` · `applyDecision` ahora rechaza con
+  `SCOPE_NOT_DECIDABLE` todo caso cuyo **scope persistido** no sea
+  `physical_unit`, antes de binding, estado y versión. La guarda decide sobre
+  `found.entity.scope`, nunca sobre lo que declare el caller.
+- La suite de dominio `wms-custody-ia-integrity.test.ts` dejó de fijar
+  `packing_unit` como operación válida: el caso de referencia es
+  `physical_unit`, y un test parametrizado (`packing_unit` y `shipment`)
+  afirma el rechazo exacto en el repositorio. El assert discrimina: sin la
+  guarda ese camino devolvería otro fallo (`BINDING_MISMATCH`, el primer
+  chequeo siguiente), nunca `SCOPE_NOT_DECIDABLE`.
 
-Es decir: **HN-1 quedó codificado en la frontera del adaptador, no en el
-modelo.** Las dos implementaciones del mismo puerto discrepan sobre una regla de
-dominio.
+Las dos implementaciones del puerto (`createIntegrityCaseRepository` sobre
+Supabase e `InMemoryIntegrityCaseRepository`) ya **coinciden** en la regla de
+dominio: un caso no físico no se decide, en ningún adaptador. Un adaptador
+futuro que omita la puerta seguirá chocando con el modelo.
 
-**No es un fallo de producción** —el camino real pasa siempre por
-`createSupabaseCustodyQueryPort`, y ahí la puerta está cerrada—. El daño es de
-otra clase y es el que importa en un módulo probatorio: **quien lea el dominio o
-sus pruebas concluirá lo contrario de lo que HN-1 decidió.** Un revisor futuro
-que audite `in-memory-repository` para entender qué se puede decidir va a leer
-que un caso no físico se decide, y no es cierto.
-
-**Severidad: MEDIUM.** No bloquea el cierre de B-1 —la puerta real está
-cerrada y probada— pero exige su propia ventana: mover el repositorio en memoria
-significa mover también su batería, y eso es cambio de comportamiento con su
-propio gate.
+Registro histórico: la C4 de B-1 lo encontró como 🟠 MEDIUM (la regla vivía
+sólo en la frontera del adaptador, y el dominio de referencia afirmaba lo
+contrario de lo que HN-1 decidió); Dirección lo difirió a su propia ventana, y
+esa ventana fue V5.
 
 ---
 

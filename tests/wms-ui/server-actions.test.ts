@@ -20,6 +20,9 @@ import {
 const CASE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT = "22222222-2222-4222-8222-222222222222";
 const SHIPMENT = "11111111-1111-4111-8111-111111111111";
+// HN-1 · La pantalla decide SÓLO unidades físicas: la v1 está revocada y 0257
+// retiró la RPC que fabricaba casos no físicos. El caso del doble es físico.
+const PHYSICAL = "44444444-4444-4444-8444-444444444444";
 const USER = "77777777-7777-4777-8777-777777777777";
 const SESSION = "88888888-8888-4888-8888-888888888888";
 const SHA = "a".repeat(64);
@@ -41,7 +44,8 @@ function sessionDouble(opts: {
   const caseRow =
     opts.caseRow === undefined
       ? {
-          id: CASE, version: 3, client_id: CLIENT, packing_unit_id: null, shipment_id: SHIPMENT,
+          id: CASE, version: 3, client_id: CLIENT,
+          physical_unit_id: PHYSICAL, packing_unit_id: null, shipment_id: null,
           state: "REVIEW_REQUIRED", hold_reasons: ["NO_CALIBRATED_THRESHOLD"],
           ingress_evidence_id: null, egress_evidence_id: null,
           provider: "p", model: "m", prompt_version: "v", execution_mode: "real",
@@ -208,7 +212,7 @@ describe("decideCustodyCaseAction", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error).toBe("El motivo es obligatorio y debe ser específico");
-    expect(db.rpcs.filter((r) => r.fn === "decide_custody_integrity")).toHaveLength(0);
+    expect(db.rpcs.filter((r) => r.fn === "decide_custody_integrity_v2")).toHaveLength(0);
   });
 
   it("la cuarentena llega a la RPC con el CAS de versión y el motivo", async () => {
@@ -216,7 +220,7 @@ describe("decideCustodyCaseAction", () => {
     __setSessionClient(db);
     const res = await decideCustodyCaseAction(base);
     expect(res.ok).toBe(true);
-    const call = db.rpcs.find((r) => r.fn === "decide_custody_integrity");
+    const call = db.rpcs.find((r) => r.fn === "decide_custody_integrity_v2");
     expect(call).toBeDefined();
     expect(call!.args.p_expected_version).toBe(3);
     expect(call!.args.p_decision).toBe("quarantine");
@@ -261,7 +265,7 @@ describe("decideCustodyCaseAction", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error).toBe("La liberación no cumple los requisitos");
-    expect(db.rpcs.filter((r) => r.fn === "decide_custody_integrity")).toHaveLength(0);
+    expect(db.rpcs.filter((r) => r.fn === "decide_custody_integrity_v2")).toHaveLength(0);
   });
 });
 
