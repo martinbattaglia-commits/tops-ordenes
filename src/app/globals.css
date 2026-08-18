@@ -1235,7 +1235,6 @@
   --cd-red-soft:  #fca5a5;
   --cd-ok:        #10b981;
   --cd-warn:      #f59e0b;
-  --cd-anmat:     #22d3ee;
   --cd-mono:      "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   background: var(--cd-card);
@@ -1293,11 +1292,6 @@
   font: 500 11.5px/1.4 var(--cd-mono);
   background: var(--cd-deep); border: 1px solid rgba(148, 163, 184, 0.16);
   color: var(--cd-fg2); padding: 3px 9px; border-radius: 6px;
-}
-.cd-chip--anmat {
-  font-weight: 700; font-size: 11px;
-  background: rgba(6, 182, 212, 0.12); border-color: rgba(6, 182, 212, 0.32);
-  color: var(--cd-anmat);
 }
 .cd-meta { font-size: 13px; color: var(--cd-fg2); overflow-wrap: anywhere; }
 .cd-meta b { color: #e2e8f0; }
@@ -1440,7 +1434,6 @@
   color: var(--cd-fg3); margin-bottom: 5px; text-transform: uppercase;
 }
 .cd-metric b { font: 700 16px/1 var(--cd-mono); color: var(--cd-fg); }
-.cd-metric b.cd-metric--low { color: var(--cd-red-soft); }
 
 .cd-flags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .cd-flag {

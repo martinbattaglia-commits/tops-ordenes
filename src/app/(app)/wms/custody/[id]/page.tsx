@@ -45,18 +45,37 @@ export const metadata = { title: "Custodia Digital · Caso" };
 
 type EventNode = Extract<Timeline["nodes"][number], { type: "event" }>;
 
-function firstEvidence(
+interface EvidenceHit {
+  evidence: CustodyEvidenceRef;
+  occurredAt: string;
+  actorId: string | null;
+  /** Posición del evento en el timeline. La RPC ordena por `chain_seq`
+   *  ascendente (`0250a:2229`), así que el índice ES el orden de cadena. */
+  index: number;
+}
+
+/**
+ * Busca un evento con evidencia. `pick: "last"` devuelve el MÁS RECIENTE en
+ * orden de cadena — imprescindible para egreso e inspección, que pueden
+ * repetirse: tras «repetí la foto de egreso», el primero ya no es el vigente.
+ */
+function scanEvidence(
   timeline: Timeline,
   match: (n: EventNode) => boolean,
-): { evidence: CustodyEvidenceRef; occurredAt: string; actorId: string | null } | null {
-  for (const node of timeline.nodes) {
-    if (node.type !== "event") continue;
+  pick: "first" | "last",
+  evidenceOk: (e: CustodyEvidenceRef) => boolean = () => true,
+): EvidenceHit | null {
+  let found: EvidenceHit | null = null;
+  timeline.nodes.forEach((node, index) => {
+    if (node.type !== "event") return;
     const ev = node as EventNode;
-    if (!match(ev)) continue;
-    const first = ev.evidences?.[0];
-    if (first) return { evidence: first, occurredAt: ev.occurred_at, actorId: ev.actor_id };
-  }
-  return null;
+    if (!match(ev)) return;
+    const evidence = (ev.evidences ?? []).find(evidenceOk);
+    if (!evidence) return;
+    if (pick === "first" && found !== null) return;
+    found = { evidence, occurredAt: ev.occurred_at, actorId: ev.actor_id, index };
+  });
+  return found;
 }
 
 export default async function CustodyCasePage({ params }: { params: { id: string } }) {
@@ -95,8 +114,10 @@ export default async function CustodyCasePage({ params }: { params: { id: string
   const qr = token ? await custodyQrDataUrl(token) : null;
 
 
-  const ingreso = firstEvidence(timeline, (e) =>
-    isPhysical ? e.event_type === "foto_ingreso" : e.stage === "packing",
+  const ingreso = scanEvidence(
+    timeline,
+    (e) => (isPhysical ? e.event_type === "foto_ingreso" : e.stage === "packing"),
+    "first",
   );
   /**
    * S1-4 · EGRESO E INSPECCIÓN SON DOS EVENTOS DISTINTOS.
@@ -105,11 +126,35 @@ export default async function CustodyCasePage({ params }: { params: { id: string
    * egreso mostraba la foto de la inspección y `tieneEgreso` declaraba egreso
    * registrado cuando no lo había: el checklist del operario mentía y el panel
    * de captura se apagaba con un slot vacío. Se separan.
+   *
+   * R-3 · Y de cada uno vale el ÚLTIMO: egreso e inspección se pueden repetir
+   * («repetí la foto de egreso»), y mostrar o computar sobre el primero sería
+   * razonar sobre un ciclo ya superado.
    */
   const egreso =
-    firstEvidence(timeline, (e) => e.event_type === "foto_egreso") ??
-    (isPhysical ? null : firstEvidence(timeline, (e) => e.stage === "entrega"));
-  const inspeccion = firstEvidence(timeline, (e) => e.event_type === "inspeccion_humana");
+    scanEvidence(timeline, (e) => e.event_type === "foto_egreso", "last") ??
+    (isPhysical ? null : scanEvidence(timeline, (e) => e.stage === "entrega", "last"));
+  const inspeccion = scanEvidence(timeline, (e) => e.event_type === "inspeccion_humana", "last");
+
+  /**
+   * R-3 · LA INSPECCIÓN VÁLIDA NO ES «HUBO UNA ALGUNA VEZ».
+   *
+   * El predicado canónico (`is_custody_inspection_evidence`, 0224) exige una
+   * foto NO redactada, posterior estricta al egreso vigente. Contar cualquier
+   * evento del timeline hacía que, tras repetir el egreso, la pantalla
+   * declarara la inspección registrada mientras el servidor la rechazaba. El
+   * índice del nodo es orden de cadena, así que «posterior al último egreso»
+   * se decide sin parsear timestamps. Divergencia residual asumida: el consumo
+   * de la evidencia por una decisión previa no es visible desde el timeline.
+   */
+  const inspeccionValida = scanEvidence(
+    timeline,
+    (e) => e.event_type === "inspeccion_humana",
+    "last",
+    (ev) => ev.kind === "foto" && !ev.redacted,
+  );
+  const tieneInspeccion =
+    inspeccionValida !== null && egreso !== null && inspeccionValida.index > egreso.index;
 
   // §7 · QUIÉN. El nombre se resuelve en la aplicación desde `profiles_public`
   // (vista sin PII, `grant select to authenticated`), no por migración: el
@@ -120,7 +165,7 @@ export default async function CustodyCasePage({ params }: { params: { id: string
     inspeccion?.actorId ?? null,
   ]);
   const slot = (
-    e: { evidence: CustodyEvidenceRef; occurredAt: string; actorId: string | null } | null,
+    e: EvidenceHit | null,
   ): EvidenceSlot | null =>
     e ? { evidence: e.evidence, occurredAt: e.occurredAt, actorName: e.actorId ? nombres[e.actorId] ?? null : null } : null;
 
@@ -134,7 +179,7 @@ export default async function CustodyCasePage({ params }: { params: { id: string
     view,
     tieneIngreso: ingreso !== null,
     tieneEgreso: egreso !== null,
-    tieneInspeccion: inspeccion !== null,
+    tieneInspeccion,
   };
   const progreso = deriveCaseProgress(progresoInput);
   const ahora = deriveNowAction(progresoInput);
@@ -279,16 +324,28 @@ export default async function CustodyCasePage({ params }: { params: { id: string
 
         <CaseChecklist items={checklist} />
 
+        {/* F2-2 · cada panel lleva el id al que ancla el CTA de ▸ AHORA:
+            un botón que parece botón tiene que llevar a alguna parte. */}
         <div className="cd-sec">
-          <PhysicalCapturePanel
-            view={view}
-            tieneIngreso={ingreso !== null}
-            tieneEgreso={egreso !== null}
-          />
-          <CaseInspectionPanel view={view} />
-          <CaseReevaluatePanel view={view} />
-          <CaseDecisionPanel view={view} />
-          <CasePodGate view={view} shipmentId={shipmentId} hasPdf={view.podPdfReady} />
+          <div id="panel-captura">
+            <PhysicalCapturePanel
+              view={view}
+              tieneIngreso={ingreso !== null}
+              tieneEgreso={egreso !== null}
+            />
+          </div>
+          <div id="panel-inspeccion">
+            <CaseInspectionPanel view={view} />
+          </div>
+          <div id="panel-reevaluacion">
+            <CaseReevaluatePanel view={view} />
+          </div>
+          <div id="panel-decision">
+            <CaseDecisionPanel view={view} />
+          </div>
+          <div id="panel-pod">
+            <CasePodGate view={view} shipmentId={shipmentId} hasPdf={view.podPdfReady} />
+          </div>
         </div>
 
         {documento && (

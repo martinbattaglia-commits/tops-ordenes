@@ -107,7 +107,7 @@ const BAJA = {
 } as const;
 const ALTA = {
   verdict: "ALTA", label: "CONCORDANCIA ALTA",
-  requirement: "no requiere inspección adicional · la decisión sigue siendo tuya", tone: "ok",
+  requirement: "conforme · la inspección física y la decisión siguen siendo tuyas", tone: "ok",
 } as const;
 
 function vista(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
@@ -118,7 +118,10 @@ function vista(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
       clientLabel: "Laboratorio Fénix S.A.", clientFromReception: false,
       casePublicId: "CINT-2026-000451", unitPublicId: "CPU-2026-000123",
       sku: "MUEBLE-DEMO-01", quantity: 1, lotNumber: null,
-      receptionId: null, receptionPublicId: null,
+      // F2-1 · la recepción existe EN LA FIXTURE y se renderiza con la misma
+      // condición que usa la página: la muestra no puede exhibir un enlace que
+      // la app, con estos datos, no mostraría.
+      receptionId: "rec-1", receptionPublicId: "REC-2026-0088",
     },
     holdLabels: [], ai: ai(),
     release: { enabled: false, blockers: [] },
@@ -161,16 +164,39 @@ const ESCENARIOS: Escenario[] = [
     ingreso: true, egreso: false,
   },
   {
-    titulo: "Estado 3 · concordancia alta · decidir",
+    // R-1 · EL ESTADO QUE ANTES MENTÍA. Concordancia alta, sin foto de
+    // inspección: la autoridad NO habilita liberar, y la pantalla lo dice —
+    // quinto ítem pendiente y ▸AHORA pidiendo la inspección. La versión
+    // anterior de esta muestra fabricaba `release.enabled: true` acá, un
+    // estado que el servidor no puede producir.
+    titulo: "Estado 3a · concordancia alta · falta la inspección física",
+    nota: "Conforme no exime de inspección: la IA alerta, no decide.",
+    input: {
+      view: vista({
+        state: "REVIEW_REQUIRED", stateLabel: "Revisión humana", tone: "review",
+        ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
+        release: { enabled: false, blockers: ["Falta la foto de inspección humana"] },
+        inspection: { enabled: true, blockers: [], eligible: 0 },
+        reevaluation: { enabled: true, required: false, analysis: "current", inFlight: false, blockers: [], reason: null },
+        podBlockedReason: "Despacho y POD bloqueados hasta que se registre la decisión humana",
+      }),
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false,
+    },
+    ingreso: true, egreso: true,
+  },
+  {
+    titulo: "Estado 3b · concordancia alta · inspección registrada · decidir",
     nota: "La IA informa. La decisión es humana. No hay liberación automática.",
     input: {
       view: vista({
         state: "REVIEW_REQUIRED", stateLabel: "Revisión humana", tone: "review",
         ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
         release: { enabled: true, blockers: [] },
+        inspection: { enabled: true, blockers: [], eligible: 1 },
+        reevaluation: { enabled: true, required: false, analysis: "current", inFlight: false, blockers: [], reason: null },
         podBlockedReason: "Despacho y POD bloqueados hasta que se registre la decisión humana",
       }),
-      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false,
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: true,
     },
     ingreso: true, egreso: true,
   },
@@ -196,9 +222,12 @@ const ESCENARIOS: Escenario[] = [
         state: "RELEASED", stateLabel: "Liberado", tone: "released",
         ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
         podBlocked: false, podBlockedReason: null,
+        inspection: { enabled: false, blockers: ["El caso ya tiene una decisión registrada"], eligible: 1 },
         decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme, embalaje íntegro." },
       }),
-      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false,
+      // R-1 · un caso LIBERADO tiene la inspección registrada por definición:
+      // la RPC no libera sin ella.
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: true,
     },
     ingreso: true, egreso: true,
   },
@@ -247,13 +276,20 @@ function pantalla(e: Escenario): string {
           <div className="cd-ident__main">
             <p className="cd-eyebrow">Caso de custodia</p>
             <h2 className="cd-title">{v.identity.clientLabel}</h2>
+            {/* F2-1 · SIN el chip «ANMAT · REFORZADA» que una versión anterior
+                dibujaba acá: la aplicación no renderiza ese chip en ninguna
+                parte, y una muestra de aprobación no puede exhibir una insignia
+                regulatoria que el producto no muestra. */}
             <div className="cd-chips">
               <span className="cd-chip">{v.identity.unitPublicId}</span>
               <span className="cd-chip">{v.identity.casePublicId}</span>
-              <span className="cd-chip cd-chip--anmat">ANMAT · REFORZADA</span>
             </div>
             <p className="cd-meta">
-              SKU <b>{v.identity.sku}</b> · 1 un. · sin lote · recepción <a href="#r">REC-2026-0088</a>
+              SKU <b>{v.identity.sku}</b> · {v.identity.quantity} un. ·{" "}
+              {v.identity.lotNumber ? `lote ${v.identity.lotNumber}` : "sin lote"}
+              {v.identity.receptionPublicId && v.identity.receptionId && (
+                <> · recepción <a href="#r">{v.identity.receptionPublicId}</a></>
+              )}
             </p>
           </div>
           <span className={estadoCls}>{v.stateLabel}</span>
@@ -354,17 +390,29 @@ body{margin:0;background:#070b16;color:#e2e8f0;font-family:Inter,system-ui,-appl
 // el panel donde el corte se filtraría, y no pasa por ese módulo. Acá se barre
 // el MARCADO REAL de los cinco estados, que es lo que ve el operario.
 //
-// Lo que se busca: el número del corte con o sin espacio, la palabra «umbral»
-// en cualquier forma, «sobre/bajo el umbral», el nombre del campo
-// (`thresholdPercent`) y el valor crudo del corte. Lo que SÍ debe estar —la
-// concordancia con su número y el fundamento como estándar— se afirma aparte,
-// para que «no dice nada» no pueda pasar por «cumple».
+// Lo que se busca: la palabra «umbral» en cualquier forma, «sobre/bajo el
+// umbral», el nombre del campo (`thresholdPercent`), «90 %» con o sin espacio,
+// el corte en letras, la fracción cruda y las perífrasis de piso/mínimo (R-4).
+// Lo que SÍ debe estar —la concordancia con su número y el fundamento como
+// estándar— se afirma aparte, para que «no dice nada» no pase por «cumple».
+//
+// LÍMITE DECLARADO (R-4, honesto en vez de sobreafirmado): sobre el MARCADO no
+// se prohíbe «90» a secas ni «90 por ciento», porque una concordancia legítima
+// puede valer exactamente 90 y su `aria-label` la lee en palabras. Para el
+// valor del corte la garantía primaria sigue siendo ESTRUCTURAL —el view-model
+// no transporta `thresholdPercent`— y el barrido léxico completo del número
+// corre sobre las cadenas del módulo de derivación, donde no hay scores.
 
 const D4_PROHIBIDO: Array<[string, RegExp]> = [
   ["la palabra «umbral»", /umbral/i],
-  ["el número del corte, con o sin espacio", /\b90\s*%/],
+  ["el número del corte con «%», con o sin espacio", /\b90\s*%/],
+  ["el número del corte en letras", /\bnoventa\b/i],
+  ["la fracción cruda del corte", /\b0[.,]9\b(?!\d)/],
   ["«por encima» / «por debajo»", /por (encima|debajo)/i],
-  ["«sobre/bajo el …»", /\b(sobre|bajo)\s+(el|la)\s+(umbral|corte|l[íi]mite)/i],
+  ["«sobre/bajo el …»", /\b(sobre|bajo)\s+(el|la)\s+(umbral|corte|l[íi]mite|m[íi]nimo|piso)/i],
+  ["«corte/mínimo/piso» de detección o similitud", /\b(corte|m[íi]nimo|piso)\s+de\s+(detecci[óo]n|similitud)/i],
+  ["«mínimo/piso exigido o requerido»", /\b(m[íi]nimo|piso)\s+(exigido|requerido)/i],
+  ["«similitud requerida/exigida/mínima»", /\bsimilitud\s+(requerida|exigida|m[íi]nima)/i],
   ["el nombre del campo", /threshold(?!PolicyVersion)/i],
   ["el campo del umbral en cualquier grafía", /threshold[_-]?percent/i],
 ];

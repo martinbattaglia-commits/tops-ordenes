@@ -58,7 +58,7 @@ function ai(over: Partial<CustodyCaseView["ai"]> = {}): CustodyCaseView["ai"] {
 /** Concordancia ALTA, la que no exige inspección adicional. */
 const ALTA = {
   verdict: "ALTA", label: "CONCORDANCIA ALTA",
-  requirement: "no requiere inspección adicional · la decisión sigue siendo tuya", tone: "ok",
+  requirement: "conforme · la inspección física y la decisión siguen siendo tuyas", tone: "ok",
 } as const;
 
 /** Un análisis que corrió y FALLÓ: `executed` false CON `failureLabel`. */
@@ -94,9 +94,12 @@ describe("§7 · la barra dice DÓNDE está parado el operario", () => {
     expect(deriveCaseProgress(inp(vista(), true, true)).current).toBe(3);
   });
 
-  it("con análisis ejecutado ⇒ paso 4, y el rótulo cambia si exige inspección", () => {
+  it("con análisis ejecutado ⇒ paso 4 · «Inspección física y decisión» SIEMPRE (R-1)", () => {
+    // La versión anterior de este test fijaba «Decisión del encargado» para
+    // concordancia alta: era un candado sobre el defecto. La autoridad exige
+    // inspección en TODA liberación, así que el rótulo no varía por veredicto.
     const alta = vista({ ai: ai({ executed: true, confidencePercent: 95 }) });
-    expect(deriveCaseProgress(inp(alta, true, true)).steps[3].label).toBe("Decisión del encargado");
+    expect(deriveCaseProgress(inp(alta, true, true)).steps[3].label).toBe("Inspección física y decisión");
 
     const baja = vista({
       state: "HOLD",
@@ -163,9 +166,14 @@ describe("§7 · el checklist «para poder decidir»", () => {
     expect(ultimo.hint).toContain("Registrala");
   });
 
-  it("sin exigencia de inspección el checklist tiene cuatro ítems", () => {
+  it("el checklist SIEMPRE tiene cinco ítems: la inspección no es opcional (R-1)", () => {
+    // El test anterior fijaba cuatro ítems para concordancia alta — 4/4
+    // «Hecho» sobre un caso que el servidor rechaza por falta de inspección.
     const v = vista({ ai: ai({ executed: true, confidencePercent: 95 }) });
-    expect(deriveDecisionChecklist(inp(v, true, true))).toHaveLength(4);
+    const items = deriveDecisionChecklist(inp(v, true, true));
+    expect(items).toHaveLength(5);
+    expect(items[4].label).toBe("Falta la foto de inspección física");
+    expect(items[4].done).toBe(false);
   });
 });
 
@@ -178,23 +186,32 @@ describe("⚠ D-4 · EL UMBRAL NO SALE A PANTALLA, EN NINGÚN TEXTO", () => {
    * estados, y se comprueba que ninguna nombra el umbral —ni con cifra, ni con
    * la palabra sola, ni como «sobre/bajo el umbral»—.
    *
-   * ─── REMEDIACIÓN C4 · M-5 · EL GUARD SE EVADÍA CON UN ESPACIO ────────────
+   * ─── REMEDIACIÓN C4 · M-5 y R-4 · EL GUARD SE EVADÍA, DOS VECES ──────────
    *
-   * La versión anterior comparaba con `toContain("90%")`. «90 %» —con el
-   * espacio fino que usa la tipografía castellana, que es como lo escribiría
-   * cualquiera— pasaba limpio. Ahora el texto se NORMALIZA antes de mirarlo y
-   * los patrones son expresiones regulares que toleran el espacio; se agregan
-   * además el nombre del campo y el score crudo, que son las otras dos formas
-   * en que el corte podría filtrarse.
+   * M-5: la versión anterior comparaba con `toContain("90%")` y «90 %» —con
+   * espacio— pasaba limpio. R-4 (C4 1/2): la siguiente versión DECÍA cubrir el
+   * valor crudo del corte y no lo cubría — «el mínimo exigido es 90», «noventa
+   * por ciento», «similitud requerida: 0,9» y «debajo del mínimo de detección»
+   * atravesaban el guard mientras su docblock afirmaba lo contrario.
+   *
+   * Ahora el texto se NORMALIZA y los patrones cubren: la palabra, el número
+   * con y sin «%», la grafía en letras, la fracción cruda, y las perífrasis de
+   * piso/mínimo. En las cadenas de ESTE módulo el «90» a secas es seguro de
+   * prohibir: ningún texto legítimo de derivación transporta números de score
+   * (los porcentajes reales viven en `CaseAiPanel`, con su propio barrido).
    */
   const PROHIBIDO: Array<[string, RegExp]> = [
     ["la palabra «umbral»", /umbral/i],
-    ["el número del corte, con o sin espacio", /\b90\s*%/],
+    ["el número del corte, con o sin «%»", /\b90\b/],
+    ["el número del corte en letras", /\bnoventa\b/i],
+    ["la fracción cruda del corte", /\b0[.,]9\b(?!\d)/],
     ["«por encima»", /por encima/i],
     ["«por debajo»", /por debajo/i],
-    ["«sobre/bajo el …»", /\b(sobre|bajo)\s+(el|la)\s+(umbral|corte|l[íi]mite)/i],
+    ["«sobre/bajo el …»", /\b(sobre|bajo)\s+(el|la)\s+(umbral|corte|l[íi]mite|m[íi]nimo|piso)/i],
     ["el nombre del campo", /threshold/i],
-    ["«corte» como sustantivo de política", /\bcorte\s+de\s+(detecci[óo]n|similitud)/i],
+    ["«corte/mínimo/piso» como sustantivo de política", /\b(corte|m[íi]nimo|piso)\s+de\s+(detecci[óo]n|similitud)/i],
+    ["«mínimo/piso exigido o requerido»", /\b(m[íi]nimo|piso)\s+(exigido|requerido)/i],
+    ["«similitud requerida/exigida/mínima»", /\bsimilitud\s+(requerida|exigida|m[íi]nima)/i],
   ];
 
   const ESTADOS: Array<[string, ProgressInput]> = [
@@ -259,12 +276,30 @@ describe("⚠ D-4 · EL UMBRAL NO SALE A PANTALLA, EN NINGÚN TEXTO", () => {
     }
   });
 
-  it("y el guard SÍ detecta la evasión con espacio que antes lo atravesaba", () => {
+  it("y el guard SÍ caza las evasiones demostradas — el espacio y el valor crudo", () => {
     // Control del propio guard: si esto pasara en verde, el test de arriba no
-    // estaría midiendo nada. `toContain("90%")` —lo que había— da false acá.
-    const evasion = "quedó 90 % sobre el umbral".replace(/[\s\u00a0\u202f\u2009]+/g, " ");
-    expect(evasion.includes("90%")).toBe(false);
-    expect(PROHIBIDO.some(([, p]) => p.test(evasion))).toBe(true);
+    // estaría midiendo nada. Las seis frases de abajo son las que la C4 1/2
+    // demostró que ATRAVESABAN la versión anterior (R-4), más la del espacio
+    // (M-5). `toContain("90%")` —lo que había al principio— da false en todas.
+    const evasiones = [
+      "quedó 90 % sobre el umbral",
+      "el mínimo exigido es 90",
+      "quedó al 90 por ciento",
+      "noventa por ciento",
+      "similitud requerida: 0,9",
+      "no llegó al piso de 90 puntos",
+      "debajo del mínimo de detección",
+    ];
+    for (const cruda of evasiones) {
+      const evasion = cruda.replace(/[\s\u00a0\u202f\u2009]+/g, " ");
+      expect(
+        PROHIBIDO.some(([, p]) => p.test(evasion)),
+        `el guard debe cazar: «${cruda}»`,
+      ).toBe(true);
+    }
+    // Y un texto legítimo del módulo NO dispara nada: guard sin falsos positivos.
+    const legitimo = "Paso 4 de 5 · Inspección física y decisión";
+    expect(PROHIBIDO.some(([, p]) => p.test(legitimo))).toBe(false);
   });
 
   /**
@@ -388,12 +423,15 @@ describe("A-3 · UNA sola definición de «exige inspección» para las tres", (
     }
   });
 
-  it("y coinciden también cuando NO hay exigencia", () => {
-    const v = vista({ ai: ai({ executed: true, concordance: ALTA }), release: { enabled: true, blockers: [] } });
+  it("y coinciden también con concordancia ALTA: la exigencia no distingue veredicto (R-1)", () => {
+    const v = vista({
+      ai: ai({ executed: true, concordance: ALTA }),
+      inspection: { enabled: true, blockers: [], eligible: 0 },
+    });
     const i = inp(v, true, true, false);
-    expect(deriveCaseProgress(i).steps[3].label).toBe("Decisión del encargado");
-    expect(deriveDecisionChecklist(i)).toHaveLength(4);
-    expect(deriveNowAction(i).kind).toBe("decidir");
+    expect(deriveCaseProgress(i).steps[3].label).toBe("Inspección física y decisión");
+    expect(deriveDecisionChecklist(i)).toHaveLength(5);
+    expect(deriveNowAction(i).kind).toBe("inspeccion");
   });
 });
 
@@ -455,5 +493,96 @@ describe("A-6 · el botón de inspección se ofrece vivo sólo si se puede usar"
     // degrada a «decidí»— y lo que cambia es que el botón no se ofrece vivo.
     expect(now.kind).toBe("inspeccion");
     expect(now.actionable).toBe(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// R-1 · LA EXIGENCIA DE INSPECCIÓN ES LA DE LA AUTORIDAD, NO LA DEL VEREDICTO
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// C4 1/2 FAIL: la definición unificada «HOLD ‖ BAJA» contradecía la autoridad.
+// `release-policy.ts` agrega `NO_HUMAN_INSPECTION_EVIDENCE` de forma
+// INCONDICIONAL, y la RPC viva (`0251:214-215`) levanta «inspección humana
+// obligatoria» después del if/else de basis: alcanza a las DOS ramas. En el
+// camino más común —ALTA sin foto— la pantalla decía 4/4 «Hecho» y «decidí», y
+// el servidor rechazaba. Estos tests fijan la autoridad; el mutante de R-26
+// (revertir a `HOLD ‖ BAJA`) los pone en rojo.
+
+describe("R-1 · el camino feliz ya no miente: ALTA sin foto exige inspección", () => {
+  const altaSinFoto = () =>
+    vista({
+      state: "REVIEW_REQUIRED",
+      ai: ai({ executed: true, confidencePercent: 95, concordance: ALTA }),
+      inspection: { enabled: true, blockers: [], eligible: 0 },
+      release: { enabled: false, blockers: ["Falta la foto de inspección humana"] },
+      reevaluation: { enabled: true, required: false, analysis: "current", inFlight: false, blockers: [], reason: null },
+    });
+
+  it("el checklist NO dice 4/4: el quinto ítem queda pendiente y es el único", () => {
+    const items = deriveDecisionChecklist(inp(altaSinFoto(), true, true, false));
+    expect(items).toHaveLength(5);
+    expect(items.slice(0, 4).every((i) => i.done)).toBe(true);
+    expect(items[4].done).toBe(false);
+    expect(items[4].label).toBe("Falta la foto de inspección física");
+    expect(items[4].hint).toContain("Es el único paso que queda");
+  });
+
+  it("▸AHORA pide la inspección, con el lenguaje de conformidad — no el de BAJA", () => {
+    const now = deriveNowAction(inp(altaSinFoto(), true, true, false));
+    expect(now.kind).toBe("inspeccion");
+    expect(now.help).toContain("resultó conforme");
+    expect(now.help).toContain("la IA alerta, no decide");
+    // La frase de disconformidad NO corresponde acá: la comparación fue conforme.
+    expect(now.help).not.toContain("no fue conforme");
+    expect(now.actionable).toBe(true);
+  });
+
+  it("con la foto registrada, ALTA pasa a «decidí» y el checklist cierra 5/5", () => {
+    const i = inp(altaSinFoto(), true, true, true);
+    expect(deriveNowAction(i).kind).toBe("decidir");
+    const items = deriveDecisionChecklist(i);
+    expect(items).toHaveLength(5);
+    expect(items.every((it) => it.done)).toBe(true);
+  });
+
+  it("BAJA conserva la redacción aprobada por Dirección", () => {
+    const v = vista({
+      state: "HOLD",
+      ai: ai({ executed: true, confidencePercent: 71, concordance: BAJA }),
+      inspection: { enabled: true, blockers: [], eligible: 0 },
+    });
+    const now = deriveNowAction(inp(v, true, true, false));
+    expect(now.kind).toBe("inspeccion");
+    expect(now.help).toContain("no fue conforme según los estándares internacionales de medición");
+  });
+
+  it("el hint de «único paso» no aparece si hay otras condiciones pendientes", () => {
+    // Sin análisis todavía: la inspección no es «lo único que queda».
+    const items = deriveDecisionChecklist(inp(vista(), true, true, false));
+    const ultimo = items[items.length - 1];
+    expect(ultimo.done).toBe(false);
+    expect(ultimo.hint).toBeUndefined();
+  });
+});
+
+describe("R-7 · «está corriendo» sólo se afirma con la reserva viva", () => {
+  it("con reserva viva dice que corre y no ofrece botón", () => {
+    const v = vista({
+      reevaluation: { enabled: false, required: false, analysis: "never", inFlight: true, blockers: ["Ya hay una evaluación en curso"], reason: null },
+    });
+    const now = deriveNowAction(inp(v, true, true));
+    expect(now.kind).toBe("esperando_analisis");
+    expect(now.label).toBe("El análisis está corriendo");
+    expect(now.actionable).toBe(false);
+  });
+
+  it("sin reserva NO promete que corre: lo dice y ofrece la re-evaluación", () => {
+    const v = vista({
+      reevaluation: { enabled: true, required: false, analysis: "never", inFlight: false, blockers: [], reason: null },
+    });
+    const now = deriveNowAction(inp(v, true, true));
+    expect(now.kind).toBe("esperando_analisis");
+    expect(now.label).toBe("El análisis no está en curso");
+    expect(now.actionable).toBe(true);
   });
 });

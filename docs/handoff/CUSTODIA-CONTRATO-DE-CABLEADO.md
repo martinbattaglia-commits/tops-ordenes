@@ -86,7 +86,7 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 1a | Razón social del cliente | `clients.razon` · `0001_init.sql:40` · depositante asentado en `receptions.client_name` `0025:41` | `CASE_COLUMNS` embebe `clients(razon)` y `receptions(client_name)` · `integrity-supabase.ts:88-92` | `mapCaseIdentity` `integrity-adapters.ts:172-186` | `identity.clientLabel` · `case-presentation.ts:buildIdentityView` | encabezado `[id]/page.tsx` · `data-cliente` | RLS de tenant; `clients.razon` exige `clientes.view`, y por eso cae al depositante de recepción | **CABLEADO** |
 | 1b | `client_id` del caso (UUID) | `custody_integrity_cases.client_id` `0222:601` | `CASE_COLUMNS` | `entity.clientId` + `mapCaseIdentity` | `identity` (no se pinta el UUID: se pinta el nombre) | encabezado | idem | **CABLEADO** |
 | 2a | `public_id` del caso (CINT-) · **detalle** | `custody_integrity_cases.public_id` · generado en `0250a:433` y `0223:130` | `CASE_COLUMNS` | `mapCaseIdentity` (el dominio `IntegrityCase` sigue puro: la identidad viaja aparte) | `identity.casePublicId` | chip `data-cint` en el encabezado | idem | **CABLEADO** |
-| 2b | `public_id` del caso (CINT-) · **listado** | idem | `custody.ts:1048` lo selecciona | `custody.ts:1054` lo mapea | `CustodyIntegrityCaseRow` | listado `wms/custody/page.tsx:30` | `wms.view` | **CABLEADO** |
+| 2b | `public_id` del caso (CINT-) · **listado** | idem | `custody.ts:1109` lo selecciona | `custody.ts:1115` lo mapea | `CustodyIntegrityCaseRow` | listado `wms/custody/page.tsx:30` | `wms.view` | **CABLEADO** |
 | 2c | `public_id` de la unidad (CPU-) | `custody_physical_units.public_id` `0250a:24` | `CASE_COLUMNS` embebe `custody_physical_units(...)` | `mapCaseIdentity` | `identity.unitPublicId` | chip `data-cpu` en el encabezado | `wms.view` + RLS `custody_physical_units_read` `0250a:68-73` | **CABLEADO** |
 | 2d | SKU, cantidad, lote, vencimiento | `custody_physical_units.sku / quantity / lot_number / expiration_date` `0250a:30-33` | `CASE_COLUMNS` | `mapCaseIdentity` | `identity.sku / quantity / lotNumber` | línea del bien en el encabezado | `wms.view` | **CABLEADO** |
 | 2e | Recepción de origen + enlace | `custody_physical_units.reception_id` `0250a:26` → `receptions(public_id)` | `CASE_COLUMNS` (embed anidado) | `mapCaseIdentity` | `identity.receptionPublicId / receptionId` | enlace `data-recepcion` en el encabezado | `wms.view` + RLS de `receptions` | **CABLEADO** |
@@ -208,6 +208,12 @@ defecto no está ahí, está en el listado:
 - `custody.ts:1048` — la consulta **ni siquiera pide** `physical_unit_id`
 - `custody.ts:1056` — `scope: c.packing_unit_id ? "packing_unit" : "shipment"`
 - `custody.ts:1057` — `entity_id: (c.packing_unit_id ?? c.shipment_id)` → **null**
+
+> Numeración de la época del hallazgo (Sesión 0); el defecto está REMEDIADO
+> (C5) y esas líneas viven hoy en `custody.ts:1109` (select con la columna) y
+> `custody.ts:1121-1127` (ternario de tres ramas), corridas por las +51 líneas
+> de `resolveActorNames` (§14.4). La C4 1/2 (C-4) encontró estos punteros
+> vueltos falsos por el propio candidato sin anotar.
 - `custody.ts:948-949` — mismo par en `listRecentCustodyEvents`
 
 El corte es de **lectura** antes que de mapeo: agregar la tercera rama del ternario
@@ -446,7 +452,7 @@ en la misma pasada.
 
 ### HN-3 · Fallback silencioso a datos inventados en el listado (C8)
 
-`custody.ts:1043-1045`:
+`custody.ts:1102-1104`:
 
 ```ts
 if (isMock()) return MOCK_CASES;
@@ -558,7 +564,7 @@ No se tocó el ruteo, ni los grants, ni se escribió migración para esto.
   la Sesión 1; se hizo el encabezado de identidad, el banner de consecuencia y
   el panel de análisis, que sí lo están.
 - **C8 (fallback silencioso a `MOCK_CASES`)** sigue vivo en
-  `custody.ts:1043-1045`, fuera de alcance por §8.
+  `custody.ts:1102-1104`, fuera de alcance por §8.
 
 ### 9.5 · Remediación post-C4 1/2 · la captura tenía su propia costura
 
@@ -1336,15 +1342,16 @@ especificación. Única excepción: el umbral, donde manda D-4.
 >  publicar el corte enseña a operar por debajo de él.»
 
 **No se revirtió I3: se fue más lejos que ella.** Las capturas mostraban el
-umbral en siete lugares. Los siete se implementaron sin él:
+umbral en varios lugares; ninguno se implementó con él. La C4 1/2 (C-2) halló
+que esta tabla citaba cadenas que no existen en el código; va con las REALES:
 
-| La captura decía | Se implementó |
+| La captura decía | Lo que el código muestra |
 |---|---|
-| «similitud 94,2% ≥ umbral 90%» | «Concordancia 94,2% · conforme» |
-| «BAJO UMBRAL 90%» | «No conforme» |
-| «POR DEBAJO DEL UMBRAL» | «Requiere revisión» |
-| «Análisis · 94,2% sobre umbral 90%» | «Análisis · concordancia 94,2%» |
-| barra con marca en 90 | barra sin marca |
+| «similitud 94,2% ≥ umbral 90%» | el número de concordancia con «%» y el veredicto «CONCORDANCIA ALTA» |
+| «BAJO UMBRAL 90%» | «CONCORDANCIA BAJA» + «inspección física obligatoria antes de poder decidir» |
+| «POR DEBAJO DEL UMBRAL» | «NO CONCLUYENTE» + «las fotos no son comparables: repetí la de egreso» |
+| «Análisis · 94,2% sobre umbral 90%» | «Análisis visual · concordancia» con el número solo |
+| barra con marca en 90 | barra sin marca, escala 0%–100% |
 
 El fundamento se expresa como **estándar** —«según los estándares
 internacionales de medición del mercado»—, y lo que sí sale es la
@@ -1397,9 +1404,14 @@ binario en la pantalla:
 > garantía probatoria del módulo.
 
 Es decir: la captura pedía una cosa que, implementada literalmente, destruye la
-propiedad que el módulo entero existe para sostener. Se implementó la
-comparación —que es lo que la Adenda pide que el inspector pueda hacer de un
-vistazo— sin sacar el binario de su circuito auditado.
+propiedad que el módulo entero existe para sostener. Lo que se implementó es la
+**disposición**: los dos recuadros enfrentados con estado, hora, operario y
+hash comparables de un vistazo. **Las imágenes mismas NO se comparan de un
+vistazo**: cada una se abre por URL firmada en su pestaña, igual que antes —la
+C4 1/2 (C-1) encontró que este párrafo afirmaba lo contrario, y era falso—. Si
+la comparación visual en pantalla se quiere de verdad, exige resolver primero
+cómo se sirve el binario sin romper la auditoría del acceso: es la misma
+ventana futura del párrafo siguiente.
 
 **Queda declarado como NO IMPLEMENTADO en §9.4.** Si Dirección quiere la imagen
 embebida, es su propia ventana y necesita resolver antes cómo se sirve sin
@@ -1415,16 +1427,20 @@ hallazgo.
 
 | Grupo | Estado tras la medición | Qué se hizo |
 |---|---|---|
-| **A** · derivar verdad de campos proxy (H-1…H-4 · M-1…M-3) | **vivos** · fase 2 no tocó `case-progress.ts` | seis instancias corregidas en una sola causa: cada campo se lee por lo que significa. Detalle abajo |
+| **A** · derivar verdad de campos proxy (H-1…H-4 · M-1…M-3) | **vivos** · fase 2 no tocó `case-progress.ts` | seis instancias corregidas. Detalle abajo |
 | **B** · capa visual (H-5 · M-8) | **ya resueltos por la fase 2** | no se re-remedió: se les puso guard de regresión, porque nada impedía que volvieran |
 | **C** · los guards que no guardan (M-4 · M-5) | **vivos** · M-4 **agravado** por la fase 2 | extractor de clases y guard D-4 corregidos, ambos con mutante |
 | **D** · el contrato afirma falso (M-6 · L-5) | **vivos** | §9.4 y §14.2 corregidos · §14.6 declara la no-implementación |
 | **E** · accesibilidad (M-7 · L-4) | **vivos** | estado en texto, además del color |
 | **R-25** · comentarios que el commit vuelve falsos | **vivos** | los dos corregidos en el código |
 
-**Grupo A · las seis instancias, y por qué cada una era falsa.** Todas son la
-misma causa: el módulo leía campos del view-model asumiendo un significado que
-esos campos no tienen.
+**Grupo A · las seis instancias, y por qué cada una era falsa.** ⚠ Este bloque
+las presentó originalmente como «una sola causa», y Dirección lo corrigió: son
+AL MENOS TRES — semántica de campos que miente (A-1 · A-4 · A-5), acoplamiento
+a permiso (A-2), definición triplicada (A-3) y un hardcode (A-6). Agregarlas en
+bloque habría tapado destinos distintos: la propia C4 1/2 encontró que A-2
+quedó bien desacoplada del permiso mientras A-3 quedó unificada sobre una
+definición falsa (ver §14.9).
 
 | | Qué leía mal | Qué producía |
 |---|---|---|
@@ -1470,6 +1486,72 @@ rechaza ahora antes de llegar a la RPC. Los tests codifican el comportamiento
 No se vieron al mergear porque **el CI no corre este config**. No se parchean
 acá: decidir qué debían afirmar esos tests después de HN-1 es del bloque que
 tomó la decisión, no de éste. Queda declarado para su propia ventana.
+
+### 14.9 · C4 1/2: FAIL · Y LA REMEDIACIÓN 2/2, POR AUTORIDAD
+
+La C4 1/2 sobre el candidato consolidado dio **FAIL** con dos bloqueantes. Su
+informe completo está **archivado como comentario en la PR #83** — la fuente
+primaria de la C4 anterior nunca se archivó y se perdió; ésta no. La C4 declaró
+emitirse contra una paráfrasis de tercer orden de los trece originales.
+
+**R-1 · HIGH · la definición unificada de «exige inspección» era falsa contra
+la autoridad.** La primera remediación unificó las tres definiciones (A-3) en
+«HOLD ‖ BAJA» — la forma correcta sobre el contenido equivocado. Verificado en
+las dos capas: `release-policy.ts:132-135` agrega `NO_HUMAN_INSPECTION_EVIDENCE`
+de forma INCONDICIONAL, y la RPC viva (`0251:214-215`) levanta «inspección
+humana obligatoria» después del if/else de basis — alcanza a las dos ramas.
+**Toda liberación exige la foto de inspección humana**, y no contradice la
+Adenda: la cumple (si la concordancia alta liberara sola, la IA decidiría). En
+el camino más común —ALTA sin foto— el checklist decía 4/4 «Hecho» y ▸AHORA
+decía «decidí»; el servidor rechazaba. Y los tests propios FIJABAN ese error.
+
+Qué cambió: el paso 4 se llama «Inspección física y decisión» sin condicional;
+el checklist SIEMPRE lista la inspección (el camino ALTA sin foto muestra el
+quinto ítem PENDIENTE); ▸AHORA la pide con lenguaje por veredicto —la redacción
+de Dirección para BAJA, una de conformidad para el resto—; el `requirement` de
+ALTA en `case-presentation.ts` dejó de decir «no requiere inspección
+adicional». Los tests-candado se CORRIGIERON, y el mutante exigido por R-26
+corre CONTRA LA AUTORIDAD: revertido a «HOLD ‖ BAJA», 7 tests caen en rojo.
+
+**R-2 · HIGH · la corrección del bucle A-2 no tenía prueba de compuerta
+(R-19).** Entraron tres pruebas por la acción REAL (`loadCustodyCaseAction`):
+con `wms.custody.decide` la RPC de candidatas se llama y `eligible` la refleja;
+sin él, `eligible` es 0 y la RPC NI SE LLAMA; y la EXIGENCIA de pantalla
+(kind/label/help/checklist) es idéntica con y sin permiso — la viveza del botón
+difiere, y debe. Dos mutantes verificados: sin el guard de permiso, 2 rojos;
+con la pantalla releyendo `eligible`, 1 rojo. Registro honesto: la primera
+versión de la tercera prueba pasaba por VACUIDAD —la fixture caía en
+NO_CONCLUYENTE y nunca pisaba la rama custodiada—; la descubrió el propio
+mutante y se endureció con kinds esperados explícitos y precondición.
+
+**Los MEDIUM/LOW, en esta misma ventana:** R-3 (la señal de inspección del
+timeline exige ahora foto NO redactada posterior estricta al ÚLTIMO egreso, por
+índice de cadena; divergencia residual declarada: el consumo por decisión
+previa no es visible desde el timeline) · R-4 (los guards D-4 cubren el valor
+crudo —«noventa», «0,9», «piso/mínimo»— con las seis evasiones demostradas como
+control, y el guard de marcado DECLARA su límite con el «90» a secas en vez de
+sobreafirmar) · R-5 (el extractor de clases resuelve funciones locales,
+`className =` con espacios y un salto de alias; mutante cuádruple: 4/4 cazadas;
+el docblock enumera lo cubierto Y lo invisible) · R-6 (la frase «estándares
+internacionales de medición» es redacción de Dirección aprobada bajo D-4; el
+docblock de `CaseAiPanel` dejó de contradecirla) · R-7 («está corriendo» sólo
+con reserva viva; sin ella se ofrece la re-evaluación) · F2-1 (la muestra ya no
+exhibe el chip ANMAT ni recepción hardcodeada; sus estados son producibles por
+el servidor, con el estado 3 desdoblado en 3a —falta inspección— y 3b
+—registrada—) · F2-2 (el CTA de ▸AHORA es un ancla real al panel de la acción;
+muerto, es un `<span>` declarado) · F2-3 (el config dice la verdad sobre sus
+pruebas de render) · F2-4 (fuera el corte `< 80` de UI que ninguna política
+define) · C-1, C-2 y C-4 corregidos arriba, en sus propias secciones.
+
+**C-3 fue RETIRADO por Dirección:** R-25 manda corregir el comentario
+falsificado en el MISMO commit; el segundo-commit-con-compuerta es la excepción
+para candidatos ya aprobados, y `dac1459` estaba en construcción.
+
+**Gates de esta remediación, POR CONFIG** — «suite global» no se escribe más:
+`vitest.config.ts` (el que corre el CI) · `vitest.wms-ui.config.ts` (el CI NO
+lo corre; quedan los 6 rojos preexistentes de `origin/main`, §14.8) ·
+`typecheck` · `lint` · `lint:boundaries` · `lint:udie-boundary`. Los números de
+la corrida final están en el mensaje del commit de esta remediación.
 
 ---
 

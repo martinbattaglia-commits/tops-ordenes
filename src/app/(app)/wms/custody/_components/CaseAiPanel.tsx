@@ -23,6 +23,13 @@ import type { CustodyCaseView } from "@/lib/custody/case-presentation";
  * como valor numérico de certeza. Un número que TOPS no puede defender ante un
  * perito no va impreso en un documento probatorio.
  *
+ * NOTA (C4 · R-6) · La frase de cara al operario «según los estándares
+ * internacionales de medición del mercado» es redacción de Dirección aprobada
+ * bajo D-4, y NO contradice lo anterior: refiere a esos mismos estándares de
+ * EXPRESIÓN de la medición —veredicto cualitativo, sin corte numérico—, no a
+ * una norma que fije un umbral. El fundamento del corte sigue siendo la
+ * política interna, y el corte sigue sin salir a pantalla.
+ *
  * La garantía no depende de este archivo: `thresholdPercent` NO EXISTE en el
  * view-model, así que no hay nada que renderizar aunque alguien lo intente.
  *
@@ -113,18 +120,19 @@ export function CaseAiPanel({ view }: { view: CustodyCaseView }) {
           {concordancia && <p className="cd-help">{concordancia.requirement}</p>}
 
           {/* ── COMPONENTES DEL SCORE ──────────────────────────────────── */}
+          {/* F2-4 · sin corte de color inventado: la versión anterior pintaba
+              en rojo los componentes bajo 80, un número que NINGUNA política
+              define — un cuasi-umbral de UI que le enseñaba al ojo un corte
+              inexistente. Los cuatro valores se muestran parejos; el juicio
+              sobre ellos es del veredicto, no de un color. */}
           {componentes && (
             <dl className="cd-metrics" data-componentes="true">
-              {COMPONENTES.map(([label, clave]) => {
-                const valor = componentes[clave];
-                const cls = valor < 80 ? "cd-metric--low" : undefined;
-                return (
-                  <div key={label} className="cd-metric">
-                    <dt><span>{label}</span></dt>
-                    <dd><b className={cls}>{valor}%</b></dd>
-                  </div>
-                );
-              })}
+              {COMPONENTES.map(([label, clave]) => (
+                <div key={label} className="cd-metric">
+                  <dt><span>{label}</span></dt>
+                  <dd><b>{componentes[clave]}%</b></dd>
+                </div>
+              ))}
             </dl>
           )}
 

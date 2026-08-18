@@ -9,9 +9,11 @@ import type { NowAction } from "@/lib/custody/case-progress";
  * lenguaje llano debajo. El resto de los paneles siguen existiendo; dejan de
  * competir por la atención.
  *
- * No dispara nada por su cuenta: apunta al panel que tiene la acción, que es
- * donde vive la server action con su permiso. Duplicar el disparo acá sería
- * tener dos superficies que autorizan lo mismo.
+ * No dispara nada por su cuenta: APUNTA —con un ancla de verdad, no con la
+ * intención (C4 · F2-2)— al panel que tiene la acción, que es donde vive la
+ * server action con su permiso. Duplicar el disparo acá sería tener dos
+ * superficies que autorizan lo mismo. Cuando la acción está muerta, no se
+ * simula un enlace: se declara con un `<span>` sin destino.
  *
  * ─── D-4 ─────────────────────────────────────────────────────────────────
  *
@@ -19,6 +21,19 @@ import type { NowAction } from "@/lib/custody/case-progress";
  * fundamento se expresa como estándar —«según los estándares internacionales de
  * medición del mercado»— y la magnitud que sí sale es la concordancia.
  */
+/** A qué panel de la página lleva cada acción. `null` = no hay adónde ir. */
+const ANCLA: Record<NowAction["kind"], string | null> = {
+  foto_ingreso: "#panel-captura",
+  foto_egreso: "#panel-captura",
+  repetir_egreso: "#panel-captura",
+  esperando_analisis: "#panel-reevaluacion",
+  analisis_fallido: "#panel-reevaluacion",
+  inspeccion: "#panel-inspeccion",
+  decidir: "#panel-decision",
+  pod: "#panel-pod",
+  cerrado: null,
+};
+
 export function CaseNowBlock({ action }: { action: NowAction }) {
   const icono =
     action.kind === "foto_ingreso" || action.kind === "foto_egreso"
@@ -42,10 +57,17 @@ export function CaseNowBlock({ action }: { action: NowAction }) {
   return (
     <section className="cd-sec cd-sec--now" aria-labelledby="ahora-title" data-ahora={action.kind}>
       <p id="ahora-title" className={rotulo}>▸ Ahora</p>
-      <span className={boton}>
-        <Icon name={icono as "eye"} size={19} aria-hidden="true" />
-        <span data-ahora-label="true">{action.label}</span>
-      </span>
+      {action.actionable && ANCLA[action.kind] ? (
+        <a className={boton} href={ANCLA[action.kind]!} data-ahora-cta="true">
+          <Icon name={icono as "eye"} size={19} aria-hidden="true" />
+          <span data-ahora-label="true">{action.label}</span>
+        </a>
+      ) : (
+        <span className={boton}>
+          <Icon name={icono as "eye"} size={19} aria-hidden="true" />
+          <span data-ahora-label="true">{action.label}</span>
+        </span>
+      )}
       <p className="cd-help" data-ahora-help="true">
         {action.help}
       </p>

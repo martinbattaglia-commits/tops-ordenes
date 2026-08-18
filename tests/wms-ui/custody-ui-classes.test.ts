@@ -61,10 +61,22 @@ const UI_FILES = [
  * formas pasaba sin que nadie se enterara.
  *
  * Ahora se toma la EXPRESIÓN COMPLETA entre llaves balanceadas y se extraen
- * todos sus literales de cadena; si la expresión menciona identificadores, se
- * resuelve su `const` en el mismo archivo y se extraen también los de allí.
- * No es un parser de TypeScript y no pretende serlo: es exactamente lo que
- * hace falta para que ninguna clase escrita en estos archivos quede invisible.
+ * todos sus literales de cadena, resolviendo además lo que la expresión
+ * nombra en el mismo archivo. No es un parser de TypeScript y no pretende
+ * serlo. Cobertura EXACTA, medida con mutantes (C4 · R-5):
+ *
+ *   CUBIERTO  · `className="…"` y `className = "…"` (espacios alrededor de =)
+ *             · `className={"…"}` · `className={\`…\`}` · ternarios en línea
+ *             · `className={variable}` → el cuerpo de su `const`
+ *             · `const alias = otraConst` → un salto de alias (cuerpo que es
+ *               un identificador a secas)
+ *             · `className={helper()}` → el cuerpo de `function helper()`
+ *               declarada en el archivo
+ *
+ *   INVISIBLE · clases construidas por concatenación dinámica de fragmentos,
+ *               helpers IMPORTADOS de otro archivo, y cadenas de alias de más
+ *               de un salto. Si alguna de esas formas aparece en estos
+ *               archivos, este guard NO la ve: agregala acá antes de usarla.
  */
 
 /**
@@ -117,8 +129,12 @@ function balanced(src: string, i: number, open: string, close: string): string {
   return "";
 }
 
-/** Cuerpo de `const <name> = …;` en el archivo, o `null`. */
+/** Cuerpo de `const <name> = …;` o de `function <name>(…) {…}`, o `null`. */
 function constBody(src: string, name: string): string | null {
+  // R-5 · las clases también viven en helpers locales: `function seg() {
+  // return "cd-…" }` era invisible para la versión anterior.
+  const fn = new RegExp(`\\bfunction\\s+${name}\\s*\\([^)]*\\)\\s*\\{`).exec(src);
+  if (fn) return balanced(src, fn.index + fn[0].length - 1, "{", "}");
   const re = new RegExp(`\\bconst\\s+${name}\\s*(?::[^=]*)?=`, "g");
   const m = re.exec(src);
   if (!m) return null;
@@ -150,24 +166,29 @@ function classTokens(file: string): string[] {
     }
   };
 
-  // 1 · `className="…"` literal.
-  const lit = /className="([^"]*)"/g;
+  // 1 · `className="…"` literal — con espacios opcionales alrededor de `=`,
+  //     que es JSX válido y era invisible (R-5).
+  const lit = /className\s*=\s*"([^"]*)"/g;
   for (let m = lit.exec(src); m !== null; m = lit.exec(src)) add(m[1]);
 
-  // 2 · `className={<expr>}` en todas sus formas.
-  const abre = /className=\{/g;
+  // 2 · `className={<expr>}` en todas sus formas, también con espacios.
+  const abre = /className\s*=\s*\{/g;
   for (let m = abre.exec(src); m !== null; m = abre.exec(src)) {
-    const expr = balanced(src, m.index + "className=".length, "{", "}");
+    const expr = balanced(src, m.index + m[0].length - 1, "{", "}");
     for (const l of literalsOf(expr)) add(l);
-    // 3 · y lo que aporte el `const` que la expresión nombra. UN SOLO SALTO,
-    //     y es deliberado: el cuerpo de una `const` de clase es un ternario
-    //     sobre literales de clase, pero los identificadores de su CONDICIÓN
-    //     —`tono`, `estado`— son del dominio de los valores, no de las clases.
-    //     Seguirlos un nivel más traía `"warn"` de `tone ?? "warn"` y hacía que
-    //     el guard reclamara una regla `.warn` que nunca debió existir.
+    // 3 · y lo que aporte lo que la expresión nombra: el cuerpo de su `const`
+    //     o de su `function` local. La resolución es de UN salto — los
+    //     identificadores de una CONDICIÓN (`tono`, `estado`) son del dominio
+    //     de los valores, no de las clases, y seguirlos traía falsos
+    //     positivos como `"warn"` de `tone ?? "warn"` — con UNA excepción
+    //     (R-5): si el cuerpo es un identificador A SECAS (`const e = i`), es
+    //     un alias puro y se sigue una vez más.
     for (const id of identsOf(expr)) {
       const cuerpo = constBody(src, id);
-      if (cuerpo !== null) for (const l of literalsOf(cuerpo)) add(l);
+      if (cuerpo === null) continue;
+      const alias = /^\s*([A-Za-z_$][\w$]*)\s*$/.exec(cuerpo);
+      const efectivo = alias ? constBody(src, alias[1]) ?? cuerpo : cuerpo;
+      for (const l of literalsOf(efectivo)) add(l);
     }
   }
   return [...out];

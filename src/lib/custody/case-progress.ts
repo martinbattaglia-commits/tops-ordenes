@@ -45,13 +45,25 @@
  *        `inspeccion_humana`, que no depende de ningún permiso de decisión, y
  *        entra por `tieneInspeccion`.
  *
- *  A-3 · tres definiciones distintas de «exige inspección». Ahora hay UNA
- *        —`exigeInspeccion`—, derivada una sola vez y consumida por las tres.
+ *  A-3 · tres definiciones distintas de «exige inspección». La C4 1/2 sobre
+ *        la primera remediación (R-1) encontró que la definición unificada
+ *        («HOLD o veredicto BAJA») seguía siendo FALSA contra la autoridad:
+ *        `release-policy.ts` agrega `NO_HUMAN_INSPECTION_EVIDENCE` de forma
+ *        INCONDICIONAL y la RPC viva (`0251:214-215`) levanta «inspección
+ *        humana obligatoria» DESPUÉS del if/else de basis — alcanza a las dos
+ *        ramas. **TODA liberación exige foto de inspección humana**, y no
+ *        contradice la Adenda: la cumple — si la concordancia alta liberara
+ *        sola, la IA estaría decidiendo. Por eso ya no existe un
+ *        `exigeInspeccion` condicional: el paso 4 ES «Inspección física y
+ *        decisión», el checklist SIEMPRE lista la inspección, y `▸ AHORA` la
+ *        pide en cuanto el análisis está y la foto no. Lo único que varía por
+ *        veredicto es el LENGUAJE, nunca la exigencia.
  *
  *  A-4 · `ai.executed !== true` se leía como «el análisis está corriendo».
- *        `executed` sólo es `true` con `outcome === "ok"`; hay cuatro outcomes
- *        de FALLO. Un análisis caído anunciaba estar corriendo para siempre:
- *        el segundo bucle. Se distingue por `failureLabel`.
+ *        `executed` sólo es `true` con `outcome === "ok"`; hay cinco outcomes
+ *        que no lo son. Un análisis caído anunciaba estar corriendo para
+ *        siempre: el segundo bucle. Se distingue por `failureLabel`, y (R-7)
+ *        «está corriendo» sólo se afirma con una reserva viva (`inFlight`).
  *
  *  A-5 · `NO_CONCLUYENTE` no se manejaba en ninguna derivación y caía al
  *        default «la comparación no encontró diferencias» —falso: no pudo
@@ -98,8 +110,9 @@ interface CaseFacts {
   analisisVencido: boolean;
   /** Las fotos no son comparables: no hay veredicto que sostener. */
   noConcluyente: boolean;
-  /** El caso exige mirar el bien antes de decidir. UNA definición. */
-  exigeInspeccion: boolean;
+  /** El veredicto exige lenguaje de disconformidad (BAJA). Sólo LENGUAJE:
+   *  la exigencia de inspección es incondicional por autoridad (R-1). */
+  veredictoBaja: boolean;
   /** La cadena está verificada: hay análisis utilizable y sigue vigente. */
   cadenaVerificada: boolean;
 }
@@ -121,7 +134,7 @@ function hechos(input: ProgressInput): CaseFacts {
     analisisFallido,
     analisisVencido,
     noConcluyente: veredicto === "NO_CONCLUYENTE",
-    exigeInspeccion: view.state === "HOLD" || veredicto === "BAJA",
+    veredictoBaja: veredicto === "BAJA",
     cadenaVerificada: analisisOk && !analisisVencido,
   };
 }
@@ -159,7 +172,9 @@ const PASOS = [
   "Foto de ingreso",
   "Foto de egreso",
   "Análisis",
-  "Decisión",
+  // R-1 · sin condicional: la autoridad exige inspección en TODA liberación,
+  // así que el cuarto paso se llama por lo que es, en todos los casos.
+  "Inspección física y decisión",
   "Entrega y POD",
 ] as const;
 
@@ -183,13 +198,8 @@ export function deriveCaseProgress(input: ProgressInput): CaseProgress {
   else if (!h.analisisOk) current = 3;
   else current = 4;
 
-  // El rótulo del paso 4 cambia cuando la concordancia exige mirar el bien:
-  // no es lo mismo «decidí» que «andá, miralo y después decidí».
-  const rotulo4 = h.exigeInspeccion ? "Inspección física y decisión" : "Decisión del encargado";
-
   const steps: ProgressStep[] = PASOS.map((label, i) => {
     const index = i + 1;
-    const propio = index === 4 ? rotulo4 : label;
     let state: StepState;
     if (h.cuarentenado && index >= 4) state = index === 4 ? "blocked" : "pending";
     // A-4 · un análisis CAÍDO no está «corriendo»: está trabado, y la barra lo
@@ -198,7 +208,7 @@ export function deriveCaseProgress(input: ProgressInput): CaseProgress {
     else if (index < current) state = "done";
     else if (index === current) state = h.liberado && index === 5 ? "done" : "current";
     else state = "pending";
-    return { index, label: propio, state };
+    return { index, label, state };
   });
 
   const caption = `Paso ${current} de 5 · ${steps[current - 1]?.label ?? ""}`;
@@ -297,11 +307,24 @@ export function deriveNowAction(input: ProgressInput): NowAction {
   }
 
   if (!h.analisisOk) {
+    // R-7 · «está corriendo» sólo se afirma con la reserva viva. Sin reserva
+    // —el disparo falló entre la foto y el intento, o un caso legado sin
+    // intento— prometer que corre es el mismo bucle de A-4 por la otra puerta.
+    if (view.reevaluation.inFlight) {
+      return {
+        kind: "esperando_analisis",
+        label: "El análisis está corriendo",
+        help: "Corre solo al quedar registradas las dos fotos. No hace falta pedirlo.",
+        actionable: false,
+      };
+    }
     return {
       kind: "esperando_analisis",
-      label: "El análisis está corriendo",
-      help: "Corre solo al quedar registradas las dos fotos. No hace falta pedirlo.",
-      actionable: false,
+      label: "El análisis no está en curso",
+      help:
+        "Debería correr solo al quedar registradas las dos fotos. Si esta pantalla " +
+        "persiste, pedilo desde el panel de re-evaluación.",
+      actionable: view.reevaluation.enabled,
     };
   }
 
@@ -320,21 +343,27 @@ export function deriveNowAction(input: ProgressInput): NowAction {
     };
   }
 
-  // D-4 · acá es donde las capturas decían «quedó por debajo del umbral». Se
-  // dice lo mismo sin el corte: qué exige la concordancia, no contra qué.
+  // R-1 · LA EXIGENCIA ES INCONDICIONAL. La autoridad —release-policy y la RPC
+  // viva (`0251:214-215`)— bloquea TODA liberación sin foto de inspección
+  // humana, con veredicto alto o bajo. Lo único que cambia por veredicto es el
+  // LENGUAJE: la frase de disconformidad de D-4 (redacción aprobada por
+  // Dirección) sólo corresponde cuando la comparación de verdad no fue conforme.
   //
   // A-2 · «¿ya está registrada?» se pregunta al TIMELINE (`tieneInspeccion`),
   // no a `inspection.eligible`, que depende de un permiso que el operario que
   // saca la foto no tiene.
   // A-6 · y el botón se ofrece vivo sólo si de verdad se puede usar.
-  if (h.exigeInspeccion && !tieneInspeccion) {
+  if (!tieneInspeccion) {
     return {
       kind: "inspeccion",
       label: "Registrar inspección física",
-      help:
-        "La comparación no fue conforme según los estándares internacionales de medición " +
-        "del mercado. Andá a la unidad, revisala y sacá una foto de la inspección. " +
-        "Recién después vas a poder decidir.",
+      help: h.veredictoBaja
+        ? "La comparación no fue conforme según los estándares internacionales de medición " +
+          "del mercado. Andá a la unidad, revisala y sacá una foto de la inspección. " +
+          "Recién después vas a poder decidir."
+        : "La comparación resultó conforme, pero ninguna unidad se libera sin su " +
+          "inspección física registrada: la IA alerta, no decide. Andá a la unidad, " +
+          "revisala y registrá la foto. Recién después vas a poder decidir.",
       actionable: view.inspection.enabled,
     };
   }
@@ -342,11 +371,9 @@ export function deriveNowAction(input: ProgressInput): NowAction {
   return {
     kind: "decidir",
     label: "Mirá las dos fotos y decidí",
-    help: h.exigeInspeccion
-      ? "La inspección física ya está registrada. La decisión es tuya: no existe " +
-        "liberación automática por porcentaje."
-      : "La comparación no encontró diferencias, pero la decisión sigue siendo tuya. " +
-        "No existe liberación automática por porcentaje.",
+    help:
+      "La inspección física ya está registrada. La decisión es tuya: no existe " +
+      "liberación automática por porcentaje.",
     actionable: view.release.enabled || view.quarantine.enabled,
   };
 }
@@ -368,6 +395,10 @@ export interface ChecklistItem {
  * No sustituye a `release.blockers` —que sigue diciendo el motivo exacto— sino
  * que lo presenta como una lista de condiciones concretas, que es como el
  * operario la piensa: unas cuantas tildes y una cosa por hacer.
+ *
+ * R-1 · La inspección física es un ítem SIEMPRE: la autoridad la exige para
+ * toda liberación. Un checklist que dijera 4/4 «Hecho» sin la foto declararía
+ * completo un caso que el servidor va a rechazar.
  */
 export function deriveDecisionChecklist(input: ProgressInput): ChecklistItem[] {
   const { tieneIngreso, tieneEgreso, tieneInspeccion } = input;
@@ -398,12 +429,16 @@ export function deriveDecisionChecklist(input: ProgressInput): ChecklistItem[] {
     },
   ];
 
-  if (h.exigeInspeccion) {
-    items.push({
-      label: tieneInspeccion ? "Inspección física registrada" : "Falta la foto de inspección física",
-      done: tieneInspeccion,
-      hint: tieneInspeccion ? undefined : "Es el único paso que queda. Registrala arriba.",
-    });
-  }
+  // El hint de «único paso» sólo cuando de verdad lo es: con otras condiciones
+  // pendientes, afirmarlo sería mentir sobre el estado del caso.
+  const restoDone = tieneIngreso && tieneEgreso && h.analisisOk && h.cadenaVerificada;
+  items.push({
+    label: tieneInspeccion ? "Inspección física registrada" : "Falta la foto de inspección física",
+    done: tieneInspeccion,
+    hint:
+      tieneInspeccion || h.decidido || !restoDone
+        ? undefined
+        : "Es el único paso que queda. Registrala arriba.",
+  });
   return items;
 }
