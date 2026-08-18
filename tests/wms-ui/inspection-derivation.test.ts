@@ -25,7 +25,9 @@ import { deriveNowAction, deriveDecisionChecklist } from "@/lib/custody/case-pro
 
 const CASE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CLIENT = "22222222-2222-4222-8222-222222222222";
-const SHIPMENT = "11111111-1111-4111-8111-111111111111";
+// HN-1 · La pantalla decide SÓLO unidades físicas: la v1 está revocada y 0257
+// retiró la RPC que fabricaba casos no físicos. El doble modela esa verdad.
+const PHYSICAL = "11111111-1111-4111-8111-111111111111";
 const USER = "77777777-7777-4777-8777-777777777777";
 const SESSION = "88888888-8888-4888-8888-888888888888";
 const ING = "33333333-3333-4333-8333-333333333333";
@@ -56,7 +58,8 @@ interface Opts {
 function sessionDouble(opts: Opts = {}) {
   const rpcs: Array<{ fn: string; args: Record<string, unknown> }> = [];
   const caseRow = {
-    id: CASE, version: 3, client_id: CLIENT, packing_unit_id: null, shipment_id: SHIPMENT,
+    id: CASE, version: 3, client_id: CLIENT,
+    physical_unit_id: PHYSICAL, packing_unit_id: null, shipment_id: null,
     state: opts.state ?? "REVIEW_REQUIRED", hold_reasons: ["NO_CALIBRATED_THRESHOLD"],
     ingress_evidence_id: ING, egress_evidence_id: EGR,
     provider: "p", model: "m", prompt_version: "v", execution_mode: "real",
@@ -83,7 +86,7 @@ function sessionDouble(opts: Opts = {}) {
     id, event_id: `ev-${id}`, kind: "foto", sha256: SHA, redacted: false,
     captured_at: "2026-08-09T10:00:00.000Z",
     custody_events: {
-      packing_unit_id: null, shipment_id: SHIPMENT, stage, event_type: eventType,
+      physical_unit_id: PHYSICAL, packing_unit_id: null, shipment_id: null, stage, event_type: eventType,
       occurred_at: "2026-08-09T10:00:00.000Z",
     },
   });
@@ -147,7 +150,7 @@ function sessionDouble(opts: Opts = {}) {
     from: table,
     async rpc(fn: string, args: Record<string, unknown>) {
       rpcs.push({ fn, args });
-      if (fn === "custody_inspection_candidates") {
+      if (fn === "custody_inspection_candidates_v2") {
         if (opts.candidatesError) return { data: null, error: { message: opts.candidatesError } };
         return {
           data: (opts.candidates ?? [INSPECCION]).map((evidence_id) => ({
@@ -157,7 +160,7 @@ function sessionDouble(opts: Opts = {}) {
           error: null,
         };
       }
-      if (fn === "decide_custody_integrity") return { data: "decision-1", error: null };
+      if (fn === "decide_custody_integrity_v2") return { data: "decision-1", error: null };
       return { data: null, error: null };
     },
     auth: {
@@ -243,7 +246,7 @@ describe("la página NO aporta la lista: el servidor la deriva", () => {
     __setSessionClient(db);
     await loadCustodyCaseAction(CASE);
 
-    const call = db.rpcs.find((r) => r.fn === "custody_inspection_candidates");
+    const call = db.rpcs.find((r) => r.fn === "custody_inspection_candidates_v2");
     expect(call).toBeDefined();
     expect(call!.args).toEqual({ p_case_id: CASE });
   });
@@ -277,7 +280,7 @@ describe("la página NO aporta la lista: el servidor la deriva", () => {
     const res = await loadCustodyCaseAction(CASE);
     expect(res.ok).toBe(true);
     if (!res.ok || !res.data) return;
-    expect(db.rpcs.find((r) => r.fn === "custody_inspection_candidates")).toBeUndefined();
+    expect(db.rpcs.find((r) => r.fn === "custody_inspection_candidates_v2")).toBeUndefined();
     expect(res.data.release.enabled).toBe(false);
   });
 
@@ -285,7 +288,7 @@ describe("la página NO aporta la lista: el servidor la deriva", () => {
     const db = sessionDouble({ decisionId: "d-1", state: "RELEASED" });
     __setSessionClient(db);
     await loadCustodyCaseAction(CASE);
-    expect(db.rpcs.find((r) => r.fn === "custody_inspection_candidates")).toBeUndefined();
+    expect(db.rpcs.find((r) => r.fn === "custody_inspection_candidates_v2")).toBeUndefined();
   });
 });
 
@@ -301,11 +304,11 @@ describe("la decisión REDERIVA y no confía en lo que llegue de afuera", () => 
       reason: "inspección física conforme y sin diferencias",
     });
 
-    const decide = db.rpcs.find((r) => r.fn === "decide_custody_integrity");
+    const decide = db.rpcs.find((r) => r.fn === "decide_custody_integrity_v2");
     expect(decide).toBeDefined();
     expect(decide!.args.p_inspection_evidence_ids).toEqual([INSPECCION]);
     // Y se rederivó en ESTA llamada, no se reusó la del render.
-    expect(db.rpcs.filter((r) => r.fn === "custody_inspection_candidates")).toHaveLength(1);
+    expect(db.rpcs.filter((r) => r.fn === "custody_inspection_candidates_v2")).toHaveLength(1);
   });
 
   it("si los bytes de la inspección fueron sustituidos, la decisión NO llega a la base", async () => {
@@ -333,7 +336,7 @@ describe("la decisión REDERIVA y no confía en lo que llegue de afuera", () => 
     });
 
     expect(res.ok).toBe(false);
-    expect(db.rpcs.find((r) => r.fn === "decide_custody_integrity")).toBeUndefined();
+    expect(db.rpcs.find((r) => r.fn === "decide_custody_integrity_v2")).toBeUndefined();
   });
 
   it("un `inspectionEvidenceIds` inyectado en el input NO llega a la base", async () => {
@@ -350,7 +353,7 @@ describe("la decisión REDERIVA y no confía en lo que llegue de afuera", () => 
       ...({ inspectionEvidenceIds: [intruso] } as Record<string, unknown>),
     });
 
-    const decide = db.rpcs.find((r) => r.fn === "decide_custody_integrity");
+    const decide = db.rpcs.find((r) => r.fn === "decide_custody_integrity_v2");
     expect(decide!.args.p_inspection_evidence_ids).toEqual([INSPECCION]);
     expect(JSON.stringify(decide!.args)).not.toContain(intruso);
   });
@@ -365,9 +368,9 @@ describe("la decisión REDERIVA y no confía en lo que llegue de afuera", () => 
       reason: "diferencias visibles en la esquina del bulto",
     });
 
-    const decide = db.rpcs.find((r) => r.fn === "decide_custody_integrity");
+    const decide = db.rpcs.find((r) => r.fn === "decide_custody_integrity_v2");
     expect(decide!.args.p_inspection_evidence_ids).toEqual([]);
-    expect(db.rpcs.find((r) => r.fn === "custody_inspection_candidates")).toBeUndefined();
+    expect(db.rpcs.find((r) => r.fn === "custody_inspection_candidates_v2")).toBeUndefined();
   });
 });
 
@@ -506,7 +509,7 @@ describe("R-2 · la compuerta de permiso sobre la derivación de inspección", (
     expect(res.ok).toBe(true);
     if (!res.ok || !res.data) return;
     expect(res.data.inspection.eligible).toBe(1);
-    expect(db.rpcs.some((r) => r.fn === "custody_inspection_candidates")).toBe(true);
+    expect(db.rpcs.some((r) => r.fn === "custody_inspection_candidates_v2")).toBe(true);
   });
 
   it("SIN `wms.custody.decide`: `eligible` es 0 y la RPC NI SE LLAMA — la compuerta muerde", async () => {
@@ -518,7 +521,7 @@ describe("R-2 · la compuerta de permiso sobre la derivación de inspección", (
     // El doble TIENE candidatas para dar; si `eligible` fuera 0 sin que la
     // compuerta corte, la prueba mediría el doble y no el guard.
     expect(res.data.inspection.eligible).toBe(0);
-    expect(db.rpcs.some((r) => r.fn === "custody_inspection_candidates")).toBe(false);
+    expect(db.rpcs.some((r) => r.fn === "custody_inspection_candidates_v2")).toBe(false);
   });
 
   it("LA PANTALLA NO DEPENDE DEL PERMISO: misma exigencia con y sin él", async () => {

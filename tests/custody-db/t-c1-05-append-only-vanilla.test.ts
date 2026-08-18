@@ -427,6 +427,9 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
       .map((l) => `${l[0]}${l.slice(1).trim()}`);
     const permitido = new Set([
       '+"test:custody:db": "vitest run --config vitest.custody.config.ts",',
+      // V5 · CUSTODIA-DEUDAS-DE-INSTRUMENTACION · deuda 2: el master autoriza
+      // enganchar vitest.wms-ui.config.ts al CI, y eso exige este script.
+      '+"test:wms-ui": "vitest run --config vitest.wms-ui.config.ts",',
       '+"jsdom": "^26.1.0",',
       '-"@netlify/blobs": "^10.7.8",',
       '+"@netlify/blobs": "^10.7.8",',

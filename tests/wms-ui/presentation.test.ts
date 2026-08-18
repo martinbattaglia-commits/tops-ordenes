@@ -345,7 +345,13 @@ describe("serialización segura", () => {
     expect(holdLabel("CHAIN_INVALID")).toBe("La cadena de custodia no es válida");
     expect(holdLabel("LO_QUE_SEA")).toBe("Retención registrada por el servidor");
     expect(blockerLabel("NO_HUMAN_INSPECTION_EVIDENCE")).toBe("Falta la foto de inspección humana");
-    expect(blockerLabel("XX")).toBe("Requisito de liberación no cumplido");
+    // S2-6 · el respaldo dejó de ser mudo: un código con forma de código pero
+    // desconocido se declara con el paso a seguir, y una entrada que no tiene
+    // forma de código (ya es frase traducida) pasa intacta.
+    expect(blockerLabel("CODIGO_NUEVO_DESCONOCIDO")).toBe(
+      "El sistema bloqueó este paso por un motivo que la pantalla todavía no sabe explicar. Anotá el código y avisá a supervisión: CODIGO_NUEVO_DESCONOCIDO",
+    );
+    expect(blockerLabel("XX")).toBe("XX");
   });
 });
 

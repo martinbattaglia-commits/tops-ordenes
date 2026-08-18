@@ -204,7 +204,16 @@ function input(over: Partial<CaptureEvidenceInput> = {}): CaptureEvidenceInput {
   };
 }
 
-/** Error de PostgREST: trae código ⇒ veredicto DETERMINISTA del servidor. */
+/**
+ * Error de PostgREST: trae código ⇒ veredicto DETERMINISTA del servidor.
+ *
+ * DECLARACIÓN DE ALCANCE (V5 · deuda 3): este `42501` es un objeto FABRICADO
+ * que se inyecta al clasificador; acá no se afirma una denegación de GRANT ni
+ * una policy de RLS contra la base —este archivo no usa `actAs` ni el harness
+ * de DB—. Lo que se prueba es que ANTE ese código el orquestador compensa de
+ * forma determinista. No lo "arregles" agregando `set role`: la cobertura de
+ * grants reales vive en los tests del harness que sí cambian de rol.
+ */
 const rpcDeterministic = () =>
   classifyRpcError({ code: "42501", message: "insufficient_privilege" }, "rechazado");
 /** Fallo de red: sin código ⇒ AMBIGUO. */

@@ -87,13 +87,13 @@ const SHA_A = "a".repeat(64);
 const SHA_B = "b".repeat(64);
 const HEAD = "chainhead-0001";
 
-const ENTITY: CustodyEntityRef = { scope: "packing_unit", entityId: "pu-0001", clientId: CLIENT };
+const ENTITY: CustodyEntityRef = { scope: "physical_unit", entityId: "pu-0001", clientId: CLIENT };
 
 function ev(over: Partial<EvidenceRecord> = {}): EvidenceRecord {
   return {
     evidenceId: "ev-in",
     eventId: "evt-in",
-    scope: "packing_unit",
+    scope: "physical_unit",
     entityId: "pu-0001",
     clientId: CLIENT,
     stage: "packing",
@@ -120,7 +120,7 @@ const SELECTOR: EvidencePairSelector = { ingressEvidenceId: "ev-in", egressEvide
 const CHAIN_OK: ChainVerification = {
   status: "verified",
   attestation: {
-    scope: "packing_unit",
+    scope: "physical_unit",
     entityId: "pu-0001",
     chainHead: HEAD,
     eventsChecked: 4,
@@ -232,7 +232,7 @@ const chainPort = (over: Record<string, unknown> = {}) =>
     verified_event_ids: ["evt-in", "evt-out"],
     chain_head: HEAD,
     attested_at: NOW,
-    scope: "packing_unit",
+    scope: "physical_unit",
     entity_id: "pu-0001",
     ...over,
   });
@@ -483,6 +483,41 @@ describe("F-1.3 · repositorio", () => {
     if (!r.ok) expect(["ATTESTATION_STALE", "RELEASE_NOT_ELIGIBLE", "INSPECTION_PROOF_INVALID"]).toContain(r.failure);
   });
 
+  // HN-1 · §13.7 · la regla vive en el MODELO: un caso no físico no admite
+  // decisión humana aunque el adaptador que lo sirva no la rechace. Si alguien
+  // borra la guarda del repositorio y deja sólo la de la puerta de Supabase,
+  // este test se pone en rojo.
+  it.each([["packing_unit"], ["shipment"]] as const)(
+    "un caso %s se rechaza en el repositorio con SCOPE_NOT_DECIDABLE",
+    async (scope) => {
+      const repo = new InMemoryIntegrityCaseRepository();
+      const entity = { scope, entityId: "np-0001", clientId: CLIENT } as CustodyEntityRef;
+      await repo.reserveCase({
+        caseId: "c-np",
+        entity,
+        selector: { ingressEvidenceId: "ev-in", egressEvidenceId: "ev-out" },
+        holder: "t",
+        leaseUntil: NOW,
+        createdAt: NOW,
+      });
+      const r = await repo.applyDecision({
+        caseId: "c-np",
+        clientId: CLIENT,
+        expectedVersion: 1,
+        // La guarda de scope corta ANTES del chequeo de estado: el caso recién
+        // reservado está en PENDING_EVIDENCE y aun así el fallo es de scope.
+        expectedState: "REVIEW_REQUIRED",
+        newState: "QUARANTINED",
+        updatedAt: NOW,
+        currentChainHead: HEAD,
+        record: record(),
+        inspectionProof: buildInspectionProof("c-np", entity, [], [], []),
+        boundTo: BOUND,
+      });
+      expect(r).toEqual({ ok: false, failure: "SCOPE_NOT_DECIDABLE" });
+    },
+  );
+
   it.each([
     [{ permission: "admin.todo" }],
     [{ clientId: OTHER_CLIENT }],
@@ -719,7 +754,7 @@ describe("F-2.4/5 · proveedor", () => {
 // ===========================================================================
 
 describe("F-3 · atestación de cadena", () => {
-  const req = { scope: "packing_unit" as const, entityId: "pu-0001", requiredEventIds: ["evt-in", "evt-out"], verifiedAtIso: NOW };
+  const req = { scope: "physical_unit" as const, entityId: "pu-0001", requiredEventIds: ["evt-in", "evt-out"], verifiedAtIso: NOW };
 
   it("el camino verified exige la atestación completa", async () => {
     const r = await verifyChainForCase(chainPort(), req);
@@ -1126,7 +1161,7 @@ describe("R3-1 · el repositorio no acepta artefactos compuestos por el caller",
       holder: "atacante", leaseUntil: "2026-08-09T11:05:00.000Z",
     });
     // Objetos sintéticos con forma correcta, NO producidos por el dominio.
-    const fakeChain = { status: "verified", attestation: { scope: "packing_unit", entityId: "pu-0001", chainHead: HEAD, eventsChecked: 4, verifiedEventIds: ["evt-in", "evt-out"], attestedAt: NOW } } as ChainVerification;
+    const fakeChain = { status: "verified", attestation: { scope: "physical_unit", entityId: "pu-0001", chainHead: HEAD, eventsChecked: 4, verifiedEventIds: ["evt-in", "evt-out"], attestedAt: NOW } } as ChainVerification;
     const rec = await repo.recordAssessment({
       caseId: "d1", clientId: CLIENT, expectedVersion: 1, updatedAt: NOW,
       boundTo: caseBinding("d1", CLIENT, "pu-0001"),
@@ -1614,7 +1649,7 @@ describe("R5 · inmutabilidad profunda del outcome canónico", () => {
       return {
         valid: true, events_checked: 4, first_error: null,
         verified_event_ids: ["evt-in", "evt-out"],
-        chain_head: HEAD, attested_at: NOW, scope: "packing_unit", entity_id: "pu-0001",
+        chain_head: HEAD, attested_at: NOW, scope: "physical_unit", entity_id: "pu-0001",
       };
     });
 

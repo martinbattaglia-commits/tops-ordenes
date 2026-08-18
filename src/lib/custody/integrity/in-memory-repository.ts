@@ -159,6 +159,16 @@ export class InMemoryIntegrityCaseRepository implements IntegrityCaseRepository 
       return { ok: false, failure: "NOT_FOUND" };
     }
 
+    // HN-1 · §13.7 · LA REGLA VIVE EN EL MODELO, NO EN LA PUERTA. Sólo la
+    // unidad física admite decisión humana: la v1 está revocada y 0257 retiró
+    // la única RPC capaz de fabricar un caso no físico. Si esta regla quedara
+    // sólo en el adaptador de Supabase, cualquier adaptador nuevo reabriría el
+    // camino viejo en silencio. Se decide sobre el scope PERSISTIDO del caso,
+    // nunca sobre lo que declare el caller.
+    if (found.entity.scope !== "physical_unit") {
+      return { ok: false, failure: "SCOPE_NOT_DECIDABLE" };
+    }
+
     // R4-1: binding recalculado desde el caso persistido.
     const expectedBinding = caseBinding(
       found.caseId,
