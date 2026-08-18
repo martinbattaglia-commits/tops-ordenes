@@ -15,6 +15,7 @@ import {
   captureCustodyEvidence,
   registerCustodyEvent,
   generateDeliveryPod,
+  getDeliveryPodByShipment,
   redactCustodyEvidence,
   getEvidenceSignedUrl,
   resolveTrustedActor,
@@ -35,8 +36,10 @@ import {
   buildCustodyCaseView,
   CUSTODY_CAPTURE_PERMISSION,
   leaksSensitiveData,
+  type BuildCaseViewInput,
   type CustodyCaseView,
 } from "@/lib/custody/case-presentation";
+import { resolvePhysicalUnitPodShipment } from "@/lib/custody/dispatch-egress";
 import {
   createActorAuthorizationPort,
   createChainHeadPort,
@@ -481,12 +484,37 @@ export async function loadCustodyCaseAction(
     // ¿El POD-PDF ya existe? Sólo tiene sentido preguntarlo con el caso
     // liberado, que es cuando la compuerta ofrece algo. La pantalla no importa
     // el generador de PDF para responder esto.
+    //
+    // FILA 11b · la unidad física también tiene POD: el de SU despacho,
+    // resuelto por genealogía (allocations → pedido → shipment). El POD sigue
+    // siendo post-entrega (0250a): acá sólo se lee, no se relaja nada.
     let podPdfReady = false;
+    let physicalUnitPod: BuildCaseViewInput["physicalUnitPod"] = null;
     if (found.state === "RELEASED" && found.entity.scope === "shipment") {
       try {
         podPdfReady = (await getPodPdfEvidenceId(found.entity.entityId)) !== null;
       } catch {
         podPdfReady = false;
+      }
+    } else if (found.state === "RELEASED" && found.entity.scope === "physical_unit") {
+      try {
+        const resolved = await resolvePhysicalUnitPodShipment(found.entity.entityId);
+        if (resolved) {
+          const pod = resolved.delivered
+            ? await getDeliveryPodByShipment(resolved.shipmentId).catch(() => null)
+            : null;
+          physicalUnitPod = {
+            shipmentId: resolved.shipmentId,
+            shipmentPublicId: resolved.shipmentPublicId,
+            delivered: resolved.delivered,
+            podExists: pod !== null,
+          };
+          if (pod !== null) {
+            podPdfReady = (await getPodPdfEvidenceId(resolved.shipmentId)) !== null;
+          }
+        }
+      } catch {
+        physicalUnitPod = null;
       }
     }
 
@@ -497,6 +525,7 @@ export async function loadCustodyCaseAction(
       chainAdvanced,
       evaluationInFlight,
       podPdfReady,
+      physicalUnitPod,
       draftReason: options.draftReason,
       candidateInspectionEvidenceIds: inspectionEvidenceIds,
     });

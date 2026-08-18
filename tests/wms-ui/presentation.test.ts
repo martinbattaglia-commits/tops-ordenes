@@ -226,6 +226,66 @@ describe("POD bloqueado hasta la decisión humana", () => {
     expect(v.podBlocked).toBe(false);
     expect(v.podBlockedReason).toBeNull();
   });
+
+  it("scope shipment liberado ⇒ la compuerta descarga contra la propia entidad", () => {
+    const v = buildCustodyCaseView({ case: caseOf({ state: "RELEASED" }), actor: actorOf() });
+    expect(v.podShipmentId).toBe(SHIPMENT);
+  });
+});
+
+describe("FILA 11b · POD de la unidad física: estado real y motivo visible", () => {
+  const UNIT = "99999999-9999-4999-8999-999999999999";
+  const unitCase = () =>
+    caseOf({ state: "RELEASED", entity: { scope: "physical_unit", entityId: UNIT, clientId: CLIENT } });
+
+  it("liberada sin despacho resuelto ⇒ sin botón y CON motivo (no el literal genérico)", () => {
+    const v = buildCustodyCaseView({ case: unitCase(), actor: actorOf() });
+    expect(v.podBlocked).toBe(false);
+    expect(v.podShipmentId).toBeNull();
+    expect(v.podBlockedReason).toMatch(/no se encontró un despacho/i);
+  });
+
+  it("despacho sin entrega ⇒ el POD es post-entrega y el motivo nombra al despacho", () => {
+    const v = buildCustodyCaseView({
+      case: unitCase(),
+      actor: actorOf(),
+      physicalUnitPod: { shipmentId: SHIPMENT, shipmentPublicId: "DSP-2026-0001", delivered: false, podExists: false },
+    });
+    expect(v.podShipmentId).toBeNull();
+    expect(v.podBlockedReason).toMatch(/post-entrega/i);
+    expect(v.podBlockedReason).toContain("DSP-2026-0001");
+  });
+
+  it("entregado pero sin POD emitido ⇒ sin botón, con motivo que apunta al despacho", () => {
+    const v = buildCustodyCaseView({
+      case: unitCase(),
+      actor: actorOf(),
+      physicalUnitPod: { shipmentId: SHIPMENT, shipmentPublicId: "DSP-2026-0001", delivered: true, podExists: false },
+    });
+    expect(v.podShipmentId).toBeNull();
+    expect(v.podBlockedReason).toMatch(/aún no fue emitido/i);
+  });
+
+  it("entregado con POD emitido ⇒ descarga contra el despacho resuelto y sin motivo", () => {
+    const v = buildCustodyCaseView({
+      case: unitCase(),
+      actor: actorOf(),
+      physicalUnitPod: { shipmentId: SHIPMENT, shipmentPublicId: "DSP-2026-0001", delivered: true, podExists: true },
+      podPdfReady: true,
+    });
+    expect(v.podShipmentId).toBe(SHIPMENT);
+    expect(v.podBlockedReason).toBeNull();
+    expect(v.podPdfReady).toBe(true);
+  });
+
+  it("la unidad NUNCA ofrece POD antes de la decisión: bloqueado manda", () => {
+    const v = buildCustodyCaseView({
+      case: caseOf({ entity: { scope: "physical_unit", entityId: UNIT, clientId: CLIENT } }),
+      actor: actorOf(),
+      physicalUnitPod: { shipmentId: SHIPMENT, shipmentPublicId: "DSP-2026-0001", delivered: true, podExists: true },
+    });
+    expect(v.podBlocked).toBe(true);
+  });
 });
 
 describe("la IA informa y nunca decide", () => {

@@ -221,3 +221,99 @@ export async function getDispatchEgressGate(orderId: string): Promise<DispatchEg
     return NO_APLICA;
   }
 }
+
+/**
+ * FILA 11b · UNIDAD FÍSICA → SU DESPACHO, PARA EL POD.
+ *
+ * El POD pertenece al shipment (0250a lo condiciona a la entrega efectiva) y
+ * la pantalla del caso de una unidad física no tenía cómo llegar a él. Este
+ * resolver recorre la genealogía en sentido inverso al de arriba —unidad →
+ * allocations → pedido → shipment— con la MISMA doctrina de lectura:
+ *
+ *   · la unidad se verifica primero por el cliente de SESIÓN y su RLS: si el
+ *     operario no puede ver la unidad, acá no hay nada que resolver;
+ *   · el puente `custody_allocation_physical_units` (RLS sin política de
+ *     SELECT) se lee con admin, CERRADO sobre ESA unidad ya vista;
+ *   · allocations y shipments vuelven a salir por SESIÓN, sometidos a su RLS.
+ *
+ * No toca ninguna compuerta: sólo responde «¿en qué despacho salió esta
+ * unidad y ese despacho ya registró la entrega?». Ante cualquier error
+ * devuelve `null` y la pantalla dice que no pudo resolverse, no inventa.
+ */
+export interface PhysicalUnitPodShipment {
+  shipmentId: string;
+  shipmentPublicId: string;
+  delivered: boolean;
+}
+
+export async function resolvePhysicalUnitPodShipment(
+  physicalUnitId: string,
+): Promise<PhysicalUnitPodShipment | null> {
+  try {
+    const session = createClient();
+    const admin = createAdminClient();
+    if (!session || !admin) return null;
+
+    // 1 · La unidad, por SESIÓN (RLS de tenant). Sin visibilidad no hay mapeo.
+    const { data: unit, error: uErr } = await session
+      .from("custody_physical_units")
+      .select("id")
+      .eq("id", physicalUnitId)
+      .maybeSingle();
+    if (uErr || !unit) return null;
+
+    // 2 · El puente, admin CERRADO sobre esa unidad (ver docblock del módulo).
+    const { data: bridge, error: bErr } = await admin
+      .from("custody_allocation_physical_units")
+      .select("allocation_id")
+      .eq("physical_unit_id", physicalUnitId);
+    if (bErr || !bridge?.length) return null;
+    const allocationIds = (bridge as { allocation_id: string }[]).map((b) => b.allocation_id);
+
+    // 3 · Las allocations por SESIÓN → pedidos que el usuario puede ver.
+    //     C4-M1 · MISMO filtro de estado que `resolveDispatchOrderUnits` y que
+    //     la doctrina `sa.status<>'liberada'` de la base (0250a/0252): una
+    //     reserva LIBERADA persiste en el puente inmutable pero la unidad
+    //     nunca viajó con ese pedido — sin este filtro la pantalla podía
+    //     atribuirle el POD de una entrega ajena.
+    const { data: allocs, error: aErr } = await session
+      .from("stock_allocations")
+      .select("id, logistics_order_items!inner(order_id)")
+      .in("id", allocationIds)
+      .in("status", ["empacada", "despachada"]);
+    if (aErr || !allocs?.length) return null;
+    // El `!inner` garantiza la fila; el tipo generado la modela como arreglo.
+    const allocRows = allocs as unknown as { logistics_order_items: { order_id: string } | { order_id: string }[] }[];
+    const orderIds = [
+      ...new Set(
+        allocRows.flatMap((a) =>
+          Array.isArray(a.logistics_order_items)
+            ? a.logistics_order_items.map((i) => i.order_id)
+            : [a.logistics_order_items.order_id],
+        ),
+      ),
+    ];
+
+    // 4 · El shipment vigente de esos pedidos, por SESIÓN. Se prefiere el
+    //     entregado (el POD es post-entrega); si no, el último despachado.
+    const { data: ships, error: sErr } = await session
+      .from("shipments")
+      .select("id, public_id, status, delivered_at, dispatched_at")
+      .in("order_id", orderIds)
+      .neq("status", "anulado")
+      // C4-L2 · sin `nullsFirst:false`, un shipment sin `dispatched_at` quedaba
+      // primero y el motivo podía nombrar un despacho que nunca salió.
+      .order("dispatched_at", { ascending: false, nullsFirst: false });
+    if (sErr || !ships?.length) return null;
+    type Ship = { id: string; public_id: string; status: string; delivered_at: string | null };
+    const rows = ships as Ship[];
+    const chosen = rows.find((s) => s.delivered_at !== null || s.status === "entregado") ?? rows[0];
+    return {
+      shipmentId: chosen.id,
+      shipmentPublicId: chosen.public_id,
+      delivered: chosen.delivered_at !== null || chosen.status === "entregado",
+    };
+  } catch {
+    return null;
+  }
+}

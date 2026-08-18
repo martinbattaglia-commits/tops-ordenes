@@ -7,10 +7,29 @@ import type { ChartAccount } from "@/lib/erp/types";
 import { ClienteFiscalEditor } from "@/components/comercial/ClienteFiscalEditor";
 import { EntityConversationButton } from "@/components/connect/EntityConversationButton";
 import type { CondicionIva } from "@/lib/invoicing/types";
+import { createClient } from "@/lib/supabase/server";
 import { ClientMasterEditor } from "./ClientMasterEditor";
 
 export const metadata = { title: "Ficha de cliente" };
 export const dynamic = "force-dynamic";
+
+/**
+ * Espejo de lectura de la compuerta REAL de `contractClientCustody`
+ * (`has_permission("clientes.custody.contract")`, fail-closed). No autoriza
+ * nada: sólo evita ofrecer en pantalla lo que el servidor va a rechazar.
+ */
+async function canContractCustody(): Promise<boolean> {
+  const supabase = createClient();
+  if (!supabase) return false;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data, error } = await supabase.rpc("has_permission", {
+    p_slug: "clientes.custody.contract",
+  });
+  return !error && data === true;
+}
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -88,6 +107,7 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
         activo={c.activo !== false}
         updatedAt={c.updated_at ?? c.created_at ?? ""}
         custodyLevel={c.custody_level === 2 ? 2 : 1}
+        canContractCustody={await canContractCustody()}
         initial={{
           razon: c.razon ?? "",
           nombre_comercial: c.nombre_comercial ?? "",

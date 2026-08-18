@@ -344,7 +344,10 @@ export default async function CustodyCasePage({ params }: { params: { id: string
             <CaseDecisionPanel view={view} />
           </div>
           <div id="panel-pod">
-            <CasePodGate view={view} shipmentId={shipmentId} hasPdf={view.podPdfReady} />
+            {/* FILA 11b · la compuerta descarga contra el despacho que el view-model
+                resolvió (la propia entidad en scope shipment; el despacho de la
+                unidad física, sólo con su POD ya emitido, en scope physical_unit). */}
+            <CasePodGate view={view} shipmentId={view.podShipmentId} hasPdf={view.podPdfReady} />
           </div>
         </div>
 

@@ -30,6 +30,15 @@ vi.mock("@/app/(app)/wms/custody/_components/EvidenceViewer", () => ({
   ),
 }));
 
+vi.mock("@/app/(app)/wms/custody/_components/PodDownloadButton", () => ({
+  // El botón real dispara server actions (signed URL): fuera de Next no
+  // resuelve. Lo que se aprueba acá es CUÁNDO la compuerta lo ofrece.
+  PodDownloadButton: ({ hasPdf }: { hasPdf: boolean }) => (
+    <span className="btn btn-primary btn-sm">{hasPdf ? "Descargar PDF" : "Generar PDF"}</span>
+  ),
+}));
+
+import { CasePodGate } from "@/app/(app)/wms/custody/_components/CasePodGate";
 import { CaseProgressBar } from "@/app/(app)/wms/custody/_components/CaseProgressBar";
 import { CaseNowBlock } from "@/app/(app)/wms/custody/_components/CaseNowBlock";
 import { CaseChecklist } from "@/app/(app)/wms/custody/_components/CaseChecklist";
@@ -130,7 +139,7 @@ function vista(over: Partial<CustodyCaseView> = {}): CustodyCaseView {
     inspection: { enabled: false, blockers: [], eligible: 0 },
     capture: { enabled: true, blockers: [] },
     podBlocked: true, podBlockedReason: "Despacho y POD bloqueados · la unidad no puede salir del depósito",
-    podPdfReady: false, decision: null,
+    podPdfReady: false, podShipmentId: null, decision: null,
     createdAt: "2026-08-16T05:40:00.000Z", updatedAt: "2026-08-16T09:24:00.000Z",
     ...over,
   } as CustodyCaseView;
@@ -221,12 +230,68 @@ const ESCENARIOS: Escenario[] = [
       view: vista({
         state: "RELEASED", stateLabel: "Liberado", tone: "released",
         ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
+        // C4-L3 · un liberado con POD ofrecible lleva su despacho resuelto: el
+        // builder real nunca produce `podBlocked:false` con la compuerta muda.
         podBlocked: false, podBlockedReason: null,
+        podShipmentId: "shp-demo-1", podPdfReady: true,
         inspection: { enabled: false, blockers: ["El caso ya tiene una decisión registrada"], eligible: 1 },
         decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme, embalaje íntegro." },
       }),
       // R-1 · un caso LIBERADO tiene la inspección registrada por definición:
       // la RPC no libera sin ella.
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: true,
+    },
+    ingreso: true, egreso: true,
+  },
+  // FILA 11b · el POD de la UNIDAD FÍSICA muestra su estado real y, si no se
+  // ofrece, DICE POR QUÉ. Los textos son los que produce `releasedPodReason`
+  // (case-presentation), verificados en `presentation.test.ts`.
+  {
+    titulo: "Estado 6a · liberado · sin despacho encontrado para la unidad",
+    nota: "FILA 11b · el POD pertenece al despacho: sin despacho, motivo visible.",
+    input: {
+      view: vista({
+        state: "RELEASED", stateLabel: "Liberado", tone: "released",
+        ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
+        podBlocked: false,
+        podBlockedReason: "La unidad está liberada. El POD se emite sobre el despacho, y no se encontró un despacho de esta unidad",
+        podShipmentId: null,
+        inspection: { enabled: false, blockers: ["El caso ya tiene una decisión registrada"], eligible: 1 },
+        decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme." },
+      }),
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: true,
+    },
+    ingreso: true, egreso: true,
+  },
+  {
+    titulo: "Estado 6b · liberado · despacho sin entrega registrada",
+    nota: "FILA 11b · el POD sigue siendo post-entrega (0250a): el motivo nombra al despacho.",
+    input: {
+      view: vista({
+        state: "RELEASED", stateLabel: "Liberado", tone: "released",
+        ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
+        podBlocked: false,
+        podBlockedReason: "El POD es post-entrega: el despacho DSP-2026-0001 aún no registra la entrega",
+        podShipmentId: null,
+        inspection: { enabled: false, blockers: ["El caso ya tiene una decisión registrada"], eligible: 1 },
+        decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme." },
+      }),
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: true,
+    },
+    ingreso: true, egreso: true,
+  },
+  {
+    titulo: "Estado 6c · liberado · entrega registrada · POD del despacho disponible",
+    nota: "FILA 11b · la unidad descarga el POD de SU despacho, ya emitido.",
+    input: {
+      view: vista({
+        state: "RELEASED", stateLabel: "Liberado", tone: "released",
+        ai: ai({ ...ANALISIS_ALTO, concordance: ALTA }),
+        podBlocked: false, podBlockedReason: null,
+        podShipmentId: "shp-demo-1", podPdfReady: true,
+        inspection: { enabled: false, blockers: ["El caso ya tiene una decisión registrada"], eligible: 1 },
+        decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme." },
+      }),
       tieneIngreso: true, tieneEgreso: true, tieneInspeccion: true,
     },
     ingreso: true, egreso: true,
@@ -314,6 +379,10 @@ function pantalla(e: Escenario): string {
       <CaseAiPanel view={v} />
 
       <CaseChecklist items={check} />
+
+      {/* FILA 11b · la compuerta del POD, con el MISMO cableado que la página:
+          descarga contra `view.podShipmentId` y, si no se ofrece, dice por qué. */}
+      <CasePodGate view={v} shipmentId={v.podShipmentId} hasPdf={v.podPdfReady} />
     </div>,
   );
 }
