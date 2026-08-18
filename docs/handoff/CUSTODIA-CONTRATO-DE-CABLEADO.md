@@ -32,10 +32,18 @@ Los ocho archivos exigidos existen y se leyeron completos:
 | `tests/custody-db/t-c1-05-append-only-vanilla.test.ts` | 688 |
 
 **Toda referencia `archivo:línea` de este documento está tomada de ese HEAD**,
-con una excepción declarada: las anclas que el §13 introduce
-—`integrity-supabase.ts:263-293` y `:319-321`— resuelven contra el candidato del
-bloque B-1, no contra ese HEAD, porque describen el código **después** del
-cambio. El §13.2 explicita el corrimiento respecto de la numeración anterior.
+con excepciones declaradas. Son **tres épocas**, no dos, y conviene decirlo
+entero para que nadie abra el archivo equivocado:
+
+1. **La regla general** — el HEAD de arriba. Vale para todo lo que no esté en 2
+   ni en 3.
+2. **`integrity-supabase.ts:302-304`**, citada en §13.2, resuelve contra
+   **`fe5c92f`** (la base del bloque B-1): es la ubicación del ternario de
+   `custody_inspection_candidates` **antes** de este bloque. El propio §13.2 la
+   rotula «antes de este bloque».
+3. **`integrity-supabase.ts:263-293` y `:319-321`**, introducidas por §13,
+   resuelven contra el **candidato de B-1**, porque describen el código
+   **después** del cambio. §13.2 explicita el corrimiento entre 2 y 3.
 
 ---
 
@@ -1250,20 +1258,33 @@ La única fila que sigue **CORTADA** es la **11b** (POD de unidad física).
 - **No** aplicó `0257` a producción, ni `supabase db push`, ni merge, ni deploy.
 - **No** usó números de migración fuera del lease `0257`.
 
-**Y una divergencia que queda ABIERTA, declarada y no remediada.** La C4 la
-encontró: `integrity/in-memory-repository.ts:152` —el repositorio de referencia
-del dominio— **no** tiene rama de scope, así que sigue aceptando una decisión
-sobre un caso `packing_unit` y devolviendo `{ ok: true }`; y la suite de dominio
-`wms-custody-ia-integrity.test.ts:90` sigue fijando `scope: "packing_unit"` como
-operación válida. HN-1 queda codificado **sólo** en la frontera del adaptador.
+### 13.7 · 🟠 MEDIUM ABIERTO · HN-1 vive en la PUERTA, no en el MODELO
 
-No es un fallo de producción —el camino real pasa siempre por
-`createSupabaseCustodyQueryPort`— pero sí una divergencia entre dos
-implementaciones del mismo puerto sobre una regla de dominio, y quien lea el
-dominio o sus pruebas concluirá lo contrario de lo que HN-1 decidió. **No se
-remedió acá a propósito:** el master acotó este bloque a dos piezas, y mover el
-repositorio en memoria y su batería es alcance que Dirección no autorizó.
-Registrado para que se decida, no enterrado.
+La C4 lo encontró y Dirección resolvió **no tocarlo en esta ventana**, porque
+toca comportamiento y este bloque estaba acotado a dos piezas. Queda acá con su
+propio bloque para que no se entierre.
+
+`integrity/in-memory-repository.ts:152` —el repositorio de referencia del
+dominio— **no** tiene rama de scope: sigue aceptando una decisión sobre un caso
+`packing_unit` y devolviendo `{ ok: true }`. Y la suite de dominio
+`wms-custody-ia-integrity.test.ts:90` sigue fijando `scope: "packing_unit"` como
+operación válida y exitosa.
+
+Es decir: **HN-1 quedó codificado en la frontera del adaptador, no en el
+modelo.** Las dos implementaciones del mismo puerto discrepan sobre una regla de
+dominio.
+
+**No es un fallo de producción** —el camino real pasa siempre por
+`createSupabaseCustodyQueryPort`, y ahí la puerta está cerrada—. El daño es de
+otra clase y es el que importa en un módulo probatorio: **quien lea el dominio o
+sus pruebas concluirá lo contrario de lo que HN-1 decidió.** Un revisor futuro
+que audite `in-memory-repository` para entender qué se puede decidir va a leer
+que un caso no físico se decide, y no es cierto.
+
+**Severidad: MEDIUM.** No bloquea el cierre de B-1 —la puerta real está
+cerrada y probada— pero exige su propia ventana: mover el repositorio en memoria
+significa mover también su batería, y eso es cambio de comportamiento con su
+propio gate.
 
 ---
 

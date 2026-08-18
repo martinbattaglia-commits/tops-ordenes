@@ -311,9 +311,12 @@ export async function evidenceSignedUrlAction(evidenceId: string, reason?: strin
 // Reglas que gobiernan todo lo de abajo:
 //   · la identidad, la sesión, el tenant, el rol y los permisos salen del
 //     servidor; el `FormData` sólo aporta QUÉ se decide, nunca QUIÉN decide;
-//   · la autoridad final es la RPC `decide_custody_integrity` (0224), que
-//     revalida sesión, permiso, tenant, estado, CAS de versión, cadena viva y
-//     evidencia de inspección. Lo de acá es la primera línea, no la única;
+//   · la autoridad final es la RPC `decide_custody_integrity_v2` (0250a/0251),
+//     que revalida sesión, permiso, tenant, estado, CAS de versión, cadena viva
+//     y evidencia de inspección. Lo de acá es la primera línea, no la única.
+//     La v1 está revocada para `authenticated` desde `0250a:2199-2200` y, desde
+//     HN-1, ningún scope la alcanza: un caso no físico se rechaza tipado en el
+//     puerto y llega acá como `SCOPE_NOT_DECIDABLE`;
 //   · los errores que salen son ETIQUETAS: no llevan bucket, path, digest,
 //     token, sesión ni mensajes crudos de PostgreSQL.
 // ===========================================================================
