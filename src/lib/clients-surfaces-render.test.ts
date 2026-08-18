@@ -55,6 +55,7 @@ vi.mock("@/app/(app)/clients/actions", () => ({
   updateClientFiscal: vi.fn(),
   updateClientMaster: vi.fn(),
   setClientActivo: vi.fn(),
+  contractClientCustody: vi.fn(),
   checkDuplicates: vi.fn(),
   canCreateClientFromOrder: vi.fn(async () => true),
 }));
@@ -484,6 +485,7 @@ describe("E · superficies del maestro, por render real", () => {
       cuit: CLIENTE.cuit,
       activo: true,
       updatedAt: CLIENTE.updated_at,
+      custodyLevel: 1,
       initial: {
         razon: CLIENTE.razon,
         nombre_comercial: CLIENTE.nombre_comercial,

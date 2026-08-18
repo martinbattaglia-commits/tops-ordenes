@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import {
+  contractClientCustody,
   setClientActivo,
   updateClientMaster,
 } from "@/app/(app)/clients/actions";
@@ -28,15 +29,17 @@ interface Props {
   cuit: string;
   activo: boolean;
   updatedAt: string;
+  custodyLevel: 1 | 2;
   initial: EditorState;
 }
 
-export function ClientMasterEditor({ clientId, cuit, activo: initialActive, updatedAt, initial }: Props) {
+export function ClientMasterEditor({ clientId, cuit, activo: initialActive, updatedAt, custodyLevel: initialCustodyLevel, initial }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(initial);
   const [version, setVersion] = useState(updatedAt);
   const [active, setActive] = useState(initialActive);
+  const [custodyLevel, setCustodyLevel] = useState<1 | 2>(initialCustodyLevel);
   const [stateReason, setStateReason] = useState("");
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -78,6 +81,23 @@ export function ClientMasterEditor({ clientId, cuit, activo: initialActive, upda
       }));
       setEditing(false);
       setMessage({ kind: "ok", text: "Ficha nativa actualizada y auditada." });
+      router.refresh();
+    });
+  };
+
+  const contractCustody = () => {
+    setMessage(null);
+    startTransition(async () => {
+      const result = await contractClientCustody(clientId, version);
+      if (!result.ok) {
+        setMessage({ kind: "error", text: result.error });
+        return;
+      }
+      // La RPC devuelve la fila con su nuevo `updated_at`: sin refrescar la
+      // versión, el próximo guardado de la ficha chocaría contra el CAS.
+      setVersion(result.updated_at);
+      setCustodyLevel(2);
+      setMessage({ kind: "ok", text: "Custodia digital reforzada contratada y auditada." });
       router.refresh();
     });
   };
@@ -179,6 +199,41 @@ export function ClientMasterEditor({ clientId, cuit, activo: initialActive, upda
           </button>
         </div>
       )}
+
+      <div className="mt-5 pt-4 border-t border-stroke-soft">
+        <div className="text-xs font-semibold mb-2 flex items-center gap-1.5">
+          <Icon name="shield" size={13} /> Custodia digital
+        </div>
+        {custodyLevel === 2 ? (
+          <div>
+            <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-status-success/10 text-status-success">
+              Reforzada contratada · nivel 2
+            </span>
+            <p className="text-[11px] text-fg-muted mt-1.5">
+              El nivel contratado eleva, nunca degrada: la baja del servicio no se ofrece desde esta ficha y es una decisión de Dirección.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="flex-1">
+              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-neutral-200 text-fg-secondary">
+                Estándar · nivel 1
+              </span>
+              <p className="text-[11px] text-fg-muted mt-1.5">
+                Contratar aplica a la mercadería que ingrese desde ahora: foto de egreso obligatoria, análisis y compuerta. Requiere el permiso de contratación de custodia.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={contractCustody}
+              disabled={pending || !version}
+            >
+              <Icon name="shield" size={14} /> {pending ? "Contratando…" : "Contratar custodia reforzada"}
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="mt-5 pt-4 border-t border-stroke-soft">
         <div className="text-xs font-semibold mb-2">Estado del cliente</div>

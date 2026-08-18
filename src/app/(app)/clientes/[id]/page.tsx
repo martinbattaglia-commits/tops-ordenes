@@ -87,6 +87,7 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
         cuit={c.cuit ?? ""}
         activo={c.activo !== false}
         updatedAt={c.updated_at ?? c.created_at ?? ""}
+        custodyLevel={c.custody_level === 2 ? 2 : 1}
         initial={{
           razon: c.razon ?? "",
           nombre_comercial: c.nombre_comercial ?? "",
