@@ -30,10 +30,12 @@ interface Props {
   activo: boolean;
   updatedAt: string;
   custodyLevel: 1 | 2;
+  /** Permiso `clientes.custody.contract`, medido server-side. La compuerta real sigue en la base. */
+  canContractCustody: boolean;
   initial: EditorState;
 }
 
-export function ClientMasterEditor({ clientId, cuit, activo: initialActive, updatedAt, custodyLevel: initialCustodyLevel, initial }: Props) {
+export function ClientMasterEditor({ clientId, cuit, activo: initialActive, updatedAt, custodyLevel: initialCustodyLevel, canContractCustody, initial }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(initial);
@@ -223,14 +225,20 @@ export function ClientMasterEditor({ clientId, cuit, activo: initialActive, upda
                 Contratar aplica a la mercadería que ingrese desde ahora: foto de egreso obligatoria, análisis y compuerta. Requiere el permiso de contratación de custodia.
               </p>
             </div>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={contractCustody}
-              disabled={pending || !version}
-            >
-              <Icon name="shield" size={14} /> {pending ? "Contratando…" : "Contratar custodia reforzada"}
-            </button>
+            {canContractCustody ? (
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={contractCustody}
+                disabled={pending || !version}
+              >
+                <Icon name="shield" size={14} /> {pending ? "Contratando…" : "Contratar custodia reforzada"}
+              </button>
+            ) : (
+              <p className="text-[11px] text-fg-muted">
+                La contratación requiere el permiso de contratación de custodia: pedila a quien lo tenga.
+              </p>
+            )}
           </div>
         )}
       </div>

@@ -366,6 +366,14 @@ export interface CustodyCaseView {
    * ofrece generarlo. Nunca transporta la ruta ni el identificador del binario.
    */
   podPdfReady: boolean;
+  /**
+   * FILA 11b · el despacho contra el que la compuerta del POD descarga.
+   * Para el scope `shipment` es la propia entidad; para la unidad física es el
+   * despacho resuelto por genealogía y SÓLO cuando su POD ya existe (el POD es
+   * post-entrega: nunca se ofrece un botón que el servidor va a rechazar).
+   * `null` = no se ofrece descarga y `podBlockedReason` dice por qué.
+   */
+  podShipmentId: string | null;
   decision: {
     kind: "release" | "quarantine";
     label: string;
@@ -415,6 +423,18 @@ export interface BuildCaseViewInput {
   evaluationInFlight?: boolean;
   /** El POD-PDF ya existe. Lo resuelve el servidor, no la pantalla. */
   podPdfReady?: boolean;
+  /**
+   * FILA 11b · resolución servidor-side del despacho de una unidad física.
+   * `undefined`/`null` = no pudo resolverse ningún despacho para la unidad.
+   */
+  physicalUnitPod?: {
+    shipmentId: string;
+    shipmentPublicId: string;
+    /** El despacho registró la entrega efectiva (el POD es post-entrega). */
+    delivered: boolean;
+    /** Ya existe la fila del POD del despacho (creada tras la entrega). */
+    podExists: boolean;
+  } | null;
 }
 
 /**
@@ -431,6 +451,41 @@ function hasPermission(actor: VerifiedActor | null): boolean {
 
 function mayCapture(actor: VerifiedActor | null): boolean {
   return actor !== null && actor.permissions.includes(CUSTODY_CAPTURE_PERMISSION);
+}
+
+/**
+ * FILA 11b · ¿contra qué despacho descarga la compuerta del POD?
+ * Sólo se ofrece descarga cuando el POD del despacho YA existe: 0250a lo
+ * condiciona a la entrega efectiva y esta pantalla no relaja eso — un botón
+ * que el servidor va a rechazar es un defecto, no una mejora.
+ */
+function resolvePodShipmentId(c: IntegrityCase, input: BuildCaseViewInput): string | null {
+  if (c.entity.scope === "shipment") return c.entity.entityId;
+  if (c.entity.scope !== "physical_unit") return null;
+  const pod = input.physicalUnitPod;
+  return pod && pod.delivered && pod.podExists ? pod.shipmentId : null;
+}
+
+/**
+ * FILA 11b · con el caso RELEASED, el POD puede seguir sin ofrecerse; el
+ * operario tiene que ver POR QUÉ, no un literal genérico.
+ */
+function releasedPodReason(c: IntegrityCase, input: BuildCaseViewInput): string | null {
+  if (c.entity.scope === "shipment") return null;
+  if (c.entity.scope === "packing_unit") {
+    return "El POD pertenece al despacho: esta vista de bulto no lo ofrece";
+  }
+  const pod = input.physicalUnitPod;
+  if (!pod) {
+    return "La unidad está liberada y aún no integra ningún despacho: el POD se emite sobre el despacho";
+  }
+  if (!pod.delivered) {
+    return `El POD es post-entrega: el despacho ${pod.shipmentPublicId} aún no registra la entrega`;
+  }
+  if (!pod.podExists) {
+    return `La entrega del despacho ${pod.shipmentPublicId} está registrada, pero su POD aún no fue emitido: se emite desde la pantalla del despacho`;
+  }
+  return null;
 }
 
 export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView {
@@ -653,9 +708,10 @@ export function buildCustodyCaseView(input: BuildCaseViewInput): CustodyCaseView
     },
     podPdfReady: input.podPdfReady === true,
     podBlocked: c.state !== "RELEASED",
+    podShipmentId: resolvePodShipmentId(c, input),
     podBlockedReason:
       c.state === "RELEASED"
-        ? null
+        ? releasedPodReason(c, input)
         : c.state === "QUARANTINED"
           ? "La unidad está en cuarentena: el POD no se emite"
           : "POD y despacho bloqueados hasta registrar la decisión humana",

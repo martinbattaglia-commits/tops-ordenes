@@ -486,6 +486,7 @@ describe("E · superficies del maestro, por render real", () => {
       activo: true,
       updatedAt: CLIENTE.updated_at,
       custodyLevel: 1,
+      canContractCustody: true,
       initial: {
         razon: CLIENTE.razon,
         nombre_comercial: CLIENTE.nombre_comercial,

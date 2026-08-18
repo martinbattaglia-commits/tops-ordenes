@@ -358,7 +358,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
     expect(porRef, "la base tiene que venir de un ref identificado").toBe(true);
   });
 
-  it("sólo cambia el ÚNICO archivo autorizado del harness vanilla", () => {
+  it("bajo tests/db sólo cambian archivos de la lista autorizada del harness vanilla", () => {
     // El invariante REAL es éste y vale para cualquier frente: bajo `tests/db`
     // no puede aparecer ningún cambio fuera de lo autorizado. Un diff que no
     // toca `tests/db` produce `[]`, y `[]` no viola nada.
