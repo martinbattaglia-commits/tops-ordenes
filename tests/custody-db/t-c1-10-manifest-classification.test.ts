@@ -59,6 +59,17 @@ const CUSTODY_ARTIFACT_FILES = [
   "ROLLBACK_0252_custody_two_levels.sql",
   "ROLLBACK_0253_custody_egress_gate.sql",
   "ROLLBACK_0254_custody_certificate_read.sql",
+  // CUSTODIA NIVEL CONTRATADO · los tres artefactos nuevos. NO entran al
+  // manifiesto de custodia —se apoyan en 0241/0242, que el snapshot congelado
+  // no tiene, y corren en el arnes vanilla— pero SI los captura la exclusion
+  // dedicada, que es lo unico que este inventario mide: archivos en disco.
+  // Por eso van aca y no en CUSTODY_FORWARD_FILES, que es la lista de los que
+  // el manifiesto dedicado si contiene (36 + 14 = 50).
+  // 0255 no tiene inversa a proposito: PostgreSQL no admite quitar un valor
+  // de un enum. Mismo tratamiento que 0221.
+  "0255_clients_custody_action_enum.sql",
+  "0256_clients_custody_level_rpc.sql",
+  "ROLLBACK_0256_clients_custody_level_rpc.sql",
 ];
 
 const dedicated = () =>
@@ -130,7 +141,7 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(frozen()!.matches(f)).toBe(false);
   });
 
-  it("cubre EXACTAMENTE los diecinueve artefactos del árbol y ninguno más", () => {
+  it("cubre EXACTAMENTE los veintidós artefactos del árbol y ninguno más", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
     const cubiertos = onDisk.filter((f) => dedicated()!.matches(f)).sort();
     expect(cubiertos).toEqual([...CUSTODY_ARTIFACT_FILES].sort());

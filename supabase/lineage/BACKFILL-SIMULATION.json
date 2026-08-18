@@ -10,9 +10,9 @@
     "alcance": "lectura read-only del ledger productivo; NO incluye estado del esquema"
   },
   "conteos": {
-    "ejecutables_en_catalogo": 217,
+    "ejecutables_en_catalogo": 219,
     "observadas_en_ledger": 98,
-    "inferidas_no_registradas": 119,
+    "inferidas_no_registradas": 121,
     "filas_autorizadas_a_escritura": 0,
     "sondas_ejecutadas": 0
   },
@@ -1755,6 +1755,22 @@
     {
       "ledger_version": "L00244",
       "ledger_name": "0254_custody_certificate_read",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00246",
+      "ledger_name": "0255_clients_custody_action_enum",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00247",
+      "ledger_name": "0256_clients_custody_level_rpc",
       "estado_ledger": "INFERRED_NOT_REGISTERED",
       "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
       "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",

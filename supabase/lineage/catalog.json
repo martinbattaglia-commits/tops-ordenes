@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 217,
-  "no_ejecutables": 28,
+  "ejecutables": 219,
+  "no_ejecutables": 29,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2843,6 +2843,46 @@
       "ledger_name": "ROLLBACK_0254_custody_certificate_read",
       "provenance": "repo (custodia/cierre-probatorio)",
       "motivo": "Inversa logica e idempotente de 0254. Retira la politica y devuelve la tabla a RLS habilitada sin politica. NO borra ningun certificado emitido: la tabla es inmutable por trigger desde 0250a y una inversa que borrara documentos probatorios seria el ataque del que el modulo protege."
+    },
+    {
+      "id": "0255_clients_custody_action_enum.sql",
+      "filename": "0255_clients_custody_action_enum.sql",
+      "sha256": "66b139dcd064e5e5c5860037e02802f6b5be539bd8b3796b09733612e66693bd",
+      "orden": 246,
+      "requires": [
+        "0252_custody_two_levels.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00246",
+      "ledger_name": "0255_clients_custody_action_enum",
+      "provenance": "repo (custodia/nivel-contratado)",
+      "motivo": "CUSTODIA NIVEL CONTRATADO. SOLO agrega el valor custody_contract al enum permission_action_t y nada mas. PostgreSQL prohibe usar un valor de enum nuevo en la misma transaccion que lo crea y el harness aplica cada archivo como una transaccion implicita, asi que el seed del permiso y la RPC viven en 0256. Precedente identico en 0221, 0164 y 0167. Hace falta una accion nueva porque permissions tiene unique(module,action) y el modulo clientes ya ocupa view create edit delete. Sin rollback: PostgreSQL no admite quitar un valor de un enum, igual que 0221."
+    },
+    {
+      "id": "0256_clients_custody_level_rpc.sql",
+      "filename": "0256_clients_custody_level_rpc.sql",
+      "sha256": "7dffc656ee42408d112b51da99a9a0e3e6fa204c20d4ca7fc3b114c9817c2d1b",
+      "orden": 247,
+      "requires": [
+        "0255_clients_custody_action_enum.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00247",
+      "ledger_name": "0256_clients_custody_level_rpc",
+      "provenance": "repo (custodia/nivel-contratado)",
+      "motivo": "CUSTODIA NIVEL CONTRATADO. Siembra el permiso clientes.custody.contract SIN asignarlo a ningun rol y crea la RPC client_set_custody_level, gemela de client_set_active: permiso propio, sesion del usuario, CAS obligatorio, motivo obligatorio solo en la baja 2 a 1 y evento de auditoria atomico. NO toca la firma de client_update: agregarle un parametro habria creado una SOBRECARGA con la vieja todavia granteada y sin la guarda del nivel, habria vuelto ambiguas las llamadas con argumentos nombrados y habria debilitado la guarda de orden de ROLLBACK_0241 que identifica client_update por su firma literal. No toca receptions.custody_reforzada ni la regla eleva nunca degrada de 0252, ni custody_physical_units.custody_level, que es columna propia con default 2."
+    },
+    {
+      "id": "ROLLBACK_0256_clients_custody_level_rpc.sql",
+      "filename": "ROLLBACK_0256_clients_custody_level_rpc.sql",
+      "sha256": "d930304acb4aa5cf8b3fe587956bfbbb66989cd3487e1c228bd324b00a6fa583",
+      "orden": 248,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00248",
+      "ledger_name": "ROLLBACK_0256_clients_custody_level_rpc",
+      "provenance": "repo (custodia/nivel-contratado)",
+      "motivo": "Inversa logica e idempotente de 0256. Retira la RPC y el permiso solo si ningun rol lo tiene asignado. NO borra client_events, NO modifica clients.custody_level de ningun cliente y NO quita el valor de enum de 0255, que PostgreSQL no admite retirar. No depende de ninguna otra inversa porque 0256 no toca client_update, client_create ni client_set_active."
     }
   ]
 }

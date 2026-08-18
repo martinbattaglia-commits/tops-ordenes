@@ -544,6 +544,9 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0253_custody_egress_gate.sql",
     // 2-C-2 · la inversa de la politica de lectura del certificado.
     "ROLLBACK_0254_custody_certificate_read.sql",
+    // CUSTODIA NIVEL CONTRATADO. 0255 no tiene inversa: PostgreSQL no admite
+    // quitar un valor de un enum, igual que 0221.
+    "ROLLBACK_0256_clients_custody_level_rpc.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

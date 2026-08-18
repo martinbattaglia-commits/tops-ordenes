@@ -70,6 +70,7 @@ export const EXPECTED_TEST_FILES = [
   "t-cli-a1-01-clients-search.test.ts",
   "t-cli-a1-02-clients-master-rollback.test.ts",
   "t-cli-a2-01-atomic-mutations.test.ts",
+  "t-cli-a3-01-nivel-contratado.test.ts",
   "t-pr66-a1-purchase-order-integrity.test.ts",
   "t-pr66-01-order-pricing.test.ts",
 ];
@@ -126,6 +127,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-cli-a1-01-clients-search.test.ts": 38,
   "t-cli-a1-02-clients-master-rollback.test.ts": 10,
   "t-cli-a2-01-atomic-mutations.test.ts": 47,
+  "t-cli-a3-01-nivel-contratado.test.ts": 8,
   "t-pr66-a1-purchase-order-integrity.test.ts": 7,
   "t-pr66-01-order-pricing.test.ts": 19,
 });

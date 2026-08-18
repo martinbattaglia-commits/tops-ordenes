@@ -1,0 +1,28 @@
+-- =========================================================================
+-- 0255 · CUSTODIA NIVEL CONTRATADO — VALOR DE ENUM
+--
+-- Depende de: 0009 (permission_action_t, permissions) · 0241 (modulo 'clientes')
+-- Habilita:   0256
+--
+-- ESTE ARCHIVO SOLO AGREGA UN VALOR DE ENUM Y NADA MAS.
+--
+-- Mismo motivo que 0221, que lo documenta: PostgreSQL admite
+-- `alter type ... add value` dentro de una transaccion pero PROHIBE usar el
+-- valor nuevo en esa misma transaccion ("unsafe use of new value of enum
+-- type"), y el harness aplica cada archivo como UNA transaccion implicita. Por
+-- eso el seed del permiso y la RPC viven en 0256 y no aca. Partirlo no es
+-- estilo: es la unica forma de que 0256 pueda referenciar este valor.
+--
+-- POR QUE HACE FALTA UNA ACCION NUEVA Y NO SE REUSA UNA EXISTENTE
+--
+-- `permissions` tiene `unique (module, action)` (0009:50) y el modulo
+-- 'clientes' ya ocupa view/create/edit/delete (0241:606). Sin una accion nueva
+-- no se puede sembrar `clientes.custody.contract`. Precedente identico:
+-- 0164 ('incident_admin'), 0167 ('task_admin') y 0221 ('custody_decide').
+--
+-- NO TIENE ROLLBACK, y es deliberado: PostgreSQL no admite quitar un valor de
+-- un enum. Mismo tratamiento que 0221, que tampoco lo tiene. La inversa de
+-- 0256 retira el permiso y la RPC; el valor de enum queda, inerte y sin uso.
+-- =========================================================================
+
+alter type public.permission_action_t add value if not exists 'custody_contract';

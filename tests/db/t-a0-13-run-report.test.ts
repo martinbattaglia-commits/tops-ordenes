@@ -137,8 +137,10 @@ describe("T-A0-13 · reporte de corrida", () => {
     // + 34 (h1-01, cierre de H1: entorno C5 con esquema real derivado de
     // main) de NEXUS-LINK-NOTIFICATIONS-MEDIA-001 = 728; +2 guardas
     // estructurales fail-closed en T-A0-10 = 730; +121 de PR #66 FASE A
-    // (Clientes 38+10+47, OC 7 y ciclo integral OC/OS 19).
-    expect(EXPECTED_TOTAL_TESTS).toBe(851);
+    // (Clientes 38+10+47, OC 7 y ciclo integral OC/OS 19) = 851; +8 de
+    // CUSTODIA-NIVEL-CONTRATADO (t-cli-a3-01: lo ya materializado no se degrada
+    // cuando el cliente da de baja la custodia, y la puerta de la RPC) = 859.
+    expect(EXPECTED_TOTAL_TESTS).toBe(859);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {
