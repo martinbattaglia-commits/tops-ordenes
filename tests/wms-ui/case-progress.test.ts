@@ -55,7 +55,7 @@ function ai(over: Partial<CustodyCaseView["ai"]> = {}): CustodyCaseView["ai"] {
   } as CustodyCaseView["ai"];
 }
 
-/** Concordancia ALTA, la que no exige inspección adicional. */
+/** Concordancia ALTA. No exime de la inspección: la exigencia es incondicional (R-1). */
 const ALTA = {
   verdict: "ALTA", label: "CONCORDANCIA ALTA",
   requirement: "conforme · la inspección física y la decisión siguen siendo tuyas", tone: "ok",

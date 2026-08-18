@@ -1447,7 +1447,7 @@ definición falsa (ver §14.9).
 | A-1 | `reevaluation.analysis !== "stale"` como «cadena verificada» | `"never"` tampoco es `"stale"`: un caso **sin ningún análisis** mostraba la tilde de verificado. El docblock de `AnalysisFreshness` advierte literalmente contra esto |
 | A-2 | `inspection.eligible` como «hay foto de inspección» | se calcula tras un guard de `wms.custody.decide`; el operario captura con `wms.edit` y **no** lo tiene, así que valía 0 SIEMPRE → **bucle infinito**: registrá la inspección, y te la vuelve a pedir |
 | A-3 | tres definiciones distintas de «exige inspección» | la barra, el checklist y `▸ AHORA` podían contradecirse en la misma pantalla |
-| A-4 | `ai.executed !== true` como «está corriendo» | `executed` sólo es `true` con `outcome === "ok"`, y hay **cuatro** outcomes de fallo → **segundo bucle**: un análisis caído anunciaba estar corriendo para siempre |
+| A-4 | `ai.executed !== true` como «está corriendo» | `executed` sólo es `true` con `outcome === "ok"`, y hay **cinco** outcomes que no lo son → **segundo bucle**: un análisis caído anunciaba estar corriendo para siempre |
 | A-5 | `NO_CONCLUYENTE` sin manejar | caía al default «la comparación no encontró diferencias» — falso: no llegó a comparar |
 | A-6 | `actionable: true` fijo en la inspección | botón vivo para quien no puede usarlo |
 
