@@ -126,14 +126,31 @@ export default async function CustodyCasePage({ params }: { params: { id: string
 
   // §7 · las tres derivaciones puras: dónde está parado, qué hacer ahora y qué
   // falta para decidir. Viven en `case-progress.ts` para poder probarse sin DOM.
-  const progresoInput = { view, tieneIngreso: ingreso !== null, tieneEgreso: egreso !== null };
+  // `tieneInspeccion` sale del TIMELINE, no de `inspection.eligible`: ese campo
+  // se calcula detrás de un guard de `wms.custody.decide`, permiso que el
+  // operario que saca las fotos no tiene, y leerlo como «hay foto» lo dejaba
+  // pidiendo una inspección ya registrada para siempre (remediación C4 · A-2).
+  const progresoInput = {
+    view,
+    tieneIngreso: ingreso !== null,
+    tieneEgreso: egreso !== null,
+    tieneInspeccion: inspeccion !== null,
+  };
   const progreso = deriveCaseProgress(progresoInput);
   const ahora = deriveNowAction(progresoInput);
   const checklist = deriveDecisionChecklist(progresoInput);
 
-  // Las clases condicionales se calculan en variables, no con template
-  // literals dentro de `className`: es el patrón que ya usa `StateBadge` en
-  // este mismo archivo, y el que el guard de clases sabe leer (I6).
+  // Las clases condicionales se calculan en variables, no con template literals
+  // dentro de `className`.
+  //
+  // ⚠ R-25 · ESTE COMENTARIO AFIRMABA DOS COSAS FALSAS, y las dos las volvió
+  // falsas el propio commit que lo escribió: citaba un `StateBadge` «en este
+  // mismo archivo» que no existe en ninguna parte del módulo, y sostenía que
+  // era «el patrón que el guard de clases sabe leer» cuando el extractor de
+  // `custody-ui-classes.test.ts` NO leía `className={variable}` — es decir,
+  // justo esta forma. El guard corría en verde sin mirar ninguna de estas
+  // clases. El extractor se corrigió (M-4) y ahora la afirmación es cierta:
+  // hay un mutante que lo prueba en los dos sentidos.
   const bannerCls = view.podBlocked ? "cd-banner cd-banner--block" : "cd-banner cd-banner--ok";
 
   // §7 VISUAL · el chip de estado del mockup, por tono del caso.

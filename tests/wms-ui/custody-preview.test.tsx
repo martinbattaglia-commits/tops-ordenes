@@ -151,13 +151,13 @@ const ESCENARIOS: Escenario[] = [
   {
     titulo: "Estado 1 · falta la foto de ingreso",
     nota: "El caso acaba de nacer desde la recepción.",
-    input: { view: vista(), tieneIngreso: false, tieneEgreso: false },
+    input: { view: vista(), tieneIngreso: false, tieneEgreso: false, tieneInspeccion: false },
     ingreso: false, egreso: false,
   },
   {
     titulo: "Estado 2 · falta la foto de egreso",
     nota: "La unidad estuvo guardada y ahora se prepara el despacho.",
-    input: { view: vista(), tieneIngreso: true, tieneEgreso: false },
+    input: { view: vista(), tieneIngreso: true, tieneEgreso: false, tieneInspeccion: false },
     ingreso: true, egreso: false,
   },
   {
@@ -170,7 +170,7 @@ const ESCENARIOS: Escenario[] = [
         release: { enabled: true, blockers: [] },
         podBlockedReason: "Despacho y POD bloqueados hasta que se registre la decisión humana",
       }),
-      tieneIngreso: true, tieneEgreso: true,
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false,
     },
     ingreso: true, egreso: true,
   },
@@ -184,7 +184,7 @@ const ESCENARIOS: Escenario[] = [
         inspection: { enabled: true, blockers: [], eligible: 0 },
         quarantine: { enabled: true, blockers: [] },
       }),
-      tieneIngreso: true, tieneEgreso: true,
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false,
     },
     ingreso: true, egreso: true,
   },
@@ -198,7 +198,7 @@ const ESCENARIOS: Escenario[] = [
         podBlocked: false, podBlockedReason: null,
         decision: { kind: "release", label: "Liberado para despacho", decidedAt: "2026-08-16T09:24:00.000Z", actorRole: "admin", reason: "Comparación conforme, embalaje íntegro." },
       }),
-      tieneIngreso: true, tieneEgreso: true,
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false,
     },
     ingreso: true, egreso: true,
   },
@@ -343,4 +343,116 @@ body{margin:0;background:#070b16;color:#e2e8f0;font-family:Inter,system-ui,-appl
       );
     });
   }, 60_000);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠ D-4 · RE-BARRIDO COMPLETO SOBRE EL MARCADO RENDERIZADO
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// El guard de `case-progress.test.ts` mide las CADENAS que produce el módulo de
+// derivación. No alcanza: `CaseAiPanel` —193 líneas reescritas en la fase 2— es
+// el panel donde el corte se filtraría, y no pasa por ese módulo. Acá se barre
+// el MARCADO REAL de los cinco estados, que es lo que ve el operario.
+//
+// Lo que se busca: el número del corte con o sin espacio, la palabra «umbral»
+// en cualquier forma, «sobre/bajo el umbral», el nombre del campo
+// (`thresholdPercent`) y el valor crudo del corte. Lo que SÍ debe estar —la
+// concordancia con su número y el fundamento como estándar— se afirma aparte,
+// para que «no dice nada» no pueda pasar por «cumple».
+
+const D4_PROHIBIDO: Array<[string, RegExp]> = [
+  ["la palabra «umbral»", /umbral/i],
+  ["el número del corte, con o sin espacio", /\b90\s*%/],
+  ["«por encima» / «por debajo»", /por (encima|debajo)/i],
+  ["«sobre/bajo el …»", /\b(sobre|bajo)\s+(el|la)\s+(umbral|corte|l[íi]mite)/i],
+  ["el nombre del campo", /threshold(?!PolicyVersion)/i],
+  ["el campo del umbral en cualquier grafía", /threshold[_-]?percent/i],
+];
+
+/** Marcado sin entidades ni espacios raros: «90&nbsp;%» y «90 %» miden igual. */
+function plano(html: string): string {
+  return html
+    .replace(/&nbsp;|&#160;|&#xa0;/gi, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/[\s   ]+/g, " ");
+}
+
+describe("⚠ D-4 · el corte no aparece en el marcado de NINGÚN estado", () => {
+  it("los cinco estados de aprobación salen limpios", () => {
+    for (const e of ESCENARIOS) {
+      const html = plano(pantalla(e));
+      for (const [queEs, patron] of D4_PROHIBIDO) {
+        expect(patron.test(html), `${e.titulo}: no debe contener ${queEs}`).toBe(false);
+      }
+    }
+  });
+
+  it("también el análisis CAÍDO y el NO CONCLUYENTE, que no están en los cinco", () => {
+    const extras: CustodyCaseView[] = [
+      vista({
+        state: "REVIEW_REQUIRED", stateLabel: "Revisión humana", tone: "review",
+        ai: ai({ executed: false, failureLabel: "El proveedor no respondió a tiempo" }),
+      }),
+      vista({
+        state: "REVIEW_REQUIRED", stateLabel: "Revisión humana", tone: "review",
+        ai: ai({
+          executed: true, similarityScore: 41.5, confidencePercent: 40,
+          concordance: {
+            verdict: "NO_CONCLUYENTE", label: "NO CONCLUYENTE",
+            requirement: "las fotos no son comparables: repetí la de egreso", tone: "warn",
+          },
+        }),
+      }),
+    ];
+    for (const v of extras) {
+      const input: ProgressInput = { view: v, tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false };
+      const html = plano(
+        renderToStaticMarkup(
+          <div className="cd-shell">
+            <CaseNowBlock action={deriveNowAction(input)} />
+            <CaseAiPanel view={v} />
+            <CaseChecklist items={deriveDecisionChecklist(input)} />
+          </div>,
+        ),
+      );
+      for (const [queEs, patron] of D4_PROHIBIDO) {
+        expect(patron.test(html), `${v.ai.failureLabel ?? "no concluyente"}: ${queEs}`).toBe(false);
+      }
+    }
+  });
+
+  it("el campo `thresholdPercent` no se LEE en ninguna superficie del §7", () => {
+    // Se mide el CÓDIGO, no la prosa: los docblocks nombran el campo justamente
+    // para explicar por qué no existe, y prohibir la explicación no protege
+    // nada. Lo que no puede haber es una lectura del campo.
+    const sinComentarios = (src: string) =>
+      src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+
+    for (const f of UI_FILES) {
+      const codigo = sinComentarios(readFileSync(resolve(ROOT, f), "utf8"))
+        // `thresholdPolicyVersion` SÍ va: es el NÚMERO de la política, no su
+        // valor, y sin él el documento probatorio no sería reproducible.
+        .replace(/thresholdPolicyVersion/g, "politicaVersion");
+      expect(/threshold/i.test(codigo), `${f} lee el campo del umbral`).toBe(false);
+    }
+  });
+
+  it("lo APROBADO sí está: concordancia con su número y fundamento como estándar", () => {
+    // Si el barrido de arriba pasara por haber vaciado la pantalla, esto cae.
+    const alto = ESCENARIOS.find((e) => e.titulo.includes("Estado 3"))!;
+    expect(plano(pantalla(alto))).toMatch(/94,2\s*<small>%/);
+    expect(plano(pantalla(alto))).toContain("CONCORDANCIA ALTA");
+
+    const baja: ProgressInput = {
+      view: vista({
+        state: "HOLD",
+        ai: ai({ ...ANALISIS_BAJO, concordance: BAJA }),
+        inspection: { enabled: true, blockers: [], eligible: 0 },
+      }),
+      tieneIngreso: true, tieneEgreso: true, tieneInspeccion: false,
+    };
+    expect(deriveNowAction(baja).help).toContain("estándares internacionales de medición");
+  });
 });

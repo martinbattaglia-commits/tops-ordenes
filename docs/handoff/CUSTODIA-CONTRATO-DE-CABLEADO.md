@@ -550,13 +550,13 @@ No se tocó el ruteo, ni los grants, ni se escribió migración para esto.
 - Costuras 7, 8, 10, 11b y 12 (certificado visible, traductor de códigos
   `CUSTODY_*`, puerta de egreso en picking/packing, POD de unidad física, firma
   de quien retira): son **Sesión 2**.
-- ~~**Del §7 quedan sin implementar** la barra de progreso de cinco pasos, el
-  bloque `▶ AHORA` con una sola acción viva y el reordenamiento mobile-first, y
-  el render de imagen grande lado a lado en `EvidenceViewer`.~~
-  **IMPLEMENTADO · ver §14**, con el puntero a las ocho capturas que son su
-  especificación. No están en
-  ninguno de los siete puntos de la Sesión 1; se hizo el encabezado de
-  identidad, el banner de consecuencia y el panel de análisis, que sí lo están.
+- **Del §7**, tres de las cuatro piezas están **IMPLEMENTADAS · ver §14**: la
+  barra de progreso de cinco pasos, el bloque `▸ AHORA` con una sola acción
+  viva y el reordenamiento mobile-first. La cuarta —**el render de imagen
+  grande lado a lado en `EvidenceViewer`**— sigue **SIN IMPLEMENTAR, y es
+  deliberado**: ver §14.6. Ninguna de las cuatro estaba en los siete puntos de
+  la Sesión 1; se hizo el encabezado de identidad, el banner de consecuencia y
+  el panel de análisis, que sí lo están.
 - **C8 (fallback silencioso a `MOCK_CASES`)** sigue vivo en
   `custody.ts:1043-1045`, fuera de alcance por §8.
 
@@ -1321,7 +1321,7 @@ sesiones siguientes no supieron que existía. Que no se pierda otra vez.
 |---|---|
 | Barra de cinco pasos | `case-progress.ts` · `deriveCaseProgress` → `CaseProgressBar.tsx` |
 | Bloque `▸ AHORA`, una sola acción viva | `deriveNowAction` → `CaseNowBlock.tsx` |
-| Comparación visual lado a lado | `CaseEvidencePanel.tsx` |
+| Comparación visual lado a lado · **la DISPOSICIÓN, no el binario** | `CaseEvidencePanel.tsx` · ver §14.6 |
 | Checklist «para poder decidir» | `deriveDecisionChecklist` → `CaseChecklist.tsx` |
 | Reordenamiento mobile-first | `[id]/page.tsx` · una columna que se abre en `lg` |
 | Nombre del operario en la evidencia | `custody.ts` · `resolveActorNames` |
@@ -1379,6 +1379,97 @@ Se implementó la estructura de UI-1. **Hoy mostrará siempre ACTA**, por las tr
 capas preexistentes de §12, que este bloque no toca. El día que el certificado
 sea emisible, la misma pantalla lo muestra sin tocar presentación. El campo
 «Base» va sin el umbral, por D-4.
+
+### 14.6 · 🔴 LO QUE NO SE IMPLEMENTÓ, Y POR QUÉ NO ES UN OLVIDO
+
+**El render de imagen grande lado a lado NO se hizo.** La C4 lo encontró
+declarado como implementado en §9.4 y en la tabla de §14.2, y tenía razón: el
+contrato afirmaba falso.
+
+Lo que sí se hizo es la **disposición**: `CaseEvidencePanel` enfrenta los dos
+recuadros en `grid-template-columns: 1fr 1fr`, con hora, operario y sha256 al
+pie de cada uno. Lo que **no** se hace —y no se va a hacer así— es poner el
+binario en la pantalla:
+
+> El recuadro NO renderiza la imagen. La evidencia se abre por `EvidenceViewer`,
+> que pide un signed URL de TTL corto por server action auditada. Un `<img>` con
+> la ruta de Storage sería el único cambio de este bloque capaz de romper la
+> garantía probatoria del módulo.
+
+Es decir: la captura pedía una cosa que, implementada literalmente, destruye la
+propiedad que el módulo entero existe para sostener. Se implementó la
+comparación —que es lo que la Adenda pide que el inspector pueda hacer de un
+vistazo— sin sacar el binario de su circuito auditado.
+
+**Queda declarado como NO IMPLEMENTADO en §9.4.** Si Dirección quiere la imagen
+embebida, es su propia ventana y necesita resolver antes cómo se sirve sin
+romper la auditoría del acceso.
+
+### 14.7 · REMEDIACIÓN C4 1/2 · LOS TRECE, POR CAUSA RAÍZ
+
+La C4 sobre `cdebbdc` dio **FAIL con trece bloqueantes**. La fase 2 reescribió
+exactamente los archivos donde caían, así que se midió cuáles seguían vivos
+**antes** de escribir remediación —`git diff --stat cdebbdc 1b0d5f4` probó que
+`case-progress.ts` no había sido tocado— y se remedió por causa, no por
+hallazgo.
+
+| Grupo | Estado tras la medición | Qué se hizo |
+|---|---|---|
+| **A** · derivar verdad de campos proxy (H-1…H-4 · M-1…M-3) | **vivos** · fase 2 no tocó `case-progress.ts` | seis instancias corregidas en una sola causa: cada campo se lee por lo que significa. Detalle abajo |
+| **B** · capa visual (H-5 · M-8) | **ya resueltos por la fase 2** | no se re-remedió: se les puso guard de regresión, porque nada impedía que volvieran |
+| **C** · los guards que no guardan (M-4 · M-5) | **vivos** · M-4 **agravado** por la fase 2 | extractor de clases y guard D-4 corregidos, ambos con mutante |
+| **D** · el contrato afirma falso (M-6 · L-5) | **vivos** | §9.4 y §14.2 corregidos · §14.6 declara la no-implementación |
+| **E** · accesibilidad (M-7 · L-4) | **vivos** | estado en texto, además del color |
+| **R-25** · comentarios que el commit vuelve falsos | **vivos** | los dos corregidos en el código |
+
+**Grupo A · las seis instancias, y por qué cada una era falsa.** Todas son la
+misma causa: el módulo leía campos del view-model asumiendo un significado que
+esos campos no tienen.
+
+| | Qué leía mal | Qué producía |
+|---|---|---|
+| A-1 | `reevaluation.analysis !== "stale"` como «cadena verificada» | `"never"` tampoco es `"stale"`: un caso **sin ningún análisis** mostraba la tilde de verificado. El docblock de `AnalysisFreshness` advierte literalmente contra esto |
+| A-2 | `inspection.eligible` como «hay foto de inspección» | se calcula tras un guard de `wms.custody.decide`; el operario captura con `wms.edit` y **no** lo tiene, así que valía 0 SIEMPRE → **bucle infinito**: registrá la inspección, y te la vuelve a pedir |
+| A-3 | tres definiciones distintas de «exige inspección» | la barra, el checklist y `▸ AHORA` podían contradecirse en la misma pantalla |
+| A-4 | `ai.executed !== true` como «está corriendo» | `executed` sólo es `true` con `outcome === "ok"`, y hay **cuatro** outcomes de fallo → **segundo bucle**: un análisis caído anunciaba estar corriendo para siempre |
+| A-5 | `NO_CONCLUYENTE` sin manejar | caía al default «la comparación no encontró diferencias» — falso: no llegó a comparar |
+| A-6 | `actionable: true` fijo en la inspección | botón vivo para quien no puede usarlo |
+
+La señal verdadera de A-2 —si el timeline tiene el evento `inspeccion_humana`—
+ya estaba resuelta en la página y no se pasaba. Ahora entra por `tieneInspeccion`.
+
+**Todo se verificó con mutante, en los dos sentidos.** Nueve de los tests nuevos
+del grupo A caen en rojo contra el código anterior; el extractor de clases
+corregido caza una clase inventada en `className={variable}` que el anterior
+dejaba pasar **en verde**; el guard D-4 caza «90 %» con espacio, que era
+exactamente la evasión que M-5 denunciaba.
+
+**Radio de alcance del guard de clases: medido y nulo.** Corregir el extractor
+podía encender violaciones en módulos ajenos —era el riesgo declarado—. Se midió:
+es el **único** guard del repositorio que usa ese extractor, y tras corregir dos
+falsos positivos propios (una cadena COMPARADA no es una clase; un valor por
+defecto tampoco) **no enciende ninguna violación real**. No hubo que tocar nada
+fuera del §7.
+
+### 14.8 · 🟠 RESIDUO DE B-1 · CINCO ROJOS QUE NO SON DE ESTE BLOQUE
+
+Medido en tres puntos con `vitest.wms-ui.config.ts`:
+
+| Punto | Rojos |
+|---|---|
+| `fe5c92f` · antes de HN-1 | **1** — `blockerLabel`, el preexistente de `aa8d288` |
+| `origin/main` `0fcab54` · tras PR #82 | **6** |
+| este candidato, ya mergeado | **6** — el mismo conjunto |
+
+**El candidato aporta cero.** Los cinco nuevos los introdujo **HN-1**: sus
+fixtures en `inspection-derivation.test.ts` y `server-actions.test.ts` no
+declaran `scope`, y el fail-closed `SCOPE_NOT_DECIDABLE` que B-1 instaló los
+rechaza ahora antes de llegar a la RPC. Los tests codifican el comportamiento
+**anterior** a HN-1.
+
+No se vieron al mergear porque **el CI no corre este config**. No se parchean
+acá: decidir qué debían afirmar esos tests después de HN-1 es del bloque que
+tomó la decisión, no de éste. Queda declarado para su propia ventana.
 
 ---
 
