@@ -121,6 +121,11 @@ export type CasFailure =
   | "BINDING_MISMATCH"
   | "OUTCOME_ENTITY_MISMATCH"
   | "INSPECTION_PROOF_INVALID"
+  /**
+   * HN-1 · El alcance del caso no tiene camino de decisión. No es una carrera
+   * ni un registro incoherente: es que la superficie no existe.
+   */
+  | "SCOPE_NOT_DECIDABLE"
   | "LEASE_HELD";
 
 export type CasResult =

@@ -336,6 +336,12 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // viven en 0250a, fuera del vanilla.
   "0254_custody_certificate_read.sql",
   "ROLLBACK_0254_custody_certificate_read.sql",
+  // CUSTODIA HN-1 CIERRE · B-1 · se retira EXECUTE a `authenticated` sobre
+  // `upsert_custody_integrity_assessment`, con su rollback logico. Misma
+  // decision explicita: la funcion nace en 0223, que ya esta excluida por su
+  // dependencia de PostGIS y de la serie 0036-0039, fuera del vanilla.
+  "0257_custody_legacy_creator_revoke.sql",
+  "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
 ]);
 
 /**
@@ -560,9 +566,10 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "0224 contención de autoridad y cota temporal · 0225 tri-state 0039 · " +
       "0226 atestación de contenido · 0231 lectura tenant · 0232 lease exclusivo · " +
       "0250/0250a scope físico y visión productiva · 0251 autoridad de decisión y " +
-      "evidencia completa · 0252 los dos niveles de custodia, las tres últimas con " +
-      "rollback lógico). " +
-      "Los doce forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
+      "evidencia completa · 0252 los dos niveles de custodia · 0253 puerta de egreso · " +
+      "0254 lectura del certificado · 0257 retiro de la creadora heredada, las seis " +
+      "últimas con rollback lógico). " +
+      "Los quince forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
       "clasifican y prueban aparte y nunca integran un manifiesto forward. " +
       "Se excluye del cierre WMS vanilla porque su cierre de dependencias exige " +
       "PostGIS y la serie 0036-0039, que este manifiesto excluye por diseño para " +
@@ -572,7 +579,7 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "ADVERTENCIA: 0222 modifica `custody_events` (CHECK stage/event_type) y " +
       "reemplaza `attach_custody_evidence`, objetos del dominio de custodia; se " +
       "excluye por la dependencia de PostGIS, NO porque sea ajena. La exclusión " +
-      "es por los QUINCE filenames exactos de esta serie; cualquier migración que " +
+      "es por los VEINTIÚN filenames exactos de esta serie; cualquier migración que " +
       "no enumere ninguna regla queda sin clasificar y rompe la suite hasta una " +
       "decisión explícita.",
   },

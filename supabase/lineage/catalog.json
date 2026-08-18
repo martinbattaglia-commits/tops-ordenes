@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 217,
-  "no_ejecutables": 28,
+  "ejecutables": 218,
+  "no_ejecutables": 29,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2843,6 +2843,32 @@
       "ledger_name": "ROLLBACK_0254_custody_certificate_read",
       "provenance": "repo (custodia/cierre-probatorio)",
       "motivo": "Inversa logica e idempotente de 0254. Retira la politica y devuelve la tabla a RLS habilitada sin politica. NO borra ningun certificado emitido: la tabla es inmutable por trigger desde 0250a y una inversa que borrara documentos probatorios seria el ataque del que el modulo protege."
+    },
+    {
+      "id": "0257_custody_legacy_creator_revoke.sql",
+      "filename": "0257_custody_legacy_creator_revoke.sql",
+      "sha256": "8df089cec973d494a70e279f687624f61ab2495990d6028e6219b658986a2eec",
+      "orden": 246,
+      "requires": [
+        "0254_custody_certificate_read.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00246",
+      "ledger_name": "0257_custody_legacy_creator_revoke",
+      "provenance": "repo (custodia/hn-1-cierre)",
+      "motivo": "CUSTODIA HN-1 CIERRE bloque B-1, extremo de atras. Retira EXECUTE a authenticated sobre upsert_custody_integrity_assessment, la unica funcion capaz de crear casos de custodia no fisicos. Medido sobre produccion antes de escribirla: los 4 casos existentes son todos physical_unit, casos con packing_unit_id o shipment_id son CERO, el circuito productivo de 0250a y 0252 inserta siempre physical_unit_id por trigger de recepcion, ningun codigo de src la llama y ninguna funcion SQL la invoca internamente, y sin embargo authenticated conservaba EXECUTE desde 0223 linea 160. Era una RPC de escritura alcanzable por PostgREST desde cualquier sesion autenticada, sin consumidor, capaz de crear casos que la pantalla despues no puede decidir porque decide_custody_integrity v1 ya esta revocada desde 0250a lineas 2199-2200. R-22: el privilegio se retira sin esperar a que se demuestre el camino. NO elimina la funcion porque sigue siendo el ingreso legitimo del circuito no fisico bajo el dueno del esquema y sostiene la cobertura D1 a D3 de 0221 a 0224 en tests custody-db. service_role conserva EXECUTE a proposito: el master acota la revocacion a authenticated. No toca decide_custody_integrity_v2 ni su cuerpo, no reconcede decide_custody_integrity v1 a ningun rol, y no toca custody_inspection_candidates que 0224 linea 313 mantiene concedida y que no esta rota."
+    },
+    {
+      "id": "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
+      "filename": "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
+      "sha256": "80a50c7fcfdbee4660df1f73ef66b1696edc4397fcc570c58cece36442406a77",
+      "orden": 247,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00247",
+      "ledger_name": "ROLLBACK_0257_custody_legacy_creator_revoke",
+      "provenance": "repo (custodia/hn-1-cierre)",
+      "motivo": "Inversa logica e idempotente de 0257. Devuelve upsert_custody_integrity_assessment al estado exacto de 0223 lineas 159 y 160: revocada para public y anon, concedida a authenticated. Queda escrito que ejecutarlo REABRE la superficie que 0257 cerro y devuelve la base al estado inconsistente que HN-1 describe, porque decide_custody_integrity v1 sigue revocada y este rollback no la reconcede: no restaura una capacidad de negocio, ya que no hay consumidor, sino un privilegio sin camino. No borra identidades, eventos, evidencias, intentos, decisiones, certificados ni auditoria."
     }
   ]
 }

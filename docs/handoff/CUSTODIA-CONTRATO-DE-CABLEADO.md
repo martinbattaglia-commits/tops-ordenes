@@ -1,9 +1,9 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque 2-C-2** — el CIERRE PROBATORIO: el análisis
-arranca solo desde la foto de egreso y el certificado se emite (§11). Antes:
-2-C-1 dejó la puerta de egreso operable (§10.8)
+**Última actualización:** **Bloque B-1 · HN-1** — se cierra el caño por los dos
+extremos: la aplicación deja de enrutar a la v1 y `0257` retira la creadora
+heredada de casos no físicos (§13). Antes: 2-C-2, el CIERRE PROBATORIO (§11)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -31,7 +31,19 @@ Los ocho archivos exigidos existen y se leyeron completos:
 | `supabase/migrations/0250a_custody_productive_vision.sql` | 2555 |
 | `tests/custody-db/t-c1-05-append-only-vanilla.test.ts` | 688 |
 
-**Toda referencia `archivo:línea` de este documento está tomada de ese HEAD.**
+**Toda referencia `archivo:línea` de este documento está tomada de ese HEAD**,
+con excepciones declaradas. Son **tres épocas**, no dos, y conviene decirlo
+entero para que nadie abra el archivo equivocado:
+
+1. **La regla general** — el HEAD de arriba. Vale para todo lo que no esté en 2
+   ni en 3.
+2. **`integrity-supabase.ts:302-304`**, citada en §13.2, resuelve contra
+   **`fe5c92f`** (la base del bloque B-1): es la ubicación del ternario de
+   `custody_inspection_candidates` **antes** de este bloque. El propio §13.2 la
+   rotula «antes de este bloque».
+3. **`integrity-supabase.ts:263-293` y `:319-321`**, introducidas por §13,
+   resuelven contra el **candidato de B-1**, porque describen el código
+   **después** del cambio. §13.2 explicita el corrimiento entre 2 y 3.
 
 ---
 
@@ -94,13 +106,33 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 11a | Resolución del token del QR | `get_custody_physical_by_token` `0250a:2253-2289` · `revoke ... from public,anon` `:2291` · `grant ... to authenticated` `:2292` | `getCustodyByToken` (`custody.ts`), consumido en `c/[token]/page.tsx:18` | — | — | `c/[token]/page.tsx:41-84` | `assert_custody_access('wms.view')` `0250a:2261` | **CABLEADO** (autenticado) |
 | 11b | Compuerta del POD para unidad física | POD ligado a `shipment` | `actions.ts:568` sólo calcula `podPdfReady` cuando `scope === "shipment"` | — | `case-presentation.ts:462-468` | `[id]/page.tsx:86` fija `shipmentId = isShipment ? view.entityId : null`; `CasePodGate.tsx:19` bloquea con `view.podBlocked \|\| !shipmentId` → **la unidad física queda bloqueada siempre**, y con el caso ya `RELEASED` el motivo es `null` (`case-presentation.ts:464`) y cae al literal por defecto `CasePodGate.tsx:24` | — | **CORTADO EN view-model** |
 | 14 | Permiso de **captura del par** ingreso/egreso | `attach_custody_physical_evidence` (0251) rechaza por estado SÓLO con `state in('RELEASED','QUARANTINED')` | `actions.ts` exige `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`) antes de tocar Storage | — | **`capture`** — campo PROPIO · `PhysicalCaptureView` | `PhysicalCapturePanel` · `view.capture.enabled` + `view.capture.blockers[0]` en los dos slots | `wms.edit` | **CABLEADO** |
-| 13 | Decisión de casos **no** físicos (`packing_unit` / `shipment`) | `decide_custody_integrity` (v1) **revocada** para `authenticated` · `0250a:2199-2200` | `integrity-supabase.ts:263-265` sigue enrutando ahí todo scope no físico | — | — | el botón existe y la RPC rechaza por privilegio | `wms.custody.decide` | **CORTADO EN lectura · HN-1, determinado y NO remediado** |
+| 13 | Decisión de casos **no** físicos (`packing_unit` / `shipment`) | `decide_custody_integrity` (v1) **revocada** para `authenticated` · `0250a:2199-2200` · creadora `upsert_custody_integrity_assessment` **revocada** para `authenticated` · `0257` | `integrity-supabase.ts:263-293` ya **no** enruta a la v1: rechaza tipado | — | — | rechazo `CustodyContractError` → `SCOPE_NOT_DECIDABLE` → «Este caso no es de una unidad física: no se decide desde esta pantalla» | `wms.custody.decide` | **NO EXISTE · CERRADO A PROPÓSITO por los dos extremos (HN-1)** |
 | 12 | Firma de quien retira | — | — | — | — | — | — | **NO EXISTE** |
 
-**Recuento tras el bloque 2-A:** 25 filas · **CABLEADO 18** · **CORTADO 4** ·
-**NO EXISTE 2** · **NO VIAJA por diseño 1**.
+> ⚠ **CÓMO SE LEE LA COLUMNA «ESTADO» DE ESTA TABLA · época mixta.**
+>
+> La tabla **no** es una foto coherente de un solo momento, y decirlo es
+> preferible a fingir que lo es:
+>
+> - las filas **7**, **8** y **10** conservan su estado de **2-A**; sus cambios
+>   posteriores viven en los deltas de §10.1 y §11.1, que es la convención que
+>   practicaron los bloques 2-B y 2-C-2;
+> - la fila **13** se actualizó **in situ**, por instrucción expresa del master
+>   del bloque B-1 (§13).
+>
+> Por eso **el recuento vigente del expediente NO es el de acá abajo: es el de
+> §13.5.** Los dos que siguen son históricos y se conservan como registro.
+
+**Recuento tras el bloque 2-A (histórico):** 25 filas · **CABLEADO 18** ·
+**CORTADO 4** · **NO EXISTE 2** · **NO VIAJA por diseño 1**. Ese recuento
+describía la tabla tal como quedó en 2-A, cuando la fila 13 todavía figuraba
+como `CORTADO EN lectura`.
 
 *(Al cerrar la Sesión 0 eran 20 filas: 4 CABLEADO, 14 CORTADO, 2 NO EXISTE.)*
+
+*(Contada hoy, columna por columna, esta tabla da CABLEADO 18 · CORTADO 3 ·
+NO EXISTE 3 · NO VIAJA 1: la diferencia con el histórico es exactamente la fila
+13 y ninguna otra.)*
 
 ---
 
@@ -366,6 +398,10 @@ Costuras que el master no enumeró. **Se documentan, no se arreglan.**
 
 ### HN-1 · Los casos que no son de unidad física ya no se pueden decidir desde la UI
 
+> **🟢 CERRADO · bloque B-1 · expediente CUSTODIA-HN-1-CIERRE.** Ver §13. Lo que
+> sigue es el hallazgo tal como se determinó, conservado como registro; el
+> estado vigente de la costura 13 es **NO EXISTE · CERRADO A PROPÓSITO**.
+
 `0250a:2199-2200` revoca la RPC v1 para `authenticated`:
 
 ```sql
@@ -502,6 +538,12 @@ concedida a `authenticated`.
 **Conclusión:** el único eslabón cortado es la llamada de decisión, y la salida
 —re-otorgar la v1 o generalizar la v2— es **decisión de base, de Dirección**.
 No se tocó el ruteo, ni los grants, ni se escribió migración para esto.
+
+> **🟢 CERRADO · bloque B-1.** Dirección resolvió, y la resolución no fue
+> ninguna de las dos que esta sección anticipaba: **no se re-otorgó la v1, no se
+> generalizó la v2 y no se escribió una v3.** Se cerró el caño por los dos
+> extremos. La medición que sostiene la decisión, y el detalle de lo que se
+> hizo, están en §13.
 
 ### 9.4 · Lo que la Sesión 1 NO cerró y no le correspondía
 
@@ -1088,6 +1130,161 @@ reforzada.
 
 Por eso se publica declarado y no se corrige acá: corregirlo bien es un
 expediente, y corregirlo mal —capa por capa— es peor que declararlo.
+
+---
+
+## 13 · BLOQUE B-1 · HN-1 · SE CIERRA EL CAÑO POR LOS DOS EXTREMOS
+
+### 13.1 · La medición de producción que sostiene la decisión
+
+Antes de escribir una sola línea se midió la base productiva. Los cinco hechos:
+
+| Qué se midió | Resultado |
+|---|---|
+| Casos de custodia existentes | **4 · los CUATRO con `physical_unit_id`** |
+| Casos con `packing_unit_id` o `shipment_id` | **CERO** |
+| `upsert_custody_integrity_assessment` · ACL | `postgres=X` · `service_role=X` · **`authenticated=X`** — vivo |
+| Llamadores en `src/` | **CERO** |
+| Llamadores SQL internos (`pg_proc.prosrc` en producción) | **CERO** |
+
+Y el circuito productivo —`0250a:430`, `0252:228`— inserta **siempre**
+`physical_unit_id`, por el trigger de recepción: no hay hoy camino productivo
+que fabrique un caso no físico.
+
+De modo que lo que había no era una costura rota con un consumidor esperando del
+otro lado. Era una **RPC de escritura alcanzable por PostgREST desde cualquier
+sesión autenticada, sin ningún consumidor, capaz de crear casos que la pantalla
+después no puede decidir.** Un privilegio vivo sin camino que lo justifique.
+**R-22: se retira sin esperar a que se demuestre el camino.**
+
+### 13.2 · Extremo de adelante · la aplicación deja de enrutar a la v1
+
+`integrity-supabase.ts` tenía el ternario que §9.3(b) señaló:
+
+```ts
+const fn = input.scope === "physical_unit"
+  ? "decide_custody_integrity_v2"
+  : "decide_custody_integrity";
+```
+
+No elegía entre dos caminos. Elegía entre un camino y un **`42501` crudo de
+PostgreSQL subiendo a la cara del inspector**, porque la v1 está revocada desde
+`0250a:2199-2200`. La rama muerta se eliminó. Un scope no físico —y también un
+scope **ausente**, que cae fail-closed— produce ahora un rechazo tipado del
+dominio **antes de tocar la plataforma**:
+
+`CustodyContractError` → `SCOPE_NOT_DECIDABLE` (nuevo miembro de `CasFailure`) →
+«Este caso no es de una unidad física: no se decide desde esta pantalla».
+
+El rechazo **no pasa por `classifyDecideFailure`**: ese clasificador adivina por
+texto del mensaje y habría devuelto `RECORD_INCOHERENT`, que es mentirle al
+inspector. Se distingue por tipo, con `instanceof`, en el `catch` de
+`applyDecision`.
+
+**`custody_inspection_candidates` no se tocó.** Su ternario —que era
+`integrity-supabase.ts:302-304` antes de este bloque y quedó en `:319-321` por
+el corrimiento del docblock nuevo— está **byte por byte igual**: `0224:313` la
+mantiene concedida a `authenticated` y esa superficie **no está rota** —medido
+de nuevo en producción en esta sesión—.
+
+### 13.3 · Extremo de atrás · la migración `0257`
+
+`0257_custody_legacy_creator_revoke.sql` retira `EXECUTE` a `authenticated`
+sobre `upsert_custody_integrity_assessment`, con su `ROLLBACK_0257`, su entrada
+de linaje (catálogo 245 → 247, ejecutables 217 → 218) y su lugar en el
+manifiesto dedicado (50 → 51).
+
+**Por qué se revoca y no se elimina la función.** `0223` sí eliminó
+`record_custody_integrity_evaluation`, y con razón. Acá el caso es distinto:
+esta función es todavía el ingreso legítimo del circuito no físico **bajo el
+dueño del esquema**, y sobre ella se apoya la batería `tests/custody-db/**` que
+sostiene la cobertura D1–D3 de `0221`–`0224`. Eliminarla borraría esa cobertura
+sin haber decidido nada sobre el circuito no físico, que no es lo que este
+bloque vino a resolver. Lo que se retira es la **alcanzabilidad desde una sesión
+de usuario**, que es exactamente el privilegio sin camino.
+
+`service_role` conserva `EXECUTE` **a propósito**: es el rol interno de
+servidor, no una sesión de navegador, y el master acota la revocación a
+`authenticated`. Ampliarla de paso habría sido decidir por cuenta propia.
+
+### 13.4 · La prueba · R-19, y por el lado POSITIVO
+
+Una revocación no entra con un contador que sube. `T-C7-05` la **ejercita**:
+llama la RPC con `set role authenticated` —el rol de base de datos con el que
+PostgREST atiende al navegador— y exige `permission denied`. Un test que sólo
+leyera `pg_proc.proacl` mediría el catálogo, no el privilegio.
+
+Las dos mitades, ambas verificadas con mutante:
+
+- **la revocación:** con el `grant` reinstalado en `0257`, `T-C7-05` cae en rojo
+  en la llamada real y en la lectura de ACL;
+- **el ruteo:** con el ternario restaurado en `integrity-supabase.ts`, 7 de los 8
+  casos de `custody-hn1-scope-routing` caen en rojo.
+
+Y lo que debía seguir funcionando se afirma explícitamente, para que una
+ampliación de alcance por descuido tampoco pase en silencio: `service_role`
+conserva `EXECUTE`; la función **sigue existiendo** y sigue construyendo casos
+bajo el dueño del esquema; `authenticated` conserva `EXECUTE` sobre
+`decide_custody_integrity_v2` y sobre `custody_inspection_candidates`; y la v1
+sigue revocada, porque `0257` **no la reconcedió**.
+
+### 13.5 · Recuento
+
+**Recuento tras HN-1:** 25 filas · **CABLEADO 21** · **CORTADO 1** ·
+**NO EXISTE 2** · **NO VIAJA por diseño 1**.
+
+Los números no se mueven respecto de 2-C-2, y decirlo así es más honesto que
+fabricar un cambio: la fila 13 ya se contaba entre las dos **NO EXISTE**. Lo que
+cambia es **qué significa** cada una de esas dos:
+
+- la **12** (firma de quien retira) sigue siendo un hueco abierto, con trabajo
+  pendiente —bloque B-2—;
+- la **13** ya no es un hueco. Es una capacidad **que no existe a propósito**,
+  cerrada por los dos extremos y con prueba que lo sostiene.
+
+La única fila que sigue **CORTADA** es la **11b** (POD de unidad física).
+
+> **Nota de concurrencia.** Este bloque tocó únicamente su propia fila (13), sus
+> propias secciones (§6/HN-1, §9.3, §13) y este recuento. Las filas 11b y 12 son
+> del bloque B-2 y no se tocaron. El recuento definitivo del expediente lo
+> recalcula el bloque D (C-3) como su primera medición.
+
+### 13.6 · Lo que este bloque NO hizo
+
+- **No** re-otorgó `decide_custody_integrity` (v1) a ningún rol.
+- **No** tocó `decide_custody_integrity_v2` ni su cuerpo.
+- **No** escribió una v3 ni un cuerpo genérico por scope.
+- **No** tocó `custody_inspection_candidates` ni su grant.
+- **No** aplicó `0257` a producción, ni `supabase db push`, ni merge, ni deploy.
+- **No** usó números de migración fuera del lease `0257`.
+
+### 13.7 · 🟠 MEDIUM ABIERTO · HN-1 vive en la PUERTA, no en el MODELO
+
+La C4 lo encontró y Dirección resolvió **no tocarlo en esta ventana**, porque
+toca comportamiento y este bloque estaba acotado a dos piezas. Queda acá con su
+propio bloque para que no se entierre.
+
+`integrity/in-memory-repository.ts:152` —el repositorio de referencia del
+dominio— **no** tiene rama de scope: sigue aceptando una decisión sobre un caso
+`packing_unit` y devolviendo `{ ok: true }`. Y la suite de dominio
+`wms-custody-ia-integrity.test.ts:90` sigue fijando `scope: "packing_unit"` como
+operación válida y exitosa.
+
+Es decir: **HN-1 quedó codificado en la frontera del adaptador, no en el
+modelo.** Las dos implementaciones del mismo puerto discrepan sobre una regla de
+dominio.
+
+**No es un fallo de producción** —el camino real pasa siempre por
+`createSupabaseCustodyQueryPort`, y ahí la puerta está cerrada—. El daño es de
+otra clase y es el que importa en un módulo probatorio: **quien lea el dominio o
+sus pruebas concluirá lo contrario de lo que HN-1 decidió.** Un revisor futuro
+que audite `in-memory-repository` para entender qué se puede decidir va a leer
+que un caso no físico se decide, y no es cierto.
+
+**Severidad: MEDIUM.** No bloquea el cierre de B-1 —la puerta real está
+cerrada y probada— pero exige su propia ventana: mover el repositorio en memoria
+significa mover también su batería, y eso es cambio de comportamiento con su
+propio gate.
 
 ---
 
