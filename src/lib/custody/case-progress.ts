@@ -263,7 +263,7 @@ export function deriveNowAction(input: ProgressInput): NowAction {
   if (h.liberado) {
     return {
       kind: "pod",
-      label: "Generar POD de entrega",
+      label: "Ir al panel del POD de entrega",
       help:
         "El POD nombra al depositante y a la unidad, y lleva impreso el mismo QR de siempre. " +
         "La página de ese QR ya muestra la historia completa.",

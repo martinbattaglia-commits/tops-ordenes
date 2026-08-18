@@ -1,9 +1,10 @@
 # CUSTODIA DIGITAL · CONTRATO DE CABLEADO
 
 **Expediente:** CUSTODIA-CIERRE-CIRCUITO · 16-08-2026
-**Última actualización:** **Bloque B-1 · HN-1** — se cierra el caño por los dos
-extremos: la aplicación deja de enrutar a la v1 y `0257` retira la creadora
-heredada de casos no físicos (§13). Antes: 2-C-2, el CIERRE PROBATORIO (§11)
+**Última actualización:** **C-3 · fase 1 — el cierre del contrato**: filas 11b
+y 12 actualizadas in situ (#88 las cableó), recuento vigente recalculado en
+§13.5 (la prohibición de concurrencia cesó), épocas de anclas re-declaradas en
+§0 y deudas D-1/D-2 registradas en §15. Antes: B-1 · HN-1 (§13); 2-C-2 (§11)
 **Regla permanente:** ninguna sesión cierra sin actualizar este archivo (§7).
 
 ---
@@ -31,19 +32,27 @@ Los ocho archivos exigidos existen y se leyeron completos:
 | `supabase/migrations/0250a_custody_productive_vision.sql` | 2555 |
 | `tests/custody-db/t-c1-05-append-only-vanilla.test.ts` | 688 |
 
-**Toda referencia `archivo:línea` de este documento está tomada de ese HEAD**,
-con excepciones declaradas. Son **tres épocas**, no dos, y conviene decirlo
-entero para que nadie abra el archivo equivocado:
+**Toda referencia `archivo:línea` de este documento resuelve contra la época
+declarada de su sección**, y conviene decirlo entero para que nadie abra el
+archivo equivocado. La convención por épocas se MANTIENE; C-3 (fase 1) la
+re-declara así:
 
-1. **La regla general** — el HEAD de arriba. Vale para todo lo que no esté en 2
-   ni en 3.
-2. **`integrity-supabase.ts:302-304`**, citada en §13.2, resuelve contra
-   **`fe5c92f`** (la base del bloque B-1): es la ubicación del ternario de
-   `custody_inspection_candidates` **antes** de este bloque. El propio §13.2 la
-   rotula «antes de este bloque».
-3. **`integrity-supabase.ts:263-293` y `:319-321`**, introducidas por §13,
-   resuelven contra el **candidato de B-1**, porque describen el código
-   **después** del cambio. §13.2 explicita el corrimiento entre 2 y 3.
+1. **La superficie viva** — la tabla de §2 y el recuento vigente de §13.5 —
+   fue **re-medida por C-3 contra `origin/main` = `69e63ce`**. Las anclas que
+   no resolvían se corrigieron in situ (filas 6b, 11b y 12; la 11b citaba
+   `actions.ts:568`, ya corrida). Las anclas a migraciones (`0250a:NNNN`,
+   `0251`, …) son inmutables por naturaleza y no requieren re-medición.
+2. **La regla histórica** — las secciones de registro (§3–§12 y §14) conservan
+   las anclas de la época en que cada bloque las midió; la general era el HEAD
+   `76fafb1` de arriba. Se leen como registro, no como mapa del código actual:
+   los archivos de custodia recibieron ~4.000 líneas después de esa época y
+   esas anclas están corridas respecto de main. El estado real de las costuras
+   es el de la tabla de §2 + §13.5.
+3. **Las excepciones ya declaradas se conservan:**
+   `integrity-supabase.ts:302-304` (§13.2) resuelve contra **`fe5c92f`** —la
+   base del bloque B-1, «antes de este bloque»—; `integrity-supabase.ts:263-293`
+   y `:319-321` (§13) resuelven contra el **candidato de B-1**. §13.2 explicita
+   el corrimiento entre ambas.
 
 ---
 
@@ -95,7 +104,7 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 5a | `damageFlags` (embalaje / faltante / daño) | `packaging_changed`, `missing_items_suspected`, `damage_suspected` | `CASE_COLUMNS` | `integrity-adapters.ts` | `ai.damageFlags` | chips `data-banderas` en `CaseAiPanel` | — | **CABLEADO** |
 | 5b | `provider_details` (observations, zones) | escrito en `integrity-supabase.ts:406-410` (`p_provider_details`) | `CASE_COLUMNS` ahora **sí** pide `provider_details` | `boundedStrings` en `mapAssessment` (recorta a 6 × 240/120) | `ai.observations` / `ai.zones` | bloque «Observaciones del análisis» en `CaseAiPanel` | — | **CABLEADO** |
 | 6a | `quarantine.blockers` | `0250a:2088-2099` (las reglas que producen el bloqueo) | — | — | `case-presentation.ts` · habilitado también en `HOLD` (S1-5) | `CaseDecisionPanel` · bloque «Por qué no se puede enviar a cuarentena» (`data-cuarentena-blockers`) | `wms.custody.decide` + rol `admin`/`operaciones`/`supervisor` (0251) | **CABLEADO** |
-| 6b | `release.blockers` | `0250a:2108-2150` | — | — | `case-presentation.ts:325-377`, expuesto en `:438-443` | `CaseDecisionPanel.tsx:172-179` · encabezado «Por qué no se puede liberar» | `wms.custody.decide` + rol `admin` | **CABLEADO** |
+| 6b | `release.blockers` | `0250a:2108-2150` | — | — | `case-presentation.ts:355` (`release: DecisionActionView`), armado en `:684-686` | `CaseDecisionPanel.tsx:175` · encabezado «Por qué no se puede liberar» | `wms.custody.decide` + rol `admin` | **CABLEADO** · anclas re-medidas contra main por C-3 |
 | 7 | Certificado de liberación | tabla `custody_release_certificates` `0250a:1742-1794` · insertado en `0250a:2182-2186` · validador `custody_assert_release_certificate` `0250a:1796` · `grant select ... to authenticated` `0250a:1786` | **cero lecturas** · `grep -rn "custody_release_certificates" src/` → 0 resultados | — | — | — | SELECT concedido a `authenticated`, sin consumidor | **CORTADO EN lectura** |
 | 8 | Códigos de gate de despacho (los seis `CUSTODY_*`) | `CUSTODY_CASE_MISSING` `0250a:2304` · `CUSTODY_HOLD` `0250a:2307` · `CUSTODY_RELEASE_CERTIFICATE_MISSING` `0250a:2312` · `CUSTODY_CHAIN_ADVANCED_AFTER_RELEASE` `0250a:2316` · `CUSTODY_GENEALOGY_MISSING` `0250a:2361` · `CUSTODY_ZERO_APPLICABLE_CASES` `0250a:2401` | **ningún traductor** · `grep -rn "CUSTODY_HOLD\|CUSTODY_GENEALOGY_MISSING\|..." src/` → 0 resultados | — | — | el error crudo de PostgreSQL sube tal cual al despachante | — | **CORTADO EN lectura** |
 | 9 | Puente recepción → caso de custodia | mismo trigger, con `custody_materialize_reception_item_row` **condicional** (0252 §5): la unidad siempre, el caso sólo en nivel 2 | `custody_reception_units` (0252 §8) | — | `ReceptionCustodyUnit` en `recepciones/actions.ts` | lista posterior a confirmar, con enlace a cada caso | la función sigue revocada para todos los roles: corre **sólo** como trigger | **CABLEADO** |
@@ -104,10 +113,10 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 | 17 | Señal de custodia en el listado de recepciones | `custody_physical_units` + `custody_events` | embed en `listReceptions` | — | `ReceptionRow.custody_units / custody_units_con_foto / custody_reforzada` | insignia `data-custodia="unidades"` en `recepciones/page.tsx` | `wms.view` | **CABLEADO** |
 | 10 | Puerta de la foto de egreso en el flujo de salida | gates disparados por trigger en `0250a:2417 / 2486 / 2507 / 2529` | — | — | — | **cero menciones de custodia** en picking y packing (`grep -rniE "custod\|CPU-\|physical_unit"` sobre `wms/picking` y `wms/packing` → 0 resultados); en despachos sólo `CustodyShipmentSection` (`despachos/[id]/page.tsx:172-175`), que es scope `shipment` | — | **NO EXISTE** |
 | 11a | Resolución del token del QR | `get_custody_physical_by_token` `0250a:2253-2289` · `revoke ... from public,anon` `:2291` · `grant ... to authenticated` `:2292` | `getCustodyByToken` (`custody.ts`), consumido en `c/[token]/page.tsx:18` | — | — | `c/[token]/page.tsx:41-84` | `assert_custody_access('wms.view')` `0250a:2261` | **CABLEADO** (autenticado) |
-| 11b | Compuerta del POD para unidad física | POD ligado a `shipment` | `actions.ts:568` sólo calcula `podPdfReady` cuando `scope === "shipment"` | — | `case-presentation.ts:462-468` | `[id]/page.tsx:86` fija `shipmentId = isShipment ? view.entityId : null`; `CasePodGate.tsx:19` bloquea con `view.podBlocked \|\| !shipmentId` → **la unidad física queda bloqueada siempre**, y con el caso ya `RELEASED` el motivo es `null` (`case-presentation.ts:464`) y cae al literal por defecto `CasePodGate.tsx:24` | — | **CORTADO EN view-model** |
+| 11b | Compuerta del POD para unidad física | POD ligado a `shipment` | `actions.ts:499-519` resuelve el shipment de la unidad por genealogía (`resolvePhysicalUnitPodShipment` · `dispatch-egress.ts:249`) y calcula `podPdfReady` también para `physical_unit` | — | `case-presentation.ts:376` (`podShipmentId`) · `:713` lo deriva en `buildCustodyCaseView` | `[id]/page.tsx:350` pasa `view.podShipmentId`; `CasePodGate.tsx:19` bloquea sólo sin liberación o sin shipment resuelto, con motivo visible (`podBlockedReason`) | según permiso del botón de POD | **CABLEADO** · in situ por C-3 (#88 lo cableó; la fila anterior citaba `actions.ts:568`, ancla ya corrida) |
 | 14 | Permiso de **captura del par** ingreso/egreso | `attach_custody_physical_evidence` (0251) rechaza por estado SÓLO con `state in('RELEASED','QUARANTINED')` | `actions.ts` exige `CUSTODY_CAPTURE_PERMISSION` (`wms.edit`) antes de tocar Storage | — | **`capture`** — campo PROPIO · `PhysicalCaptureView` | `PhysicalCapturePanel` · `view.capture.enabled` + `view.capture.blockers[0]` en los dos slots | `wms.edit` | **CABLEADO** |
 | 13 | Decisión de casos **no** físicos (`packing_unit` / `shipment`) | `decide_custody_integrity` (v1) **revocada** para `authenticated` · `0250a:2199-2200` · creadora `upsert_custody_integrity_assessment` **revocada** para `authenticated` · `0257` | `integrity-supabase.ts:263-293` ya **no** enruta a la v1: rechaza tipado | — | — | rechazo `CustodyContractError` → `SCOPE_NOT_DECIDABLE` → «Este caso no es de una unidad física: no se decide desde esta pantalla» | `wms.custody.decide` | **NO EXISTE · CERRADO A PROPÓSITO por los dos extremos (HN-1)** |
-| 12 | Firma de quien retira | — | — | — | — | — | — | **NO EXISTE** |
+| 12 | Firma de quien retira | `delivery_pods.signature_evidence_id` (0036 · 0039; binario en bucket `custody-pii`) | `pod-pdf.ts:126-137` resuelve y embebe la firma en el POD-PDF | — | — | `pod/[id]/page.tsx:54-56` la muestra; si la PII está restringida cae al placeholder honesto (`PodPdfDocument.tsx:175`) | acceso al binario por signed URL auditada (`emit_custody_signed_url`) | **CABLEADO** · in situ por C-3 · por reutilización de la superficie de firma del despacho (#88) |
 
 > ⚠ **CÓMO SE LEE LA COLUMNA «ESTADO» DE ESTA TABLA · época mixta.**
 >
@@ -118,10 +127,13 @@ comprobar, dice **NO VERIFICADO** y explica por qué.
 >   posteriores viven en los deltas de §10.1 y §11.1, que es la convención que
 >   practicaron los bloques 2-B y 2-C-2;
 > - la fila **13** se actualizó **in situ**, por instrucción expresa del master
->   del bloque B-1 (§13).
+>   del bloque B-1 (§13);
+> - las filas **11b** y **12** se actualizaron **in situ** por C-3 (fase 1):
+>   #88 las cableó y sus estados anteriores («CORTADO EN view-model» y
+>   «NO EXISTE») habían quedado afirmando falso.
 >
 > Por eso **el recuento vigente del expediente NO es el de acá abajo: es el de
-> §13.5.** Los dos que siguen son históricos y se conservan como registro.
+> §13.5.** Los que siguen son históricos y se conservan como registro.
 
 **Recuento tras el bloque 2-A (histórico):** 25 filas · **CABLEADO 18** ·
 **CORTADO 4** · **NO EXISTE 2** · **NO VIAJA por diseño 1**. Ese recuento
@@ -130,9 +142,15 @@ como `CORTADO EN lectura`.
 
 *(Al cerrar la Sesión 0 eran 20 filas: 4 CABLEADO, 14 CORTADO, 2 NO EXISTE.)*
 
-*(Contada hoy, columna por columna, esta tabla da CABLEADO 18 · CORTADO 3 ·
-NO EXISTE 3 · NO VIAJA 1: la diferencia con el histórico es exactamente la fila
-13 y ninguna otra.)*
+*(Contada al cierre de HN-1 —histórico—, columna por columna, esta tabla daba
+CABLEADO 18 · CORTADO 3 · NO EXISTE 3 · NO VIAJA 1: la diferencia con el
+histórico 2-A era exactamente la fila 13 y ninguna otra.)*
+
+*(Contada por C-3 fase 1, columna por columna y con 11b y 12 ya actualizadas
+in situ, esta tabla da CABLEADO 20 · CORTADO 2 —filas 7 y 8, cuyo estado real
+vive en los deltas de §10.1 y §11.1— · NO EXISTE 2 —fila 10, ídem, y fila 13,
+cerrada a propósito— · NO VIAJA 1. El recuento vigente del expediente sigue
+siendo el de §13.5.)*
 
 ---
 
@@ -714,7 +732,7 @@ puede liberar mercadería de un cliente.
 | — | Los 22 códigos de `CertificateBlocker` | sin ningún traductor | **traducidos y guiados** | `blocker-guidance.ts`; llegan a pantalla recién cuando 2-C cablee el certificado, y ya no llegarán crudos |
 | — | Acceso del encargado de depósito a `/wms/custody` | **404** en dos renglones | **entra** | `src/lib/rbac/depot-manager.ts:94-102`; prueba rojo→verde en `depot-manager-routes.test.ts` |
 
-**Recuento tras el bloque 2-B:** 25 filas · **CABLEADO 20** · **CORTADO 2** ·
+**Recuento tras el bloque 2-B (histórico):** 25 filas · **CABLEADO 20** · **CORTADO 2** ·
 **NO EXISTE 2** · **NO VIAJA por diseño 1**.
 
 Las dos filas que siguen **CORTADAS** son la 7 (certificado sin lecturas) y la
@@ -957,7 +975,7 @@ superficie que 2-B ya cerró, y decidir si corrige el test o el umbral de
 | 7 | Certificado de liberación | **CORTADO EN lectura** · «cero lecturas, SELECT concedido sin consumidor» | **CABLEADO** | política de tenant en `0254`; consumidor en `certificate-emission.ts`; acción `loadCustodyDocumentAction`; pantalla `CaseDocumentCard` |
 | — | Disparo del análisis desde despachos | **NO EXISTE** · la foto de egreso no arrancaba nada | **CABLEADO** | `analysis-trigger.ts`, llamado desde `despachos/actions.ts` |
 
-**Recuento tras 2-C-2:** 25 filas · **CABLEADO 21** · **CORTADO 1** ·
+**Recuento tras 2-C-2 (histórico):** 25 filas · **CABLEADO 21** · **CORTADO 1** ·
 **NO EXISTE 2** · **NO VIAJA por diseño 1**. La única fila que sigue CORTADA es
 la 11b (POD de unidad física); las dos NO EXISTE son la 12 (firma de quien
 retira, que sí existe para el despacho) y la 13/HN-1.
@@ -1238,24 +1256,41 @@ sigue revocada, porque `0257` **no la reconcedió**.
 
 ### 13.5 · Recuento
 
-**Recuento tras HN-1:** 25 filas · **CABLEADO 21** · **CORTADO 1** ·
+**Recuento vigente · C-3 fase 1 (contado fila por fila desde la tabla de §2,
+con los deltas de §10.1 y §11.1 aplicados):** 25 filas · **CABLEADO 23** ·
+**CORTADO 0** · **NO EXISTE 1** · **NO VIAJA por diseño 1**.
+
+- El único **NO EXISTE** es la fila **13** (HN-1): capacidad que no existe
+  **a propósito**, cerrada por los dos extremos y con prueba que lo sostiene.
+- El único **NO VIAJA** es la fila **4** (`thresholdPercent`, D-4).
+- La **11b** (POD de unidad física) y la **12** (firma de quien retira) pasaron
+  a **CABLEADO** con #88: la compuerta del POD resuelve el shipment por
+  genealogía y la firma se reutiliza de la superficie del despacho.
+
+El recuento se recalcula acá porque **la prohibición de concurrencia cesó**: la
+nota anterior congelaba este renglón para que tres frentes concurrentes no se lo
+pisaran, y C-3 es el único frente vivo.
+
+**Recuento tras HN-1 (histórico):** 25 filas · **CABLEADO 21** · **CORTADO 1** ·
 **NO EXISTE 2** · **NO VIAJA por diseño 1**.
 
-Los números no se mueven respecto de 2-C-2, y decirlo así es más honesto que
+Los números no se movían respecto de 2-C-2, y decirlo así era más honesto que
 fabricar un cambio: la fila 13 ya se contaba entre las dos **NO EXISTE**. Lo que
-cambia es **qué significa** cada una de esas dos:
+cambiaba era **qué significaba** cada una de esas dos:
 
-- la **12** (firma de quien retira) sigue siendo un hueco abierto, con trabajo
-  pendiente —bloque B-2—;
-- la **13** ya no es un hueco. Es una capacidad **que no existe a propósito**,
+- la **12** (firma de quien retira) seguía siendo entonces un hueco abierto, con
+  trabajo pendiente —bloque B-2, luego resuelto por #88—;
+- la **13** ya no era un hueco. Es una capacidad **que no existe a propósito**,
   cerrada por los dos extremos y con prueba que lo sostiene.
 
-La única fila que sigue **CORTADA** es la **11b** (POD de unidad física).
+En aquel momento la única fila que seguía **CORTADA** era la **11b** (POD de
+unidad física), luego cableada por #88.
 
-> **Nota de concurrencia.** Este bloque tocó únicamente su propia fila (13), sus
-> propias secciones (§6/HN-1, §9.3, §13) y este recuento. Las filas 11b y 12 son
-> del bloque B-2 y no se tocaron. El recuento definitivo del expediente lo
-> recalcula el bloque D (C-3) como su primera medición.
+> **Nota de concurrencia (histórica, cumplida).** El bloque B-1 tocó únicamente
+> su propia fila (13), sus propias secciones (§6/HN-1, §9.3, §13) y este
+> recuento. Las filas 11b y 12 eran del bloque B-2 y no se tocaron. El recuento
+> definitivo del expediente lo recalculó el bloque D (C-3) como su primera
+> medición — es el recuento vigente al tope de esta sección.
 
 ### 13.6 · Lo que este bloque NO hizo
 
@@ -1560,3 +1595,41 @@ la corrida final están en el mensaje del commit de esta remediación.
 - `Custodia-Digital-Desktop.html` y `Custodia-Digital-Mobile.html` no se abrieron.
 - Ningún defecto remediado. Los catorce cortes y las dos ausencias quedan vivos y
   documentados.
+
+---
+
+## 15 · DEUDAS REGISTRADAS · C-3 · FASE 1
+
+Registro sin remediación: la letra del master de C-3 manda registrarlas, no
+resolverlas. Ninguna la introdujo una ventana de Custodia.
+
+### 15.1 · D-1 · SIN FK `allocation → shipment`
+
+**Ancla:** `dispatch-egress.ts:249` (`resolvePhysicalUnitPodShipment`), pasos
+3–4: la unidad física llega al shipment por genealogía
+(`custody_allocation_physical_units` → `stock_allocations` →
+`logistics_order_items` → `shipments`), porque **ninguna tabla registra en qué
+shipment viajó cada allocation**.
+
+**Consecuencia:** con despachos parciales —un pedido repartido en más de un
+shipment— el mapeo pedido→shipment es ambiguo. El código elige el entregado o
+el último despachado; para el caso común es correcto, pero no hay dato que
+garantice que ESE shipment llevó ESA unidad. El filtro C4-M1
+(`status in ('empacada','despachada')`) acota el error, no lo elimina.
+
+**Qué la cerraría:** una FK o tabla puente `allocation → shipment` poblada al
+despachar. Es migración: fuera del alcance de C-3 (STOP — NEEDS_MIGRATION).
+
+### 15.2 · D-2 · `t-c1-05` · `VANILLA_AUTHORIZED_CHANGES` como registro de intenciones
+
+**Ancla:** `tests/custody-db/harness/vanilla-guard.ts` +
+`tests/custody-db/t-c1-05-append-only-vanilla.test.ts`.
+
+**Hecho:** la lista pasó de 1 a 5 entradas en una sola ventana. El mecanismo
+mide «lo que esta rama declaró tocar» — un registro de intenciones por frente,
+no una invariante del sistema: cada frente puede ampliarla para autorizarse a
+sí mismo, y el test verde no distingue una ampliación legítima de una laxa.
+El título del test ya se corrigió en #88 para no prometer de más.
+
+**Estado:** la decisión sobre el mecanismo es de **Dirección**. C-3 no tocó la
+lista ni apretó el guard, por prohibición expresa del master.

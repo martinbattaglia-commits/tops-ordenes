@@ -365,6 +365,21 @@ export function mapEvidenceRow(row: RawEvidenceRow, clientId: string): EvidenceR
   };
 }
 
+/**
+ * ⚠ PROPIEDAD DE SEGURIDAD APOYADA EN ESTE MAPEO (D-3 · C-3 fase 1).
+ *
+ * El fail-closed del certificado —«cadena viva rota ⇒ acta, nunca
+ * certificado»— DEPENDE de que la atestación reconstruida acá lleve
+ * `verifiedEventIds: []`: la fila persistida no guarda los IDs verificados,
+ * y ese vacío es lo que obliga a la política de certificado a re-derivar el
+ * conjunto contra el testigo (0258) en vez de confiar en una lista que este
+ * adaptador no puede conocer. Si mañana alguien «completa» ese campo con IDs
+ * inferidos, la política dejaría de re-derivar y una cadena rota podría
+ * emitir certificado donde correspondía acta.
+ *
+ * El comportamiento está fijado por el E2E (`t-c8-01-testigo-evaluado`):
+ * tocar este invariante lo pone en rojo. No cambiar sin pasar por ahí.
+ */
 function mapChain(row: RawCaseRow): ChainVerification | null {
   if (row.chain_status === null) return null;
   if (row.chain_status === "verified") {
