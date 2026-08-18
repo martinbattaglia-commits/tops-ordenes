@@ -521,12 +521,15 @@ describe("T-C8-01 · E2E · certificado y acta", () => {
       [caso.caseId, caso.headEvaluado],
     );
 
-    // (c) la cadena avanza DESPUÉS de la liberación ⇒ acta por diseño
-    // (límite 3 del expediente: la vigencia post-liberación es política
-    // firmada). La RPC productiva rechaza adjuntar a un caso terminal —la
-    // puerta de egreso de 0253, correcta—, así que el eslabón posterior se
-    // inserta directo como dueño del esquema: el trigger de 0036 igual encadena
-    // el hash y la cadena REALMENTE avanza.
+    // (c) la cadena avanza DESPUÉS de la liberación ⇒ SIGUE siendo certificate
+    // (V4-bis · límite 3 RESUELTO por decisión firmada: la verificación se
+    // hace contra el TESTIGO que la decisión atestó, no contra la punta viva;
+    // el avance operativo posterior —pod, entrega— no es adulteración). La RPC
+    // productiva rechaza adjuntar a un caso terminal —la puerta de egreso de
+    // 0253, correcta—, así que el eslabón posterior se inserta directo como
+    // dueño del esquema: el trigger de 0036 igual encadena el hash y la cadena
+    // REALMENTE avanza. El certificado sobrevive; el solicitante de otro
+    // tenant sigue recibiendo acta (la compuerta no se afloja).
     await db.query(
       `insert into public.custody_events
          (public_id, physical_unit_id, stage, event_type, row_hash)
@@ -536,7 +539,9 @@ describe("T-C8-01 · E2E · certificado y acta", () => {
     );
     const c = await contextoDocumental(s.clientId, caso.caseId, s.clientId);
     const rc = evaluateCertificateEligibility(c.ctx);
-    expect(rc.document).toBe("acta_inspeccion");
-    expect(rc.blockers).toContain("DECISION_CHAIN_HEAD_MISMATCH");
+    expect(rc).toEqual({ document: "certificate", blockers: [] });
+
+    const ajeno = await contextoDocumental(s.clientId, caso.caseId, otro);
+    expect(evaluateCertificateEligibility(ajeno.ctx).document).toBe("acta_inspeccion");
   });
 });

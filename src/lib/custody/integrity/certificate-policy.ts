@@ -3,8 +3,18 @@
  *
  * REVISIÓN 3. El certificado exige, además de todo lo anterior, que la decisión
  * sea internamente coherente (actor, sesión, fecha, permiso exacto, estados) y
- * que la ATESTACIÓN de cadena siga vigente y vinculada a las evidencias
+ * que la ATESTACIÓN de cadena estuviera vigente y vinculada a las evidencias
  * comparadas. `eventsChecked` debe ser entero positivo, no simplemente `> 0`.
+ *
+ * REVISIÓN 4 (V4-bis · decisión firmada de Dirección). Un certificado certifica
+ * UN MOMENTO: la liberación. La verificación se hace CONTRA EL TESTIGO —la
+ * punta que la decisión atestó (`chainHeadAtDecision`)— y en EL INSTANTE de esa
+ * decisión (`decidedAt`), nunca contra la punta viva ni contra la hora de
+ * emisión. El avance operativo posterior a la liberación (pod, entrega,
+ * entregado, foto_entrega, en_transito) no es adulteración y no degrada el
+ * documento; de la adulteración se ocupa la verificación de cadena completa
+ * (`verify_custody_chain_v2`): una cadena rota deja la atestación viva sin
+ * verificar y el documento degrada a acta por su propio camino.
  */
 
 import { isAttestationCurrent } from "./chain";
@@ -57,8 +67,14 @@ export interface CertificateContext {
    * conforma con que existan IDs: exige que sean exactamente estos.
    */
   canonicalInspectionEvidenceIds: readonly string[];
-  /** Head vigente al emitir. La atestación debe seguir describiéndolo. */
+  /**
+   * Head vigente al emitir. Desde la REVISIÓN 4 es INFORMATIVO: la política no
+   * lo compara — el certificado se verifica contra el testigo de la decisión y
+   * sobrevive al avance operativo posterior. Se conserva en el contexto porque
+   * el armador (la acción de documento) lo transporta para trazabilidad.
+   */
   currentChainHead: string | null;
+  /** Hora de emisión. También informativa desde la REVISIÓN 4 (ver arriba). */
   issuedAt: string;
 }
 
@@ -84,7 +100,12 @@ export function evaluateCertificateEligibility(ctx: CertificateContext): Certifi
     if (ctx.evidenceEventIds.length === 0 || ctx.evidenceEventIds.some((id) => !covered.has(id))) {
       blockers.push("EVIDENCE_NOT_LINKED");
     }
-    if (!isAttestationCurrent(att, ctx.currentChainHead, ctx.issuedAt)) {
+    // REVISIÓN 4: la vigencia se mide EN EL MOMENTO QUE EL DOCUMENTO CERTIFICA
+    // —la decisión— y contra el TESTIGO que ella atestó. Sin decisión no hay
+    // momento certificable: fail-closed (y NO_HUMAN_DECISION bloquea aparte).
+    const witnessHead = ctx.decision?.chainHeadAtDecision ?? null;
+    const witnessInstant = ctx.decision?.decidedAt ?? null;
+    if (witnessInstant === null || !isAttestationCurrent(att, witnessHead, witnessInstant)) {
       blockers.push("CHAIN_ATTESTATION_STALE");
     }
   }
@@ -116,16 +137,17 @@ export function evaluateCertificateEligibility(ctx: CertificateContext): Certifi
     if (typeof d.reason !== "string" || d.reason.trim().length < 10) {
       blockers.push("DECISION_REASON_TOO_SHORT");
     }
-    // 🔴 R4-2: el head de la decisión debe coincidir con la atestación Y con el
-    // head vigente, y la atestación debe seguir vigente en AMBOS instantes.
+    // 🔴 R4-2 · REVISIÓN 4: el head de la decisión debe coincidir con el de la
+    // ATESTACIÓN que la sostuvo, y esa atestación debe haber estado vigente EN
+    // EL INSTANTE DE DECIDIR. La punta viva y la hora de emisión no participan:
+    // el certificado certifica el momento de la liberación y sobrevive a los
+    // eventos operativos posteriores.
     const attested = ctx.chain?.status === "verified" ? ctx.chain.attestation : null;
     if (
       !isNonEmptyId(d.chainHeadAtDecision) ||
       !attested ||
       d.chainHeadAtDecision !== attested.chainHead ||
-      d.chainHeadAtDecision !== ctx.currentChainHead ||
-      !isAttestationCurrent(attested, ctx.currentChainHead, d.decidedAt) ||
-      !isAttestationCurrent(attested, ctx.currentChainHead, ctx.issuedAt)
+      !isAttestationCurrent(attested, d.chainHeadAtDecision, d.decidedAt)
     ) {
       blockers.push("DECISION_CHAIN_HEAD_MISMATCH");
     }
