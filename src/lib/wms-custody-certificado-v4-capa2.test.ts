@@ -9,7 +9,9 @@
  * VERDE: `buildDocumentChain` toma la atestación de la DECISIÓN (la política
  * exige que la atestación la preceda: una viva posterior daría edad negativa)
  * y la enriquece con los `verified_event_ids` que la verificación VIVA
- * re-deriva — sólo cuando la viva confirma EXACTAMENTE el mismo head.
+ * re-deriva — siempre que la viva VERIFIQUE la cadena completa. Desde V4-bis
+ * no se exige igualdad de heads: el avance operativo posterior a la
+ * liberación no es adulteración (decisión firmada de Dirección).
  *
  * DIRECCIÓN DEL FAIL-CLOSED: ninguna rama de `buildDocumentChain` puede
  * convertir en certificable lo que la cadena viva no acredita.
@@ -59,14 +61,17 @@ describe("V4 · capa 2 · buildDocumentChain", () => {
     expect(out.attestation.verifiedEventIds).toEqual([]);
   });
 
-  it("fail-closed · la viva ve OTRO head ⇒ no se enriquece nada", () => {
+  it("V4-bis · la viva verifica con la cadena AVANZADA ⇒ se enriquece igual", () => {
     const out = buildDocumentChain(stored, {
       status: "verified",
       chainHead: "b".repeat(64),
-      verifiedEventIds: ["evt-x"],
+      verifiedEventIds: ["evt-in", "evt-out", "evt-insp", "evt-pod"],
     });
     if (out?.status !== "verified") throw new Error("unreachable");
-    expect(out.attestation.verifiedEventIds).toEqual([]);
+    expect(out.attestation.verifiedEventIds).toEqual(["evt-in", "evt-out", "evt-insp", "evt-pod"]);
+    // El head y el instante del documento siguen siendo los de la decisión.
+    expect(out.attestation.chainHead).toBe(HEAD);
+    expect(out.attestation.attestedAt).toBe(DECIDED_AT);
   });
 
   it("fail-closed · la viva NO verifica ⇒ no se enriquece nada", () => {

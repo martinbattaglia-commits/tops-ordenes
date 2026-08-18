@@ -75,7 +75,7 @@ const GUIDANCE: Record<string, string> = {
   CHAIN_EVENTS_NOT_POSITIVE_INT:
     "La verificación de cadena no cerró bien. Volvé a evaluar el caso; si vuelve a pasar, avisá a supervisión.",
   CHAIN_ATTESTATION_STALE:
-    "La verificación de cadena quedó vieja porque el caso siguió moviéndose. Volvé a evaluarlo antes de decidir.",
+    "La verificación de cadena no estaba vigente en el momento de la liberación. Volvé a evaluar el caso y decidí de nuevo.",
   EVIDENCE_INVALID:
     "Las fotos comparadas no son válidas. Sacá de nuevo la que falte o esté mal y volvé a evaluar.",
   EVIDENCE_NOT_LINKED:
@@ -109,7 +109,7 @@ const GUIDANCE: Record<string, string> = {
   INSPECTION_SET_NOT_CANONICAL:
     "Las fotos de inspección declaradas no son las que el caso tiene registradas. Volvé a evaluar y decidí de nuevo.",
   DECISION_CHAIN_HEAD_MISMATCH:
-    "El caso cambió después de la decisión, así que la liberación ya no la describe. Volvé a evaluar el caso y decidí de nuevo.",
+    "La liberación no coincide con la verificación de cadena que la sostuvo. Volvé a evaluar el caso y decidí de nuevo.",
   STATE_NOT_RELEASED:
     "El caso todavía no está liberado. Registrá la decisión humana de liberación.",
   CLIENT_MISMATCH:

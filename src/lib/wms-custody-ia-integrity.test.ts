@@ -841,7 +841,11 @@ describe("F-3.5 · certificado", () => {
     [{ decision: { ...decision, reason: "x" } }, "DECISION_REASON_TOO_SHORT"],
     [{ decision: { ...decision, clientId: OTHER_CLIENT } }, "DECISION_CLIENT_MISMATCH"],
     [{ decision: { ...decision, inspectionEvidenceIds: [] } }, "NO_INSPECTION_EVIDENCE"],
-    [{ currentChainHead: "otro" }, "CHAIN_ATTESTATION_STALE"],
+    // V4-bis: la punta viva ya no participa; lo vencido se mide al DECIDIR.
+    [
+      { decision: { ...decision, decidedAt: "2026-08-09T13:01:00.000Z" } },
+      "CHAIN_ATTESTATION_STALE",
+    ],
     [{ evidenceEventIds: ["desconocido"] }, "EVIDENCE_NOT_LINKED"],
   ])("bloqueo %#", (over, blocker) => {
     const r = evaluateCertificateEligibility({ ...base, ...(over as object) });
@@ -1522,10 +1526,9 @@ describe("R4-2 · chainHeadAtDecision en el certificado", () => {
     }
   );
 
-  it("head correcto en la decisión pero distinto al vigente → acta", () => {
+  it("V4-bis · la punta viva avanzó tras la liberación → SIGUE siendo certificate", () => {
     const r = evaluateCertificateEligibility({ ...base, currentChainHead: "otro-head" });
-    expect(r.document).toBe("acta_inspeccion");
-    expect(r.blockers).toContain("DECISION_CHAIN_HEAD_MISMATCH");
+    expect(r).toEqual({ document: "certificate", blockers: [] });
   });
 
   it("atestación vencida en decidedAt → acta", () => {
@@ -1537,11 +1540,10 @@ describe("R4-2 · chainHeadAtDecision en el certificado", () => {
     expect(r.blockers).toContain("DECISION_CHAIN_HEAD_MISMATCH");
   });
 
-  it("atestación vencida en issuedAt → acta", () => {
-    const later = new Date(Date.parse(NOW) + 120 * 60_000).toISOString();
-    const r = evaluateCertificateEligibility({ ...base, issuedAt: later });
-    expect(r.document).toBe("acta_inspeccion");
-    expect(r.blockers).toEqual(expect.arrayContaining(["DECISION_CHAIN_HEAD_MISMATCH", "CHAIN_ATTESTATION_STALE"]));
+  it("V4-bis · emisión mucho después de la liberación → SIGUE siendo certificate", () => {
+    const nextDay = new Date(Date.parse(NOW) + 24 * 60 * 60_000).toISOString();
+    const r = evaluateCertificateEligibility({ ...base, issuedAt: nextDay });
+    expect(r).toEqual({ document: "certificate", blockers: [] });
   });
 });
 
