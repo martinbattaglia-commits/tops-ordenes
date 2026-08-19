@@ -49,12 +49,62 @@ const MIGRACIONES = join(process.cwd(), "supabase", "migrations");
 const ENUM = "connect_conversation_kind_t";
 
 /**
- * Reconstruye el enum leyendo las migraciones en el orden en que se aplican.
+ * H-1 del C4 · NORMALIZACIÓN ANTES DE LAS REGEX.
  *
- * Dos formas, que son las que el linaje usa de verdad:
- *   · `create type public.<enum> as enum ('a','b',…)`  → valores iniciales;
- *   · `alter type public.<enum> add value [if not exists] 'x'` → agregados.
+ * La primera versión de este parser exigía el prefijo `public.` literal, el
+ * identificador sin comillas y el literal pegado a `add value`. Tres formas
+ * legales de SQL lo evadían EN VERDE — y la primera no es hipotética: 8 de los
+ * 37 `alter type` del propio linaje van sin prefijo de esquema. Un guarda que
+ * se cree exhaustivo y no lo es reproduce el defecto original con más
+ * confianza, que es el criterio de este mismo expediente.
+ *
+ * Se normaliza: fuera comentarios (de línea y de bloque), fuera comillas
+ * dobles de identificadores, espacios colapsados. LÍMITE DECLARADO: quitar
+ * `"` globalmente podría deformar un string literal que contuviera comillas
+ * dobles; el DDL de un enum no las lleva, y este parser sólo alimenta las
+ * regex del enum — no interpreta el resto del archivo.
  */
+function normalizarSql(sql: string): string {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/--[^\n]*/g, " ")
+    .replace(/"/g, "")
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Extrae los valores del enum de UN texto SQL ya normalizable. Pura y
+ * exportada al describe de formas evasivas: la propiedad se prueba contra
+ * cadenas construidas, no sólo contra el linaje real de hoy.
+ *
+ * Dos formas, que son las que el linaje usa de verdad — con o sin `public.`:
+ *   · `create type [public.]<enum> as enum ('a','b',…)`  → valores iniciales;
+ *   · `alter type [public.]<enum> add value [if not exists] 'x'` → agregados.
+ */
+function kindsEnSql(sql: string, valores: string[]): void {
+  const plano = normalizarSql(sql);
+  if (!plano.includes(ENUM)) return;
+
+  const creacion = new RegExp(
+    `create\\s+type\\s+(?:public\\.)?${ENUM}\\s+as\\s+enum\\s*\\(([^)]*)\\)`,
+    "i",
+  ).exec(plano);
+  if (creacion) {
+    for (const m of creacion[1].matchAll(/'([^']+)'/g)) {
+      if (!valores.includes(m[1])) valores.push(m[1]);
+    }
+  }
+
+  const agregado = new RegExp(
+    `alter\\s+type\\s+(?:public\\.)?${ENUM}\\s+add\\s+value\\s+(?:if\\s+not\\s+exists\\s+)?'([^']+)'`,
+    "gi",
+  );
+  for (const m of plano.matchAll(agregado)) {
+    if (!valores.includes(m[1])) valores.push(m[1]);
+  }
+}
+
+/** Reconstruye el enum leyendo las migraciones en el orden en que se aplican. */
 function kindsSegunLasMigraciones(): string[] {
   const archivos = readdirSync(MIGRACIONES)
     .filter((f) => f.endsWith(".sql") && !f.startsWith("ROLLBACK_"))
@@ -62,26 +112,7 @@ function kindsSegunLasMigraciones(): string[] {
 
   const valores: string[] = [];
   for (const archivo of archivos) {
-    const sql = readFileSync(join(MIGRACIONES, archivo), "utf8");
-    if (!sql.includes(ENUM)) continue;
-
-    const creacion = new RegExp(
-      `create\\s+type\\s+public\\.${ENUM}\\s+as\\s+enum\\s*\\(([^)]*)\\)`,
-      "i",
-    ).exec(sql);
-    if (creacion) {
-      for (const m of creacion[1].matchAll(/'([^']+)'/g)) {
-        if (!valores.includes(m[1])) valores.push(m[1]);
-      }
-    }
-
-    const agregado = new RegExp(
-      `alter\\s+type\\s+public\\.${ENUM}\\s+add\\s+value\\s+(?:if\\s+not\\s+exists\\s+)?'([^']+)'`,
-      "gi",
-    );
-    for (const m of sql.matchAll(agregado)) {
-      if (!valores.includes(m[1])) valores.push(m[1]);
-    }
+    kindsEnSql(readFileSync(join(MIGRACIONES, archivo), "utf8"), valores);
   }
   return valores;
 }
@@ -125,5 +156,45 @@ describe("INC-04-R2 · el universo de kinds se mide contra las migraciones", () 
   it("`task` está entre ellos: es el kind que originó este expediente", () => {
     expect(kindsSegunLasMigraciones()).toContain("task");
     expect(CONVERSATION_KINDS as readonly string[]).toContain("task");
+  });
+});
+
+// H-1 del C4 · LAS TRES FORMAS EVASIVAS, COMO CASOS PERMANENTES.
+//
+// Cada una es SQL legal que la primera versión del parser dejaba pasar en
+// verde. Se prueban contra `kindsEnSql` con cadenas construidas: si alguien
+// endurece las regex y vuelve a exigir la forma exacta, esto lo delata.
+describe("H-1 · el parser no se deja evadir por formas legales de SQL", () => {
+  const extraer = (sql: string) => {
+    const v: string[] = [];
+    kindsEnSql(sql, v);
+    return v;
+  };
+
+  it("alter type SIN prefijo public. (8 de 37 en el linaje real van así)", () => {
+    expect(extraer("alter type connect_conversation_kind_t add value if not exists 'evasivo1';"))
+      .toContain("evasivo1");
+  });
+
+  it("identificador entre comillas dobles", () => {
+    expect(extraer(`alter type public."connect_conversation_kind_t" add value 'evasivo2';`))
+      .toContain("evasivo2");
+  });
+
+  it("comentario SQL entre `add value` y el literal", () => {
+    expect(extraer(
+      "alter type public.connect_conversation_kind_t add value -- pendiente de revisar\n  'evasivo3';",
+    )).toContain("evasivo3");
+  });
+
+  it("comentario de bloque en el medio del create type", () => {
+    expect(extraer(
+      "create type connect_conversation_kind_t as enum /* v1 */ ('a', 'b');",
+    )).toEqual(["a", "b"]);
+  });
+
+  it("y un ROLLBACK con remove value NO agrega nada (no hay remove en el parser)", () => {
+    expect(extraer("-- alter type public.connect_conversation_kind_t add value 'comentado';"))
+      .toEqual([]);
   });
 });
