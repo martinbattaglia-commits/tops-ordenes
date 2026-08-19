@@ -553,6 +553,7 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     // pasa a 247.
     "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
     "ROLLBACK_0258_custody_evaluated_head_witness.sql",
+    "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

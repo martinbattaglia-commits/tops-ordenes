@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 221,
-  "no_ejecutables": 31,
+  "ejecutables": 222,
+  "no_ejecutables": 32,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2936,6 +2936,32 @@
       "ledger_name": "ROLLBACK_0258_custody_evaluated_head_witness",
       "provenance": "repo (custodia/certificado-emisible)",
       "motivo": "Inversa logica e idempotente de 0258. Retira la RPC de lectura, restaura complete_custody_integrity_evaluation_v2 e is_custody_inspection_evidence_v2 a su cuerpo exacto de 0250a y elimina la columna testigo, cuyo contenido es derivado y se regenera con 0258 mas una nueva evaluacion. No borra casos, decisiones, evidencias, certificados ni auditoria. Ejecutarlo devuelve el modulo al estado 0257: la re-derivacion canonica post-decision vuelve a dar vacio y el documento vuelve a resolver acta."
+    },
+    {
+      "id": "0259_purchase_order_signer_by_permission.sql",
+      "filename": "0259_purchase_order_signer_by_permission.sql",
+      "sha256": "a50c984035d7605d20f163465b11edb1cc2f741a02adc4d95bc83c99e73863b8",
+      "orden": 253,
+      "requires": [
+        "0243_purchase_order_price_lifecycle.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00253",
+      "ledger_name": "0259_purchase_order_signer_by_permission",
+      "provenance": "repo (frente/oc-firmante-por-permiso)",
+      "motivo": "OC-FIRMANTE-POR-PERMISO. purchase_order_issue(jsonb,jsonb) deja de resolver el firmante comparando el correo del actor contra el literal joseluis@logisticatops.com y de devolver nombre y cargo como literales. Quien PUEDE emitir ya se resolvia por has_permission compras.create + compras.sign cuatro lineas antes y ese gate no se toca; quien ES el firmante ahora sale del perfil del actor: nombre de profiles.full_name y cargo de user_roles.position_title, exigiendo exactamente un cargo distinto y no vacio. Sin cargo, sin nombre o con cargo ambiguo la emision rechaza con mensaje propio y accionable. Misma firma (jsonb, jsonb): es reemplazo, no sobrecarga. El resto del cuerpo de 0243 se reemite byte a byte, con dos unicos hunks de diff: la declaracion de v_role_titles y el bloque del firmante. Carga dos cargos y ninguno inventado: Presidente para las dos cuentas de Direccion (dato provisto por Direccion, valor previo Presidente mas Super Administrador) y Director de Operaciones y Apoderado para joseluis, que es el literal exacto que 0243 ya estampaba en sus 24 ordenes. No escribe ninguna fila de purchase_orders."
+    },
+    {
+      "id": "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
+      "filename": "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
+      "sha256": "dd06f9d71b847ba0e33ae77edc134dbca9ff8c1be0eb66ad67b8db263288925f",
+      "orden": 254,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00254",
+      "ledger_name": "ROLLBACK_0259_purchase_order_signer_by_permission",
+      "provenance": "repo (frente/oc-firmante-por-permiso)",
+      "motivo": "Inversa logica e idempotente de 0259. Restituye purchase_order_issue(jsonb,jsonb) al cuerpo exacto de 0243, con el firmante resuelto por el correo literal, y devuelve los dos cargos a su estado previo: Direccion vuelve a Presidente mas Super Administrador y joseluis vuelve a NULL. No toca purchase_orders: 0259 nunca escribio una fila de esa tabla, asi que las 24 ordenes emitidas conservan firmante, cargo y sus dos hashes en los dos sentidos. Ejecutarlo devuelve el modulo al estado 0258: solo joseluis puede volver a emitir, con el defecto de diseno incluido."
     }
   ]
 }

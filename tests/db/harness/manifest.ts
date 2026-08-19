@@ -425,6 +425,27 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
   reason: string;
 }> = [
   {
+    // OC-FIRMANTE-POR-PERMISO · decisión explícita, en entrada PROPIA y por
+    // filename EXACTO. No entra al snapshot congelado —que describe el árbol al
+    // cerrar la segunda revisión C4 y no debe crecer con dominios posteriores—
+    // ni a la exclusión dedicada de custodia, que es un conjunto cerrado.
+    id: "oc-firmante-por-permiso",
+    matches: (f) =>
+      f === "0259_purchase_order_signer_by_permission.sql" ||
+      f === "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
+    reason:
+      "0259 reemite `purchase_order_issue(jsonb, jsonb)` para que el firmante se " +
+      "resuelva por PERMISO (`compras.create` + `compras.sign`, gate que no toca) y " +
+      "su identidad salga del perfil del actor, con su rollback lógico. Se excluye " +
+      "del replay WMS vanilla por la misma razón que su origen: la función NACE en " +
+      "`0243_purchase_order_price_lifecycle.sql`, ya excluido por pertenecer al " +
+      "cierre PR #66 FASE A. Una migración no puede entrar al vanilla si la función " +
+      "que redefine no está. Se excluye del cierre WMS, NO de la verificación: el " +
+      "preludio de la función se ejercita contra PostgreSQL 17 real en " +
+      "`supabase/tests/oc-firmante-por-permiso/run.mjs`, que extrae el bloque de " +
+      "0243 y el de 0259 tal como están en disco y exige que el par difiera.",
+  },
+  {
     id: "frozen-excluded-snapshot",
     // Filename EXACTO contra el snapshot congelado: NO es un rango. Una
     // migración nueva no está en el set y por tanto NO queda clasificada.
