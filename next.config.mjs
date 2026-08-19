@@ -61,7 +61,7 @@ const nextConfig = {
           // Sigue bloqueando que cualquier sitio externo enmarque la app (anti-clickjacking).
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(self), geolocation=(self), microphone=()" },
+          { key: "Permissions-Policy", value: "camera=(self), geolocation=(self), microphone=(self)" },
         ],
       },
       {
