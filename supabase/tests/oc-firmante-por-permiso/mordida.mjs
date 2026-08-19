@@ -16,18 +16,9 @@
  */
 
 import { join } from "node:path";
-import { AQUI_TESTS, SEMILLA, psql, psqlFile, extraerDatos, CARGO_PRUEBA_CYNTHIA } from "./comun.mjs";
+import { AQUI_TESTS, SEMILLA, psql, psqlFile, extraerDatos, CARGO_CYNTHIA } from "./comun.mjs";
 
-const { sql: sinCentinela } = extraerDatos();
-
-/** El texto ÍNTEGRO, con el centinela vivo: es lo que hay hoy en disco. */
-import { readFileSync } from "node:fs";
-import { MIGRACIONES } from "./comun.mjs";
-const txt = readFileSync(join(MIGRACIONES, "0259_purchase_order_signer_by_permission.sql"), "utf8");
-const integro = txt.slice(
-  txt.indexOf("\nbegin;\n") + "\nbegin;\n".length,
-  txt.indexOf("-- ── 5 · LA COMPUERTA"),
-);
+const { sql: bloques } = extraerDatos();
 
 /** Deja la base en el estado PREVIO de producción antes de cada mutación. */
 function limpiar() {
@@ -46,15 +37,18 @@ function mutar(sql, de, a) {
 
 const CASOS = [
   {
+    // Dirección tiene DOS cuentas y las dos firman: es el caso que más fácil se
+    // pierde de vista, porque «una persona» y «una cuenta» se confunden.
     id: "M-1",
-    que: "el centinela del cargo de Cynthia aborta la migración entera",
-    sql: () => integro,
-    espera: "OC_FIRMANTE_CARGO_CYNTHIA_PENDIENTE",
+    que: "el padrón muerde si se pierde la segunda cuenta de Dirección",
+    sql: () => mutar(bloques,
+      "('1f39803f-d602-4a89-90b1-72ea5d3b69e1'::uuid, 'martin@logisticatops.com'),\n        ", ""),
+    espera: "OC_FIRMANTE_PADRON_INESPERADO",
   },
   {
     id: "M-2",
-    que: "el padrón muerde si falta una de las tres cuentas",
-    sql: () => mutar(sinCentinela,
+    que: "el padrón muerde si falta una de las cuatro cuentas",
+    sql: () => mutar(bloques,
       "('4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid, 'cynthia@logisticatops.com')",
       "('00000000-0000-4000-8000-000000000000'::uuid, 'nadie@logisticatops.com')"),
     espera: "OC_FIRMANTE_PADRON_INESPERADO",
@@ -62,7 +56,7 @@ const CASOS = [
   {
     id: "M-3",
     que: "el padrón muerde si se cuela una cuenta de más",
-    sql: () => mutar(sinCentinela,
+    sql: () => mutar(bloques,
       "('4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid, 'cynthia@logisticatops.com')",
       "('4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid, 'cynthia@logisticatops.com'),\n        ('98acb5c2-5666-4539-991e-8a778cfecda2'::uuid, 'mariela@sullivancamejo.com.ar')"),
     espera: "OC_FIRMANTE_PADRON_INESPERADO",
@@ -70,7 +64,7 @@ const CASOS = [
   {
     id: "M-4",
     que: "la revocación muerde si un rol conserva compras.sign",
-    sql: () => mutar(sinCentinela,
+    sql: () => mutar(bloques,
       "  and r.slug <> 'firmante_oc';",
       "  and r.slug not in ('firmante_oc','director_ops');"),
     espera: "OC_FIRMANTE_REVOCACION_INCOMPLETA",
@@ -78,7 +72,7 @@ const CASOS = [
   {
     id: "M-5",
     que: "el cargo muerde si el UUID de destino no matchea nada (HIGH-2)",
-    sql: () => mutar(sinCentinela,
+    sql: () => mutar(bloques,
       "'7a9ecbdc-3ff0-459e-b340-8a07eed898fa'::uuid\n     and lower",
       "'ffffffff-0000-4000-8000-000000000000'::uuid\n     and lower"),
     espera: "OC_FIRMANTE_CARGO_SIN_DESTINO",
@@ -86,10 +80,21 @@ const CASOS = [
   {
     id: "M-6",
     que: "la doble llave UUID+email rechaza un correo reasignado a otra persona",
-    sql: () => mutar(sinCentinela,
+    sql: () => mutar(bloques,
       "('3b1607c9-32c5-4ca0-91e1-19c82099b64d'::uuid, 'joseluis@logisticatops.com')",
       "('3b1607c9-32c5-4ca0-91e1-19c82099b64d'::uuid, 'otro@logisticatops.com')"),
     espera: "OC_FIRMANTE_PADRON_INESPERADO",
+  },
+  {
+    // El cargo de cada firmante viene por escrito de Dirección y el certificado
+    // lo imprime. Si el UPDATE no encuentra a quién aplicarlo, la migración no
+    // puede reportar éxito dejando a una firmante autorizada sin cargo.
+    id: "M-7",
+    que: "el cargo de Cynthia muerde si no encuentra su fila (HIGH-2)",
+    sql: () => mutar(bloques,
+      "and r.slug = 'admin_sin_rrhh'\n     and u.id = '4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid",
+      "and r.slug = 'gerencia_comercial'\n     and u.id = '4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid"),
+    espera: "OC_FIRMANTE_CARGO_SIN_DESTINO",
   },
 ];
 
@@ -113,12 +118,12 @@ for (const c of CASOS) {
 // El control: sin romper nada, los bloques aplican limpio. Sin esto, una
 // mutación podría estar "mordiendo" por un error de sintaxis y no por el guarda.
 limpiar();
-const control = psql(sinCentinela, { tuplesOnly: false });
+const control = psql(bloques, { tuplesOnly: false });
 if (!control.ok) {
   fallas.push(`M-0: el texto sin mutar NO aplica → ${control.err.split("\n")[0]}`);
   console.log("M-0 ✗ el texto sin mutar no aplica");
 } else {
-  console.log(`M-0 ✓ sin romper nada, los bloques aplican limpio (Cynthia con ${CARGO_PRUEBA_CYNTHIA})`);
+  console.log(`M-0 ✓ sin romper nada, los bloques aplican limpio (Cynthia con «${CARGO_CYNTHIA}»)`);
 }
 
 if (fallas.length) {

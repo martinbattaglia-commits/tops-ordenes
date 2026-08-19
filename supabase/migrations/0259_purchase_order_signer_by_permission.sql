@@ -67,17 +67,23 @@
 --
 -- ─── QUIÉNES FIRMAN · DECISIÓN DE DIRECCIÓN ─────────────────────────────────
 --
---   1 · Martín F. Battaglia        martin.battaglia@logisticatops.com
---   2 · José Luis Rodríguez Silva  joseluis@logisticatops.com
---   3 · Cynthia Alba               cynthia@logisticatops.com
+--   CUATRO CUENTAS, TRES PERSONAS:
+--
+--   1 · Martín Battaglia           martin.battaglia@logisticatops.com  ┐ misma
+--   2 · Martín Battaglia           martin@logisticatops.com            ┘ persona
+--   3 · José Luis Rodríguez Silva  joseluis@logisticatops.com
+--   4 · Cynthia Alba               cynthia@logisticatops.com
+--
+--   Las dos primeras son la misma persona con dos cuentas, y las dos firman.
+--   Nada en este modelo exige que una persona tenga una sola cuenta: la firma
+--   se concede POR CUENTA, y cada una lleva su propio nombre y cargo desde su
+--   propio perfil.
 --
 --   Y NADIE MÁS. Quedan explícitamente excluidos, aunque hoy tengan
 --   `compras.sign` por su rol o el bypass de `profiles.role='admin'`:
 --   mariela@sullivancamejo.com.ar, ruth@, martinrinas@, despachos-lujan@,
 --   despachos-magaldi@, y toda cuenta futura que Dirección no conceda de forma
---   expresa. La cuenta `martin@logisticatops.com` —segunda cuenta de Dirección,
---   que NO figura en la decisión— tampoco recibe el rol: se concede por cuenta
---   nombrada, no por persona.
+--   expresa.
 --
 -- ─── LO QUE NO CAMBIA ───────────────────────────────────────────────────────
 --
@@ -149,7 +155,7 @@ on conflict (role_id, permission_id) do nothing;
 do $post$
 declare v_roles text[];
 begin
-  select coalesce(array_agg(r.slug order by r.slug), '{}')
+  select coalesce(array_agg(r.slug order by r.slug collate "C"), '{}')
     into v_roles
   from public.role_permissions rp
   join public.roles r on r.id = rp.role_id
@@ -173,6 +179,7 @@ from auth.users u, public.roles r
 where r.slug = 'firmante_oc'
   and (u.id, lower(btrim(coalesce(u.email, '')))) in (
         ('7a9ecbdc-3ff0-459e-b340-8a07eed898fa'::uuid, 'martin.battaglia@logisticatops.com'),
+        ('1f39803f-d602-4a89-90b1-72ea5d3b69e1'::uuid, 'martin@logisticatops.com'),
         ('3b1607c9-32c5-4ca0-91e1-19c82099b64d'::uuid, 'joseluis@logisticatops.com'),
         ('4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid, 'cynthia@logisticatops.com')
       )
@@ -182,7 +189,11 @@ on conflict (user_id, role_id) do nothing;
 do $post$
 declare v_emails text[];
 begin
-  select coalesce(array_agg(lower(btrim(u.email)) order by lower(btrim(u.email))), '{}')
+  -- El `collate "C"` ordena por bytes y no por reglas de idioma. No es
+  -- cosmético: 'martin.battaglia@' y 'martin@' difieren en un '.' contra un
+  -- '@', y un collation lingüístico puede ordenarlos al revés que uno binario.
+  -- Sin fijarlo, esta post-condición abortaría o no según la base donde corra.
+  select coalesce(array_agg(lower(btrim(u.email)) order by lower(btrim(u.email)) collate "C"), '{}')
     into v_emails
   from public.user_roles ur
   join public.roles r on r.id = ur.role_id
@@ -191,7 +202,8 @@ begin
   if v_emails is distinct from array[
        'cynthia@logisticatops.com',
        'joseluis@logisticatops.com',
-       'martin.battaglia@logisticatops.com'
+       'martin.battaglia@logisticatops.com',
+       'martin@logisticatops.com'
      ] then
     raise exception 'OC_FIRMANTE_PADRON_INESPERADO: firmante_oc quedó asignado a % (se esperaban exactamente las tres cuentas de la decisión)', v_emails;
   end if;
@@ -207,16 +219,30 @@ $post$;
 -- rechazo posterior parecería un defecto del sistema en vez de un dato que
 -- faltó cargar.
 --
---   · Dirección (`martin.battaglia@`) → 'Presidente'. El valor previo en base
---     era 'Presidente · Super Administrador', que mezcla el cargo de la empresa
---     con la etiqueta del rol del sistema; un documento que obliga a la empresa
---     declara el cargo, no el rol técnico. La otra cuenta de Dirección
---     (`martin@`) NO se toca: no firma.
+--   · Dirección, SUS DOS CUENTAS (`martin.battaglia@` y `martin@`) →
+--     'Presidente'. El valor previo en base era 'Presidente · Super
+--     Administrador' en las dos, que mezcla el cargo de la empresa con la
+--     etiqueta del rol del sistema; un documento que obliga a la empresa
+--     declara el cargo, no el rol técnico. Medido antes de escribir esto: las
+--     dos cuentas tenían nombre y cargo IDÉNTICOS, así que no hay divergencia
+--     que unificar — sólo el mismo cambio aplicado dos veces.
 --   · José Luis (`joseluis@`) → 'Director de Operaciones y Apoderado'. NO es un
 --     cargo nuevo: es EXACTAMENTE el literal que 0243 ya estampaba en sus 24
 --     órdenes. Se migra del código al dato para que el firmante histórico siga
 --     emitiendo con el mismo cargo de siempre.
---   · Cynthia (`cynthia@`) → dato pendiente de Dirección. Ver el bloque 4.b.
+--   · Cynthia (`cynthia@`) → 'Gerenta Comercial', provisto por Dirección.
+--
+--   Ningún `full_name` se toca. El certificado imprime lo que dice la base:
+--   Dirección figura como 'Martín F. Battaglia' y así se estampa, aunque la
+--   decisión la nombre 'Martín Battaglia'. Un mandato no reescribe un perfil.
+--
+--   ⚠ COLISIÓN DE NOMBRES, verificada y descartada: el cargo 'Gerenta
+--     Comercial' NO tiene relación con el rol `gerencia_comercial`, uno de los
+--     cinco portadores de `compras.sign` que esta migración revoca. El cargo es
+--     TEXTO DOCUMENTAL en `user_roles.position_title`; el rol es AUTORIDAD en
+--     `roles.slug`. Cynthia no tiene ese rol, ningún código deriva uno del otro
+--     y la revocación es por negación, así que ni siquiera nombra el slug en
+--     SQL ejecutable. Quedan desacoplados.
 
 do $cargos$
 declare
@@ -232,7 +258,20 @@ begin
      and lower(btrim(coalesce(u.email, ''))) = 'martin.battaglia@logisticatops.com';
   get diagnostics v_filas = row_count;
   if v_filas <> 1 then
-    raise exception 'OC_FIRMANTE_CARGO_SIN_DESTINO: el cargo de Dirección afectó % filas (se esperaba 1)', v_filas;
+    raise exception 'OC_FIRMANTE_CARGO_SIN_DESTINO: el cargo de Dirección (martin.battaglia@) afectó % filas (se esperaba 1)', v_filas;
+  end if;
+
+  update public.user_roles ur
+     set position_title = 'Presidente'
+    from auth.users u, public.roles r
+   where u.id = ur.user_id
+     and r.id = ur.role_id
+     and r.slug = 'super_admin'
+     and u.id = '1f39803f-d602-4a89-90b1-72ea5d3b69e1'::uuid
+     and lower(btrim(coalesce(u.email, ''))) = 'martin@logisticatops.com';
+  get diagnostics v_filas = row_count;
+  if v_filas <> 1 then
+    raise exception 'OC_FIRMANTE_CARGO_SIN_DESTINO: el cargo de Dirección (martin@) afectó % filas (se esperaba 1)', v_filas;
   end if;
 
   update public.user_roles ur
@@ -250,36 +289,21 @@ begin
 end;
 $cargos$;
 
--- ── 4.b · EL CARGO DE CYNTHIA · DATO PENDIENTE DE DIRECCIÓN ─────────────────
+-- ── 4.b · EL CARGO DE CYNTHIA ──────────────────────────────────────────────
 --
--- ⛔ ESTA MIGRACIÓN NO PUEDE APLICARSE TODAVÍA, A PROPÓSITO.
---
--- Cynthia figura en la decisión de Dirección y recibe el rol de firma, pero su
--- `position_title` está VACÍO en producción y el certificado lo imprime. Ese
--- cargo NO se infiere de su rol (`admin_sin_rrhh`), NO se copia del de otra
--- persona y NO se deja en blanco: tiene que venir por escrito de Dirección.
---
--- Mientras el centinela siga acá, la transacción ABORTA ENTERA. Es deliberado:
--- aplicar el resto y dejar a Cynthia sin cargo la haría rebotar con «no tiene
--- cargo cargado», que se lee como un defecto del sistema cuando en realidad es
--- una decisión a medio ejecutar. La ventana de aplicación tiene que ser una
--- sola y completa.
---
--- PARA HABILITAR: reemplazar el centinela por el cargo textual que indique
--- Dirección, en el `update` de abajo, y borrar el bloque del centinela.
-
-do $centinela$
-begin
-  raise exception 'OC_FIRMANTE_CARGO_CYNTHIA_PENDIENTE: falta el cargo textual de cynthia@logisticatops.com, que el certificado imprime. Dato exigido a Dirección; la migración no aplica sin él.';
-end;
-$centinela$;
+-- 'Gerenta Comercial', textual, provisto por Dirección. Va en su propio bloque
+-- porque llegó en una ventana posterior a los otros dos: mientras faltó, esta
+-- migración ABORTABA ENTERA a propósito, para que no pudiera aplicarse dejando
+-- a una firmante autorizada rebotando con «no tiene cargo cargado» — un rechazo
+-- que se lee como defecto del sistema cuando en realidad era una decisión a
+-- medio ejecutar. Con el dato en mano, el centinela ya no hace falta.
 
 do $cargo_cynthia$
 declare
   v_filas integer;
 begin
   update public.user_roles ur
-     set position_title = '⛔ CARGO PENDIENTE DE DIRECCIÓN'
+     set position_title = 'Gerenta Comercial'
     from auth.users u, public.roles r
    where u.id = ur.user_id
      and r.id = ur.role_id

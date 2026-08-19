@@ -435,8 +435,9 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       f === "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
     reason:
       "0259 crea el rol `firmante_oc` como único portador de `compras.sign`, se lo " +
-      "revoca a todo otro rol, lo concede nominalmente a las tres cuentas que " +
-      "Dirección autorizó, y reemite `purchase_order_issue(jsonb, jsonb)` con un " +
+      "revoca a todo otro rol, lo concede nominalmente a las CUATRO cuentas que " +
+      "Dirección autorizó —tres personas, porque Dirección tiene dos cuentas y " +
+      "las dos firman—, y reemite `purchase_order_issue(jsonb, jsonb)` con un " +
       "gate del firmante que lee `user_roles → role_permissions → permissions` " +
       "directo —sin `has_permission`, cuyo bypass por `profiles.role='admin'` es " +
       "otro expediente y NO se toca acá—; con su rollback lógico. Se excluye del " +

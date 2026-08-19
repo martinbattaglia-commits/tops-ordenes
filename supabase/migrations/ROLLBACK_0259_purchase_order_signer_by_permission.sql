@@ -8,8 +8,9 @@
 --       el firmante resuelto por el correo literal 'joseluis@logisticatops.com',
 --       los dos literales de nombre y cargo, y SIN el gate directo del firmante;
 --   2 · revierte los cargos que 0259 cargó en `user_roles.position_title`:
---       Dirección vuelve a 'Presidente · Super Administrador', y José Luis y
---       Cynthia vuelven a NULL, que era su estado antes de esta migración;
+--       las DOS cuentas de Dirección vuelven a 'Presidente · Super
+--       Administrador', y José Luis y Cynthia vuelven a NULL, que era su estado
+--       antes de esta migración;
 --   3 · devuelve `compras.sign` a los CINCO roles que lo portaban —medidos en
 --       producción: admin_sin_rrhh, administracion_finanzas, director_ops,
 --       gerencia_comercial, super_admin— y borra el rol `firmante_oc` con todas
@@ -398,9 +399,9 @@ grant execute on function public.purchase_order_issue(jsonb, jsonb) to authentic
 
 -- ── 2 · LOS CARGOS, AL ESTADO PREVIO ────────────────────────────────────────
 --
--- Sólo se revierten los cargos que 0259 escribió. `martin@logisticatops.com`
--- no aparece acá porque 0259 tampoco lo tocó: esa cuenta no firma, y su cargo
--- quedó como estaba en los dos sentidos.
+-- Sólo se revierten los cargos que 0259 escribió, y cada uno a su valor previo
+-- MEDIDO: las dos cuentas de Dirección tenían el mismo cargo mezclado, y José
+-- Luis y Cynthia no tenían ninguno.
 
 update public.user_roles ur
    set position_title = 'Presidente · Super Administrador'
@@ -410,6 +411,15 @@ update public.user_roles ur
    and r.slug = 'super_admin'
    and u.id = '7a9ecbdc-3ff0-459e-b340-8a07eed898fa'::uuid
    and lower(btrim(coalesce(u.email, ''))) = 'martin.battaglia@logisticatops.com';
+
+update public.user_roles ur
+   set position_title = 'Presidente · Super Administrador'
+  from auth.users u, public.roles r
+ where u.id = ur.user_id
+   and r.id = ur.role_id
+   and r.slug = 'super_admin'
+   and u.id = '1f39803f-d602-4a89-90b1-72ea5d3b69e1'::uuid
+   and lower(btrim(coalesce(u.email, ''))) = 'martin@logisticatops.com';
 
 update public.user_roles ur
    set position_title = null
@@ -466,7 +476,9 @@ delete from public.roles r where r.slug = 'firmante_oc';
 do $post$
 declare v_roles text[]; v_quedan integer;
 begin
-  select coalesce(array_agg(r.slug order by r.slug), '{}')
+  -- `collate "C"` por la misma razón que en 0259: el orden no puede depender
+  -- del collation de la base donde corra el rollback.
+  select coalesce(array_agg(r.slug order by r.slug collate "C"), '{}')
     into v_roles
   from public.role_permissions rp
   join public.roles r on r.id = rp.role_id

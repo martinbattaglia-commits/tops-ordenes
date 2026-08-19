@@ -38,7 +38,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  AQUI_TESTS, MIGRACIONES, CARGO_PRUEBA_CYNTHIA, U, SEMILLA, BORDES,
+  AQUI_TESTS, MIGRACIONES, CARGO_CYNTHIA, U, SEMILLA, BORDES,
   CARGOS_A_LOS_EXCLUIDOS, psql, psqlFile, extraerDatos,
 } from "./comun.mjs";
 
@@ -156,7 +156,7 @@ const ESCENARIOS = [
     // el literal del email — la medición de por qué este expediente existe.
     rojo: { emite: false, dice: "No se pudo resolver el firmante canónico" },
     verde: { emite: true, dice: "Cynthia Alba" },
-    verdeAdemas: [CARGO_PRUEBA_CYNTHIA],
+    verdeAdemas: [CARGO_CYNTHIA],
   },
   {
     id: "R-19-11", nombre: "ruth@ · admin_sin_rrhh + CARGO CARGADO · NO firma", actor: U.ruth,
@@ -169,9 +169,13 @@ const ESCENARIOS = [
     verde: { emite: false, dice: "Sin permisos compras.create/compras.sign" },
   },
   {
-    id: "R-19-12", nombre: "martin@ · 2ª cuenta de Dirección, no nombrada · NO firma", actor: U.direccion2,
+    // Dirección tiene DOS cuentas y las dos firman. El modelo no exige que una
+    // persona tenga una sola cuenta: la firma se concede POR CUENTA, y cada una
+    // estampa el nombre y el cargo de su propio perfil.
+    id: "R-19-12", nombre: "martin@ · 2ª cuenta de Dirección · FIRMA igual que la 1ª", actor: U.direccion2,
     rojo: { emite: false, dice: "No se pudo resolver el firmante canónico" },
-    verde: { emite: false, dice: "No estás autorizado a firmar" },
+    verde: { emite: true, dice: "Martín F. Battaglia" },
+    verdeAdemas: ["Presidente"],
   },
 ];
 
@@ -259,13 +263,16 @@ if (portadores.out !== "firmante_oc") {
   fallas.push(`R-2: tras la migración, compras.sign quedó en «${portadores.out}» (se esperaba sólo firmante_oc)`);
 }
 const padron = psql(
-  `select coalesce(string_agg(lower(btrim(u.email)), ',' order by lower(btrim(u.email))), '(vacío)')
+  `select coalesce(string_agg(lower(btrim(u.email)), ',' order by lower(btrim(u.email)) collate "C"), '(vacío)')
      from public.user_roles ur
      join public.roles r on r.id = ur.role_id
      join auth.users u on u.id = ur.user_id
     where r.slug = 'firmante_oc'`,
 );
-const PADRON_ESPERADO = "cynthia@logisticatops.com,joseluis@logisticatops.com,martin.battaglia@logisticatops.com";
+// Ordenado por bytes (`collate "C"`), igual que la post-condición de 0259: sin
+// fijarlo, 'martin.battaglia@' y 'martin@' se ordenan distinto según la base.
+const PADRON_ESPERADO = "cynthia@logisticatops.com,joseluis@logisticatops.com,"
+  + "martin.battaglia@logisticatops.com,martin@logisticatops.com";
 if (padron.out !== PADRON_ESPERADO) {
   fallas.push(`R-1: el padrón de firmante_oc quedó en «${padron.out}» (se esperaba «${PADRON_ESPERADO}»)`);
 }
@@ -317,8 +324,8 @@ for (const e of ESCENARIOS) {
 
 console.log("\n══ PAR ROJO→VERDE · OC-FIRMANTE-POR-PERMISO ══════════════════════════════\n");
 if (datos.pendiente) {
-  console.log("⚠ El cargo de cynthia@ sigue PENDIENTE de Dirección: la migración aborta");
-  console.log(`  a propósito hasta tenerlo. Acá se ejercita con ${CARGO_PRUEBA_CYNTHIA}.\n`);
+  console.log("⚠ Hay un cargo PENDIENTE de Dirección: la migración aborta a propósito");
+  console.log("  hasta tenerlo, y acá se elide el centinela para poder medir el resto.\n");
 }
 console.log(`R-19-8 · órdenes ya emitidas · antes  ${huellaAntes.out}`);
 console.log(`R-19-8 · órdenes ya emitidas · después ${huellaDespues.out}`);

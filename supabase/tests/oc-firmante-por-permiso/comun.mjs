@@ -26,13 +26,16 @@ export const PORT = arg("--port", "55432");
 export const USER = arg("--user", "harness");
 
 /**
- * Cargo con el que el harness ejercita a Cynthia mientras Dirección no entregue
- * el real. NO es un cargo inventado que la migración vaya a estampar: la
- * migración aborta a propósito hasta tener el dato (bloque 4.b). Acá existe
- * sólo para que los escenarios de Cynthia puedan correr, y se declara en la
- * salida para que nadie lo confunda con el dato definitivo.
+ * El cargo de Cynthia, provisto por Dirección y estampado por 0259. Se declara
+ * acá para que los escenarios lo exijan por valor: si alguien lo cambia en la
+ * migración sin decidirlo, el par rojo→verde lo ve.
+ *
+ * Hubo una ventana en que este dato faltaba y la migración llevaba un bloque
+ * centinela que la abortaba entera. El extractor de abajo sigue sabiendo elidir
+ * un centinela si volviera a aparecer, porque el patrón —«el dato lo da
+ * Dirección, no lo inventa la migración»— vale para el próximo cargo también.
  */
-export const CARGO_PRUEBA_CYNTHIA = "«CARGO DE PRUEBA · NO ES EL DE PRODUCCIÓN»";
+export const CARGO_CYNTHIA = "Gerenta Comercial";
 
 /**
  * Extrae de 0259 los bloques de datos: todo lo que va entre `begin;` y la
@@ -64,7 +67,7 @@ export function extraerDatos() {
   const CENTINELA_CARGO = "⛔ CARGO PENDIENTE DE DIRECCIÓN";
   if (sql.includes(CENTINELA_CARGO)) {
     if (!pendiente) throw new Error("0259: hay cargo centinela pero no bloque centinela");
-    sql = sql.split(CENTINELA_CARGO).join(CARGO_PRUEBA_CYNTHIA);
+    sql = sql.split(CENTINELA_CARGO).join("«CARGO DE PRUEBA · NO ES EL DE PRODUCCIÓN»");
   } else if (pendiente) {
     throw new Error("0259: hay bloque centinela pero no cargo centinela");
   }
@@ -87,11 +90,12 @@ export function psqlFile(ruta) {
 
 // ── LAS CUENTAS, CON SUS UUID REALES DE PRODUCCIÓN ──────────────────────────
 //
-// Los seis primeros son personas reales medidas en `arsksytgdnzukbmfgkju`. Que
-// los UUID coincidan con los escritos en 0259 es parte de lo que se prueba.
+// Los siete primeros son cuentas reales medidas en `arsksytgdnzukbmfgkju` — seis
+// personas, porque Dirección tiene dos cuentas. Que los UUID coincidan con los
+// escritos en 0259 es parte de lo que se prueba.
 export const U = {
   direccion:  "7a9ecbdc-3ff0-459e-b340-8a07eed898fa", // martin.battaglia@ · FIRMA
-  direccion2: "1f39803f-d602-4a89-90b1-72ea5d3b69e1", // martin@ · NO firma
+  direccion2: "1f39803f-d602-4a89-90b1-72ea5d3b69e1", // martin@ · FIRMA (misma persona)
   joseluis:   "3b1607c9-32c5-4ca0-91e1-19c82099b64d", // FIRMA
   cynthia:    "4aa1203d-a943-4ef0-b1c5-3127fde3adfb", // FIRMA
   mariela:    "98acb5c2-5666-4539-991e-8a778cfecda2", // NO firma

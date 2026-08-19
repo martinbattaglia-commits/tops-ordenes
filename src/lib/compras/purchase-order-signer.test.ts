@@ -161,17 +161,19 @@ describe("0259 · el firmante se resuelve por permiso, no por un correo literal"
     expect(rollback).toMatch(/delete\s+from\s+public\.roles\s+r\s+where\s+r\.slug\s*=\s*'firmante_oc'/i);
   });
 
-  it("0259 carga los cargos de los tres firmantes y ninguno inventado", () => {
+  it("0259 carga los cargos de las cuatro cuentas firmantes y ninguno inventado", () => {
     expect(sql0259).toContain("set position_title = 'Presidente'");
     expect(sql0259).toContain("set position_title = 'Director de Operaciones y Apoderado'");
     // El cargo de José Luis es el literal exacto que 0243 ya estampaba.
     expect(sql0243).toContain("'Director de Operaciones y Apoderado'");
-    // Nadie más recibe cargo: exactamente tres UPDATE de position_title, uno
-    // por firmante. La segunda cuenta de Dirección (`martin@`) NO está entre
-    // ellos, porque no firma.
+    expect(sql0259).toContain("set position_title = 'Gerenta Comercial'");
+    // Nadie más recibe cargo: exactamente CUATRO UPDATE de position_title, uno
+    // por cuenta firmante. Son cuatro y no tres porque Dirección tiene dos
+    // cuentas y las dos firman: el cargo se carga por CUENTA, no por persona.
     const cargos = sql0259.match(/^\s*set position_title = /gm) ?? [];
-    expect(cargos.length).toBe(3);
-    expect(sql0259).not.toContain("'martin@logisticatops.com'");
+    expect(cargos.length).toBe(4);
+    // Y ningún `full_name` se toca: el certificado imprime lo que dice la base.
+    expect(sql0259).not.toMatch(/set full_name/i);
   });
 
   // R-1 · el rol de firma es el único portador, y se concede por nombre.
@@ -184,6 +186,7 @@ describe("0259 · el firmante se resuelve por permiso, no por un correo literal"
     // alcanza, para que un correo reasignado no herede la firma.
     for (const [uuid, email] of [
       ["7a9ecbdc-3ff0-459e-b340-8a07eed898fa", "martin.battaglia@logisticatops.com"],
+      ["1f39803f-d602-4a89-90b1-72ea5d3b69e1", "martin@logisticatops.com"],
       ["3b1607c9-32c5-4ca0-91e1-19c82099b64d", "joseluis@logisticatops.com"],
       ["4aa1203d-a943-4ef0-b1c5-3127fde3adfb", "cynthia@logisticatops.com"],
     ]) {
@@ -200,6 +203,22 @@ describe("0259 · el firmante se resuelve por permiso, no por un correo literal"
     ]) {
       expect(ejecutable).not.toContain(excluido);
     }
+  });
+
+  // El cargo impreso «Gerenta Comercial» y el rol `gerencia_comercial` —uno de
+  // los cinco portadores revocados— son cosas distintas que se parecen: uno es
+  // texto documental, el otro es autoridad. Si alguien los acoplara, revocar el
+  // rol cambiaría lo que imprime un certificado.
+  it("el cargo de Cynthia no queda acoplado al rol homónimo", () => {
+    const ejecutable = sql0259
+      .split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+    // El cargo se escribe donde va: en position_title, y sobre el rol que ella
+    // realmente tiene, que NO es `gerencia_comercial`.
+    expect(ejecutable).toContain("set position_title = 'Gerenta Comercial'");
+    expect(ejecutable).toContain("r.slug = 'admin_sin_rrhh'");
+    // Y el slug homónimo no aparece en SQL ejecutable: la revocación es por
+    // negación, así que no necesita nombrar a ninguno de los cinco.
+    expect(ejecutable).not.toContain("gerencia_comercial");
   });
 
   // R-3 · el gate del firmante no puede resolverse por `has_permission`, que
