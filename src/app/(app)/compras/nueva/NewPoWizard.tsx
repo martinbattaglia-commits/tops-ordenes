@@ -70,6 +70,13 @@ const STEPS = ["Proveedor", "Datos generales", "Productos", "Firma"] as const;
 /** Identificador público canónico de una OC emitida (`OC-AAAA-NNNN`). */
 const PUBLIC_ID_OC = /^OC-\d{4}-\d{4}$/;
 
+/**
+ * Modo demostración, legible desde el cliente (`NEXT_PUBLIC_`). Se anuncia
+ * ANTES de firmar: sin el aviso, el operador recorre los cuatro pasos, firma, y
+ * recién entonces descubre que nada se guardó.
+ */
+const EN_MODO_DEMO = process.env.NEXT_PUBLIC_DEMO_MODE === "1";
+
 export function NewPoWizard({ vendors, products }: Props) {
   const router = useRouter();
   const [stepIdx, setStepIdx] = useState(0);
@@ -167,15 +174,20 @@ export function NewPoWizard({ vendors, products }: Props) {
           hash: draft.signatureHash ?? "",
         },
       });
-      if (res.ok && res.persisted && PUBLIC_ID_OC.test(res.public_id)) {
-        router.push(`/compras/ordenes/${res.public_id}?just_created=1`);
-      } else if (res.ok) {
+      if (!res.ok) {
+        setError(res.error ?? "No se pudo crear la OC");
+      } else if (!res.persisted) {
         // HOTFIX-01: la orden no quedó escrita en la base. Navegar a su ficha
         // sería un 404 con el borrador perdido; el aviso va acá y el
         // formulario conserva todo lo cargado.
-        setError("La OC no quedó guardada, así que no hay una ficha para abrir. Revisá la configuración del backend de Compras antes de reintentar.");
+        setError("Estás en modo demostración: la OC no quedó guardada y no hay una ficha para abrir.");
+      } else if (!PUBLIC_ID_OC.test(res.public_id)) {
+        // C4 1/2 · M-1: acá la OC SÍ está emitida, firmada y notificada al
+        // proveedor. Decir "no quedó guardada" e invitar a reintentar emitiría
+        // una segunda orden y un segundo correo. Una causa, un mensaje.
+        setError("La OC se emitió, pero su número llegó con un formato inesperado. Buscala en Órdenes de compra: no la vuelvas a emitir.");
       } else {
-        setError(res.error ?? "No se pudo crear la OC");
+        router.push(`/compras/ordenes/${res.public_id}?just_created=1`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error inesperado");
@@ -1218,6 +1230,13 @@ function SignatureStep({
           ))}
         </ul>
       </div>
+
+      {EN_MODO_DEMO && (
+        <div className="rounded-md border border-status-warning/40 bg-status-warning/5 px-3 py-2 text-sm text-fg-primary">
+          Modo demostración: al confirmar se recorre el flujo completo, pero la OC no se
+          guarda ni se envía al proveedor.
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md border border-tops-red/30 bg-tops-red/5 text-tops-red text-sm px-3 py-2">

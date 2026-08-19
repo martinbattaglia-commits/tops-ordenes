@@ -67,14 +67,26 @@ describe("NotificationsBell · marcación masiva sin éxito silencioso", () => {
     await montarYAbrir();
     await act(async () => { botonMarcar()!.click(); });
     await act(async () => { await Promise.resolve(); });
-    expect(host.textContent).toMatch(/no pudimos marcarlas|sesión/i);
+    expect(host.textContent).toContain("Tu sesión venció. Volvé a iniciar sesión.");
   });
 
-  it("no muestra ningún error cuando la marcación sí escribió", async () => {
+  it("cuando la marcación escribió, recarga y el rojo se apaga", async () => {
     S.respuestaRpc = { data: 3, error: null };
     await montarYAbrir();
+    expect(host.textContent).toMatch(/^3/);
+    // La base ya quedó sin pendientes: la recarga tiene que traer el cero.
+    S.contadores = { red_system_count: 0, green_whatsapp_count: 0, yellow_internal_count: 0 };
     await act(async () => { botonMarcar()!.click(); });
     await act(async () => { await Promise.resolve(); });
     expect(host.textContent).not.toMatch(/No se marcó ninguna notificación/i);
+    // El badge rojo dejó de renderizarse: `load()` corrió de verdad.
+    expect(host.querySelector('[role="status"]')).toBeNull();
+  });
+
+  it("con el rojo ya en cero explica que verde y amarillo son mensajes", async () => {
+    S.contadores = { red_system_count: 0, green_whatsapp_count: 4, yellow_internal_count: 2 };
+    await montarYAbrir();
+    expect(botonMarcar()).toBeUndefined();
+    expect(host.textContent).toMatch(/se apagan al abrir cada conversación/i);
   });
 });

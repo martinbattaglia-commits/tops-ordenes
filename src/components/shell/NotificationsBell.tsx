@@ -26,6 +26,7 @@ import {
   type BadgeCounts,
   type NotificationCategory,
 } from "@/lib/notifications/categories";
+import { mapNotifRpcError } from "@/lib/notifications/rpc-errors";
 import { relTime } from "@/lib/utils";
 
 interface Notification {
@@ -163,14 +164,17 @@ export function NotificationsBell() {
     // marcación que no escribía nada dejaba el rojo encendido sin explicación.
     const { data, error } = await supabase.rpc("connect_notif_mark_all_read");
     if (error) {
-      setErrorMarcado("No pudimos marcarlas como leídas. Reintentá en unos segundos.");
+      // C4 1/2 · M-3: la causa la sabe PostgreSQL. Descartarla dejaba
+      // "reintentá en unos segundos" ante una sesión vencida, donde reintentar
+      // no puede funcionar nunca.
+      setErrorMarcado(mapNotifRpcError(error.message));
       return;
     }
     if (typeof data !== "number" || data === 0) {
       setErrorMarcado("No se marcó ninguna notificación como leída. Recargá la página y reintentá.");
       return;
     }
-    load();
+    await load();
   };
 
   const cerrar = useCallback(() => {
@@ -240,6 +244,16 @@ export function NotificationsBell() {
                 </button>
               )}
             </div>
+
+            {/* C4 1/2 · M-4: apagado el rojo, verde y amarillo pueden seguir
+                encendidos. Son mensajes sin leer, no avisos: decirlo evita que
+                el operador lea la campanita como "la marcación no funcionó". */}
+            {counts.red === 0 && counts.green + counts.yellow > 0 && (
+              <p className="border-b border-stroke-soft bg-neutral-50 px-3 py-2 text-[11px] text-fg-secondary">
+                No quedan avisos pendientes. Los indicadores verde y amarillo son mensajes
+                sin leer: se apagan al abrir cada conversación.
+              </p>
+            )}
 
             {errorMarcado && (
               <p

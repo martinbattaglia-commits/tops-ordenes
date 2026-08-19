@@ -54,6 +54,6 @@ describe("markAllNotificationsReadAction · filas afectadas en base", () => {
   it("propaga el error de PostgreSQL sin inventar éxito", async () => {
     H.rpc.mockResolvedValue({ data: null, error: { message: "sesión no autenticada" } });
     const r = await markAllNotificationsReadAction();
-    expect(r).toEqual({ ok: false, message: "Sesión no autenticada." });
+    expect(r).toEqual({ ok: false, message: "Tu sesión venció. Volvé a iniciar sesión." });
   });
 });

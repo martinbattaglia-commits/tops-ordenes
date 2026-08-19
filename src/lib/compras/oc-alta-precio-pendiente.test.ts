@@ -160,6 +160,7 @@ describe("alta de OC con precio pendiente", () => {
     await emitirOcConPrecioPendiente();
 
     expect(H.push).not.toHaveBeenCalled();
+    expect(host.textContent).toMatch(/modo demostración/i);
     expect(host.textContent).toMatch(/no quedó guardada/i);
 
     // El borrador sigue vivo: se vuelve a Productos por el stepper y el motivo
@@ -173,6 +174,18 @@ describe("alta de OC con precio pendiente", () => {
       i.getAttribute("aria-label")?.startsWith("Motivo de precio"),
     );
     expect(motivo?.value).toBe("No llegó la cotización");
+  });
+
+  it("una OC emitida con número inesperado NO invita a reintentar", async () => {
+    // C4 1/2 · M-1: acá la orden EXISTE, firmada y notificada. Un mensaje que
+    // dijera "no quedó guardada, reintentá" produciría una segunda OC y un
+    // segundo correo al proveedor.
+    H.crear.mockResolvedValue({ ok: true, id: "11111111-1111-4111-8111-111111111111", public_id: "OC-25", persisted: true });
+    await emitirOcConPrecioPendiente();
+
+    expect(H.push).not.toHaveBeenCalled();
+    expect(host.textContent).toMatch(/no la vuelvas a emitir/i);
+    expect(host.textContent).not.toMatch(/no quedó guardada/i);
   });
 
   it("un error de guardado se muestra en el formulario, sin navegar", async () => {
