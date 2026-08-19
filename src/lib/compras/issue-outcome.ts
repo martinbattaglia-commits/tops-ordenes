@@ -25,6 +25,8 @@ export type IssueFailureKind =
   | "no_session"
   | "inactive_profile"
   | "signer_not_canonical"
+  | "signer_not_authorized"
+  | "signer_profile_incomplete"
   | "permission"
   | "validation"
   | "incomplete_result"
@@ -190,24 +192,94 @@ function classifyRpcError(error: RpcErrorLike): {
         + "Pedí que lo reactiven; reintentar ahora va a fallar igual.",
     };
   }
+  // 0259 · OC-FIRMANTE-POR-PERMISO. La emisión ya no pregunta por un correo
+  // literal: pregunta por el permiso, y toma nombre y cargo del perfil del
+  // actor. Eso abre tres rechazos nuevos que NO son falta de permiso — el
+  // usuario está autorizado, lo que falta es el dato con el que se firma. Sin
+  // esta traducción caerían en el 42501 genérico de más abajo, que manda a
+  // soporte a alguien que puede resolverlo solo cargando su propio cargo.
+  if (raw.includes("no tiene nombre cargado")) {
+    return {
+      kind: "signer_profile_incomplete",
+      retryable: false,
+      userMessage:
+        "Tenés el permiso para emitir, pero tu perfil no tiene el nombre cargado y una "
+        + "orden de compra no puede salir firmada en blanco. Cargá tu nombre en el perfil "
+        + "y volvé a emitir. No se creó ninguna orden.",
+    };
+  }
+  if (raw.includes("no tiene cargo cargado")) {
+    return {
+      kind: "signer_profile_incomplete",
+      retryable: false,
+      userMessage:
+        "Tenés el permiso para emitir, pero tu rol no tiene un cargo cargado y la orden "
+        + "declara el cargo de quien la firma. Pedí que carguen tu cargo en tu rol y volvé "
+        + "a emitir. No se creó ninguna orden.",
+    };
+  }
+  if (raw.includes("cargo del firmante es ambiguo")) {
+    return {
+      kind: "signer_profile_incomplete",
+      retryable: false,
+      userMessage:
+        "Tenés el permiso para emitir, pero tus roles declaran más de un cargo distinto y "
+        + "la orden no puede elegir cuál estampar. Pedí que dejen un único cargo en tus "
+        + "roles y volvé a emitir. No se creó ninguna orden.",
+    };
+  }
+  if (raw.includes("perfil activo del firmante")) {
+    return {
+      kind: "inactive_profile",
+      retryable: false,
+      userMessage:
+        "El servidor no encontró tu perfil activo al resolver la firma. "
+        + "Pedí que revisen el estado de tu usuario; reintentar ahora va a fallar igual.",
+    };
+  }
   if (raw.includes("firmante canónico")) {
     return {
       kind: "signer_not_canonical",
       retryable: false,
       userMessage:
-        "La firma y emisión de órdenes de compra están reservadas al apoderado de TOPS. "
-        + "Tu usuario puede prepararlas, pero no firmarlas: ingresá con el usuario apoderado "
-        + "o pedile que la emita. No se creó ninguna orden y volver a intentarlo con este "
-        + "usuario va a fallar siempre.",
+        "El servidor no pudo resolver los datos con los que se firma la orden: el correo "
+        + "del emisor o su cargo no tienen una forma válida. Es un problema del perfil, no "
+        + "de los datos de la orden: pasáselo a soporte. No se creó ninguna orden y "
+        + "reintentar con este usuario va a fallar igual.",
     };
   }
+  // 0259 · el gate directo del firmante. No es «te falta un permiso» ni «te
+  // falta un dato»: es que la firma de órdenes de compra se concede por nombre
+  // y esta cuenta no está en la lista. Tiene mensaje propio porque el rechazo
+  // no se resuelve pidiéndole a soporte que cargue algo — se resuelve, si
+  // corresponde, con una decisión de Dirección.
+  if (raw.includes("No estás autorizado a firmar")) {
+    return {
+      kind: "signer_not_authorized",
+      retryable: false,
+      userMessage:
+        "Tu cuenta no está habilitada para firmar órdenes de compra. La firma la concede "
+        + "Dirección por nombre: tener un cargo cargado o un perfil de administrador no "
+        + "alcanza. Si necesitás firmar, pedíselo a Dirección. No se creó ninguna orden.",
+    };
+  }
+  // 0259 · este rechazo llega cuando el gate de 0243 frena al actor ANTES del
+  // gate directo del firmante — le pasa a quien no tiene el bypass de
+  // `profiles.role='admin'`. El texto NO puede mandar a pedir `compras.sign`:
+  // desde 0259 ese permiso cuelga de un único rol que Dirección concede por
+  // nombre, y un administrador que obedeciera ese consejo sólo podría volver a
+  // colgarlo de un rol funcional —rehabilitando a firmar a todo ese rol— o
+  // conceder el rol de firma sin la decisión. El mensaje tiene que llevar al
+  // mismo lugar que el del gate directo, porque el motivo de fondo es el mismo.
   if (raw.includes("Sin permisos compras")) {
     return {
       kind: "permission",
       retryable: false,
       userMessage:
-        "No tenés los permisos compras.create y compras.sign que exige la emisión. "
-        + "Pedí que te los asignen; reintentar no cambia nada.",
+        "No tenés la autorización que exige la emisión de una orden de compra. La "
+        + "firma la concede Dirección por nombre, cuenta por cuenta: no es un permiso "
+        + "que se pida al área de sistemas. Si necesitás firmar, pedíselo a Dirección. "
+        + "No se creó ninguna orden.",
     };
   }
   if (isTransientSqlstate(code)) {
