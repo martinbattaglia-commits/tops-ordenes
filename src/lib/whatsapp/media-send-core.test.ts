@@ -325,3 +325,58 @@ describe("el binario se prepara según lo que WhatsApp reproduce", () => {
     expect(subido.fileName.endsWith(".webm")).toBe(false);
   });
 });
+
+describe("nada sale hacia Meta sin que se le mire el códec adentro", () => {
+  /** MP4 mínimo cuyo `stsd` declara el códec dado. Misma forma que el real. */
+  function mp4Con(codec: string): Uint8Array {
+    const enc = new TextEncoder();
+    const cat = (...p: Uint8Array[]) => {
+      const o = new Uint8Array(p.reduce((a, x) => a + x.length, 0));
+      let k = 0; for (const x of p) { o.set(x, k); k += x.length; }
+      return o;
+    };
+    const be32 = (n: number) =>
+      new Uint8Array([n >>> 24 & 255, n >>> 16 & 255, n >>> 8 & 255, n & 255]);
+    const box = (t: string, ...h: Uint8Array[]) => {
+      const c = cat(...h);
+      return cat(be32(c.length + 8), enc.encode(t), c);
+    };
+    const stsd = box("stsd", be32(0), be32(1),
+      cat(be32(16), enc.encode(codec), new Uint8Array(8)));
+    return cat(
+      box("ftyp", enc.encode("isom"), be32(0x200), enc.encode("isomvp09")),
+      box("moov", box("trak", box("mdia", box("minf", box("stbl", stsd))))),
+    );
+  }
+
+  it("un MP4 con Opus se detiene ACÁ y no llega a /media", async () => {
+    // Es el binario que producía Chromium y que Meta rechazaba con 131053,
+    // asincrónico, después de haber aceptado la subida.
+    const p = puertos({ bytes: mp4Con("Opus") });
+    const r = await sendWhatsappMedia(
+      { ...ENTRADA, mimeType: "audio/mp4", fileName: "voz-3s.m4a" }, p.ports);
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.state).toBe("failed");
+    expect(r.message).toContain("Opus");
+    expect(r.message).toContain("AAC");
+    // Lo que importa: NO se gastó una subida ni salió nada.
+    expect(p.uploadMedia).not.toHaveBeenCalled();
+    expect(p.sendMedia).not.toHaveBeenCalled();
+  });
+
+  it("un MP4 con AAC —el de Safari— sí sale", async () => {
+    const p = puertos({ bytes: mp4Con("mp4a") });
+    const r = await sendWhatsappMedia(
+      { ...ENTRADA, mimeType: "audio/mp4", fileName: "voz-3s.m4a" }, p.ports);
+    expect(r.ok).toBe(true);
+    expect(p.uploadMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it("una imagen no pasa por este guarda: tiene su propia admisión", async () => {
+    const p = puertos({ bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 16]) });
+    const r = await sendWhatsappMedia({ ...ENTRADA, mimeType: "image/jpeg" }, p.ports);
+    expect(r.ok).toBe(true);
+  });
+});
