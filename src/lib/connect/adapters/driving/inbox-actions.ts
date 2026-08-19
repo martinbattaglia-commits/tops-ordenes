@@ -13,20 +13,29 @@ import { createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import type { InboxItem } from "../../types";
 import { listInbox } from "../../read/inbox-data";
+import { archiveFailureMessage, type ArchiveBlockReason } from "../../archive-policy";
 
 export type ArchivedInboxResult =
   | { ok: true; items: InboxItem[] }
   | { ok: false; message: string };
 
-export type SimpleInboxResult = { ok: true } | { ok: false; message: string };
+/** INC-01: el resultado de archivar dice, además del mensaje, QUÉ causa lo bloqueó. */
+export type ArchiveInboxResult =
+  | { ok: true }
+  | { ok: false; message: string; reason?: ArchiveBlockReason };
 
 /**
  * UX-002c: archivar directo desde la fila de la bandeja. Intenta primero la vía de
  * ENTIDAD (0206: tarea/incidente terminado — el asignado-member puede) y cae a la
  * manual (connect_archive_conversation: owner/moderator/admin). Las RPCs re-validan
- * todo; acá sólo se elige el camino y se devuelve el error humano si ninguna aplica.
+ * todo; acá sólo se elige el camino y se traduce el error si ninguna aplica.
+ *
+ * INC-01/D-1: antes se descartaban `first.error` y `fallback.error` y se devolvía una
+ * cadena fija que nombraba las DOS causas a la vez — el código no sabía cuál había
+ * fallado. Ahora los errores reales se leen y se clasifican en `archive-policy`, que
+ * devuelve UNA causa con su redacción humana. El texto del motor no llega a pantalla.
  */
-export async function archiveInboxItemAction(raw: unknown): Promise<SimpleInboxResult> {
+export async function archiveInboxItemAction(raw: unknown): Promise<ArchiveInboxResult> {
   const p = z.object({ conversationId: z.string().min(1) }).safeParse(raw);
   if (!p.success) return { ok: false, message: "Datos inválidos." };
   const supabase = createClient();
@@ -41,7 +50,9 @@ export async function archiveInboxItemAction(raw: unknown): Promise<SimpleInboxR
   if (first.error) {
     const fallback = await supabase.rpc("connect_archive_conversation", args);
     if (fallback.error) {
-      return { ok: false, message: "No se pudo archivar: la tarea/incidencia sigue activa y no sos administrador del hilo." };
+      // Las dos puertas quedaron cerradas: se informa la causa real, una sola.
+      const { reason, message } = archiveFailureMessage(first.error, fallback.error);
+      return { ok: false, message, reason };
     }
   }
   revalidatePath("/connect", "layout");
