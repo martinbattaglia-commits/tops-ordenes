@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import {
   contractClientCustody,
+  downgradeClientCustody,
   setClientActivo,
   updateClientMaster,
 } from "@/app/(app)/clients/actions";
@@ -43,8 +44,27 @@ export function ClientMasterEditor({ clientId, cuit, activo: initialActive, upda
   const [active, setActive] = useState(initialActive);
   const [custodyLevel, setCustodyLevel] = useState<1 | 2>(initialCustodyLevel);
   const [stateReason, setStateReason] = useState("");
+  // La baja de custodia tiene su propio motivo y su propia confirmación: es
+  // rescindir un servicio contratado, no un guardado más de la ficha.
+  const [downgradeReason, setDowngradeReason] = useState("");
+  const [confirmingDowngrade, setConfirmingDowngrade] = useState(false);
+  const confirmDowngradeRef = useRef<HTMLDivElement | null>(null);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+
+  /**
+   * El panel de confirmación toma el foco AL ABRIRSE, y sólo entonces.
+   *
+   * La primera versión de esto era un `ref` en línea —`ref={(n) => n?.focus()}`—
+   * y ése fue un defecto propio: como la función es nueva en cada render, React
+   * desprende y vuelve a montar el ref en CADA commit del componente, así que
+   * el panel se robaba el foco cada vez que el padre se re-renderizaba. Con la
+   * confirmación abierta, escribir en «Estado del cliente» rendía un carácter
+   * por clic. El efecto depende de la APERTURA, no del render.
+   */
+  useEffect(() => {
+    if (confirmingDowngrade) confirmDowngradeRef.current?.focus();
+  }, [confirmingDowngrade]);
 
   const set = <K extends keyof EditorState>(key: K, value: EditorState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
@@ -100,6 +120,35 @@ export function ClientMasterEditor({ clientId, cuit, activo: initialActive, upda
       setVersion(result.updated_at);
       setCustodyLevel(2);
       setMessage({ kind: "ok", text: "Custodia digital reforzada contratada y auditada." });
+      router.refresh();
+    });
+  };
+
+  const downgradeCustody = () => {
+    setMessage(null);
+    const motivo = downgradeReason.trim();
+    // Sin motivo no se envía: 0256 lo exige y el operador merece saberlo antes
+    // de gastar el viaje. El control está deshabilitado, y esto lo cierra.
+    if (!motivo) return;
+    startTransition(async () => {
+      const result = await downgradeClientCustody(clientId, version, motivo);
+      if (!result.ok) {
+        // El mensaje del servidor se muestra TAL CUAL: cada causa trae el suyo
+        // y taparlo con una frase propia volvería a esconder la razón real.
+        setMessage({ kind: "error", text: result.error });
+        setConfirmingDowngrade(false);
+        return;
+      }
+      // Igual que en el alta: sin refrescar la versión, el próximo guardado de
+      // la ficha chocaría contra el CAS.
+      setVersion(result.updated_at);
+      setCustodyLevel(1);
+      setDowngradeReason("");
+      setConfirmingDowngrade(false);
+      setMessage({
+        kind: "ok",
+        text: "Custodia reforzada dada de baja y auditada con su motivo. La mercadería ya ingresada conserva su custodia digital.",
+      });
       router.refresh();
     });
   };
@@ -211,9 +260,86 @@ export function ClientMasterEditor({ clientId, cuit, activo: initialActive, upda
             <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-status-success/10 text-status-success">
               Reforzada contratada · nivel 2
             </span>
-            <p className="text-[11px] text-fg-muted mt-1.5">
-              El nivel contratado eleva, nunca degrada: la baja del servicio no se ofrece desde esta ficha y es una decisión de Dirección.
-            </p>
+            {canContractCustody ? (
+              <div className="mt-2">
+                <p className="text-[11px] text-fg-muted mb-2">
+                  Dar de baja corrige una contratación hecha sobre el cliente equivocado: la mercadería ya ingresada conserva su custodia digital; esto aplica a lo que ingrese desde ahora. La baja queda auditada con su motivo.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    className="input flex-1"
+                    aria-label="Motivo de la baja de la custodia reforzada"
+                    placeholder="Motivo de la baja (obligatorio)"
+                    value={downgradeReason}
+                    onChange={(event) => {
+                      setDowngradeReason(event.target.value);
+                      // Cambiar el motivo invalida una confirmación en curso:
+                      // se confirma lo que se va a asentar, no otra cosa.
+                      setConfirmingDowngrade(false);
+                    }}
+                    disabled={pending}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => {
+                      // Guarda real, no sólo el atributo `disabled`: sin motivo
+                      // no se abre siquiera la confirmación. Deshabilitar un
+                      // botón es una cortesía visual, no un control.
+                      if (!downgradeReason.trim()) return;
+                      setConfirmingDowngrade(true);
+                    }}
+                    // No se deshabilita al confirmar: deshabilitar el botón que
+                    // acaba de accionarse suelta el foco al `body` y el lector
+                    // de pantalla pierde la posición.
+                    disabled={pending || !version || !downgradeReason.trim()}
+                  >
+                    <Icon name="shield" size={14} /> Dar de baja la custodia reforzada
+                  </button>
+                </div>
+                {confirmingDowngrade && (
+                  <div
+                    role="alertdialog"
+                    aria-label="Confirmar la baja de la custodia reforzada"
+                    tabIndex={-1}
+                    // Sin `aria-modal`: este panel NO es modal. No hay trampa
+                    // de foco, ni `inert`, ni cierre por Escape, y la ficha
+                    // entera sigue tabulable. Declararlo modal le haría ocultar
+                    // al lector de pantalla todo lo de afuera mientras el foco
+                    // sale libremente, y el operador terminaría manejando
+                    // controles que su lector afirma que no existen.
+                    ref={confirmDowngradeRef}
+                    className="mt-2 rounded-md border border-status-danger/40 bg-status-danger/5 px-3 py-2"
+                  >
+                    <p role="alert" className="text-[11px] text-fg-primary">
+                      Estás dando de baja un servicio contratado. La mercadería ya ingresada conserva su custodia digital —su QR, su caso y su compuerta de despacho—; esto aplica a lo que ingrese desde ahora. Queda asentado en la auditoría del cliente con el motivo que escribiste.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-sm"
+                        onClick={downgradeCustody}
+                        disabled={pending || !downgradeReason.trim()}
+                      >
+                        {pending ? "Dando de baja…" : "Confirmar la baja"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setConfirmingDowngrade(false)}
+                        disabled={pending}
+                      >
+                        No dar de baja
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-[11px] text-fg-muted mt-1.5">
+                La mercadería de este cliente ingresa con custodia reforzada. Dar de baja el servicio requiere el permiso de contratación de custodia: pedilo a quien lo tenga.
+              </p>
+            )}
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
