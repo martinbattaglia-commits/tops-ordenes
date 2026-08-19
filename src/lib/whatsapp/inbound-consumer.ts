@@ -106,6 +106,14 @@ export function isTransient(error: string): boolean {
  * Se conserva sólo un CÓDIGO: la primera palabra reconocible del mensaje,
  * normalizada. Nunca el mensaje entero, nunca el payload.
  */
+/**
+ * Código para la proyección que se declara incompleta sin decir por qué.
+ *
+ * Mismo destino y mismo criterio que `STATUS_UNMATCHED_REASON`: viaja a
+ * `wa_inbound_events.last_error`. Es un código, no un mensaje.
+ */
+export const SIN_MOTIVO_REASON = "proyeccion_incompleta_sin_motivo";
+
 export function sanitizeError(raw: unknown): string {
   if (typeof raw !== "string" || raw.trim() === "") return "error_desconocido";
   const token = raw
@@ -164,7 +172,15 @@ export async function consumeInboundBatch(
       if (proyeccion.complete) {
         outcome = "done";
       } else {
-        motivo = sanitizeError(proyeccion.errors[0]);
+        // Defensa en profundidad. «No vino motivo» y «el motivo era ilegible»
+        // son dos hechos distintos, y confundirlos fue lo que dejó una cola
+        // entera de eventos terminales sin diagnóstico. Si alguna proyección
+        // futura vuelve a declararse incompleta sin decir por qué, se archiva
+        // ESE hecho, no un genérico.
+        motivo =
+          proyeccion.errors.length === 0
+            ? SIN_MOTIVO_REASON
+            : sanitizeError(proyeccion.errors[0]);
         // La proyección incompleta se reintenta salvo que TODOS sus errores
         // sean de los que no mejoran insistiendo.
         outcome = isPermanent(proyeccion.errors) ? "permanent" : "retryable";

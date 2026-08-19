@@ -16,6 +16,7 @@ import {
   type ClaimedEvent,
   type InboundConsumerPorts,
 } from "./inbound-consumer";
+import { STATUS_UNMATCHED_REASON } from "./link-projection";
 
 const TOKEN = "tok-1";
 
@@ -318,5 +319,105 @@ describe("HIGH-3 · clasificación de motivos de parseo", () => {
     // Exactamente UNA proyección efectiva, pese a los dos pasajes por la cola.
     expect(proyecciones).toBe(1);
     expect(liberados).toEqual(["retryable", "done"]);
+  });
+});
+
+/**
+ * INCIDENTE-WHATSAPP-ENTRANTES · R-19 · defensa en profundidad.
+ *
+ * Aunque la proyección ya emite su motivo, el consumidor no debe volver a
+ * colapsar "no vino motivo" con "el motivo era ilegible": son dos hechos
+ * distintos y confundirlos es exactamente lo que dejó 203 eventos sin
+ * diagnóstico posible durante seis días.
+ */
+describe("consumeInboundBatch · incompleta SIN motivo (incidente 203)", () => {
+  it("no registra «error_desconocido» cuando la proyección no dio razón", async () => {
+    const releases: Array<{ outcome: string; error: string | null }> = [];
+    const res = await consumeInboundBatch({
+      newToken: () => "tok",
+      claim: async () => [{ seq: 1, payload: {}, attempts: 0 }],
+      project: async () => ({ complete: false, errors: [] }),
+      release: async (_seq, _tok, outcome, error) => {
+        releases.push({ outcome, error });
+        return "requeued";
+      },
+    });
+    expect(releases).toHaveLength(1);
+    expect(releases[0].error).not.toBe("error_desconocido");
+    expect(releases[0].error).toBe("proyeccion_incompleta_sin_motivo");
+    // El desenlace no cambia: sigue siendo reintentable, como hasta hoy.
+    expect(releases[0].outcome).toBe("retryable");
+    expect(res.requeued).toBe(1);
+  });
+
+  it("«error_desconocido» queda reservado a un motivo REALMENTE ilegible", async () => {
+    const releases: Array<{ error: string | null }> = [];
+    await consumeInboundBatch({
+      newToken: () => "tok",
+      claim: async () => [{ seq: 1, payload: {}, attempts: 0 }],
+      project: async () => ({ complete: false, errors: ["99999999"] }),
+      release: async (_s, _t, _o, error) => {
+        releases.push({ error });
+        return "requeued";
+      },
+    });
+    expect(releases[0].error).toBe("error_desconocido");
+  });
+});
+
+/**
+ * C4 · M-3 · CANDADO de la propiedad de seguridad central.
+ *
+ * `isPermanent` clasifica por `includes()` sobre literales. Mover
+ * `status_unmatched` a PERMANENTES —una edición de una palabra, plausible
+ * viniendo de `unmatched_permanent`, que ya está en la lista— terminalizaría
+ * TODO acuse pendiente de reconciliación en el primer intento, y hasta esta
+ * prueba la suite entera seguía verde. Sin candado, el arreglo era reversible
+ * por accidente.
+ */
+describe("isPermanent · el acuse sin dueño NO puede volverse permanente", () => {
+  it("un acuse sin dueño, solo, NO es permanente", () => {
+    expect(isPermanent([STATUS_UNMATCHED_REASON])).toBe(false);
+  });
+
+  it("y el evento cuyo único motivo es ése se reintenta, no se descarta", async () => {
+    const releases: Array<{ outcome: string; error: string | null }> = [];
+    await consumeInboundBatch({
+      newToken: () => TOKEN,
+      claim: async () => [{ seq: 1, payload: {}, attempts: 0 }],
+      project: async () => ({ complete: false, errors: [STATUS_UNMATCHED_REASON] }),
+      release: async (_s, _t, outcome, error) => {
+        releases.push({ outcome, error });
+        return "requeued";
+      },
+    });
+    expect(releases[0].outcome).toBe("retryable");
+    expect(releases[0].error).toBe(STATUS_UNMATCHED_REASON);
+  });
+
+  /**
+   * C4 · M-1 · el ÚNICO desenlace que sí cambia respecto de main, fijado acá
+   * para que sea una decisión declarada y no un efecto colateral silencioso.
+   */
+  it("LOTE MIXTO · permanente + acuse sin dueño ⇒ se reintenta (deliberado)", async () => {
+    expect(isPermanent(["mensaje wamid.X: rejected"])).toBe(true);
+    expect(isPermanent(["mensaje wamid.X: rejected", STATUS_UNMATCHED_REASON])).toBe(false);
+
+    const releases: string[] = [];
+    await consumeInboundBatch({
+      newToken: () => TOKEN,
+      claim: async () => [{ seq: 1, payload: {}, attempts: 0 }],
+      project: async () => ({
+        complete: false,
+        errors: ["mensaje wamid.X: rejected", STATUS_UNMATCHED_REASON],
+      }),
+      release: async (_s, _t, outcome) => {
+        releases.push(outcome);
+        return "requeued";
+      },
+    });
+    // Reintentar de más antes que perder un hecho del proveedor: la política
+    // declarada del propio consumidor.
+    expect(releases[0]).toBe("retryable");
   });
 });
