@@ -98,3 +98,39 @@ describe("el guarda rechaza ANTES de mandar, y dice por qué", () => {
     expect(r.ok).toBe(false);
   });
 });
+
+describe("C4 · el parser falla ACOTADO también ante anidamiento hostil", () => {
+  /**
+   * MP4 con `moov` anidado N veces: 8 bytes por nivel. 50.000 niveles son
+   * ~400 KB — muy por debajo del tope de 25 MB del adjunto—, y una recursión
+   * sin límite revienta la pila con `RangeError`. El docblock del parser
+   * promete «ante cualquier inconsistencia, responder no sé»: esto lo mide.
+   */
+  function mp4Anidado(niveles: number): Uint8Array {
+    const ftyp = box("ftyp", enc.encode("isom"), be32(0x200), enc.encode("isomvp09"));
+    // Construcción iterativa de adentro hacia afuera para no reventar la pila
+    // del PROPIO test.
+    let cuerpo = new Uint8Array(0);
+    for (let i = 0; i < niveles; i++) {
+      cuerpo = cat(be32(cuerpo.length + 8), enc.encode("moov"), cuerpo);
+    }
+    return cat(ftyp, cuerpo);
+  }
+
+  it("50.000 niveles de moov: responde «no sé», no revienta la pila", () => {
+    const hostil = mp4Anidado(50_000);
+    let r: ReturnType<typeof inspectAudioPayload>;
+    expect(() => { r = inspectAudioPayload(hostil); }).not.toThrow();
+    expect(r!.codec).toBeNull();
+  });
+
+  it("y el guarda lo RECHAZA en vez de dejarlo pasar a Meta", () => {
+    const v = checkMetaAudioPayload(mp4Anidado(50_000), "audio/mp4");
+    expect(v.ok).toBe(false);
+  });
+
+  it("el anidamiento LEGÍTIMO (moov›trak›mdia›minf›stbl) sigue leyéndose", () => {
+    // La estructura real usa 5 niveles: el límite no puede comerse el caso bueno.
+    expect(inspectAudioPayload(mp4Con("Opus")).codec).toBe("Opus");
+  });
+});

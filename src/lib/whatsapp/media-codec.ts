@@ -47,9 +47,27 @@ function codecDeMp4(b: Uint8Array): string | null {
   const CONTENEDORAS = new Set(["moov", "trak", "mdia", "minf", "stbl"]);
   const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
 
-  const recorrer = (ini: number, fin: number): string | null => {
+  // ─── C4 · LOS DOS TOPES QUE ACOTAN AL PARSER ──────────────────────────────
+  //
+  // La recursión sin límite incumplía el contrato de este mismo docblock: un
+  // MP4 con `moov` anidado 50.000 veces —8 bytes por nivel, ~400 KB, muy por
+  // debajo del tope de 25 MB del adjunto— reventaba la pila con `RangeError`
+  // en vez de responder «no sé». Y la excepción subía por la Server Action,
+  // porque el llamador confía en que esto NO lanza.
+  //
+  // El camino legítimo hasta el `stsd` usa 5 niveles (moov›trak›mdia›minf›stbl);
+  // 16 deja margen para muxers exóticos sin dejar margen para el ataque. El
+  // tope de iteraciones cubre el otro eje —miles de cajas hermanas— que la
+  // profundidad sola no acota.
+  const MAX_PROFUNDIDAD = 16;
+  const MAX_CAJAS = 10_000;
+  let cajasVistas = 0;
+
+  const recorrer = (ini: number, fin: number, profundidad: number): string | null => {
+    if (profundidad > MAX_PROFUNDIDAD) return null;
     let off = ini;
     while (off + 8 <= fin) {
+      if (++cajasVistas > MAX_CAJAS) return null;
       let size = dv.getUint32(off);
       let hdr = 8;
       if (size === 1) {
@@ -68,7 +86,7 @@ function codecDeMp4(b: Uint8Array): string | null {
         return String.fromCharCode(b[fmt], b[fmt + 1], b[fmt + 2], b[fmt + 3]);
       }
       if (CONTENEDORAS.has(tipo)) {
-        const hallado = recorrer(off + hdr, off + size);
+        const hallado = recorrer(off + hdr, off + size, profundidad + 1);
         if (hallado) return hallado;
       }
       off += size;
@@ -76,7 +94,7 @@ function codecDeMp4(b: Uint8Array): string | null {
     return null;
   };
 
-  return recorrer(0, b.length);
+  return recorrer(0, b.length, 0);
 }
 
 export function inspectAudioPayload(bytes: Uint8Array): AudioPayloadInfo {
