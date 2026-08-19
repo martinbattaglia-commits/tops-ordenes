@@ -554,6 +554,10 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
     "ROLLBACK_0258_custody_evaluated_head_witness.sql",
     "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
+    // CONNECT-RPC-PARAMETROS-SIN-NOMBRE · inversa de 0260. Restituye las 17
+    // envolturas connect_* posicionales tal como las dejó 0246 —el defecto
+    // que 0260 corrige—, así que ejecutarla devuelve el estado del 17/08.
+    "ROLLBACK_0260_connect_rpc_named_parameters.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 
