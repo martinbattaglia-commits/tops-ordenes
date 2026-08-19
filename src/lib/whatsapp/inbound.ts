@@ -15,6 +15,11 @@
  * en `wa_inbound_events` (crudo) para fases posteriores.
  */
 
+import {
+  describeUnsupported, extractInboundCaption, extractInboundMedia, inboundMediaBody,
+  type InboundMedia,
+} from "./inbound-media";
+
 export type WaStatusValue = "sent" | "delivered" | "read" | "failed";
 
 export interface WaInboundMessage {
@@ -27,6 +32,15 @@ export interface WaInboundMessage {
   sentAt: string;
   /** Nombre de perfil declarado por WhatsApp, si vino. Nunca se confía como identidad. */
   profileName: string | null;
+  /**
+   * H-7 · media adjunto del cliente, cuando el mensaje trae uno.
+   *
+   * `text` sigue siendo el cuerpo visible —el pie de foto, o la etiqueta de lo
+   * que llegó—: el hilo nunca muestra una burbuja muda. Los BYTES no viajan
+   * acá; se resuelven contra la Graph API en el adaptador, igual que el
+   * saliente.
+   */
+  media?: InboundMedia | null;
 }
 
 export interface WaInboundStatus {
@@ -38,9 +52,17 @@ export interface WaInboundStatus {
 }
 
 export interface WaInboundSkipped {
+  /**
+   * H-7 · dejó de significar «todo lo que no es texto». Ahora cuenta SÓLO los
+   * tipos que este ingreso no sabe guardar —video, sticker, ubicación,
+   * reacción—, y `unsupportedTypes` los nombra: el número solo fue lo que hizo
+   * invisible durante seis días la pérdida de 14 archivos de clientes.
+   */
   nonText: number;
   malformed: number;
   unknownStatus: number;
+  /** Tipos concretos que se descartaron, sin repetir. */
+  unsupportedTypes?: string[];
 }
 
 export type WaInboundParse =
@@ -108,6 +130,7 @@ export function parseInboundPayload(
   const messages: WaInboundMessage[] = [];
   const statuses: WaInboundStatus[] = [];
   const skipped: WaInboundSkipped = { nonText: 0, malformed: 0, unknownStatus: 0 };
+  const unsupportedTypes: string[] = [];
   const seenWamids = new Set<string>();
   let sawMatchingTenant = false;
   let sawForeignTenant = false;
@@ -148,14 +171,29 @@ export function parseInboundPayload(
           skipped.malformed += 1;
           continue;
         }
-        if (m?.type !== "text") {
-          skipped.nonText += 1;
-          continue;
-        }
-        const body = asRecord(m.text)?.body;
-        if (typeof body !== "string" || !body.length) {
-          skipped.malformed += 1;
-          continue;
+        // H-7 · el media del cliente ENTRA. Antes, todo lo que no fuera texto se
+        // sumaba a `skipped.nonText` —un contador que no se persistía— y se
+        // perdía sin dejar rastro que el operador pudiera ver.
+        let body: string;
+        let media: InboundMedia | null = null;
+        if (m?.type === "text") {
+          const t = asRecord(m.text)?.body;
+          if (typeof t !== "string" || !t.length) {
+            skipped.malformed += 1;
+            continue;
+          }
+          body = t;
+        } else {
+          media = extractInboundMedia(m);
+          if (!media) {
+            // Sigue habiendo tipos que este ingreso no sabe guardar. Ahora se
+            // NOMBRAN, para que la próxima pérdida sea diagnosticable.
+            skipped.nonText += 1;
+            const tipo = describeUnsupported(m);
+            if (tipo && !unsupportedTypes.includes(tipo)) unsupportedTypes.push(tipo);
+            continue;
+          }
+          body = inboundMediaBody(media, extractInboundCaption(m));
         }
         // Meta puede reenviar el mismo wamid dentro del mismo POST.
         if (seenWamids.has(wamid)) continue;
@@ -167,6 +205,7 @@ export function parseInboundPayload(
           text: body,
           sentAt,
           profileName: nameByWaId.get(fromE164) ?? null,
+          media,
         });
       }
 
@@ -200,5 +239,8 @@ export function parseInboundPayload(
     return { ok: false, reason: "tenant_mismatch" };
   }
 
-  return { ok: true, phoneNumberId: tenant, messages, statuses, skipped };
+  return {
+    ok: true, phoneNumberId: tenant, messages, statuses,
+    skipped: unsupportedTypes.length > 0 ? { ...skipped, unsupportedTypes } : skipped,
+  };
 }

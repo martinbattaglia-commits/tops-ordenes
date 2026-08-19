@@ -13,6 +13,10 @@ import {
   type WaOutboundState,
 } from "./outbound-state";
 import type { WaInboundStatus } from "./inbound";
+import type { InboundMedia } from "./inbound-media";
+import type { MetaMediaDownloadTransport } from "./media-transport";
+import { validateAttachment } from "@/lib/connect/attachments/validate";
+import { createHash, randomUUID } from "node:crypto";
 
 /**
  * link-projection.supabase.ts — LINK-WA S1 · Adaptador service_role del puerto
@@ -42,7 +46,101 @@ const CAS_ATTEMPTS = 3;
  */
 export const WA_STATUS_SOURCE_META = "meta" as const;
 
-export function createSupabaseProjectionPort(admin: AdminClient): LinkProjectionPort {
+/** Mismo bucket que el saliente: no hay un almacén nuevo para lo entrante. */
+const BUCKET = "connect-files";
+
+/**
+ * H-7 · ingreso del media entrante.
+ *
+ * Recorre EXACTAMENTE los mismos pasos que el saliente y en el mismo orden:
+ * bajar los bytes, verificar la FIRMA BINARIA real —nunca el MIME que declara
+ * el proveedor—, subir a `connect-files` bajo la carpeta de la conversación
+ * (que es lo que exige la policy de storage de 0237) y registrar la fila en
+ * `connect_attachments` ligada a su mensaje.
+ *
+ * Idempotente por `(storage_bucket, storage_path)`: el path se deriva del
+ * wamid, así que reprocesar el mismo evento reconoce el objeto que ya existe
+ * en vez de duplicarlo.
+ */
+export function createInboundMediaIngest(
+  admin: AdminClient,
+  transport: MetaMediaDownloadTransport,
+) {
+  return async function ingestInboundMedia(input: {
+    conversationId: string;
+    externalMsgId: string;
+    media: InboundMedia;
+  }): Promise<"stored" | "duplicate"> {
+    // El path lo elige el SERVIDOR y se deriva del wamid: es la identidad que
+    // Meta ya garantiza única, así que el reproceso cae sobre el mismo objeto.
+    const huella = createHash("sha256").update(input.externalMsgId).digest("hex").slice(0, 32);
+    const path = `${input.conversationId}/files/in-${huella}`;
+
+    const { data: yaEsta } = await admin
+      .from("connect_attachments")
+      .select("id")
+      .eq("storage_bucket", BUCKET)
+      .eq("storage_path", path)
+      .maybeSingle();
+    if (yaEsta) return "duplicate";
+
+    const bajado = await transport.downloadMedia(input.media.mediaId);
+    if (bajado.kind !== "downloaded") {
+      // El motivo viaja; el detalle del proveedor no, por la misma regla que
+      // gobierna el saliente.
+      throw new Error(`media ${input.externalMsgId}: descarga ${bajado.reason}`);
+    }
+
+    // El MIME que declara Meta NO se cree: manda la firma binaria, igual que en
+    // `finalizeAttachmentAction`.
+    const v = validateAttachment(bajado.bytes, input.media.fileName);
+    if (!v.ok) {
+      throw new Error(`media ${input.externalMsgId}: ${v.message}`);
+    }
+
+    const { error: subErr } = await admin.storage
+      .from(BUCKET)
+      .upload(path, bajado.bytes, { contentType: v.sniffed.mime, upsert: false });
+    if (subErr && !/exists|duplicate/i.test(subErr.message)) {
+      throw new Error(`media ${input.externalMsgId}: storage ${subErr.message}`);
+    }
+
+    const { data: msg } = await admin
+      .from("connect_messages")
+      .select("id")
+      .eq("conversation_id", input.conversationId)
+      .eq("external_msg_id", input.externalMsgId)
+      .maybeSingle();
+
+    const { error: attErr } = await admin.from("connect_attachments").insert({
+      conversation_id: input.conversationId,
+      message_id: (msg as { id: string } | null)?.id ?? null,
+      storage_bucket: BUCKET,
+      storage_path: path,
+      sha256: createHash("sha256").update(bajado.bytes).digest("hex"),
+      mime_type: v.sniffed.mime,
+      file_size: bajado.bytes.length,
+      file_name: v.fileName,
+      // Entrante: no hay usuario interno que lo haya subido.
+      uploaded_by: null,
+    });
+    if (attErr) {
+      if (/duplicate|23505/i.test(attErr.message)) return "duplicate";
+      throw new Error(`media ${input.externalMsgId}: adjunto ${attErr.message}`);
+    }
+    return "stored";
+  };
+}
+
+export function createSupabaseProjectionPort(
+  admin: AdminClient,
+  /**
+   * Transporte de descarga. Opcional para no romper a los llamadores que sólo
+   * proyectan texto y status; sin él, un mensaje con media deja el evento
+   * incompleto y reprocesable en vez de perder el archivo.
+   */
+  downloadTransport?: MetaMediaDownloadTransport,
+): LinkProjectionPort {
   return {
     async findConversationByContext(contextId: string): Promise<ProjectionConversation | null> {
       const { data, error } = await admin
@@ -152,6 +250,10 @@ export function createSupabaseProjectionPort(admin: AdminClient): LinkProjection
       if (/duplicate|23505/i.test(error.message)) return "duplicate";
       throw new Error(`mensaje ${row.externalMsgId}: ${error.message}`);
     },
+
+    ingestInboundMedia: downloadTransport
+      ? createInboundMediaIngest(admin, downloadTransport)
+      : undefined,
 
     async resolveEligibleOperators(ids: string[]): Promise<string[]> {
       if (!ids.length) return [];

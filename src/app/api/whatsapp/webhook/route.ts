@@ -6,6 +6,7 @@ import { parseInboundPayload } from "@/lib/whatsapp/inbound";
 import { parseOperatorProfileIds } from "@/lib/whatsapp/operators";
 import { projectInbound } from "@/lib/whatsapp/link-projection";
 import { createSupabaseProjectionPort } from "@/lib/whatsapp/link-projection.supabase";
+import { metaDownloadTransport } from "@/lib/whatsapp/media-transport";
 import { handleInboundEvent, type InboundPorts } from "@/lib/whatsapp/inbound-core";
 import { consumeMakeRelayBatch } from "@/lib/whatsapp/make-relay-worker";
 import { createSupabaseMakeRelayPorts } from "@/lib/whatsapp/make-relay-worker.supabase";
@@ -126,7 +127,14 @@ function buildPorts(): InboundPorts {
     async project(input) {
       if (!admin) throw new Error("sin service client");
       const operators = parseOperatorProfileIds();
-      return projectInbound(input, createSupabaseProjectionPort(admin), operators.ids);
+      // H-7 · el transporte de DESCARGA se pasa acá para que el media entrante se
+      // guarde. Sin él, un mensaje con archivo dejaría el evento incompleto y
+      // reprocesable — nunca perdido en silencio, que era el defecto.
+      return projectInbound(
+        input,
+        createSupabaseProjectionPort(admin, metaDownloadTransport()),
+        operators.ids,
+      );
     },
 
     async kickRelay(relayKey) {

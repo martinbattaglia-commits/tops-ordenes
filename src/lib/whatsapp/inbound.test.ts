@@ -158,19 +158,48 @@ describe("parseInboundPayload · mensajes de texto", () => {
         text: "hola",
         sentAt: new Date(1760000000000).toISOString(),
         profileName: "Contacto Sintético",
+        // H-7 · un texto no trae media, y lo dice explícitamente.
+        media: null,
       },
     ]);
   });
 
-  it("cuenta como skipped los tipos no-texto (S1 sólo proyecta texto)", () => {
+  /**
+   * H-7 · ESTE COMPORTAMIENTO CAMBIÓ A PROPÓSITO.
+   *
+   * La prueba anterior afirmaba que una imagen entrante se descartaba
+   * («S1 sólo proyecta texto»). Era cierto y era el defecto: entre el 13 y el
+   * 18 de agosto de 2026 se perdieron así 6 documentos, 5 imágenes y 3 audios
+   * de clientes. Ahora la imagen ENTRA; lo que sigue descartándose son los
+   * tipos que este ingreso no sabe guardar, y ésos se nombran.
+   */
+  it("una imagen entrante YA NO se descarta: entra con su media", () => {
     const r = parseInboundPayload(
-      messageEvent({ type: "image", text: undefined, image: { id: "media" } }),
+      messageEvent({
+        type: "image", text: undefined,
+        image: { id: "media", mime_type: "image/jpeg", sha256: "x", url: "https://cdn/x" },
+      }),
+      TENANT,
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.messages).toHaveLength(1);
+    expect(r.messages[0].media).toMatchObject({ kind: "image", mediaId: "media" });
+    // El cuerpo dice QUÉ llegó: el hilo no muestra una burbuja muda.
+    expect(r.messages[0].text).toBe("📷 Foto");
+    expect(r.skipped.nonText).toBe(0);
+  });
+
+  it("lo que todavía no se sabe guardar se descarta CON NOMBRE, no como número mudo", () => {
+    const r = parseInboundPayload(
+      messageEvent({ type: "sticker", text: undefined, sticker: { id: "s" } }),
       TENANT,
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.messages).toHaveLength(0);
     expect(r.skipped.nonText).toBe(1);
+    expect(r.skipped.unsupportedTypes).toEqual(["sticker"]);
   });
 
   it("descarta mensajes sin wamid, sin from o sin timestamp", () => {

@@ -29,6 +29,7 @@
  */
 
 import type { WaInboundMessage, WaInboundStatus, WaStatusValue } from "./inbound";
+import type { InboundMedia } from "./inbound-media";
 
 export interface ProjectionConversation {
   id: string;
@@ -71,6 +72,22 @@ export interface LinkProjectionPort {
    * Ahora cada fila se resuelve sola contra el índice único de external_msg_id.
    */
   insertMessage(row: ProjectionMessageRow): Promise<"inserted" | "duplicate">;
+  /**
+   * H-7 · guarda el media ENTRANTE y lo liga a su mensaje.
+   *
+   * Devuelve `stored` si quedó guardado, `duplicate` si ese mismo objeto ya
+   * estaba —el reproceso de un evento no debe duplicar adjuntos— y lanza si
+   * falló de verdad, para que el evento quede reprocesable.
+   *
+   * Opcional en el puerto: las suites que sólo ejercen texto y status no
+   * tienen por qué implementarlo. Si no está, el media NO se pierde en
+   * silencio: se registra como error y el evento no se marca procesado.
+   */
+  ingestInboundMedia?(input: {
+    conversationId: string;
+    externalMsgId: string;
+    media: InboundMedia;
+  }): Promise<"stored" | "duplicate">;
   /** Perfiles de `ids` que existen, están activos y pertenecen al tenant. */
   resolveEligibleOperators(ids: string[]): Promise<string[]>;
   /**
@@ -94,6 +111,8 @@ export interface ProjectionResult {
   statusesNoop: number;
   /** Status llegado ANTES del sello del wamid: pendiente de reconciliación. */
   statusesUnmatched: number;
+  /** H-7 · adjuntos entrantes efectivamente guardados. */
+  mediaStored: number;
   errors: string[];
 }
 
@@ -144,6 +163,7 @@ function emptyResult(): ProjectionResult {
     statusesApplied: 0,
     statusesNoop: 0,
     statusesUnmatched: 0,
+    mediaStored: 0,
     errors: [],
   };
 }
@@ -228,6 +248,25 @@ export async function projectInbound(
           });
           if (outcome === "inserted") insertedHere += 1;
           else result.messagesDuplicated += 1;
+
+          // H-7 · el adjunto se guarda DESPUÉS del mensaje y también cuando el
+          // mensaje resultó duplicado: si un intento anterior insertó la fila y
+          // murió antes de bajar el binario, éste lo termina. `ingestInboundMedia`
+          // es idempotente por (bucket, path) y por el sha del contenido.
+          if (m.media) {
+            if (!port.ingestInboundMedia) {
+              // Un puerto sin ingreso de media NO puede tragarse el archivo en
+              // silencio: se declara error y el evento queda reprocesable.
+              result.errors.push(`media ${m.wamid}: el puerto no ingresa adjuntos`);
+            } else {
+              const guardado = await port.ingestInboundMedia({
+                conversationId: conv.id,
+                externalMsgId: m.wamid,
+                media: m.media,
+              });
+              if (guardado === "stored") result.mediaStored += 1;
+            }
+          }
         } catch (e) {
           // Falla de UN mensaje: se registra y se sigue con el resto. El evento
           // quedará incompleto y por lo tanto NO se marcará processed.
