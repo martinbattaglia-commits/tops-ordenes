@@ -32,6 +32,14 @@ interface CreateOk {
   ok: true;
   id: string;
   public_id: string;
+  /**
+   * HOTFIX-01: `true` sólo cuando la OC quedó escrita en PostgreSQL y existe
+   * una ficha para abrir. La rama de demo devuelve un `public_id` sintético;
+   * navegar a él aterriza en el `notFound()` de `ordenes/[publicId]` — un 404
+   * producido por un guardado que nunca ocurrió. El cliente decide si navega
+   * mirando ESTE campo, no la mera ausencia de error.
+   */
+  persisted: boolean;
 }
 interface CreateErr {
   ok: false;
@@ -58,7 +66,7 @@ export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput)
   if (env.app.demoMode) {
     const short = Math.floor(Math.random() * 9000) + 1000;
     const public_id = `OC-2026-${String(short).padStart(4, "0")}`;
-    return { ok: true, id: `demo-${short}`, public_id };
+    return { ok: true, id: `demo-${short}`, public_id, persisted: false };
   }
   if (env.app.needsSupabase) {
     return { ok: false, error: "El backend de Compras todavía no está configurado." };
@@ -455,7 +463,7 @@ export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput)
 
   revalidatePath("/compras/ordenes");
   revalidatePath("/compras");
-  return { ok: true, id: orderId, public_id };
+  return { ok: true, id: orderId, public_id, persisted: true };
 }
 
 function monthDir(iso: string): string {

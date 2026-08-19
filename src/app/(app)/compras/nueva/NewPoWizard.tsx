@@ -67,6 +67,9 @@ const EMPTY_ITEM = (pos: number): POItem => ({
 
 const STEPS = ["Proveedor", "Datos generales", "Productos", "Firma"] as const;
 
+/** Identificador público canónico de una OC emitida (`OC-AAAA-NNNN`). */
+const PUBLIC_ID_OC = /^OC-\d{4}-\d{4}$/;
+
 export function NewPoWizard({ vendors, products }: Props) {
   const router = useRouter();
   const [stepIdx, setStepIdx] = useState(0);
@@ -164,8 +167,13 @@ export function NewPoWizard({ vendors, products }: Props) {
           hash: draft.signatureHash ?? "",
         },
       });
-      if (res.ok) {
+      if (res.ok && res.persisted && PUBLIC_ID_OC.test(res.public_id)) {
         router.push(`/compras/ordenes/${res.public_id}?just_created=1`);
+      } else if (res.ok) {
+        // HOTFIX-01: la orden no quedó escrita en la base. Navegar a su ficha
+        // sería un 404 con el borrador perdido; el aviso va acá y el
+        // formulario conserva todo lo cargado.
+        setError("La OC no quedó guardada, así que no hay una ficha para abrir. Revisá la configuración del backend de Compras antes de reintentar.");
       } else {
         setError(res.error ?? "No se pudo crear la OC");
       }
