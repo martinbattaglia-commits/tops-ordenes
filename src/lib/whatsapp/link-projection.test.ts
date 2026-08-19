@@ -8,6 +8,8 @@ import {
   type ProjectionParticipant,
 } from "./link-projection";
 import { canTransition } from "./outbound-state";
+import { STATUS_UNMATCHED_REASON } from "./link-projection";
+import { errorCategory } from "./inbound-core";
 import type { WaInboundMessage, WaInboundStatus, WaStatusValue } from "./inbound";
 
 /**
@@ -347,5 +349,66 @@ describe("projectInbound · aislamiento de fallos", () => {
     const r = await projectInbound({ messages: [msg("wamid.1"), otro], statuses: [] }, f.port, []);
     expect(r.errors).toHaveLength(1);
     expect(r.messagesInserted).toBe(1);
+  });
+});
+
+/**
+ * INCIDENTE-WHATSAPP-ENTRANTES · R-19 · par ROJO→VERDE.
+ *
+ * Medido en producción: los 203 eventos terminales de `wa_inbound_events` son
+ * TODOS acuses de entrega cuyo wamid no existe en `connect_messages`
+ * (correlación 268/268), y los 203 dicen `last_error = "error_desconocido"`.
+ *
+ * El motivo nunca se perdió: NUNCA SE ESCRIBIÓ. `statusesUnmatched` era el
+ * único desenlace incompleto que no dejaba razón en `errors`, así que el
+ * consumidor recibía `errors: []` y saneaba `undefined` a «error_desconocido».
+ */
+describe("projectInbound · el status sin sello DEJA MOTIVO (incidente 203)", () => {
+  it("un status unmatched escribe una razón legible en errors", async () => {
+    const f = makeFakePort();
+    const r = await projectInbound(
+      { messages: [], statuses: [status("wamid.SIN-SELLO", "delivered")] },
+      f.port,
+      [],
+    );
+    expect(r.statusesUnmatched).toBe(1);
+    // ANTES: errors === []  →  el consumidor no tenía NADA que sanear.
+    expect(r.errors.length).toBeGreaterThan(0);
+    expect(r.errors[0]).toContain("status_unmatched");
+  });
+
+  it("la razón no filtra el wamid ni el teléfono de la contraparte", async () => {
+    const f = makeFakePort();
+    const r = await projectInbound(
+      { messages: [], statuses: [status("wamid.SECRETO-DEL-CLIENTE", "read")] },
+      f.port,
+      [],
+    );
+    const todo = r.errors.join(" | ");
+    expect(todo).not.toContain("wamid.SECRETO-DEL-CLIENTE");
+    expect(todo).not.toContain(PHONE);
+  });
+
+  it("C4 · M-2 · la razón tiene categoría propia: NUNCA «unknown»", async () => {
+    const f = makeFakePort();
+    const r = await projectInbound(
+      { messages: [], statuses: [status("wamid.SIN-SELLO", "delivered")] },
+      f.port,
+      [],
+    );
+    // El camino EN VIVO (webhook) categoriza cada motivo antes de loguearlo.
+    // Sin rama propia caía en «unknown» y el arreglo no se notaba ahí.
+    expect(errorCategory(r.errors[0])).toBe(STATUS_UNMATCHED_REASON);
+    expect(errorCategory(r.errors[0])).not.toBe("unknown");
+  });
+
+  it("invariante: proyección incompleta ⇒ SIEMPRE hay al menos un motivo", async () => {
+    const f = makeFakePort();
+    const r = await projectInbound(
+      { messages: [], statuses: [status("wamid.SIN-SELLO", "sent")] },
+      f.port,
+      [],
+    );
+    if (!isProjectionComplete(r)) expect(r.errors.length).toBeGreaterThan(0);
   });
 });

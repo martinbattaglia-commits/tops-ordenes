@@ -109,6 +109,20 @@ export function isProjectionComplete(r: ProjectionResult): boolean {
 const TOPIC = "WhatsApp Comercial";
 
 /**
+ * Código del status que no encontró su mensaje saliente.
+ *
+ * Es un CÓDIGO, no un mensaje: viaja hasta `wa_inbound_events.last_error`, una
+ * columna consultable, y el evento del que proviene contiene el teléfono y el
+ * texto de un tercero. Nunca lleva el wamid ni la contraparte.
+ *
+ * Por qué existe: `statusesUnmatched` era el ÚNICO desenlace que dejaba la
+ * proyección incompleta sin escribir una razón. El consumidor recibía
+ * `errors: []`, saneaba `undefined` y lo archivaba como «error_desconocido».
+ * Seis días de eventos terminales quedaron sin diagnóstico posible por eso.
+ */
+export const STATUS_UNMATCHED_REASON = "status_unmatched";
+
+/**
  * La decisión de transición vive en `outbound-state.ts` (máquina única para
  * inbound y outbound). El rank local anterior era incorrecto: daba a `failed`
  * el rango más alto, con lo que un error tardío de Meta pisaba un `delivered`
@@ -241,7 +255,24 @@ export async function projectInbound(
       const outcome = await port.applyOutboundStatus(st);
       if (outcome === "applied") result.statusesApplied += 1;
       else if (outcome === "noop") result.statusesNoop += 1;
-      else result.statusesUnmatched += 1;
+      else {
+        result.statusesUnmatched += 1;
+        // El motivo se escribe ACÁ, en el único punto que lo conoce, y le
+        // devuelve al operador la diferencia entre «no sé qué pasó» y «este
+        // acuse no tiene dueño».
+        //
+        // C4 · M-1 · EFECTO SOBRE EL DESENLACE, declarado y no afirmado de más:
+        //  · si el acuse sin dueño es el ÚNICO motivo, nada cambia: el código no
+        //    figura en PERMANENTES, así que `isPermanent` sigue dando false y el
+        //    evento sigue siendo reintentable, igual que antes del arreglo;
+        //  · en un LOTE MIXTO —un error permanente de mensaje MÁS un acuse sin
+        //    dueño en el mismo `value`— el evento pasa de permanent a retryable,
+        //    porque `isPermanent` exige que TODOS los motivos sean permanentes.
+        //    Es deliberado y es la dirección segura: reintentar de más antes que
+        //    descartar un hecho del proveedor, que es la política declarada del
+        //    consumidor. Queda fijado por prueba en inbound-consumer.test.ts.
+        result.errors.push(STATUS_UNMATCHED_REASON);
+      }
     } catch (e) {
       result.errors.push(
         `estado ${st.status}: ${e instanceof Error ? e.message : String(e)}`,

@@ -13,7 +13,11 @@
  */
 
 import type { WaInboundParse, WaInboundMessage, WaInboundStatus } from "./inbound";
-import { isProjectionComplete, type ProjectionResult } from "./link-projection";
+import {
+  isProjectionComplete,
+  STATUS_UNMATCHED_REASON,
+  type ProjectionResult,
+} from "./link-projection";
 // HIGH-3 · clasificación transitorio/permanente. Módulo PURO: no arrastra IO.
 import { isTransient } from "./inbound-consumer";
 
@@ -72,6 +76,10 @@ export interface InboundPorts {
  */
 export function errorCategory(message: string): string {
   const m = message.toLowerCase();
+  // C4 · M-2 · el acuse sin dueño tiene categoría PROPIA. Sin esta rama caía en
+  // `unknown` y el webhook en vivo volvía a decir «no sé qué pasó» justo sobre
+  // el hecho que este expediente existe para nombrar.
+  if (m.includes(STATUS_UNMATCHED_REASON)) return STATUS_UNMATCHED_REASON;
   if (m.includes("mensaje ")) return "message_write";
   if (m.includes("proyección") || m.includes("conversación")) return "conversation_write";
   if (m.includes("participante") || m.includes("operador")) return "participant_write";
@@ -192,15 +200,27 @@ async function projectSafely(
     });
     // R6 · los errores de `link-projection` traen wamid y a veces el teléfono.
     // Nunca llegan crudos al logger: sólo categoría estable + correlación.
+    // C4 · M-2 · el acuse sin dueño es una condición ESPERADA, no un fallo: ya
+    // se cuenta en `pending=` y, según la medición del incidente, va a seguir
+    // llegando mientras se responda desde el teléfono en vez de desde Nexus.
+    // Emitirlo a nivel error convertía ~34 hechos benignos por día en ruido
+    // permanente. Se degrada a `warn`; el resto no cambia de nivel.
     for (const err of result.errors) {
-      ports.logger.error(`event=${seq} category=${errorCategory(err)}`);
+      const category = errorCategory(err);
+      const linea = `event=${seq} category=${category}`;
+      if (category === STATUS_UNMATCHED_REASON) ports.logger.warn(linea);
+      else ports.logger.error(linea);
     }
 
     const complete = isProjectionComplete(result);
     const notes =
       `msgs=${result.messagesInserted} dup=${result.messagesDuplicated} ` +
       `status=${result.statusesApplied} noop=${result.statusesNoop} ` +
-      `pending=${result.statusesUnmatched} ops=${result.operatorsAdded} err=${result.errors.length}`;
+      `pending=${result.statusesUnmatched} ops=${result.operatorsAdded} ` +
+      // C4 · M-2 · `err=` conserva EXACTAMENTE el significado que tenía antes
+      // del arreglo: fallos. El acuse sin dueño ya está contado en `pending=` y
+      // contarlo dos veces cambiaría una columna de evidencia ya persistida.
+      `err=${result.errors.filter((e) => e !== STATUS_UNMATCHED_REASON).length}`;
     // R7 · si la marca no acredita su fila, el evento NO puede reportarse como
     // procesado: se degrada a pendiente y, si eso también falla, se informa.
     if (complete) {
