@@ -64,6 +64,33 @@ describe("el detalle NO puede convertirse en una fuga", () => {
     expect(r.length).toBeLessThanOrEqual(500);
   });
 
+  it("C4/MEDIUM-2 · el recorte NO parte un carácter multibyte", () => {
+    // 498 ASCII + un emoji (2 unidades UTF-16). Un slice por unidades corta el
+    // par sustituto a la mitad: queda un high surrogate suelto que el round-trip
+    // por UTF-8 vuelve U+FFFD y que PostgreSQL rechaza con 22P02 —«Unicode low
+    // surrogate must follow a high surrogate»—. El status no se aplicaría, el
+    // evento quedaría sin procesar y volvería el bucle de reproceso: el mismo
+    // que este expediente acaba de pagar, reintroducido por el módulo que
+    // existe para mejorar la trazabilidad.
+    const casi = "x".repeat(498) + "💥" + "relleno posterior";
+    const r = extractWaErrorDetail([{ code: 1, error_data: { details: casi } }])!;
+    // Ninguna unidad de par sustituto puede quedar suelta en los bordes.
+    const ultima = r.charCodeAt(r.length - 1);
+    const esAltaSuelta = ultima >= 0xd800 && ultima <= 0xdbff;
+    expect(esAltaSuelta).toBe(false);
+    // Y el resultado es UTF-8 válido de ida y vuelta, sin U+FFFD inventados.
+    const vuelta = new TextDecoder().decode(new TextEncoder().encode(r));
+    expect(vuelta).toBe(r);
+    expect(r).not.toContain("\uFFFD");
+  });
+
+  it("C4/MEDIUM-2 · un texto de puros emojis también respeta el tope sin romperse", () => {
+    const emojis = "🎙️".repeat(400);
+    const r = extractWaErrorDetail([{ code: 1, error_data: { details: emojis } }])!;
+    const vuelta = new TextDecoder().decode(new TextEncoder().encode(r));
+    expect(vuelta).toBe(r);
+  });
+
   it("el texto real de Meta pasa entero: no se recorta lo que sirve", () => {
     const r = extractWaErrorDetail([errorReal])!;
     expect(r).toBe(errorReal.error_data.details);

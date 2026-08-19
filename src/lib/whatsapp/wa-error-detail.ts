@@ -47,9 +47,16 @@ function texto(v: unknown): string | null {
 
 function sanear(bruto: string): string {
   const sinTelefonos = bruto.replace(TELEFONO, "[tel]");
-  return sinTelefonos.length > MAX_LARGO
-    ? `${sinTelefonos.slice(0, MAX_LARGO - 1)}…`
-    : sinTelefonos;
+  if (sinTelefonos.length <= MAX_LARGO) return sinTelefonos;
+  // C4/MEDIUM-2 · el recorte va por CODE POINTS, no por unidades UTF-16. Un
+  // `slice` por unidades puede partir un par sustituto a la mitad: queda un
+  // high surrogate suelto que el round-trip por UTF-8 vuelve U+FFFD y que
+  // PostgreSQL rechaza con 22P02. El status no se aplicaría y el evento
+  // entraría en reproceso — el mismo bucle que este expediente pagó caro,
+  // reintroducido por el módulo que existe para la trazabilidad. El criterio
+  // es el de siempre: que Meta no haya mandado nunca un emoji ahí no es
+  // garantía de que no lo haga.
+  return `${Array.from(sinTelefonos).slice(0, MAX_LARGO - 1).join("")}…`;
 }
 
 /**
