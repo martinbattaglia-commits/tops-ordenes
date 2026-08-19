@@ -14,7 +14,7 @@ import { postMessageAction } from "@/lib/connect/adapters/driving/message-action
 import { sendWhatsappTextAction } from "@/lib/whatsapp/reply-action";
 import { dispatchComposerSend } from "@/lib/connect/composer-dispatch";
 import {
-  audioRecorderOptionsFor, composerCapabilities, ownBubbleClass, sendButtonClass,
+  audioRecorderOptionsFor, composerBlockNotice, composerCapabilities, ownBubbleClass, sendButtonClass,
 } from "@/lib/connect/composer-policy";
 import {
   reduceMessageState,
@@ -178,6 +178,9 @@ export function ThreadView({
   // antes de EJECUTAR: ocultar un botón no impide que un atajo, un dictado o un
   // re-render disparen la acción igual.
   const caps = useMemo(() => composerCapabilities(kind, { readOnly }), [kind, readOnly]);
+  // INC-04-R2 · por qué NO se puede escribir, si es que no se puede. La vista
+  // consulta el motivo; no lo deduce comparando `kind`. `null` = se puede.
+  const bloqueo = useMemo(() => composerBlockNotice(kind, { readOnly }), [kind, readOnly]);
 
   async function sendAudio() {
     // Guarda de LÓGICA, no de CSS: corta antes de `prepareAudioUploadAction`,
@@ -608,10 +611,18 @@ export function ThreadView({
         <div ref={endRef} />
       </div>
 
-      {readOnly ? (
-        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt px-4 py-3 text-center text-xs text-fg-muted">
-          <Icon name="folder" size={13} className="text-fg-muted" />
-          Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.
+      {/* INC-04-R2 · si hay motivo de bloqueo, se MUESTRA en lugar del composer.
+          Antes esta rama sólo contemplaba `readOnly`, así que un kind que el
+          código no conocía dejaba un campo de texto que no enviaba nada y no
+          decía por qué. Un composer que no puede enviar tiene que declararlo:
+          es lo que hizo que este defecto durara ocho días sin diagnóstico. */}
+      {bloqueo ? (
+        <div
+          role="status"
+          className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt px-4 py-3 text-center text-xs text-fg-muted"
+        >
+          <Icon name={bloqueo.reason === "read_only" ? "folder" : "x"} size={13} className="text-fg-muted" />
+          {bloqueo.message}
         </div>
       ) : (
         <div className="relative border-t border-stroke-soft bg-bg-surface px-3 py-2.5">

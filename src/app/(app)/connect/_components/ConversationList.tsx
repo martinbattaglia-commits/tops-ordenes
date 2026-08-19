@@ -18,7 +18,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 const KIND_ICON: Record<ConversationKind, IconName> = {
   dm: "user", group: "users", channel: "megaphone", erp: "database",
-  incident: "shield", whatsapp: "whatsapp", ai: "sparkle",
+  // INC-04-R2 · `task` faltaba. El ícono es el mismo con el que el sidebar
+  // nombra a Tareas, para que la bandeja y la navegación no discrepen.
+  incident: "shield", task: "check", whatsapp: "whatsapp", ai: "sparkle",
 };
 
 // UX-005: la paleta canónica vive en connect/theme.ts (KIND_COLOR importado).

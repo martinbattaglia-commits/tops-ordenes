@@ -4,7 +4,7 @@
 // NO se importa nada de otros bounded contexts (acoplamiento débil por (entity_type, entity_id)).
 
 // ───────────────────────── Enums (1:1 con 0143_connect_schema) ─────────────────────────
-export type ConversationKind = "dm" | "group" | "channel" | "erp" | "incident" | "whatsapp" | "ai";
+export type ConversationKind = "dm" | "group" | "channel" | "erp" | "incident" | "whatsapp" | "ai" | "task";
 export type MemberRole = "owner" | "moderator" | "member" | "guest";
 export type MessageKind = "text" | "system" | "ai" | "file" | "call_link" | "whatsapp" | "audio";
 export type ParticipantType = "staff" | "client" | "provider" | "ai" | "system" | "whatsapp";

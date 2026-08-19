@@ -4,7 +4,7 @@ import { listConversationLinks, getCurrentUserId } from "@/lib/connect/data";
 import { getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
 import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { canChannel } from "@/lib/rbac/nexus-link";
-import { ENTITY_TYPE_LABELS } from "@/lib/connect/types";
+import { ENTITY_TYPE_LABELS, type ConversationKind } from "@/lib/connect/types";
 import { getWaContact } from "@/lib/connect/read/wa-contact";
 import { ThreadView } from "../../_components/ThreadView";
 import { WaContactCard } from "../../_components/WaContactCard";
@@ -14,9 +14,13 @@ import { UnarchiveButton } from "../../_components/UnarchiveButton";
 
 export const dynamic = "force-dynamic";
 
-const KIND_LABEL: Record<string, string> = {
+// INC-04-R2/H-2 · CUARTO mapa incompleto, y el único que el compilador no veía:
+// estaba tipado `Record<string, string>`, así que la ausencia de `task` no era
+// un error de tipos. El arreglo real es el TIPO: con `ConversationKind` como
+// clave, el próximo kind que entre al universo rompe la compilación acá también.
+const KIND_LABEL: Record<ConversationKind, string> = {
   dm: "Mensaje directo", group: "Grupo", channel: "Canal", erp: "Contexto ERP",
-  incident: "Incidente", whatsapp: "WhatsApp", ai: "Asistente",
+  incident: "Incidente", task: "Tarea", whatsapp: "WhatsApp", ai: "Asistente",
 };
 
 export default async function ConnectThreadPage({

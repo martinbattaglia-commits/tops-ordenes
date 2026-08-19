@@ -11,7 +11,15 @@
 
 import type { ConversationKind } from "./types";
 
-/** Universo cerrado de kinds. Cualquier otra cosa es fail-closed. */
+/**
+ * Universo cerrado de kinds. Cualquier otra cosa es fail-closed.
+ *
+ * ⚠ ESTA LISTA ES UNA COPIA DEL ENUM `connect_conversation_kind_t`. Cuando una
+ * migración agrega un valor allá y nadie lo agrega acá, el composer enmudece
+ * para ese kind sin que nada lo delate: fue exactamente lo que pasó con `task`
+ * durante ocho días. `composer-policy.enum.test.ts` compara esta lista contra
+ * las migraciones en disco para que no vuelva a pasar en silencio.
+ */
 export const CONVERSATION_KINDS = [
   "dm",
   "group",
@@ -20,6 +28,10 @@ export const CONVERSATION_KINDS = [
   "incident",
   "whatsapp",
   "ai",
+  // INC-04-R2 · vive en el enum desde 0167 y faltaba acá. Un hilo de tarea es
+  // chat interno del tenant igual que uno de incidente, así que sus capacidades
+  // son las mismas: texto, audio, adjuntos y menciones.
+  "task",
 ] as const;
 
 /** Falla la compilación si `types.ts` agrega un kind y este archivo no se entera. */
@@ -114,6 +126,60 @@ export function composerCapabilities(
     return { canSendText: true, canSendAudio: true, canAttachFile: true, canMention: false };
   }
   return { canSendText: true, canSendAudio: true, canAttachFile: true, canMention: true };
+}
+
+/**
+ * INC-04-R2 · POR QUÉ EL COMPOSER NO DEJA ESCRIBIR, EN PALABRAS.
+ *
+ * `composerCapabilities` dice QUÉ se puede hacer; esto dice POR QUÉ no se puede,
+ * que es lo que le faltaba al usuario. Cuando `task` quedó fuera del universo
+ * cerrado, el composer devolvía NONE y la vista no mostraba nada: el botón
+ * quedaba `disabled` y `send()` retornaba sin señal. Escribir y que no pase nada
+ * es indistinguible de un sistema roto, y por eso el defecto duró ocho días.
+ *
+ * Vive acá y no en la vista por el mismo contrato que el resto de las
+ * decisiones por `kind`: `ThreadView` CONSULTA, no compara.
+ *
+ * `null` significa «se puede escribir». Cualquier otro valor es un cartel que
+ * la vista debe mostrar EN LUGAR del composer: ofrecer un campo de texto que no
+ * va a enviar nada es la promesa que este expediente vino a romper.
+ */
+export type ComposerBlockReason = "read_only" | "unknown_kind";
+
+export interface ComposerBlockNotice {
+  reason: ComposerBlockReason;
+  message: string;
+}
+
+/** Mensaje estable cuando el composer no sabe a dónde iría el mensaje. */
+export const UNKNOWN_KIND_MESSAGE =
+  "No se pudo determinar el tipo de conversación. No se envió nada.";
+
+// H-3 · el texto afirmaba «está archivada», pero `readOnly` llega TRUE por tres
+// caminos distintos: conversación archivada, tarea terminal (completada o
+// cancelada) e incidente cerrado. Para dos de los tres, la causa afirmada era
+// falsa. DECISIÓN DECLARADA: el mensaje se vuelve genérico y honesto en vez de
+// llevar la causa real hasta acá — propagarla exigiría que cada página la
+// declare, y las páginas ya muestran el estado (chips de tarea, cabecera de
+// incidente); un cartel genérico verdadero vale más que uno específico que a
+// veces miente.
+const READ_ONLY_MESSAGE =
+  "Esta conversación es de solo lectura: no se pueden enviar mensajes.";
+
+export function composerBlockNotice(
+  kind: unknown,
+  options: { readOnly?: boolean } = {},
+): ComposerBlockNotice | null {
+  if (options.readOnly === true) {
+    return { reason: "read_only", message: READ_ONLY_MESSAGE };
+  }
+  if (!isConversationKind(kind)) {
+    // El texto es el MISMO que devuelve `dispatchComposerSend` para este caso:
+    // el usuario no debería leer dos explicaciones distintas del mismo hecho
+    // según por dónde se entere.
+    return { reason: "unknown_kind", message: UNKNOWN_KIND_MESSAGE };
+  }
+  return null;
 }
 
 /**

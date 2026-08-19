@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  composerBlockNotice,
   CONVERSATION_KINDS,
   composerCapabilities,
   isConversationKind,
@@ -54,6 +55,83 @@ describe("21 · audio, adjuntos y menciones operativos en Connect", () => {
       canAttachFile: true,
       canMention: true,
     });
+  });
+});
+
+// INC-04-R2 · el chat de una TAREA no dejaba escribir.
+//
+// `task` existe en el enum `connect_conversation_kind_t` desde
+// `0167_connect_tasks_enums_permissions.sql`, pero el universo cerrado de este
+// módulo se quedó en siete y nunca se enteró. Con el kind fuera de la lista,
+// `composerCapabilities` devolvía NONE y el composer quedaba mudo: 22
+// conversaciones de tarea sin poder enviar un mensaje durante ocho días.
+//
+// LAS CAPACIDADES DE UNA TAREA SON LAS DE UN INCIDENTE, y se declara acá en vez
+// de dejarlo implícito: un hilo de tarea es chat interno del tenant igual que
+// uno de incidente —mismos participantes, misma FK de menciones, mismo destino
+// de adjuntos—, así que texto, audio, adjuntos y menciones. No hay ninguna
+// razón de canal para recortarle nada; la única restricción que existe en este
+// módulo es la de WhatsApp, y una tarea no sale del tenant.
+describe("INC-04-R2 · una tarea escribe igual que un incidente", () => {
+  it("`task` es un kind reconocido", () => {
+    expect(isConversationKind("task")).toBe(true);
+  });
+
+  it("una tarea tiene EXACTAMENTE las capacidades de un incidente", () => {
+    expect(composerCapabilities("task")).toEqual(composerCapabilities("incident"));
+  });
+
+  it("y esas capacidades son texto, audio, adjuntos y menciones", () => {
+    expect(composerCapabilities("task")).toEqual({
+      canSendText: true,
+      canSendAudio: true,
+      canAttachFile: true,
+      canMention: true,
+    });
+  });
+
+  it("una tarea NO rutea por el outbound de WhatsApp", () => {
+    expect(isWhatsappKind("task")).toBe(false);
+  });
+
+  it("readOnly la sigue bloqueando, como a cualquier otro kind", () => {
+    expect(composerCapabilities("task", { readOnly: true })).toEqual({
+      canSendText: false,
+      canSendAudio: false,
+      canAttachFile: false,
+      canMention: false,
+    });
+  });
+});
+
+// INC-04-R2 · EL INVARIANTE QUE IMPIDE QUE EL SILENCIO VUELVA.
+//
+// `composerCapabilities` dice si se puede escribir; `composerBlockNotice` dice
+// por qué no. Hoy coinciden por construcción, y nada lo garantizaba: si alguien
+// agrega en el futuro una razón para devolver `canSendText: false` sin agregarla
+// también a `composerBlockNotice`, el composer vuelve a quedar mudo —botón
+// deshabilitado y ningún cartel— que es EXACTAMENTE el defecto de ocho días que
+// este expediente cierra. Este bloque ata las dos funciones.
+describe("INC-04-R2 · no se puede escribir ⟺ hay un motivo que mostrar", () => {
+  const CASOS: Array<[unknown, { readOnly?: boolean }]> = [
+    ...CONVERSATION_KINDS.map((k) => [k, {}] as [unknown, { readOnly?: boolean }]),
+    ...CONVERSATION_KINDS.map((k) => [k, { readOnly: true }] as [unknown, { readOnly?: boolean }]),
+    ["kind-inexistente", {}],
+    ["kind-inexistente", { readOnly: true }],
+    [null, {}],
+    [undefined, {}],
+    ["", {}],
+    [42, {}],
+  ];
+
+  it.each(CASOS)("kind=%s opciones=%o · el bloqueo y las capacidades no se contradicen", (kind, opts) => {
+    const caps = composerCapabilities(kind, opts);
+    const aviso = composerBlockNotice(kind, opts);
+    // Si no puede enviar texto, TIENE que haber un motivo que mostrar.
+    expect(caps.canSendText ? aviso === null : aviso !== null).toBe(true);
+    // Y el motivo, cuando existe, nunca es una cadena vacía: un cartel en
+    // blanco es la misma falla con otra forma.
+    if (aviso) expect(aviso.message.trim().length).toBeGreaterThan(0);
   });
 });
 
