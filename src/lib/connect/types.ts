@@ -139,6 +139,21 @@ export interface Participant {
   isFavorite: boolean;
 }
 
+/**
+ * H-1 · el adjunto, tal como VIAJA al cliente.
+ *
+ * NO lleva `storage_path` ni `storage_bucket`: la ubicación real del objeto no
+ * es asunto del navegador —el portón `connect_emit_attachment_signed_url` la
+ * resuelve del lado del servidor— y publicarla sólo agregaría superficie.
+ */
+export interface MessageAttachment {
+  id: string;
+  fileName: string | null;
+  mimeType: string | null;
+  fileSize: number | null;
+  scanStatus: string;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -162,6 +177,11 @@ export interface Message {
    * sin evidencia, que es exactamente el caso que no puede mostrarse confirmado.
    */
   wa?: WaProjection;
+  /**
+   * H-1 · adjuntos del mensaje. Presente sólo en la lectura real: una burbuja
+   * optimista todavía no los tiene, y su ausencia no significa «no hay».
+   */
+  attachments?: MessageAttachment[];
 }
 
 export interface ConversationLink {
@@ -251,6 +271,14 @@ export interface MessageRow {
    */
   meta?: unknown;
   external_msg_id?: unknown;
+  /** H-1 · filas embebidas de `connect_attachments` (join de PostgREST). */
+  connect_attachments?: Array<{
+    id: string;
+    file_name: string | null;
+    mime_type: string | null;
+    file_size: number | string | null;
+    scan_status: string | null;
+  }> | null;
 }
 
 export interface InboxRow {

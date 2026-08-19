@@ -36,6 +36,7 @@ import {
 } from "@/lib/connect/adapters/driving/audio-actions";
 import { AudioPlayer } from "./AudioPlayer";
 import { AttachmentComposer } from "./AttachmentComposer";
+import { MessageAttachments } from "./MessageAttachments";
 
 /** D1 (LINK-MEDIA-001): ícono propio del MENSAJE de voz — distinto del Voice Command. */
 function MicIcon({ size = 15 }: { size?: number }) {
@@ -548,6 +549,22 @@ export function ThreadView({
                   <div className="whitespace-pre-wrap break-words">
                     {renderWithMentions(messageDisplayBody(m), mentionNames)}
                   </div>
+                )}
+                {/*
+                  H-1 · LOS ADJUNTOS SE MUESTRAN.
+
+                  Antes no había ninguna rama para `kind === "file"`: el mensaje
+                  caía al `else` de arriba y el archivo se pintaba como el texto
+                  `📎 foto.png`, inabrible. El cuerpo sigue mostrándose —es el
+                  pie de foto cuando lo hay— y debajo va el adjunto real.
+
+                  Cuelga de `attachments` y no de `kind` a propósito: un mensaje
+                  con archivo adjunto se muestra igual venga marcado como venga,
+                  y una burbuja optimista —que todavía no tiene la lista— no
+                  renderiza nada de más.
+                */}
+                {m.attachments && m.attachments.length > 0 && (
+                  <MessageAttachments attachments={m.attachments} />
                 )}
                 <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
                   {/*
