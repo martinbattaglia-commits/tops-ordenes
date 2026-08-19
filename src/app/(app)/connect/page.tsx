@@ -9,8 +9,8 @@ import { getMyProfile } from "@/lib/profile/data";
 import { canAdminWhatsappImport } from "@/lib/rbac/nexus-link";
 import type { NotificationItem, NotificationPriority } from "@/lib/notifications/types";
 import {
-  CATEGORY_LEGEND, CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind,
-  formatBadgeCount, type NotificationCategory,
+  CATEGORY_LEGEND, CATEGORY_STYLE, LEGEND_FOOTNOTE, categoryAriaLabel,
+  categoryForConversationKind, formatBadgeCount, type NotificationCategory,
 } from "@/lib/notifications/categories";
 import { relTime } from "@/lib/utils";
 
@@ -216,6 +216,9 @@ function ColorLegendCard() {
           );
         })}
       </dl>
+      {/* C4/LOW-2 · el filtro que comparten los tres. Sin esto, quien silencia
+          un hilo y no ve su badge concluye que el contador está roto. */}
+      <p className="text-[10px] leading-snug text-fg-muted">{LEGEND_FOOTNOTE}</p>
     </section>
   );
 }

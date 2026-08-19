@@ -76,8 +76,13 @@ export interface LinkProjectionPort {
    * H-7 · guarda el media ENTRANTE y lo liga a su mensaje.
    *
    * Devuelve `stored` si quedó guardado, `duplicate` si ese mismo objeto ya
-   * estaba —el reproceso de un evento no debe duplicar adjuntos— y lanza si
-   * falló de verdad, para que el evento quede reprocesable.
+   * estaba —el reproceso de un evento no debe duplicar adjuntos—,
+   * `unsupported` si el formato no se sabe guardar, y lanza SÓLO ante un fallo
+   * reintentable, para que el evento quede reprocesable.
+   *
+   * C4/HIGH-1 · `unsupported` es terminal a propósito. Cuando era una excepción,
+   * el evento nunca llegaba a `processed` y se reprocesaba para siempre,
+   * re-descargando el binario de la Graph API en cada vuelta.
    *
    * Opcional en el puerto: las suites que sólo ejercen texto y status no
    * tienen por qué implementarlo. Si no está, el media NO se pierde en
@@ -87,7 +92,7 @@ export interface LinkProjectionPort {
     conversationId: string;
     externalMsgId: string;
     media: InboundMedia;
-  }): Promise<"stored" | "duplicate">;
+  }): Promise<"stored" | "duplicate" | "unsupported">;
   /** Perfiles de `ids` que existen, están activos y pertenecen al tenant. */
   resolveEligibleOperators(ids: string[]): Promise<string[]>;
   /**
@@ -113,6 +118,13 @@ export interface ProjectionResult {
   statusesUnmatched: number;
   /** H-7 · adjuntos entrantes efectivamente guardados. */
   mediaStored: number;
+  /**
+   * C4/HIGH-1 · adjuntos cuyo formato este ingreso no sabe guardar.
+   *
+   * NO son errores: el evento se completa igual. Pero se CUENTAN, porque un
+   * cero silencioso fue lo que hizo invisible la pérdida original.
+   */
+  mediaUnsupported: number;
   errors: string[];
 }
 
@@ -164,6 +176,7 @@ function emptyResult(): ProjectionResult {
     statusesNoop: 0,
     statusesUnmatched: 0,
     mediaStored: 0,
+    mediaUnsupported: 0,
     errors: [],
   };
 }
@@ -265,6 +278,9 @@ export async function projectInbound(
                 media: m.media,
               });
               if (guardado === "stored") result.mediaStored += 1;
+              // `unsupported` no ensucia `errors`: el evento se completa y el
+              // adjunto queda contado como no guardado, que es la verdad.
+              else if (guardado === "unsupported") result.mediaUnsupported += 1;
             }
           }
         } catch (e) {

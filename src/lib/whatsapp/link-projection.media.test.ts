@@ -6,7 +6,7 @@
 // adjunto tiene que quedar guardado y ligado a su mensaje.
 
 import { describe, it, expect, vi } from "vitest";
-import { projectInbound, type LinkProjectionPort } from "./link-projection";
+import { projectInbound, isProjectionComplete, type LinkProjectionPort } from "./link-projection";
 import type { WaInboundMessage } from "./inbound";
 
 const CONV = { id: "conv-1", archivedAt: null };
@@ -107,5 +107,17 @@ describe("H-7 · el archivo no se pierde en silencio NUNCA", () => {
     const todo = r.errors.join(" | ");
     expect(todo).not.toContain("dato-privado-del-cliente");
     expect(todo).not.toContain("+5491100000000");
+  });
+});
+
+describe("C4/HIGH-1 · un formato no soportado NO deja el evento incompleto", () => {
+  it("se cuenta aparte y `errors` queda vacío: el evento se marca procesado", async () => {
+    const { port } = puerto({ ingestInboundMedia: async () => "unsupported" });
+    const r = await projectInbound(entrada([mensaje()]), port, []);
+    expect(r.mediaUnsupported).toBe(1);
+    expect(r.mediaStored).toBe(0);
+    // La condición que evita el bucle de reproceso contra la Graph API.
+    expect(r.errors).toEqual([]);
+    expect(isProjectionComplete(r)).toBe(true);
   });
 });

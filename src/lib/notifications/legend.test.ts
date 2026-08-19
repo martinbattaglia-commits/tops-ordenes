@@ -6,6 +6,7 @@
 import { describe, it, expect } from "vitest";
 import {
   CATEGORY_LEGEND,
+  LEGEND_FOOTNOTE,
   CATEGORY_STYLE,
   categoryForConversationKind,
   type NotificationCategory,
@@ -52,5 +53,18 @@ describe("INC-06 · lo que la leyenda AFIRMA es lo que el sistema hace", () => {
     const rojo = CATEGORY_LEGEND.find((e) => e.category === "red_system")!;
     expect(rojo.meaning).toMatch(/[Aa]visos/);
     expect(rojo.meaning).not.toMatch(/mensajes sin leer/i);
+  });
+});
+
+describe("C4/LOW-2 · la leyenda no promete lo que la vista excluye", () => {
+  it("el rojo dice que cuenta lo VENCIDO, no toda notificación sin leer", () => {
+    const rojo = CATEGORY_LEGEND.find((e) => e.category === "red_system")!;
+    // `v_link_notification_badges` filtra `not is_read AND is_due`.
+    expect(rojo.meaning).toMatch(/vencier|vencid/i);
+  });
+
+  it("el pie declara los dos filtros que comparten verde y amarillo", () => {
+    expect(LEGEND_FOOTNOTE).toMatch(/silenciad/i);
+    expect(LEGEND_FOOTNOTE).toMatch(/archivad/i);
   });
 });

@@ -4,7 +4,10 @@ import { describe, it, expect, vi } from "vitest";
 // SÓLO para este test, sin tocar vitest.config ni configuración compartida.
 vi.mock("server-only", () => ({}));
 
-import { createSupabaseProjectionPort } from "./link-projection.supabase";
+import {
+  createInboundMediaIngest, createSupabaseProjectionPort,
+} from "./link-projection.supabase";
+import type { InboundMedia } from "./inbound-media";
 import { projectInbound, isProjectionComplete } from "./link-projection";
 
 /**
@@ -302,5 +305,129 @@ describe("WA-8R9 · statusesApplied y la reprocesabilidad del evento", () => {
       const { res } = await proyectar(outcome);
       expect(isProjectionComplete(res)).toBe(true);
     }
+  });
+});
+
+// =========================================================================
+// C4/HIGH-1 y MEDIUM-1 - el ingreso de media entrante, contra la
+// IMPLEMENTACION REAL. Se dobla la frontera -Supabase y el transporte de
+// Meta-, nunca `createInboundMediaIngest`.
+//
+// La prueba original de H-7 reemplazaba el ingreso por un `vi.fn()` y solo
+// ejercia imagenes: demostraba que el ingreso se LLAMARA, no que GUARDARA.
+// Con eso, <<el audio entra>> paso por verdadero en una suite entera verde.
+// =========================================================================
+
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 0, 0]);
+/** Ogg/Opus: 'OggS' + cabecera. Es lo que WhatsApp entrega como nota de voz. */
+const OGG = new Uint8Array([
+  0x4f, 0x67, 0x67, 0x53, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64,
+]);
+/** MP3 con tag ID3. */
+const MP3 = new Uint8Array([0x49, 0x44, 0x33, 3, 0, 0, 0, 0, 0, 0, 0xff, 0xfb, 0x90, 0x44]);
+/** M4A: ISO-BMFF con brand M4A. */
+const M4A = new Uint8Array([
+  0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41, 0x20, 0, 0, 0, 0,
+]);
+
+const media = (over: Partial<InboundMedia> = {}): InboundMedia => ({
+  kind: "image", mediaId: "media-1", declaredMime: "image/jpeg", fileName: null, voice: false, ...over,
+});
+
+function fakes(bytes: Uint8Array) {
+  const subidos: Array<{ path: string; contentType: string }> = [];
+  const insertados: Array<Record<string, unknown>> = [];
+  const admin = {
+    from: (tabla: string) => ({
+      select: () => ({
+        eq: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({ data: null }),
+            eq: () => ({ maybeSingle: async () => ({ data: { id: "msg-1" } }) }),
+          }),
+        }),
+      }),
+      insert: async (fila: Record<string, unknown>) => {
+        if (tabla === "connect_attachments") insertados.push(fila);
+        return { error: null };
+      },
+    }),
+    storage: {
+      from: () => ({
+        upload: async (path: string, _b: unknown, o: { contentType: string }) => {
+          subidos.push({ path, contentType: o.contentType });
+          return { error: null };
+        },
+      }),
+    },
+  };
+  const transport = {
+    downloadMedia: vi.fn(async () => ({
+      kind: "downloaded" as const, bytes, mimeType: "application/octet-stream",
+    })),
+  };
+  const ingest = createInboundMediaIngest(admin as never, transport);
+  return { ingest, subidos, insertados, transport };
+}
+
+describe("C4/HIGH-1 · el AUDIO entrante se guarda", () => {
+  it.each([
+    ["Ogg/Opus (la nota de voz de WhatsApp)", OGG, "audio/ogg"],
+    ["MP3", MP3, "audio/mpeg"],
+    ["M4A", M4A, "audio/mp4"],
+  ])("%s entra y se registra con su MIME real", async (_n, bytes, mimeEsperado) => {
+    const { ingest, subidos, insertados } = fakes(bytes);
+    const r = await ingest({
+      conversationId: "conv-1",
+      externalMsgId: "wamid.A",
+      media: media({ kind: "audio", declaredMime: "audio/ogg; codecs=opus", voice: true }),
+    });
+
+    expect(r).toBe("stored");
+    expect(subidos).toHaveLength(1);
+    // El MIME sale de la FIRMA BINARIA, no de lo que declara Meta.
+    expect(subidos[0].contentType).toBe(mimeEsperado);
+    expect(insertados[0].mime_type).toBe(mimeEsperado);
+  });
+
+  it("una imagen sigue entrando, como antes", async () => {
+    const { ingest, subidos } = fakes(JPEG);
+    const r = await ingest({
+      conversationId: "conv-1", externalMsgId: "wamid.B", media: media(),
+    });
+    expect(r).toBe("stored");
+    expect(subidos[0].contentType).toBe("image/jpeg");
+  });
+});
+
+describe("C4/HIGH-1 · un tipo no soportado NO atasca el evento", () => {
+  it("se declara como desenlace, no se lanza", async () => {
+    // Bytes que ningún sniffer reconoce.
+    const basura = new Uint8Array(20).fill(0x7a);
+    const { ingest, subidos, insertados } = fakes(basura);
+
+    // La clave: NO lanza. Un throw acá llegaba a `result.errors`, dejaba el
+    // evento incompleto y lo hacía reprocesar para siempre, re-descargando el
+    // binario de la Graph API en cada vuelta.
+    const r = await ingest({
+      conversationId: "conv-1", externalMsgId: "wamid.C",
+      media: media({ kind: "document", fileName: "raro.xyz" }),
+    });
+
+    expect(r).toBe("unsupported");
+    // Y no deja residuo: ni objeto en storage ni fila de adjunto.
+    expect(subidos).toHaveLength(0);
+    expect(insertados).toHaveLength(0);
+  });
+
+  it("un fallo de DESCARGA sí lanza: es transitorio y debe reintentarse", async () => {
+    const { ingest, transport } = fakes(JPEG);
+    transport.downloadMedia.mockResolvedValueOnce({
+      kind: "failed", reason: "http_error", detail: "HTTP 500",
+    } as never);
+    await expect(ingest({
+      conversationId: "conv-1", externalMsgId: "wamid.D", media: media(),
+    })).rejects.toThrow(/descarga/);
   });
 });
