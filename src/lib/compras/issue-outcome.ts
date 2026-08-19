@@ -25,6 +25,7 @@ export type IssueFailureKind =
   | "no_session"
   | "inactive_profile"
   | "signer_not_canonical"
+  | "signer_not_authorized"
   | "signer_profile_incomplete"
   | "permission"
   | "validation"
@@ -245,6 +246,21 @@ function classifyRpcError(error: RpcErrorLike): {
         + "del emisor o su cargo no tienen una forma válida. Es un problema del perfil, no "
         + "de los datos de la orden: pasáselo a soporte. No se creó ninguna orden y "
         + "reintentar con este usuario va a fallar igual.",
+    };
+  }
+  // 0259 · el gate directo del firmante. No es «te falta un permiso» ni «te
+  // falta un dato»: es que la firma de órdenes de compra se concede por nombre
+  // y esta cuenta no está en la lista. Tiene mensaje propio porque el rechazo
+  // no se resuelve pidiéndole a soporte que cargue algo — se resuelve, si
+  // corresponde, con una decisión de Dirección.
+  if (raw.includes("No estás autorizado a firmar")) {
+    return {
+      kind: "signer_not_authorized",
+      retryable: false,
+      userMessage:
+        "Tu cuenta no está habilitada para firmar órdenes de compra. La firma la concede "
+        + "Dirección por nombre: tener un cargo cargado o un perfil de administrador no "
+        + "alcanza. Si necesitás firmar, pedíselo a Dirección. No se creó ninguna orden.",
     };
   }
   if (raw.includes("Sin permisos compras")) {

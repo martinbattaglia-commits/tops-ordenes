@@ -328,7 +328,11 @@ function stepSubtitle(i: number): string {
     case 2:
       return "Cargá los productos del catálogo o tipeá libre. Los totales se calculan automáticamente.";
     case 3:
-      return "Único habilitado: José Luis Rodríguez Silva, Director de Operaciones y Apoderado. Tu firma queda hasheada con SHA-256.";
+      // OC-FIRMANTE-POR-PERMISO · el wizard ya no nombra a una persona. Quién
+      // puede firmar lo decide el servidor por autoridad, y quién ES el firmante
+      // sale de su propio perfil: nombrar acá a alguien fijo volvía a escribir
+      // en la interfaz el literal que 0259 sacó de la base.
+      return "Firmás como vos: la orden estampa tu nombre y tu cargo, tomados de tu perfil. Tu firma queda hasheada con SHA-256.";
     default:
       return "";
   }

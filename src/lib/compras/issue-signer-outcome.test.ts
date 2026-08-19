@@ -97,6 +97,34 @@ describe("0259 · la traducción de los rechazos del firmante", () => {
     }
   });
 
+  // El gate directo del firmante, que 0259 agrega para esquivar el bypass de
+  // `has_permission`. Su rechazo NO es «te falta un dato» ni «te falta un
+  // permiso»: es que la firma se concede por nombre y esta cuenta no está en la
+  // lista. Si cayera en cualquiera de los otros dos, el mensaje mandaría a
+  // cargar un cargo o a pedir un permiso, y ninguna de las dos cosas
+  // habilitaría a firmar.
+  it("el que NO está autorizado a firmar recibe un rechazo propio, ni permiso ni perfil", () => {
+    const o = classifyIssueOutcome({
+      issueError: rpcError(
+        "No estás autorizado a firmar órdenes de compra. La firma la concede Dirección por "
+        + "nombre; tener un cargo cargado o un perfil de administrador no habilita a firmar.",
+      ),
+      issued: null,
+    });
+    expect(o.ok).toBe(false);
+    if (o.ok) return;
+    expect(o.kind).toBe("signer_not_authorized");
+    expect(o.retryable).toBe(false);
+    expect(o.userMessage).toMatch(/Dirección/);
+    // No manda a cargar nada: cargar un cargo es justamente lo que NO habilita.
+    expect(o.userMessage).not.toMatch(/cargá|cargar tu cargo/i);
+    expect(o.userMessage).not.toContain("soporte");
+  });
+
+  it("el rechazo del gate directo es el texto que 0259 realmente emite", () => {
+    expect(MENSAJES_DEL_0259).toContain("No estás autorizado a firmar órdenes de compra.");
+  });
+
   it("el permiso faltante sigue siendo permiso, no perfil incompleto", () => {
     const o = classifyIssueOutcome({
       issueError: rpcError("Sin permisos compras.create/compras.sign"),

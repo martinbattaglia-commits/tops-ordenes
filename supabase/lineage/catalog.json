@@ -2940,7 +2940,7 @@
     {
       "id": "0259_purchase_order_signer_by_permission.sql",
       "filename": "0259_purchase_order_signer_by_permission.sql",
-      "sha256": "a50c984035d7605d20f163465b11edb1cc2f741a02adc4d95bc83c99e73863b8",
+      "sha256": "287a5894902d9703fcb24208da6deacfb7bc15ea4a23f23c4b5fd2734f092080",
       "orden": 253,
       "requires": [
         "0243_purchase_order_price_lifecycle.sql"
@@ -2949,19 +2949,19 @@
       "ledger_version": "L00253",
       "ledger_name": "0259_purchase_order_signer_by_permission",
       "provenance": "repo (frente/oc-firmante-por-permiso)",
-      "motivo": "OC-FIRMANTE-POR-PERMISO. purchase_order_issue(jsonb,jsonb) deja de resolver el firmante comparando el correo del actor contra el literal joseluis@logisticatops.com y de devolver nombre y cargo como literales. Quien PUEDE emitir ya se resolvia por has_permission compras.create + compras.sign cuatro lineas antes y ese gate no se toca; quien ES el firmante ahora sale del perfil del actor: nombre de profiles.full_name y cargo de user_roles.position_title, exigiendo exactamente un cargo distinto y no vacio. Sin cargo, sin nombre o con cargo ambiguo la emision rechaza con mensaje propio y accionable. Misma firma (jsonb, jsonb): es reemplazo, no sobrecarga. El resto del cuerpo de 0243 se reemite byte a byte, con dos unicos hunks de diff: la declaracion de v_role_titles y el bloque del firmante. Carga dos cargos y ninguno inventado: Presidente para las dos cuentas de Direccion (dato provisto por Direccion, valor previo Presidente mas Super Administrador) y Director de Operaciones y Apoderado para joseluis, que es el literal exacto que 0243 ya estampaba en sus 24 ordenes. No escribe ninguna fila de purchase_orders."
+      "motivo": "OC-FIRMANTE-POR-PERMISO. Quien firma una orden de compra deja de ser un correo escrito a mano y pasa a ser una autoridad que Direccion concede por nombre. 0243 resolvia el firmante comparando el correo del actor contra el literal joseluis@logisticatops.com y devolvia nombre y cargo como literales. Resolverlo por has_permission compras.sign no alcanzaba, por tres cerrojos medidos en produccion: (1) compras.sign colgaba de CINCO roles -admin_sin_rrhh, administracion_finanzas, director_ops, gerencia_comercial, super_admin- que mezclan a quien firma con quien no; (2) has_permission termina en un bypass por profiles.role='admin' que da TRUE sin el permiso; (3) user_roles.position_title, campo de RRHH, frenaba a los excluidos de casualidad. Esta migracion crea el rol firmante_oc como UNICO portador de compras.sign, lo revoca de todo otro rol por negacion, y lo concede nominalmente a las tres cuentas de la decision de Direccion -martin.battaglia@, joseluis@ y cynthia@- exigiendo que coincidan UUID y correo. El gate del firmante dentro de la RPC consulta user_roles, role_permissions y permissions de forma DIRECTA, sin has_permission y por lo tanto sin su bypass; has_permission NO se modifica porque afecta a todo el sistema y es su propio expediente. Cada bloque lleva post-condicion que aborta: reparto de compras.sign, padron exacto de firmantes y filas afectadas por cada cargo. Quien ES el firmante sale del perfil del actor: nombre de profiles.full_name y cargo de user_roles.position_title, exigiendo exactamente un cargo distinto y no vacio; sin cargo, sin nombre o con cargo ambiguo la emision rechaza con mensaje propio. Misma firma (jsonb, jsonb): es reemplazo, no sobrecarga. El resto del cuerpo de 0243 se reemite byte a byte. Carga los cargos de los tres firmantes y ninguno inventado. ATENCION: contiene un bloque centinela que ABORTA la transaccion a proposito hasta que Direccion entregue el cargo textual de cynthia@, que el certificado imprime. No escribe ninguna fila de purchase_orders."
     },
     {
       "id": "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
       "filename": "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
-      "sha256": "dd06f9d71b847ba0e33ae77edc134dbca9ff8c1be0eb66ad67b8db263288925f",
+      "sha256": "c50050be046d884077e5461aa6e0b8dd03e90a66fdeeac34eae2213fdc562c57",
       "orden": 254,
       "requires": [],
       "estado": "rollback",
       "ledger_version": "L00254",
       "ledger_name": "ROLLBACK_0259_purchase_order_signer_by_permission",
       "provenance": "repo (frente/oc-firmante-por-permiso)",
-      "motivo": "Inversa logica e idempotente de 0259. Restituye purchase_order_issue(jsonb,jsonb) al cuerpo exacto de 0243, con el firmante resuelto por el correo literal, y devuelve los dos cargos a su estado previo: Direccion vuelve a Presidente mas Super Administrador y joseluis vuelve a NULL. No toca purchase_orders: 0259 nunca escribio una fila de esa tabla, asi que las 24 ordenes emitidas conservan firmante, cargo y sus dos hashes en los dos sentidos. Ejecutarlo devuelve el modulo al estado 0258: solo joseluis puede volver a emitir, con el defecto de diseno incluido."
+      "motivo": "Inversa logica e idempotente de 0259. Restituye purchase_order_issue(jsonb,jsonb) al cuerpo exacto de 0243, con el firmante resuelto por el correo literal y sin el gate directo del firmante. Devuelve compras.sign a los CINCO roles que lo portaban -admin_sin_rrhh, administracion_finanzas, director_ops, gerencia_comercial, super_admin-, escritos de forma explicita y no por negacion para no otorgar de mas al deshacer. Borra el rol firmante_oc con todas sus asignaciones y sus grants. Devuelve los cargos a su estado previo: Direccion vuelve a Presidente mas Super Administrador, joseluis y cynthia vuelven a NULL. Lleva post-condicion propia: verifica el reparto restituido exacto y que no sobreviva el rol. No toca purchase_orders: 0259 nunca escribio una fila de esa tabla, asi que las 24 ordenes emitidas conservan firmante, cargo y sus dos hashes en los dos sentidos. Ejecutarlo devuelve el modulo al estado 0258: solo joseluis puede volver a emitir, con sus tres defectos incluidos."
     }
   ]
 }

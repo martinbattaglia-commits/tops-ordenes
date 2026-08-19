@@ -434,16 +434,22 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       f === "0259_purchase_order_signer_by_permission.sql" ||
       f === "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
     reason:
-      "0259 reemite `purchase_order_issue(jsonb, jsonb)` para que el firmante se " +
-      "resuelva por PERMISO (`compras.create` + `compras.sign`, gate que no toca) y " +
-      "su identidad salga del perfil del actor, con su rollback lógico. Se excluye " +
-      "del replay WMS vanilla por la misma razón que su origen: la función NACE en " +
+      "0259 crea el rol `firmante_oc` como único portador de `compras.sign`, se lo " +
+      "revoca a todo otro rol, lo concede nominalmente a las tres cuentas que " +
+      "Dirección autorizó, y reemite `purchase_order_issue(jsonb, jsonb)` con un " +
+      "gate del firmante que lee `user_roles → role_permissions → permissions` " +
+      "directo —sin `has_permission`, cuyo bypass por `profiles.role='admin'` es " +
+      "otro expediente y NO se toca acá—; con su rollback lógico. Se excluye del " +
+      "replay WMS vanilla por la misma razón que su origen: la función NACE en " +
       "`0243_purchase_order_price_lifecycle.sql`, ya excluido por pertenecer al " +
       "cierre PR #66 FASE A. Una migración no puede entrar al vanilla si la función " +
-      "que redefine no está. Se excluye del cierre WMS, NO de la verificación: el " +
-      "preludio de la función se ejercita contra PostgreSQL 17 real en " +
-      "`supabase/tests/oc-firmante-por-permiso/run.mjs`, que extrae el bloque de " +
-      "0243 y el de 0259 tal como están en disco y exige que el par difiera.",
+      "que redefine no está. Se excluye del cierre WMS, NO de la verificación: se " +
+      "ejercita contra PostgreSQL 17 real por TRES corredores en " +
+      "`supabase/tests/oc-firmante-por-permiso/` —`run.mjs` (par rojo→verde, con el " +
+      "rojo medido ANTES de migrar y el verde después), `mordida.mjs` (cada guarda " +
+      "se rompe a propósito y debe abortar) e `ida-y-vuelta.mjs` (aplicar 0259 y su " +
+      "rollback restituye el estado previo exacto)—, todos extrayendo el SQL de los " +
+      "archivos en disco en vez de copiarlo.",
   },
   {
     id: "frozen-excluded-snapshot",

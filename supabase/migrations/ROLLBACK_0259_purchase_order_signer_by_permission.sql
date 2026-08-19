@@ -5,18 +5,25 @@
 -- Deshace 0259 en el orden inverso exacto:
 --
 --   1 · restituye `purchase_order_issue(jsonb, jsonb)` al cuerpo de 0243, con
---       el firmante resuelto por el correo literal 'joseluis@logisticatops.com'
---       y los dos literales de nombre y cargo;
---   2 · revierte los dos cargos que 0259 cargó en `user_roles.position_title`:
---       Dirección vuelve a 'Presidente · Super Administrador' y José Luis
---       vuelve a NULL, que era su estado antes de esta migración.
+--       el firmante resuelto por el correo literal 'joseluis@logisticatops.com',
+--       los dos literales de nombre y cargo, y SIN el gate directo del firmante;
+--   2 · revierte los cargos que 0259 cargó en `user_roles.position_title`:
+--       Dirección vuelve a 'Presidente · Super Administrador', y José Luis y
+--       Cynthia vuelven a NULL, que era su estado antes de esta migración;
+--   3 · devuelve `compras.sign` a los CINCO roles que lo portaban —medidos en
+--       producción: admin_sin_rrhh, administracion_finanzas, director_ops,
+--       gerencia_comercial, super_admin— y borra el rol `firmante_oc` con todas
+--       sus asignaciones.
 --
 -- NO toca `public.purchase_orders`: 0259 nunca escribió una sola de sus filas,
 -- así que no hay nada que restaurar ahí. Las 24 órdenes emitidas conservan su
 -- firmante, su cargo y sus dos hashes en los dos sentidos de la migración.
 --
 -- ⚠ Después de este rollback, sólo `joseluis@logisticatops.com` vuelve a poder
---   emitir órdenes de compra. Es el estado previo, con su defecto incluido.
+--   emitir órdenes de compra, y `compras.sign` vuelve a colgar de cinco roles
+--   que mezclan a quien firma con quien no. Es el estado previo, con sus tres
+--   defectos incluidos: el correo literal, el permiso mal repartido y el bypass
+--   de `has_permission` volviendo a ser el único freno real.
 --
 -- ============================================================================
 
@@ -390,6 +397,10 @@ revoke all on function public.purchase_order_issue(jsonb, jsonb)
 grant execute on function public.purchase_order_issue(jsonb, jsonb) to authenticated;
 
 -- ── 2 · LOS CARGOS, AL ESTADO PREVIO ────────────────────────────────────────
+--
+-- Sólo se revierten los cargos que 0259 escribió. `martin@logisticatops.com`
+-- no aparece acá porque 0259 tampoco lo tocó: esa cuenta no firma, y su cargo
+-- quedó como estaba en los dos sentidos.
 
 update public.user_roles ur
    set position_title = 'Presidente · Super Administrador'
@@ -397,10 +408,8 @@ update public.user_roles ur
  where u.id = ur.user_id
    and r.id = ur.role_id
    and r.slug = 'super_admin'
-   and lower(btrim(coalesce(u.email, ''))) in (
-         'martin.battaglia@logisticatops.com',
-         'martin@logisticatops.com'
-       );
+   and u.id = '7a9ecbdc-3ff0-459e-b340-8a07eed898fa'::uuid
+   and lower(btrim(coalesce(u.email, ''))) = 'martin.battaglia@logisticatops.com';
 
 update public.user_roles ur
    set position_title = null
@@ -408,6 +417,72 @@ update public.user_roles ur
  where u.id = ur.user_id
    and r.id = ur.role_id
    and r.slug = 'director_ops'
+   and u.id = '3b1607c9-32c5-4ca0-91e1-19c82099b64d'::uuid
    and lower(btrim(coalesce(u.email, ''))) = 'joseluis@logisticatops.com';
+
+update public.user_roles ur
+   set position_title = null
+  from auth.users u, public.roles r
+ where u.id = ur.user_id
+   and r.id = ur.role_id
+   and r.slug = 'admin_sin_rrhh'
+   and u.id = '4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid
+   and lower(btrim(coalesce(u.email, ''))) = 'cynthia@logisticatops.com';
+
+-- ── 3 · EL MODELO DE AUTORIDAD, AL ESTADO PREVIO ────────────────────────────
+--
+-- `compras.sign` vuelve a los cinco roles de los que 0259 lo sacó. La lista se
+-- escribe explícita —y no por negación, como en la revocación— porque restituir
+-- de más sería peor que restituir de menos: un rol que NO lo tenía antes no
+-- puede terminar teniéndolo por deshacer un cambio.
+
+insert into public.role_permissions (role_id, permission_id)
+select r.id, p.id
+from public.roles r, public.permissions p
+where p.slug = 'compras.sign'
+  and r.slug in (
+        'admin_sin_rrhh',
+        'administracion_finanzas',
+        'director_ops',
+        'gerencia_comercial',
+        'super_admin'
+      )
+on conflict (role_id, permission_id) do nothing;
+
+-- El rol de firma desaparece con todo lo que colgaba de él. Se borra por
+-- último: mientras existiera sin `compras.sign`, quedaría un rol asignado a
+-- tres personas que no significa nada.
+delete from public.user_roles ur
+using public.roles r
+where ur.role_id = r.id and r.slug = 'firmante_oc';
+
+delete from public.role_permissions rp
+using public.roles r
+where rp.role_id = r.id and r.slug = 'firmante_oc';
+
+delete from public.roles r where r.slug = 'firmante_oc';
+
+-- Post-condición del regreso: el reparto previo, exacto, y ni rastro del rol.
+do $post$
+declare v_roles text[]; v_quedan integer;
+begin
+  select coalesce(array_agg(r.slug order by r.slug), '{}')
+    into v_roles
+  from public.role_permissions rp
+  join public.roles r on r.id = rp.role_id
+  join public.permissions p on p.id = rp.permission_id
+  where p.slug = 'compras.sign';
+  if v_roles is distinct from array[
+       'admin_sin_rrhh','administracion_finanzas','director_ops',
+       'gerencia_comercial','super_admin'
+     ] then
+    raise exception 'ROLLBACK_0259_REPARTO_INESPERADO: compras.sign quedó en % (se esperaban los cinco roles previos)', v_roles;
+  end if;
+  select count(*) into v_quedan from public.roles where slug = 'firmante_oc';
+  if v_quedan <> 0 then
+    raise exception 'ROLLBACK_0259_ROL_RESIDUAL: firmante_oc sobrevivió al rollback';
+  end if;
+end;
+$post$;
 
 commit;

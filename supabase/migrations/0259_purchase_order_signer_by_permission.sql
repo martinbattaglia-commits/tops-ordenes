@@ -1,6 +1,7 @@
 -- ============================================================================
 -- 0259 · OC-FIRMANTE-POR-PERMISO
---        El emisor de una orden de compra deja de ser un correo escrito a mano.
+--        Quién firma una orden de compra deja de ser un correo escrito a mano
+--        y pasa a ser una AUTORIDAD que Dirección concede por nombre.
 -- ============================================================================
 --
 -- ─── EL DEFECTO QUE CIERRA ──────────────────────────────────────────────────
@@ -15,24 +16,68 @@
 --      where lower(btrim(coalesce(u.email,''))) = 'joseluis@logisticatops.com'  -- literal
 --
 -- Tres literales: nombre, cargo y correo. Ni un rol, ni un permiso, ni una
--- tabla. La función preguntaba por una IDENTIDAD en vez de por una AUTORIDAD,
--- y con eso saltaba por encima del modelo de seguridad entero: `super_admin` y
--- `gerencia` quedaban afuera aunque `has_permission('compras.sign')` ya les
--- diera TRUE cuatro líneas antes, y morían con «No se pudo resolver el firmante
--- canónico de la sesión» — un mensaje que no dice nada de lo que pasó.
+-- tabla. La función preguntaba por una IDENTIDAD en vez de por una AUTORIDAD.
+-- Cualquier otro portador legítimo de `compras.sign` moría con «No se pudo
+-- resolver el firmante canónico de la sesión» — un mensaje que no dice nada de
+-- lo que pasó.
+--
+-- ─── POR QUÉ NO ALCANZABA CON FIRMAR «POR PERMISO» ──────────────────────────
+--
+-- La versión anterior de esta migración resolvía el firmante por
+-- `has_permission('compras.sign')`. Medido contra producción, eso abría la
+-- firma a gente que Dirección no autorizó. Tres cerrojos distintos, ninguno
+-- diseñado para esto:
+--
+--   1 · EL PERMISO ESTÁ MAL REPARTIDO. `compras.sign` cuelga hoy de CINCO
+--       roles —`admin_sin_rrhh`, `administracion_finanzas`, `director_ops`,
+--       `gerencia_comercial`, `super_admin`— y esos roles mezclan a quien firma
+--       con quien no: `director_ops` contiene a José Luis (SÍ) y a una contadora
+--       externa (NO); `admin_sin_rrhh` contiene a Cynthia (SÍ) y a Ruth (NO).
+--       No se arregla quitándole el permiso a un rol: hay que sacar la firma de
+--       los roles funcionales y ponerla en un rol que exista SÓLO para eso.
+--
+--   2 · `public.has_permission` TIENE UN BYPASS. Termina en
+--       `or (select role='admin' from public.profiles where id=auth.uid())`.
+--       Con eso, cualquier perfil marcado `admin` obtiene TRUE sin tener el
+--       permiso — y hoy hay perfiles `admin` que Dirección excluyó de la firma.
+--       Ese bypass afecta a TODO el sistema y es su propio expediente (H-A):
+--       acá NO se lo toca, se lo ESQUIVA. El gate del firmante consulta
+--       `user_roles → role_permissions → permissions` de forma directa.
+--
+--   3 · `user_roles.position_title` NO ES UN CONTROL DE AUTORIDAD. Hoy los
+--       excluidos rebotan de casualidad, porque nadie les cargó el cargo. Ese
+--       campo es de RRHH: quien administre RRHH podría habilitar una firma
+--       escribiendo un cargo. Después de esta migración, cargar un cargo NO
+--       habilita a nadie: sin el rol de firma se rechaza igual.
 --
 -- ─── LA REGLA QUE INSTALA ───────────────────────────────────────────────────
 --
---   Quién PUEDE emitir se resuelve por PERMISO: `compras.create` +
---   `compras.sign`. Ese gate ya existía y NO SE TOCA.
+--   · Un rol nuevo, `firmante_oc`, es el ÚNICO portador de `compras.sign`.
+--     No agrupa una función de la empresa: agrupa una autoridad. Se concede
+--     nominalmente, por cuenta, y por decisión expresa de Dirección.
+--   · `compras.sign` se REVOCA de todo otro rol.
+--   · El gate del firmante consulta las tablas de RBAC de forma directa, sin
+--     `has_permission`, y por lo tanto sin su bypass.
+--   · Quién ES el firmante sale del PERFIL del actor de la sesión:
+--       nombre → `public.profiles.full_name`
+--       cargo  → `public.user_roles.position_title`
+--     Si falta el nombre o el cargo, la emisión RECHAZA con mensaje propio y
+--     accionable. Un documento que obliga a la empresa no sale firmado en
+--     blanco ni con el cargo de otra persona.
 --
---   Quién ES el firmante sale del PERFIL del actor de la sesión:
---     · nombre → `public.profiles.full_name`
---     · cargo  → `public.user_roles.position_title`
+-- ─── QUIÉNES FIRMAN · DECISIÓN DE DIRECCIÓN ─────────────────────────────────
 --
---   Si falta el nombre o el cargo, la emisión RECHAZA con mensaje propio y
---   accionable. Un documento que obliga a la empresa no sale firmado en blanco
---   ni con el cargo de otra persona.
+--   1 · Martín F. Battaglia        martin.battaglia@logisticatops.com
+--   2 · José Luis Rodríguez Silva  joseluis@logisticatops.com
+--   3 · Cynthia Alba               cynthia@logisticatops.com
+--
+--   Y NADIE MÁS. Quedan explícitamente excluidos, aunque hoy tengan
+--   `compras.sign` por su rol o el bypass de `profiles.role='admin'`:
+--   mariela@sullivancamejo.com.ar, ruth@, martinrinas@, despachos-lujan@,
+--   despachos-magaldi@, y toda cuenta futura que Dirección no conceda de forma
+--   expresa. La cuenta `martin@logisticatops.com` —segunda cuenta de Dirección,
+--   que NO figura en la decisión— tampoco recibe el rol: se concede por cuenta
+--   nombrada, no por persona.
 --
 -- ─── LO QUE NO CAMBIA ───────────────────────────────────────────────────────
 --
@@ -41,58 +86,214 @@
 --     reemplazo, y dejaría la versión vieja viva y alcanzable;
 --   · el gate de perfil activo, la forma del payload, la validación de líneas,
 --     la inmutabilidad de precios y las guardas de precio pendiente de 0243
---     quedan BYTE A BYTE como estaban. El único bloque que cambia es el del
---     firmante, más la declaración de una variable auxiliar;
+--     quedan BYTE A BYTE como estaban. Los únicos bloques que cambian son el
+--     del firmante y el gate que lo precede, más una variable auxiliar;
+--   · el gate `has_permission('compras.create')` de 0243 NO se toca;
 --   · las 24 órdenes ya emitidas NO se tocan: esta migración no escribe una
 --     sola fila de `public.purchase_orders`.
 --
 -- ─── ROLLBACK ───────────────────────────────────────────────────────────────
 --
 --   `ROLLBACK_0259_purchase_order_signer_by_permission.sql` restaura la función
---   de 0243 tal cual y revierte los dos datos de cargo que esta migración carga.
+--   de 0243 tal cual, devuelve `compras.sign` a los cinco roles que lo tenían,
+--   borra el rol `firmante_oc` con sus asignaciones y revierte los cargos.
 --
 -- ============================================================================
 
 begin;
 
--- ── 1 · LOS CARGOS QUE ESTA MIGRACIÓN CARGA ─────────────────────────────────
+-- ── 1 · EL ROL QUE CONCENTRA LA AUTORIDAD DE FIRMA ──────────────────────────
 --
--- Sólo dos, y ninguno inventado:
---
---   · Dirección (`martin.battaglia@` y `martin@`) → 'Presidente'. Dato provisto
---     por Dirección como fuente autoritativa. El valor previo en base era
---     'Presidente · Super Administrador', que mezcla el cargo de la empresa con
---     la etiqueta del rol del sistema; un documento que obliga a la empresa
---     declara el cargo, no el rol técnico.
---
---   · José Luis Rodríguez Silva (`joseluis@`) → 'Director de Operaciones y
---     Apoderado'. NO es un cargo nuevo: es EXACTAMENTE el literal que 0243 ya
---     estampaba en sus 24 órdenes. Se migra del código al dato para que el único
---     firmante histórico siga emitiendo con el mismo cargo de siempre.
---
--- Ningún otro usuario recibe cargo acá. Quien no lo tenga será rechazado con el
--- mensaje propio, que es justamente el comportamiento buscado.
+-- `firmante_oc` no describe un puesto: describe un permiso otorgado. Por eso no
+-- lleva `position_title` — el cargo del firmante sigue viviendo en su rol
+-- funcional, que es dato de RRHH y no se muda acá.
 
-update public.user_roles ur
-   set position_title = 'Presidente'
-  from auth.users u, public.roles r
- where u.id = ur.user_id
-   and r.id = ur.role_id
-   and r.slug = 'super_admin'
-   and lower(btrim(coalesce(u.email, ''))) in (
-         'martin.battaglia@logisticatops.com',
-         'martin@logisticatops.com'
-       );
+insert into public.roles (slug, name, description, color, is_system)
+values (
+  'firmante_oc',
+  'Firmante de Órdenes de Compra',
+  'Único portador de compras.sign. Autoridad concedida nominalmente por decisión expresa de Dirección; no agrupa una función de la empresa.',
+  '#7C2D12',
+  true
+)
+on conflict (slug) do nothing;
 
-update public.user_roles ur
-   set position_title = 'Director de Operaciones y Apoderado'
-  from auth.users u, public.roles r
- where u.id = ur.user_id
-   and r.id = ur.role_id
-   and r.slug = 'director_ops'
-   and lower(btrim(coalesce(u.email, ''))) = 'joseluis@logisticatops.com';
+-- ── 2 · LA REVOCACIÓN ───────────────────────────────────────────────────────
+--
+-- `compras.sign` sale de TODO rol que no sea `firmante_oc`. Medido en
+-- producción antes de escribir esto, los portadores eran cinco:
+-- admin_sin_rrhh · administracion_finanzas · director_ops · gerencia_comercial
+-- · super_admin. La lista no se escribe acá a propósito: el `delete` es por
+-- negación, así que también alcanza a cualquier rol que la haya recibido
+-- después de la medición.
+--
+-- Medido también antes de escribir esto: `compras.sign` NO aparece en ninguna
+-- policy de RLS ni en ninguna otra función del esquema; su único consumidor en
+-- la base es `public.purchase_order_issue`. La revocación no tiene efecto
+-- colateral fuera de este expediente.
 
--- ── 2 · LA COMPUERTA ────────────────────────────────────────────────────────
+delete from public.role_permissions rp
+using public.roles r, public.permissions p
+where rp.role_id = r.id
+  and rp.permission_id = p.id
+  and p.slug = 'compras.sign'
+  and r.slug <> 'firmante_oc';
+
+insert into public.role_permissions (role_id, permission_id)
+select r.id, p.id
+from public.roles r, public.permissions p
+where r.slug = 'firmante_oc' and p.slug = 'compras.sign'
+on conflict (role_id, permission_id) do nothing;
+
+-- Post-condición: exactamente UN rol porta la firma, y es el nuevo.
+do $post$
+declare v_roles text[];
+begin
+  select coalesce(array_agg(r.slug order by r.slug), '{}')
+    into v_roles
+  from public.role_permissions rp
+  join public.roles r on r.id = rp.role_id
+  join public.permissions p on p.id = rp.permission_id
+  where p.slug = 'compras.sign';
+  if v_roles is distinct from array['firmante_oc'] then
+    raise exception 'OC_FIRMANTE_REVOCACION_INCOMPLETA: compras.sign quedó en % (se esperaba sólo firmante_oc)', v_roles;
+  end if;
+end;
+$post$;
+
+-- ── 3 · LAS TRES CUENTAS QUE FIRMAN ─────────────────────────────────────────
+--
+-- La concesión exige que COINCIDAN el UUID y el correo. Un email reasignado a
+-- otra persona, o un UUID cuyo correo cambió, NO recibe la firma: la doble
+-- llave falla cerrada y la post-condición lo detiene.
+
+insert into public.user_roles (user_id, role_id)
+select u.id, r.id
+from auth.users u, public.roles r
+where r.slug = 'firmante_oc'
+  and (u.id, lower(btrim(coalesce(u.email, '')))) in (
+        ('7a9ecbdc-3ff0-459e-b340-8a07eed898fa'::uuid, 'martin.battaglia@logisticatops.com'),
+        ('3b1607c9-32c5-4ca0-91e1-19c82099b64d'::uuid, 'joseluis@logisticatops.com'),
+        ('4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid, 'cynthia@logisticatops.com')
+      )
+on conflict (user_id, role_id) do nothing;
+
+-- Post-condición: ni una cuenta de más, ni una de menos.
+do $post$
+declare v_emails text[];
+begin
+  select coalesce(array_agg(lower(btrim(u.email)) order by lower(btrim(u.email))), '{}')
+    into v_emails
+  from public.user_roles ur
+  join public.roles r on r.id = ur.role_id
+  join auth.users u on u.id = ur.user_id
+  where r.slug = 'firmante_oc';
+  if v_emails is distinct from array[
+       'cynthia@logisticatops.com',
+       'joseluis@logisticatops.com',
+       'martin.battaglia@logisticatops.com'
+     ] then
+    raise exception 'OC_FIRMANTE_PADRON_INESPERADO: firmante_oc quedó asignado a % (se esperaban exactamente las tres cuentas de la decisión)', v_emails;
+  end if;
+end;
+$post$;
+
+-- ── 4 · LOS CARGOS DE LOS TRES FIRMANTES ────────────────────────────────────
+--
+-- El cargo lo imprime el certificado, así que ninguno se infiere ni se inventa:
+-- los tres vienen por escrito de Dirección. Cada `update` lleva su
+-- post-condición de filas afectadas — un `update` que no matchea NADA no puede
+-- reportar éxito con cero filas, porque dejaría al firmante sin cargo y el
+-- rechazo posterior parecería un defecto del sistema en vez de un dato que
+-- faltó cargar.
+--
+--   · Dirección (`martin.battaglia@`) → 'Presidente'. El valor previo en base
+--     era 'Presidente · Super Administrador', que mezcla el cargo de la empresa
+--     con la etiqueta del rol del sistema; un documento que obliga a la empresa
+--     declara el cargo, no el rol técnico. La otra cuenta de Dirección
+--     (`martin@`) NO se toca: no firma.
+--   · José Luis (`joseluis@`) → 'Director de Operaciones y Apoderado'. NO es un
+--     cargo nuevo: es EXACTAMENTE el literal que 0243 ya estampaba en sus 24
+--     órdenes. Se migra del código al dato para que el firmante histórico siga
+--     emitiendo con el mismo cargo de siempre.
+--   · Cynthia (`cynthia@`) → dato pendiente de Dirección. Ver el bloque 4.b.
+
+do $cargos$
+declare
+  v_filas integer;
+begin
+  update public.user_roles ur
+     set position_title = 'Presidente'
+    from auth.users u, public.roles r
+   where u.id = ur.user_id
+     and r.id = ur.role_id
+     and r.slug = 'super_admin'
+     and u.id = '7a9ecbdc-3ff0-459e-b340-8a07eed898fa'::uuid
+     and lower(btrim(coalesce(u.email, ''))) = 'martin.battaglia@logisticatops.com';
+  get diagnostics v_filas = row_count;
+  if v_filas <> 1 then
+    raise exception 'OC_FIRMANTE_CARGO_SIN_DESTINO: el cargo de Dirección afectó % filas (se esperaba 1)', v_filas;
+  end if;
+
+  update public.user_roles ur
+     set position_title = 'Director de Operaciones y Apoderado'
+    from auth.users u, public.roles r
+   where u.id = ur.user_id
+     and r.id = ur.role_id
+     and r.slug = 'director_ops'
+     and u.id = '3b1607c9-32c5-4ca0-91e1-19c82099b64d'::uuid
+     and lower(btrim(coalesce(u.email, ''))) = 'joseluis@logisticatops.com';
+  get diagnostics v_filas = row_count;
+  if v_filas <> 1 then
+    raise exception 'OC_FIRMANTE_CARGO_SIN_DESTINO: el cargo de José Luis afectó % filas (se esperaba 1)', v_filas;
+  end if;
+end;
+$cargos$;
+
+-- ── 4.b · EL CARGO DE CYNTHIA · DATO PENDIENTE DE DIRECCIÓN ─────────────────
+--
+-- ⛔ ESTA MIGRACIÓN NO PUEDE APLICARSE TODAVÍA, A PROPÓSITO.
+--
+-- Cynthia figura en la decisión de Dirección y recibe el rol de firma, pero su
+-- `position_title` está VACÍO en producción y el certificado lo imprime. Ese
+-- cargo NO se infiere de su rol (`admin_sin_rrhh`), NO se copia del de otra
+-- persona y NO se deja en blanco: tiene que venir por escrito de Dirección.
+--
+-- Mientras el centinela siga acá, la transacción ABORTA ENTERA. Es deliberado:
+-- aplicar el resto y dejar a Cynthia sin cargo la haría rebotar con «no tiene
+-- cargo cargado», que se lee como un defecto del sistema cuando en realidad es
+-- una decisión a medio ejecutar. La ventana de aplicación tiene que ser una
+-- sola y completa.
+--
+-- PARA HABILITAR: reemplazar el centinela por el cargo textual que indique
+-- Dirección, en el `update` de abajo, y borrar el bloque del centinela.
+
+do $centinela$
+begin
+  raise exception 'OC_FIRMANTE_CARGO_CYNTHIA_PENDIENTE: falta el cargo textual de cynthia@logisticatops.com, que el certificado imprime. Dato exigido a Dirección; la migración no aplica sin él.';
+end;
+$centinela$;
+
+do $cargo_cynthia$
+declare
+  v_filas integer;
+begin
+  update public.user_roles ur
+     set position_title = '⛔ CARGO PENDIENTE DE DIRECCIÓN'
+    from auth.users u, public.roles r
+   where u.id = ur.user_id
+     and r.id = ur.role_id
+     and r.slug = 'admin_sin_rrhh'
+     and u.id = '4aa1203d-a943-4ef0-b1c5-3127fde3adfb'::uuid
+     and lower(btrim(coalesce(u.email, ''))) = 'cynthia@logisticatops.com';
+  get diagnostics v_filas = row_count;
+  if v_filas <> 1 then
+    raise exception 'OC_FIRMANTE_CARGO_SIN_DESTINO: el cargo de Cynthia afectó % filas (se esperaba 1)', v_filas;
+  end if;
+end;
+$cargo_cynthia$;
+
+-- ── 5 · LA COMPUERTA ────────────────────────────────────────────────────────
 --
 -- Cuerpo completo de `purchase_order_issue` reemitido con la MISMA firma. El
 -- delta contra 0243 son exactamente dos bloques: la declaración de
@@ -151,6 +352,33 @@ begin
   if public.has_permission('compras.create') is distinct from true
      or public.has_permission('compras.sign') is distinct from true then
     raise exception 'Sin permisos compras.create/compras.sign' using errcode = 'insufficient_privilege';
+  end if;
+
+  -- OC-FIRMANTE-POR-PERMISO · 0259 · EL GATE DEL FIRMANTE, SIN INTERMEDIARIO.
+  --
+  -- El gate de arriba resuelve por `has_permission`, que termina en
+  -- `or (select role='admin' from public.profiles where id=auth.uid())`. Ese
+  -- bypass le devuelve TRUE a cualquier perfil marcado `admin` aunque no tenga
+  -- el permiso, y hoy hay perfiles `admin` que Dirección excluyó de la firma.
+  --
+  -- Por eso la autoridad de firma se vuelve a preguntar acá, leyendo
+  -- `user_roles → role_permissions → permissions` de forma DIRECTA. Sin
+  -- `has_permission`, y por lo tanto sin su bypass. La función NO se modifica:
+  -- corregirla es otro expediente (H-A) porque afecta a todo el sistema; acá se
+  -- la esquiva para este permiso y sólo para este permiso.
+  --
+  -- Se pregunta por el PERMISO y no por el slug del rol: si mañana Dirección
+  -- mueve `compras.sign` a otro rol, este gate sigue diciendo la verdad.
+  if not exists (
+    select 1
+    from public.user_roles ur
+    join public.role_permissions rp on rp.role_id = ur.role_id
+    join public.permissions pe on pe.id = rp.permission_id
+    where ur.user_id = v_actor
+      and pe.slug = 'compras.sign'
+  ) then
+    raise exception 'No estás autorizado a firmar órdenes de compra. La firma la concede Dirección por nombre; tener un cargo cargado o un perfil de administrador no habilita a firmar.'
+      using errcode = 'insufficient_privilege';
   end if;
   if coalesce(jsonb_typeof(p_order), 'missing') <> 'object' then
     raise exception 'p_order debe ser un objeto';

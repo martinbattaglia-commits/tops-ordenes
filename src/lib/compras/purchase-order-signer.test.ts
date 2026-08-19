@@ -131,25 +131,95 @@ describe("0259 · el firmante se resuelve por permiso, no por un correo literal"
       expect(fuera).not.toMatch(/delete\s+from\s+public\.purchase_orders/i);
       expect(fuera).not.toMatch(/insert\s+into\s+public\.purchase_orders/i);
     }
-    // Y el único DML de datos de 0259 son los dos cargos.
+    // Y las únicas tablas que el DML de datos de 0259 escribe son las tres del
+    // modelo de autoridad, más los cargos. La lista es cerrada a propósito: si
+    // mañana alguien agrega un UPDATE sobre otra tabla, este test lo ve.
     const cuerpo0259 = cuerpoDeLaFuncion(sql0259);
     const fuera0259 = sql0259.split(cuerpo0259).join("");
-    expect((fuera0259.match(/^update /gm) ?? []).length).toBe(2);
+    const tablasEscritas = new Set(
+      [...fuera0259.matchAll(/(?:insert\s+into|update|delete\s+from)\s+(public\.\w+)/gi)]
+        .map((m) => m[1].toLowerCase()),
+    );
+    expect([...tablasEscritas].sort()).toEqual([
+      "public.role_permissions",
+      "public.roles",
+      "public.user_roles",
+    ]);
   });
 
-  it("el rollback restituye el cuerpo de 0243 byte a byte y revierte los dos cargos", () => {
+  it("el rollback restituye el cuerpo de 0243 byte a byte y deshace el modelo de autoridad", () => {
     expect(cuerpoDeLaFuncion(rollback)).toEqual(cuerpoDeLaFuncion(sql0243));
     expect(rollback).toContain("set position_title = 'Presidente · Super Administrador'");
     expect(rollback).toContain("set position_title = null");
+    // Y devuelve compras.sign a los cinco roles medidos, y borra el rol nuevo.
+    for (const slug of [
+      "admin_sin_rrhh", "administracion_finanzas", "director_ops",
+      "gerencia_comercial", "super_admin",
+    ]) {
+      expect(rollback).toContain(`'${slug}'`);
+    }
+    expect(rollback).toMatch(/delete\s+from\s+public\.roles\s+r\s+where\s+r\.slug\s*=\s*'firmante_oc'/i);
   });
 
-  it("0259 carga dos cargos y ninguno inventado", () => {
+  it("0259 carga los cargos de los tres firmantes y ninguno inventado", () => {
     expect(sql0259).toContain("set position_title = 'Presidente'");
     expect(sql0259).toContain("set position_title = 'Director de Operaciones y Apoderado'");
     // El cargo de José Luis es el literal exacto que 0243 ya estampaba.
     expect(sql0243).toContain("'Director de Operaciones y Apoderado'");
-    // Nadie más recibe cargo: sólo dos UPDATE en toda la migración.
-    expect((sql0259.match(/^update public\.user_roles ur$/gm) ?? []).length).toBe(2);
+    // Nadie más recibe cargo: exactamente tres UPDATE de position_title, uno
+    // por firmante. La segunda cuenta de Dirección (`martin@`) NO está entre
+    // ellos, porque no firma.
+    const cargos = sql0259.match(/^\s*set position_title = /gm) ?? [];
+    expect(cargos.length).toBe(3);
+    expect(sql0259).not.toContain("'martin@logisticatops.com'");
+  });
+
+  // R-1 · el rol de firma es el único portador, y se concede por nombre.
+  it("crea firmante_oc, le da compras.sign y se lo quita a todos los demás", () => {
+    expect(sql0259).toContain("'firmante_oc'");
+    // La revocación es POR NEGACIÓN: alcanza también a un rol que haya recibido
+    // el permiso después de la medición.
+    expect(sql0259).toMatch(/delete from public\.role_permissions[\s\S]*?p\.slug = 'compras\.sign'[\s\S]*?r\.slug <> 'firmante_oc'/);
+    // Y el padrón se concede por UUID *y* correo: una sola de las dos llaves no
+    // alcanza, para que un correo reasignado no herede la firma.
+    for (const [uuid, email] of [
+      ["7a9ecbdc-3ff0-459e-b340-8a07eed898fa", "martin.battaglia@logisticatops.com"],
+      ["3b1607c9-32c5-4ca0-91e1-19c82099b64d", "joseluis@logisticatops.com"],
+      ["4aa1203d-a943-4ef0-b1c5-3127fde3adfb", "cynthia@logisticatops.com"],
+    ]) {
+      expect(sql0259).toContain(`('${uuid}'::uuid, '${email}')`);
+    }
+    // Y NADIE más. Los excluidos SÍ están nombrados en la cabecera —documentar
+    // a quién Dirección dejó afuera es parte de la decisión—, así que la
+    // propiedad se mide sobre el SQL EJECUTABLE, con los comentarios quitados.
+    const ejecutable = sql0259
+      .split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+    for (const excluido of [
+      "mariela@sullivancamejo.com.ar", "ruth@logisticatops.com",
+      "martinrinas@logisticatops.com", "despachos-lujan@", "despachos-magaldi@",
+    ]) {
+      expect(ejecutable).not.toContain(excluido);
+    }
+  });
+
+  // R-3 · el gate del firmante no puede resolverse por `has_permission`, que
+  // termina en un bypass por `profiles.role='admin'`.
+  it("el gate del firmante lee las tablas de RBAC directo, sin has_permission", () => {
+    // El bloque EXACTO que produce el rechazo, no una ventana alrededor: el
+    // gate de `compras.create` de 0243 vive unas líneas más arriba y sigue
+    // usando `has_permission`, que es correcto y no se toca.
+    const cuerpo = cuerpoDeLaFuncion(sql0259);
+    const iMsg = cuerpo.indexOf("No estás autorizado a firmar");
+    const iGate = cuerpo.lastIndexOf("if not exists (", iMsg);
+    expect(iGate).toBeGreaterThan(-1);
+    const gate = cuerpo.slice(iGate, iMsg);
+    expect(gate).toContain("from public.user_roles ur");
+    expect(gate).toContain("join public.role_permissions rp");
+    expect(gate).toContain("join public.permissions pe");
+    expect(gate).not.toContain("has_permission");
+    // Y no toca `has_permission`: corregir el bypass es otro expediente.
+    expect(sql0259).not.toMatch(/create or replace function public\.has_permission/i);
+    expect(rollback).not.toMatch(/create or replace function public\.has_permission/i);
   });
 
   it("queda catalogada en el linaje junto con su rollback", () => {

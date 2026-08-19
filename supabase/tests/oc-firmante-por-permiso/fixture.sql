@@ -2,16 +2,17 @@
 -- OC-FIRMANTE-POR-PERMISO · CIERRE ACOTADO para el par rojo→verde del firmante.
 -- ============================================================================
 --
--- Reproduce SÓLO lo que el preludio de `purchase_order_issue` toca al resolver
--- quién firma: la identidad de sesión, el perfil activo, el gate de permisos y
--- las dos tablas de las que sale el firmante.
+-- Reproduce el ESTADO PREVIO de producción —medido, no supuesto— en lo que el
+-- expediente toca: la identidad de sesión, el perfil activo, el gate de
+-- permisos, el reparto real de `compras.sign` y las dos tablas de las que sale
+-- el firmante. Sobre este estado corre el lado ROJO; el lado VERDE se obtiene
+-- aplicando encima los bloques de datos de la propia 0259.
 --
 -- ⚠ LÍMITE DECLARADO: `public.has_permission` acá es una versión REDUCIDA de la
 --   productiva — conserva el join user_roles→role_permissions→permissions y el
 --   bypass `profiles.role='admin'`, y omite la rama de jefe de depósito, que
---   este expediente no toca. El gate de permisos del preludio no cambia entre
---   0243 y 0259 (el diff lo demuestra byte a byte); este cierre existe para
---   ejercitar el bloque del FIRMANTE contra un PostgreSQL real.
+--   este expediente no toca. El bypass SÍ se reproduce, porque es justamente el
+--   cerrojo que el gate directo del firmante tiene que esquivar.
 
 create schema if not exists auth;
 
@@ -36,9 +37,12 @@ create table public.profiles (
 );
 
 create table public.roles (
-  id   uuid primary key default gen_random_uuid(),
-  slug text unique not null,
-  name text not null
+  id          uuid primary key default gen_random_uuid(),
+  slug        text unique not null,
+  name        text not null,
+  description text,
+  color       text,
+  is_system   boolean not null default false
 );
 
 create table public.permissions (
@@ -49,14 +53,14 @@ create table public.permissions (
 );
 
 create table public.role_permissions (
-  role_id       uuid not null references public.roles(id),
-  permission_id uuid not null references public.permissions(id),
+  role_id       uuid not null references public.roles(id) on delete cascade,
+  permission_id uuid not null references public.permissions(id) on delete cascade,
   primary key (role_id, permission_id)
 );
 
 create table public.user_roles (
-  user_id        uuid not null references auth.users(id),
-  role_id        uuid not null references public.roles(id),
+  user_id        uuid not null references auth.users(id) on delete cascade,
+  role_id        uuid not null references public.roles(id) on delete cascade,
   position_title text,
   primary key (user_id, role_id)
 );
@@ -76,19 +80,36 @@ end;
 $$;
 
 -- ── PERMISOS Y ROLES, con la forma medida en producción ─────────────────────
-insert into public.permissions (slug) values ('compras.create'), ('compras.sign'), ('compras.view');
+insert into public.permissions (slug) values
+  ('compras.create'), ('compras.sign'), ('compras.view');
 
-insert into public.roles (slug, name) values
-  ('super_admin',   'Super Administrador'),
-  ('director_ops',  'Director de Operaciones'),
-  ('gerencia',      'Gerencia (acceso total sin RRHH)'),
-  ('jefe_deposito', 'Jefe de Deposito');
+insert into public.roles (slug, name, is_system) values
+  ('super_admin',              'Super Administrador',       true),
+  ('director_ops',             'Director de Operaciones',   true),
+  ('admin_sin_rrhh',           'Administración sin RRHH',   true),
+  ('administracion_finanzas',  'Administración y Finanzas', true),
+  ('gerencia_comercial',       'Gerencia Comercial',        true),
+  ('gerencia',                 'Gerencia',                  true),
+  ('facturacion_ventas',       'Facturación y Ventas',      true),
+  ('rrhh_admin',               'RRHH Admin',                true),
+  ('ai_docs_pilot',            'Piloto de documentos IA',   true),
+  ('jefe_deposito',            'Jefe de Deposito',          true);
 
--- super_admin y director_ops SÍ tienen compras.sign; gerencia NO (H-B medido).
+-- EL REPARTO REAL DE `compras.sign`, medido en producción antes de la
+-- migración: CINCO roles lo portan. `gerencia` NO lo tiene (medido: H-B).
 insert into public.role_permissions (role_id, permission_id)
 select r.id, p.id from public.roles r, public.permissions p
- where (r.slug in ('super_admin','director_ops') and p.slug in ('compras.create','compras.sign','compras.view'))
-    or (r.slug = 'gerencia' and p.slug in ('compras.create','compras.view'));
+ where p.slug = 'compras.sign'
+   and r.slug in ('super_admin','director_ops','admin_sin_rrhh',
+                  'administracion_finanzas','gerencia_comercial');
+
+-- `compras.create` y `compras.view` tienen un reparto más ancho; se siembra el
+-- de los roles que participan de los escenarios.
+insert into public.role_permissions (role_id, permission_id)
+select r.id, p.id from public.roles r, public.permissions p
+ where p.slug in ('compras.create','compras.view')
+   and r.slug in ('super_admin','director_ops','admin_sin_rrhh',
+                  'administracion_finanzas','gerencia_comercial','gerencia');
 
 -- ── TIPOS Y TABLAS que sólo aparecen en el DECLARE del preludio ─────────────
 --
