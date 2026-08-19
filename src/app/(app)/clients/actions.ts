@@ -549,9 +549,10 @@ export async function setClientActivo(
  * Contrata la custodia digital reforzada de un cliente (nivel 1 → 2) vía la
  * RPC hermana `client_set_custody_level` (0256), nunca vía `client_update`.
  *
- * Esta superficie SOLO eleva. La RPC admite el 2→1 con motivo, pero rescindir
- * un servicio contratado es una decisión de Dirección que no se ofrece desde
- * esta pantalla; por eso el nivel destino está fijado en 2 y no es parámetro.
+ * Esta superficie SOLO eleva: el nivel destino está fijado en 2 y no es
+ * parámetro. El camino inverso EXISTE y también se ofrece desde esta pantalla,
+ * pero por su propia acción —`downgradeClientCustody`, más abajo— porque la
+ * baja exige motivo y confirmación reforzada, y la suba no.
  * El permiso real (`clientes.custody.contract`) lo exige la base fail-closed;
  * el chequeo previo de acá solo evita un round-trip con error críptico.
  */
@@ -584,6 +585,116 @@ export async function contractClientCustody(
   revalidatePath(`/clientes/${id}`);
   revalidatePath("/clients");
   return { ok: true, updated_at: updated.updated_at };
+}
+
+/**
+ * Da de BAJA la custodia digital reforzada de un cliente (nivel 2 → 1) vía la
+ * misma RPC hermana `client_set_custody_level` (0256).
+ *
+ * ─── POR QUÉ EXISTE ────────────────────────────────────────────────────────
+ *
+ * `contractClientCustody` sólo eleva, y hasta este expediente no había camino
+ * inverso: contratar el servicio sobre el cliente equivocado sólo se corregía
+ * tocando la base a mano. La RPC ya lo admitía; faltaba la superficie.
+ *
+ * ─── QUÉ NO CAMBIA, Y NO HAY QUE CONFUNDIR ─────────────────────────────────
+ *
+ * Esta acción baja el nivel CONTRATADO DEL CLIENTE. Son otra cosa, y siguen
+ * intactas:
+ *
+ *   · la regla de 0252:72-74 —«la RECEPCIÓN eleva, nunca degrada»— que es
+ *     sobre recepciones puntuales, no sobre el plan del cliente;
+ *   · las unidades y casos YA materializados, que conservan su nivel 2 y su
+ *     circuito completo: 0252 estampa `custody_level` en la unidad al ingresar
+ *     y no lo re-deriva del cliente al despachar;
+ *   · las compuertas de despacho y egreso.
+ *
+ * La baja aplica solamente a lo que ingrese DESDE ESTE MOMENTO.
+ *
+ * ─── AUTORIZACIÓN Y CONCURRENCIA ───────────────────────────────────────────
+ *
+ * Mismo permiso exacto que el alta (`clientes.custody.contract`) y mismo CAS
+ * por `expectedUpdatedAt`. Ambos los exige la base fail-closed (0256:116 y
+ * 0256:133-141); el chequeo previo de acá sólo evita un round-trip inútil.
+ *
+ * El motivo es OBLIGATORIO —lo exige 0256:149-150— y se valida antes de
+ * viajar, para que el operador reciba una instrucción y no un código.
+ */
+export async function downgradeClientCustody(
+  id: string,
+  expectedUpdatedAt: string,
+  motivo: string,
+): Promise<{ ok: true; updated_at: string } | { ok: false; error: string }> {
+  const deny = await requireExactPermission("clientes.custody.contract");
+  if (deny) return { ok: false, error: deny };
+  if (!z.string().uuid().safeParse(id).success) return { ok: false, error: "Cliente inválido." };
+  if (!expectedUpdatedAt?.trim()) {
+    return { ok: false, error: "Falta la versión vigente de la ficha. Recargá la página." };
+  }
+
+  // La BAJA exige motivo (0256:149-150). Se valida ACÁ para que el rechazo
+  // llegue con la instrucción concreta y sin pagar el viaje a la base.
+  const motivoLimpio = motivo?.trim() ?? "";
+  if (!motivoLimpio) {
+    return {
+      ok: false,
+      error: "Escribí el motivo de la baja: queda asentado en la auditoría del cliente.",
+    };
+  }
+  // Mismo tope que `setClientActivo` y que el maestro: `client_events.motivo`
+  // es `text` sin límite y un pegado accidental entraría entero a la auditoría.
+  if (motivoLimpio.length > 500) {
+    return { ok: false, error: "El motivo de la baja no puede superar los 500 caracteres." };
+  }
+
+  const supabase = createUserClient();
+  if (!supabase) return { ok: false, error: "Sesión no disponible." };
+
+  const { data: updated, error } = await supabase
+    .rpc("client_set_custody_level", {
+      p_id: id,
+      p_level: 1,
+      p_motivo: motivoLimpio,
+      p_expected_updated_at: expectedUpdatedAt,
+    })
+    .select("updated_at")
+    .single<{ updated_at: string }>();
+  if (error || !updated?.updated_at) {
+    return { ok: false, error: traducirErrorBajaCustodia(error?.message) };
+  }
+
+  revalidatePath(`/clientes/${id}`);
+  revalidatePath("/clients");
+  return { ok: true, updated_at: updated.updated_at };
+}
+
+/**
+ * Traduce los rechazos de la BAJA de custodia, cada causa con SU mensaje.
+ *
+ * `traducirErrorRpc` sirve al maestro entero y por eso es deliberadamente
+ * neutro. Acá el operador está rescindiendo un servicio contratado y necesita
+ * saber QUÉ pasó y QUÉ hacer: colapsar causas distintas en una sola frase es
+ * exactamente el patrón que produjo los defectos que este expediente corrige.
+ *
+ * Las causas que esta superficie no distingue caen en `traducirErrorRpc`, que
+ * ya las traduce una por una; nunca se tapan con un texto más pobre que el
+ * que el maestro ya sabía dar.
+ */
+function traducirErrorBajaCustodia(msg: string | undefined): string {
+  if (!msg) return "No pudimos dar de baja la custodia reforzada.";
+  if (msg.includes("CLIENT_MOTIVO_REQUERIDO")) {
+    return "Escribí el motivo de la baja: queda asentado en la auditoría del cliente.";
+  }
+  if (msg.includes("CLIENT_DENEGADO")) {
+    return "No tenés el permiso de contratación de custodia: pedile la baja a quien lo tenga.";
+  }
+  if (msg.includes("CLIENT_CONFLICTO_CONCURRENTE")) {
+    return "La ficha cambió mientras la tenías abierta. Recargá la página y revisá el nivel vigente antes de dar de baja.";
+  }
+  if (msg.includes("CLIENT_NIVEL_INVALIDO")) {
+    return "El nivel de custodia no es válido: recargá la página y reintentá la baja.";
+  }
+  return traducirErrorRpc(msg);
 }
 
 // ============================================================================
