@@ -9,6 +9,14 @@ import { createClient } from "@/lib/supabase/server";
 
 export type SimpleResult = { ok: true } | { ok: false; message: string };
 
+/**
+ * Resultado de una marcación masiva. `marcadas` es el recuento que devuelve
+ * PostgreSQL, no una estimación del cliente: sin ese número la acción no puede
+ * distinguir "marqué todo" de "no marqué nada", que es exactamente el éxito
+ * silencioso que el operador veía como un botón muerto.
+ */
+export type MarkAllResult = { ok: true; marcadas: number } | { ok: false; message: string };
+
 async function session() {
   const supabase = createClient();
   if (!supabase) return { ok: false as const, message: "Modo demo: no persiste (sin Supabase)." };
@@ -41,13 +49,30 @@ export async function markNotificationReadAction(raw: unknown): Promise<SimpleRe
   return { ok: true };
 }
 
-export async function markAllNotificationsReadAction(): Promise<SimpleResult> {
+// HOTFIX-02: la RPC 0235 devuelve `integer` con las filas realmente marcadas.
+// Descartarlo convertía cualquier marcación vacía en un `{ ok: true }` que la
+// UI mostraba como éxito mientras la campanita seguía encendida. La acción no
+// vuelve a declarar éxito sin ese recuento.
+export async function markAllNotificationsReadAction(): Promise<MarkAllResult> {
   const s = await session();
   if (!s.ok) return s;
-  const { error } = await s.supabase.rpc("connect_notif_mark_all_read");
+  const { data, error } = await s.supabase.rpc("connect_notif_mark_all_read");
   if (error) return { ok: false, message: mapNotifRpcError(error.message) };
+  const marcadas = typeof data === "number" ? data : Number.NaN;
+  if (!Number.isFinite(marcadas)) {
+    return {
+      ok: false,
+      message: "No pudimos confirmar cuántas notificaciones quedaron leídas. Volvé a intentarlo.",
+    };
+  }
+  if (marcadas === 0) {
+    return {
+      ok: false,
+      message: "No se marcó ninguna notificación como leída. Actualizá la página y volvé a intentarlo.",
+    };
+  }
   revalidatePath("/connect/notificaciones");
-  return { ok: true };
+  return { ok: true, marcadas };
 }
 
 /** Traduce errores Postgres de las RPCs 0162 a mensajes accionables (lección DEFECT-4). */

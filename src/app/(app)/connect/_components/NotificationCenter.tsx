@@ -50,7 +50,12 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
     });
   }
 
-  const hasUnread = items.some((i) => !i.read);
+  // HOTFIX-02: sólo los avisos persistidos (`source === "notification"`) tienen
+  // estado propio que la acción masiva puede escribir. Las filas
+  // `source === "conversation"` son derivadas del inbox y se apagan al ABRIR la
+  // conversación. Contarlas acá habilitaba el botón para una marcación que la
+  // base nunca iba a registrar.
+  const avisosMarcables = items.filter((i) => i.source === "notification" && !i.read).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -62,7 +67,12 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
         <button
           type="button"
           className="btn btn-ghost btn-sm"
-          disabled={pending || !hasUnread}
+          disabled={pending || avisosMarcables === 0}
+          title={
+            avisosMarcables === 0
+              ? "No hay avisos pendientes. Las conversaciones se marcan leídas al abrirlas."
+              : `Marcar leídos los ${avisosMarcables} avisos pendientes`
+          }
           onClick={() => run(() => markAllNotificationsReadAction())}
         >
           <Icon name="check" size={14} /> Marcar todas leídas
