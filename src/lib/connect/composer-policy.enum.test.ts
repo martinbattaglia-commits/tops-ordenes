@@ -97,7 +97,10 @@ describe("INC-04-R2 · el universo de kinds se mide contra las migraciones", () 
 
   it("el código conoce EXACTAMENTE los kinds que crean las migraciones", () => {
     const desdeMigraciones = [...kindsSegunLasMigraciones()].sort();
-    const desdeElCodigo = [...CONVERSATION_KINDS].sort();
+    // `string[]` a propósito: comparar contra el tipo literal haría que el
+    // compilador «supiera» de antemano qué kinds hay, que es justo la
+    // suposición que esta prueba viene a NO dar por buena.
+    const desdeElCodigo: string[] = [...CONVERSATION_KINDS].sort();
 
     // Se comparan los dos sentidos por separado para que el error diga QUÉ
     // pasó: un kind que la base tiene y el código no enmudece el composer para

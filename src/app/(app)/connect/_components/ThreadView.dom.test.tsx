@@ -649,3 +649,33 @@ describe("H-1 · el adjunto llega al HILO, no sólo al componente", () => {
     expect(botones.some((t) => /Descargar/i.test(t))).toBe(true);
   });
 });
+
+// ── INC-04-R2 · UN COMPOSER BLOQUEADO TIENE QUE DECIR POR QUÉ ──────────────
+//
+// Ésta es la prueba del silencio, y es la que importa más allá de `task`.
+//
+// Cuando el kind quedó fuera del universo cerrado, `composerCapabilities`
+// devolvió NONE y `send()` retornó sin efecto y SIN SEÑAL: el botón `disabled`
+// y ningún cartel. El usuario escribía, apretaba, y no pasaba nada. Por eso el
+// defecto duró ocho días con 22 conversaciones rotas: no había qué reportar
+// más allá de «no anda».
+//
+// El arreglo de fondo no es agregar `task` —eso lo arregla UNA vez—: es que el
+// PRÓXIMO kind que alguien agregue por migración se anuncie solo en pantalla.
+describe("INC-04-R2 · el composer bloqueado se explica en pantalla", () => {
+  it("un kind que el código no conoce muestra el motivo, no un composer mudo", () => {
+    const texto = montar({ kind: "kind-que-no-existe-todavia", initialMessages: [] });
+    expect(texto).toMatch(/no se pudo determinar el tipo de conversación/i);
+  });
+
+  it("y no deja un campo de texto que promete un envío que no va a ocurrir", () => {
+    montar({ kind: "kind-que-no-existe-todavia", initialMessages: [] });
+    expect(container.querySelector("textarea")).toBeNull();
+  });
+
+  it("un kind conocido SÍ muestra el composer: el aviso no aparece de más", () => {
+    const texto = montar({ kind: "task", initialMessages: [] });
+    expect(texto).not.toMatch(/no se pudo determinar el tipo de conversación/i);
+    expect(container.querySelector("textarea")).not.toBeNull();
+  });
+});

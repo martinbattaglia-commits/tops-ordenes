@@ -56,9 +56,16 @@ export type ComposerOutcome =
   | { route: ComposerRoute; status: "pending"; message: string }
   | { route: ComposerRoute; status: "failed"; message: string };
 
-/** Mensaje estable cuando el composer no sabe a dónde iría el mensaje. */
-export const UNKNOWN_KIND_MESSAGE =
-  "No se pudo determinar el tipo de conversación. No se envió nada.";
+/**
+ * Mensaje estable cuando el composer no sabe a dónde iría el mensaje.
+ *
+ * INC-04-R2 · el texto pasó a `composer-policy`, que es donde vive la decisión
+ * de por qué el composer está bloqueado. Se re-exporta para no romper a quien
+ * ya lo importaba de acá, y sobre todo para que la vista y el despacho digan
+ * exactamente lo mismo: dos redacciones del mismo hecho se leen como dos fallas.
+ */
+export { UNKNOWN_KIND_MESSAGE } from "./composer-policy";
+import { UNKNOWN_KIND_MESSAGE } from "./composer-policy";
 
 /**
  * WA-8R1 · mensaje estable cuando la acción de Connect no responde.

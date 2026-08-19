@@ -129,6 +129,52 @@ export function composerCapabilities(
 }
 
 /**
+ * INC-04-R2 · POR QUÉ EL COMPOSER NO DEJA ESCRIBIR, EN PALABRAS.
+ *
+ * `composerCapabilities` dice QUÉ se puede hacer; esto dice POR QUÉ no se puede,
+ * que es lo que le faltaba al usuario. Cuando `task` quedó fuera del universo
+ * cerrado, el composer devolvía NONE y la vista no mostraba nada: el botón
+ * quedaba `disabled` y `send()` retornaba sin señal. Escribir y que no pase nada
+ * es indistinguible de un sistema roto, y por eso el defecto duró ocho días.
+ *
+ * Vive acá y no en la vista por el mismo contrato que el resto de las
+ * decisiones por `kind`: `ThreadView` CONSULTA, no compara.
+ *
+ * `null` significa «se puede escribir». Cualquier otro valor es un cartel que
+ * la vista debe mostrar EN LUGAR del composer: ofrecer un campo de texto que no
+ * va a enviar nada es la promesa que este expediente vino a romper.
+ */
+export type ComposerBlockReason = "read_only" | "unknown_kind";
+
+export interface ComposerBlockNotice {
+  reason: ComposerBlockReason;
+  message: string;
+}
+
+/** Mensaje estable cuando el composer no sabe a dónde iría el mensaje. */
+export const UNKNOWN_KIND_MESSAGE =
+  "No se pudo determinar el tipo de conversación. No se envió nada.";
+
+const READ_ONLY_MESSAGE =
+  "Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.";
+
+export function composerBlockNotice(
+  kind: unknown,
+  options: { readOnly?: boolean } = {},
+): ComposerBlockNotice | null {
+  if (options.readOnly === true) {
+    return { reason: "read_only", message: READ_ONLY_MESSAGE };
+  }
+  if (!isConversationKind(kind)) {
+    // El texto es el MISMO que devuelve `dispatchComposerSend` para este caso:
+    // el usuario no debería leer dos explicaciones distintas del mismo hecho
+    // según por dónde se entere.
+    return { reason: "unknown_kind", message: UNKNOWN_KIND_MESSAGE };
+  }
+  return null;
+}
+
+/**
  * Estado visual de la burbuja optimista.
  *
  * `pending` es deliberadamente distinto de `failed`: un envío ambiguo pudo haber
