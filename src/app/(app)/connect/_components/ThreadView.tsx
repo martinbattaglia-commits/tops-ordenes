@@ -179,9 +179,13 @@ export function ThreadView({
   const caps = useMemo(() => composerCapabilities(kind, { readOnly }), [kind, readOnly]);
 
   async function sendAudio() {
-    // WA-8 · guarda de LÓGICA, no de CSS: en WhatsApp (y en solo-lectura) esto
-    // corta antes de `prepareAudioUploadAction`, `uploadToSignedUrl` y
-    // `finalizeAudioMessageAction`. Cero acciones de audio.
+    // Guarda de LÓGICA, no de CSS: corta antes de `prepareAudioUploadAction`,
+    // `uploadToSignedUrl` y `finalizeAudioMessageAction`.
+    //
+    // SCOPE B · el comentario anterior afirmaba que esta guarda bloqueaba el
+    // audio "en WhatsApp": era cierto en WA-8 y dejó de serlo en FASE B, que
+    // habilitó `canSendAudio` en ese canal (ver `composerCapabilities`). La
+    // documentación desactualizada apuntaba a una causa falsa para INC-02.
     if (!caps.canSendAudio) return;
     if (!recorder.blob || audioBusy) return;
     setAudioBusy(true);
@@ -588,7 +592,7 @@ export function ThreadView({
       </div>
 
       {readOnly ? (
-        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt/50 px-4 py-3 text-center text-xs text-fg-muted">
+        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt px-4 py-3 text-center text-xs text-fg-muted">
           <Icon name="folder" size={13} className="text-fg-muted" />
           Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.
         </div>

@@ -202,7 +202,7 @@ export function ConversationAdmin({
 
       {/* Fijados */}
       {pinned.length > 0 && (
-        <div className="border-b border-stroke-soft bg-bg-surface-alt/50 px-4 py-2">
+        <div className="border-b border-stroke-soft bg-bg-surface-alt px-4 py-2">
           <button type="button" className="flex items-center gap-1.5 text-[11px] font-semibold text-fg-secondary"
             onClick={() => setShowPinned((s) => !s)}>
             <Icon name="tag-alt" size={12} className="text-tops-red" /> {pinned.length} fijado{pinned.length > 1 ? "s" : ""}

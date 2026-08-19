@@ -38,6 +38,7 @@ import { canReadInternalChat } from "@/lib/rbac/internal-chat";
 import { canChannel } from "@/lib/rbac/nexus-link";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { validateAttachment } from "../../attachments/validate";
+import { classifyMediaFailure, type MediaDiagnostic } from "../../media-outcome";
 import { counterpartPhoneFromContext } from "@/lib/whatsapp/reply-core";
 import { sendWhatsappMediaForAttachment, type MediaSendResult } from "@/lib/whatsapp/media-send";
 
@@ -252,7 +253,8 @@ const PrepareSchema = z.object({ conversationId: z.string().uuid() });
 
 export type PrepareAttachmentResult =
   | { ok: true; path: string; token: string }
-  | { ok: false; message: string };
+  /** `cause` viaja sólo cuando el fallo vino del pipeline y pudo clasificarse. */
+  | { ok: false; message: string; cause?: MediaDiagnostic };
 
 export async function prepareAttachmentUploadAction(raw: unknown): Promise<PrepareAttachmentResult> {
   const g = await guardSession();
@@ -275,11 +277,19 @@ export async function prepareAttachmentUploadAction(raw: unknown): Promise<Prepa
   });
   const fila = (abierta as Array<{ object_path: string }> | null)?.[0];
   if (abrirErr || !fila?.object_path) {
-    return { ok: false, message: "No se pudo preparar la subida." };
+    // SCOPE B: `connect_upload_begin` distingue sesión ausente (42501), acceso
+    // denegado (42501 con otro texto) y bucket no admitido (22023). Colapsarlas
+    // en un solo string dejaba al operador sin saber si volver a entrar, pedir
+    // acceso o llamar a soporte — y al log sin la causa.
+    const outcome = classifyMediaFailure(abrirErr, "upload_begin");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
   }
 
   const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(fila.object_path);
-  if (error || !data) return { ok: false, message: `No se pudo preparar la subida: ${error?.message}` };
+  if (error || !data) {
+    const outcome = classifyMediaFailure(error, "upload_begin");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   return { ok: true, path: data.path, token: data.token };
 }
 
@@ -311,7 +321,7 @@ export type FinalizeAttachmentResult =
       fileName: string;
       whatsapp?: { state: MediaSendResult["state"]; message?: string };
     }
-  | { ok: false; message: string };
+  | { ok: false; message: string; cause?: MediaDiagnostic };
 
 export async function finalizeAttachmentAction(raw: unknown): Promise<FinalizeAttachmentResult> {
   const g = await guardSession();
@@ -339,13 +349,29 @@ export async function finalizeAttachmentAction(raw: unknown): Promise<FinalizeAt
     p_bucket: BUCKET,
     p_path: p.data.path,
   });
-  if (claimErr) return { ok: false, message: "No se pudo confirmar la subida." };
+  if (claimErr) {
+    // SCOPE B: la RPC sólo aborta por sesión ausente o por fallo de transporte.
+    // Son condiciones opuestas —una exige volver a entrar, la otra es la única
+    // reintentable— y el string único las hacía indistinguibles.
+    const outcome = classifyMediaFailure(claimErr, "claim_finalize");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   if (veredicto !== "claimed" && veredicto !== "already_finalized") {
-    return { ok: false, message: "La subida ya no está disponible." };
+    // `denied` es un VEREDICTO, no un error: la base lo devuelve deliberadamente
+    // sin distinguir causa para no servir de oráculo. Se nombra como tal —con su
+    // propia clase— en vez de disfrazarlo de fallo técnico.
+    const outcome = classifyMediaFailure(
+      { code: "CLAIM_DENIED", message: String(veredicto ?? "denied") },
+      "claim_finalize",
+    );
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
   }
 
   const { data: file, error: dlErr } = await admin.storage.from(BUCKET).download(p.data.path);
-  if (dlErr || !file) return { ok: false, message: "El archivo no llegó a storage." };
+  if (dlErr || !file) {
+    const outcome = classifyMediaFailure(dlErr, "download");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   const bytes = new Uint8Array(await file.arrayBuffer());
 
   const v = validateAttachment(bytes, p.data.fileName ?? null);
@@ -463,7 +489,9 @@ export async function finalizeAttachmentAction(raw: unknown): Promise<FinalizeAt
 
 const UrlSchema = z.object({ attachmentId: z.string().uuid() });
 
-export type AttachmentUrlResult = { ok: true; url: string } | { ok: false; message: string };
+export type AttachmentUrlResult =
+  | { ok: true; url: string }
+  | { ok: false; message: string; cause?: MediaDiagnostic };
 
 /**
  * URL firmada de vigencia corta para VER o DESCARGAR.
@@ -481,7 +509,13 @@ export async function getAttachmentUrlAction(raw: unknown): Promise<AttachmentUr
   const { data: gate, error } = await supabase.rpc("connect_emit_attachment_signed_url", {
     p_attachment_id: p.data.attachmentId,
   });
-  if (error || !gate) return { ok: false, message: "Adjunto no disponible o sin acceso." };
+  if (error || !gate) {
+    // SCOPE B: el portón distingue «adjunto inexistente» (no_data_found) de «no
+    // autorizado» (insufficient_privilege). El string único las fundía en una
+    // sola frase ambigua que además insinuaba culpa del usuario.
+    const outcome = classifyMediaFailure(error, "signed_url");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   const { bucket, path } = gate as { bucket?: string; path?: string };
   if (!bucket || !path) return { ok: false, message: "Respuesta del portón inválida." };
   const admin = createAdminClient();
@@ -490,7 +524,10 @@ export async function getAttachmentUrlAction(raw: unknown): Promise<AttachmentUr
     .from(bucket)
     .createSignedUrl(path, 300); // 5 min
   if (signErr || !signed?.signedUrl) {
-    return { ok: false, message: signErr?.message ?? "No se pudo firmar la URL." };
+    // El mensaje crudo de Storage se iba tal cual a la UI: filtraba detalle
+    // interno y, cuando no había error, quedaba un string sin causa.
+    const outcome = classifyMediaFailure(signErr, "signed_url");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
   }
   return { ok: true, url: signed.signedUrl };
 }

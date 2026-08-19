@@ -19,6 +19,7 @@ import { canReadInternalChat } from "@/lib/rbac/internal-chat";
 import { canChannel } from "@/lib/rbac/nexus-link";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { validateAudio, AUDIO_LIMITS } from "../../audio/validate";
+import { classifyMediaFailure, type MediaDiagnostic } from "../../media-outcome";
 import { counterpartPhoneFromContext } from "@/lib/whatsapp/reply-core";
 import { sendWhatsappMediaForAttachment, type MediaSendResult } from "@/lib/whatsapp/media-send";
 
@@ -93,7 +94,7 @@ const PrepareSchema = z.object({ conversationId: z.string().uuid() });
 
 export type PrepareUploadResult =
   | { ok: true; path: string; token: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; cause?: MediaDiagnostic };
 
 export async function prepareAudioUploadAction(raw: unknown): Promise<PrepareUploadResult> {
   const g = await guardSession();
@@ -108,7 +109,13 @@ export async function prepareAudioUploadAction(raw: unknown): Promise<PrepareUpl
   // Path elegido por el SERVIDOR (el cliente jamás lo controla).
   const path = `${p.data.conversationId}/audio/${randomUUID()}`;
   const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
-  if (error || !data) return { ok: false, message: `No se pudo preparar la subida: ${error?.message}` };
+  if (error || !data) {
+    // SCOPE B · instrumentación del camino de media: el audio compartía el
+    // mismo defecto que los adjuntos —causa real descartada, mensaje crudo de
+    // Storage expuesto—, y es justo el camino que INC-02 necesita medir.
+    const outcome = classifyMediaFailure(error, "upload_begin");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   return { ok: true, path: data.path, token: data.token };
 }
 
@@ -125,7 +132,7 @@ export type FinalizeResult =
       ok: true; messageId: string; attachmentId: string;
       whatsapp?: { state: MediaSendResult["state"]; message?: string };
     }
-  | { ok: false; message: string };
+  | { ok: false; message: string; cause?: MediaDiagnostic };
 
 export async function finalizeAudioMessageAction(raw: unknown): Promise<FinalizeResult> {
   const g = await guardSession();
@@ -143,7 +150,10 @@ export async function finalizeAudioMessageAction(raw: unknown): Promise<Finalize
   if (!admin) return { ok: false, message: "Storage no disponible." };
 
   const { data: file, error: dlErr } = await admin.storage.from(BUCKET).download(p.data.path);
-  if (dlErr || !file) return { ok: false, message: "El audio no llegó a storage." };
+  if (dlErr || !file) {
+    const outcome = classifyMediaFailure(dlErr, "download");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   const bytes = new Uint8Array(await file.arrayBuffer());
 
   const v = validateAudio(bytes, p.data.durationMs);
@@ -220,7 +230,7 @@ const UrlSchema = z.object({ messageId: z.string().uuid() });
 
 export type AudioUrlResult =
   | { ok: true; url: string }
-  | { ok: false; message: string };
+  | { ok: false; message: string; cause?: MediaDiagnostic };
 
 export async function getAudioUrlAction(raw: unknown): Promise<AudioUrlResult> {
   const g = await guardSession();
@@ -234,13 +244,22 @@ export async function getAudioUrlAction(raw: unknown): Promise<AudioUrlResult> {
     .select("id")
     .eq("message_id", p.data.messageId)
     .maybeSingle();
-  if (error || !att) return { ok: false, message: "Audio no disponible o sin acceso." };
+  if (error || !att) {
+    // Dos condiciones distintas bajo un mismo string: el adjunto no existe, o
+    // existe y la RLS de sesión no lo deja ver. PGRST116 agrega una tercera —
+    // más de una fila para el mismo mensaje—, que es un defecto de datos.
+    const outcome = classifyMediaFailure(error, "signed_url");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   // RPC existente (0144) = PORTÓN: re-valida membresía y AUDITA el acceso; devuelve
   // {bucket, path}. La firma con expiración la emite el servidor con service client.
   const { data: gate, error: rpcErr } = await supabase.rpc("connect_emit_attachment_signed_url", {
     p_attachment_id: (att as { id: string }).id,
   });
-  if (rpcErr || !gate) return { ok: false, message: rpcErr?.message ?? "Acceso denegado." };
+  if (rpcErr || !gate) {
+    const outcome = classifyMediaFailure(rpcErr, "signed_url");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
+  }
   const { bucket, path } = gate as { bucket?: string; path?: string };
   if (!bucket || !path) return { ok: false, message: "Respuesta del portón inválida." };
   const admin = createAdminClient();
@@ -249,7 +268,8 @@ export async function getAudioUrlAction(raw: unknown): Promise<AudioUrlResult> {
     .from(bucket)
     .createSignedUrl(path, 300); // 5 min de vigencia
   if (signErr || !signed?.signedUrl) {
-    return { ok: false, message: signErr?.message ?? "No se pudo firmar la URL." };
+    const outcome = classifyMediaFailure(signErr, "signed_url");
+    return { ok: false, message: outcome.userMessage, cause: outcome.diagnostic };
   }
   return { ok: true, url: signed.signedUrl };
 }

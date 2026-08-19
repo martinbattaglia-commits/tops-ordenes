@@ -230,7 +230,7 @@ export function ConversationList({
               key={it.conversationId}
               data-conversation-id={it.conversationId}
               className={cn(
-                "border-b border-stroke-soft/50",
+                "border-b border-stroke-soft",
                 active ? "bg-bg-surface-alt" : "hover:bg-bg-surface-alt",
               )}
             >

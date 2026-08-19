@@ -117,7 +117,7 @@ export function AudioPlayer({
               value={pct}
               aria-label="Posición del audio"
               onChange={(e) => seek(Number(e.target.value))}
-              className="w-full accent-[#c90812]"
+              className="w-full accent-tops-red"
             />
             <div className="flex justify-between text-[10px] text-fg-muted">
               <span>{fmt(current)}</span>
