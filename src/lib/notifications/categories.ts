@@ -68,6 +68,53 @@ export const CATEGORY_STYLE: Record<NotificationCategory, CategoryStyle> = {
   },
 };
 
+/**
+ * INC-06 · la LEYENDA que se le muestra al usuario.
+ *
+ * Dirección pidió «un cartelito con la referencia de qué hace cada color». La
+ * condición que hace útil a una leyenda es que sea VERDADERA, así que cada
+ * texto de acá se verificó contra lo que el sistema realmente cuenta —la vista
+ * `v_link_notification_badges`—, no contra lo que se supone que cuenta:
+ *
+ *   · rojo     = `v_link_my_notifications` no leídas y vencidas. En producción
+ *                son avisos de tarea, incidente, mención y membresía.
+ *   · verde    = mensajes sin leer de conversaciones `kind = 'whatsapp'`.
+ *   · amarillo = mensajes sin leer de TODA otra conversación. Incluye los hilos
+ *                de Tarea y de Incidente, y decirlo importa: el AVISO de una
+ *                tarea es rojo, pero un MENSAJE escrito dentro del hilo de esa
+ *                misma tarea es amarillo. Una leyenda que callara esa distinción
+ *                convertiría una ambigüedad en una afirmación falsa.
+ *
+ * Deriva de `CATEGORY_STYLE`, que es la única definición del color: la leyenda
+ * no puede quedar describiendo un color que la campanita dejó de usar.
+ */
+export interface CategoryLegendEntry {
+  category: NotificationCategory;
+  /** Nombre del color, en las palabras del usuario. */
+  colorName: string;
+  /** Qué cuenta ese color. Verificado contra `v_link_notification_badges`. */
+  meaning: string;
+}
+
+export const CATEGORY_LEGEND: readonly CategoryLegendEntry[] = [
+  {
+    category: "red_system",
+    colorName: "Rojo",
+    meaning: "Avisos del sistema: tareas, incidentes, menciones y membresías.",
+  },
+  {
+    category: "yellow_internal",
+    colorName: "Amarillo",
+    meaning:
+      "Mensajes sin leer del chat interno de Nexus Link, incluidos los hilos de Tareas e Incidentes.",
+  },
+  {
+    category: "green_whatsapp",
+    colorName: "Verde",
+    meaning: "Mensajes sin leer de conversaciones de WhatsApp.",
+  },
+] as const;
+
 /** Tope visual del badge. Por encima se muestra `99+`. */
 export const BADGE_VISUAL_CAP = 99;
 
