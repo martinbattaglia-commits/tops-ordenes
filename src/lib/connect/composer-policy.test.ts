@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import {
+  composerBlockNotice,
   CONVERSATION_KINDS,
   composerCapabilities,
   isConversationKind,
@@ -100,6 +101,37 @@ describe("INC-04-R2 · una tarea escribe igual que un incidente", () => {
       canAttachFile: false,
       canMention: false,
     });
+  });
+});
+
+// INC-04-R2 · EL INVARIANTE QUE IMPIDE QUE EL SILENCIO VUELVA.
+//
+// `composerCapabilities` dice si se puede escribir; `composerBlockNotice` dice
+// por qué no. Hoy coinciden por construcción, y nada lo garantizaba: si alguien
+// agrega en el futuro una razón para devolver `canSendText: false` sin agregarla
+// también a `composerBlockNotice`, el composer vuelve a quedar mudo —botón
+// deshabilitado y ningún cartel— que es EXACTAMENTE el defecto de ocho días que
+// este expediente cierra. Este bloque ata las dos funciones.
+describe("INC-04-R2 · no se puede escribir ⟺ hay un motivo que mostrar", () => {
+  const CASOS: Array<[unknown, { readOnly?: boolean }]> = [
+    ...CONVERSATION_KINDS.map((k) => [k, {}] as [unknown, { readOnly?: boolean }]),
+    ...CONVERSATION_KINDS.map((k) => [k, { readOnly: true }] as [unknown, { readOnly?: boolean }]),
+    ["kind-inexistente", {}],
+    ["kind-inexistente", { readOnly: true }],
+    [null, {}],
+    [undefined, {}],
+    ["", {}],
+    [42, {}],
+  ];
+
+  it.each(CASOS)("kind=%s opciones=%o · el bloqueo y las capacidades no se contradicen", (kind, opts) => {
+    const caps = composerCapabilities(kind, opts);
+    const aviso = composerBlockNotice(kind, opts);
+    // Si no puede enviar texto, TIENE que haber un motivo que mostrar.
+    expect(caps.canSendText ? aviso === null : aviso !== null).toBe(true);
+    // Y el motivo, cuando existe, nunca es una cadena vacía: un cartel en
+    // blanco es la misma falla con otra forma.
+    if (aviso) expect(aviso.message.trim().length).toBeGreaterThan(0);
   });
 });
 
