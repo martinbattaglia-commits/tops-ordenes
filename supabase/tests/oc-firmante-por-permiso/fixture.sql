@@ -36,13 +36,25 @@ create table public.profiles (
   active    boolean not null default true
 );
 
+-- ⚠ LÍMITE DECLARADO Nº2: las tres tablas de RBAC de abajo son una copia A MANO
+--   del esquema productivo, y NADA las mantiene sincronizadas. Se replican con
+--   sus constraints y su nulabilidad tal como se midieron en producción
+--   (`arsksytgdnzukbmfgkju`) antes de escribir 0259 — PK compuestas en
+--   `user_roles` y `role_permissions`, unique en `roles.slug`, y toda columna
+--   NOT NULL con su default— justamente porque son las que la migración
+--   ESCRIBE: un `insert` que omita una columna NOT NULL sin default fallaría en
+--   la ventana de aplicación con estos corredores igual en verde. Las columnas
+--   que la migración no toca están acá sólo para que esa forma sea fiel.
 create table public.roles (
   id          uuid primary key default gen_random_uuid(),
   slug        text unique not null,
   name        text not null,
   description text,
-  color       text,
-  is_system   boolean not null default false
+  color       text not null default '#214576',
+  is_system   boolean not null default false,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  created_by  uuid
 );
 
 create table public.permissions (
@@ -55,6 +67,7 @@ create table public.permissions (
 create table public.role_permissions (
   role_id       uuid not null references public.roles(id) on delete cascade,
   permission_id uuid not null references public.permissions(id) on delete cascade,
+  created_at    timestamptz not null default now(),
   primary key (role_id, permission_id)
 );
 
@@ -62,6 +75,8 @@ create table public.user_roles (
   user_id        uuid not null references auth.users(id) on delete cascade,
   role_id        uuid not null references public.roles(id) on delete cascade,
   position_title text,
+  assigned_at    timestamptz not null default now(),
+  assigned_by    uuid,
   primary key (user_id, role_id)
 );
 

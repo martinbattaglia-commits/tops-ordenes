@@ -145,6 +145,15 @@ const ESCENARIOS = [
     verde: { emite: false, dice: "cargo del firmante es ambiguo" },
   },
   {
+    // La salida al defecto que el C4 encontró: sin este desempate, cargarle un
+    // cargo a un firmante en cualquier otro de sus roles lo dejaba sin poder
+    // emitir, y la única forma de destrabarlo era borrar un dato de RRHH.
+    id: "R-19-13", nombre: "cargos funcionales en conflicto + cargo en el rol de FIRMA · emite", actor: U.desempate,
+    rojo: { emite: false, dice: "No se pudo resolver el firmante canónico" },
+    verde: { emite: true, dice: "Alguien Con Dos Cargos" },
+    verdeAdemas: ["Apoderado"],
+  },
+  {
     id: "R-19-9", nombre: "mariela@ · admin + director_ops + CARGO CARGADO · NO firma", actor: U.mariela,
     rojo: { emite: false, dice: "No se pudo resolver el firmante canónico" },
     verde: { emite: false, dice: "No estás autorizado a firmar" },

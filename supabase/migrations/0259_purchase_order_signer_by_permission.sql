@@ -167,7 +167,7 @@ begin
 end;
 $post$;
 
--- ── 3 · LAS TRES CUENTAS QUE FIRMAN ─────────────────────────────────────────
+-- ── 3 · LAS CUATRO CUENTAS QUE FIRMAN ───────────────────────────────────────
 --
 -- La concesión exige que COINCIDAN el UUID y el correo. Un email reasignado a
 -- otra persona, o un UUID cuyo correo cambió, NO recibe la firma: la doble
@@ -205,7 +205,7 @@ begin
        'martin.battaglia@logisticatops.com',
        'martin@logisticatops.com'
      ] then
-    raise exception 'OC_FIRMANTE_PADRON_INESPERADO: firmante_oc quedó asignado a % (se esperaban exactamente las tres cuentas de la decisión)', v_emails;
+    raise exception 'OC_FIRMANTE_PADRON_INESPERADO: firmante_oc quedó asignado a % (se esperaban exactamente las cuatro cuentas de la decisión)', v_emails;
   end if;
 end;
 $post$;
@@ -434,16 +434,42 @@ begin
   end if;
 
   -- EL CARGO sale de `user_roles.position_title`, la única columna de cargo que
-  -- existe en el esquema. Se exige exactamente UNO distinto y no vacío:
-  --   · cero  => el perfil no tiene cargo cargado;
-  --   · más de uno => el cargo es ambiguo.
-  -- Los dos casos rechazan con mensaje propio. Un documento que obliga a la
-  -- empresa no sale firmado en blanco ni con el cargo de otra persona.
-  select count(distinct btrim(ur.position_title)), min(btrim(ur.position_title))
-  into v_role_titles, v_emitter_role
+  -- existe en el esquema, y un actor tiene una fila por cada rol que se le
+  -- asignó. Se busca en DOS pasos.
+  --
+  -- PRIMERO, la fila del ROL DE FIRMA. Si declara un cargo, ese gana y no se
+  -- mira ninguna otra. Ese desempate no es un lujo: sin él, cargar un cargo en
+  -- CUALQUIER otro rol del firmante lo deja sin poder emitir por «cargo
+  -- ambiguo», y `position_title` es un campo de RRHH que se completa por
+  -- razones ajenas a Compras. Un firmante no puede quedar deshabilitado por una
+  -- carga de datos de otro módulo, y menos sin más salida que borrar ese dato.
+  -- La autoridad manda sobre el dato funcional: el cargo con el que se firma se
+  -- declara, si hace falta, en la fila del rol con el que se firma.
+  select btrim(ur.position_title)
+  into v_emitter_role
   from public.user_roles ur
+  join public.roles r on r.id = ur.role_id
   where ur.user_id = v_actor
+    and r.slug = 'firmante_oc'
     and length(btrim(coalesce(ur.position_title, ''))) >= 2;
+
+  if v_emitter_role is not null then
+    v_role_titles := 1;
+  else
+    -- SEGUNDO, y es el caso normal: el rol de firma NO declara cargo, así que
+    -- el cargo sale de los roles funcionales del actor y se exige exactamente
+    -- UNO distinto y no vacío:
+    --   · cero  => el perfil no tiene cargo cargado;
+    --   · más de uno => el cargo es ambiguo, y se resuelve declarándolo en la
+    --     fila del rol de firma o dejando uno solo en los demás.
+    -- Los dos casos rechazan con mensaje propio. Un documento que obliga a la
+    -- empresa no sale firmado en blanco ni con el cargo de otra persona.
+    select count(distinct btrim(ur.position_title)), min(btrim(ur.position_title))
+    into v_role_titles, v_emitter_role
+    from public.user_roles ur
+    where ur.user_id = v_actor
+      and length(btrim(coalesce(ur.position_title, ''))) >= 2;
+  end if;
 
   if v_signer is null or length(btrim(v_signer)) < 2 then
     raise exception 'El perfil del firmante no tiene nombre cargado: cargá el nombre del usuario antes de emitir'
@@ -454,7 +480,7 @@ begin
       using errcode = 'insufficient_privilege';
   end if;
   if v_role_titles > 1 then
-    raise exception 'El cargo del firmante es ambiguo: el usuario declara más de un cargo en sus roles'
+    raise exception 'El cargo del firmante es ambiguo: el usuario declara más de un cargo en sus roles. Dejá uno solo, o cargá el cargo de firma en su rol de firmante de OC'
       using errcode = 'insufficient_privilege';
   end if;
   if v_emitter_email is null or length(v_emitter_email) > 254

@@ -134,4 +134,46 @@ describe("0259 · la traducción de los rechazos del firmante", () => {
     if (o.ok) return;
     expect(o.kind).toBe("permission");
   });
+
+  // Este rechazo lo recibe quien NO tiene el bypass de `profiles.role='admin'`:
+  // el gate viejo lo frena antes de llegar al gate directo del firmante. Desde
+  // 0259 el mensaje NO puede mandar a pedir `compras.sign`, porque ese permiso
+  // cuelga de un único rol que Dirección concede por nombre. Un administrador
+  // que obedeciera ese consejo sólo podría volver a colgarlo de un rol
+  // funcional —rehabilitando a firmar a todo ese rol— o conceder el rol de
+  // firma sin la decisión. Los dos caminos deshacen lo que 0259 instala.
+  it("el permiso faltante NO manda a pedir que le asignen compras.sign", () => {
+    const o = classifyIssueOutcome({
+      issueError: rpcError("Sin permisos compras.create/compras.sign"),
+      issued: null,
+    });
+    expect(o.ok).toBe(false);
+    if (o.ok) return;
+    expect(o.userMessage).not.toMatch(/que te (lo|los) asignen|pedí .*permiso/i);
+    expect(o.userMessage).not.toContain("compras.sign");
+    // Y lleva al mismo lugar que el rechazo del gate directo, porque el motivo
+    // de fondo es el mismo: no está autorizado a firmar.
+    expect(o.userMessage).toMatch(/Dirección/);
+  });
+
+  // Los dos rechazos por falta de autoridad —el del gate viejo y el del gate
+  // directo— tienen que apuntar a la misma puerta. Si divergieran, dos personas
+  // igualmente no autorizadas recibirían instrucciones contradictorias según
+  // tuvieran o no el bypass de admin.
+  it("los dos rechazos por autoridad apuntan a la misma puerta", () => {
+    const porGateViejo = classifyIssueOutcome({
+      issueError: rpcError("Sin permisos compras.create/compras.sign"),
+      issued: null,
+    });
+    const porGateDirecto = classifyIssueOutcome({
+      issueError: rpcError("No estás autorizado a firmar órdenes de compra."),
+      issued: null,
+    });
+    if (porGateViejo.ok || porGateDirecto.ok) throw new Error("ambos deben fallar");
+    for (const o of [porGateViejo, porGateDirecto]) {
+      expect(o.retryable).toBe(false);
+      expect(o.userMessage).toMatch(/Dirección/);
+      expect(o.userMessage).not.toContain("soporte");
+    }
+  });
 });

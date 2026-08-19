@@ -106,6 +106,7 @@ export const U = {
   sinCargo:   "aaaaaaaa-0000-4000-8000-000000000005",
   sinNombre:  "aaaaaaaa-0000-4000-8000-000000000006",
   ambiguo:    "aaaaaaaa-0000-4000-8000-000000000007",
+  desempate:  "aaaaaaaa-0000-4000-8000-000000000008",
 };
 
 /** El estado PREVIO de producción, medido. Sobre esto corre el lado ROJO. */
@@ -121,7 +122,8 @@ insert into auth.users (id, email) values
   ('${U.inactivo}','inactivo@logisticatops.com'),
   ('${U.sinCargo}','sincargo@logisticatops.com'),
   ('${U.sinNombre}','sinnombre@logisticatops.com'),
-  ('${U.ambiguo}','ambiguo@logisticatops.com');
+  ('${U.ambiguo}','ambiguo@logisticatops.com'),
+  ('${U.desempate}','desempate@logisticatops.com');
 
 insert into public.profiles (id, full_name, email, role, active) values
   ('${U.direccion}','Martín F. Battaglia','martin.battaglia@logisticatops.com','admin',true),
@@ -134,7 +136,8 @@ insert into public.profiles (id, full_name, email, role, active) values
   ('${U.inactivo}','Alguien Inactivo','inactivo@logisticatops.com','admin',false),
   ('${U.sinCargo}','Alguien Sin Cargo','sincargo@logisticatops.com','admin',true),
   ('${U.sinNombre}',null,'sinnombre@logisticatops.com','admin',true),
-  ('${U.ambiguo}','Alguien Ambiguo','ambiguo@logisticatops.com','admin',true);
+  ('${U.ambiguo}','Alguien Ambiguo','ambiguo@logisticatops.com','admin',true),
+  ('${U.desempate}','Alguien Con Dos Cargos','desempate@logisticatops.com','admin',true);
 
 -- Roles tal como estaban repartidos en producción. Sólo Dirección tenía cargo
 -- cargado, y era el valor mezclado que 0259 corrige.
@@ -192,10 +195,24 @@ insert into public.user_roles (user_id, role_id, position_title)
 select '${U.sinCargo}', id, null from public.roles where slug='firmante_oc';
 insert into public.user_roles (user_id, role_id, position_title)
 select '${U.sinNombre}', id, 'Apoderada' from public.roles where slug='firmante_oc';
+-- AMBIGUO: dos cargos en roles FUNCIONALES y ninguno en el rol de firma, que es
+-- lo que hace irresoluble el cargo.
 insert into public.user_roles (user_id, role_id, position_title)
-select '${U.ambiguo}', id, 'Presidente' from public.roles where slug='firmante_oc';
+select '${U.ambiguo}', id, null from public.roles where slug='firmante_oc';
 insert into public.user_roles (user_id, role_id, position_title)
-select '${U.ambiguo}', id, 'Director de Operaciones' from public.roles where slug='super_admin';
+select '${U.ambiguo}', id, 'Presidente' from public.roles where slug='super_admin';
+insert into public.user_roles (user_id, role_id, position_title)
+select '${U.ambiguo}', id, 'Director de Operaciones' from public.roles where slug='director_ops';
+
+-- DESEMPATE: los mismos dos cargos funcionales en conflicto, pero con el cargo
+-- de firma declarado en la fila del rol de firma. Es la salida para un firmante
+-- al que RRHH le cargó un cargo en otro rol.
+insert into public.user_roles (user_id, role_id, position_title)
+select '${U.desempate}', id, 'Apoderado' from public.roles where slug='firmante_oc';
+insert into public.user_roles (user_id, role_id, position_title)
+select '${U.desempate}', id, 'Presidente' from public.roles where slug='super_admin';
+insert into public.user_roles (user_id, role_id, position_title)
+select '${U.desempate}', id, 'Director de Operaciones' from public.roles where slug='director_ops';
 insert into public.user_roles (user_id, role_id, position_title)
 select '${U.inactivo}', id, null from public.roles where slug='firmante_oc';
 `;

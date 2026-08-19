@@ -221,6 +221,22 @@ describe("0259 · el firmante se resuelve por permiso, no por un correo literal"
     expect(ejecutable).not.toContain("gerencia_comercial");
   });
 
+  // Un firmante no puede quedar deshabilitado por una carga de datos de RRHH en
+  // otro de sus roles. El cargo declarado en la fila del ROL DE FIRMA gana sobre
+  // los funcionales, y sólo si no hay ninguno se exige unicidad entre los demás.
+  it("el cargo del rol de firma desempata sobre los cargos funcionales", () => {
+    const cuerpo = cuerpoDeLaFuncion(sql0259);
+    const iDesempate = cuerpo.indexOf("r.slug = 'firmante_oc'");
+    const iFallback = cuerpo.indexOf("count(distinct btrim(ur.position_title))");
+    expect(iDesempate).toBeGreaterThan(-1);
+    // El desempate se consulta ANTES del conteo: si fuera al revés, el conteo
+    // ya habría rechazado por ambigüedad y el desempate no se alcanzaría nunca.
+    expect(iDesempate).toBeLessThan(iFallback);
+    // Y el rechazo por ambigüedad nombra la salida, en vez de dejar al operador
+    // sin más opción que borrar un dato de RRHH.
+    expect(sql0259).toMatch(/cargo del firmante es ambiguo[^']*rol de firmante de OC/);
+  });
+
   // R-3 · el gate del firmante no puede resolverse por `has_permission`, que
   // termina en un bypass por `profiles.role='admin'`.
   it("el gate del firmante lee las tablas de RBAC directo, sin has_permission", () => {

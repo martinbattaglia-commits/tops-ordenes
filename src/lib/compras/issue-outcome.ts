@@ -263,13 +263,23 @@ function classifyRpcError(error: RpcErrorLike): {
         + "alcanza. Si necesitás firmar, pedíselo a Dirección. No se creó ninguna orden.",
     };
   }
+  // 0259 · este rechazo llega cuando el gate de 0243 frena al actor ANTES del
+  // gate directo del firmante — le pasa a quien no tiene el bypass de
+  // `profiles.role='admin'`. El texto NO puede mandar a pedir `compras.sign`:
+  // desde 0259 ese permiso cuelga de un único rol que Dirección concede por
+  // nombre, y un administrador que obedeciera ese consejo sólo podría volver a
+  // colgarlo de un rol funcional —rehabilitando a firmar a todo ese rol— o
+  // conceder el rol de firma sin la decisión. El mensaje tiene que llevar al
+  // mismo lugar que el del gate directo, porque el motivo de fondo es el mismo.
   if (raw.includes("Sin permisos compras")) {
     return {
       kind: "permission",
       retryable: false,
       userMessage:
-        "No tenés los permisos compras.create y compras.sign que exige la emisión. "
-        + "Pedí que te los asignen; reintentar no cambia nada.",
+        "No tenés la autorización que exige la emisión de una orden de compra. La "
+        + "firma la concede Dirección por nombre, cuenta por cuenta: no es un permiso "
+        + "que se pida al área de sistemas. Si necesitás firmar, pedíselo a Dirección. "
+        + "No se creó ninguna orden.",
     };
   }
   if (isTransientSqlstate(code)) {
