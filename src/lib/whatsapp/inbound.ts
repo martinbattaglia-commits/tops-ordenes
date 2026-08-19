@@ -19,6 +19,7 @@ import {
   describeUnsupported, extractInboundCaption, extractInboundMedia, inboundMediaBody,
   type InboundMedia,
 } from "./inbound-media";
+import { extractWaErrorDetail } from "./wa-error-detail";
 
 export type WaStatusValue = "sent" | "delivered" | "read" | "failed";
 
@@ -49,6 +50,15 @@ export interface WaInboundStatus {
   at: string;
   recipientE164: string | null;
   errorCode: number | null;
+  /**
+   * Texto que Meta manda junto al código, ya saneado.
+   *
+   * El código es genérico —131053 es «Media upload error» para cualquier
+   * causa— y esto es lo único que distingue una de otra. Se descartaba, y esa
+   * pérdida costó dos días de diagnóstico: el detalle decía, textual, que el
+   * audio subido como `audio/mp4` se procesaba como `application/octet-stream`.
+   */
+  errorDetail: string | null;
 }
 
 export interface WaInboundSkipped {
@@ -230,6 +240,7 @@ export function parseInboundPayload(
           at,
           recipientE164: toE164(s?.recipient_id),
           errorCode: code,
+          errorDetail: extractWaErrorDetail(s?.errors),
         });
       }
     }

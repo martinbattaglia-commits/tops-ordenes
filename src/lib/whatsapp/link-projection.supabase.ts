@@ -350,6 +350,10 @@ export function createSupabaseProjectionPort(
         p_source: WA_STATUS_SOURCE_META,
         p_at: status.at,
         p_error_code: status.errorCode ?? null,
+        // El detalle del proveedor. La RPC ya tenía el parámetro `p_error` y
+        // nadie lo estaba usando: el texto que explicaba el fallo se perdía
+        // entre el webhook y la fila. Sin migración.
+        p_error: status.errorDetail ?? null,
       });
       if (error) throw new Error(`estado (rpc): ${error.message}`);
 

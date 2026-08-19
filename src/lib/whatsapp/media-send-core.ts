@@ -34,6 +34,7 @@ import {
   checkWhatsappMedia, type MetaMediaKind, type MetaMediaTransport,
 } from "./media-transport";
 import { necesitaRemuxParaWhatsapp, remuxWebmOpusAOgg } from "./opus-remux";
+import { checkMetaAudioPayload } from "./media-codec";
 
 export type MediaSendResult =
   | { ok: true; state: "sent"; wamid: string }
@@ -201,6 +202,15 @@ export async function sendWhatsappMedia(
 
   const admisible = checkWhatsappMedia(listo.mimeType, listo.bytes.length);
   if (!admisible.ok) return fallar(admisible.detail);
+
+  // ─── LA ÚLTIMA COMPUERTA, Y MIRA ADENTRO ──────────────────────────────────
+  // `checkWhatsappMedia` juzga el MIME y el tamaño; ninguno de los dos distingue
+  // un MP4 con AAC de un MP4 con Opus, que declaran lo mismo y empiezan igual.
+  // Meta acepta la subida, devuelve el wamid y recién horas después contesta
+  // 131053 por webhook: para el operador el mensaje había salido bien. Fallar
+  // acá cuesta un intento; fallar allá costó dos días de diagnóstico.
+  const reproducible = checkMetaAudioPayload(listo.bytes, listo.mimeType);
+  if (!reproducible.ok) return fallar(reproducible.message);
   const kind: MetaMediaKind = admisible.kind;
 
   const subida = await ports.transport.uploadMedia({

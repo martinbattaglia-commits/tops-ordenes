@@ -36,14 +36,38 @@ export const MIME_PREFERIDOS = [
 /**
  * Orden de preferencia para WhatsApp.
  *
- * Primero lo que Meta reproduce tal cual —mp4, ogg/opus—, para no hacer trabajo
- * innecesario. Pero el WebM NO se descarta: Chrome y Android no ofrecen otra
- * cosa, y el servidor lo REENVASA a Ogg antes de mandarlo (mismo códec Opus,
- * otro contenedor, sin recodificar). Sacarlo de la lista dejaría a Android sin
- * mensajes de voz, que es el problema, no la solución.
+ * ─── POR QUÉ `audio/mp4` VA ÚLTIMO ────────────────────────────────────────
+ *
+ * Estaba PRIMERO, con el razonamiento de que Meta lo reproduce tal cual. Eso es
+ * cierto del mp4 de Safari, que lleva AAC. Pero Chromium también contesta
+ * `isTypeSupported("audio/mp4") === true` —medido en Chromium 148— y lo que
+ * produce es **Opus dentro de un MP4 fragmentado**: el binario rechazado en
+ * producción tiene el sample entry `Opus` y el box `dOps`, y ni `esds` ni
+ * `mp4a` por ningún lado.
+ *
+ * Meta acepta `audio/mp4` esperando AAC. Al abrirlo no lo reconoce y contesta,
+ * textual: «uploaded with mimetype as audio/mp4, however on processing it is of
+ * type application/octet-stream». Ese rechazo llega ASINCRÓNICO, por webhook,
+ * después de que Meta ya aceptó la subida y devolvió el wamid — por eso el
+ * envío parecía exitoso y el error aparecía horas más tarde.
+ *
+ * Efecto colateral que también cierra: como Chromium siempre ganaba con mp4, la
+ * rama de reenvasado a Ogg NUNCA corrió en producción. Los seis audios
+ * salientes registrados son `audio/mp4`; ninguno webm.
+ *
+ * El orden nuevo pone adelante todo lo que lleva Opus, que es el códec que usa
+ * el propio WhatsApp —los audios ENTRANTES que manda Meta son `audio/ogg`—:
+ *
+ *   · Firefox     → `audio/ogg;codecs=opus`, directo, sin reenvasar;
+ *   · Chromium    → `audio/webm;codecs=opus`, y el servidor lo reenvasa a Ogg
+ *                   (mismo códec, otro contenedor, sin recodificar);
+ *   · Safari      → cae en `audio/mp4`, y el suyo SÍ es AAC.
+ *
+ * `audio/mp4` NO se saca de la lista: sacarlo dejaría a Safari sin mensajes de
+ * voz, que es el problema, no la solución.
  */
 export const MIME_PREFERIDOS_WHATSAPP = [
-  "audio/mp4", "audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm",
+  "audio/ogg;codecs=opus", "audio/webm;codecs=opus", "audio/webm", "audio/mp4",
 ] as const;
 
 export function pickMimeType(paraWhatsapp = false): string | null {

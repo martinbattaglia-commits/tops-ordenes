@@ -108,7 +108,7 @@ const STATUS = {
   status: "delivered" as const,
   at: "2026-08-09T10:00:00.000Z",
   recipientE164: "+5491100000001",
-  errorCode: null,
+  errorCode: null, errorDetail: null,
 };
 
 describe("insertMessage · una fila por vez", () => {
@@ -178,6 +178,9 @@ describe("WA-8R9 · applyOutboundStatus delega en connect_wa_apply_status", () =
       p_source: "meta",
       p_at: STATUS.at,
       p_error_code: null,
+      // El detalle del proveedor. La RPC ya tenía `p_error` y nadie lo usaba:
+      // el texto que explicaba el fallo se perdía entre el webhook y la fila.
+      p_error: null,
     });
     // Y CERO read-modify-write: ni lectura previa ni UPDATE desde el cliente.
     expect(calls.filter((c) => c.op === "update")).toHaveLength(0);
@@ -197,7 +200,7 @@ describe("WA-8R9 · applyOutboundStatus delega en connect_wa_apply_status", () =
   it("propaga el código de error del proveedor cuando existe", async () => {
     const { client, rpcs } = recordingClient({ rpcOutcome: "applied" });
     await createSupabaseProjectionPort(client).applyOutboundStatus({
-      ...STATUS, status: "failed", errorCode: 131047,
+      ...STATUS, status: "failed", errorCode: 131047, errorDetail: null,
     });
     expect(rpcs[0].args.p_error_code).toBe(131047);
   });
@@ -429,5 +432,22 @@ describe("C4/HIGH-1 · un tipo no soportado NO atasca el evento", () => {
     await expect(ingest({
       conversationId: "conv-1", externalMsgId: "wamid.D", media: media(),
     })).rejects.toThrow(/descarga/);
+  });
+});
+
+describe("el detalle de Meta llega hasta la fila", () => {
+  it("`p_error` lleva el texto del proveedor cuando el status trae uno", async () => {
+    const { rpcs, client } = recordingClient({ rpcOutcome: "applied" });
+    await createSupabaseProjectionPort(client).applyOutboundStatus({
+      ...STATUS,
+      status: "failed",
+      errorCode: 131053,
+      errorDetail:
+        "Audio file uploaded with mimetype as audio/mp4, however on processing it is of type application/octet-stream.",
+    });
+    // El código solo no distingue una causa de otra: 131053 es «Media upload
+    // error» para cualquiera. El texto es lo único accionable.
+    expect(rpcs[0].args.p_error_code).toBe(131053);
+    expect(rpcs[0].args.p_error).toContain("application/octet-stream");
   });
 });

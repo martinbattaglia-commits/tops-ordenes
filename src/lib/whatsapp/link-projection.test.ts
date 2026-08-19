@@ -109,7 +109,7 @@ function msg(wamid: string, text = "hola"): WaInboundMessage {
 }
 
 function status(wamid: string, s: WaStatusValue): WaInboundStatus {
-  return { wamid, status: s, at: "2026-08-09T10:01:00.000Z", recipientE164: PHONE, errorCode: null };
+  return { wamid, status: s, at: "2026-08-09T10:01:00.000Z", recipientE164: PHONE, errorCode: null, errorDetail: null };
 }
 
 describe("contextIdFor", () => {
