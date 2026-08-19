@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 222,
-  "no_ejecutables": 32,
+  "ejecutables": 223,
+  "no_ejecutables": 33,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2962,6 +2962,32 @@
       "ledger_name": "ROLLBACK_0259_purchase_order_signer_by_permission",
       "provenance": "repo (frente/oc-firmante-por-permiso)",
       "motivo": "Inversa logica e idempotente de 0259. Restituye purchase_order_issue(jsonb,jsonb) al cuerpo exacto de 0243, con el firmante resuelto por el correo literal y sin el gate directo del firmante. Devuelve compras.sign a los CINCO roles que lo portaban -admin_sin_rrhh, administracion_finanzas, director_ops, gerencia_comercial, super_admin-, escritos de forma explicita y no por negacion para no otorgar de mas al deshacer. Borra el rol firmante_oc con todas sus asignaciones y sus grants. Devuelve los cuatro cargos a su valor previo MEDIDO: las dos cuentas de Direccion vuelven a Presidente mas Super Administrador, joseluis y cynthia vuelven a NULL. Lleva post-condicion propia: verifica el reparto restituido exacto y que no sobreviva el rol. No toca purchase_orders: 0259 nunca escribio una fila de esa tabla, asi que las 24 ordenes emitidas conservan firmante, cargo y sus dos hashes en los dos sentidos. Ejecutarlo devuelve el modulo al estado 0258: solo joseluis puede volver a emitir, con sus tres defectos incluidos."
+    },
+    {
+      "id": "0260_connect_rpc_named_parameters.sql",
+      "filename": "0260_connect_rpc_named_parameters.sql",
+      "sha256": "4c338dd4c616dec2cc38c76b1e038dbed53bd6c1e85419ef49470371e560b17b",
+      "orden": 255,
+      "requires": [
+        "0246_clientes_fase_b_principals_capabilities.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00255",
+      "ledger_name": "0260_connect_rpc_named_parameters",
+      "provenance": "repo (frente/connect-rpc-parametros-sin-nombre)",
+      "motivo": "CONNECT-RPC-PARAMETROS-SIN-NOMBRE. PostgREST resuelve una RPC por NOMBRE de argumento -notacion nombrada de PostgreSQL-, asi que una funcion declarada sin identificadores de parametro es inalcanzable por esa via. 0246 renombro 17 funciones del modulo a *_pre_0246 -que CONSERVAN sus nombres- y creo 17 envolturas que anteponen nexus_depot_manager_reject_legacy_connect() antes de delegar; el proposito de la envoltura es correcto y no se toca, pero se declararon posicionales -create function public.connect_mark_read(uuid,bigint)- y reenvian con $1,$2. Reproducido contra produccion con EXPLAIN, que planifica sin ejecutar: la llamada nombrada devuelve 42883 does not exist y la _pre_0246 con los mismos nombres planifica. El codigo invoca a ONCE de las 17 con objeto nombrado, asi que once operaciones quedaron muertas desde el 2026-08-17: marcar leido, archivar, favoritos, unirse a canal, alta y baja de miembro, rol de miembro, titulo, tema, fijar y desfijar mensaje. Una de ellas -marcar leido- fallaba EN SILENCIO porque su llamador descarta el resultado con void, y por eso el sintoma que llego fue el contador amarillo que no se apaga y no un error. Esta migracion hace DROP + CREATE de las 17 con parametros NOMBRADOS identicos a los de su *_pre_0246: create or replace no alcanza porque cambiar el nombre de un parametro exige recrear. Mismo cuerpo, mismo security definer, mismo search_path, mismos revoke y grant; la autoridad no se mueve, el gate del principal depot-manager sigue primero y los permisos internos de las *_pre_0246 siguen mordiendo. Post-condicion que aborta: verifica que ninguna de las 17 quede sin nombres Y que los nombres coincidan exactamente con los de su _pre_0246, porque recrearlas con cualquier nombre las volveria alcanzables pero con otro contrato. Cierra con notify pgrst reload schema, que no es decorativo: sin recargar, PostgREST sigue sirviendo el cache viejo y las 17 seguirian inalcanzables aunque la base ya este bien. No escribe ni una fila de datos."
+    },
+    {
+      "id": "ROLLBACK_0260_connect_rpc_named_parameters.sql",
+      "filename": "ROLLBACK_0260_connect_rpc_named_parameters.sql",
+      "sha256": "d213fa809e0eb7a7c47dbb9e3113585de8d2867eee80ab7fb1aef2b984e4c018",
+      "orden": 256,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00256",
+      "ledger_name": "ROLLBACK_0260_connect_rpc_named_parameters",
+      "provenance": "repo (frente/connect-rpc-parametros-sin-nombre)",
+      "motivo": "Inversa logica e idempotente de 0260. Restituye las 17 envolturas EXACTAMENTE como las dejo 0246: parametros POSICIONALES declarados por tipo y cuerpo que reenvia con $1,$2,$3, reemitidos byte a byte desde esa migracion. Mismo security definer, search_path, revoke y grant. Ejecutarlo DEVUELVE el defecto -las 17 vuelven a ser inalcanzables por PostgREST- porque restituir un estado anterior tal cual era, defectos incluidos, es el contrato de un rollback; no es un estado sano, es el estado del 2026-08-17. Post-condicion que aborta si alguna de las 17 conservara nombres tras ejecutarlo. Cierra con notify pgrst reload schema por la misma razon que 0260. No escribe ni una fila de datos."
     }
   ]
 }

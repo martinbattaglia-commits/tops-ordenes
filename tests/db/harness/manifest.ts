@@ -453,6 +453,33 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "archivos en disco en vez de copiarlo.",
   },
   {
+    // CONNECT-RPC-PARAMETROS-SIN-NOMBRE · decisión explícita, entrada PROPIA,
+    // filename EXACTO. No entra a CLIENTES_PHASE_B_MIGRATION_FILES —ese
+    // conjunto es cuatro artefactos congelados de esa fase y no se amplía con
+    // un correctivo posterior—, ni al replay WMS vanilla.
+    id: "connect-rpc-parametros-sin-nombre",
+    matches: (f) =>
+      f === "0260_connect_rpc_named_parameters.sql" ||
+      f === "ROLLBACK_0260_connect_rpc_named_parameters.sql",
+    reason:
+      "0260 hace DROP + CREATE de las 17 funciones connect_* que 0246 dejó con " +
+      "parámetros posicionales —create function public.connect_mark_read(uuid," +
+      "bigint), reenviando con $1,$2 a su *_pre_0246, que SÍ conserva nombres—, " +
+      "inalcanzables por PostgREST porque resuelve una RPC por nombre de " +
+      "argumento (42883 does not exist, reproducido contra producción con " +
+      "EXPLAIN). Se recrean con los MISMOS nombres que su *_pre_0246: mismo " +
+      "cuerpo, mismo security definer, mismo search_path, mismos revoke y " +
+      "grant; la autoridad no se mueve. Se excluye del replay WMS vanilla por " +
+      "la misma razón que 0246: nace de una migración ya excluida —" +
+      "CLIENTES_PHASE_B_MIGRATION_FILES, arriba— y una migración no puede " +
+      "entrar al vanilla si la función que redefine no está. Se excluye del " +
+      "cierre WMS, NO de la verificación: reproducido contra PostgreSQL 17 " +
+      "real (rojo→verde con EXPLAIN antes/después de aplicar los DROP+CREATE, " +
+      "y el permiso interno de *_pre_0246 verificado mordiendo igual) y con " +
+      "guarda permanente en src/lib/connect/rpc-parametros-nombrados.test.ts, " +
+      "que falla si cualquier función del módulo vuelve a quedar sin nombres.",
+  },
+  {
     id: "frozen-excluded-snapshot",
     // Filename EXACTO contra el snapshot congelado: NO es un rango. Una
     // migración nueva no está en el set y por tanto NO queda clasificada.
