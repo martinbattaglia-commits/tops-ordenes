@@ -11,7 +11,15 @@
 
 import type { ConversationKind } from "./types";
 
-/** Universo cerrado de kinds. Cualquier otra cosa es fail-closed. */
+/**
+ * Universo cerrado de kinds. Cualquier otra cosa es fail-closed.
+ *
+ * ⚠ ESTA LISTA ES UNA COPIA DEL ENUM `connect_conversation_kind_t`. Cuando una
+ * migración agrega un valor allá y nadie lo agrega acá, el composer enmudece
+ * para ese kind sin que nada lo delate: fue exactamente lo que pasó con `task`
+ * durante ocho días. `composer-policy.enum.test.ts` compara esta lista contra
+ * las migraciones en disco para que no vuelva a pasar en silencio.
+ */
 export const CONVERSATION_KINDS = [
   "dm",
   "group",
@@ -20,6 +28,10 @@ export const CONVERSATION_KINDS = [
   "incident",
   "whatsapp",
   "ai",
+  // INC-04-R2 · vive en el enum desde 0167 y faltaba acá. Un hilo de tarea es
+  // chat interno del tenant igual que uno de incidente, así que sus capacidades
+  // son las mismas: texto, audio, adjuntos y menciones.
+  "task",
 ] as const;
 
 /** Falla la compilación si `types.ts` agrega un kind y este archivo no se entera. */

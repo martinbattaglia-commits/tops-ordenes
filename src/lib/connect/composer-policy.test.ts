@@ -57,6 +57,52 @@ describe("21 · audio, adjuntos y menciones operativos en Connect", () => {
   });
 });
 
+// INC-04-R2 · el chat de una TAREA no dejaba escribir.
+//
+// `task` existe en el enum `connect_conversation_kind_t` desde
+// `0167_connect_tasks_enums_permissions.sql`, pero el universo cerrado de este
+// módulo se quedó en siete y nunca se enteró. Con el kind fuera de la lista,
+// `composerCapabilities` devolvía NONE y el composer quedaba mudo: 22
+// conversaciones de tarea sin poder enviar un mensaje durante ocho días.
+//
+// LAS CAPACIDADES DE UNA TAREA SON LAS DE UN INCIDENTE, y se declara acá en vez
+// de dejarlo implícito: un hilo de tarea es chat interno del tenant igual que
+// uno de incidente —mismos participantes, misma FK de menciones, mismo destino
+// de adjuntos—, así que texto, audio, adjuntos y menciones. No hay ninguna
+// razón de canal para recortarle nada; la única restricción que existe en este
+// módulo es la de WhatsApp, y una tarea no sale del tenant.
+describe("INC-04-R2 · una tarea escribe igual que un incidente", () => {
+  it("`task` es un kind reconocido", () => {
+    expect(isConversationKind("task")).toBe(true);
+  });
+
+  it("una tarea tiene EXACTAMENTE las capacidades de un incidente", () => {
+    expect(composerCapabilities("task")).toEqual(composerCapabilities("incident"));
+  });
+
+  it("y esas capacidades son texto, audio, adjuntos y menciones", () => {
+    expect(composerCapabilities("task")).toEqual({
+      canSendText: true,
+      canSendAudio: true,
+      canAttachFile: true,
+      canMention: true,
+    });
+  });
+
+  it("una tarea NO rutea por el outbound de WhatsApp", () => {
+    expect(isWhatsappKind("task")).toBe(false);
+  });
+
+  it("readOnly la sigue bloqueando, como a cualquier otro kind", () => {
+    expect(composerCapabilities("task", { readOnly: true })).toEqual({
+      canSendText: false,
+      canSendAudio: false,
+      canAttachFile: false,
+      canMention: false,
+    });
+  });
+});
+
 describe("22 · archived/readOnly bloquea todo, en cualquier kind", () => {
   it.each(CONVERSATION_KINDS)("%s en solo-lectura no puede nada", (kind) => {
     expect(composerCapabilities(kind, { readOnly: true })).toEqual({

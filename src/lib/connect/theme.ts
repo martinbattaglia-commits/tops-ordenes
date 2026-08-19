@@ -25,6 +25,10 @@ export const KIND_COLOR: Record<ConversationKind, string> = {
   channel: "text-tops-red",
   erp: "text-tops-red",
   incident: "text-tops-red",
+  // INC-04-R2 · una tarea es Connect interno, como un incidente: le corresponde
+  // el rojo de marca por la resolución 07-26. Faltaba, y `Record` lo dejaba
+  // pasar sólo porque el kind tampoco estaba en `ConversationKind`.
+  task: "text-tops-red",
   whatsapp: "text-emerald-500",
   ai: "text-violet-400",
 };
