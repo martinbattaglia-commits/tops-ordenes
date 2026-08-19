@@ -155,8 +155,16 @@ export interface ComposerBlockNotice {
 export const UNKNOWN_KIND_MESSAGE =
   "No se pudo determinar el tipo de conversación. No se envió nada.";
 
+// H-3 · el texto afirmaba «está archivada», pero `readOnly` llega TRUE por tres
+// caminos distintos: conversación archivada, tarea terminal (completada o
+// cancelada) e incidente cerrado. Para dos de los tres, la causa afirmada era
+// falsa. DECISIÓN DECLARADA: el mensaje se vuelve genérico y honesto en vez de
+// llevar la causa real hasta acá — propagarla exigiría que cada página la
+// declare, y las páginas ya muestran el estado (chips de tarea, cabecera de
+// incidente); un cartel genérico verdadero vale más que uno específico que a
+// veces miente.
 const READ_ONLY_MESSAGE =
-  "Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.";
+  "Esta conversación es de solo lectura: no se pueden enviar mensajes.";
 
 export function composerBlockNotice(
   kind: unknown,
