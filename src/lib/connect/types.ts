@@ -189,6 +189,16 @@ export interface InboxItem {
   isFavorite: boolean;
   mutedUntil: string | null;
   archivedAt: string | null;
+  /**
+   * INC-01/D-3 · espejo server-side de lo que evalúan las RPC de archivado
+   * (`connect_archive_entity_thread` + `connect_archive_conversation`). Lo calcula
+   * `read/archive-capability.ts` reusando las MISMAS funciones del motor; la UI sólo
+   * lo refleja. `undefined` = sin veredicto (demo/seeds o bandeja de Archivo): el
+   * control queda habilitado y manda el servidor, como antes de INC-01.
+   */
+  canArchive?: boolean;
+  /** Redacción humana de por qué no se puede archivar. Tooltip del control. */
+  archiveBlockedMessage?: string | null;
 }
 
 /** Canal visible (v_connect_channels). */

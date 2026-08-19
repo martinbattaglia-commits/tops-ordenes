@@ -66,10 +66,16 @@ export function ConversationList({
   // UX-002c: archivado directo desde la fila — oculta al instante, el server confirma.
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<string | null>(null);
+  // INC-01/D-2: el error de archivado es POR HILO. Antes era un `string | null`
+  // único que se pintaba como banner global de la vista, aunque la variable ya se
+  // llamaba `rowError`: la intención estaba, el anclaje no.
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
 
   async function openArchive() {
     setTab("archivo");
+    // INC-01/MEDIUM-3: los errores de archivado son de la bandeja ACTIVA. Sobrevivir al
+    // cambio de pestaña los dejaba colgados de un hilo que quizá ya archivó otro.
+    setRowErrors({});
     if (archived !== null || loading) return;
     setLoading(true);
     setArchiveError(null);
@@ -86,11 +92,17 @@ export function ConversationList({
 
   async function archiveItem(conversationId: string) {
     setBusyId(conversationId);
-    setRowError(null);
+    // Sólo se limpia el error de ESTE hilo: el de los otros sigue visible.
+    setRowErrors((prev) => {
+      if (!(conversationId in prev)) return prev;
+      const next = { ...prev };
+      delete next[conversationId];
+      return next;
+    });
     const r = await archiveInboxItemAction({ conversationId });
     setBusyId(null);
     if (!r.ok) {
-      setRowError(r.message);
+      setRowErrors((prev) => ({ ...prev, [conversationId]: r.message }));
       return;
     }
     setHiddenIds((prev) => new Set(prev).add(conversationId));
@@ -151,7 +163,7 @@ export function ConversationList({
           type="button"
           role="tab"
           aria-selected={!isArchive}
-          onClick={() => setTab("activos")}
+          onClick={() => { setTab("activos"); setRowErrors({}); }}
           className={cn(
             "focus-nexus flex-1 border-b-2 px-3 py-2 text-[11px] font-semibold transition-colors",
             !isArchive
@@ -198,22 +210,34 @@ export function ConversationList({
             hint={q ? "Probá con otro nombre o número." : undefined}
           />
         )}
-        {rowError && (
-          <p className="border-b border-stroke-soft/50 px-4 py-2 text-[11px] text-tops-red">{rowError}</p>
-        )}
         {(!isArchive || (!loading && !archiveError)) && visible.map((it) => {
           const href = `/connect/c/${it.conversationId}`;
           const active = pathname === href;
           const d = displayParts(it);
+          // INC-01/D-3: `canArchive` es el veredicto que el SERVIDOR calculó con las
+          // mismas condiciones que evalúan las RPC. `undefined` (demo/seeds, o la
+          // pestaña Archivo) = sin veredicto: se deja habilitado y manda el servidor.
+          const archiveBlocked = it.canArchive === false;
+          const archiveTip = archiveBlocked
+            ? (it.archiveBlockedMessage ?? "No podés archivar este hilo.")
+            : "Archivar el hilo";
+          const rowMessage = rowErrors[it.conversationId];
+          const tipId = `archive-tip-${it.conversationId}`;
           return (
-            <Link
+            // INC-01/D-2: la FILA es este contenedor. El error vive acá, hermano del
+            // enlace y no adentro: clickear el mensaje ya no navega al hilo.
+            <div
               key={it.conversationId}
-              href={href}
-              onClick={onNavigate}
+              data-conversation-id={it.conversationId}
               className={cn(
-                "flex items-start gap-2.5 border-b border-stroke-soft/50 py-2.5 pl-3 pr-1.5 transition-colors",
+                "border-b border-stroke-soft/50",
                 active ? "bg-bg-surface-alt" : "hover:bg-bg-surface-alt",
               )}
+            >
+            <Link
+              href={href}
+              onClick={onNavigate}
+              className="flex items-start gap-2.5 py-2.5 pl-3 pr-1.5 transition-colors"
             >
               <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
                 {/* UX-002c: código de color por tipo — nada queda en gris neutro. */}
@@ -225,18 +249,38 @@ export function ConversationList({
                 </span>
                 <div className="mt-0.5 flex items-center gap-2">
                   {!isArchive && (
-                    <button
-                      type="button"
-                      disabled={busyId === it.conversationId}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        void archiveItem(it.conversationId);
-                      }}
-                      className="focus-nexus shrink-0 rounded text-[11px] font-semibold text-amber-400 transition-colors hover:text-amber-300 disabled:opacity-50"
-                    >
-                      {busyId === it.conversationId ? "Archivando…" : "Archivar"}
-                    </button>
+                    // INC-01/D-3 · se muestra deshabilitado, pero con `aria-disabled` y no
+                    // con `disabled`: un <button disabled> sale del orden de tabulación y
+                    // no despacha eventos de mouse, así que su explicación no llegaría ni
+                    // al mouse, ni al teclado, ni al lector de pantalla — y el gate
+                    // preventivo terminaría siendo MENOS informativo que el mensaje que
+                    // vino a evitar. Inaccionable por el guard del onClick, no por el DOM.
+                    <>
+                      <button
+                        type="button"
+                        title={archiveTip}
+                        aria-disabled={archiveBlocked || undefined}
+                        aria-describedby={archiveBlocked ? tipId : undefined}
+                        disabled={!archiveBlocked && busyId === it.conversationId}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (archiveBlocked || busyId === it.conversationId) return;
+                          void archiveItem(it.conversationId);
+                        }}
+                        className={cn(
+                          "focus-nexus shrink-0 rounded text-[11px] font-semibold transition-colors disabled:opacity-50",
+                          archiveBlocked
+                            ? "cursor-not-allowed text-fg-muted opacity-60"
+                            : "text-amber-400 hover:text-amber-300",
+                        )}
+                      >
+                        {busyId === it.conversationId ? "Archivando…" : "Archivar"}
+                      </button>
+                      {archiveBlocked && (
+                        <span id={tipId} className="sr-only">{archiveTip}</span>
+                      )}
+                    </>
                   )}
                   {it.topic && (
                     <span className="truncate text-[11px] text-fg-muted">{it.topic}</span>
@@ -269,6 +313,18 @@ export function ConversationList({
                 )}
               </div>
             </Link>
+            {/* INC-01/D-2: el error de ESTE hilo, dentro de ESTA fila. No es banner de
+                la vista, no navega al clickearlo y no toca a los otros hilos. */}
+            {rowMessage && (
+              <p
+                role="alert"
+                data-testid="archive-error"
+                className="px-3 pb-2 pl-[3.25rem] text-[11px] leading-snug text-tops-red"
+              >
+                {rowMessage}
+              </p>
+            )}
+            </div>
           );
         })}
       </nav>

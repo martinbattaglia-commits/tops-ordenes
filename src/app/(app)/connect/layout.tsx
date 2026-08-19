@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { canReadInternalChat } from "@/lib/rbac/internal-chat";
 import { AccesoRestringido } from "@/components/shell/AccesoRestringido";
 import { listInbox } from "@/lib/connect/read/inbox-data";
+import { annotateArchiveCapability } from "@/lib/connect/read/archive-capability";
 import { InboxPanel } from "./_components/InboxPanel";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,9 @@ export default async function ConnectLayout({ children }: { children: ReactNode 
   if (!(await canReadInternalChat())) {
     return <AccesoRestringido modulo="Nexus Link" />;
   }
-  const inbox = await listInbox();
+  // INC-01/D-3: la bandeja sale del servidor con el veredicto de archivado por hilo,
+  // calculado con las mismas condiciones que evalúan las RPC. La UI sólo lo refleja.
+  const inbox = await annotateArchiveCapability(await listInbox());
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden">
