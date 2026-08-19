@@ -12,6 +12,7 @@ import {
   formatZodIssues,
   type CreatePurchaseOrderInput,
 } from "@/lib/compras/validation";
+import { classifyIssueOutcome } from "@/lib/compras/issue-outcome";
 import { sendPurchaseOrderEmails } from "@/lib/compras/email";
 import { buildPoPdf } from "@/lib/compras/pdf/build";
 import { uploadPoPdf } from "@/lib/compras/storage";
@@ -146,7 +147,7 @@ export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput)
         pos: i,
       })),
   });
-  const issued = issuedRaw as {
+  const issuedCandidate = issuedRaw as {
     id?: string;
     public_id?: string;
     price_state?: Totals["state"];
@@ -167,19 +168,18 @@ export async function createPurchaseOrderAction(input: CreatePurchaseOrderInput)
     emisor_role?: string;
     vendor_snapshot?: CanonicalVendor;
   } | null;
-  if (
-    issueError || !issued?.id || !issued.public_id || !issued.signed_by || !issued.issued_at
-    || !issued.signature_hash?.match(/^[a-f0-9]{64}$/)
-    || !issued.integrity_hash?.match(/^[a-f0-9]{64}$/)
-    || !issued.price_state || !issued.emisor_name || !issued.emisor_email || !issued.emisor_role
-    || !issued.vendor_snapshot?.id || !issued.vendor_snapshot.razon || !issued.vendor_snapshot.cuit
-  ) {
-    console.error("[compras] purchase_order_issue failed", { code: "PO_ISSUE_FAILED" });
-    return {
-      ok: false,
-      error: "No pudimos emitir la orden de compra de forma atómica. Reintentá en unos minutos.",
-    };
+  // HOTFIX-OC-EMISION-ATOMICA · el guard anterior era un OR de quince
+  // condiciones que descartaba `issueError` y respondía siempre lo mismo:
+  // «reintentá en unos minutos». Ninguno de los abortos de la RPC es
+  // transitorio —el más frecuente es firmar sin ser el apoderado— y el log
+  // sólo guardaba un código fijo. Ahora el desenlace se clasifica: qué
+  // condición falló, si reintentar puede cambiar algo, y qué hacer.
+  const outcome = classifyIssueOutcome({ issueError, issued: issuedCandidate });
+  if (!outcome.ok) {
+    console.error("[compras] purchase_order_issue failed", outcome.log);
+    return { ok: false, error: outcome.userMessage };
   }
+  const issued = outcome.issued;
   const orderId = issued.id;
   const public_id = issued.public_id;
   const now = issued.issued_at;
