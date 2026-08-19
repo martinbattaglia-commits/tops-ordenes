@@ -43,7 +43,9 @@ vi.mock("@/lib/supabase/realtime", () => ({
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: "user-de-prueba" } } }) },
-    rpc: async (nombre: string) => { rpcs.push(nombre); return { error: null }; },
+    // La RPC 0235 devuelve `integer` con las filas marcadas. El doble tiene que
+    // devolverlo o la campanita toma la rama de error y no recarga.
+    rpc: async (nombre: string) => { rpcs.push(nombre); return { data: 1, error: null }; },
     from(tabla: string) {
       consultadas.push(tabla);
       if (tabla === "v_link_notification_badges") {

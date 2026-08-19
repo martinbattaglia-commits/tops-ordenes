@@ -50,7 +50,16 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
     });
   }
 
-  const hasUnread = items.some((i) => !i.read);
+  // HOTFIX-02: sólo los avisos persistidos (`source === "notification"`) tienen
+  // estado propio que la acción masiva puede escribir. Las filas
+  // `source === "conversation"` son derivadas del inbox y se apagan al ABRIR la
+  // conversación. Contarlas acá habilitaba el botón para una marcación que la
+  // base nunca iba a registrar.
+  const avisosMarcables = items.filter((i) => i.source === "notification" && !i.read).length;
+  const leyendaMarcables =
+    avisosMarcables === 1
+      ? "Marcar leído el aviso pendiente"
+      : `Marcar leídos los ${avisosMarcables} avisos pendientes`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -59,14 +68,30 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
           <Icon name="bell" size={18} className="text-fg-link" />
           <h1 className="text-sm font-bold text-fg-primary">Centro de Notificaciones</h1>
         </div>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          disabled={pending || !hasUnread}
-          onClick={() => run(() => markAllNotificationsReadAction())}
-        >
-          <Icon name="check" size={14} /> Marcar todas leídas
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={pending || avisosMarcables === 0}
+            // C4 1/2 · L-2: un botón `disabled` sale del orden de tabulación y
+            // su `title` queda inalcanzable para teclado y lector de pantalla.
+            // El motivo se anuncia por `aria-disabled` + una pista VISIBLE.
+            aria-disabled={pending || avisosMarcables === 0}
+            title={
+              avisosMarcables === 0
+                ? "No hay avisos pendientes. Las conversaciones se marcan leídas al abrirlas."
+                : leyendaMarcables
+            }
+            onClick={() => run(() => markAllNotificationsReadAction())}
+          >
+            <Icon name="check" size={14} /> Marcar todas leídas
+          </button>
+          {avisosMarcables === 0 && (
+            <span className="text-[11px] text-fg-muted">
+              Las conversaciones se marcan leídas al abrirlas.
+            </span>
+          )}
+        </div>
       </header>
 
       {err && <p className="px-5 pt-3 text-xs text-tops-red">{err}</p>}

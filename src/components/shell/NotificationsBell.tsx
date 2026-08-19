@@ -26,6 +26,7 @@ import {
   type BadgeCounts,
   type NotificationCategory,
 } from "@/lib/notifications/categories";
+import { mapNotifRpcError } from "@/lib/notifications/rpc-errors";
 import { relTime } from "@/lib/utils";
 
 interface Notification {
@@ -71,6 +72,9 @@ export function NotificationsBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [counts, setCounts] = useState<BadgeCounts>(EMPTY_BADGE_COUNTS);
+  // HOTFIX-02: el fallo de la marcación masiva se muestra ANCLADO al panel que
+  // lo produjo, nunca como éxito silencioso.
+  const [errorMarcado, setErrorMarcado] = useState<string | null>(null);
   const botonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
 
@@ -150,15 +154,32 @@ export function NotificationsBell() {
   const markAllRead = async () => {
     const supabase = createClient();
     if (!supabase) return;
+    setErrorMarcado(null);
     // Una sola vía de escritura (RPC 0235): marca leídas TODAS mis pendientes
     // —directas y broadcasts— sin tope de página y sin tocar el estado de
     // terceros. El broadcast se registra como lectura PERSONAL.
-    await supabase.rpc("connect_notif_mark_all_read");
-    load();
+    //
+    // HOTFIX-02: la RPC devuelve `integer` con las filas realmente marcadas.
+    // Antes se descartaban tanto ese recuento como el error, así que una
+    // marcación que no escribía nada dejaba el rojo encendido sin explicación.
+    const { data, error } = await supabase.rpc("connect_notif_mark_all_read");
+    if (error) {
+      // C4 1/2 · M-3: la causa la sabe PostgreSQL. Descartarla dejaba
+      // "reintentá en unos segundos" ante una sesión vencida, donde reintentar
+      // no puede funcionar nunca.
+      setErrorMarcado(mapNotifRpcError(error.message));
+      return;
+    }
+    if (typeof data !== "number" || data === 0) {
+      setErrorMarcado("No se marcó ninguna notificación como leída. Recargá la página y reintentá.");
+      return;
+    }
+    await load();
   };
 
   const cerrar = useCallback(() => {
     setOpen(false);
+    setErrorMarcado(null);
     botonRef.current?.focus();
   }, []);
 
@@ -223,6 +244,25 @@ export function NotificationsBell() {
                 </button>
               )}
             </div>
+
+            {/* C4 1/2 · M-4: apagado el rojo, verde y amarillo pueden seguir
+                encendidos. Son mensajes sin leer, no avisos: decirlo evita que
+                el operador lea la campanita como "la marcación no funcionó". */}
+            {counts.red === 0 && counts.green + counts.yellow > 0 && (
+              <p className="border-b border-stroke-soft bg-neutral-50 px-3 py-2 text-[11px] text-fg-secondary">
+                No quedan avisos pendientes. Los indicadores verde y amarillo son mensajes
+                sin leer: se apagan al abrir cada conversación.
+              </p>
+            )}
+
+            {errorMarcado && (
+              <p
+                role="alert"
+                className="border-b border-stroke-soft bg-tops-red/5 px-3 py-2 text-[11px] text-tops-red"
+              >
+                {errorMarcado}
+              </p>
+            )}
 
             {/* Resumen por categoría: cada cifra es la exacta, sin recorte. */}
             <div className="flex items-stretch gap-1 border-b border-stroke-soft bg-neutral-50/60 px-2 py-1.5">
