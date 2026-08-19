@@ -76,3 +76,33 @@ describe("NotificationCenter · el botón de marcación masiva no promete lo que
     expect(host.textContent).toContain("No se marcó ninguna notificación como leída.");
   });
 });
+
+/**
+ * M-N1 · `items` es UNA PÁGINA: `listNotificationCenter()` trae los 50 avisos
+ * más recientes. Cuando ninguno de esa página queda pendiente, la pantalla
+ * afirmaba «No hay avisos pendientes» — una afirmación sobre TODO el conjunto
+ * sacada de una página. Un aviso sin leer más viejo que esos 50 la desmiente.
+ */
+describe("NotificationCenter · no afirma más de lo que la vista mide", () => {
+  let host: HTMLDivElement; let root: Root;
+  beforeEach(() => { host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host); });
+  afterEach(async () => { await act(async () => root.unmount()); host.remove(); });
+
+  const boton = () =>
+    Array.from(host.querySelectorAll("button")).find((b) => /Marcar todas leídas/.test(b.textContent ?? ""))!;
+
+  it("acota a la vista lo que dice cuando la página no tiene pendientes", async () => {
+    await act(async () => {
+      root.render(<NotificationCenter items={[aviso({ read: true }), conversacion("c-1")]} />);
+    });
+    expect(boton().title).toMatch(/en esta vista/i);
+    expect(boton().title).not.toMatch(/^No hay avisos pendientes\./);
+    expect(host.textContent).toMatch(/en esta vista/i);
+  });
+
+  it("no arrastra la salvedad cuando sí hay un aviso marcable", async () => {
+    await act(async () => { root.render(<NotificationCenter items={[aviso()]} />); });
+    expect(boton().title).toMatch(/Marcar leído el aviso pendiente/);
+    expect(host.textContent).not.toMatch(/en esta vista/i);
+  });
+});

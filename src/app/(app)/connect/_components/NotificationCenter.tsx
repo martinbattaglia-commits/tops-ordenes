@@ -60,6 +60,12 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
     avisosMarcables === 1
       ? "Marcar leído el aviso pendiente"
       : `Marcar leídos los ${avisosMarcables} avisos pendientes`;
+  // M-N1: `items` es UNA PÁGINA — `listNotificationCenter()` trae los 50 avisos
+  // más recientes. Un cero acá significa "ninguno en esta vista", no "ninguno
+  // en la organización": un aviso sin leer más viejo que esos 50 queda fuera y
+  // la pantalla no lo sabe. La leyenda dice exactamente lo que la vista mide.
+  const leyendaSinPendientes =
+    "No hay avisos pendientes en esta vista. Las conversaciones se marcan leídas al abrirlas.";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -77,18 +83,14 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
             // su `title` queda inalcanzable para teclado y lector de pantalla.
             // El motivo se anuncia por `aria-disabled` + una pista VISIBLE.
             aria-disabled={pending || avisosMarcables === 0}
-            title={
-              avisosMarcables === 0
-                ? "No hay avisos pendientes. Las conversaciones se marcan leídas al abrirlas."
-                : leyendaMarcables
-            }
+            title={avisosMarcables === 0 ? leyendaSinPendientes : leyendaMarcables}
             onClick={() => run(() => markAllNotificationsReadAction())}
           >
             <Icon name="check" size={14} /> Marcar todas leídas
           </button>
           {avisosMarcables === 0 && (
             <span className="text-[11px] text-fg-muted">
-              Las conversaciones se marcan leídas al abrirlas.
+              Sin avisos pendientes en esta vista. Las conversaciones se marcan leídas al abrirlas.
             </span>
           )}
         </div>
