@@ -36,6 +36,7 @@ import {
 } from "@/lib/connect/adapters/driving/audio-actions";
 import { AudioPlayer } from "./AudioPlayer";
 import { AttachmentComposer } from "./AttachmentComposer";
+import { MessageAttachments } from "./MessageAttachments";
 
 /** D1 (LINK-MEDIA-001): ícono propio del MENSAJE de voz — distinto del Voice Command. */
 function MicIcon({ size = 15 }: { size?: number }) {
@@ -179,9 +180,13 @@ export function ThreadView({
   const caps = useMemo(() => composerCapabilities(kind, { readOnly }), [kind, readOnly]);
 
   async function sendAudio() {
-    // WA-8 · guarda de LÓGICA, no de CSS: en WhatsApp (y en solo-lectura) esto
-    // corta antes de `prepareAudioUploadAction`, `uploadToSignedUrl` y
-    // `finalizeAudioMessageAction`. Cero acciones de audio.
+    // Guarda de LÓGICA, no de CSS: corta antes de `prepareAudioUploadAction`,
+    // `uploadToSignedUrl` y `finalizeAudioMessageAction`.
+    //
+    // SCOPE B · el comentario anterior afirmaba que esta guarda bloqueaba el
+    // audio "en WhatsApp": era cierto en WA-8 y dejó de serlo en FASE B, que
+    // habilitó `canSendAudio` en ese canal (ver `composerCapabilities`). La
+    // documentación desactualizada apuntaba a una causa falsa para INC-02.
     if (!caps.canSendAudio) return;
     if (!recorder.blob || audioBusy) return;
     setAudioBusy(true);
@@ -545,6 +550,22 @@ export function ThreadView({
                     {renderWithMentions(messageDisplayBody(m), mentionNames)}
                   </div>
                 )}
+                {/*
+                  H-1 · LOS ADJUNTOS SE MUESTRAN.
+
+                  Antes no había ninguna rama para `kind === "file"`: el mensaje
+                  caía al `else` de arriba y el archivo se pintaba como el texto
+                  `📎 foto.png`, inabrible. El cuerpo sigue mostrándose —es el
+                  pie de foto cuando lo hay— y debajo va el adjunto real.
+
+                  Cuelga de `attachments` y no de `kind` a propósito: un mensaje
+                  con archivo adjunto se muestra igual venga marcado como venga,
+                  y una burbuja optimista —que todavía no tiene la lista— no
+                  renderiza nada de más.
+                */}
+                {m.attachments && m.attachments.length > 0 && (
+                  <MessageAttachments attachments={m.attachments} />
+                )}
                 <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
                   {/*
                     WA-8R9 · H-3 · la HORA se muestra SIEMPRE.
@@ -588,7 +609,7 @@ export function ThreadView({
       </div>
 
       {readOnly ? (
-        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt/50 px-4 py-3 text-center text-xs text-fg-muted">
+        <div className="flex items-center justify-center gap-1.5 border-t border-stroke-soft bg-bg-surface-alt px-4 py-3 text-center text-xs text-fg-muted">
           <Icon name="folder" size={13} className="text-fg-muted" />
           Esta conversación está archivada. Es de solo lectura: no se pueden enviar mensajes.
         </div>

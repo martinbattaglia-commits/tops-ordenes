@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { parseInboundPayload } from "./inbound";
 import { projectInbound, isProjectionComplete } from "./link-projection";
 import { createSupabaseProjectionPort } from "./link-projection.supabase";
+import { metaDownloadTransport } from "./media-transport";
 import { parseOperatorProfileIds } from "./operators";
 import type { InboundConsumerPorts, ClaimedEvent } from "./inbound-consumer";
 
@@ -72,7 +73,7 @@ export function createSupabaseInboundConsumerPorts(admin: AdminClient): InboundC
       const operadores = parseOperatorProfileIds();
       const resultado = await projectInbound(
         { messages: parsed.messages, statuses: parsed.statuses },
-        createSupabaseProjectionPort(admin as never),
+        createSupabaseProjectionPort(admin as never, metaDownloadTransport()),
         operadores.ids,
       );
       return { complete: isProjectionComplete(resultado), errors: resultado.errors };

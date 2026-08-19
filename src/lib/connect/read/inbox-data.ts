@@ -49,6 +49,18 @@ function mapMessage(r: MessageRow): Message {
     kind: r.kind, body: r.body, bodyFormat: r.body_format, replyToMessageId: r.reply_to_message_id,
     editedAt: r.edited_at, deletedAt: r.deleted_at, redacted: r.redacted, createdAt: r.created_at,
     wa: projectWaMessage({ meta: r.meta, externalMsgId: r.external_msg_id }),
+    // H-1 · el adjunto viaja con su mensaje. Sin `storage_path`: la ubicación
+    // del objeto la resuelve el portón, no el navegador.
+    attachments: (r.connect_attachments ?? []).map((a) => ({
+      id: a.id,
+      fileName: a.file_name,
+      mimeType: a.mime_type,
+      // `file_size` es bigint: PostgREST lo entrega como número o como string
+      // según el tamaño, y un `null` no debe convertirse en 0 —que mentiría
+      // diciendo «archivo vacío»—.
+      fileSize: a.file_size === null || a.file_size === undefined ? null : Number(a.file_size),
+      scanStatus: a.scan_status ?? "",
+    })),
   };
 }
 
@@ -184,7 +196,11 @@ export async function listMessages(
     .select(
       // `meta` y `external_msg_id` entran SÓLO para derivar la proyección
       // sanitizada en `mapMessage`; no se propagan al cliente.
-      "id, conversation_id, seq, author_participant_id, author_profile_id, kind, body, body_format, reply_to_message_id, edited_at, deleted_at, redacted, created_at, meta, external_msg_id",
+      // H-1 · el join trae el adjunto con el mensaje. La RLS de
+      // `connect_attachments` ya exige membresía + canal permitido, así que el
+      // embebido no amplía lo que el usuario puede ver: si no puede leer el
+      // adjunto, la lista embebida le llega vacía.
+      "id, conversation_id, seq, author_participant_id, author_profile_id, kind, body, body_format, reply_to_message_id, edited_at, deleted_at, redacted, created_at, meta, external_msg_id, connect_attachments(id, file_name, mime_type, file_size, scan_status)",
     )
     .eq("conversation_id", conversationId)
     .order("seq", { ascending: false })

@@ -90,6 +90,12 @@ vi.mock("@/lib/connect/adapters/driving/read-actions", () => ({
 // AttachmentComposer: NO se toca vitest.config.ts, se mockea el módulo que
 // arrastra `server-only` a un entorno que no lo necesita.
 vi.mock("@/lib/rbac/nexus-link", () => ({ canChannel: async () => true }));
+// H-1 · el portón que resuelve la URL firmada del adjunto.
+vi.mock("@/lib/connect/adapters/driving/attachment-actions", () => ({
+  getAttachmentUrlAction: async () => ({ ok: true, url: "https://signed.example/f.png" }),
+  prepareAttachmentUploadAction: async () => ({ ok: false, message: "no usado" }),
+  finalizeAttachmentAction: async () => ({ ok: false, message: "no usado" }),
+}));
 // Mismo motivo: audio-actions.ts también importa el adaptador productivo de
 // envío de media (server-only). No se ejercita el egress real acá — eso vive
 // en media-send-core.test.ts, contra el core puro.
@@ -610,5 +616,36 @@ describe("WA-VIS-01 · la ayuda de teclado es legible y accesible", () => {
       ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     expect(sendWhatsappTextAction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("H-1 · el adjunto llega al HILO, no sólo al componente", () => {
+  it("un mensaje con archivo deja de ser texto suelto y ofrece cómo abrirlo", async () => {
+    // Éste es el caso que fallaba en producción: la burbuja mostraba
+    // `📎 remito.pdf` y NADA más. Sin rama para el adjunto no hay control
+    // alguno en el DOM, y esta prueba no puede pasar.
+    await act(async () => {
+      montar({
+        kind: "dm",
+        initialMessages: [
+          mensaje({
+            kind: "file" as never,
+            body: "📎 remito.pdf",
+            attachments: [{
+              id: "att-9", fileName: "remito.pdf", mimeType: "application/pdf",
+              fileSize: 2048, scanStatus: "clean",
+            }],
+          }),
+        ],
+      });
+    });
+
+    // El pie sigue estando…
+    expect(container.textContent).toContain("remito.pdf");
+    // …y ahora hay una forma REAL de abrirlo, con su tamaño a la vista.
+    expect(container.textContent).toContain("2 KB");
+    const botones = [...container.querySelectorAll("button")]
+      .map((b) => b.textContent ?? "");
+    expect(botones.some((t) => /Descargar/i.test(t))).toBe(true);
   });
 });

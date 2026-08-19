@@ -13,6 +13,11 @@ import {
   type WaOutboundState,
 } from "./outbound-state";
 import type { WaInboundStatus } from "./inbound";
+import type { InboundMedia } from "./inbound-media";
+import type { MetaMediaDownloadTransport } from "./media-transport";
+import { normalizeFileName, validateAttachment } from "@/lib/connect/attachments/validate";
+import { sniffAudio, AUDIO_LIMITS } from "@/lib/connect/audio/validate";
+import { createHash, randomUUID } from "node:crypto";
 
 /**
  * link-projection.supabase.ts — LINK-WA S1 · Adaptador service_role del puerto
@@ -42,7 +47,148 @@ const CAS_ATTEMPTS = 3;
  */
 export const WA_STATUS_SOURCE_META = "meta" as const;
 
-export function createSupabaseProjectionPort(admin: AdminClient): LinkProjectionPort {
+/** Mismo bucket que el saliente: no hay un almacén nuevo para lo entrante. */
+const BUCKET = "connect-files";
+
+type EntranteVerificado =
+  | { ok: true; mime: string; fileName: string }
+  | { ok: false };
+
+/**
+ * Verifica el binario entrante por FIRMA BINARIA, con el validador que
+ * corresponde a su familia. Ver el docblock de `createInboundMediaIngest`.
+ */
+function verificarEntrante(
+  bytes: Uint8Array,
+  media: InboundMedia,
+): EntranteVerificado {
+  if (media.kind === "audio") {
+    if (bytes.length === 0 || bytes.length > AUDIO_LIMITS.maxBytes) return { ok: false };
+    const s = sniffAudio(bytes);
+    if (!s) return { ok: false };
+    // El nombre del entrante lo propone un TERCERO: se normaliza igual que el
+    // de un adjunto propio —descarta componentes de ruta y extensiones
+    // prohibidas— y su extensión pasa a ser la del contenido real.
+    return { ok: true, mime: s.mime, fileName: normalizeFileName(media.fileName, s.ext) };
+  }
+  const v = validateAttachment(bytes, media.fileName);
+  return v.ok ? { ok: true, mime: v.sniffed.mime, fileName: v.fileName } : { ok: false };
+}
+
+/**
+ * H-7 · ingreso del media entrante.
+ *
+ * Recorre EXACTAMENTE los mismos pasos que el saliente y en el mismo orden:
+ * bajar los bytes, verificar la FIRMA BINARIA real —nunca el MIME que declara
+ * el proveedor—, subir a `connect-files` bajo la carpeta de la conversación
+ * (que es lo que exige la policy de storage de 0237) y registrar la fila en
+ * `connect_attachments` ligada a su mensaje.
+ *
+ * Idempotente por `(storage_bucket, storage_path)`: el path se deriva del
+ * wamid, así que reprocesar el mismo evento reconoce el objeto que ya existe
+ * en vez de duplicarlo.
+ *
+ * C4/LOW-1 · el SELECT previo NO es lo que cierra la carrera —entre consultar y
+ * escribir hay una ventana, y la reentrega concurrente de Meta es la norma—.
+ * El árbitro es el índice `connect_attachments_storage_bucket_storage_path_key`,
+ * UNIQUE sobre `(storage_bucket, storage_path)`, MEDIDO en producción: ya
+ * existía, así que el catch del 23505 de acá abajo tiene quién lo dispare y
+ * esta corrección no necesitó migración. El SELECT queda como atajo que evita
+ * bajar el binario de nuevo, no como garantía.
+ *
+ * ─── C4/HIGH-1 · POR QUÉ HAY DOS VALIDADORES ──────────────────────────────
+ *
+ * `validateAttachment` conoce imágenes y documentos; su sniffer no tiene NI UNA
+ * firma de audio. Validar con él TODO lo entrante rechazaba las notas de voz de
+ * WhatsApp —Ogg/Opus—, que son justo el caso que H-7 decía recuperar. El audio
+ * se valida con `sniffAudio`, el MISMO módulo que ya usa el saliente.
+ *
+ * ─── Y POR QUÉ «NO SOPORTADO» NO ES UNA EXCEPCIÓN ─────────────────────────
+ *
+ * Un `throw` acá llegaba a `result.errors`, dejaba el evento incompleto y lo
+ * hacía reprocesar indefinidamente, RE-DESCARGANDO el binario de la Graph API
+ * en cada vuelta. Un formato que no sabemos guardar no es un fallo transitorio:
+ * es un desenlace terminal y se devuelve como tal (`unsupported`), para que el
+ * evento se marque procesado y quede registro de qué no se guardó. Sólo lo
+ * genuinamente reintentable —la descarga, storage, la escritura— lanza.
+ */
+export function createInboundMediaIngest(
+  admin: AdminClient,
+  transport: MetaMediaDownloadTransport,
+) {
+  return async function ingestInboundMedia(input: {
+    conversationId: string;
+    externalMsgId: string;
+    media: InboundMedia;
+  }): Promise<"stored" | "duplicate" | "unsupported"> {
+    // El path lo elige el SERVIDOR y se deriva del wamid: es la identidad que
+    // Meta ya garantiza única, así que el reproceso cae sobre el mismo objeto.
+    const huella = createHash("sha256").update(input.externalMsgId).digest("hex").slice(0, 32);
+    const path = `${input.conversationId}/files/in-${huella}`;
+
+    const { data: yaEsta } = await admin
+      .from("connect_attachments")
+      .select("id")
+      .eq("storage_bucket", BUCKET)
+      .eq("storage_path", path)
+      .maybeSingle();
+    if (yaEsta) return "duplicate";
+
+    const bajado = await transport.downloadMedia(input.media.mediaId);
+    if (bajado.kind !== "downloaded") {
+      // El motivo viaja; el detalle del proveedor no, por la misma regla que
+      // gobierna el saliente.
+      throw new Error(`media ${input.externalMsgId}: descarga ${bajado.reason}`);
+    }
+
+    // El MIME que declara Meta NO se cree: manda la firma binaria, igual que en
+    // `finalizeAttachmentAction`.
+    const v = verificarEntrante(bajado.bytes, input.media);
+    if (!v.ok) return "unsupported";
+
+    const { error: subErr } = await admin.storage
+      .from(BUCKET)
+      .upload(path, bajado.bytes, { contentType: v.mime, upsert: false });
+    if (subErr && !/exists|duplicate/i.test(subErr.message)) {
+      throw new Error(`media ${input.externalMsgId}: storage ${subErr.message}`);
+    }
+
+    const { data: msg } = await admin
+      .from("connect_messages")
+      .select("id")
+      .eq("conversation_id", input.conversationId)
+      .eq("external_msg_id", input.externalMsgId)
+      .maybeSingle();
+
+    const { error: attErr } = await admin.from("connect_attachments").insert({
+      conversation_id: input.conversationId,
+      message_id: (msg as { id: string } | null)?.id ?? null,
+      storage_bucket: BUCKET,
+      storage_path: path,
+      sha256: createHash("sha256").update(bajado.bytes).digest("hex"),
+      mime_type: v.mime,
+      file_size: bajado.bytes.length,
+      file_name: v.fileName,
+      // Entrante: no hay usuario interno que lo haya subido.
+      uploaded_by: null,
+    });
+    if (attErr) {
+      if (/duplicate|23505/i.test(attErr.message)) return "duplicate";
+      throw new Error(`media ${input.externalMsgId}: adjunto ${attErr.message}`);
+    }
+    return "stored";
+  };
+}
+
+export function createSupabaseProjectionPort(
+  admin: AdminClient,
+  /**
+   * Transporte de descarga. Opcional para no romper a los llamadores que sólo
+   * proyectan texto y status; sin él, un mensaje con media deja el evento
+   * incompleto y reprocesable en vez de perder el archivo.
+   */
+  downloadTransport?: MetaMediaDownloadTransport,
+): LinkProjectionPort {
   return {
     async findConversationByContext(contextId: string): Promise<ProjectionConversation | null> {
       const { data, error } = await admin
@@ -152,6 +298,10 @@ export function createSupabaseProjectionPort(admin: AdminClient): LinkProjection
       if (/duplicate|23505/i.test(error.message)) return "duplicate";
       throw new Error(`mensaje ${row.externalMsgId}: ${error.message}`);
     },
+
+    ingestInboundMedia: downloadTransport
+      ? createInboundMediaIngest(admin, downloadTransport)
+      : undefined,
 
     async resolveEligibleOperators(ids: string[]): Promise<string[]> {
       if (!ids.length) return [];

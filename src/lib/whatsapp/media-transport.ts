@@ -151,12 +151,62 @@ export interface MetaMediaTransport {
   }): Promise<MetaSendOutcome>;
 }
 
+/**
+ * H-7 · el lado ENTRANTE del transporte, en su propia interfaz.
+ *
+ * Separado de `MetaMediaTransport` a propósito: el envío no necesita saber
+ * bajar, y obligarlo a declarar el método sólo forzaría a cada doble de la
+ * suite de salida a implementar algo que nunca llama. La implementación real
+ * cumple las dos.
+ */
+export interface MetaMediaDownloadTransport {
+  /**
+   * Baja los bytes de un media entrante.
+   *
+   * Dos saltos, y los dos con el token: primero `GET /{media-id}` devuelve una
+   * URL de descarga de vida corta, y recién esa URL entrega el binario. NO se
+   * usa la `url` que viene dentro del webhook: llega en un evento que declara
+   * el remitente, y este camino es el mismo que ya recorre el saliente.
+   */
+  downloadMedia(mediaId: string): Promise<MetaDownloadOutcome>;
+}
+
+export type MetaDownloadOutcome =
+  | { kind: "downloaded"; bytes: Uint8Array; mimeType: string | null }
+  | {
+      kind: "failed";
+      reason: "not_configured" | "http_error" | "invalid_response" | "too_large" | "timeout" | "network";
+      detail: string;
+    };
+
 export interface MetaMediaTransportConfig {
   token: string | undefined;
   phoneNumberId: string | undefined;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   graphBase?: string;
+}
+
+/**
+ * H-7 · tope del binario ENTRANTE.
+ *
+ * El bucket `connect-files` corta en 25 MB; acá se corta antes para no gastar
+ * la descarga completa de algo que storage va a rechazar igual.
+ */
+export const INBOUND_MAX_BYTES = 25 * 1024 * 1024;
+
+/** URL de descarga del cuerpo de `GET /{media-id}`. */
+export function extractMediaUrl(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const url = (body as { url?: unknown }).url;
+  return typeof url === "string" && url.trim().length > 0 ? url.trim() : null;
+}
+
+/** MIME declarado por Meta. Se re-verifica por firma binaria antes de guardar. */
+export function extractMediaMime(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const m = (body as { mime_type?: unknown }).mime_type;
+  return typeof m === "string" && m.trim().length > 0 ? m.trim() : null;
 }
 
 /** `media_id` del cuerpo de `/media`. `null` ⇒ contrato roto. */
@@ -166,7 +216,9 @@ export function extractMediaId(body: unknown): string | null {
   return typeof id === "string" && id.trim().length > 0 ? id.trim() : null;
 }
 
-export function createMetaMediaTransport(config: MetaMediaTransportConfig): MetaMediaTransport {
+export function createMetaMediaTransport(
+  config: MetaMediaTransportConfig,
+): MetaMediaTransport & MetaMediaDownloadTransport {
   const doFetch = config.fetchImpl ?? fetch;
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const base = config.graphBase ?? GRAPH;
@@ -237,6 +289,58 @@ export function createMetaMediaTransport(config: MetaMediaTransportConfig): Meta
         return { kind: "failed", reason: "invalid_response", detail: "2xx sin id de media" };
       }
       return { kind: "uploaded", mediaId };
+    },
+
+    async downloadMedia(mediaId): Promise<MetaDownloadOutcome> {
+      const cred = credenciales();
+      if (!cred) {
+        return {
+          kind: "failed", reason: "not_configured",
+          detail: "META_WA_TOKEN / META_WA_PHONE_NUMBER_ID ausentes",
+        };
+      }
+      const auth = { Authorization: `Bearer ${cred.token}` };
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        // Salto 1 · el id se resuelve a una URL de descarga de vida corta.
+        const meta = await doFetch(`${base}/${encodeURIComponent(mediaId)}`, {
+          method: "GET", headers: auth, signal: controller.signal,
+        });
+        if (!meta.ok) return { kind: "failed", reason: "http_error", detail: `HTTP ${meta.status}` };
+        let descripcion: unknown;
+        try {
+          descripcion = JSON.parse(await meta.text());
+        } catch {
+          return { kind: "failed", reason: "invalid_response", detail: "2xx no parseable" };
+        }
+        const url = extractMediaUrl(descripcion);
+        if (!url) {
+          return { kind: "failed", reason: "invalid_response", detail: "2xx sin url de descarga" };
+        }
+        const declarado = extractMediaMime(descripcion);
+
+        // Salto 2 · el binario. La URL del CDN también exige el token.
+        const bin = await doFetch(url, { method: "GET", headers: auth, signal: controller.signal });
+        if (!bin.ok) return { kind: "failed", reason: "http_error", detail: `HTTP ${bin.status}` };
+        const buf = new Uint8Array(await bin.arrayBuffer());
+        if (buf.length > INBOUND_MAX_BYTES) {
+          return {
+            kind: "failed", reason: "too_large",
+            detail: `${buf.length} > ${INBOUND_MAX_BYTES}`,
+          };
+        }
+        return { kind: "downloaded", bytes: buf, mimeType: declarado };
+      } catch (e) {
+        const abortado = e instanceof Error && e.name === "AbortError";
+        return {
+          kind: "failed",
+          reason: abortado ? "timeout" : "network",
+          detail: abortado ? `timeout ${timeoutMs}ms` : "fallo de red",
+        };
+      } finally {
+        clearTimeout(timer);
+      }
     },
 
     async sendMedia({ to, kind, mediaId, caption, fileName }): Promise<MetaSendOutcome> {
@@ -319,4 +423,17 @@ export function createMetaMediaTransport(config: MetaMediaTransportConfig): Meta
       return { kind: "accepted", wamid };
     },
   };
+}
+
+/**
+ * H-7 · transporte de descarga con las credenciales del entorno.
+ *
+ * Fábrica única para que el webhook y el consumidor diferido usen exactamente
+ * el mismo camino que el saliente, sin repetir la lectura de variables.
+ */
+export function metaDownloadTransport(): MetaMediaDownloadTransport {
+  return createMetaMediaTransport({
+    token: process.env.META_WA_TOKEN,
+    phoneNumberId: process.env.META_WA_PHONE_NUMBER_ID,
+  });
 }

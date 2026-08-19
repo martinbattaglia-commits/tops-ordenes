@@ -232,7 +232,7 @@ describe("lo incierto NUNCA se reintenta solo", () => {
 describe("el binario se prepara según lo que WhatsApp reproduce", () => {
   it("lo que ya sirve pasa intacto", () => {
     const bytes = new Uint8Array([1, 2, 3]);
-    const r = prepararParaWhatsapp(bytes, "audio/mp4");
+    const r = prepararParaWhatsapp(bytes, "audio/mp4", "voz.m4a");
     expect(r.ok).toBe(true);
     if (r.ok) {
       expect(r.mimeType).toBe("audio/mp4");
@@ -241,7 +241,7 @@ describe("el binario se prepara según lo que WhatsApp reproduce", () => {
   });
 
   it("un WebM inválido no se manda a medias: se explica el motivo", () => {
-    const r = prepararParaWhatsapp(new Uint8Array([0, 1, 2]), "audio/webm");
+    const r = prepararParaWhatsapp(new Uint8Array([0, 1, 2]), "audio/webm", "voz.webm");
     expect(r.ok).toBe(false);
   });
 
@@ -277,5 +277,51 @@ describe("el binario se prepara según lo que WhatsApp reproduce", () => {
     // Y el audio se manda como AUDIO, sin pie: Meta lo descartaría en silencio.
     const enviado = p.sendMedia.mock.calls[0]?.[0] as { kind: string };
     expect(enviado.kind).toBe("audio");
+  });
+
+  // ─── H-2 · el nombre también es parte del contrato con Meta ───────────────
+  it("el NOMBRE del archivo acompaña al reenvasado: no queda diciendo .webm", () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    // Lo que ya sirve conserva su nombre tal cual.
+    const intacto = prepararParaWhatsapp(bytes, "audio/mp4", "voz-12s.m4a");
+    expect(intacto.ok).toBe(true);
+    if (intacto.ok) expect(intacto.fileName).toBe("voz-12s.m4a");
+  });
+
+  it("un WebM reenvasado sube como .ogg, con los tres datos coherentes", async () => {
+    const enc = new TextEncoder();
+    const size8 = (n: number) => {
+      const o = new Uint8Array(8); o[0] = 1;
+      for (let i = 7; i >= 1; i--) { o[i] = n & 0xff; n = Math.floor(n / 256); }
+      return o;
+    };
+    const cat = (...pz: Uint8Array[]) => {
+      const o = new Uint8Array(pz.reduce((a, x) => a + x.length, 0));
+      let k = 0; for (const x of pz) { o.set(x, k); k += x.length; } return o;
+    };
+    const el = (id: number[], pl: Uint8Array) => cat(new Uint8Array(id), size8(pl.length), pl);
+    const head = cat(enc.encode("OpusHead"), new Uint8Array([1, 1, 0x38, 1, 0x80, 0xbb, 0, 0, 0, 0, 0]));
+    const webm = cat(
+      new Uint8Array([0x18, 0x53, 0x80, 0x67, 0x01, 255, 255, 255, 255, 255, 255, 255]),
+      el([0x16, 0x54, 0xae, 0x6b], el([0xae], cat(
+        el([0x86], enc.encode("A_OPUS")), el([0x63, 0xa2], head)))),
+      new Uint8Array([0x1f, 0x43, 0xb6, 0x75, 0x01, 255, 255, 255, 255, 255, 255, 255]),
+      el([0xa3], cat(new Uint8Array([0x81, 0, 0, 0]), new Uint8Array([0xfc, 1, 2, 3]))),
+    );
+
+    const p = puertos({ bytes: webm });
+    const r = await sendWhatsappMedia(
+      { ...ENTRADA, mimeType: "audio/webm", fileName: "voz-12s.webm" }, p.ports);
+    expect(r.ok).toBe(true);
+
+    const subido = p.uploadMedia.mock.calls[0]?.[0] as {
+      mimeType: string; bytes: Uint8Array; fileName: string;
+    };
+    // LOS TRES TIENEN QUE DECIR LO MISMO. Ésta es la diferencia exacta contra el
+    // camino de imágenes, que sí funciona: ahí tipo, nombre y bytes coinciden.
+    expect(subido.mimeType).toBe("audio/ogg");
+    expect(String.fromCharCode(...subido.bytes.subarray(0, 4))).toBe("OggS");
+    expect(subido.fileName).toBe("voz-12s.ogg");
+    expect(subido.fileName.endsWith(".webm")).toBe(false);
   });
 });

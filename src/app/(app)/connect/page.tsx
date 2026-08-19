@@ -9,8 +9,8 @@ import { getMyProfile } from "@/lib/profile/data";
 import { canAdminWhatsappImport } from "@/lib/rbac/nexus-link";
 import type { NotificationItem, NotificationPriority } from "@/lib/notifications/types";
 import {
-  CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
-  type NotificationCategory,
+  CATEGORY_LEGEND, CATEGORY_STYLE, LEGEND_FOOTNOTE, categoryAriaLabel,
+  categoryForConversationKind, formatBadgeCount, type NotificationCategory,
 } from "@/lib/notifications/categories";
 import { relTime } from "@/lib/utils";
 
@@ -118,6 +118,13 @@ export default async function ConnectHomePage() {
           </HomeCard>
         ) : null}
 
+        {/* INC-06 · referencia de colores.
+            Va en la Home de Nexus Link y no en la campanita porque acá conviven
+            los tres badges a la vez —Notificaciones en rojo, y las tarjetas de
+            conversaciones con verde y amarillo—: la leyenda se lee al lado de
+            lo que explica, en vez de dentro de un panel que hay que abrir. */}
+        <ColorLegendCard />
+
         {/* Canales activos */}
         <HomeCard title="Canales activos" icon="users" href="/connect/canales">
           {channels.length === 0 ? (
@@ -166,6 +173,52 @@ function HomeCard({ title, icon, href, badge, badgeCategory = "red_system", acti
         <Link href={href} className="text-[11px] font-semibold text-fg-link hover:underline">{actionLabel}</Link>
       </div>
       <div className="min-h-[60px] flex-1">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * INC-06 · qué significa cada color de notificación.
+ *
+ * El texto sale de `CATEGORY_LEGEND` y la muestra de color de `CATEGORY_STYLE`:
+ * misma fuente que pinta los badges reales, así que la leyenda no puede quedar
+ * describiendo un color que el sistema dejó de usar.
+ *
+ * A.4 · el color NO es el único portador del significado: cada fila lleva el
+ * icono de su categoría, su forma propia (el radio distingue círculo de
+ * cuadrado) y el nombre del color escrito.
+ */
+function ColorLegendCard() {
+  return (
+    <section className="card flex flex-col gap-3 p-4">
+      <div className="flex items-center gap-2">
+        <Icon name="bell" size={15} className="text-fg-link" />
+        <h2 className="text-sm font-bold text-fg-primary">Qué significa cada color</h2>
+      </div>
+      <dl className="min-h-[60px] flex-1 space-y-2.5">
+        {CATEGORY_LEGEND.map((e) => {
+          const style = CATEGORY_STYLE[e.category];
+          return (
+            <div key={e.category} className="flex items-start gap-2.5">
+              <span
+                aria-hidden
+                className={`mt-0.5 grid h-[15px] w-[15px] shrink-0 place-items-center ${style.badgeClass}`}
+              >
+                <Icon name={style.icon} size={8} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <dt className="text-xs font-semibold text-fg-primary">
+                  {e.colorName} · {style.label}
+                </dt>
+                <dd className="text-[11px] leading-snug text-fg-muted">{e.meaning}</dd>
+              </div>
+            </div>
+          );
+        })}
+      </dl>
+      {/* C4/LOW-2 · el filtro que comparten los tres. Sin esto, quien silencia
+          un hilo y no ve su badge concluye que el contador está roto. */}
+      <p className="text-[10px] leading-snug text-fg-muted">{LEGEND_FOOTNOTE}</p>
     </section>
   );
 }

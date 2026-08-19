@@ -41,7 +41,7 @@ export default async function FavoritosPage() {
             return (
               <div
                 key={it.conversationId}
-                className="flex items-center gap-2 border-b border-stroke-soft/50 px-3 py-2.5 transition-colors hover:bg-bg-surface-alt"
+                className="flex items-center gap-2 border-b border-stroke-soft px-3 py-2.5 transition-colors hover:bg-bg-surface-alt"
               >
                 <FavoriteStar conversationId={it.conversationId} initial={true} />
                 <Link href={href} className="flex min-w-0 flex-1 items-center gap-2">

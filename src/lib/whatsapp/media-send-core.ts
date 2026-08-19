@@ -63,21 +63,65 @@ export interface MediaSendInput {
   caption?: string;
 }
 
+/** Extensión que corresponde a un MIME ya verificado. `null` = no se toca. */
+function extensionDe(mime: string): string | null {
+  switch (mime.split(";")[0].trim().toLowerCase()) {
+    case "audio/ogg": return "ogg";
+    default: return null;
+  }
+}
+
+/**
+ * Reescribe la extensión del nombre para que diga lo mismo que el binario.
+ * Conserva todo lo demás del nombre, incluidos los puntos internos.
+ */
+function conExtension(fileName: string, ext: string): string {
+  const punto = fileName.lastIndexOf(".");
+  const base = punto > 0 ? fileName.slice(0, punto) : fileName;
+  return `${base}.${ext}`;
+}
+
 /**
  * Prepara el binario para WhatsApp.
  *
  * El WebM se REENVASA a Ogg —mismo códec Opus, otro contenedor— porque WhatsApp
  * no reproduce WebM y es lo único que sabe grabar Chrome/Android. No se
  * convierte nada: los paquetes de audio salen bit a bit como entraron.
+ *
+ * ─── H-2 · POR QUÉ EL NOMBRE VIAJA ACÁ ────────────────────────────────────
+ *
+ * En producción, los 5 de 5 audios enviados a WhatsApp fallaron con el código
+ * **131053** de Meta (error de subida de media), mientras los archivos comunes
+ * del MISMO canal subían bien —sus fallas eran 131047, la ventana de 24 h, que
+ * es regla de negocio—. Puestos los dos caminos lado a lado, la diferencia era
+ * ésta: en imágenes, tipo declarado, nombre y bytes dicen lo mismo; en audio no.
+ *
+ * `finalizeAudioMessageAction` nombra el archivo con la extensión del binario
+ * ORIGINAL (`voz-12s.webm` en Chrome) y este reenvasado cambiaba los bytes y el
+ * MIME a Ogg pero dejaba el nombre intacto. A `/media` le llegaba
+ * `type=audio/ogg` con un `filename` terminado en `.webm`: el propio contrato
+ * se contradecía.
+ *
+ * La forma del arreglo importa tanto como el arreglo: los tres datos salen del
+ * MISMO retorno, así que ya no se pueden desincronizar. Quien agregue mañana
+ * otro reenvasado tiene que devolver los tres o no compila.
  */
 export function prepararParaWhatsapp(
   bytes: Uint8Array,
   mimeType: string,
-): { ok: true; bytes: Uint8Array; mimeType: string } | { ok: false; message: string } {
-  if (!necesitaRemuxParaWhatsapp(mimeType)) return { ok: true, bytes, mimeType };
+  fileName: string,
+): { ok: true; bytes: Uint8Array; mimeType: string; fileName: string }
+  | { ok: false; message: string } {
+  if (!necesitaRemuxParaWhatsapp(mimeType)) return { ok: true, bytes, mimeType, fileName };
   const r = remuxWebmOpusAOgg(bytes);
   if (!r.ok) return { ok: false, message: r.message };
-  return { ok: true, bytes: r.bytes, mimeType: "audio/ogg" };
+  const ext = extensionDe("audio/ogg");
+  return {
+    ok: true,
+    bytes: r.bytes,
+    mimeType: "audio/ogg",
+    fileName: ext ? conExtension(fileName, ext) : fileName,
+  };
 }
 
 /** Traduce el resultado del transporte al estado que corresponde persistir. */
@@ -152,7 +196,7 @@ export async function sendWhatsappMedia(
   const crudo = await ports.objects.read(input.bucket, input.path);
   if (!crudo) return fallar("El archivo no está disponible.");
 
-  const listo = prepararParaWhatsapp(crudo, input.mimeType);
+  const listo = prepararParaWhatsapp(crudo, input.mimeType, input.fileName);
   if (!listo.ok) return fallar(listo.message);
 
   const admisible = checkWhatsappMedia(listo.mimeType, listo.bytes.length);
@@ -162,7 +206,9 @@ export async function sendWhatsappMedia(
   const subida = await ports.transport.uploadMedia({
     bytes: listo.bytes,
     mimeType: listo.mimeType,
-    fileName: input.fileName,
+    // H-2 · el nombre sale de `listo`, no de `input`: es el que corresponde a
+    // los bytes que efectivamente se están subiendo.
+    fileName: listo.fileName,
   });
   // Una subida fallida —incluso por red— NO deja mensajes en vuelo: como mucho
   // un `media_id` colgado en Meta, que caduca solo. Es seguro reintentarla.
@@ -173,7 +219,7 @@ export async function sendWhatsappMedia(
     kind,
     mediaId: subida.mediaId,
     caption: input.caption,
-    fileName: input.fileName,
+    fileName: listo.fileName,
   });
   const estado = estadoDe(envio);
 

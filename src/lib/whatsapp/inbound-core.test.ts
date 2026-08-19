@@ -19,7 +19,8 @@ function projection(over: Partial<ProjectionResult> = {}): ProjectionResult {
   return {
     conversationsTouched: 1, conversationsCreated: 0, messagesInserted: 1,
     messagesDuplicated: 0, operatorsAdded: 0, statusesApplied: 0,
-    statusesNoop: 0, statusesUnmatched: 0, errors: [], ...over,
+    statusesNoop: 0, statusesUnmatched: 0, mediaStored: 0, mediaUnsupported: 0,
+    errors: [], ...over,
   };
 }
 
