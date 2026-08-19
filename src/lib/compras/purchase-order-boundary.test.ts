@@ -21,6 +21,10 @@ const exportRoute = readFileSync(
   resolve(process.cwd(), "src/app/api/compras/export/route.ts"),
   "utf8",
 );
+const issueOutcome = readFileSync(
+  resolve(process.cwd(), "src/lib/compras/issue-outcome.ts"),
+  "utf8",
+);
 const deliveryStatus = readFileSync(
   resolve(process.cwd(), "src/lib/compras/delivery-status.ts"),
   "utf8",
@@ -101,6 +105,23 @@ describe("frontera de confianza de emisión OC", () => {
     expect(email).toContain('throw new Error("PO_EMAIL_PROVIDER_REJECTED")');
     expect(email).not.toContain("throw new Error(body");
     expect(action).not.toMatch(/console\.(?:error|warn)\([^\n]*(?:issueError|canonicalVendor\.email|data\.vendor\.email)/);
+  });
+
+  // HOTFIX-OC-EMISION-ATOMICA · el invariante viejo prohibía nombrar
+  // `issueError` en el log. El hotfix necesita justamente ese error, así que
+  // la frontera se mueve —no se afloja—: lo único que puede entrar al log del
+  // emisor es lo que ya pasó por el redactor de `issue-outcome.ts`.
+  it("registra el error real de la RPC sólo a través del clasificador redactado", () => {
+    expect(action).toContain("classifyIssueOutcome");
+    expect(action).toContain("outcome.log");
+    expect(action).toContain("error: outcome.userMessage");
+    expect(action).not.toContain('{ code: "PO_ISSUE_FAILED" }');
+    // Ningún campo crudo de la RPC llega al log salteando el clasificador.
+    expect(action).not.toMatch(
+      /console\.(?:error|warn)\([^\n]*issueError\.(?:message|details|hint)/,
+    );
+    expect(issueOutcome).toContain("redactRpcDetail(args.issueError.details)");
+    expect(issueOutcome).toContain("failing row contains");
   });
 
   it("crea header/líneas/created atómicos y sólo firma al congelar el PDF", () => {
