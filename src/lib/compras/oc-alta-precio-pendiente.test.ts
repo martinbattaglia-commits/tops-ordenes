@@ -198,3 +198,52 @@ describe("alta de OC con precio pendiente", () => {
     expect(host.textContent).toContain("No pudimos emitir la orden de compra de forma atómica.");
   });
 });
+
+/**
+ * HOTFIX-01-CIERRE · el defecto que se reprodujo en un navegador real contra
+ * producción: escribir el motivo de una línea pendiente estrellaba la pantalla
+ * en el error boundary de `app/error.tsx` («Algo no salió bien»).
+ *
+ * Las pruebas de arriba tipean el motivo COMPLETO de una sola vez, y por eso
+ * nunca lo vieron. Un usuario tipea de a un carácter: al primero, el motivo ya
+ * no es vacío pero todavía es corto, la proyección de la vista previa dejaba de
+ * taparlo y `computePurchasePricing` lanzaba en pleno render.
+ */
+describe("el motivo se escribe carácter por carácter", () => {
+  it("no estrella la pantalla en el primer carácter", async () => {
+    await act(async () => {
+      root.render(createElement(NewPoWizard, { vendors, products: [] as never }));
+    });
+    const busqueda = Array.from(host.querySelectorAll("input")).find((i) => i.type === "search")!;
+    await act(async () => escribir(busqueda, "Proveedor"));
+    await act(async () => { boton(/Proveedor SA/)!.click(); });
+    await act(async () => { boton(/Continuar/)!.click(); });
+    await act(async () => { boton(/Continuar/)!.click(); });
+
+    const label = Array.from(host.querySelectorAll("input")).find((i) =>
+      i.placeholder?.includes("catálogo"),
+    )!;
+    await act(async () => escribir(label, "Bidón 20L"));
+
+    const motivo = Array.from(host.querySelectorAll("input")).find((i) =>
+      i.getAttribute("aria-label")?.startsWith("Motivo de precio"),
+    )!;
+
+    const texto = "No llegó la cotización";
+    for (let n = 1; n <= texto.length; n += 1) {
+      const parcial = texto.slice(0, n);
+      await act(async () => escribir(motivo, parcial));
+    }
+
+    // Sobrevivió al tipeo completo: el formulario sigue en pie y conserva todo.
+    expect(host.textContent).toContain("Productos");
+    const motivoFinal = Array.from(host.querySelectorAll("input")).find((i) =>
+      i.getAttribute("aria-label")?.startsWith("Motivo de precio"),
+    )!;
+    expect(motivoFinal.value).toBe(texto);
+    const labelFinal = Array.from(host.querySelectorAll("input")).find((i) =>
+      i.placeholder?.includes("catálogo"),
+    )!;
+    expect(labelFinal.value).toBe("Bidón 20L");
+  });
+});

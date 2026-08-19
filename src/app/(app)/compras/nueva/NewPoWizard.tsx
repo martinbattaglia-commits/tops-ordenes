@@ -15,6 +15,7 @@ import {
   validateCuit,
 } from "@/lib/compras/format";
 import { computeTotals, lineSubtotal } from "@/lib/compras/totals";
+import { previewTotals } from "@/lib/compras/wizard-preview";
 import { PO_PRICE_STATE_LABEL } from "@/lib/compras/pricing";
 import { POSITIVE_CATEGORIES, COND_PAGO_OPTIONS, ORG } from "@/lib/org";
 import type { Vendor, Product, POItem } from "@/lib/types-po";
@@ -105,22 +106,12 @@ export function NewPoWizard({ vendors, products }: Props) {
     signatureHash: null,
   }));
 
-  // El dominio estricto rechaza un borrador incompleto. Para la vista previa se
-  // proyecta temporalmente cualquier campo aún vacío a "pending"; el submit
+  // El dominio estricto rechaza un borrador incompleto y LANZA. Esta pantalla
+  // no puede lanzar en render: una excepción acá cae en el error boundary de
+  // `app/error.tsx` y se lleva puesto el formulario entero. `previewTotals`
+  // proyecta el borrador y degrada a "pendiente" en vez de propagar; el submit
   // conserva los bytes reales y canStep3 exige motivo/precio antes de avanzar.
-  const totals = useMemo(
-    () => computeTotals(draft.items.map((item) => {
-      const qty = Number.isFinite(item.qty) && item.qty > 0 ? item.qty : 1;
-      if (item.price_state === "pending" || item.price === null || !Number.isFinite(item.price)) {
-        return { ...item, qty, price: null, price_state: "pending" as const, price_reason: item.price_reason || "Borrador incompleto" };
-      }
-      if (item.price_state === "estimated") {
-        return { ...item, qty, price_reason: item.price_reason || "Borrador incompleto" };
-      }
-      return { ...item, qty };
-    })),
-    [draft.items],
-  );
+  const totals = useMemo(() => previewTotals(draft.items), [draft.items]);
 
   const cuitOk = validateCuit(draft.vendor.cuit);
 
