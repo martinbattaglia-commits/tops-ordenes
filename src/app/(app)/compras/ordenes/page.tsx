@@ -61,7 +61,8 @@ export default async function OrdenesComprasPage({ searchParams }: PageProps) {
           <div className="eyebrow-tiny">Historial · {total} OC</div>
           <h1 className="page-title">Órdenes de Compra</h1>
           <p className="page-subtitle">
-            Filtros y exportación de comprobantes firmados por José Luis Rodríguez Silva.
+            Filtros y exportación de comprobantes. Cada OC lleva el nombre y el cargo de
+            quien la firmó.
           </p>
         </div>
         <div className="flex gap-2">

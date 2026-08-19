@@ -40,6 +40,16 @@ describe("clasificación del resultado de purchase_order_issue", () => {
   // HOTFIX-OC-EMISION-ATOMICA · el caso REPRODUCIDO en producción: un usuario
   // con compras.create y compras.sign que no es el apoderado. La RPC aborta
   // antes del nextval y hoy el operador recibe «reintentá en unos minutos».
+  //
+  // OC-FIRMANTE-POR-PERMISO · dos expectativas de este test envejecieron con el
+  // expediente y se corrigen acá:
+  //   · exigía la palabra «apoderado». Ya no hay UN apoderado: la firma es una
+  //     autoridad que Dirección concede por nombre, y el mensaje describe qué
+  //     falta en vez de nombrar a una persona.
+  //   · prohibía la subcadena /reintent/, que es demasiado tosca para lo que
+  //     el test quiere proteger. Lo que no puede hacer el mensaje es INVITAR a
+  //     reintentar; decir «reintentar va a fallar igual» es exactamente lo
+  //     contrario, y es la información que al operador le falta.
   it("nombra al firmante canónico y NUNCA ofrece reintentar", () => {
     const outcome = classifyIssueOutcome({
       issueError: {
@@ -54,8 +64,9 @@ describe("clasificación del resultado de purchase_order_issue", () => {
     if (outcome.ok) return;
     expect(outcome.kind).toBe("signer_not_canonical");
     expect(outcome.retryable).toBe(false);
-    expect(outcome.userMessage).not.toMatch(/reintent/i);
-    expect(outcome.userMessage).toMatch(/apoderado/i);
+    expect(outcome.userMessage).not.toMatch(/volvé a (emitir|intentar)|reintentá|probá de nuevo/i);
+    expect(outcome.userMessage).toMatch(/reintentar .* va a fallar igual/i);
+    expect(outcome.userMessage).toMatch(/no se creó ninguna orden/i);
     expect(outcome.log.sqlstate).toBe("42501");
     expect(outcome.log.message).toContain("firmante canónico");
   });

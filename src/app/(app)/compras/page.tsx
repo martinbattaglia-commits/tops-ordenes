@@ -21,7 +21,11 @@ export default async function ComprasDashboardPage() {
       <div className="page-header">
         <div>
           <div className="eyebrow-tiny">Compras inteligentes · 2026</div>
-          <h1 className="page-title">Buen día, José Luis.</h1>
+          {/* OC-FIRMANTE-POR-PERMISO · el saludo nombraba a una persona fija, y
+              desde 0259 el módulo lo usan tres. Se neutraliza en vez de
+              personalizarse: traer el perfil acá agregaría un await a una
+              página de entrada, que es justo lo que el módulo no admite. */}
+          <h1 className="page-title">Buen día.</h1>
           <p className="page-subtitle">
             {k.ocThisMonth} órdenes de compra emitidas este mes ·{" "}
             {fmtCurrencyShort(k.spendThisMonth)} con importe real
