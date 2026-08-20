@@ -91,7 +91,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // Resolver o crear conversación de WhatsApp
+    const candidates = [`wa:${phoneFormatted}`, `wa:+${phoneFormatted}`, phoneFormatted, `+${phoneFormatted}`];
     let conversationId: string | null = null;
     let handoverState = "BOT_ACTIVE";
 
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
       .from("connect_conversations")
       .select("id, handover_state")
       .eq("kind", "whatsapp")
-      .eq("context_id", phoneFormatted)
+      .in("context_id", candidates)
       .maybeSingle();
 
     if (existingConv) {
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
         .from("connect_conversations")
         .insert({
           kind: "whatsapp",
-          context_id: phoneFormatted,
+          context_id: `wa:${phoneFormatted}`,
           title: `WhatsApp ${phoneFormatted}`,
           handover_state: "BOT_ACTIVE",
         })

@@ -14,6 +14,31 @@ type AdminClient = {
   from?: (table: string) => any;
 };
 
+export function getContextIdCandidates(rawPhone: string): string[] {
+  const digits = String(rawPhone).replace(/\D/g, "");
+  const set = new Set<string>();
+  if (digits) {
+    set.add(`wa:${digits}`);
+    set.add(`wa:+${digits}`);
+    set.add(`+${digits}`);
+    set.add(digits);
+    if (digits.startsWith("549") && digits.length >= 12) {
+      const sin9 = `54${digits.slice(3)}`;
+      set.add(`wa:${sin9}`);
+      set.add(`wa:+${sin9}`);
+      set.add(`+${sin9}`);
+      set.add(sin9);
+    } else if (digits.startsWith("54") && !digits.startsWith("549") && digits.length >= 10) {
+      const con9 = `549${digits.slice(2)}`;
+      set.add(`wa:${con9}`);
+      set.add(`wa:+${con9}`);
+      set.add(`+${con9}`);
+      set.add(con9);
+    }
+  }
+  return Array.from(set);
+}
+
 export function createSupabaseMakeRelayPorts(admin: AdminClient): MakeRelayWorkerPorts {
   return {
     newToken: () => randomUUID(),
@@ -47,21 +72,75 @@ export function createSupabaseMakeRelayPorts(admin: AdminClient): MakeRelayWorke
           const entry = payload?.entry?.[0]?.changes?.[0]?.value;
           const fromNum = entry?.messages?.[0]?.from;
           if (fromNum) {
-            const phoneFormatted = String(fromNum).replace(/\D/g, "");
-            const { data: conv } = await admin
+            const candidates = getContextIdCandidates(String(fromNum));
+            const { data: convs } = await admin
               .from("connect_conversations")
-              .select("handover_state")
-              .eq("kind", "whatsapp")
-              .eq("context_id", phoneFormatted)
-              .maybeSingle();
+              .select("id, handover_state, is_bot_active, assigned_to, assigned_profile_id")
+              .in("context_id", candidates)
+              .limit(1);
 
-            if (conv?.handover_state === "PAUSED_HUMAN") {
-              console.log("[whatsapp] Relay omitido por Handover activo");
-              return { ok: true, state: "delivered" };
+            const conv = Array.isArray(convs) ? convs[0] : convs;
+
+            if (conv) {
+              // 1. Si el hilo está en PAUSED_HUMAN, bot desactivado o asignado a operador humano
+              if (
+                conv.handover_state === "PAUSED_HUMAN" ||
+                conv.is_bot_active === false ||
+                conv.assigned_to != null ||
+                conv.assigned_profile_id != null
+              ) {
+                console.log(`[whatsapp] Relay omitido por Handover activo (conv=${conv.id})`);
+                return { ok: true, state: "delivered" };
+              }
+
+              // 2. Comprobar si el último mensaje saliente fue enviado por un operador humano (no Max Bot)
+              const { data: recentMsgs } = await admin
+                .from("connect_messages")
+                .select("id, author_participant_id, author_profile_id, meta, created_at")
+                .eq("conversation_id", conv.id)
+                .order("created_at", { ascending: false })
+                .limit(10);
+
+              if (recentMsgs && recentMsgs.length > 0) {
+                const lastOutbound = (recentMsgs as Array<Record<string, any>>).find((m) => {
+                  const meta = m.meta ?? {};
+                  const waMeta = meta.wa ?? {};
+                  return (
+                    meta.direction === "outbound" ||
+                    waMeta.direction === "outbound" ||
+                    m.author_profile_id != null
+                  );
+                });
+
+                if (lastOutbound) {
+                  const meta = lastOutbound.meta ?? {};
+                  const waMeta = meta.wa ?? {};
+                  const isMaxBot =
+                    meta.sent_by === "max_bot" ||
+                    meta.author === "max_bot" ||
+                    meta.source === "make_relay" ||
+                    meta.is_bot === true ||
+                    waMeta.sent_by === "max_bot";
+
+                  if (!isMaxBot) {
+                    console.log(`[whatsapp] Relay omitido: último mensaje saliente de operador humano (conv=${conv.id})`);
+                    if (conv.handover_state !== "PAUSED_HUMAN") {
+                      await admin
+                        .from("connect_conversations")
+                        .update({
+                          handover_state: "PAUSED_HUMAN",
+                          handover_at: new Date().toISOString(),
+                        })
+                        .eq("id", conv.id);
+                    }
+                    return { ok: true, state: "delivered" };
+                  }
+                }
+              }
             }
           }
         } catch {
-          // continuar con relay standard si no es parseable
+          // continuar con relay standard ante excepciones no controladas de parsing
         }
       }
 
