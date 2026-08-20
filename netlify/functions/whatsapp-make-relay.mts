@@ -1,7 +1,10 @@
 // Puente durable Nexus → Make. El webhook intenta entrega inmediata; este cron
 // recupera timeouts/caídas desde la outbox sin depender de reintentos de Meta.
 export default async () => {
-  const base = process.env.URL;
+  // En un Draft, URL sigue apuntando al dominio productivo. DEPLOY_PRIME_URL
+  // identifica el deploy exacto que contiene esta función y evita que el smoke
+  // de preview ejecute accidentalmente el route handler de producción.
+  const base = process.env.DEPLOY_PRIME_URL ?? process.env.URL;
   const secret = process.env.CRON_SECRET;
   if (!base || !secret) {
     console.error("[whatsapp-make-relay] misconfigured");
