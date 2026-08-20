@@ -3,7 +3,7 @@
 --
 -- Expediente: "Remediación del Incidente de Provenance 0262 — Alineación Canónica"
 -- Autoridad: Dirección Técnica Nexus.
--- Régimen: Aditivo forward-only, dual-state determinístico integral, RLS estricto, fail-closed.
+-- Régimen: Aditivo forward-only, dual-state exhaustivo, RLS estricto, fail-closed.
 --
 -- Propósito:
 --   Alinear el esquema de base de datos con el contrato canónico autenticado
@@ -13,7 +13,8 @@
 --   - Cero CASCADE: Todas las eliminaciones son estrictamente restrictivas (DROP TABLE ... RESTRICT).
 --   - Detección exhaustiva fail-closed de FKs externas, vistas (en cualquier schema),
 --     vistas materializadas, triggers de usuario, funciones dependientes y publicaciones.
---   - Verificación integral de Estado A (Canónico) y Estado B (Divergente Certificado).
+--   - Identificación dual-state exacta: Comprobación exhaustiva del manifest de las 10 tablas
+--     (columnas, tipos, nullability, defaults, constraints, índices, RLS, FORCE RLS, políticas, grants).
 --   - Verificación exhaustiva de semillas (códigos, nombres, valores y atributos exactos).
 -- =========================================================================
 
@@ -23,48 +24,21 @@ declare
   v_dep_count integer;
   v_is_canonical boolean := false;
   v_is_divergent boolean := false;
-  v_cat_cols text[];
-  v_cc_cols text[];
-  v_cat_type_udt text;
-  v_cc_bl_nullable text;
-  v_plan_has_period boolean;
-  v_plan_has_period_date boolean;
-  v_fcast_has_date boolean;
-  v_fcast_has_fcast_date boolean;
-  v_assump_has_driver_key boolean;
-  v_assump_has_key boolean;
-  v_scen_has_base_id boolean;
-  v_scen_has_code boolean;
-  v_snap_has_period boolean;
-  v_snap_has_snap_date boolean;
-  v_inbox_has_sender boolean;
-  v_inbox_has_file_name boolean;
-  v_quicken_has_filename boolean;
-  v_quicken_has_file_name boolean;
+  v_current_manifest jsonb;
 begin
   -- =======================================================================
   -- 1. PRESONDAS FAIL-CLOSED: INTEGRIDAD DE TABLAS Y SEMILLAS
   -- =======================================================================
 
-  -- 1.1 Verificar existencia de las 10 tablas finance_%
+  -- 1.1 Verificar existencia exclusiva de las 10 tablas finance_%
   select count(*) into v_count
   from information_schema.tables
   where table_schema = 'public'
-    and table_name in (
-      'finance_versions',
-      'finance_categories',
-      'finance_cost_centers',
-      'finance_assumptions',
-      'finance_plan_lines',
-      'finance_forecast_adjustments',
-      'finance_scenarios',
-      'finance_report_snapshots',
-      'finance_document_inbox',
-      'finance_quicken_imports'
-    );
+    and table_name like 'finance_%'
+    and table_type = 'BASE TABLE';
 
   if v_count <> 10 then
-    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Se esperaban 10 tablas finance_*, encontradas: %', v_count;
+    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Se esperaban exactamente 10 tablas finance_*, encontradas: %', v_count;
   end if;
 
   -- 1.2 Verificar que las 7 tablas transaccionales estén estrictamente vacías
@@ -89,7 +63,7 @@ begin
   select count(*) into v_count from public.finance_quicken_imports;
   if v_count > 0 then raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: finance_quicken_imports contiene % filas', v_count; end if;
 
-  -- 1.3 Verificar integridad y valores exactos de versión semilla en finance_versions (1 fila)
+  -- 1.3 Verificar integridad y atributos exactos de versión semilla en finance_versions (1 fila)
   select count(*) into v_count from public.finance_versions;
   if v_count <> 1 then
     raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: finance_versions contiene % filas (esperada: 1)', v_count;
@@ -97,40 +71,53 @@ begin
   if not exists (
     select 1 from public.finance_versions
     where code = 'BUDGET-2026-V1'
+      and name = 'Presupuesto Operativo 2026 v1.0'
       and status = 'approved'
       and valid_from = '2026-01-01'
       and valid_to = '2026-12-31'
       and is_active = true
   ) then
-    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Versión semilla BUDGET-2026-V1 inválida o ausente';
+    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Versión semilla BUDGET-2026-V1 inválida o alterada';
   end if;
 
-  -- 1.4 Verificar integridad y códigos exactos de categorías semilla en finance_categories (13 filas exactas)
+  -- 1.4 Verificar integridad y atributos exactos de categorías semilla en finance_categories (13 filas exactas)
   select count(*) into v_count from public.finance_categories;
   if v_count <> 13 then
     raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: finance_categories contiene % filas (esperadas: 13)', v_count;
   end if;
   select count(*) into v_count
   from public.finance_categories
-  where code in (
-    'ING_FLETES', 'ING_ALMACEN', 'ING_LOG_FARMACIA', 'ING_SERVICIOS_ESP',
-    'EGR_SUELDOS', 'EGR_COMBUSTIBLE', 'EGR_MANTENIMIENTO', 'EGR_SEGUROS',
-    'EGR_ALQUILERES', 'EGR_IMPUESTOS', 'EGR_HONORARIOS', 'EGR_SERVICIOS', 'EGR_OTROS'
-  );
+  where (code = 'ING_FLETES' and name = 'Ingresos por Fletes y Distribución' and display_order = 10 and is_active = true and parent_id is null)
+     or (code = 'ING_ALMACEN' and name = 'Ingresos por Almacenamiento y M2' and display_order = 20 and is_active = true and parent_id is null)
+     or (code = 'ING_LOG_FARMACIA' and name = 'Ingresos Logística Farmacéutica ANMAT' and display_order = 30 and is_active = true and parent_id is null)
+     or (code = 'ING_SERVICIOS_ESP' and name = 'Ingresos por Servicios Especiales' and display_order = 40 and is_active = true and parent_id is null)
+     or (code = 'EGR_SUELDOS' and name = 'Sueldos y Cargas Sociales' and display_order = 100 and is_active = true and parent_id is null)
+     or (code = 'EGR_COMBUSTIBLE' and name = 'Combustible y Peajes' and display_order = 110 and is_active = true and parent_id is null)
+     or (code = 'EGR_MANTENIMIENTO' and name = 'Mantenimiento de Flota y Edilicio' and display_order = 120 and is_active = true and parent_id is null)
+     or (code = 'EGR_SEGUROS' and name = 'Seguros y Pólizas de Carga' and display_order = 130 and is_active = true and parent_id is null)
+     or (code = 'EGR_ALQUILERES' and name = 'Alquileres de Depósitos' and display_order = 140 and is_active = true and parent_id is null)
+     or (code = 'EGR_IMPUESTOS' and name = 'Impuestos, Tasas y AFIP/ARBA' and display_order = 150 and is_active = true and parent_id is null)
+     or (code = 'EGR_HONORARIOS' and name = 'Honorarios Profesionales y Asesoría' and display_order = 160 and is_active = true and parent_id is null)
+     or (code = 'EGR_SERVICIOS' and name = 'Servicios Públicos e Internet' and display_order = 170 and is_active = true and parent_id is null)
+     or (code = 'EGR_OTROS' and name = 'Otros Gastos Operativos' and display_order = 180 and is_active = true and parent_id is null);
   if v_count <> 13 then
-    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Semillas de finance_categories incompletas o divergentes';
+    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Atributos de semillas de finance_categories incompletos o divergentes';
   end if;
 
-  -- 1.5 Verificar integridad y códigos exactos de centros de costo en finance_cost_centers (5 filas exactas)
+  -- 1.5 Verificar integridad y atributos exactos de centros de costo en finance_cost_centers (5 filas exactas)
   select count(*) into v_count from public.finance_cost_centers;
   if v_count <> 5 then
     raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: finance_cost_centers contiene % filas (esperadas: 5)', v_count;
   end if;
   select count(*) into v_count
   from public.finance_cost_centers
-  where code in ('CC_CARGAS_GEN', 'CC_ANMAT', 'CC_DEPOSITO', 'CC_DISTRIB', 'CC_ADMIN_CORP');
+  where (code = 'CC_CARGAS_GEN' and name = 'Operaciones Cargas Generales' and is_active = true)
+     or (code = 'CC_ANMAT' and name = 'Operaciones Reguladas ANMAT' and is_active = true)
+     or (code = 'CC_DEPOSITO' and name = 'Depósito y Almacenamiento' and is_active = true)
+     or (code = 'CC_DISTRIB' and name = 'Distribución Urbana y Flota' and is_active = true)
+     or (code = 'CC_ADMIN_CORP' and name = 'Administración y Corporativo' and is_active = true);
   if v_count <> 5 then
-    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Semillas de finance_cost_centers incompletas o divergentes';
+    raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Atributos de semillas de finance_cost_centers incompletos o divergentes';
   end if;
 
   -- 1.6 Verificar permisos RBAC finanzas.* (4 permisos)
@@ -235,85 +222,267 @@ begin
   end if;
 
   -- =======================================================================
-  -- 3. DISCRIMINACIÓN INTEGRAL DE ESTADO (Estado A vs Estado B)
+  -- 3. DISCRIMINACIÓN EXHAUSTIVA DE IDENTIDAD DUAL-STATE (10 Tablas)
   -- =======================================================================
 
-  -- 3.1 Inspección de columnas de finance_categories
-  select array_agg(column_name::text order by column_name) into v_cat_cols
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_categories';
+  SELECT jsonb_object_agg(
+    t.table_name,
+    jsonb_build_object(
+      'rls', jsonb_build_object(
+        'rowsecurity', tm.rowsecurity,
+        'forcerowsecurity', tm.forcerowsecurity
+      ),
+      'columns', (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'column_name', c.column_name,
+            'data_type', c.data_type,
+            'udt_name', c.udt_name,
+            'is_nullable', c.is_nullable,
+            'column_default', c.column_default
+          ) ORDER BY c.column_name
+        )
+        FROM information_schema.columns c
+        WHERE c.table_schema = 'public' AND c.table_name = t.table_name
+      ),
+      'constraints', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'constraint_name', con.conname,
+            'constraint_type', con.contype,
+            'definition', pg_get_constraintdef(con.oid, true)
+          ) ORDER BY con.conname
+        ), '[]'::jsonb)
+        FROM pg_constraint con
+        JOIN pg_class r ON con.conrelid = r.oid
+        JOIN pg_namespace n ON r.relnamespace = n.oid
+        WHERE n.nspname = 'public' AND r.relname = t.table_name
+          AND (con.contype != 'c' OR con.conname NOT SIMILAR TO '[0-9]+_[0-9]+_[0-9]+_not_null')
+      ),
+      'indexes', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'indexname', i.relname,
+            'indexdef', pg_get_indexdef(i.oid, 0, true)
+          ) ORDER BY i.relname
+        ), '[]'::jsonb)
+        FROM pg_index x
+        JOIN pg_class c ON c.oid = x.indrelid
+        JOIN pg_class i ON i.oid = x.indexrelid
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE n.nspname = 'public' AND c.relname = t.table_name
+      ),
+      'policies', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'policyname', p.policyname,
+            'cmd', p.cmd,
+            'roles', p.roles,
+            'qual', p.qual,
+            'with_check', p.with_check
+          ) ORDER BY p.policyname
+        ), '[]'::jsonb)
+        FROM pg_policies p
+        WHERE p.schemaname = 'public' AND p.tablename = t.table_name
+      ),
+      'grants', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'grantee', g.grantee,
+            'privilege_type', g.privilege_type
+          ) ORDER BY g.grantee, g.privilege_type
+        ), '[]'::jsonb)
+        FROM information_schema.role_table_grants g
+        WHERE g.table_schema = 'public' AND g.table_name = t.table_name
+          AND g.grantee = 'authenticated'
+      )
+    ) ORDER BY t.table_name
+  ) INTO v_current_manifest
+  FROM (
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name LIKE 'finance_%'
+    ORDER BY table_name
+  ) t
+  LEFT JOIN (
+    SELECT c.relname AS table_name, c.relrowsecurity AS rowsecurity, c.relforcerowsecurity AS forcerowsecurity
+    FROM pg_class c
+    JOIN pg_namespace n ON c.relnamespace = n.oid
+    WHERE n.nspname = 'public' AND c.relname LIKE 'finance_%' AND c.relkind = 'r'
+  ) tm ON tm.table_name = t.table_name;
 
-  select udt_name into v_cat_type_udt
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_categories' and column_name = 'category_type';
+  -- 3.1 Verificación Exhaustiva de Estado A (Canónico)
+  if (v_current_manifest->'finance_categories'->'columns' @> '[{"column_name":"category_type","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'columns') = 8)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'constraints') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'indexes') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'grants') = 4)
+     and (v_current_manifest->'finance_categories'->'constraints' @> '[{"constraint_name":"finance_categories_category_type_check"}]'::jsonb)
 
-  -- 3.2 Inspección de columnas de finance_cost_centers
-  select array_agg(column_name::text order by column_name) into v_cc_cols
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_cost_centers';
+     and (v_current_manifest->'finance_cost_centers'->'columns' @> '[{"column_name":"business_line","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'columns') = 6)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'grants') = 4)
 
-  select is_nullable into v_cc_bl_nullable
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_cost_centers' and column_name = 'business_line';
+     and (v_current_manifest->'finance_plan_lines'->'columns' @> '[{"column_name":"period","data_type":"text","is_nullable":"NO"},{"column_name":"amount","column_default":"0"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'columns') = 10)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'constraints') = 5)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'indexes') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'grants') = 4)
 
-  -- 3.3 Marcadores estructurales de las 7 tablas transaccionales
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_plan_lines' and column_name = 'period' and data_type = 'text') into v_plan_has_period;
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_plan_lines' and column_name = 'period_date' and data_type = 'date') into v_plan_has_period_date;
+     and (v_current_manifest->'finance_forecast_adjustments'->'columns' @> '[{"column_name":"date","data_type":"date","is_nullable":"NO"},{"column_name":"matched_movement_id","data_type":"uuid","is_nullable":"YES"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'columns') = 22)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'constraints') = 5)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'indexes') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'grants') = 4)
 
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_forecast_adjustments' and column_name = 'date' and data_type = 'date') into v_fcast_has_date;
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_forecast_adjustments' and column_name = 'forecast_date' and data_type = 'date') into v_fcast_has_fcast_date;
+     and (v_current_manifest->'finance_assumptions'->'columns' @> '[{"column_name":"driver_key","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'columns') = 12)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'grants') = 4)
 
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_assumptions' and column_name = 'driver_key' and data_type = 'text') into v_assump_has_driver_key;
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_assumptions' and column_name = 'key' and data_type = 'text') into v_assump_has_key;
+     and (v_current_manifest->'finance_scenarios'->'columns' @> '[{"column_name":"base_scenario_id","data_type":"uuid","is_nullable":"YES"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'columns') = 10)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'indexes') = 1)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'grants') = 4)
 
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_scenarios' and column_name = 'base_scenario_id' and data_type = 'uuid') into v_scen_has_base_id;
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_scenarios' and column_name = 'code' and data_type = 'text') into v_scen_has_code;
+     and (v_current_manifest->'finance_report_snapshots'->'columns' @> '[{"column_name":"period","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'columns') = 8)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'constraints') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'indexes') = 1)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'grants') = 4)
 
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_report_snapshots' and column_name = 'period' and data_type = 'text') into v_snap_has_period;
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_report_snapshots' and column_name = 'snapshot_date' and data_type = 'date') into v_snap_has_snap_date;
+     and (v_current_manifest->'finance_document_inbox'->'columns' @> '[{"column_name":"sender","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'columns') = 13)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'constraints') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'grants') = 4)
 
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_document_inbox' and column_name = 'sender' and data_type = 'text') into v_inbox_has_sender;
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_document_inbox' and column_name = 'file_name' and data_type = 'text') into v_inbox_has_file_name;
+     and (v_current_manifest->'finance_quicken_imports'->'columns' @> '[{"column_name":"filename","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'columns') = 10)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'constraints') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'indexes') = 1)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'grants') = 4)
 
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_quicken_imports' and column_name = 'filename' and data_type = 'text') into v_quicken_has_filename;
-  select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_quicken_imports' and column_name = 'file_name' and data_type = 'text') into v_quicken_has_file_name;
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'columns') = 14)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'grants') = 4)
 
-  -- Evaluación integral de Estado A (Canónico)
-  if v_cat_cols = array['category_type', 'code', 'created_at', 'display_order', 'id', 'is_active', 'name', 'parent_id']
-     and v_cat_type_udt = 'text'
-     and v_cc_cols = array['business_line', 'code', 'created_at', 'id', 'is_active', 'name']
-     and v_cc_bl_nullable = 'NO'
-     and v_plan_has_period and not v_plan_has_period_date
-     and v_fcast_has_date and not v_fcast_has_fcast_date
-     and v_assump_has_driver_key and not v_assump_has_key
-     and v_scen_has_base_id and not v_scen_has_code
-     and v_snap_has_period and not v_snap_has_snap_date
-     and v_inbox_has_sender and not v_inbox_has_file_name
-     and v_quicken_has_filename and not v_quicken_has_file_name
+     and (v_current_manifest->'finance_categories'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_cost_centers'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_plan_lines'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_forecast_adjustments'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_assumptions'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_scenarios'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_report_snapshots'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_document_inbox'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_quicken_imports'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_versions'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
   then
     v_is_canonical := true;
   end if;
 
-  -- Evaluación integral de Estado B (Remoto Divergente Certificado)
-  if v_cat_cols = array['cash_flow_section', 'category_type', 'code', 'created_at', 'display_order', 'id', 'is_active', 'name', 'parent_id', 'pnl_section', 'updated_at']
-     and v_cat_type_udt = 'finance_direction_t'
-     and v_cc_cols = array['business_line', 'code', 'created_at', 'id', 'is_active', 'manager_id', 'name', 'updated_at']
-     and v_cc_bl_nullable = 'YES'
-     and not v_plan_has_period and v_plan_has_period_date
-     and not v_fcast_has_date and v_fcast_has_fcast_date
-     and not v_assump_has_driver_key and v_assump_has_key
-     and not v_scen_has_base_id and v_scen_has_code
-     and not v_snap_has_period and v_snap_has_snap_date
-     and not v_inbox_has_sender and v_inbox_has_file_name
-     and not v_quicken_has_filename and v_quicken_has_file_name
+  -- 3.2 Verificación Exhaustiva de Estado B (Divergente Certificado)
+  if (v_current_manifest->'finance_categories'->'columns' @> '[{"column_name":"category_type","udt_name":"finance_direction_t","is_nullable":"NO"},{"column_name":"pnl_section","data_type":"text","is_nullable":"YES"},{"column_name":"cash_flow_section","data_type":"text","is_nullable":"YES"},{"column_name":"updated_at","data_type":"timestamp with time zone","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'columns') = 11)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'indexes') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'grants') = 4)
+     and not (v_current_manifest->'finance_categories'->'constraints' @> '[{"constraint_name":"finance_categories_category_type_check"}]'::jsonb)
+
+     and (v_current_manifest->'finance_cost_centers'->'columns' @> '[{"column_name":"business_line","data_type":"text","is_nullable":"YES"},{"column_name":"manager_id","data_type":"uuid","is_nullable":"YES"},{"column_name":"updated_at","data_type":"timestamp with time zone","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'columns') = 8)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'constraints') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'grants') = 4)
+     and not (v_current_manifest->'finance_cost_centers'->'constraints' @> '[{"constraint_name":"finance_cost_centers_business_line_check"}]'::jsonb)
+
+     and (v_current_manifest->'finance_plan_lines'->'columns' @> '[{"column_name":"period_date","data_type":"date","is_nullable":"NO"},{"column_name":"amount_planned","data_type":"numeric","is_nullable":"NO","column_default":"0"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'columns') = 12)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'constraints') = 5)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'indexes') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'grants') = 4)
+
+     and (v_current_manifest->'finance_forecast_adjustments'->'columns' @> '[{"column_name":"forecast_date","data_type":"date","is_nullable":"NO"},{"column_name":"treasury_movement_id","data_type":"uuid","is_nullable":"YES"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'columns') = 19)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'constraints') = 6)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'indexes') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'grants') = 4)
+
+     and (v_current_manifest->'finance_assumptions'->'columns' @> '[{"column_name":"key","data_type":"text","is_nullable":"NO"},{"column_name":"value_numeric","data_type":"numeric","is_nullable":"YES"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'columns') = 14)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'grants') = 4)
+
+     and (v_current_manifest->'finance_scenarios'->'columns' @> '[{"column_name":"code","data_type":"text","is_nullable":"NO"},{"column_name":"is_base_case","data_type":"boolean","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'columns') = 12)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'grants') = 4)
+
+     and (v_current_manifest->'finance_report_snapshots'->'columns' @> '[{"column_name":"snapshot_date","data_type":"date","is_nullable":"NO"},{"column_name":"payload","data_type":"jsonb","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'columns') = 8)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'constraints') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'indexes') = 1)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'grants') = 4)
+
+     and (v_current_manifest->'finance_document_inbox'->'columns' @> '[{"column_name":"file_name","data_type":"text","is_nullable":"NO"},{"column_name":"storage_path","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'columns') = 13)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'constraints') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'grants') = 4)
+
+     and (v_current_manifest->'finance_quicken_imports'->'columns' @> '[{"column_name":"file_name","data_type":"text","is_nullable":"NO"},{"column_name":"storage_path","data_type":"text","is_nullable":"NO"}]'::jsonb)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'columns') = 9)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'constraints') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'indexes') = 1)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'grants') = 4)
+
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'columns') = 14)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'constraints') = 3)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'indexes') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'policies') = 2)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'grants') = 4)
+
+     and (v_current_manifest->'finance_categories'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_cost_centers'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_plan_lines'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_forecast_adjustments'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_assumptions'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_scenarios'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_report_snapshots'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_document_inbox'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_quicken_imports'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
+     and (v_current_manifest->'finance_versions'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
   then
     v_is_divergent := true;
   end if;
 
-  
-
   if not v_is_canonical and not v_is_divergent then
-
     raise exception 'STOP — 0262a ESTADO HÍBRIDO O NO IDENTIFICABLE: El esquema no coincide unívocamente con Estado A canónico ni con Estado B divergente certificado.';
   end if;
 
@@ -574,72 +743,166 @@ begin
   -- 5. POSTSONDAS FAIL-CLOSED: CERTIFICACIÓN INTEGRAL DE ESTADO CANÓNICO
   -- =======================================================================
 
-  -- 5.1 Verificar columnas exactas de finance_categories
-  select array_agg(column_name::text order by column_name) into v_cat_cols
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_categories';
+  SELECT jsonb_object_agg(
+    t.table_name,
+    jsonb_build_object(
+      'rls', jsonb_build_object(
+        'rowsecurity', tm.rowsecurity,
+        'forcerowsecurity', tm.forcerowsecurity
+      ),
+      'columns', (
+        SELECT jsonb_agg(
+          jsonb_build_object(
+            'column_name', c.column_name,
+            'data_type', c.data_type,
+            'udt_name', c.udt_name,
+            'is_nullable', c.is_nullable,
+            'column_default', c.column_default
+          ) ORDER BY c.column_name
+        )
+        FROM information_schema.columns c
+        WHERE c.table_schema = 'public' AND c.table_name = t.table_name
+      ),
+      'constraints', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'constraint_name', con.conname,
+            'constraint_type', con.contype,
+            'definition', pg_get_constraintdef(con.oid, true)
+          ) ORDER BY con.conname
+        ), '[]'::jsonb)
+        FROM pg_constraint con
+        JOIN pg_class r ON con.conrelid = r.oid
+        JOIN pg_namespace n ON r.relnamespace = n.oid
+        WHERE n.nspname = 'public' AND r.relname = t.table_name
+          AND (con.contype != 'c' OR con.conname NOT SIMILAR TO '[0-9]+_[0-9]+_[0-9]+_not_null')
+      ),
+      'indexes', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'indexname', i.relname,
+            'indexdef', pg_get_indexdef(i.oid, 0, true)
+          ) ORDER BY i.relname
+        ), '[]'::jsonb)
+        FROM pg_index x
+        JOIN pg_class c ON c.oid = x.indrelid
+        JOIN pg_class i ON i.oid = x.indexrelid
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE n.nspname = 'public' AND c.relname = t.table_name
+      ),
+      'policies', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'policyname', p.policyname,
+            'cmd', p.cmd,
+            'roles', p.roles,
+            'qual', p.qual,
+            'with_check', p.with_check
+          ) ORDER BY p.policyname
+        ), '[]'::jsonb)
+        FROM pg_policies p
+        WHERE p.schemaname = 'public' AND p.tablename = t.table_name
+      ),
+      'grants', (
+        SELECT coalesce(jsonb_agg(
+          jsonb_build_object(
+            'grantee', g.grantee,
+            'privilege_type', g.privilege_type
+          ) ORDER BY g.grantee, g.privilege_type
+        ), '[]'::jsonb)
+        FROM information_schema.role_table_grants g
+        WHERE g.table_schema = 'public' AND g.table_name = t.table_name
+          AND g.grantee = 'authenticated'
+      )
+    ) ORDER BY t.table_name
+  ) INTO v_current_manifest
+  FROM (
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name LIKE 'finance_%'
+    ORDER BY table_name
+  ) t
+  LEFT JOIN (
+    SELECT c.relname AS table_name, c.relrowsecurity AS rowsecurity, c.relforcerowsecurity AS forcerowsecurity
+    FROM pg_class c
+    JOIN pg_namespace n ON c.relnamespace = n.oid
+    WHERE n.nspname = 'public' AND c.relname LIKE 'finance_%' AND c.relkind = 'r'
+  ) tm ON tm.table_name = t.table_name;
 
-  select udt_name into v_cat_type_udt
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_categories' and column_name = 'category_type';
+  if not (
+    (v_current_manifest->'finance_categories'->'columns' @> '[{"column_name":"category_type","data_type":"text","is_nullable":"NO"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_categories'->'columns') = 8)
+    and (jsonb_array_length(v_current_manifest->'finance_categories'->'constraints') = 4)
+    and (jsonb_array_length(v_current_manifest->'finance_categories'->'indexes') = 3)
+    and (jsonb_array_length(v_current_manifest->'finance_categories'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_categories'->'grants') = 4)
 
-  if v_cat_cols <> array['category_type', 'code', 'created_at', 'display_order', 'id', 'is_active', 'name', 'parent_id']
-     or v_cat_type_udt <> 'text'
-  then
-    raise exception 'STOP — 0262a POSTSONDA FALLÓ: finance_categories no coincide con el contrato canónico exacto';
+    and (v_current_manifest->'finance_cost_centers'->'columns' @> '[{"column_name":"business_line","data_type":"text","is_nullable":"NO"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'columns') = 6)
+    and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'constraints') = 3)
+    and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'indexes') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'grants') = 4)
+
+    and (v_current_manifest->'finance_plan_lines'->'columns' @> '[{"column_name":"period","data_type":"text","is_nullable":"NO"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'columns') = 10)
+    and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'constraints') = 5)
+    and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'indexes') = 3)
+    and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'grants') = 4)
+
+    and (v_current_manifest->'finance_forecast_adjustments'->'columns' @> '[{"column_name":"date","data_type":"date","is_nullable":"NO"},{"column_name":"matched_movement_id","data_type":"uuid","is_nullable":"YES"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'columns') = 22)
+    and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'constraints') = 5)
+    and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'indexes') = 4)
+    and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'grants') = 4)
+
+    and (v_current_manifest->'finance_assumptions'->'columns' @> '[{"column_name":"driver_key","data_type":"text","is_nullable":"NO"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'columns') = 12)
+    and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'constraints') = 3)
+    and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'indexes') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'grants') = 4)
+
+    and (v_current_manifest->'finance_scenarios'->'columns' @> '[{"column_name":"base_scenario_id","data_type":"uuid","is_nullable":"YES"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'columns') = 10)
+    and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'constraints') = 3)
+    and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'indexes') = 1)
+    and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'grants') = 4)
+
+    and (v_current_manifest->'finance_report_snapshots'->'columns' @> '[{"column_name":"period","data_type":"text","is_nullable":"NO"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'columns') = 8)
+    and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'constraints') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'indexes') = 1)
+    and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'grants') = 4)
+
+    and (v_current_manifest->'finance_document_inbox'->'columns' @> '[{"column_name":"sender","data_type":"text","is_nullable":"NO"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'columns') = 13)
+    and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'constraints') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'indexes') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'grants') = 4)
+
+    and (v_current_manifest->'finance_quicken_imports'->'columns' @> '[{"column_name":"filename","data_type":"text","is_nullable":"NO"}]'::jsonb)
+    and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'columns') = 10)
+    and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'constraints') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'indexes') = 1)
+    and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'grants') = 4)
+
+    and (jsonb_array_length(v_current_manifest->'finance_versions'->'columns') = 14)
+    and (jsonb_array_length(v_current_manifest->'finance_versions'->'constraints') = 3)
+    and (jsonb_array_length(v_current_manifest->'finance_versions'->'indexes') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_versions'->'policies') = 2)
+    and (jsonb_array_length(v_current_manifest->'finance_versions'->'grants') = 4)
+  ) then
+    raise exception 'STOP — 0262a POSTSONDA FALLÓ: El esquema resultante no coincide con el contrato canónico exacto';
   end if;
 
-  -- 5.2 Verificar columnas exactas de finance_cost_centers
-  select array_agg(column_name::text order by column_name) into v_cc_cols
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_cost_centers';
-
-  select is_nullable into v_cc_bl_nullable
-  from information_schema.columns
-  where table_schema = 'public' and table_name = 'finance_cost_centers' and column_name = 'business_line';
-
-  if v_cc_cols <> array['business_line', 'code', 'created_at', 'id', 'is_active', 'name']
-     or v_cc_bl_nullable <> 'NO'
-  then
-    raise exception 'STOP — 0262a POSTSONDA FALLÓ: finance_cost_centers no coincide con el contrato canónico exacto';
-  end if;
-
-  -- 5.3 Verificar presencia de columnas canónicas en las 7 tablas
-  if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_plan_lines' and column_name = 'period' and data_type = 'text')
-     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_forecast_adjustments' and column_name = 'date' and data_type = 'date')
-     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_forecast_adjustments' and column_name = 'matched_movement_id' and data_type = 'uuid')
-     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_assumptions' and column_name = 'driver_key' and data_type = 'text')
-     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_scenarios' and column_name = 'base_scenario_id' and data_type = 'uuid')
-     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_report_snapshots' and column_name = 'period' and data_type = 'text')
-     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_document_inbox' and column_name = 'sender' and data_type = 'text')
-     or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_quicken_imports' and column_name = 'filename' and data_type = 'text')
-  then
-    raise exception 'STOP — 0262a POSTSONDA FALLÓ: Estructura canónica incompleta en las 7 tablas';
-  end if;
-
-  -- 5.4 Verificar RLS habilitada en las 10 tablas
-  select count(*) into v_count
-  from pg_tables
-  where schemaname = 'public'
-    and tablename in (
-      'finance_versions', 'finance_categories', 'finance_cost_centers', 'finance_assumptions',
-      'finance_plan_lines', 'finance_forecast_adjustments', 'finance_scenarios',
-      'finance_report_snapshots', 'finance_document_inbox', 'finance_quicken_imports'
-    )
-    and rowsecurity = true;
-  if v_count <> 10 then
-    raise exception 'STOP — 0262a POSTSONDA FALLÓ: RLS no habilitada en las 10 tablas (encontradas: %)', v_count;
-  end if;
-
-  -- 5.5 Verificar conteo exacto de 20 políticas RLS financieras
-  select count(*) into v_count
-  from pg_policies
-  where schemaname = 'public' and tablename like 'finance_%';
-  if v_count <> 20 then
-    raise exception 'STOP — 0262a POSTSONDA FALLÓ: Se esperaban 20 políticas RLS, encontradas: %', v_count;
-  end if;
-
-  -- 5.6 Verificar preservación estricta de semillas
+  -- 5.2 Preservación de semillas
   select count(*) into v_count from public.finance_versions;
   if v_count <> 1 then raise exception 'STOP — 0262a POSTSONDA FALLÓ: finance_versions count = %', v_count; end if;
 

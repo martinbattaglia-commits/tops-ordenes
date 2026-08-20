@@ -141,8 +141,8 @@ describe("T-A0-13 · reporte de corrida", () => {
     // CUSTODIA-NIVEL-CONTRATADO (t-cli-a3-01: lo ya materializado no se degrada
     // cuando el cliente da de baja la custodia, y la puerta de la RPC) = 859;
     // + 9 de remediación 0261 (desambiguación connect_archive_conversation) y precursora 0261a (enums RBAC Finanzas) = 868;
-    // + 11 de remediación 0262a (alineación canónica dual-state del esquema de Finanzas) = 879.
-    expect(EXPECTED_TOTAL_TESTS).toBe(879);
+    // + 24 de remediación 0262a (alineación canónica dual-state del esquema de Finanzas) = 892.
+    expect(EXPECTED_TOTAL_TESTS).toBe(892);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {
