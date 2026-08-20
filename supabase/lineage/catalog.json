@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 225,
-  "no_ejecutables": 35,
+  "ejecutables": 226,
+  "no_ejecutables": 36,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -3017,16 +3017,40 @@
       "motivo": "Inversa lógica asociada a 0261; no integra el plan forward."
     },
     {
+      "id": "0262_finance_core_foundation.sql",
+      "filename": "0262_finance_core_foundation.sql",
+      "sha256": "1908587594777b7e9dfd6b2d629f578a6b0edc1985b0f4f47b36038879a42d63",
+      "orden": 259,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00259",
+      "ledger_name": "0262_finance_core_foundation",
+      "provenance": "repo (frente/finanzas-quicken)",
+      "motivo": "Fundacion del modulo nativo NEXUS Finanzas: tablas finance_*, RLS y RBAC finanzas.*"
+    },
+    {
+      "id": "ROLLBACK_0262_finance_core_foundation.sql",
+      "filename": "ROLLBACK_0262_finance_core_foundation.sql",
+      "sha256": "250b56f7fa0f0a9cd585e4d5019d78d595f6f627b692c71f13ea7ae77e31cf85",
+      "orden": 260,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00260",
+      "ledger_name": "ROLLBACK_0262_finance_core_foundation",
+      "provenance": "repo (frente/finanzas-quicken)",
+      "motivo": "Inversa logica e idempotente de 0262"
+    },
+    {
       "id": "0263_custody_pod_signature_and_reception_idempotency.sql",
       "filename": "0263_custody_pod_signature_and_reception_idempotency.sql",
       "sha256": "ebcd157062c35747fc12925e83ca7e848be726bfb5fee16acd1b5f47632be395",
-      "orden": 259,
+      "orden": 261,
       "requires": [
         "0253_custody_egress_gate.sql",
         "0258_custody_evaluated_head_witness.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00259",
+      "ledger_version": "L00261",
       "ledger_name": "0263_custody_pod_signature_and_reception_idempotency",
       "provenance": "repo (codex/remediacion-custodia-wms)",
       "motivo": "Endurece firma y POD con capacidad explícita, atestación server-side y snapshot de liberación; retira las vías legacy manipulables y hace atómica e idempotente la creación-confirmación de recepciones WMS."
@@ -3035,10 +3059,10 @@
       "id": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
       "filename": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
       "sha256": "263fa1b5e84aae4095c150673124e286a65e297c961d12880ef21a5263e4706b",
-      "orden": 260,
+      "orden": 262,
       "requires": [],
       "estado": "rollback",
-      "ledger_version": "L00260",
+      "ledger_version": "L00262",
       "ledger_name": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency",
       "provenance": "repo (codex/remediacion-custodia-wms)",
       "motivo": "Inversa lógica data-preserving de 0263: retira superficies nuevas, restaura RPC legacy y conserva ledgers de idempotencia y autorizaciones si contienen auditoría."

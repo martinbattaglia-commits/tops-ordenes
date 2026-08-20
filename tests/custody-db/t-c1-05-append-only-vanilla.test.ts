@@ -353,6 +353,13 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
     expect(BASE).toMatch(/^[0-9a-f]{40}$/);
     // Se resolvió por un ref nombrado, no por el padre del HEAD.
     const porRef = REFS_BASE.some((ref) => {
+      try {
+        const mergeHead = git(["rev-parse", "--verify", "MERGE_HEAD^{commit}"]).trim();
+        const nombrada = git(["rev-parse", `${ref}^{commit}`]).trim();
+        if (mergeHead === BASE && nombrada === BASE) return true;
+      } catch {
+        // Fuera de un merge se prueba la vía ordinaria de merge-base.
+      }
       try { return git(["merge-base", "HEAD", ref]).trim() === BASE; } catch { return false; }
     });
     expect(porRef, "la base tiene que venir de un ref identificado").toBe(true);

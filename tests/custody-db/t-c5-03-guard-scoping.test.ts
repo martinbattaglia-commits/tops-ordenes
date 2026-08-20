@@ -169,4 +169,34 @@ describe("T-C5-03 · el acotamiento funciona con git real y HEAD detached", () =
       "tests/custody-db/t-c9-99-x.test.ts",
     ]);
   });
+
+  it("10 · durante un merge mide el índice contra el nuevo main y no atribuye sus cambios a Custodia", () => {
+    const dir = mkdtempSync(join(tmpdir(), "scoping-merge-"));
+    temporales.push(dir);
+    const g: GitRunner = (args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" });
+    execFileSync("git", ["init", "-q", "-b", "main", dir], { encoding: "utf8" });
+    g(["config", "user.email", "t@t"]); g(["config", "user.name", "t"]);
+    writeFileSync(join(dir, "README.md"), "base\n");
+    g(["add", "-A"]); g(["commit", "-qm", "base"]);
+
+    g(["checkout", "-qb", "custodia"]);
+    mkdirSync(join(dir, "src/lib/custody"), { recursive: true });
+    writeFileSync(join(dir, "src/lib/custody/custody.ts"), "custodia\n");
+    g(["add", "-A"]); g(["commit", "-qm", "custodia"]);
+
+    g(["checkout", "-q", "main"]);
+    mkdirSync(join(dir, "src/components/shell"), { recursive: true });
+    writeFileSync(join(dir, "src/components/shell/Sidebar.tsx"), "finanzas\n");
+    g(["add", "-A"]); g(["commit", "-qm", "finanzas"]);
+    const main = g(["rev-parse", "HEAD^{commit}"]).trim();
+
+    g(["checkout", "-q", "custodia"]);
+    g(["merge", "--no-commit", "--no-ff", "main"]);
+
+    const base = baseDeRama(g);
+    expect(base).toBe(main);
+    const todo = cambiosDeLaRama(g, base, ".");
+    expect(todo).toContain("src/lib/custody/custody.ts");
+    expect(todo).not.toContain("src/components/shell/Sidebar.tsx");
+  });
 });
