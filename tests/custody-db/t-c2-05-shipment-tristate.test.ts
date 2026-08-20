@@ -178,7 +178,7 @@ describe("T-C2-05 · M5 · verified", () => {
     const s = await baseScenario(db);
     await actAs(db, s.staff);
     const { shipmentId: sh, orderId: sh_ord } = await newShipment(s);
-    await attachEvidence(db, { shipmentId: sh, stage: "entrega", eventType: "firmado" });
+    await attachEvidence(db, { shipmentId: sh, stage: "entrega", eventType: "foto_entrega" });
     await packingUnitWithEvents(sh_ord, sh, 2);
 
     const r = await summary(sh);
@@ -260,7 +260,7 @@ describe("T-C2-05 · M5 · conteos, compatibilidad y auditoría", () => {
     const s = await baseScenario(db);
     await actAs(db, s.staff);
     const { shipmentId: sh, orderId: sh_ord } = await newShipment(s);
-    await attachEvidence(db, { shipmentId: sh, stage: "pod", eventType: "pod" });
+    await attachEvidence(db, { shipmentId: sh, stage: "entrega", eventType: "foto_entrega" });
     await packingUnitWithEvents(sh_ord, sh, 3);
     await packingUnitWithEvents(sh_ord, sh, 2);
 
@@ -464,20 +464,21 @@ describe("T-C2-05 · M5 · las cuatro RPC de 0039 siguen operativas", () => {
     await actAs(db, s.staff);
     const { shipmentId: sh, orderId: sh_ord } = await newShipment(s);
     await packingUnitWithEvents(sh_ord, sh, 2);
-    await attachEvidence(db, { shipmentId: sh, stage: "entrega", eventType: "firmado" });
+    const firmaLegacy = await expectFailure(() =>
+      attachEvidence(db, { shipmentId: sh, stage: "entrega", eventType: "firmado" }),
+    );
+    expect(firmaLegacy).toMatch(/firma POD sólo por attach_custody_pod_signature/);
+    await attachEvidence(db, { shipmentId: sh, stage: "entrega", eventType: "foto_entrega" });
 
-    // 1) generate_delivery_pod — la firma de 0039 sigue intacta, pero 0250a le
-    // antepuso el gate contractual «POD sólo post-entrega»: sobre un despacho
-    // que todavía no está `entregado` la RPC existe y se invoca igual, y es el
-    // gate el que la rechaza. Que el POD ya no se emita antes de la entrega es
-    // el comportamiento exigido, no una regresión.
+    // 1) La superficie legacy quedó retirada por 0263: no puede emitir un POD
+    // sin operation/snapshot. Las lecturas históricas de 0039 sí permanecen.
     const pod = await expectFailure(() =>
       db.query(
         `select public.generate_delivery_pod($1, 'Receptor Sintético', 'DNI', '00000000', null, null, null) as r`,
         [sh],
       ),
     );
-    expect(pod).toMatch(/CUSTODY_POD_REQUIRES_DELIVERED_SHIPMENT/);
+    expect(pod).toMatch(/generate_delivery_pod.*does not exist/i);
 
     // 2) get_custody_timeline
     const { rows: tl } = await db.query<{ r: { nodes: unknown[] } }>(

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { confirmDispatch, confirmDelivery, revertDispatch } from "@/lib/dispatch/dispatch";
 import { registerEgressEvidence } from "@/lib/custody/physical-egress";
-import { resolveDispatchOrderUnits } from "@/lib/custody/dispatch-egress";
+import { getDispatchEgressGate, resolveDispatchOrderUnits } from "@/lib/custody/dispatch-egress";
 import { triggerAnalysisIfPairComplete } from "@/lib/custody/analysis-trigger";
 import { createClient } from "@/lib/supabase/server";
 import { parseCanonicalUuid } from "@/lib/custody/canonical-contract";
@@ -41,8 +41,22 @@ function revalidate(orderId: string): void {
 /** Despacha un pedido preparado (EGRESO irreversible). Devuelve el shipment id. */
 export async function confirmDispatchAction(orderId: string): Promise<Result> {
   try {
-    const id = await confirmDispatch(orderId);
-    revalidate(orderId);
+    const order = parseCanonicalUuid(orderId);
+    if (!order) return { ok: false, error: "Pedido inválido" };
+
+    // La pantalla puede estar desactualizada. Se vuelve a leer la puerta en la
+    // acción inmediatamente antes del RPC; el trigger DB conserva la última
+    // palabra frente a una carrera posterior a esta lectura.
+    const custody = await getDispatchEgressGate(order);
+    if (custody.status === "unavailable") {
+      return { ok: false, error: "Custodia no verificable: el despacho permanece bloqueado." };
+    }
+    if (custody.status === "required" && !custody.allAllowed) {
+      return { ok: false, error: "Custodia nivel 2 pendiente: resolvé los casos antes de despachar." };
+    }
+
+    const id = await confirmDispatch(order);
+    revalidate(order);
     return { ok: true, id };
   } catch (e) {
     return fail(e);
@@ -56,8 +70,32 @@ export async function confirmDeliveryAction(
   receivedBy?: string | null
 ): Promise<Result> {
   try {
-    await confirmDelivery(shipmentId, receivedBy ?? null);
-    revalidate(orderId);
+    const shipment = parseCanonicalUuid(shipmentId);
+    const order = parseCanonicalUuid(orderId);
+    if (!shipment || !order) return { ok: false, error: "Despacho o pedido inválido" };
+
+    const session = createClient();
+    if (!session) return { ok: false, error: "Supabase no configurado" };
+    const { data, error } = await session
+      .from("shipments")
+      .select("id, order_id, status")
+      .eq("id", shipment)
+      .eq("order_id", order)
+      .maybeSingle();
+    if (error || !data || (data as { status?: string }).status !== "despachado") {
+      return { ok: false, error: "El despacho no pertenece al pedido o ya no puede entregarse" };
+    }
+
+    const custody = await getDispatchEgressGate(order);
+    if (custody.status === "unavailable") {
+      return { ok: false, error: "Custodia no verificable: la entrega permanece bloqueada." };
+    }
+    if (custody.status === "required" && !custody.allAllowed) {
+      return { ok: false, error: "Custodia pendiente: resolvé los casos antes de entregar." };
+    }
+
+    await confirmDelivery(shipment, receivedBy ?? null);
+    revalidate(order);
     return { ok: true };
   } catch (e) {
     return fail(e);
@@ -160,7 +198,11 @@ export async function registerDispatchEgressAction(
       .eq("id", unitId)
       .maybeSingle();
     if (error || !data) return { ok: false, error: "Unidad física no disponible para tu usuario" };
-    const level = (Number((data as { custody_level: number }).custody_level) >= 2 ? 2 : 1) as CustodyLevel;
+    const rawLevel = Number((data as { custody_level: number }).custody_level);
+    if (rawLevel !== 1 && rawLevel !== 2) {
+      return { ok: false, error: "Nivel de custodia no verificable" };
+    }
+    const level = rawLevel as CustodyLevel;
 
     const forced = new FormData();
     forced.set("file", form.get("file") as Blob);

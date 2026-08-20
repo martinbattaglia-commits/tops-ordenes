@@ -31,6 +31,8 @@ import { CaseChecklist } from "../_components/CaseChecklist";
 import { EvidenceViewer } from "../_components/EvidenceViewer";
 import { PrintButton } from "../_components/PrintButton";
 import { QrCard } from "../_components/QrCard";
+import { custodyDispatchReturn } from "@/lib/custody/dispatch-return";
+import { getDispatchEgressGate } from "@/lib/custody/dispatch-egress";
 
 export const metadata = { title: "Custodia Digital · Caso" };
 
@@ -78,15 +80,23 @@ function scanEvidence(
   return found;
 }
 
-export default async function CustodyCasePage({ params }: { params: { id: string } }) {
+export default async function CustodyCasePage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { dispatchOrderId?: string };
+}) {
+  const defaultReturn = custodyDispatchReturn(null);
+  const requestedReturn = custodyDispatchReturn(searchParams?.dispatchOrderId);
   const res = await loadCustodyCaseAction(params.id);
 
   if (!res.ok || !res.data) {
     return (
       <main className="p-4 lg:p-8 nx-page-fade">
-        <Link href="/wms/custody" className="btn btn-ghost btn-sm">
-          <Icon name="arrow-left" size={12} /> Volver a Custodia
-        </Link>
+        <a href={defaultReturn.href} className="btn btn-ghost btn-sm">
+          <Icon name="arrow-left" size={12} /> {defaultReturn.label}
+        </a>
         <div className="card mt-4 p-4" role="alert">
           <p className="text-sm">{res.ok ? "Caso no disponible" : res.error}</p>
         </div>
@@ -103,6 +113,23 @@ export default async function CustodyCasePage({ params }: { params: { id: string
   const isShipment = view.scope === "shipment";
   const isPhysical = view.scope === "physical_unit";
   const shipmentId = isShipment ? view.entityId : null;
+
+  // Un UUID sintácticamente válido no prueba que el pedido sea el que contiene
+  // esta CPU/CINT. La relación se vuelve a derivar del gate autoritativo; ante
+  // error, contradicción o manipulación se vuelve al listado de Custodia.
+  let dispatchReturn = defaultReturn;
+  if (isPhysical && requestedReturn.orderId) {
+    const gate = await getDispatchEgressGate(requestedReturn.orderId);
+    const belongs =
+      gate.status === "required" &&
+      gate.units.some(
+        (unit) => unit.physicalUnitId === view.entityId && unit.caseId === view.caseId,
+      );
+    if (belongs) dispatchReturn = requestedReturn;
+  }
+  const dispatchOrderId = dispatchReturn.orderId;
+  const backHref = dispatchReturn.href;
+  const backLabel = dispatchReturn.label;
 
   const timeline = isPhysical
     ? await getCustodyPhysicalTimeline(view.entityId)
@@ -213,9 +240,9 @@ export default async function CustodyCasePage({ params }: { params: { id: string
   return (
     <main className="p-4 lg:p-8 nx-page-fade">
       <header className="flex flex-wrap items-center gap-3">
-        <Link href="/wms/custody" className="btn btn-ghost btn-sm" aria-label="Volver a Custodia">
-          <Icon name="arrow-left" size={12} /> Volver
-        </Link>
+        <a href={backHref} className="btn btn-ghost btn-sm" aria-label={backLabel}>
+          <Icon name="arrow-left" size={12} /> {backLabel}
+        </a>
         <h1 className="page-title">Custodia Digital</h1>
       </header>
 
@@ -341,7 +368,7 @@ export default async function CustodyCasePage({ params }: { params: { id: string
             <CaseReevaluatePanel view={view} />
           </div>
           <div id="panel-decision">
-            <CaseDecisionPanel view={view} />
+            <CaseDecisionPanel view={view} dispatchOrderId={dispatchOrderId} />
           </div>
           <div id="panel-pod">
             {/* FILA 11b · la compuerta descarga contra el despacho que el view-model

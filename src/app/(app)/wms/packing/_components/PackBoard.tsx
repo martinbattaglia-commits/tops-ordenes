@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import type { LogisticsOrderStatus } from "@/lib/pedidos/types";
 import {
@@ -9,6 +10,8 @@ import {
   type PackingUnitRow,
   type PhysicalLocation,
 } from "@/lib/packing/types";
+import type { CustodyOperationalUnit } from "@/lib/custody/operation-visibility";
+import { createSingleFlightGuard } from "@/lib/custody/single-flight";
 import {
   createPackingUnitAction,
   packAllocationAction,
@@ -45,15 +48,20 @@ export function PackBoard({
   status,
   pendingStops,
   units,
+  custodyStatus,
+  custodyByAllocation,
 }: {
   orderId: string;
   status: LogisticsOrderStatus;
   pendingStops: PackStop[];
   units: PackingUnitRow[];
+  custodyStatus: "available" | "unavailable";
+  custodyByAllocation: Record<string, CustodyOperationalUnit[]>;
 }) {
-  const [pending, start] = useTransition();
+  const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [activeUnitId, setActiveUnitId] = useState<string | null>(null);
+  const guard = useMemo(() => createSingleFlightGuard(), []);
 
   const openUnits = units.filter((u) => u.status === "abierta");
   const effectiveActive =
@@ -64,12 +72,18 @@ export function PackBoard({
         : null;
 
   const isEnPrep = status === "en_preparacion";
-  const run = (fn: () => Promise<ActionResult>) =>
-    start(async () => {
+  const run = (fn: () => Promise<ActionResult>) => {
+    void guard.run("packing-mutation", async () => {
+      setPending(true);
       setErr(null);
-      const res = await fn();
-      if (!res.ok) setErr(res.error);
+      try {
+        const res = await fn();
+        if (!res.ok) setErr(res.error);
+      } finally {
+        setPending(false);
+      }
     });
+  };
 
   const newUnit = () =>
     run(async () => {
@@ -92,6 +106,11 @@ export function PackBoard({
 
   return (
     <div className="flex flex-col gap-4">
+      {custodyStatus === "unavailable" && (
+        <div role="alert" className="rounded border border-status-warning/40 bg-status-warning/5 p-3 text-xs text-status-warning">
+          Custodia no verificable: no se pudo recuperar la identidad CPU/CINT. Verificá el acceso antes de operar mercadería de nivel 2.
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         {isEnPrep && (
@@ -147,7 +166,10 @@ export function PackBoard({
                       <div className="font-mono text-[11px]">{s.location.full_code ?? "—"}</div>
                       <div className="text-[10px] text-fg-muted">{locationDetail(s.location) || "Sin ubicación"}</div>
                     </td>
-                    <td className="font-mono text-xs font-semibold">{s.sku}</td>
+                    <td>
+                      <div className="font-mono text-xs font-semibold">{s.sku}</div>
+                      <CustodyN2Identity units={custodyByAllocation[s.allocation_id] ?? []} />
+                    </td>
                     <td className="font-mono text-[11px] text-fg-secondary">{s.lot_number ?? "—"}</td>
                     <td className="text-right tabular">{s.quantity.toLocaleString("es-AR")}</td>
                     <td className="text-right">
@@ -230,7 +252,10 @@ export function PackBoard({
                     <tbody>
                       {u.items.map((it) => (
                         <tr key={it.allocation_id}>
-                          <td className="font-mono text-xs font-semibold">{it.sku}</td>
+                          <td>
+                            <div className="font-mono text-xs font-semibold">{it.sku}</div>
+                            <CustodyN2Identity units={custodyByAllocation[it.allocation_id] ?? []} />
+                          </td>
                           <td className="font-mono text-[11px] text-fg-secondary">{it.lot_number ?? "—"}</td>
                           <td className="text-right tabular">{it.quantity.toLocaleString("es-AR")}</td>
                           <td className="font-mono text-[11px] text-fg-secondary">{it.location.full_code ?? "—"}</td>
@@ -263,6 +288,27 @@ export function PackBoard({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function CustodyN2Identity({ units }: { units: CustodyOperationalUnit[] }) {
+  if (units.length === 0) return null;
+  return (
+    <div className="mt-1 flex flex-col gap-1" data-custodia-n2="true">
+      {units.map((unit) => (
+        <div key={unit.physicalUnitId} className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-status-warning text-status-warning">N2</span>
+          <span className="font-mono text-[10px]">{unit.unitPublicId}</span>
+          {unit.caseId ? (
+            <Link href={`/wms/custody/${unit.caseId}`} className="text-[10px] underline">
+              {unit.casePublicId ?? "CINT"}
+            </Link>
+          ) : (
+            <span className="text-[10px] text-status-warning">CINT no disponible</span>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

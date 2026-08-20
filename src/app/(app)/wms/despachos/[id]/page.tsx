@@ -36,9 +36,8 @@ export default async function DispatchPanelPage({ params }: { params: { id: stri
   const meta = ORDER_STATUS_META[panel.status];
   const sm = panel.shipment ? SHIPMENT_STATUS_META[panel.shipment.status] : null;
 
-  // 2-C-1 · La puerta de egreso. Devuelve `applies: false` para el nivel 1, para
-  // la mercadería sin custodia y ante cualquier error de lectura: en esos casos
-  // la pantalla queda EXACTAMENTE igual que antes de este bloque.
+  // 2-C-1 · La puerta de egreso distingue N1/no aplica de una lectura no
+  // verificable. Sólo el primer estado conserva la pantalla histórica.
   const egreso = await getDispatchEgressGate(panel.order_id);
 
   return (
@@ -101,11 +100,13 @@ export default async function DispatchPanelPage({ params }: { params: { id: stri
       {/* Puerta de egreso (2-C-1) — INMEDIATAMENTE ANTES de las acciones, que es
           donde vive `confirmDispatchAction`. Sólo nivel 2: si no aplica, no se
           monta nada y la pantalla es la de siempre. */}
-      {egreso.applies && (
+      {egreso.status !== "not_applicable" && (
         <DispatchEgressPanel
           orderId={panel.order_id}
           units={egreso.units}
           allAllowed={egreso.allAllowed}
+          status={egreso.status}
+          captureAllowed={!panel.shipment}
         />
       )}
 
@@ -117,6 +118,8 @@ export default async function DispatchPanelPage({ params }: { params: { id: stri
           allClosed={panel.all_closed}
           openUnits={panel.open_units}
           shipment={panel.shipment}
+          custodyStatus={egreso.status}
+          custodyAllAllowed={egreso.allAllowed}
         />
       </div>
 

@@ -56,6 +56,11 @@ jobs:
       - name: Tests WMS UI (vitest.wms-ui.config.ts)
         run: npm run test:wms-ui
 
+      # Los componentes Server/Client integrados se montan en jsdom. Esta
+      # batería tiene config propia y tampoco forma parte de `npm test`.
+      - name: Tests WMS DOM (vitest.wms-dom.config.ts)
+        run: npm run test:wms-dom
+
       - name: Benchmark remito-capacidad (aislado, presupuesto original)
         run: npm test -- src/lib/doc-system/remito-capacidad.test.tsx --no-file-parallelism --maxWorkers=1 --minWorkers=1
 

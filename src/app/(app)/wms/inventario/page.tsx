@@ -3,11 +3,20 @@ import { Icon } from "@/components/Icon";
 import { listInventory } from "@/lib/wms/data";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { fmtDate } from "@/lib/utils";
+import {
+  getCanonicalPhysicalUnitQr,
+  getInventoryCustodyVisibility,
+} from "@/lib/custody/operation-visibility";
+import { QrCard } from "../custody/_components/QrCard";
 
 export const metadata = { title: "Inventario · WMS" };
 export const dynamic = "force-dynamic";
 
-export default async function InventarioPage() {
+export default async function InventarioPage({
+  searchParams,
+}: {
+  searchParams?: { qr?: string };
+}) {
   let rows: Awaited<ReturnType<typeof listInventory>>;
   try {
     rows = await listInventory();
@@ -20,6 +29,15 @@ export default async function InventarioPage() {
       />
     );
   }
+
+  // Proyección paralela: no modifica el agregado logístico ni agrega gates.
+  // Sólo N2 llega a este mapa; un error no se traduce en un badge falso N1.
+  const custody = await getInventoryCustodyVisibility(rows.map((row) => row.id));
+  const visibleN2 = Object.values(custody.byInventoryItem).flat();
+  const selectedUnit = visibleN2.find((unit) => unit.physicalUnitId === searchParams?.qr) ?? null;
+  const selectedQr = selectedUnit?.caseId
+    ? await getCanonicalPhysicalUnitQr(selectedUnit.physicalUnitId)
+    : null;
 
   return (
     <div className="p-4 lg:p-8 nx-page-fade">
@@ -37,6 +55,41 @@ export default async function InventarioPage() {
         </Link>
       </div>
 
+      {custody.status === "unavailable" && (
+        <div className="mb-4 rounded border border-status-warning p-3 text-xs text-status-warning" role="alert">
+          Custodia no verificable: CPU y CINT no se ocultan como si fueran mercadería sin N2. Recargá o escalá al encargado.
+        </div>
+      )}
+
+      {selectedUnit && (
+        <section id="custodia-qr" className="nx-surface card card-pad mb-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="eyebrow-tiny">Identidad física N2</div>
+              <h2 className="text-base font-semibold">{selectedUnit.unitPublicId}</h2>
+              {selectedUnit.caseId && (
+                <Link href={`/wms/custody/${selectedUnit.caseId}`} className="text-xs underline">
+                  {selectedUnit.casePublicId ?? "Ver CINT"}
+                </Link>
+              )}
+            </div>
+            <Link href="/wms/inventario" className="btn btn-ghost btn-sm">Cerrar</Link>
+          </div>
+          {selectedQr ? (
+            <div className="mt-3 max-w-[260px]">
+              <QrCard
+                dataUrl={selectedQr.dataUrl}
+                url={selectedQr.url}
+                publicId={selectedUnit.unitPublicId}
+                label="QR canónico de la unidad"
+              />
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-status-warning" role="alert">QR canónico no verificable.</p>
+          )}
+        </section>
+      )}
+
       <div className="nx-surface card overflow-hidden">
         <div className="px-4 py-3 border-b border-stroke-soft">
           <h2 className="text-sm font-semibold">Stock cargado</h2>
@@ -51,11 +104,14 @@ export default async function InventarioPage() {
                 <th>Lote</th>
                 <th>Vencimiento</th>
                 <th className="text-right">Stock</th>
+                <th>Custodia N2</th>
                 <th>Ubicación física</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r) => {
+                const custodyUnits = custody.byInventoryItem[r.id] ?? [];
+                return (
                 <tr key={r.id}>
                   <td className="font-mono text-xs font-semibold">{r.sku}</td>
                   <td className="text-sm">{r.description}</td>
@@ -69,6 +125,41 @@ export default async function InventarioPage() {
                     {r.stock_reserved > 0 && (
                       <div className="text-[10px] text-status-warning font-normal">
                         {r.stock_reserved.toLocaleString("es-AR")} reservado
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    {custody.status === "unavailable" ? (
+                      <span className="text-xs text-status-warning">No verificable</span>
+                    ) : custodyUnits.length === 0 ? (
+                      <span className="text-xs text-fg-muted">—</span>
+                    ) : (
+                      <div className="flex flex-col gap-2" data-custodia-n2={r.id}>
+                        {custodyUnits.map((unit) => (
+                          <div key={unit.physicalUnitId} className="rounded border border-stroke-soft p-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-status-warning text-status-warning">
+                                N2
+                              </span>
+                              <span className="font-mono text-[11px] font-semibold">{unit.unitPublicId}</span>
+                            </div>
+                            {unit.caseId ? (
+                              <Link href={`/wms/custody/${unit.caseId}`} className="text-xs underline">
+                                {unit.casePublicId ?? "Ver CINT"}
+                              </Link>
+                            ) : (
+                              <p className="text-xs text-status-warning">Caso no disponible</p>
+                            )}
+                            {unit.caseId && (
+                              <Link
+                                href={`/wms/inventario?qr=${unit.physicalUnitId}#custodia-qr`}
+                                className="text-xs underline"
+                              >
+                                Ver / imprimir QR
+                              </Link>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </td>
@@ -89,10 +180,11 @@ export default async function InventarioPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-fg-muted py-8 text-sm">
+                  <td colSpan={8} className="text-center text-fg-muted py-8 text-sm">
                     Aún no hay inventario cargado.
                   </td>
                 </tr>

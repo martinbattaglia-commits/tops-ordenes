@@ -15,8 +15,8 @@ import { defineConfig } from "vitest/config";
  * lo que sigue diferido son las pruebas de DOM interactivo y E2E, que exigen
  * jsdom/happy-dom o navegador.
  *
- * ⚠ El CI NO corre este config. Correrlo es responsabilidad de la ventana que
- * toca custodia — y decir «la suite pasa» sin nombrar cuál, está prohibido.
+ * App CI ejecuta este config mediante `npm run test:wms-ui`; un rojo focal no
+ * queda oculto detrás de la suite general.
  */
 export default defineConfig({
   resolve: {

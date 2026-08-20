@@ -57,6 +57,35 @@ export function baseDeRama(
   }
 
   const intentos: string[] = [];
+  let mergeHead: string | null = null;
+  try {
+    const resuelta = git(["rev-parse", "--verify", "MERGE_HEAD^{commit}"]).trim();
+    if (ES_SHA.test(resuelta)) mergeHead = resuelta;
+  } catch {
+    // No hay merge en curso: se aplica la resolución ordinaria por merge-base.
+  }
+
+  // Durante un merge controlado todavía no existe el commit de dos padres.
+  // La base correcta es MERGE_HEAD sólo si coincide exactamente con un ref
+  // nombrado de main; aceptar un MERGE_HEAD huérfano permitiría inyectar una
+  // base arbitraria y volvería el guard fail-open.
+  if (mergeHead) {
+    for (const ref of REFS_BASE) {
+      try {
+        if (ref === "origin/HEAD") {
+          const destino = git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]).trim();
+          if (!destino) { intentos.push(`${ref} (ambiguo o ausente)`); continue; }
+        }
+        const nombrada = git(["rev-parse", `${ref}^{commit}`]).trim();
+        if (nombrada === mergeHead) return mergeHead;
+        intentos.push(`${ref} (no coincide con MERGE_HEAD)`);
+      } catch {
+        intentos.push(`${ref} (no existe durante merge)`);
+      }
+    }
+    throw new BaseIndeterminadaError(intentos);
+  }
+
   for (const ref of REFS_BASE) {
     try {
       // `origin/HEAD` sólo vale si resuelve a UNA rama sin ambigüedad.
@@ -82,6 +111,26 @@ export function baseDeRama(
  * checkout sintético de un PR.
  */
 export function cambiosDeLaRama(git: GitRunner, base: string, ruta: string): string[] {
+  let mergeContraBase = false;
+  try {
+    mergeContraBase = git(["rev-parse", "--verify", "MERGE_HEAD^{commit}"]).trim() === base;
+  } catch {
+    // No hay merge en curso.
+  }
+
+  if (mergeContraBase) {
+    // El índice contiene el árbol candidato completo del merge. Compararlo
+    // contra MERGE_HEAD excluye los cambios ya integrados en main y conserva
+    // únicamente el delta de esta rama más sus resoluciones explícitas.
+    const staged = git(["diff", "--cached", "--name-only", base, "--", ruta])
+      .split("\n").map((l) => l.trim()).filter(Boolean);
+    const unstaged = git(["diff", "--name-only", "--", ruta])
+      .split("\n").map((l) => l.trim()).filter(Boolean);
+    const untracked = git(["ls-files", "--others", "--exclude-standard", "--", ruta])
+      .split("\n").map((l) => l.trim()).filter(Boolean);
+    return [...new Set([...staged, ...unstaged, ...untracked])].sort();
+  }
+
   const commiteado = git(["diff", "--name-only", `${base}..HEAD`, "--", ruta])
     .split("\n").map((l) => l.trim()).filter(Boolean);
   const pendiente = git(["status", "--porcelain", "--", ruta])

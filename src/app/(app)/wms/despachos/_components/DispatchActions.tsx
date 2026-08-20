@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/Icon";
 import type { LogisticsOrderStatus } from "@/lib/pedidos/types";
 import type { ShipmentRow } from "@/lib/dispatch/types";
+import { createSingleFlightGuard } from "@/lib/custody/single-flight";
 import { confirmDispatchAction, confirmDeliveryAction, revertDispatchAction } from "../actions";
 
 type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
@@ -22,27 +23,46 @@ export function DispatchActions({
   allClosed,
   openUnits,
   shipment,
+  custodyStatus,
+  custodyAllAllowed,
 }: {
   orderId: string;
   orderStatus: LogisticsOrderStatus;
   allClosed: boolean;
   openUnits: number;
   shipment: ShipmentRow | null;
+  custodyStatus: "not_applicable" | "unavailable" | "required";
+  custodyAllAllowed: boolean;
 }) {
-  const [pending, start] = useTransition();
+  const [pending, setPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [received, setReceived] = useState("");
+  const guard = useMemo(() => createSingleFlightGuard(), []);
 
-  const run = (fn: () => Promise<ActionResult>, confirmMsg?: string) => {
+  const run = (
+    fn: () => Promise<ActionResult>,
+    confirmMsg?: string,
+    onSuccess?: () => void,
+  ) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
-    start(async () => {
+    void guard.run("dispatch-mutation", async () => {
+      setPending(true);
       setErr(null);
-      const res = await fn();
-      if (!res.ok) setErr(res.error);
+      try {
+        const res = await fn();
+        if (!res.ok) setErr(res.error);
+        else onSuccess?.();
+      } finally {
+        setPending(false);
+      }
     });
   };
 
-  const canDispatch = orderStatus === "preparado" && allClosed && openUnits === 0 && !shipment;
+  const logisticsReady = orderStatus === "preparado" && allClosed && openUnits === 0 && !shipment;
+  const custodyReady =
+    custodyStatus === "not_applicable" ||
+    (custodyStatus === "required" && custodyAllAllowed);
+  const canDispatch = logisticsReady && custodyReady;
   const isDispatched = shipment?.status === "despachado";
   const isDelivered = shipment?.status === "entregado";
 
@@ -72,8 +92,20 @@ export function DispatchActions({
         </span>
       )}
 
+      {logisticsReady && custodyStatus === "unavailable" && (
+        <span className="text-[11px] text-status-warning inline-flex items-center gap-1.5">
+          <Icon name="lock" size={11} /> Custodia no verificable: despacho bloqueado.
+        </span>
+      )}
+
+      {logisticsReady && custodyStatus === "required" && !custodyAllAllowed && (
+        <span className="text-[11px] text-status-warning inline-flex items-center gap-1.5">
+          <Icon name="lock" size={11} /> Resolvé la liberación CINT antes de despachar.
+        </span>
+      )}
+
       {/* Entregar */}
-      {isDispatched && (
+      {isDispatched && custodyReady && (
         <>
           <input
             value={received}
@@ -84,7 +116,11 @@ export function DispatchActions({
           />
           <button
             onClick={() =>
-              run(() => confirmDeliveryAction(shipment!.id, orderId, received.trim() || null))
+              run(
+                () => confirmDeliveryAction(shipment!.id, orderId, received.trim() || null),
+                undefined,
+                () => setReceived(""),
+              )
             }
             disabled={pending}
             className="btn btn-primary btn-sm"
@@ -92,20 +128,29 @@ export function DispatchActions({
           >
             <Icon name="check" size={12} /> Entregar
           </button>
-          <button
-            onClick={() =>
-              run(
-                () => revertDispatchAction(shipment!.id, orderId),
-                "Revertir el despacho repondrá el stock con un movimiento compensatorio y devolverá el pedido a Preparado. ¿Continuar?"
-              )
-            }
-            disabled={pending}
-            className="btn btn-ghost btn-sm text-status-danger"
-            title="Revertir el despacho (reingreso compensatorio)"
-          >
-            <Icon name="refresh" size={12} /> Revertir despacho
-          </button>
         </>
+      )}
+
+      {isDispatched && !custodyReady && (
+        <span className="text-[11px] text-status-warning inline-flex items-center gap-1.5">
+          <Icon name="lock" size={11} /> Custodia no liberada o no verificable: entrega bloqueada.
+        </span>
+      )}
+
+      {isDispatched && (
+        <button
+          onClick={() =>
+            run(
+              () => revertDispatchAction(shipment!.id, orderId),
+              "Revertir el despacho repondrá el stock con un movimiento compensatorio y devolverá el pedido a Preparado. ¿Continuar?"
+            )
+          }
+          disabled={pending}
+          className="btn btn-ghost btn-sm text-status-danger"
+          title="Revertir el despacho (reingreso compensatorio)"
+        >
+          <Icon name="refresh" size={12} /> Revertir despacho
+        </button>
       )}
 
       {/* Entregado (terminal) */}

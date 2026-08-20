@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  CONNECT_LINK_ARCHIVE_MIGRATION_FILES,
   EXPECTED_MANIFEST_SIZE,
   MANIFEST_EXCLUSIONS,
   MIGRATIONS_DIR,
@@ -19,7 +20,9 @@ import {
   migrationSeq,
   validateCanonicalManifest,
   validateManifest,
+  validateMigrationClassification,
 } from "./harness/manifest";
+import type { ManifestExclusion } from "./harness/manifest";
 
 interface SqlFunctionBlock {
   file: string;
@@ -120,13 +123,50 @@ describe("T-A0-10 · manifiesto", () => {
     expect([...WMS_MIGRATION_MANIFEST].sort()).toEqual([...WMS_MIGRATION_MANIFEST]);
   });
 
-  it("toda migración del repositorio está clasificada", () => {
+  it("toda migración forma una partición única y los mutantes de superposición fallan", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
-    const inManifest = new Set(WMS_MIGRATION_MANIFEST);
-    const unclassified = onDisk.filter(
-      (f) => !inManifest.has(f) && !MANIFEST_EXCLUSIONS.some((e) => e.matches(f)),
+    expect(() => validateMigrationClassification(onDisk)).not.toThrow();
+
+    const linkFile = "0260_nexus_link_handover_archived.sql";
+    for (const file of CONNECT_LINK_ARCHIVE_MIGRATION_FILES) {
+      expect(MANIFEST_EXCLUSIONS.filter((entry) => entry.matches(file)).map((entry) => entry.id))
+        .toEqual(["connect-link-archive-override"]);
+    }
+
+    const overlap: ManifestExclusion = {
+      id: "mutant-link-overlap",
+      matches: (file) => file === linkFile,
+      reason: "Mutante deliberado que captura un archivo Link ya clasificado.",
+    };
+    expect(() =>
+      validateMigrationClassification([linkFile], [], [...MANIFEST_EXCLUSIONS, overlap]),
+    ).toThrow(
+      /0260_nexus_link_handover_archived\.sql.*cantidad=2.*manifiesto=no.*connect-link-archive-override, mutant-link-overlap/,
     );
-    expect(unclassified).toEqual([]);
+
+    expect(() =>
+      validateMigrationClassification([linkFile], [linkFile], MANIFEST_EXCLUSIONS),
+    ).toThrow(
+      /0260_nexus_link_handover_archived\.sql.*cantidad=2.*manifiesto=sí.*connect-link-archive-override/,
+    );
+
+    expect(() =>
+      validateMigrationClassification(
+        [linkFile],
+        [],
+        [MANIFEST_EXCLUSIONS[0], { ...MANIFEST_EXCLUSIONS[0] }],
+      ),
+    ).toThrow(/identificadores de exclusión duplicados.*connect-link-archive-override \(2\)/);
+
+    for (const file of [
+      "0262_finance_core_foundation.sql",
+      "ROLLBACK_0262_finance_core_foundation.sql",
+      "0263_custody_pod_signature_and_reception_idempotency.sql",
+      "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
+    ]) {
+      expect(WMS_MIGRATION_MANIFEST.includes(file)).toBe(false);
+      expect(MANIFEST_EXCLUSIONS.filter((entry) => entry.matches(file))).toHaveLength(1);
+    }
   });
 
   // ── H-05: una migración FUTURA no puede clasificarse sola ──────────────
@@ -139,6 +179,9 @@ describe("T-A0-10 · manifiesto", () => {
     const futura = "9999_wms_required.sql";
     expect(WMS_MIGRATION_MANIFEST).not.toContain(futura);
     expect(MANIFEST_EXCLUSIONS.some((e) => e.matches(futura))).toBe(false);
+    expect(() => validateMigrationClassification([futura], [], MANIFEST_EXCLUSIONS)).toThrow(
+      /9999_wms_required\.sql.*cantidad=0.*manifiesto=no.*exclusiones=\[ninguna\]/,
+    );
   });
 
   it.each([

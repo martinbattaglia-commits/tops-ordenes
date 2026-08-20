@@ -343,6 +343,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   // blanca de package.json: nada fuera de ella puede cambiar.
   const VANILLA_AUTHORIZED_CHANGES = [
     "tests/db/harness/manifest.ts",
+    "tests/db/t-a0-10-manifest.test.ts",
     "tests/db/harness/custodia-closure.ts",
     "tests/db/scripts/expected-suite.mjs",
     "tests/db/t-a0-13-run-report.test.ts",
@@ -353,6 +354,13 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
     expect(BASE).toMatch(/^[0-9a-f]{40}$/);
     // Se resolvió por un ref nombrado, no por el padre del HEAD.
     const porRef = REFS_BASE.some((ref) => {
+      try {
+        const mergeHead = git(["rev-parse", "--verify", "MERGE_HEAD^{commit}"]).trim();
+        const nombrada = git(["rev-parse", `${ref}^{commit}`]).trim();
+        if (mergeHead === BASE && nombrada === BASE) return true;
+      } catch {
+        // Fuera de un merge se prueba la vía ordinaria de merge-base.
+      }
       try { return git(["merge-base", "HEAD", ref]).trim() === BASE; } catch { return false; }
     });
     expect(porRef, "la base tiene que venir de un ref identificado").toBe(true);
@@ -441,6 +449,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
       // V5 · CUSTODIA-DEUDAS-DE-INSTRUMENTACION · deuda 2: el master autoriza
       // enganchar vitest.wms-ui.config.ts al CI, y eso exige este script.
       '+"test:wms-ui": "vitest run --config vitest.wms-ui.config.ts",',
+      '+"test:wms-dom": "vitest run --config vitest.wms-dom.config.ts",',
       '+"jsdom": "^26.1.0",',
       '-"@netlify/blobs": "^10.7.8",',
       '+"@netlify/blobs": "^10.7.8",',

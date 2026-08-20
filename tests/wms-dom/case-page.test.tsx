@@ -8,7 +8,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { byText, render } from "./_render";
 import type { CustodyCaseView } from "@/lib/custody/case-presentation";
-import { derivedView, INSPECCION_ID } from "./_view";
+import { derivedView, fisicoConPar, INSPECCION_ID, UNIT } from "./_view";
 import type { CustodyTimeline } from "@/lib/custody/types";
 
 const CASE_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -18,6 +18,7 @@ const SHA = "b".repeat(64);
 const loadMock = vi.fn();
 vi.mock("@/app/(app)/wms/custody/actions", () => ({
   loadCustodyCaseAction: (...a: unknown[]) => loadMock(...a),
+  loadCustodyDocumentAction: vi.fn(async () => ({ ok: true, data: null })),
   registerHumanInspectionAction: vi.fn(async () => ({ ok: true, data: { evidence_id: "e", event_public_id: "p" } })),
   decideCustodyCaseAction: vi.fn(async () => ({ ok: true })),
   evidenceSignedUrlAction: vi.fn(async () => ({ ok: true, data: { url: "http://x" } })),
@@ -30,7 +31,15 @@ const timelineMock = vi.fn();
 const tokenMock = vi.fn();
 vi.mock("@/lib/custody/custody", () => ({
   getCustodyTimeline: (...a: unknown[]) => timelineMock(...a),
+  getCustodyPhysicalTimeline: (...a: unknown[]) => timelineMock(...a),
   getShipmentToken: (...a: unknown[]) => tokenMock(...a),
+  getPhysicalUnitToken: (...a: unknown[]) => tokenMock(...a),
+  resolveActorNames: vi.fn(async () => ({})),
+}));
+
+const gateMock = vi.fn();
+vi.mock("@/lib/custody/dispatch-egress", () => ({
+  getDispatchEgressGate: (...a: unknown[]) => gateMock(...a),
 }));
 
 vi.mock("@/lib/custody/qr", () => ({
@@ -77,6 +86,12 @@ beforeEach(() => {
   loadMock.mockReset().mockResolvedValue({ ok: true, data: view() });
   timelineMock.mockReset().mockResolvedValue(TIMELINE);
   tokenMock.mockReset().mockResolvedValue("tok-sintetico");
+  gateMock.mockReset().mockResolvedValue({
+    status: "not_applicable",
+    applies: false,
+    units: [],
+    allAllowed: true,
+  });
 });
 
 async function renderPage() {
@@ -85,11 +100,11 @@ async function renderPage() {
 }
 
 describe("la pantalla del caso se renderiza completa", () => {
-  it("muestra las tres columnas del flujo: ingreso, custodia y egreso", async () => {
+  it("muestra el circuito completo: evidencia, análisis y decisión", async () => {
     const { container, unmount } = await renderPage();
-    expect(byText(container, /^Ingreso · recepción$/)).not.toBeNull();
-    expect(byText(container, /^Custodia · movimientos$/)).not.toBeNull();
-    expect(byText(container, /^Preparación de egreso$/)).not.toBeNull();
+    expect(byText(container, /^Evidencia · comparación visual$/)).not.toBeNull();
+    expect(byText(container, /^Análisis visual · concordancia$/)).not.toBeNull();
+    expect(byText(container, /^Para poder decidir$/)).not.toBeNull();
     await unmount();
   });
 
@@ -101,9 +116,11 @@ describe("la pantalla del caso se renderiza completa", () => {
     await unmount();
   });
 
-  it("la foto de ingreso aparece con su confirmación de hash verificado", async () => {
+  it("la foto de ingreso aparece con su huella truncada, sin exponer el digest", async () => {
     const { container, unmount } = await renderPage();
-    expect(byText(container, /Foto vinculada · hash verificado/)).not.toBeNull();
+    const pie = container.querySelector('[data-slot="ingreso"] [data-slot-pie="true"]');
+    expect(pie?.textContent).toMatch(/^sha256 bbbb…bbbb$/);
+    expect(pie?.textContent).not.toContain(SHA);
     await unmount();
   });
 
@@ -125,9 +142,11 @@ describe("la pantalla del caso se renderiza completa", () => {
     await unmount();
   });
 
-  it("el egreso muestra la fotografía nueva obligatoria", async () => {
+  it("el egreso muestra su evidencia vinculada", async () => {
     const { container, unmount } = await renderPage();
-    expect(byText(container, /Fotografía nueva obligatoria/)).not.toBeNull();
+    const egreso = container.querySelector('[data-slot="egreso"]');
+    expect(egreso).not.toBeNull();
+    expect(egreso?.querySelector('button[title^="Ver evidencia"]')).not.toBeNull();
     await unmount();
   });
 
@@ -136,7 +155,7 @@ describe("la pantalla del caso se renderiza completa", () => {
     const { container, unmount } = await renderPage();
     // §7.5 · el texto ya no manda al operario a otro panel («registrala en
     // "Fotografías de la unidad"»): el slot de captura está en la pantalla.
-    expect(byText(container, /Esperando la fotografía de egreso/)).not.toBeNull();
+    expect(byText(container, /Esperando la foto de egreso/)).not.toBeNull();
     await unmount();
   });
 });
@@ -248,6 +267,40 @@ describe("seguridad visual y errores", () => {
     expect(volver).not.toBeNull();
     expect(volver?.getAttribute("aria-label")).toMatch(/Volver a Custodia/);
     await unmount();
+  });
+
+  it("sólo vuelve al despacho si pedido, CPU y CINT pertenecen al mismo gate", async () => {
+    const order = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const physicalView = derivedView(
+      { base: fisicoConPar, candidateInspectionEvidenceIds: [INSPECCION_ID] },
+    );
+    loadMock.mockResolvedValue({ ok: true, data: physicalView });
+    timelineMock.mockResolvedValue({ ...TIMELINE, scope: "physical_unit", entity_id: UNIT });
+    gateMock.mockResolvedValue({
+      status: "required",
+      applies: true,
+      allAllowed: false,
+      units: [{ physicalUnitId: UNIT, caseId: CASE_ID }],
+    });
+    const linked = await render(
+      await CustodyCasePage({ params: { id: CASE_ID }, searchParams: { dispatchOrderId: order } }),
+    );
+    expect(linked.container.querySelector(`a[href="/wms/despachos/${order}"]`)).not.toBeNull();
+    expect(gateMock).toHaveBeenCalledWith(order);
+    await linked.unmount();
+
+    gateMock.mockResolvedValue({
+      status: "required",
+      applies: true,
+      allAllowed: false,
+      units: [{ physicalUnitId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", caseId: CASE_ID }],
+    });
+    const manipulated = await render(
+      await CustodyCasePage({ params: { id: CASE_ID }, searchParams: { dispatchOrderId: order } }),
+    );
+    expect(manipulated.container.querySelector('a[href="/wms/custody"]')).not.toBeNull();
+    expect(manipulated.container.querySelector(`a[href="/wms/despachos/${order}"]`)).toBeNull();
+    await manipulated.unmount();
   });
 });
 

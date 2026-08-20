@@ -69,6 +69,8 @@ export async function attachPhysicalEvidence(
     };
   }
   const physicalUnitId = parseCanonicalUuid(form.get("entity_id"));
+  const receptionOperationId = parseCanonicalUuid(form.get("reception_operation_id"));
+  const receptionItemId = parseCanonicalUuid(form.get("reception_item_id"));
   const pair = parseCustodyStagePair(form.get("stage"), form.get("event_type"));
   if (!physicalUnitId || !pair || !(
     (pair.stage === "recepcion" && pair.eventType === "foto_ingreso")
@@ -159,17 +161,27 @@ export async function attachPhysicalEvidence(
     if (attested.error || typeof attested.data !== "string") throw new Error("atestación rechazada");
     attestationId = attested.data;
 
-    const attached = await sessionMutation.rpc("attach_custody_physical_evidence", {
-      p_physical_unit_id: physicalUnitId,
-      p_stage: pair.stage,
-      p_event_type: pair.eventType,
-      p_storage_path: storagePath,
-      p_attestation_id: attestationId,
-      p_file_name: file.name || null,
-      p_captured_at: null,
-      p_exif: null,
-      p_notes: (form.get("notes") as string | null) || null,
-    });
+    const attached = receptionOperationId && receptionItemId && pair.stage === "recepcion"
+      ? await sessionMutation.rpc("attach_wms_reception_ingress_v1", {
+          p_operation_id: receptionOperationId,
+          p_reception_item_id: receptionItemId,
+          p_physical_unit_id: physicalUnitId,
+          p_storage_path: storagePath,
+          p_attestation_id: attestationId,
+          p_file_name: file.name || null,
+          p_notes: (form.get("notes") as string | null) || null,
+        })
+      : await sessionMutation.rpc("attach_custody_physical_evidence", {
+          p_physical_unit_id: physicalUnitId,
+          p_stage: pair.stage,
+          p_event_type: pair.eventType,
+          p_storage_path: storagePath,
+          p_attestation_id: attestationId,
+          p_file_name: file.name || null,
+          p_captured_at: null,
+          p_exif: null,
+          p_notes: (form.get("notes") as string | null) || null,
+        });
     if (attached.error) {
       // S1-3 · Un rechazo de REGLA no es una carga ambigua.
       //

@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 225,
-  "no_ejecutables": 35,
+  "ejecutables": 226,
+  "no_ejecutables": 36,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2968,12 +2968,14 @@
       "filename": "0260_nexus_link_handover_archived.sql",
       "sha256": "043459f125f43050fdb2127e0d0b295466f4d3fbfb67b6fef72005cae0809154",
       "orden": 255,
-      "requires": [],
+      "requires": [
+        "0246_clientes_fase_b_principals_capabilities.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00255",
       "ledger_name": "0260_nexus_link_handover_archived",
-      "provenance": "repo (frente/nexus-link)",
-      "motivo": "NEXUS Link: persistencia de estados de archivo en conversaciones handover"
+      "provenance": "repo (frente/nexus-link-ui-handover-fix; commit 2d6512e)",
+      "motivo": "Forward activo de Nexus Link: agrega estado de handover, trigger de archivo y RPC de handover/archivo. Se cataloga sin alterar sus bytes."
     },
     {
       "id": "ROLLBACK_0260_nexus_link_handover_archived.sql",
@@ -2984,20 +2986,23 @@
       "estado": "rollback",
       "ledger_version": "L00256",
       "ledger_name": "ROLLBACK_0260_nexus_link_handover_archived",
-      "provenance": "repo (frente/nexus-link)",
-      "motivo": "Inversa logica e idempotente de 0260"
+      "provenance": "repo (frente/nexus-link-ui-handover-fix; commit 2d6512e)",
+      "motivo": "Inversa lógica asociada a 0260; no integra el plan forward."
     },
     {
       "id": "0261_connect_archive_force_override.sql",
       "filename": "0261_connect_archive_force_override.sql",
       "sha256": "700f46f92ac0ddc3c0b5fcc0ce6be4129f476e650edf886bd488d35782c783fd",
       "orden": 257,
-      "requires": [],
+      "requires": [
+        "0168_connect_tasks_schema.sql",
+        "0260_nexus_link_handover_archived.sql"
+      ],
       "estado": "active",
       "ledger_version": "L00257",
       "ledger_name": "0261_connect_archive_force_override",
-      "provenance": "repo (frente/connect-archive)",
-      "motivo": "Connect Archive: override forzado de archivo de conversaciones"
+      "provenance": "repo (frente/meta-wa-complete-engine-and-ux; commit 821873e)",
+      "motivo": "Forward activo de Nexus Link: agrega la sobrecarga de archivo con override forzado sobre handover y tareas. Se cataloga sin alterar sus bytes."
     },
     {
       "id": "ROLLBACK_0261_connect_archive_force_override.sql",
@@ -3008,8 +3013,8 @@
       "estado": "rollback",
       "ledger_version": "L00258",
       "ledger_name": "ROLLBACK_0261_connect_archive_force_override",
-      "provenance": "repo (frente/connect-archive)",
-      "motivo": "Inversa logica e idempotente de 0261"
+      "provenance": "repo (frente/meta-wa-complete-engine-and-ux; commit 821873e)",
+      "motivo": "Inversa lógica asociada a 0261; no integra el plan forward."
     },
     {
       "id": "0262_finance_core_foundation.sql",
@@ -3034,6 +3039,33 @@
       "ledger_name": "ROLLBACK_0262_finance_core_foundation",
       "provenance": "repo (frente/finanzas-quicken)",
       "motivo": "Inversa logica e idempotente de 0262"
+    },
+    {
+      "id": "0263_custody_pod_signature_and_reception_idempotency.sql",
+      "filename": "0263_custody_pod_signature_and_reception_idempotency.sql",
+      "sha256": "ebcd157062c35747fc12925e83ca7e848be726bfb5fee16acd1b5f47632be395",
+      "orden": 261,
+      "requires": [
+        "0253_custody_egress_gate.sql",
+        "0258_custody_evaluated_head_witness.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00261",
+      "ledger_name": "0263_custody_pod_signature_and_reception_idempotency",
+      "provenance": "repo (codex/remediacion-custodia-wms)",
+      "motivo": "Endurece firma y POD con capacidad explícita, atestación server-side y snapshot de liberación; retira las vías legacy manipulables y hace atómica e idempotente la creación-confirmación de recepciones WMS."
+    },
+    {
+      "id": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
+      "filename": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
+      "sha256": "263fa1b5e84aae4095c150673124e286a65e297c961d12880ef21a5263e4706b",
+      "orden": 262,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00262",
+      "ledger_name": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency",
+      "provenance": "repo (codex/remediacion-custodia-wms)",
+      "motivo": "Inversa lógica data-preserving de 0263: retira superficies nuevas, restaura RPC legacy y conserva ledgers de idempotencia y autorizaciones si contienen auditoría."
     }
   ]
 }

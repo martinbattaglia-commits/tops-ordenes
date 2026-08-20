@@ -11,6 +11,7 @@ import { fmtDateTime } from "@/lib/utils";
 import { CustodyTimeline } from "./CustodyTimeline";
 import { QrCard } from "./QrCard";
 import { CustodyShipmentActions } from "./CustodyShipmentActions";
+import { shipmentPodReadinessAction } from "../actions";
 
 /**
  * Sección de Cadena de Custodia integrada en el detalle de Despacho (GATE 5 · FASE 6).
@@ -30,11 +31,13 @@ export async function CustodyShipmentSection({
   let qr: string | null = null;
   let timeline = null;
   let summary = null;
+  let readiness: Awaited<ReturnType<typeof shipmentPodReadinessAction>> | null = null;
   try {
-    [token, timeline, summary] = await Promise.all([
+    [token, timeline, summary, readiness] = await Promise.all([
       getShipmentToken(shipmentId),
       getCustodyTimeline(null, shipmentId),
       getShipmentCustodySummary(shipmentId),
+      shipmentPodReadinessAction(shipmentId),
     ]);
     if (token) qr = await custodyQrDataUrl(token);
   } catch {
@@ -48,6 +51,12 @@ export async function CustodyShipmentSection({
 
   const chain = presentChain(summary);
   const revalidate = `/wms/despachos/${orderId}`;
+  const podReadiness =
+    readiness?.ok && readiness.data?.delivered
+      ? "delivered"
+      : readiness?.ok
+        ? "pending_delivery"
+        : "unavailable";
 
   return (
     <div className="flex flex-col gap-4">
@@ -74,7 +83,12 @@ export async function CustodyShipmentSection({
 
       <div className="grid lg:grid-cols-[1fr_auto] gap-4 items-start">
         <div className="flex flex-col gap-4">
-          <CustodyShipmentActions shipmentId={shipmentId} podPresent={summary.pod_present} revalidate={revalidate} />
+          <CustodyShipmentActions
+            shipmentId={shipmentId}
+            podPresent={summary.pod_present}
+            revalidate={revalidate}
+            podReadiness={podReadiness}
+          />
           <CustodyTimeline timeline={timeline} allowRedact revalidate={revalidate} />
         </div>
         {qr && <QrCard dataUrl={qr} url={`/c/${token}`} publicId={shipmentPublicId} label="QR del despacho" />}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import type { CustodyEventType, CustodyStage, EvidenceKind } from "@/lib/custody/types";
 import { attachEvidenceAction, generatePodAction, registerEventAction } from "../actions";
+import { createSingleFlightGuard } from "@/lib/custody/single-flight";
 
 type ActionResult = { ok: true; data?: unknown } | { ok: false; error: string };
 
@@ -11,7 +12,6 @@ type ActionResult = { ok: true; data?: unknown } | { ok: false; error: string };
 const EVIDENCE_PRESETS: { label: string; kind: EvidenceKind; stage: CustodyStage; event_type: CustodyEventType }[] = [
   { label: "Foto de carga", kind: "foto", stage: "despacho", event_type: "cargado" },
   { label: "Foto de entrega", kind: "foto", stage: "entrega", event_type: "foto_entrega" },
-  { label: "Firma del receptor", kind: "firma", stage: "entrega", event_type: "firmado" },
   { label: "Documento (entrega)", kind: "documento", stage: "entrega", event_type: "foto_entrega" },
 ];
 
@@ -19,23 +19,42 @@ export function CustodyShipmentActions({
   shipmentId,
   podPresent,
   revalidate,
+  podReadiness,
 }: {
   shipmentId: string;
   podPresent: boolean;
   revalidate: string;
+  podReadiness: "delivered" | "pending_delivery" | "unavailable";
 }) {
-  const [busy, start] = useTransition();
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [preset, setPreset] = useState(1);
+  const [preset, setPreset] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const guard = useMemo(() => createSingleFlightGuard(), []);
 
-  const run = (fn: () => Promise<ActionResult>, okMsg: string) =>
-    start(async () => {
+  const run = (
+    fn: () => Promise<ActionResult>,
+    okMsg: string,
+    onSuccess?: () => void,
+  ) => {
+    void guard.run("shipment-custody-mutation", async () => {
+      setBusy(true);
       setErr(null); setMsg(null);
-      const res = await fn();
-      if (!res.ok) setErr(res.error); else setMsg(okMsg);
+      try {
+        const res = await fn();
+        if (!res.ok) setErr(res.error);
+        else {
+          setMsg(okMsg);
+          onSuccess?.();
+        }
+      } catch {
+        setErr("No se pudo completar la operación");
+      } finally {
+        setBusy(false);
+      }
     });
+  };
 
   const registerEvent = (stage: CustodyStage, eventType: CustodyEventType, okMsg: string) =>
     run(() => registerEventAction({ shipmentId, stage, eventType }, revalidate), okMsg);
@@ -45,6 +64,10 @@ export function CustodyShipmentActions({
     const file = fileRef.current?.files?.[0];
     if (!file) { setErr("Elegí un archivo"); return; }
     const p = EVIDENCE_PRESETS[preset];
+    if (!p || (p.stage === "entrega" && podReadiness !== "delivered")) {
+      setErr("La evidencia de entrega se habilita después de confirmar la entrega");
+      return;
+    }
     const fd = new FormData();
     fd.set("file", file);
     fd.set("scope", "shipment");
@@ -53,8 +76,9 @@ export function CustodyShipmentActions({
     fd.set("stage", p.stage);
     fd.set("event_type", p.event_type);
     fd.set("revalidate", revalidate);
-    run(() => attachEvidenceAction(fd), "Evidencia adjuntada");
-    if (fileRef.current) fileRef.current.value = "";
+    run(() => attachEvidenceAction(fd), "Evidencia adjuntada", () => {
+      if (fileRef.current) fileRef.current.value = "";
+    });
   };
 
   const submitPod = (e: React.FormEvent<HTMLFormElement>) => {
@@ -62,16 +86,15 @@ export function CustodyShipmentActions({
     const f = new FormData(e.currentTarget);
     const receiverName = String(f.get("receiver_name") ?? "").trim();
     if (!receiverName) { setErr("Nombre del receptor requerido"); return; }
+    const form = e.currentTarget;
     run(
-      () => generatePodAction({
-        shipmentId,
-        receiverName,
-        receiverDocument: (String(f.get("receiver_document") ?? "").trim() || null),
-        observations: (String(f.get("observations") ?? "").trim() || null),
-      }, revalidate),
-      "POD generado"
+      () => {
+        f.set("shipment_id", shipmentId);
+        return generatePodAction(f, revalidate);
+      },
+      "POD generado",
+      () => form.reset(),
     );
-    e.currentTarget.reset();
   };
 
   return (
@@ -93,7 +116,11 @@ export function CustodyShipmentActions({
         <label className="flex flex-col gap-1">
           <span className="kpi-label">Tipo de evidencia</span>
           <select value={preset} onChange={(e) => setPreset(Number(e.target.value))} className="input" disabled={busy}>
-            {EVIDENCE_PRESETS.map((p, i) => <option key={p.label} value={i}>{p.label}</option>)}
+            {EVIDENCE_PRESETS.map((p, i) =>
+              p.stage !== "entrega" || podReadiness === "delivered"
+                ? <option key={p.label} value={i}>{p.label}</option>
+                : null,
+            )}
           </select>
         </label>
         <label className="flex flex-col gap-1">
@@ -106,7 +133,7 @@ export function CustodyShipmentActions({
       </form>
 
       {/* Generar POD */}
-      {!podPresent && (
+      {!podPresent && podReadiness === "delivered" && (
         <form onSubmit={submitPod} className="flex flex-wrap items-end gap-2 border-t border-stroke-soft pt-3">
           <label className="flex flex-col gap-1">
             <span className="kpi-label">Receptor</span>
@@ -120,10 +147,29 @@ export function CustodyShipmentActions({
             <span className="kpi-label">Observaciones</span>
             <input name="observations" className="input" placeholder="(opcional)" disabled={busy} />
           </label>
+          <label className="flex flex-col gap-1">
+            <span className="kpi-label">Firma del receptor (opcional)</span>
+            <input name="signature" type="file" accept="image/jpeg,image/png,image/webp" className="input" disabled={busy} />
+          </label>
           <button type="submit" disabled={busy} className="btn btn-primary btn-sm">
             <Icon name="check-circle" size={12} /> Generar POD
           </button>
+          <p className="w-full text-xs text-fg-muted">
+            La firma se autoriza para este receptor y este estado exacto al generar el POD; no se reutilizan firmas previas.
+          </p>
         </form>
+      )}
+
+      {!podPresent && podReadiness === "pending_delivery" && (
+        <p className="border-t border-stroke-soft pt-3 text-xs text-fg-muted">
+          La firma del receptor y el POD se habilitan después de confirmar la entrega.
+        </p>
+      )}
+
+      {!podPresent && podReadiness === "unavailable" && (
+        <p role="alert" className="border-t border-stroke-soft pt-3 text-xs text-status-warning">
+          Estado de entrega no verificable: firma y POD bloqueados.
+        </p>
       )}
 
       {err && <span className="text-[11px] text-status-danger" title={err}>{err}</span>}

@@ -38,15 +38,13 @@
  *     `custody_egress_gate_status`, que exige `wms.view` y compara el tenant.
  *     Ahí es donde se autoriza de verdad, y ahí falla si no corresponde.
  *
- * ─── FALLAR HACIA «NO APLICA» ES LO CORRECTO ACÁ ─────────────────────────
+ * ─── LECTURA TRIESTADO Y FAIL-CLOSED ─────────────────────────────────────
  *
- * Ante cualquier error, este módulo devuelve `applies: false` y la pantalla
- * queda idéntica a como estaba. Puede sonar al revés, pero la interfaz no es
- * la que retiene la mercadería: el trigger de 0253 lo hace del otro lado, y una
- * unidad de nivel 2 sin foto de egreso no se despacha aunque acá no se muestre
- * nada. Fallar hacia «mostrar panel» sí rompería el requisito duro del bloque
- * —que un despacho de nivel 1 no vea absolutamente nada— y convertiría una
- * caída de custodia en un freno para mercadería que nunca la contrató.
+ * Sólo una lectura autoritativa que demuestra ausencia de genealogía N2 puede
+ * producir `not_applicable`. Una falla, contradicción o respuesta incompleta
+ * produce `unavailable` y bloquea la acción visible; `required` conserva el
+ * detalle por unidad. El trigger DB sigue siendo la última autoridad, pero la
+ * UX ya no degrada una lectura fallida a mercadería de nivel 1.
  */
 
 import { createAdminClient, createClient } from "@/lib/supabase/server";
@@ -59,6 +57,7 @@ export interface DispatchEgressUnit {
   unitPublicId: string;
   sku: string;
   caseId: string | null;
+  casePublicId: string | null;
   hasIngressPhoto: boolean;
   hasEgressPhoto: boolean;
   /** Ya guiados por `blocker-guidance`: qué falta y qué hacer. */
@@ -67,14 +66,26 @@ export interface DispatchEgressUnit {
 }
 
 export interface DispatchEgressGate {
-  /** `false` ⇒ la pantalla de despacho no cambia en nada. */
+  status: "not_applicable" | "unavailable" | "required";
+  /** Compatibilidad visual: sólo `required` monta el panel por unidad. */
   applies: boolean;
   units: DispatchEgressUnit[];
   /** Todas las unidades de nivel 2 en condiciones de salir. */
   allAllowed: boolean;
 }
 
-const NO_APLICA: DispatchEgressGate = { applies: false, units: [], allAllowed: true };
+const NO_APLICA: DispatchEgressGate = {
+  status: "not_applicable",
+  applies: false,
+  units: [],
+  allAllowed: true,
+};
+const NO_VERIFICABLE: DispatchEgressGate = {
+  status: "unavailable",
+  applies: false,
+  units: [],
+  allAllowed: false,
+};
 
 interface GateStatusRow {
   custody_level: number;
@@ -94,6 +105,87 @@ export interface DispatchOrderUnit {
   public_id: string;
   sku: string;
   custody_level: number;
+}
+
+interface DispatchAllocationRow {
+  id: string;
+  quantity: number | string;
+}
+
+interface DispatchBridgeRow {
+  allocation_id: string;
+  physical_unit_id: string;
+  quantity: number | string;
+}
+
+/** Convierte numeric(14,3) a milésimos exactos, sin comparar floats. */
+function quantityMilli(value: unknown): bigint | null {
+  const raw = typeof value === "number" || typeof value === "string" ? String(value) : "";
+  if (!/^\d{1,11}(?:\.\d{1,3})?$/.test(raw)) return null;
+  const [whole, fraction = ""] = raw.split(".");
+  return BigInt(whole) * 1000n + BigInt(fraction.padEnd(3, "0"));
+}
+
+type DispatchOrderUnitsResolution =
+  | { status: "resolved"; units: DispatchOrderUnit[] }
+  | { status: "not_applicable" }
+  | { status: "unavailable" };
+
+async function resolveDispatchOrderUnitsDetailed(
+  orderId: string,
+  allocationStatuses: readonly ("empacada" | "despachada")[] = ["empacada", "despachada"],
+): Promise<DispatchOrderUnitsResolution> {
+  const session = createClient();
+  const admin = createAdminClient();
+  if (!session || !admin) return { status: "unavailable" };
+
+  const { data: allocs, error: aErr } = await session
+    .from("stock_allocations")
+    .select("id, quantity, logistics_order_items!inner(order_id)")
+    .eq("logistics_order_items.order_id", orderId)
+    .in("status", allocationStatuses);
+  if (aErr) return { status: "unavailable" };
+  if (!allocs?.length) return { status: "not_applicable" };
+  const allocationRows = allocs as DispatchAllocationRow[];
+  const allocationIds = allocationRows.map((a) => a.id);
+
+  const { data: bridge, error: bErr } = await admin
+    .from("custody_allocation_physical_units")
+    .select("allocation_id, physical_unit_id, quantity")
+    .in("allocation_id", allocationIds);
+  if (bErr) return { status: "unavailable" };
+  if (!bridge?.length) return { status: "unavailable" };
+  const bridgeRows = bridge as DispatchBridgeRow[];
+
+  // 0252 exige cobertura física exacta ANTES de decidir si hay N2. Un puente
+  // ausente/parcial no significa N1: significa genealogía no verificable.
+  for (const allocation of allocationRows) {
+    const target = quantityMilli(allocation.quantity);
+    const covered = bridgeRows
+      .filter((row) => row.allocation_id === allocation.id)
+      .reduce<bigint | null>((sum, row) => {
+        if (sum === null) return null;
+        const quantity = quantityMilli(row.quantity);
+        return quantity === null ? null : sum + quantity;
+      }, 0n);
+    if (target === null || target <= 0n || covered === null || covered !== target) {
+      return { status: "unavailable" };
+    }
+  }
+
+  const unitIds = [...new Set(bridgeRows.map((b) => b.physical_unit_id))];
+
+  const { data: units, error: uErr } = await session
+    .from("custody_physical_units")
+    .select("id, public_id, sku, custody_level")
+    .in("id", unitIds)
+    .order("public_id", { ascending: true });
+  if (uErr || !units) return { status: "unavailable" };
+  const visible = units as DispatchOrderUnit[];
+  if (new Set(visible.map((unit) => unit.id)).size !== unitIds.length) {
+    return { status: "unavailable" };
+  }
+  return { status: "resolved", units: visible };
 }
 
 /**
@@ -123,36 +215,12 @@ export interface DispatchOrderUnit {
 export async function resolveDispatchOrderUnits(
   orderId: string,
 ): Promise<DispatchOrderUnit[] | null> {
-  const session = createClient();
-  const admin = createAdminClient();
-  if (!session || !admin) return null;
-
-  // 1 · Las allocations del pedido, por el cliente de SESIÓN y su RLS.
-  const { data: allocs, error: aErr } = await session
-    .from("stock_allocations")
-    .select("id, logistics_order_items!inner(order_id)")
-    .eq("logistics_order_items.order_id", orderId)
-    .in("status", ["empacada", "despachada"]);
-  if (aErr || !allocs?.length) return null;
-  const allocationIds = (allocs as { id: string }[]).map((a) => a.id);
-
-  // 2 · El puente. Lectura admin acotada a esas allocations — ver docblock.
-  const { data: bridge, error: bErr } = await admin
-    .from("custody_allocation_physical_units")
-    .select("physical_unit_id")
-    .in("allocation_id", allocationIds);
-  if (bErr || !bridge?.length) return null;
-  const unitIds = [...new Set((bridge as { physical_unit_id: string }[]).map((b) => b.physical_unit_id))];
-
-  // 3 · Identidad legible de cada unidad, por SESIÓN (RLS de tenant).
-  const { data: units, error: uErr } = await session
-    .from("custody_physical_units")
-    .select("id, public_id, sku, custody_level")
-    .in("id", unitIds)
-    .order("public_id", { ascending: true });
-  if (uErr || !units?.length) return null;
-
-  return units as DispatchOrderUnit[];
+  // Esta superficie existe para la foto PRE-despacho: una allocation que ya
+  // figura despachada queda deliberadamente fuera aunque siga en el puente.
+  const result = await resolveDispatchOrderUnitsDetailed(orderId, ["empacada"]);
+  if (result.status === "resolved") return result.units;
+  if (result.status === "not_applicable") return [];
+  return null;
 }
 
 /**
@@ -165,14 +233,30 @@ export async function resolveDispatchOrderUnits(
 export async function getDispatchEgressGate(orderId: string): Promise<DispatchEgressGate> {
   try {
     const session = createClient();
-    if (!session) return NO_APLICA;
+    if (!session) return NO_VERIFICABLE;
 
-    const units = await resolveDispatchOrderUnits(orderId);
-    if (!units) return NO_APLICA;
+    const resolution = await resolveDispatchOrderUnitsDetailed(orderId, ["empacada", "despachada"]);
+    if (resolution.status === "unavailable") return NO_VERIFICABLE;
+    if (resolution.status === "not_applicable") return NO_APLICA;
+    const units = resolution.units;
 
-    const nivel2 = units.filter((u) => u.custody_level >= 2);
+    if (units.some((u) => Number(u.custody_level) !== 1 && Number(u.custody_level) !== 2)) {
+      return NO_VERIFICABLE;
+    }
+    const nivel2 = units.filter((u) => Number(u.custody_level) === 2);
     // El requisito duro del bloque: sin unidades de nivel 2 no se muestra NADA.
     if (nivel2.length === 0) return NO_APLICA;
+
+    const { data: caseRows, error: caseError } = await session
+      .from("custody_integrity_cases")
+      .select("id, public_id, physical_unit_id")
+      .in("physical_unit_id", nivel2.map((unit) => unit.id));
+    if (caseError) return NO_VERIFICABLE;
+    const cases = new Map<string, { id: string; public_id: string }>();
+    for (const row of (caseRows ?? []) as Array<{ id: string; public_id: string; physical_unit_id: string }>) {
+      if (cases.has(row.physical_unit_id)) return NO_VERIFICABLE;
+      cases.set(row.physical_unit_id, { id: row.id, public_id: row.public_id });
+    }
 
     // 4 · El estado de la puerta, por SESIÓN: acá se autoriza de verdad.
     const resueltas: DispatchEgressUnit[] = [];
@@ -181,12 +265,20 @@ export async function getDispatchEgressGate(orderId: string): Promise<DispatchEg
         p_physical_unit_id: u.id,
       });
       const row = (Array.isArray(data) ? data[0] : data) as GateStatusRow | null | undefined;
-      if (error || !row) return NO_APLICA;
+      if (error || !row) return NO_VERIFICABLE;
+      if (
+        (Number(row.custody_level) !== 1 && Number(row.custody_level) !== 2) ||
+        Number(row.custody_level) !== Number(u.custody_level)
+      ) {
+        return NO_VERIFICABLE;
+      }
+      const integrityCase = cases.get(u.id) ?? null;
+      if (row.case_exists !== (integrityCase !== null)) return NO_VERIFICABLE;
 
       // La máquina de estados es la MISMA que la de la base: se reusa el módulo
       // puro en vez de reinterpretar las columnas acá.
       const estado = evaluateEgressGate({
-        level: (row.custody_level >= 2 ? 2 : 1) as CustodyLevel,
+        level: Number(row.custody_level) as CustodyLevel,
         state: (row.case_state ?? "PENDING_EVIDENCE") as IntegrityCaseState,
         caseExists: row.case_exists === true,
         hasIngressPhoto: row.has_ingress_photo === true,
@@ -204,7 +296,8 @@ export async function getDispatchEgressGate(orderId: string): Promise<DispatchEg
         physicalUnitId: u.id,
         unitPublicId: u.public_id,
         sku: u.sku,
-        caseId: null,
+        caseId: integrityCase?.id ?? null,
+        casePublicId: integrityCase?.public_id ?? null,
         hasIngressPhoto: row.has_ingress_photo === true,
         hasEgressPhoto: row.has_egress_photo === true,
         blockers: estado.blockers,
@@ -213,12 +306,13 @@ export async function getDispatchEgressGate(orderId: string): Promise<DispatchEg
     }
 
     return {
+      status: "required",
       applies: true,
       units: resueltas,
       allAllowed: resueltas.every((u) => u.dispatchAllowed),
     };
   } catch {
-    return NO_APLICA;
+    return NO_VERIFICABLE;
   }
 }
 
@@ -257,7 +351,7 @@ export async function resolvePhysicalUnitPodShipment(
     // 1 · La unidad, por SESIÓN (RLS de tenant). Sin visibilidad no hay mapeo.
     const { data: unit, error: uErr } = await session
       .from("custody_physical_units")
-      .select("id")
+      .select("id, quantity")
       .eq("id", physicalUnitId)
       .maybeSingle();
     if (uErr || !unit) return null;
@@ -265,10 +359,11 @@ export async function resolvePhysicalUnitPodShipment(
     // 2 · El puente, admin CERRADO sobre esa unidad (ver docblock del módulo).
     const { data: bridge, error: bErr } = await admin
       .from("custody_allocation_physical_units")
-      .select("allocation_id")
+      .select("allocation_id, quantity")
       .eq("physical_unit_id", physicalUnitId);
     if (bErr || !bridge?.length) return null;
-    const allocationIds = (bridge as { allocation_id: string }[]).map((b) => b.allocation_id);
+    const bridgeRows = bridge as Array<{ allocation_id: string; quantity: number | string }>;
+    const allocationIds = bridgeRows.map((b) => b.allocation_id);
 
     // 3 · Las allocations por SESIÓN → pedidos que el usuario puede ver.
     //     C4-M1 · MISMO filtro de estado que `resolveDispatchOrderUnits` y que
@@ -278,12 +373,62 @@ export async function resolvePhysicalUnitPodShipment(
     //     atribuirle el POD de una entrega ajena.
     const { data: allocs, error: aErr } = await session
       .from("stock_allocations")
-      .select("id, logistics_order_items!inner(order_id)")
+      .select("id, quantity, status, logistics_order_items!inner(order_id)")
       .in("id", allocationIds)
       .in("status", ["empacada", "despachada"]);
     if (aErr || !allocs?.length) return null;
     // El `!inner` garantiza la fila; el tipo generado la modela como arreglo.
-    const allocRows = allocs as unknown as { logistics_order_items: { order_id: string } | { order_id: string }[] }[];
+    const allocRows = allocs as unknown as Array<{
+      id: string;
+      quantity: number | string;
+      status: string;
+      logistics_order_items: { order_id: string } | { order_id: string }[];
+    }>;
+    if (allocRows.some((allocation) => allocation.status !== "despachada")) return null;
+    const activeAllocationIds = new Set(allocRows.map((allocation) => allocation.id));
+
+    // C4-F2 · Para probar la cobertura de CADA allocation hay que sumar el
+    // puente completo de esas allocations, no sólo la fracción aportada por
+    // esta CPU. Una allocation legítima puede combinar CPU-A 5 + CPU-B 5. Los
+    // IDs ya fueron reautorizados por la sesión en el paso anterior; la lectura
+    // admin permanece cerrada a ese conjunto y sólo se usa para coherencia.
+    const { data: allocationBridge, error: allocationBridgeError } = await admin
+      .from("custody_allocation_physical_units")
+      .select("allocation_id, physical_unit_id, quantity")
+      .in("allocation_id", [...activeAllocationIds]);
+    if (allocationBridgeError || !allocationBridge?.length) return null;
+    const allocationBridgeRows = allocationBridge as Array<{
+      allocation_id: string;
+      physical_unit_id: string;
+      quantity: number | string;
+    }>;
+
+    const unitQuantity = quantityMilli((unit as { quantity: number | string }).quantity);
+    const activeCovered = bridgeRows.reduce<bigint | null>((sum, row) => {
+      if (sum === null || !activeAllocationIds.has(row.allocation_id)) return sum;
+      const quantity = quantityMilli(row.quantity);
+      return quantity === null ? null : sum + quantity;
+    }, 0n);
+    // Una CPU fraccionada o parcialmente reservada no tiene «un POD de la
+    // unidad». Sólo el shipment que cubre la cantidad física completa es apto.
+    if (unitQuantity === null || activeCovered === null || activeCovered !== unitQuantity) return null;
+    for (const allocation of allocRows) {
+      const allocationQuantity = quantityMilli(allocation.quantity);
+      const bridgeQuantity = allocationBridgeRows
+        .filter((row) => row.allocation_id === allocation.id)
+        .reduce<bigint | null>((sum, row) => {
+          if (sum === null) return null;
+          const quantity = quantityMilli(row.quantity);
+          return quantity === null ? null : sum + quantity;
+        }, 0n);
+      if (
+        allocationQuantity === null ||
+        bridgeQuantity === null ||
+        allocationQuantity !== bridgeQuantity
+      ) {
+        return null;
+      }
+    }
     const orderIds = [
       ...new Set(
         allocRows.flatMap((a) =>
@@ -293,6 +438,7 @@ export async function resolvePhysicalUnitPodShipment(
         ),
       ),
     ];
+    if (orderIds.length !== 1) return null;
 
     // 4 · El shipment vigente de esos pedidos, por SESIÓN. Se prefiere el
     //     entregado (el POD es post-entrega); si no, el último despachado.
@@ -307,7 +453,8 @@ export async function resolvePhysicalUnitPodShipment(
     if (sErr || !ships?.length) return null;
     type Ship = { id: string; public_id: string; status: string; delivered_at: string | null };
     const rows = ships as Ship[];
-    const chosen = rows.find((s) => s.delivered_at !== null || s.status === "entregado") ?? rows[0];
+    if (rows.length !== 1) return null;
+    const chosen = rows[0];
     return {
       shipmentId: chosen.id,
       shipmentPublicId: chosen.public_id,
