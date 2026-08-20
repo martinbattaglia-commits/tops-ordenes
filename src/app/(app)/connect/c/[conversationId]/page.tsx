@@ -174,6 +174,8 @@ export default async function ConnectThreadPage({
         readOnly={!!conversation.archivedAt}
         mentionables={mentionables}
         initialNowIso={initialNowIso}
+        handoverState={(conversation as unknown as { handover_state?: "BOT_ACTIVE" | "PAUSED_HUMAN" }).handover_state ?? "BOT_ACTIVE"}
+        lastCustomerMessageAt={messages.filter(m => m.wa?.direction === "inbound").pop()?.createdAt ?? conversation.lastMessageAt}
       />
     </div>
   );
