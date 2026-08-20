@@ -8,21 +8,22 @@ export function NexusOsBrand() {
   return (
     <div
       className="mt-2 flex items-center justify-center gap-2.5"
-      style={{ maxWidth: "100%", width: "auto" }}
+      style={{ maxWidth: "100%", width: "auto", flexShrink: 0 }}
     >
       <svg
-        width={36}
-        height={36}
+        width="32"
+        height="32"
         viewBox="0 0 100 100"
-        className="h-9 w-9 shrink-0"
+        className="h-8 w-8 shrink-0"
         aria-hidden="true"
         style={{
-          width: "36px",
-          height: "36px",
-          maxWidth: "36px",
-          maxHeight: "36px",
-          minWidth: "36px",
-          minHeight: "36px",
+          width: "32px",
+          height: "32px",
+          maxWidth: "32px",
+          maxHeight: "32px",
+          minWidth: "32px",
+          minHeight: "32px",
+          flexShrink: 0,
         }}
       >
         <g stroke="#3B4CC8" strokeWidth="9" strokeLinecap="round" fill="none">
@@ -38,7 +39,7 @@ export function NexusOsBrand() {
         </g>
         <circle cx="50" cy="50" r="7" fill="#3B4CC8" />
       </svg>
-      <div className="text-left leading-none">
+      <div className="text-left leading-none" style={{ flexShrink: 0 }}>
         <div className="text-[8px] font-bold uppercase tracking-[0.22em] text-[#4C63D2]">
           Core Operating System
         </div>

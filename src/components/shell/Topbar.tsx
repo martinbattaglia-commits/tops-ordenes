@@ -70,6 +70,8 @@ export default function Topbar({
           width={120}
           height={40}
           priority
+          unoptimized
+          style={{ width: "auto", height: "40px", maxWidth: "120px", maxHeight: "40px" }}
           className="w-auto h-10 max-w-[120px] max-h-10 object-contain rounded-md"
         />
       </Link>
