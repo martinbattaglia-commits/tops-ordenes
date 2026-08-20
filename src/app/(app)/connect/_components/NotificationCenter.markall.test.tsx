@@ -17,14 +17,18 @@ import { act } from "react";
 
 import { createRoot, type Root } from "react-dom/client";
 
-const H = vi.hoisted(() => ({ markAll: vi.fn(async () => ({ ok: true as const, marcadas: 1 })) }));
+const H = vi.hoisted(() => ({
+  markAll: vi.fn(async () => ({ ok: true as const, marcadas: 1 })),
+  markOne: vi.fn(async () => ({ ok: true as const })),
+  push: vi.fn(),
+}));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: H.push }) }));
 vi.mock("@/lib/supabase/realtime", () => ({ useRealtimeTable: () => {} }));
 vi.mock("./MemberSearch", () => ({ MemberSearch: () => null }));
 vi.mock("@/lib/notifications/actions", () => ({
   markAllNotificationsReadAction: H.markAll,
-  markNotificationReadAction: vi.fn(),
+  markNotificationReadAction: H.markOne,
   snoozeNotificationAction: vi.fn(),
   delegateNotificationAction: vi.fn(),
   setNotificationPriorityAction: vi.fn(),
@@ -47,7 +51,13 @@ const conversacion = (id: string): NotificationItem => ({
 describe("NotificationCenter · el botón de marcación masiva no promete lo que no puede", () => {
   let host: HTMLDivElement; let root: Root;
   beforeEach(() => { host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host); });
-  afterEach(async () => { await act(async () => root.unmount()); host.remove(); H.markAll.mockClear(); });
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+    H.markAll.mockClear();
+    H.markOne.mockClear();
+    H.push.mockClear();
+  });
 
   const boton = () =>
     Array.from(host.querySelectorAll("button")).find((b) => /Marcar todas leídas/.test(b.textContent ?? ""))!;
@@ -74,6 +84,40 @@ describe("NotificationCenter · el botón de marcación masiva no promete lo que
     await act(async () => { root.render(<NotificationCenter items={[aviso()]} />); });
     await act(async () => { boton().click(); });
     expect(host.textContent).toContain("No se marcó ninguna notificación como leída.");
+  });
+});
+
+describe("NotificationCenter · abrir un aviso acredita lectura", () => {
+  let host: HTMLDivElement; let root: Root;
+  beforeEach(() => { host = document.createElement("div"); document.body.appendChild(host); root = createRoot(host); });
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    host.remove();
+    H.markOne.mockClear();
+    H.push.mockClear();
+  });
+
+  it("marca el aviso persistido antes de navegar", async () => {
+    const item = aviso({
+      id: "11111111-1111-4111-8111-111111111111",
+      href: "/connect/c/22222222-2222-4222-8222-222222222222",
+    });
+    await act(async () => { root.render(<NotificationCenter items={[item]} />); });
+    const link = Array.from(host.querySelectorAll("a"))
+      .find((a) => a.textContent?.includes("Aviso del sistema"))!;
+    await act(async () => { link.click(); await Promise.resolve(); });
+    expect(H.markOne).toHaveBeenCalledWith({ id: item.id });
+    expect(H.push).toHaveBeenCalledWith(item.href);
+  });
+
+  it("deja la conversación derivada a connect_mark_read", async () => {
+    const item = conversacion("33333333-3333-4333-8333-333333333333");
+    await act(async () => { root.render(<NotificationCenter items={[item]} />); });
+    const link = Array.from(host.querySelectorAll("a"))
+      .find((a) => a.textContent?.includes("Depósito Magaldi"))!;
+    link.addEventListener("click", (event) => event.preventDefault());
+    await act(async () => { link.click(); });
+    expect(H.markOne).not.toHaveBeenCalled();
   });
 });
 

@@ -11,8 +11,9 @@
 // badges por conversación de la bandeja. Ninguna categoría suprime a otra y
 // cada una se apaga sólo cuando su propia cuenta llega a cero.
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeTable } from "@/lib/supabase/realtime";
@@ -69,12 +70,14 @@ function CategoryBadge({
 }
 
 export function NotificationsBell() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [counts, setCounts] = useState<BadgeCounts>(EMPTY_BADGE_COUNTS);
   // HOTFIX-02: el fallo de la marcación masiva se muestra ANCLADO al panel que
   // lo produjo, nunca como éxito silencioso.
   const [errorMarcado, setErrorMarcado] = useState<string | null>(null);
+  const [abriendoId, setAbriendoId] = useState<string | null>(null);
   const botonRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
 
@@ -183,6 +186,39 @@ export function NotificationsBell() {
     botonRef.current?.focus();
   }, []);
 
+  const openNotification = useCallback(async (
+    event: MouseEvent<HTMLAnchorElement>,
+    notification: Notification,
+    href: string,
+  ) => {
+    if (notification.is_read) {
+      cerrar();
+      return;
+    }
+    event.preventDefault();
+    if (abriendoId) return;
+    setErrorMarcado(null);
+    setAbriendoId(notification.id);
+    const supabase = createClient();
+    if (!supabase) {
+      setErrorMarcado("No se pudo registrar la lectura en este entorno.");
+      setAbriendoId(null);
+      return;
+    }
+    const { error } = await supabase.rpc("connect_notif_mark_read", {
+      p_id: notification.id,
+    });
+    if (error) {
+      setErrorMarcado(mapNotifRpcError(error.message));
+      setAbriendoId(null);
+      return;
+    }
+    await load();
+    setAbriendoId(null);
+    setOpen(false);
+    router.push(href);
+  }, [abriendoId, cerrar, load, router]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -278,7 +314,12 @@ export function NotificationsBell() {
                 </div>
               )}
               {items.map((n) => (
-                <NotificationRow key={n.id} n={n} onClose={cerrar} />
+                <NotificationRow
+                  key={n.id}
+                  n={n}
+                  pending={abriendoId === n.id}
+                  onOpen={openNotification}
+                />
               ))}
             </div>
             <Link
@@ -330,7 +371,19 @@ function ResumenCategoria({
   );
 }
 
-function NotificationRow({ n, onClose }: { n: Notification; onClose: () => void }) {
+function NotificationRow({
+  n,
+  pending,
+  onOpen,
+}: {
+  n: Notification;
+  pending: boolean;
+  onOpen: (
+    event: MouseEvent<HTMLAnchorElement>,
+    notification: Notification,
+    href: string,
+  ) => void;
+}) {
   // F4.1B: ruteo unificado con el Centro (hrefFor) — una mención/DM navega al hilo,
   // no a "#" (hasta F3 solo orders tenía destino).
   const href = hrefFor(n.entity, n.entity_id);
@@ -338,7 +391,8 @@ function NotificationRow({ n, onClose }: { n: Notification; onClose: () => void 
   return (
     <Link
       href={href}
-      onClick={onClose}
+      onClick={(event) => { void onOpen(event, n, href); }}
+      aria-busy={pending}
       className={`flex gap-2 border-b border-stroke-soft px-3 py-2.5 last:border-b-0 hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tops-red/40 ${
         isUnread ? "bg-tops-blue-700/5" : ""
       }`}

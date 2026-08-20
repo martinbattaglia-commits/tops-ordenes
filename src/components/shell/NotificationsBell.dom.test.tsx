@@ -19,6 +19,8 @@ import { act } from "react";
 
 import { createRoot, type Root } from "react-dom/client";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 // ── Fronteras ──────────────────────────────────────────────────────────────
 let contadores = { red_system_count: 0, green_whatsapp_count: 0, yellow_internal_count: 0 };
 /** Si es true, la vista responde con ERROR (0234 todavía no aplicada). */
