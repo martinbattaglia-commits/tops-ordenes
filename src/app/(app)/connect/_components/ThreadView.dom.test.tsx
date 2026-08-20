@@ -84,8 +84,8 @@ const setHandoverStateAction = vi.fn(async () => ({ ok: true as const }));
 vi.mock("@/lib/whatsapp/handover-action", () => ({
   setHandoverStateAction: (...a: unknown[]) => setHandoverStateAction(...(a as [])),
 }));
-vi.mock("@/lib/connect/adapters/driving/read-actions", () => ({
-  markReadAction: vi.fn(async () => ({ ok: true })),
+vi.mock("@/lib/connect/client-mark-read", () => ({
+  markReadInBrowser: vi.fn(async () => ({ ok: true })),
 }));
 // H2 (FASE B): audio-actions.ts ahora importa canChannel (nexus-link.ts, que
 // trae `server-only`) para exigir la capacidad del canal, igual que ya hacían
