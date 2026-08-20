@@ -97,6 +97,10 @@ const MIGRACIONES_EDITABLES: readonly string[] = [
   // RETIRAR esta entrada en cuanto 0262a quede aplicada en producción.
   "supabase/migrations/0262a_finance_core_schema_canonical_alignment.sql",
   "supabase/migrations/ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
+  // Remediación focal pgcrypto 0263: mergeada en main pero NUNCA aplicada en Supabase (abortó por function digest(text, unknown) does not exist).
+  // Calificación explícita de extensions.digest bajo search_path restringido.
+  // RETIRAR esta entrada en cuanto 0263 quede aplicada en producción.
+  "supabase/migrations/0263_custody_pod_signature_and_reception_idempotency.sql",
 ];
 
 /**
@@ -359,6 +363,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
     "tests/db/t-cli-a3-01-nivel-contratado.test.ts",
     "tests/db/t-0261-0261a-remediation.test.ts",
     "tests/db/t-0262a-finance-canonical-alignment.test.ts",
+    "tests/db/bootstrap/00-platform-stub.sql",
   ];
 
   it("la base se resuelve a un commit real y NO es HEAD~1 por descarte", () => {
@@ -716,6 +721,7 @@ describe("T-C1-05 · la excepción de edición no es una puerta abierta", () => 
       "supabase/migrations/ROLLBACK_0261_connect_archive_force_override.sql",
       "supabase/migrations/0262a_finance_core_schema_canonical_alignment.sql",
       "supabase/migrations/ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
+      "supabase/migrations/0263_custody_pod_signature_and_reception_idempotency.sql",
     ]);
     const src = readFileSync(
       join(REPO_ROOT, "tests", "custody-db", "t-c1-05-append-only-vanilla.test.ts"),

@@ -3095,7 +3095,7 @@
     {
       "id": "0263_custody_pod_signature_and_reception_idempotency.sql",
       "filename": "0263_custody_pod_signature_and_reception_idempotency.sql",
-      "sha256": "ebcd157062c35747fc12925e83ca7e848be726bfb5fee16acd1b5f47632be395",
+      "sha256": "9ff5e44ebca0fc90e449dd3debf05c3eb9be2a4048699b661bc00f3c01950181",
       "orden": 265,
       "requires": [
         "0253_custody_egress_gate.sql",
@@ -3104,8 +3104,8 @@
       "estado": "active",
       "ledger_version": "L00265",
       "ledger_name": "0263_custody_pod_signature_and_reception_idempotency",
-      "provenance": "repo (codex/remediacion-custodia-wms)",
-      "motivo": "Endurece firma y POD con capacidad expl\u00edcita, atestaci\u00f3n server-side y snapshot de liberaci\u00f3n; retira las v\u00edas legacy manipulables y hace at\u00f3mica e idempotente la creaci\u00f3n-confirmaci\u00f3n de recepciones WMS."
+      "provenance": "repo (frente/fix-0263-pgcrypto-schema)",
+      "motivo": "Remediacion focal pgcrypto de 0263: califica explicitamente extensions.digest bajo search_path restringido."
     },
     {
       "id": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
