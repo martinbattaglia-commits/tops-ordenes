@@ -200,7 +200,7 @@ const DOMAINS: Domain[] = [
   },
   {
     id: "tesoreria",
-    label: "Tesorería · Finanzas",
+    label: "Tesorería",
     items: [
       { href: "/tesoreria", label: "Resumen", icon: "wallet" },
       { href: "/tesoreria/bancos", label: "Bancos", icon: "building" },
@@ -210,6 +210,18 @@ const DOMAINS: Domain[] = [
       { href: "/tesoreria/flujo-fondos", label: "Flujo de fondos", icon: "trend-up" },
       { href: "/tesoreria/conciliacion", label: "Conciliación", icon: "check-circle" },
       { href: "/tesoreria/caja-chica", label: "Caja Chica", icon: "wallet" },
+    ],
+  },
+  {
+    id: "finanzas",
+    label: "Finanzas",
+    items: [
+      { href: "/finanzas/resumen", label: "Resumen Ejecutivo", icon: "dashboard" },
+      { href: "/finanzas/caja-liquidez", label: "Caja y Liquidez", icon: "trend-up" },
+      { href: "/finanzas/presupuesto", label: "Planificación y Presupuesto", icon: "calculator" },
+      { href: "/finanzas/resultados", label: "Resultados y Rentabilidad", icon: "report" },
+      { href: "/finanzas/ingesta", label: "Bandeja de Ingesta", icon: "mail", badge: "Inbox" },
+      { href: "/finanzas/quicken", label: "Importación Quicken", icon: "download", badge: "Histórico" },
     ],
   },
   {
