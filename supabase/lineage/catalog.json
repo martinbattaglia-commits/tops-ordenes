@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 222,
-  "no_ejecutables": 32,
+  "ejecutables": 225,
+  "no_ejecutables": 35,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2962,6 +2962,78 @@
       "ledger_name": "ROLLBACK_0259_purchase_order_signer_by_permission",
       "provenance": "repo (frente/oc-firmante-por-permiso)",
       "motivo": "Inversa logica e idempotente de 0259. Restituye purchase_order_issue(jsonb,jsonb) al cuerpo exacto de 0243, con el firmante resuelto por el correo literal y sin el gate directo del firmante. Devuelve compras.sign a los CINCO roles que lo portaban -admin_sin_rrhh, administracion_finanzas, director_ops, gerencia_comercial, super_admin-, escritos de forma explicita y no por negacion para no otorgar de mas al deshacer. Borra el rol firmante_oc con todas sus asignaciones y sus grants. Devuelve los cuatro cargos a su valor previo MEDIDO: las dos cuentas de Direccion vuelven a Presidente mas Super Administrador, joseluis y cynthia vuelven a NULL. Lleva post-condicion propia: verifica el reparto restituido exacto y que no sobreviva el rol. No toca purchase_orders: 0259 nunca escribio una fila de esa tabla, asi que las 24 ordenes emitidas conservan firmante, cargo y sus dos hashes en los dos sentidos. Ejecutarlo devuelve el modulo al estado 0258: solo joseluis puede volver a emitir, con sus tres defectos incluidos."
+    },
+    {
+      "id": "0260_nexus_link_handover_archived.sql",
+      "filename": "0260_nexus_link_handover_archived.sql",
+      "sha256": "043459f125f43050fdb2127e0d0b295466f4d3fbfb67b6fef72005cae0809154",
+      "orden": 255,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00255",
+      "ledger_name": "0260_nexus_link_handover_archived",
+      "provenance": "repo (frente/nexus-link)",
+      "motivo": "NEXUS Link: persistencia de estados de archivo en conversaciones handover"
+    },
+    {
+      "id": "ROLLBACK_0260_nexus_link_handover_archived.sql",
+      "filename": "ROLLBACK_0260_nexus_link_handover_archived.sql",
+      "sha256": "04334df359c60e5356566df1191bbd39191b5a113e928da1f10e56315b03f3c1",
+      "orden": 256,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00256",
+      "ledger_name": "ROLLBACK_0260_nexus_link_handover_archived",
+      "provenance": "repo (frente/nexus-link)",
+      "motivo": "Inversa logica e idempotente de 0260"
+    },
+    {
+      "id": "0261_connect_archive_force_override.sql",
+      "filename": "0261_connect_archive_force_override.sql",
+      "sha256": "700f46f92ac0ddc3c0b5fcc0ce6be4129f476e650edf886bd488d35782c783fd",
+      "orden": 257,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00257",
+      "ledger_name": "0261_connect_archive_force_override",
+      "provenance": "repo (frente/connect-archive)",
+      "motivo": "Connect Archive: override forzado de archivo de conversaciones"
+    },
+    {
+      "id": "ROLLBACK_0261_connect_archive_force_override.sql",
+      "filename": "ROLLBACK_0261_connect_archive_force_override.sql",
+      "sha256": "416cdc3d9e8661fa1920158a2d1b38d35c3ddb89b02d06da7eb0f6b7a52e6f67",
+      "orden": 258,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00258",
+      "ledger_name": "ROLLBACK_0261_connect_archive_force_override",
+      "provenance": "repo (frente/connect-archive)",
+      "motivo": "Inversa logica e idempotente de 0261"
+    },
+    {
+      "id": "0262_finance_core_foundation.sql",
+      "filename": "0262_finance_core_foundation.sql",
+      "sha256": "1908587594777b7e9dfd6b2d629f578a6b0edc1985b0f4f47b36038879a42d63",
+      "orden": 259,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00259",
+      "ledger_name": "0262_finance_core_foundation",
+      "provenance": "repo (frente/finanzas-quicken)",
+      "motivo": "Fundacion del modulo nativo NEXUS Finanzas: tablas finance_*, RLS y RBAC finanzas.*"
+    },
+    {
+      "id": "ROLLBACK_0262_finance_core_foundation.sql",
+      "filename": "ROLLBACK_0262_finance_core_foundation.sql",
+      "sha256": "250b56f7fa0f0a9cd585e4d5019d78d595f6f627b692c71f13ea7ae77e31cf85",
+      "orden": 260,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00260",
+      "ledger_name": "ROLLBACK_0262_finance_core_foundation",
+      "provenance": "repo (frente/finanzas-quicken)",
+      "motivo": "Inversa logica e idempotente de 0262"
     }
   ]
 }
