@@ -353,6 +353,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
     "tests/db/t-a0-13-run-report.test.ts",
     "tests/db/t-cli-a3-01-nivel-contratado.test.ts",
     "tests/db/t-0261-0261a-remediation.test.ts",
+    "tests/db/t-0262a-finance-canonical-alignment.test.ts",
   ];
 
   it("la base se resuelve a un commit real y NO es HEAD~1 por descarte", () => {

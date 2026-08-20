@@ -75,6 +75,8 @@ export const EXPECTED_TEST_FILES = [
   "t-pr66-01-order-pricing.test.ts",
   // Remediación 0261 (desambiguación de sobrecarga connect_archive_conversation) y 0261a (enums RBAC Finanzas).
   "t-0261-0261a-remediation.test.ts",
+  // Remediación 0262a (alineación canónica dual-state del esquema de Finanzas).
+  "t-0262a-finance-canonical-alignment.test.ts",
 ];
 
 /**
@@ -133,6 +135,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-pr66-a1-purchase-order-integrity.test.ts": 7,
   "t-pr66-01-order-pricing.test.ts": 19,
   "t-0261-0261a-remediation.test.ts": 9,
+  "t-0262a-finance-canonical-alignment.test.ts": 7,
 });
 
 /**
