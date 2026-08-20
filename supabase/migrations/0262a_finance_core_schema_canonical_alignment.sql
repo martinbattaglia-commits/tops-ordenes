@@ -1,13 +1,16 @@
 -- =========================================================================
 -- 0262a_finance_core_schema_canonical_alignment.sql
 --
--- Expediente: "Remediación del Incidente de Provenance 0262 — Alineación Canónica"
+-- Expediente: "Remediación del Incidente de Provenance 0262 — Alineación Canónica y Endurecimiento ACL"
 -- Autoridad: Dirección Técnica Nexus.
--- Régimen: Aditivo forward-only, dual-state exhaustivo, RLS estricto, fail-closed.
+-- Régimen: Aditivo forward-only, dual-state exhaustivo, ACL mínimo privilegio, RLS estricto, fail-closed.
 --
 -- Propósito:
---   Alinear el esquema de base de datos con el contrato canónico autenticado
---   de 0262_finance_core_foundation.sql (SHA-256: 1908587594777b7e9dfd6b2d629f578a6b0edc1985b0f4f47b36038879a42d63).
+--   1. Alinear el esquema de base de datos con el contrato canónico autenticado
+--      de 0262_finance_core_foundation.sql (SHA-256: 1908587594777b7e9dfd6b2d629f578a6b0edc1985b0f4f47b36038879a42d63).
+--   2. Endurecer la ACL de las 10 tablas financieras eliminando privilegios excesivos
+--      (TRUNCATE, REFERENCES, TRIGGER de authenticated, y todo privilegio de anon y PUBLIC),
+--      estableciendo exactamente SELECT, INSERT, UPDATE, DELETE para authenticated.
 --
 -- Garantías de Seguridad:
 --   - Cero CASCADE: Todas las eliminaciones son estrictamente restrictivas (DROP TABLE ... RESTRICT).
@@ -16,6 +19,7 @@
 --   - Identificación dual-state exacta: Comprobación exhaustiva del manifest de las 10 tablas
 --     (columnas, tipos, nullability, defaults, constraints, índices, RLS, FORCE RLS, políticas, grants).
 --   - Verificación exhaustiva de semillas (códigos, nombres, valores y atributos exactos).
+--   - Endurecimiento permanente de ACL: Revocación total a PUBLIC/anon y restricción a 4 privilegios.
 -- =========================================================================
 
 do $$
@@ -190,11 +194,12 @@ begin
     raise exception 'STOP — 0262a PRECONDICIÓN NO CUMPLIDA: Existen % triggers de usuario no autorizados en tablas financieras', v_dep_count;
   end if;
 
-  -- 2.4 Funciones / procedimientos dependientes
+  -- 2.4 Funciones / procedimientos dependientes (incluyendo tipos compuestos de parámetros)
   select count(*) into v_dep_count
   from pg_depend d
   join pg_proc p on p.oid = d.objid
-  join pg_class t on t.oid = d.refobjid
+  left join pg_type pt on pt.oid = d.refobjid
+  left join pg_class t on (t.oid = d.refobjid or t.oid = pt.typrelid)
   join pg_namespace ns_t on ns_t.oid = t.relnamespace
   join pg_namespace ns_p on ns_p.oid = p.pronamespace
   where ns_t.nspname = 'public'
@@ -311,7 +316,7 @@ begin
     WHERE n.nspname = 'public' AND c.relname LIKE 'finance_%' AND c.relkind = 'r'
   ) tm ON tm.table_name = t.table_name;
 
-  -- 3.1 Verificación Exhaustiva de Estado A (Canónico)
+  -- 3.1 Verificación Exhaustiva de Estado A (Canónico con ACL Endurecida de 4 grants)
   if (v_current_manifest->'finance_categories'->'columns' @> '[{"column_name":"category_type","data_type":"text","is_nullable":"NO"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_categories'->'columns') = 8)
      and (jsonb_array_length(v_current_manifest->'finance_categories'->'constraints') = 4)
@@ -393,16 +398,26 @@ begin
      and (v_current_manifest->'finance_quicken_imports'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
      and (v_current_manifest->'finance_versions'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
   then
-    v_is_canonical := true;
+    -- Verificar que no haya grants a anon o public
+    select count(*) into v_count
+    from information_schema.role_table_grants
+    where table_schema = 'public'
+      and table_name like 'finance_%'
+      and grantee in ('anon', 'public');
+
+    if v_count = 0 then
+      v_is_canonical := true;
+    end if;
   end if;
 
-  -- 3.2 Verificación Exhaustiva de Estado B (Divergente Certificado)
+  -- 3.2 Verificación Exhaustiva de Estado B (Divergente Remoto Certificado)
   if (v_current_manifest->'finance_categories'->'columns' @> '[{"column_name":"category_type","udt_name":"finance_direction_t","is_nullable":"NO"},{"column_name":"pnl_section","data_type":"text","is_nullable":"YES"},{"column_name":"cash_flow_section","data_type":"text","is_nullable":"YES"},{"column_name":"updated_at","data_type":"timestamp with time zone","is_nullable":"NO"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_categories'->'columns') = 11)
      and (jsonb_array_length(v_current_manifest->'finance_categories'->'constraints') = 3)
      and (jsonb_array_length(v_current_manifest->'finance_categories'->'indexes') = 3)
      and (jsonb_array_length(v_current_manifest->'finance_categories'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_categories'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_categories'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_categories'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
      and not (v_current_manifest->'finance_categories'->'constraints' @> '[{"constraint_name":"finance_categories_category_type_check"}]'::jsonb)
 
      and (v_current_manifest->'finance_cost_centers'->'columns' @> '[{"column_name":"business_line","data_type":"text","is_nullable":"YES"},{"column_name":"manager_id","data_type":"uuid","is_nullable":"YES"},{"column_name":"updated_at","data_type":"timestamp with time zone","is_nullable":"NO"}]'::jsonb)
@@ -410,7 +425,8 @@ begin
      and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'constraints') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'indexes') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_cost_centers'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_cost_centers'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
      and not (v_current_manifest->'finance_cost_centers'->'constraints' @> '[{"constraint_name":"finance_cost_centers_business_line_check"}]'::jsonb)
 
      and (v_current_manifest->'finance_plan_lines'->'columns' @> '[{"column_name":"period_date","data_type":"date","is_nullable":"NO"},{"column_name":"amount_planned","data_type":"numeric","is_nullable":"NO","column_default":"0"}]'::jsonb)
@@ -418,55 +434,63 @@ begin
      and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'constraints') = 5)
      and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'indexes') = 3)
      and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_plan_lines'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_plan_lines'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (v_current_manifest->'finance_forecast_adjustments'->'columns' @> '[{"column_name":"forecast_date","data_type":"date","is_nullable":"NO"},{"column_name":"treasury_movement_id","data_type":"uuid","is_nullable":"YES"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'columns') = 19)
      and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'constraints') = 6)
      and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'indexes') = 4)
      and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_forecast_adjustments'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_forecast_adjustments'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (v_current_manifest->'finance_assumptions'->'columns' @> '[{"column_name":"key","data_type":"text","is_nullable":"NO"},{"column_name":"value_numeric","data_type":"numeric","is_nullable":"YES"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'columns') = 14)
      and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'constraints') = 3)
      and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'indexes') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_assumptions'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_assumptions'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (v_current_manifest->'finance_scenarios'->'columns' @> '[{"column_name":"code","data_type":"text","is_nullable":"NO"},{"column_name":"is_base_case","data_type":"boolean","is_nullable":"NO"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'columns') = 12)
      and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'constraints') = 3)
      and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'indexes') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_scenarios'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_scenarios'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (v_current_manifest->'finance_report_snapshots'->'columns' @> '[{"column_name":"snapshot_date","data_type":"date","is_nullable":"NO"},{"column_name":"payload","data_type":"jsonb","is_nullable":"NO"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'columns') = 8)
      and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'constraints') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'indexes') = 1)
      and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_report_snapshots'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_report_snapshots'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (v_current_manifest->'finance_document_inbox'->'columns' @> '[{"column_name":"file_name","data_type":"text","is_nullable":"NO"},{"column_name":"storage_path","data_type":"text","is_nullable":"NO"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'columns') = 13)
      and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'constraints') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'indexes') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_document_inbox'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_document_inbox'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (v_current_manifest->'finance_quicken_imports'->'columns' @> '[{"column_name":"file_name","data_type":"text","is_nullable":"NO"},{"column_name":"storage_path","data_type":"text","is_nullable":"NO"}]'::jsonb)
      and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'columns') = 9)
      and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'constraints') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'indexes') = 1)
      and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_quicken_imports'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_quicken_imports'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (jsonb_array_length(v_current_manifest->'finance_versions'->'columns') = 14)
      and (jsonb_array_length(v_current_manifest->'finance_versions'->'constraints') = 3)
      and (jsonb_array_length(v_current_manifest->'finance_versions'->'indexes') = 2)
      and (jsonb_array_length(v_current_manifest->'finance_versions'->'policies') = 2)
-     and (jsonb_array_length(v_current_manifest->'finance_versions'->'grants') = 4)
+     and (jsonb_array_length(v_current_manifest->'finance_versions'->'grants') in (4, 7))
+     and (v_current_manifest->'finance_versions'->'grants' @> '[{"privilege_type":"SELECT"},{"privilege_type":"INSERT"},{"privilege_type":"UPDATE"},{"privilege_type":"DELETE"}]'::jsonb)
 
      and (v_current_manifest->'finance_categories'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
      and (v_current_manifest->'finance_cost_centers'->'rls' = '{"rowsecurity":true,"forcerowsecurity":false}'::jsonb)
@@ -487,15 +511,42 @@ begin
   end if;
 
   -- =======================================================================
-  -- 4. EJECUCIÓN CONDICIONAL
+  -- 4. EJECUCIÓN CONDICIONAL Y ENDURECIMIENTO DE ACL
   -- =======================================================================
 
   if v_is_canonical then
-    -- ESTADO A: No-op estructural verificado
-    raise notice '0262a: Esquema acreditado en Estado A Canónico. Ejecutando no-op estructural.';
+    -- ESTADO A: Asegurar ACL endurecida como no-op idempotente
+    raise notice '0262a: Esquema acreditado en Estado A Canónico. Verificando/endureciendo ACL...';
+
+    revoke all on table
+      public.finance_versions,
+      public.finance_categories,
+      public.finance_cost_centers,
+      public.finance_assumptions,
+      public.finance_plan_lines,
+      public.finance_forecast_adjustments,
+      public.finance_scenarios,
+      public.finance_report_snapshots,
+      public.finance_document_inbox,
+      public.finance_quicken_imports
+    from public, anon, authenticated;
+
+    grant select, insert, update, delete on table
+      public.finance_versions,
+      public.finance_categories,
+      public.finance_cost_centers,
+      public.finance_assumptions,
+      public.finance_plan_lines,
+      public.finance_forecast_adjustments,
+      public.finance_scenarios,
+      public.finance_report_snapshots,
+      public.finance_document_inbox,
+      public.finance_quicken_imports
+    to authenticated;
+
   else
-    -- ESTADO B: Aplicación de la alineación canónica exacta
-    raise notice '0262a: Esquema acreditado en Estado B Divergente. Iniciando alineación canónica...';
+    -- ESTADO B: Aplicación de la alineación canónica exacta y endurecimiento de ACL
+    raise notice '0262a: Esquema acreditado en Estado B Divergente. Iniciando alineación canónica y endurecimiento ACL...';
 
     -- 4.1 Corrección in-place de finance_categories
     alter table public.finance_categories
@@ -725,8 +776,24 @@ begin
     create policy "finance_quicken_imports write" on public.finance_quicken_imports for all
       using (coalesce(public.has_permission('finanzas.admin'), false));
 
-    -- 4.6 Grants a authenticated
-    grant select, insert, update, delete on
+    -- 4.6 Endurecimiento Integral de ACL sobre las diez tablas financieras
+    revoke all on table
+      public.finance_versions,
+      public.finance_categories,
+      public.finance_cost_centers,
+      public.finance_assumptions,
+      public.finance_plan_lines,
+      public.finance_forecast_adjustments,
+      public.finance_scenarios,
+      public.finance_report_snapshots,
+      public.finance_document_inbox,
+      public.finance_quicken_imports
+    from public, anon, authenticated;
+
+    grant select, insert, update, delete on table
+      public.finance_versions,
+      public.finance_categories,
+      public.finance_cost_centers,
       public.finance_assumptions,
       public.finance_plan_lines,
       public.finance_forecast_adjustments,
@@ -736,11 +803,11 @@ begin
       public.finance_quicken_imports
     to authenticated;
 
-    raise notice '0262a: Alineación canónica completada exitosamente.';
+    raise notice '0262a: Alineación canónica y endurecimiento ACL completados exitosamente.';
   end if;
 
   -- =======================================================================
-  -- 5. POSTSONDAS FAIL-CLOSED: CERTIFICACIÓN INTEGRAL DE ESTADO CANÓNICO
+  -- 5. POSTSONDAS FAIL-CLOSED: CERTIFICACIÓN INTEGRAL DE ESTADO CANÓNICO Y ACL
   -- =======================================================================
 
   SELECT jsonb_object_agg(
@@ -911,6 +978,17 @@ begin
 
   select count(*) into v_count from public.finance_cost_centers;
   if v_count <> 5 then raise exception 'STOP — 0262a POSTSONDA FALLÓ: finance_cost_centers count = %', v_count; end if;
+
+  -- 5.3 Verificación de ausencia absoluta de grants para anon y PUBLIC
+  select count(*) into v_count
+  from information_schema.role_table_grants
+  where table_schema = 'public'
+    and table_name like 'finance_%'
+    and grantee in ('anon', 'public');
+
+  if v_count > 0 then
+    raise exception 'STOP — 0262a POSTSONDA FALLÓ: Existen % grants inesperados para anon o public en tablas financieras', v_count;
+  end if;
 
 end $$;
 
