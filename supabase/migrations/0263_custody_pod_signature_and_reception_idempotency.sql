@@ -111,7 +111,7 @@ begin
   ) into v_doc
   from public.shipments s where s.id=p_shipment_id;
   if v_doc is null then raise exception 'shipment inexistente' using errcode='P0002'; end if;
-  return encode(sha256(convert_to(v_doc::text,'UTF8')),'hex');
+  return encode(extensions.digest(convert_to(v_doc::text,'UTF8'),'sha256'::text),'hex');
 end $$;
 revoke all on function public.custody_shipment_release_snapshot(uuid)
   from public,anon,authenticated,service_role;
@@ -139,10 +139,10 @@ create or replace function public.custody_pod_receiver_hash(p_name text,p_docume
 returns text language sql immutable security definer
 set search_path = public, pg_catalog
 as $$
-  select encode(sha256(convert_to(jsonb_build_object(
+  select encode(extensions.digest(convert_to(jsonb_build_object(
     'name',btrim(coalesce(p_name,'')),
     'document',nullif(btrim(coalesce(p_document,'')),'')
-  )::text,'UTF8')),'hex')
+  )::text,'UTF8'),'sha256'::text),'hex')
 $$;
 revoke all on function public.custody_pod_receiver_hash(text,text)
   from public,anon,authenticated,service_role;
@@ -372,13 +372,13 @@ begin
   perform public.custody_assert_shipment_released(p_shipment_id);
   perform public.custody_lock_shipment_physical_chains(p_shipment_id);
   v_snapshot:=public.custody_shipment_release_snapshot(p_shipment_id);
-  v_request_hash:=encode(sha256(convert_to(jsonb_build_object(
+  v_request_hash:=encode(extensions.digest(convert_to(jsonb_build_object(
     'contract','custody-pod-generate/v2','shipment_id',p_shipment_id,
     'receiver_name',btrim(p_receiver_name),
     'receiver_document',nullif(btrim(coalesce(p_receiver_document,'')),''),
     'observations',nullif(btrim(coalesce(p_observations,'')),''),
     'signature_operation_id',p_signature_operation_id
-  )::text,'UTF8')),'hex');
+  )::text,'UTF8'),'sha256'::text),'hex');
   select * into v_existing from public.delivery_pods where shipment_id=p_shipment_id;
   if found then
     if p_signature_operation_id is not null and exists(
@@ -655,7 +655,7 @@ begin
       'ingress_sha256',nullif(value->>'ingress_sha256','')
     ) order by ord) from jsonb_array_elements(p_payload->'items') with ordinality t(value,ord))
   ) into v_canonical;
-  v_hash:=encode(sha256(convert_to(v_canonical::text,'UTF8')),'hex');
+  v_hash:=encode(extensions.digest(convert_to(v_canonical::text,'UTF8'),'sha256'::text),'hex');
 
   select * into v_existing from public.wms_reception_operations
    where client_id=v_client and business_unit=v_bu
