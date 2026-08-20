@@ -15,21 +15,13 @@ import {
   CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
 } from "@/lib/notifications/categories";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { calculateWa24hWindow } from "@/lib/whatsapp/window24h";
 
 const KIND_ICON: Record<ConversationKind, IconName> = {
   dm: "user", group: "users", channel: "megaphone", erp: "database",
-  // INC-04-R2 · `task` faltaba. El ícono es el mismo con el que el sidebar
-  // nombra a Tareas, para que la bandeja y la navegación no discrepen.
   incident: "shield", task: "check", whatsapp: "whatsapp", ai: "sparkle",
 };
 
-// UX-005: la paleta canónica vive en connect/theme.ts (KIND_COLOR importado).
-
-/**
- * UX-002b (Dirección, smoke 07-26): los hilos de entidad guardan el título como
- * "TSK-2026-0017 — texto". En la bandeja va el nombre humano PRIMERO, el ícono
- * según tipo (tarea/avería) y el número reducido a 4 dígitos al extremo derecho.
- */
 function displayParts(it: InboxItem): {
   title: string; num: string | null; icon: IconName; color: string;
 } {
@@ -50,33 +42,25 @@ export function ConversationList({
   items, onCollapse, onNavigate,
 }: {
   items: InboxItem[];
-  /** UX-004: colapsa el panel derecho (o cierra el drawer en mobile). */
   onCollapse?: () => void;
-  /** UX-004: en el drawer mobile, navegar cierra la bandeja. */
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  // UX-004: buscador client-side sobre la pestaña visible (sin backend).
   const [query, setQuery] = useState("");
-  // UX-002: Activos llega server-rendered del layout (sin cambios); Archivo se
-  // fetchea UNA vez, recién al primer click — costo cero para el caso común.
   const [tab, setTab] = useState<InboxTab>("activos");
   const [archived, setArchived] = useState<InboxItem[] | null>(null);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  // UX-002c: archivado directo desde la fila — oculta al instante, el server confirma.
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [busyId, setBusyId] = useState<string | null>(null);
-  // INC-01/D-2: el error de archivado es POR HILO. Antes era un `string | null`
-  // único que se pintaba como banner global de la vista, aunque la variable ya se
-  // llamaba `rowError`: la intención estaba, el anclaje no.
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+
+  // Frente 2: Soft Modal state para confirmación de archivado con tarea/incidencia
+  const [pendingArchiveItem, setPendingArchiveItem] = useState<{ id: string; title: string } | null>(null);
 
   async function openArchive() {
     setTab("archivo");
-    // INC-01/MEDIUM-3: los errores de archivado son de la bandeja ACTIVA. Sobrevivir al
-    // cambio de pestaña los dejaba colgados de un hilo que quizá ya archivó otro.
     setRowErrors({});
     if (archived !== null || loading) return;
     setLoading(true);
@@ -92,23 +76,31 @@ export function ConversationList({
     }
   }
 
-  async function archiveItem(conversationId: string) {
+  async function archiveItem(conversationId: string, force = false, itemTitle = "Conversación") {
     setBusyId(conversationId);
-    // Sólo se limpia el error de ESTE hilo: el de los otros sigue visible.
     setRowErrors((prev) => {
       if (!(conversationId in prev)) return prev;
       const next = { ...prev };
       delete next[conversationId];
       return next;
     });
-    const r = await archiveInboxItemAction({ conversationId });
+
+    const r = await archiveInboxItemAction({ conversationId, force });
     setBusyId(null);
+
     if (!r.ok) {
+      if (!force && r.reason === "entity_task_open") {
+        // Frente 2: desatar soft modal de confirmación
+        setPendingArchiveItem({ id: conversationId, title: itemTitle });
+        return;
+      }
       setRowErrors((prev) => ({ ...prev, [conversationId]: r.message }));
       return;
     }
+
     setHiddenIds((prev) => new Set(prev).add(conversationId));
-    setArchived(null); // el Archivo se refetchea al próximo click, ya con este ítem
+    setArchived(null);
+    setPendingArchiveItem(null);
     router.refresh();
   }
 
@@ -150,7 +142,20 @@ export function ConversationList({
         </div>
       </div>
 
-      {/* UX-004: buscador client-side (filtra la pestaña visible, sin backend). */}
+      {/* Frente 1: Leyenda compacta de canales (Pills) arriba del buscador */}
+      <div className="flex items-center gap-1.5 border-b border-stroke-soft bg-bg-surface-alt/40 px-3 py-1.5 text-[10px] font-medium overflow-x-auto">
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 font-semibold text-emerald-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> WhatsApp
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 font-semibold text-amber-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Chat interno
+        </span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 font-semibold text-rose-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> Notificaciones
+        </span>
+      </div>
+
+      {/* Buscador client-side */}
       <div className="border-b border-stroke-soft px-3 py-2">
         <input
           value={query}
@@ -216,18 +221,17 @@ export function ConversationList({
           const href = `/connect/c/${it.conversationId}`;
           const active = pathname === href;
           const d = displayParts(it);
-          // INC-01/D-3: `canArchive` es el veredicto que el SERVIDOR calculó con las
-          // mismas condiciones que evalúan las RPC. `undefined` (demo/seeds, o la
-          // pestaña Archivo) = sin veredicto: se deja habilitado y manda el servidor.
           const archiveBlocked = it.canArchive === false;
           const archiveTip = archiveBlocked
             ? (it.archiveBlockedMessage ?? "No podés archivar este hilo.")
             : "Archivar el hilo";
           const rowMessage = rowErrors[it.conversationId];
           const tipId = `archive-tip-${it.conversationId}`;
+
+          // Frente 3: Semáforo 24h para conversaciones de WhatsApp en la lista
+          const waWindow = it.kind === "whatsapp" ? calculateWa24hWindow(it.lastMessageAt) : null;
+
           return (
-            // INC-01/D-2: la FILA es este contenedor. El error vive acá, hermano del
-            // enlace y no adentro: clickear el mensaje ya no navega al hilo.
             <div
               key={it.conversationId}
               data-conversation-id={it.conversationId}
@@ -236,100 +240,135 @@ export function ConversationList({
                 active ? "bg-bg-surface-alt" : "hover:bg-bg-surface-alt",
               )}
             >
-            <Link
-              href={href}
-              onClick={onNavigate}
-              className="flex items-start gap-2.5 py-2.5 pl-3 pr-1.5 transition-colors"
-            >
-              <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
-                {/* UX-002c: código de color por tipo — nada queda en gris neutro. */}
-                <Icon name={d.icon} size={15} className={d.color} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-fg-primary">
-                  {d.title}
-                </span>
-                <div className="mt-0.5 flex items-center gap-2">
-                  {!isArchive && (
-                    // INC-01/D-3 · se muestra deshabilitado, pero con `aria-disabled` y no
-                    // con `disabled`: un <button disabled> sale del orden de tabulación y
-                    // no despacha eventos de mouse, así que su explicación no llegaría ni
-                    // al mouse, ni al teclado, ni al lector de pantalla — y el gate
-                    // preventivo terminaría siendo MENOS informativo que el mensaje que
-                    // vino a evitar. Inaccionable por el guard del onClick, no por el DOM.
-                    <>
-                      <button
-                        type="button"
-                        title={archiveTip}
-                        aria-disabled={archiveBlocked || undefined}
-                        aria-describedby={archiveBlocked ? tipId : undefined}
-                        disabled={!archiveBlocked && busyId === it.conversationId}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (archiveBlocked || busyId === it.conversationId) return;
-                          void archiveItem(it.conversationId);
-                        }}
-                        className={cn(
-                          "focus-nexus shrink-0 rounded text-[11px] font-semibold transition-colors disabled:opacity-50",
-                          archiveBlocked
-                            ? "cursor-not-allowed text-fg-muted opacity-60"
-                            : "text-amber-400 hover:text-amber-300",
+              <Link
+                href={href}
+                onClick={onNavigate}
+                className="flex items-start gap-2.5 py-2.5 pl-3 pr-1.5 transition-colors"
+              >
+                <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
+                  <Icon name={d.icon} size={15} className={d.color} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold text-fg-primary">
+                    {d.title}
+                  </span>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    {!isArchive && (
+                      <>
+                        <button
+                          type="button"
+                          title={archiveTip}
+                          aria-disabled={archiveBlocked || undefined}
+                          aria-describedby={archiveBlocked ? tipId : undefined}
+                          disabled={!archiveBlocked && busyId === it.conversationId}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (busyId === it.conversationId) return;
+                            void archiveItem(it.conversationId, false, d.title);
+                          }}
+                          className={cn(
+                            "focus-nexus shrink-0 rounded text-[11px] font-semibold transition-colors disabled:opacity-50",
+                            archiveBlocked
+                              ? "cursor-not-allowed text-fg-muted opacity-60"
+                              : "text-amber-400 hover:text-amber-300",
+                          )}
+                        >
+                          {busyId === it.conversationId ? "Archivando…" : "Archivar"}
+                        </button>
+                        {archiveBlocked && (
+                          <span id={tipId} className="sr-only">{archiveTip}</span>
                         )}
-                      >
-                        {busyId === it.conversationId ? "Archivando…" : "Archivar"}
-                      </button>
-                      {archiveBlocked && (
-                        <span id={tipId} className="sr-only">{archiveTip}</span>
-                      )}
-                    </>
+                      </>
+                    )}
+                    {it.topic && (
+                      <span className="truncate text-[11px] text-fg-muted">{it.topic}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-0.5 flex shrink-0 flex-col items-end gap-0.5 text-right">
+                  {d.num && (
+                    <span className="font-mono text-[10px] text-fg-muted">— {d.num}</span>
                   )}
-                  {it.topic && (
-                    <span className="truncate text-[11px] text-fg-muted">{it.topic}</span>
+                  <span className="text-[10px] text-fg-muted">{timeAgo(it.lastMessageAt)}</span>
+
+                  {/* Frente 3: Badge de ventana 24h para WhatsApp */}
+                  {waWindow && (
+                    waWindow.isExpired ? (
+                      <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[9px] font-bold text-rose-500">
+                        🔒 Ventana cerrada
+                      </span>
+                    ) : waWindow.isWarning ? (
+                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500">
+                        {waWindow.formattedRemaining}
+                      </span>
+                    ) : (
+                      <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-500">
+                        {waWindow.formattedRemaining}
+                      </span>
+                    )
+                  )}
+
+                  {isArchive ? (
+                    <span className="rounded-full bg-bg-surface-alt px-1.5 text-[10px] text-fg-muted">
+                      Archivado
+                    </span>
+                  ) : (
+                    it.unreadCount > 0 && (
+                      <span
+                        aria-label={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
+                        title={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
+                        className={`px-1.5 text-[10px] font-bold ${CATEGORY_STYLE[categoryForConversationKind(it.kind)].badgeClass}`}
+                      >
+                        {formatBadgeCount(it.unreadCount)}
+                      </span>
+                    )
                   )}
                 </div>
-              </div>
-              {/* UX-002c: columna nº/hora propia, pegada al borde derecho de la fila. */}
-              <div className="mt-0.5 flex shrink-0 flex-col items-end gap-0.5 text-right">
-                {d.num && (
-                  <span className="font-mono text-[10px] text-fg-muted">— {d.num}</span>
-                )}
-                <span className="text-[10px] text-fg-muted">{timeAgo(it.lastMessageAt)}</span>
-                {isArchive ? (
-                  <span className="rounded-full bg-bg-surface-alt px-1.5 text-[10px] text-fg-muted">
-                    Archivado
-                  </span>
-                ) : (
-                  it.unreadCount > 0 && (
-                    // FASE A: el color identifica el canal —verde WhatsApp,
-                    // amarillo chat interno— y la cifra es el conteo REAL de
-                    // 0234, no la resta de secuencias globales.
-                    <span
-                      aria-label={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
-                      title={categoryAriaLabel(categoryForConversationKind(it.kind), it.unreadCount)}
-                      className={`px-1.5 text-[10px] font-bold ${CATEGORY_STYLE[categoryForConversationKind(it.kind)].badgeClass}`}
-                    >
-                      {formatBadgeCount(it.unreadCount)}
-                    </span>
-                  )
-                )}
-              </div>
-            </Link>
-            {/* INC-01/D-2: el error de ESTE hilo, dentro de ESTA fila. No es banner de
-                la vista, no navega al clickearlo y no toca a los otros hilos. */}
-            {rowMessage && (
-              <p
-                role="alert"
-                data-testid="archive-error"
-                className="px-3 pb-2 pl-[3.25rem] text-[11px] leading-snug text-tops-red"
-              >
-                {rowMessage}
-              </p>
-            )}
+              </Link>
+
+              {rowMessage && (
+                <p
+                  role="alert"
+                  data-testid="archive-error"
+                  className="px-3 pb-2 pl-[3.25rem] text-[11px] leading-snug text-tops-red"
+                >
+                  {rowMessage}
+                </p>
+              )}
             </div>
           );
         })}
       </nav>
+
+      {/* Frente 2: Soft Modal de Confirmación para Archivado con Tarea */}
+      {pendingArchiveItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-lg border border-stroke-soft bg-bg-surface p-5 shadow-2xl">
+            <h3 className="text-sm font-bold text-fg-primary">¿Archivar conversación?</h3>
+            <p className="mt-2 text-xs text-fg-secondary leading-relaxed">
+              Esta conversación tiene una tarea abierta (&quot;{pendingArchiveItem.title}&quot;). ¿Deseás archivarla de todos modos?
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm text-xs"
+                onClick={() => setPendingArchiveItem(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-nexus btn-sm text-xs bg-tops-red text-white"
+                onClick={() => void archiveItem(pendingArchiveItem.id, true, pendingArchiveItem.title)}
+              >
+                Archivar de todos modos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
