@@ -3069,7 +3069,7 @@
     {
       "id": "0262a_finance_core_schema_canonical_alignment.sql",
       "filename": "0262a_finance_core_schema_canonical_alignment.sql",
-      "sha256": "e6a94b8e82b921479b46d4f437e1186a2509984f85975b42319939d59ca8725a",
+      "sha256": "dc678407409e6b82be87efacf65fefe20e5318f9460bbacf4c700d7455f36cbe",
       "orden": 263,
       "requires": [
         "0262_finance_core_foundation.sql"
@@ -3083,7 +3083,7 @@
     {
       "id": "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
       "filename": "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
-      "sha256": "e13f5442e6773e7bdbe49a96c4b61958b0bdeaa8c39b60b9fb7c0aa2354ee890",
+      "sha256": "7cd03fa99fc8d35136965916aa5fd0065dbd58caea1350f0d1f857689018562a",
       "orden": 264,
       "requires": [],
       "estado": "rollback",

@@ -2,15 +2,28 @@
 -- ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql
 --
 -- Expediente: "Remediación del Incidente de Provenance 0262 — Alineación Canónica"
--- Autoridad: Dirección.
--- Régimen: Rollback condicionado, fail-closed, preservación de datos y semillas.
+-- Autoridad: Dirección Técnica Nexus.
+-- Régimen: Rollback condicional simétrico, fail-closed, preservación de datos y semillas.
+--
+-- Propósito:
+--   Revertir de forma simétrica, segura y sin CASCADE el esquema financiero
+--   al estado divergente previo si se requiriera en un entorno efímero/aislado.
 -- =========================================================================
 
 do $$
 declare
   v_count integer;
+  v_dep_count integer;
+  v_cat_cols text[];
+  v_cc_cols text[];
+  v_cat_type_udt text;
+  v_cc_bl_nullable text;
 begin
-  -- 1. Presondas de seguridad: verificar que las 7 tablas vacías sigan teniendo 0 filas
+  -- =======================================================================
+  -- 1. PRESONDAS FAIL-CLOSED: INTEGRIDAD DE TABLAS Y SEMILLAS
+  -- =======================================================================
+
+  -- 1.1 Verificar que las 7 tablas vacías sigan teniendo 0 filas
   select count(*) into v_count from public.finance_assumptions;
   if v_count > 0 then raise exception 'STOP — ROLLBACK 0262a ABORTADO: finance_assumptions contiene datos (% filas)', v_count; end if;
 
@@ -32,35 +45,150 @@ begin
   select count(*) into v_count from public.finance_quicken_imports;
   if v_count > 0 then raise exception 'STOP — ROLLBACK 0262a ABORTADO: finance_quicken_imports contiene datos (% filas)', v_count; end if;
 
-  -- 2. Preservar seeds en finance_versions, finance_categories, finance_cost_centers
+  -- 1.2 Preservar y validar versión semilla
   select count(*) into v_count from public.finance_versions;
   if v_count <> 1 then raise exception 'STOP — ROLLBACK 0262a ABORTADO: finance_versions alterada'; end if;
+  if not exists (select 1 from public.finance_versions where code = 'BUDGET-2026-V1') then
+    raise exception 'STOP — ROLLBACK 0262a ABORTADO: Versión semilla BUDGET-2026-V1 ausente';
+  end if;
 
+  -- 1.3 Preservar y validar categorías semilla
   select count(*) into v_count from public.finance_categories;
   if v_count <> 13 then raise exception 'STOP — ROLLBACK 0262a ABORTADO: finance_categories alterada'; end if;
 
+  -- 1.4 Preservar y validar centros de costo
   select count(*) into v_count from public.finance_cost_centers;
   if v_count <> 5 then raise exception 'STOP — ROLLBACK 0262a ABORTADO: finance_cost_centers alterada'; end if;
 
-  -- 3. Restaurar columnas auxiliares previas en categories y cost_centers
-  alter table public.finance_categories
-    add column if not exists pnl_section text,
-    add column if not exists cash_flow_section text,
-    add column if not exists updated_at timestamptz not null default now();
+  -- =======================================================================
+  -- 2. PRESONDAS EXHAUSTIVAS DE DEPENDENCIAS (Anti-CASCADE)
+  -- =======================================================================
 
-  alter table public.finance_cost_centers
-    add column if not exists manager_id uuid,
-    add column if not exists updated_at timestamptz not null default now();
+  -- 2.1 Foreign Keys entrantes externas
+  select count(*) into v_dep_count
+  from pg_constraint c
+  join pg_class r_from on r_from.oid = c.conrelid
+  join pg_class r_to on r_to.oid = c.confrelid
+  join pg_namespace ns_from on ns_from.oid = r_from.relnamespace
+  join pg_namespace ns_to on ns_to.oid = r_to.relnamespace
+  where c.contype = 'f'
+    and ns_to.nspname = 'public'
+    and r_to.relname in (
+      'finance_assumptions', 'finance_plan_lines', 'finance_forecast_adjustments',
+      'finance_scenarios', 'finance_report_snapshots', 'finance_document_inbox', 'finance_quicken_imports'
+    )
+    and not (
+      ns_from.nspname = 'public' and r_from.relname in (
+        'finance_assumptions', 'finance_plan_lines', 'finance_forecast_adjustments',
+        'finance_scenarios', 'finance_report_snapshots', 'finance_document_inbox', 'finance_quicken_imports'
+      )
+    );
+  if v_dep_count > 0 then
+    raise exception 'STOP — ROLLBACK 0262a ABORTADO: Existen foreign keys externas entrantes';
+  end if;
 
-  -- 4. Recrear tablas en el estado previo si se requiriera
-  drop table if exists public.finance_quicken_imports cascade;
-  drop table if exists public.finance_document_inbox cascade;
-  drop table if exists public.finance_report_snapshots cascade;
-  drop table if exists public.finance_scenarios cascade;
-  drop table if exists public.finance_forecast_adjustments cascade;
-  drop table if exists public.finance_plan_lines cascade;
-  drop table if exists public.finance_assumptions cascade;
+  -- 2.2 Vistas dependientes
+  select count(distinct v.oid) into v_dep_count
+  from pg_depend d
+  join pg_rewrite rw on rw.oid = d.objid
+  join pg_class v on v.oid = rw.ev_class
+  join pg_namespace ns_v on ns_v.oid = v.relnamespace
+  join pg_class t on t.oid = d.refobjid
+  join pg_namespace ns_t on ns_t.oid = t.relnamespace
+  where ns_t.nspname = 'public'
+    and t.relname in (
+      'finance_assumptions', 'finance_plan_lines', 'finance_forecast_adjustments',
+      'finance_scenarios', 'finance_report_snapshots', 'finance_document_inbox', 'finance_quicken_imports'
+    )
+    and v.relkind in ('v', 'm')
+    and v.oid <> t.oid;
+  if v_dep_count > 0 then
+    raise exception 'STOP — ROLLBACK 0262a ABORTADO: Existen vistas o vistas materializadas dependientes';
+  end if;
 
+  -- =======================================================================
+  -- 3. REVERSIÓN SIMÉTRICA (Cero CASCADE)
+  -- =======================================================================
+
+  -- 3.1 Drops restrictivos de las 7 tablas canónicas
+  drop table public.finance_quicken_imports restrict;
+  drop table public.finance_document_inbox restrict;
+  drop table public.finance_report_snapshots restrict;
+  drop table public.finance_scenarios restrict;
+  drop table public.finance_forecast_adjustments restrict;
+  drop table public.finance_plan_lines restrict;
+  drop table public.finance_assumptions restrict;
+
+  -- 3.2 Preservar semillas y reconstruir finance_categories en estado divergente exacto
+  create temp table tmp_finance_categories on commit drop as
+  select id, code, name, parent_id, category_type::text as category_type_str, display_order, is_active, created_at
+  from public.finance_categories;
+
+  drop table public.finance_categories restrict;
+
+  create table public.finance_categories (
+    id uuid primary key default gen_random_uuid(),
+    code text unique not null,
+    name text not null,
+    parent_id uuid references public.finance_categories(id) on delete set null,
+    category_type public.finance_direction_t not null,
+    pnl_section text,
+    cash_flow_section text,
+    display_order integer not null default 0,
+    is_active boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  );
+
+  insert into public.finance_categories (id, code, name, parent_id, category_type, display_order, is_active, created_at)
+  select id, code, name, parent_id, category_type_str::public.finance_direction_t, display_order, is_active, created_at
+  from tmp_finance_categories;
+
+  create index if not exists finance_categories_type_idx on public.finance_categories(category_type);
+
+  alter table public.finance_categories enable row level security;
+
+  create policy "finance_categories read" on public.finance_categories for select
+    using (coalesce(public.has_permission('finanzas.view'), false));
+
+  create policy "finance_categories write" on public.finance_categories for all
+    using (coalesce(public.has_permission('finanzas.admin'), false));
+
+  grant select, insert, update, delete on public.finance_categories to authenticated;
+
+  -- 3.3 Preservar semillas y reconstruir finance_cost_centers en estado divergente exacto
+  create temp table tmp_finance_cost_centers on commit drop as
+  select id, code, name, business_line, is_active, created_at
+  from public.finance_cost_centers;
+
+  drop table public.finance_cost_centers restrict;
+
+  create table public.finance_cost_centers (
+    id uuid primary key default gen_random_uuid(),
+    code text unique not null,
+    name text not null,
+    business_line text,
+    manager_id uuid,
+    is_active boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+  );
+
+  insert into public.finance_cost_centers (id, code, name, business_line, is_active, created_at)
+  select id, code, name, business_line, is_active, created_at
+  from tmp_finance_cost_centers;
+
+  alter table public.finance_cost_centers enable row level security;
+
+  create policy "finance_cost_centers read" on public.finance_cost_centers for select
+    using (coalesce(public.has_permission('finanzas.view'), false));
+
+  create policy "finance_cost_centers write" on public.finance_cost_centers for all
+    using (coalesce(public.has_permission('finanzas.admin'), false));
+
+  grant select, insert, update, delete on public.finance_cost_centers to authenticated;
+
+  -- 3.4 Recreación de las 7 tablas en el estado divergente exacto
   create table public.finance_assumptions (
     id uuid primary key default gen_random_uuid(),
     version_id uuid not null references public.finance_versions(id) on delete cascade,
@@ -172,7 +300,7 @@ begin
     imported_by uuid
   );
 
-  -- Indices
+  -- 3.5 Índices Divergentes
   create index if not exists finance_plan_lines_version_period_idx
     on public.finance_plan_lines (version_id, period_date);
   create index if not exists finance_forecast_date_idx
@@ -183,10 +311,8 @@ begin
     on public.finance_forecast_adjustments (account_group);
   create index if not exists finance_document_inbox_status_idx
     on public.finance_document_inbox (status);
-  create index if not exists finance_categories_type_idx
-    on public.finance_categories (category_type);
 
-  -- RLS
+  -- 3.6 RLS y Políticas Divergentes
   alter table public.finance_assumptions enable row level security;
   alter table public.finance_plan_lines enable row level security;
   alter table public.finance_forecast_adjustments enable row level security;
@@ -235,7 +361,39 @@ begin
     public.finance_quicken_imports
   to authenticated;
 
-  raise notice 'ROLLBACK 0262a completado.';
+  -- =======================================================================
+  -- 4. POSTSONDAS FAIL-CLOSED: CERTIFICACIÓN INTEGRAL DE ESTADO DIVERGENTE
+  -- =======================================================================
+
+  select array_agg(column_name::text order by column_name) into v_cat_cols
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'finance_categories';
+
+  select udt_name into v_cat_type_udt
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'finance_categories' and column_name = 'category_type';
+
+  if v_cat_cols <> array['cash_flow_section', 'category_type', 'code', 'created_at', 'display_order', 'id', 'is_active', 'name', 'parent_id', 'pnl_section', 'updated_at']
+     or v_cat_type_udt <> 'finance_direction_t'
+  then
+    raise exception 'STOP — ROLLBACK 0262a POSTSONDA FALLÓ: finance_categories no restaurada al estado divergente exacto';
+  end if;
+
+  select array_agg(column_name::text order by column_name) into v_cc_cols
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'finance_cost_centers';
+
+  select is_nullable into v_cc_bl_nullable
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'finance_cost_centers' and column_name = 'business_line';
+
+  if v_cc_cols <> array['business_line', 'code', 'created_at', 'id', 'is_active', 'manager_id', 'name', 'updated_at']
+     or v_cc_bl_nullable <> 'YES'
+  then
+    raise exception 'STOP — ROLLBACK 0262a POSTSONDA FALLÓ: finance_cost_centers no restaurada al estado divergente exacto';
+  end if;
+
+  raise notice 'ROLLBACK 0262a completado simétricamente con éxito.';
 end $$;
 
 notify pgrst, 'reload schema';
