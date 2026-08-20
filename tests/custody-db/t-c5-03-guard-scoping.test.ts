@@ -1,16 +1,17 @@
 /**
- * T-C5-03 · EL GUARD SE ACOTA POR LAS RUTAS DEL DIFF, NO POR EL NOMBRE DE LA RAMA.
+ * T-C5-03 · ACOTAMIENTO DE AUDITORÍA — discriminación por DIFF y no por rama.
  *
- * Historia del defecto, que es lo que justifica cada aserción de acá:
+ * El harness de Custodia se dispara en toda PR que toque
+ * `supabase/migrations/**`, así que sus invariantes se ejecutan también sobre
+ * candidatos de OTROS frentes. Varias de esas afirmaciones son promesas de
+ * Custodia —qué rutas no toca, qué archivo del harness vanilla cambia, qué
+ * líneas de `package.json` autoriza, qué migraciones 0250* hay en disco—, y
+ * aplicadas a un frente ajeno lo bloquean por algo que nunca prometió.
  *
- *  1. El harness de Custodia corre en TODA PR que toque `supabase/migrations/**`
- *     (`wms-custody-db-harness.yml`), así que sus invariantes se ejecutan sobre
- *     candidatos de otros frentes.
- *  2. Varias aserciones del bloque de invariancia son promesas de ESTE
- *     expediente —qué rutas no toca, qué archivo del harness vanilla cambia,
- *     qué líneas de `package.json` autoriza, qué migraciones 0250* existen en
- *     disco—. Aplicadas a un frente ajeno lo bloquean por algo que nunca
- *     prometió.
+ *  1. Acotar por NOMBRE DE ARCHIVO en el propio test dejaba un cable trampa
+ *     que saltaba con cualquier refactor legítimo.
+ *  2. Acotar por ARCHIVO TOCADO en el diff sin contemplar el caso ajeno
+ *     bloqueaba PRs ajenas (ej. Clientes Fase B) por no haber tocado Custodia.
  *  3. El primer intento de arreglo acotó por NOMBRE DE RAMA
  *     (`rev-parse --abbrev-ref HEAD`). En CI `actions/checkout` deja el HEAD
  *     DETACHED y ese comando devuelve la cadena "HEAD", que no matchea: el
@@ -58,6 +59,13 @@ describe("T-C5-03 · el frente ajeno queda fuera de alcance", () => {
     expect(rutasPropiasDeCustodia(DIFF_AJENO)).toEqual([]);
   });
 
+  it("1b · las anclas compartidas de linaje y append-only (t-c4-01 y t-c1-05) no activan alcance de Custodia", () => {
+    expect(rutasPropiasDeCustodia([
+      "tests/custody-db/t-c4-01-lineage-catalog.test.ts",
+      "tests/custody-db/t-c1-05-append-only-vanilla.test.ts",
+    ])).toEqual([]);
+  });
+
   it("2 · tocar supabase/migrations NO alcanza para quedar dentro", () => {
     // Es exactamente el disparador del workflow: si bastara con eso, el
     // acotamiento no acotaría nada.
@@ -85,10 +93,26 @@ describe("T-C5-03 · el diff propio conserva la fuerza literal", () => {
       "supabase/migrations/0250_custody_physical_scope_enums.sql",
       "supabase/migrations/ROLLBACK_0250a_custody_productive_vision.sql",
       "tests/custody-db/harness/vanilla-guard.ts",
+      "tests/custody-db/t-c5-03-guard-scoping.test.ts",
+      "tests/custody-db/t-c2-05-shipment-tristate.test.ts",
       "src/lib/custody/custody.ts",
     ]) {
       expect(rutasPropiasDeCustodia([r, "docs/otro.md"]), r).toEqual([r]);
     }
+  });
+
+  it("5b · combinación de anclas compartidas + componente de Custodia activa alcance", () => {
+    expect(rutasPropiasDeCustodia([
+      "tests/custody-db/t-c4-01-lineage-catalog.test.ts",
+      "tests/custody-db/t-c1-05-append-only-vanilla.test.ts",
+      "tests/custody-db/harness/vanilla-guard.ts",
+    ])).toEqual(["tests/custody-db/harness/vanilla-guard.ts"]);
+
+    expect(rutasPropiasDeCustodia([
+      "tests/custody-db/t-c4-01-lineage-catalog.test.ts",
+      "tests/custody-db/t-c1-05-append-only-vanilla.test.ts",
+      "tests/custody-db/t-c5-03-guard-scoping.test.ts",
+    ])).toEqual(["tests/custody-db/t-c5-03-guard-scoping.test.ts"]);
   });
 
   it("6 · no se cuela un prefijo parecido", () => {
