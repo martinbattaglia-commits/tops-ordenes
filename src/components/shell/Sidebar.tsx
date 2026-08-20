@@ -465,8 +465,8 @@ export default function Sidebar({
         <Image
           src="/icons/logo-isologo-primary.png"
           alt="Logística TOPS"
-          width={500}
-          height={500}
+          width={160}
+          height={80}
           priority
           className="w-auto h-20 max-w-[160px] max-h-20 object-contain"
         />
