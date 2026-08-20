@@ -36,7 +36,7 @@ export type ArchiveInboxResult =
  * devuelve UNA causa con su redacción humana. El texto del motor no llega a pantalla.
  */
 export async function archiveInboxItemAction(raw: unknown): Promise<ArchiveInboxResult> {
-  const p = z.object({ conversationId: z.string().min(1) }).safeParse(raw);
+  const p = z.object({ conversationId: z.string().min(1), force: z.boolean().optional() }).safeParse(raw);
   if (!p.success) return { ok: false, message: "Datos inválidos." };
   const supabase = createClient();
   if (!supabase) return { ok: false, message: "Modo demo: la acción no se persiste." };
@@ -45,12 +45,11 @@ export async function archiveInboxItemAction(raw: unknown): Promise<ArchiveInbox
   if (!(await canAccess("connect.view"))) {
     return { ok: false, message: "Sin permiso (connect.view)." };
   }
-  const args = { p_conversation_id: p.data.conversationId };
-  const first = await supabase.rpc("connect_archive_entity_thread", args);
-  if (first.error) {
+  const args = { p_conversation_id: p.data.conversationId, p_force: !!p.data.force };
+  const first = await supabase.rpc("connect_archive_entity_thread", { p_conversation_id: p.data.conversationId });
+  if (first.error || p.data.force) {
     const fallback = await supabase.rpc("connect_archive_conversation", args);
-    if (fallback.error) {
-      // Las dos puertas quedaron cerradas: se informa la causa real, una sola.
+    if (fallback.error && !first.error) {
       const { reason, message } = archiveFailureMessage(first.error, fallback.error);
       return { ok: false, message, reason };
     }
