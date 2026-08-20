@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 226,
-  "no_ejecutables": 36,
+  "ejecutables": 227,
+  "no_ejecutables": 37,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -2853,7 +2853,7 @@
         "0252_custody_two_levels.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00248",
+      "ledger_version": "L00246",
       "ledger_name": "0255_clients_custody_action_enum",
       "provenance": "repo (custodia/nivel-contratado)",
       "motivo": "CUSTODIA NIVEL CONTRATADO. SOLO agrega el valor custody_contract al enum permission_action_t y nada mas. PostgreSQL prohibe usar un valor de enum nuevo en la misma transaccion que lo crea y el harness aplica cada archivo como una transaccion implicita, asi que el seed del permiso y la RPC viven en 0256. Precedente identico en 0221, 0164 y 0167. Hace falta una accion nueva porque permissions tiene unique(module,action) y el modulo clientes ya ocupa view create edit delete. Sin rollback: PostgreSQL no admite quitar un valor de un enum, igual que 0221."
@@ -2867,7 +2867,7 @@
         "0255_clients_custody_action_enum.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00249",
+      "ledger_version": "L00247",
       "ledger_name": "0256_clients_custody_level_rpc",
       "provenance": "repo (custodia/nivel-contratado)",
       "motivo": "CUSTODIA NIVEL CONTRATADO. Siembra el permiso clientes.custody.contract SIN asignarlo a ningun rol y crea la RPC client_set_custody_level, gemela de client_set_active: permiso propio, sesion del usuario, CAS obligatorio, motivo obligatorio solo en la baja 2 a 1 y evento de auditoria atomico. NO toca la firma de client_update: agregarle un parametro habria creado una SOBRECARGA con la vieja todavia granteada y sin la guarda del nivel, habria vuelto ambiguas las llamadas con argumentos nombrados y habria debilitado la guarda de orden de ROLLBACK_0241 que identifica client_update por su firma literal. No toca receptions.custody_reforzada ni la regla eleva nunca degrada de 0252, ni custody_physical_units.custody_level, que es columna propia con default 2."
@@ -2879,7 +2879,7 @@
       "orden": 248,
       "requires": [],
       "estado": "rollback",
-      "ledger_version": "L00250",
+      "ledger_version": "L00248",
       "ledger_name": "ROLLBACK_0256_clients_custody_level_rpc",
       "provenance": "repo (custodia/nivel-contratado)",
       "motivo": "Inversa logica e idempotente de 0256. Retira la RPC y el permiso solo si ningun rol lo tiene asignado. NO borra client_events, NO modifica clients.custody_level de ningun cliente y NO quita el valor de enum de 0255, que PostgreSQL no admite retirar. No depende de ninguna otra inversa porque 0256 no toca client_update, client_create ni client_set_active."
@@ -2893,7 +2893,7 @@
         "0254_custody_certificate_read.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00246",
+      "ledger_version": "L00249",
       "ledger_name": "0257_custody_legacy_creator_revoke",
       "provenance": "repo (custodia/hn-1-cierre)",
       "motivo": "CUSTODIA HN-1 CIERRE bloque B-1, extremo de atras. Retira EXECUTE a authenticated sobre upsert_custody_integrity_assessment, la unica funcion capaz de crear casos de custodia no fisicos. Medido sobre produccion antes de escribirla: los 4 casos existentes son todos physical_unit, casos con packing_unit_id o shipment_id son CERO, el circuito productivo de 0250a y 0252 inserta siempre physical_unit_id por trigger de recepcion, ningun codigo de src la llama y ninguna funcion SQL la invoca internamente, y sin embargo authenticated conservaba EXECUTE desde 0223 linea 160. Era una RPC de escritura alcanzable por PostgREST desde cualquier sesion autenticada, sin consumidor, capaz de crear casos que la pantalla despues no puede decidir porque decide_custody_integrity v1 ya esta revocada desde 0250a lineas 2199-2200. R-22: el privilegio se retira sin esperar a que se demuestre el camino. NO elimina la funcion porque sigue siendo el ingreso legitimo del circuito no fisico bajo el dueno del esquema y sostiene la cobertura D1 a D3 de 0221 a 0224 en tests custody-db. service_role conserva EXECUTE a proposito: el master acota la revocacion a authenticated. No toca decide_custody_integrity_v2 ni su cuerpo, no reconcede decide_custody_integrity v1 a ningun rol, y no toca custody_inspection_candidates que 0224 linea 313 mantiene concedida y que no esta rota."
@@ -2905,7 +2905,7 @@
       "orden": 250,
       "requires": [],
       "estado": "rollback",
-      "ledger_version": "L00247",
+      "ledger_version": "L00250",
       "ledger_name": "ROLLBACK_0257_custody_legacy_creator_revoke",
       "provenance": "repo (custodia/hn-1-cierre)",
       "motivo": "Inversa logica e idempotente de 0257. Devuelve upsert_custody_integrity_assessment al estado exacto de 0223 lineas 159 y 160: revocada para public y anon, concedida a authenticated. Queda escrito que ejecutarlo REABRE la superficie que 0257 cerro y devuelve la base al estado inconsistente que HN-1 describe, porque decide_custody_integrity v1 sigue revocada y este rollback no la reconcede: no restaura una capacidad de negocio, ya que no hay consumidor, sino un privilegio sin camino. No borra identidades, eventos, evidencias, intentos, decisiones, certificados ni auditoria."
@@ -2992,7 +2992,7 @@
     {
       "id": "0261_connect_archive_force_override.sql",
       "filename": "0261_connect_archive_force_override.sql",
-      "sha256": "700f46f92ac0ddc3c0b5fcc0ce6be4129f476e650edf886bd488d35782c783fd",
+      "sha256": "1af26a6d12ad0eafa73177a8a0f48a8b953a131a8653cc6f119c2e05d47065cc",
       "orden": 257,
       "requires": [
         "0168_connect_tasks_schema.sql",
@@ -3002,28 +3002,54 @@
       "ledger_version": "L00257",
       "ledger_name": "0261_connect_archive_force_override",
       "provenance": "repo (frente/meta-wa-complete-engine-and-ux; commit 821873e)",
-      "motivo": "Forward activo de Nexus Link: agrega la sobrecarga de archivo con override forzado sobre handover y tareas. Se cataloga sin alterar sus bytes."
+      "motivo": "Actualización de connect_archive_conversation aceptando force. Remediación: eliminación explícita de sobrecarga mono-argumento previa (0260)."
     },
     {
       "id": "ROLLBACK_0261_connect_archive_force_override.sql",
       "filename": "ROLLBACK_0261_connect_archive_force_override.sql",
-      "sha256": "416cdc3d9e8661fa1920158a2d1b38d35c3ddb89b02d06da7eb0f6b7a52e6f67",
+      "sha256": "ff430e821829060dfc57aac02b6e974ba443beceb9589da869e35954c539cdcb",
       "orden": 258,
       "requires": [],
       "estado": "rollback",
       "ledger_version": "L00258",
       "ledger_name": "ROLLBACK_0261_connect_archive_force_override",
       "provenance": "repo (frente/meta-wa-complete-engine-and-ux; commit 821873e)",
-      "motivo": "Inversa lógica asociada a 0261; no integra el plan forward."
+      "motivo": "Inversa de 0261: eliminación de firma bi-argumento antes de restaurar firma mono-argumento de 0260."
+    },
+    {
+      "id": "0261a_finance_permission_enums.sql",
+      "filename": "0261a_finance_permission_enums.sql",
+      "sha256": "3e33f78a634483d2abcd86ad8d8a02ff56434ca9f15dc1ed823fa6d14197f763",
+      "orden": 259,
+      "requires": [],
+      "estado": "active",
+      "ledger_version": "L00259",
+      "ledger_name": "0261a_finance_permission_enums",
+      "provenance": "repo (frente/remediacion-0261-0261a)",
+      "motivo": "Enums RBAC precursores de Finanzas: agrega valor finanzas a permission_module_t y plan, approve a permission_action_t de forma aditiva e idempotente."
+    },
+    {
+      "id": "ROLLBACK_0261a_finance_permission_enums.sql",
+      "filename": "ROLLBACK_0261a_finance_permission_enums.sql",
+      "sha256": "e5365694967198bfe03b55a7a1a82560a27c02c500b407bc4c4763fd12e26f0b",
+      "orden": 260,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00260",
+      "ledger_name": "ROLLBACK_0261a_finance_permission_enums",
+      "provenance": "repo (frente/remediacion-0261-0261a)",
+      "motivo": "Inversa lógica no destructiva de 0261a: no-op deliberado conforme a la política canónica de enums en PostgreSQL."
     },
     {
       "id": "0262_finance_core_foundation.sql",
       "filename": "0262_finance_core_foundation.sql",
       "sha256": "1908587594777b7e9dfd6b2d629f578a6b0edc1985b0f4f47b36038879a42d63",
-      "orden": 259,
-      "requires": [],
+      "orden": 261,
+      "requires": [
+        "0261a_finance_permission_enums.sql"
+      ],
       "estado": "active",
-      "ledger_version": "L00259",
+      "ledger_version": "L00261",
       "ledger_name": "0262_finance_core_foundation",
       "provenance": "repo (frente/finanzas-quicken)",
       "motivo": "Fundacion del modulo nativo NEXUS Finanzas: tablas finance_*, RLS y RBAC finanzas.*"
@@ -3032,10 +3058,10 @@
       "id": "ROLLBACK_0262_finance_core_foundation.sql",
       "filename": "ROLLBACK_0262_finance_core_foundation.sql",
       "sha256": "250b56f7fa0f0a9cd585e4d5019d78d595f6f627b692c71f13ea7ae77e31cf85",
-      "orden": 260,
+      "orden": 262,
       "requires": [],
       "estado": "rollback",
-      "ledger_version": "L00260",
+      "ledger_version": "L00262",
       "ledger_name": "ROLLBACK_0262_finance_core_foundation",
       "provenance": "repo (frente/finanzas-quicken)",
       "motivo": "Inversa logica e idempotente de 0262"
@@ -3044,13 +3070,13 @@
       "id": "0263_custody_pod_signature_and_reception_idempotency.sql",
       "filename": "0263_custody_pod_signature_and_reception_idempotency.sql",
       "sha256": "ebcd157062c35747fc12925e83ca7e848be726bfb5fee16acd1b5f47632be395",
-      "orden": 261,
+      "orden": 263,
       "requires": [
         "0253_custody_egress_gate.sql",
         "0258_custody_evaluated_head_witness.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00261",
+      "ledger_version": "L00263",
       "ledger_name": "0263_custody_pod_signature_and_reception_idempotency",
       "provenance": "repo (codex/remediacion-custodia-wms)",
       "motivo": "Endurece firma y POD con capacidad explícita, atestación server-side y snapshot de liberación; retira las vías legacy manipulables y hace atómica e idempotente la creación-confirmación de recepciones WMS."
@@ -3059,10 +3085,10 @@
       "id": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
       "filename": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
       "sha256": "263fa1b5e84aae4095c150673124e286a65e297c961d12880ef21a5263e4706b",
-      "orden": 262,
+      "orden": 264,
       "requires": [],
       "estado": "rollback",
-      "ledger_version": "L00262",
+      "ledger_version": "L00264",
       "ledger_name": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency",
       "provenance": "repo (codex/remediacion-custodia-wms)",
       "motivo": "Inversa lógica data-preserving de 0263: retira superficies nuevas, restaura RPC legacy y conserva ledgers de idempotencia y autorizaciones si contienen auditoría."

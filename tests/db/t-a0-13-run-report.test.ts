@@ -139,8 +139,9 @@ describe("T-A0-13 · reporte de corrida", () => {
     // estructurales fail-closed en T-A0-10 = 730; +121 de PR #66 FASE A
     // (Clientes 38+10+47, OC 7 y ciclo integral OC/OS 19) = 851; +8 de
     // CUSTODIA-NIVEL-CONTRATADO (t-cli-a3-01: lo ya materializado no se degrada
-    // cuando el cliente da de baja la custodia, y la puerta de la RPC) = 859.
-    expect(EXPECTED_TOTAL_TESTS).toBe(859);
+    // cuando el cliente da de baja la custodia, y la puerta de la RPC) = 859;
+    // + 9 de remediación 0261 (desambiguación connect_archive_conversation) y precursora 0261a (enums RBAC Finanzas) = 868.
+    expect(EXPECTED_TOTAL_TESTS).toBe(868);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {
