@@ -468,7 +468,7 @@ export default function Sidebar({
           width={500}
           height={500}
           priority
-          className="w-auto h-20 object-contain"
+          className="w-auto h-20 max-w-[160px] max-h-20 object-contain"
         />
         {/* Marca NEXUS OS (Dirección 07-26) — el isologo de Logística TOPS queda arriba. */}
         <NexusOsBrand />

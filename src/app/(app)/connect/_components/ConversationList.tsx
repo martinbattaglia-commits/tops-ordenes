@@ -85,16 +85,18 @@ export function ConversationList({
       return next;
     });
 
-    const r = await archiveInboxItemAction({ conversationId, force });
+    const r = await archiveInboxItemAction(force ? { conversationId, force: true } : { conversationId });
     setBusyId(null);
 
-    if (!r.ok) {
-      if (!force && r.reason === "entity_task_open") {
+    if (!r || !r.ok) {
+      if (r && !force && r.reason === "entity_task_open") {
         // Frente 2: desatar soft modal de confirmación
         setPendingArchiveItem({ id: conversationId, title: itemTitle });
         return;
       }
-      setRowErrors((prev) => ({ ...prev, [conversationId]: r.message }));
+      if (r?.message) {
+        setRowErrors((prev) => ({ ...prev, [conversationId]: r.message }));
+      }
       return;
     }
 
@@ -264,7 +266,7 @@ export function ConversationList({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (busyId === it.conversationId) return;
+                            if (archiveBlocked || busyId === it.conversationId) return;
                             void archiveItem(it.conversationId, false, d.title);
                           }}
                           className={cn(
