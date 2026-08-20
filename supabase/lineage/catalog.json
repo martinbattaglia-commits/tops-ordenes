@@ -3069,7 +3069,7 @@
     {
       "id": "0262a_finance_core_schema_canonical_alignment.sql",
       "filename": "0262a_finance_core_schema_canonical_alignment.sql",
-      "sha256": "1e4f8589077345bc4cf6f7270c744800c2dce489c1431afda35e35f6fef92c75",
+      "sha256": "0e833d38fe338340d4a8bd01669518581d55e16c89d60b6652faebfd6e8ad2a9",
       "orden": 263,
       "requires": [
         "0262_finance_core_foundation.sql"
@@ -3077,20 +3077,20 @@
       "estado": "active",
       "ledger_version": "L00263",
       "ledger_name": "0262a_finance_core_schema_canonical_alignment",
-      "provenance": "repo (frente/remediacion-0262a-finance-canonical-alignment)",
-      "motivo": "Remediacion del incidente de provenance 0262: alineacion canonica dual-state del esquema de Finanzas."
+      "provenance": "repo (frente/fix-0262a-supabase-acl)",
+      "motivo": "Remediacion focal de ACL de 0262a: alineacion canonica y endurecimiento de privilegios a SELECT, INSERT, UPDATE, DELETE para authenticated."
     },
     {
       "id": "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
       "filename": "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
-      "sha256": "d6d2bb64dc1cbb6b5635217a5857deb7c9d395cfdd3d29079ee681a906f73099",
+      "sha256": "da1565f8bd40d261d86d61459aa7b14e9e851a02f4175bc25e1140636781d2d3",
       "orden": 264,
       "requires": [],
       "estado": "rollback",
       "ledger_version": "L00264",
       "ledger_name": "ROLLBACK_0262a_finance_core_schema_canonical_alignment",
-      "provenance": "repo (frente/remediacion-0262a-finance-canonical-alignment)",
-      "motivo": "Inversa logica condicional y fail-closed de 0262a."
+      "provenance": "repo (frente/fix-0262a-supabase-acl)",
+      "motivo": "Inversa logica condicional y fail-closed de 0262a con invariante de seguridad ACL endurecida."
     },
     {
       "id": "0263_custody_pod_signature_and_reception_idempotency.sql",

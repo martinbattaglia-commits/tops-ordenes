@@ -92,6 +92,11 @@ const MIGRACIONES_EDITABLES: readonly string[] = [
   // Corrección in-place de sobrecarga ambigua de connect_archive_conversation y su rollback.
   "supabase/migrations/0261_connect_archive_force_override.sql",
   "supabase/migrations/ROLLBACK_0261_connect_archive_force_override.sql",
+  // Remediación focal ACL 0262a: mergeada en main pero NUNCA aplicada en Supabase (abortó fail-closed por discrepancia de ACL 7 vs 4).
+  // Corrección in-place de reconocimiento de ACL y endurecimiento de privilegios a SELECT, INSERT, UPDATE, DELETE para authenticated.
+  // RETIRAR esta entrada en cuanto 0262a quede aplicada en producción.
+  "supabase/migrations/0262a_finance_core_schema_canonical_alignment.sql",
+  "supabase/migrations/ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
 ];
 
 /**
@@ -709,6 +714,8 @@ describe("T-C1-05 · la excepción de edición no es una puerta abierta", () => 
       "supabase/migrations/0250a_custody_productive_vision.sql",
       "supabase/migrations/0261_connect_archive_force_override.sql",
       "supabase/migrations/ROLLBACK_0261_connect_archive_force_override.sql",
+      "supabase/migrations/0262a_finance_core_schema_canonical_alignment.sql",
+      "supabase/migrations/ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
     ]);
     const src = readFileSync(
       join(REPO_ROOT, "tests", "custody-db", "t-c1-05-append-only-vanilla.test.ts"),

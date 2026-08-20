@@ -1,20 +1,21 @@
 -- =========================================================================
 -- ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql
 --
--- Expediente: "Remediación del Incidente de Provenance 0262 — Alineación Canónica"
+-- Expediente: "Remediación del Incidente de Provenance 0262 — Alineación Canónica y Endurecimiento ACL"
 -- Autoridad: Dirección Técnica Nexus.
--- Régimen: Reversibilidad simétrica, dual-state exhaustivo, fail-closed.
+-- Régimen: Reversibilidad simétrica, dual-state exhaustivo, ACL endurecida invariante, fail-closed.
 --
 -- Propósito:
---   Revertir simétricamente el esquema desde el contrato canónico 0262
---   hacia el estado divergente original ejecutado remotamente.
+--   Revertir simétricamente el esquema estructural desde el contrato canónico 0262
+--   hacia el estado divergente original, manteniendo la ACL endurecida (mínimo privilegio:
+--   SELECT, INSERT, UPDATE, DELETE para authenticated, cero para anon/PUBLIC) como invariante de seguridad.
 --
 -- Garantías de Seguridad:
 --   - Cero CASCADE: Todas las eliminaciones son estrictamente restrictivas (DROP TABLE ... RESTRICT).
 --   - Detección exhaustiva fail-closed de FKs externas, vistas (en cualquier schema),
 --     vistas materializadas, triggers de usuario, funciones dependientes y publicaciones.
---   - Identificación dual-state exacta: Comprobación exhaustiva del manifest de las 10 tablas.
 --   - Preservación íntegra de semillas y UUIDs originales.
+--   - Invariante de seguridad ACL: No reintroduce TRUNCATE, REFERENCES ni TRIGGER, ni grants a anon/PUBLIC.
 -- =========================================================================
 
 do $$
@@ -141,11 +142,12 @@ begin
     raise exception 'STOP — ROLLBACK_0262a PRECONDICIÓN NO CUMPLIDA: Existen % triggers de usuario no autorizados en tablas financieras', v_dep_count;
   end if;
 
-  -- 2.4 Funciones / procedimientos dependientes
+  -- 2.4 Funciones / procedimientos dependientes (incluyendo tipos compuestos de parámetros)
   select count(*) into v_dep_count
   from pg_depend d
   join pg_proc p on p.oid = d.objid
-  join pg_class t on t.oid = d.refobjid
+  left join pg_type pt on pt.oid = d.refobjid
+  left join pg_class t on (t.oid = d.refobjid or t.oid = pt.typrelid)
   join pg_namespace ns_t on ns_t.oid = t.relnamespace
   join pg_namespace ns_p on ns_p.oid = p.pronamespace
   where ns_t.nspname = 'public'
@@ -173,7 +175,7 @@ begin
   end if;
 
   -- =======================================================================
-  -- 3. RECONSTRUCCIÓN SIMÉTRICA HACIA ESTADO DIVERGENTE B
+  -- 3. RECONSTRUCCIÓN SIMÉTRICA HACIA ESTADO DIVERGENTE B CON ACL ENDURECIDA
   -- =======================================================================
 
   -- 3.1 Eliminación restrictiva (sin CASCADE) de las 7 tablas canónicas vacías
@@ -397,8 +399,24 @@ begin
   create policy "finance_quicken_imports write" on public.finance_quicken_imports for all
     using (coalesce(public.has_permission('finanzas.admin'), false));
 
-  -- 3.7 Grants a authenticated
-  grant select, insert, update, delete on
+  -- 3.7 Invariante de Seguridad ACL: Grants estrictos de 4 privilegios a authenticated
+  revoke all on table
+    public.finance_versions,
+    public.finance_categories,
+    public.finance_cost_centers,
+    public.finance_assumptions,
+    public.finance_plan_lines,
+    public.finance_forecast_adjustments,
+    public.finance_scenarios,
+    public.finance_report_snapshots,
+    public.finance_document_inbox,
+    public.finance_quicken_imports
+  from public, anon, authenticated;
+
+  grant select, insert, update, delete on table
+    public.finance_versions,
+    public.finance_categories,
+    public.finance_cost_centers,
     public.finance_assumptions,
     public.finance_plan_lines,
     public.finance_forecast_adjustments,
@@ -409,7 +427,7 @@ begin
   to authenticated;
 
   -- =======================================================================
-  -- 4. POSTSONDAS FAIL-CLOSED: CERTIFICACIÓN DE ESTADO DIVERGENTE B
+  -- 4. POSTSONDAS FAIL-CLOSED: CERTIFICACIÓN DE ESTADO DIVERGENTE B Y ACL ENDURECIDA
   -- =======================================================================
 
   select count(*) into v_count from public.finance_versions;
@@ -420,6 +438,17 @@ begin
 
   select count(*) into v_count from public.finance_cost_centers;
   if v_count <> 5 then raise exception 'STOP — ROLLBACK_0262a POSTSONDA FALLÓ: finance_cost_centers count = %', v_count; end if;
+
+  -- 4.2 Verificación de ausencia absoluta de grants para anon y PUBLIC
+  select count(*) into v_count
+  from information_schema.role_table_grants
+  where table_schema = 'public'
+    and table_name like 'finance_%'
+    and grantee in ('anon', 'public');
+
+  if v_count > 0 then
+    raise exception 'STOP — ROLLBACK_0262a POSTSONDA FALLÓ: Existen % grants inesperados para anon o public en tablas financieras', v_count;
+  end if;
 
 end $$;
 
