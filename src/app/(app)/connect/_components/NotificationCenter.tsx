@@ -5,7 +5,7 @@
 // Agrupa por prioridad en 3 secciones. Acciones SOLO para source==='notification'
 // (las source==='conversation' son derivadas de inbox, no tienen estado propio).
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
@@ -47,6 +47,25 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
       const r = await action();
       if (!r.ok) setErr(r.message);
       else router.refresh();
+    });
+  }
+
+  function openItem(event: MouseEvent<HTMLAnchorElement>, item: NotificationItem) {
+    // Las conversaciones derivadas se apagan mediante `connect_mark_read` al
+    // abrir el hilo. Los avisos persistidos necesitan su RPC personal antes de
+    // navegar; cerrar la pantalla sin esperarla podía abortar la petición.
+    if (item.source !== "notification" || item.read) return;
+    event.preventDefault();
+    if (pending) return;
+    setErr(null);
+    startTransition(async () => {
+      const result = await markNotificationReadAction({ id: item.id });
+      if (!result.ok) {
+        setErr(result.message);
+        return;
+      }
+      router.push(item.href);
+      router.refresh();
     });
   }
 
@@ -127,6 +146,7 @@ export function NotificationCenter({ items }: { items: NotificationItem[] }) {
                         dot={dot}
                         pending={pending}
                         onAction={run}
+                        onOpen={openItem}
                       />
                     ))}
                   </div>
@@ -152,11 +172,13 @@ function NotificationRow({
   dot,
   pending,
   onAction,
+  onOpen,
 }: {
   item: NotificationItem;
   dot: string;
   pending: boolean;
   onAction: (action: () => Promise<{ ok: true } | { ok: false; message: string }>) => void;
+  onOpen: (event: MouseEvent<HTMLAnchorElement>, item: NotificationItem) => void;
 }) {
   const canAct = item.source === "notification";
   const [showSnooze, setShowSnooze] = useState(false);
@@ -166,7 +188,12 @@ function NotificationRow({
       className={`card flex flex-col gap-2 p-3 ${item.read ? "" : "bg-tops-blue-700/5"}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <Link href={item.href} className="flex min-w-0 flex-1 items-start gap-2.5">
+        <Link
+          href={item.href}
+          onClick={(event) => onOpen(event, item)}
+          aria-disabled={pending && item.source === "notification" && !item.read}
+          className="flex min-w-0 flex-1 items-start gap-2.5"
+        >
           {!item.read && <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />}
           <div className="min-w-0">
             <p

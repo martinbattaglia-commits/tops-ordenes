@@ -17,17 +17,21 @@ import { createRoot, type Root } from "react-dom/client";
 const S = vi.hoisted(() => ({
   respuestaRpc: { data: 0 as number | null, error: null as { message: string } | null },
   contadores: { red_system_count: 3, green_whatsapp_count: 0, yellow_internal_count: 0 },
+  items: [] as Array<Record<string, unknown>>,
+  rpcs: [] as string[],
+  push: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: S.push }) }));
 vi.mock("@/lib/supabase/realtime", () => ({ useRealtimeTable: () => {} }));
 vi.mock("@/lib/supabase/client", () => ({
   createClient: () => ({
     auth: { getUser: async () => ({ data: { user: { id: "u" } } }) },
-    rpc: async () => S.respuestaRpc,
+    rpc: async (name: string) => { S.rpcs.push(name); return S.respuestaRpc; },
     from: (tabla: string) =>
       tabla === "v_link_notification_badges"
         ? { select: () => ({ maybeSingle: async () => ({ data: S.contadores, error: null }) }) }
-        : { select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: [], error: null }) }) }) }) },
+        : { select: () => ({ eq: () => ({ order: () => ({ limit: async () => ({ data: S.items, error: null }) }) }) }) },
   }),
 }));
 
@@ -51,6 +55,9 @@ const botonMarcar = () =>
 beforeEach(() => {
   S.respuestaRpc = { data: 0, error: null };
   S.contadores = { red_system_count: 3, green_whatsapp_count: 0, yellow_internal_count: 0 };
+  S.items = [];
+  S.rpcs.length = 0;
+  S.push.mockClear();
 });
 afterEach(async () => { await act(async () => root?.unmount()); host?.remove(); });
 
@@ -88,5 +95,27 @@ describe("NotificationsBell · marcación masiva sin éxito silencioso", () => {
     await montarYAbrir();
     expect(botonMarcar()).toBeUndefined();
     expect(host.textContent).toMatch(/se apagan al abrir cada conversación/i);
+  });
+});
+
+describe("NotificationsBell · abrir registra lectura antes de navegar", () => {
+  it("marca el aviso individual, recarga y recién después abre su destino", async () => {
+    S.respuestaRpc = { data: null, error: null };
+    S.items = [{
+      id: "11111111-1111-4111-8111-111111111111",
+      kind: "system",
+      title: "Aviso pendiente",
+      message: "Detalle",
+      entity: "order",
+      entity_id: "22222222-2222-4222-8222-222222222222",
+      is_read: false,
+      created_at: "2026-08-20T12:00:00.000Z",
+    }];
+    await montarYAbrir();
+    const link = Array.from(host.querySelectorAll("a"))
+      .find((a) => a.textContent?.includes("Aviso pendiente"))!;
+    await act(async () => { link.click(); await Promise.resolve(); });
+    expect(S.rpcs).toContain("connect_notif_mark_read");
+    expect(S.push).toHaveBeenCalledTimes(1);
   });
 });

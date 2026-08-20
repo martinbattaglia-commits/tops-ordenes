@@ -69,32 +69,25 @@ describe("Handover Relay Blocking Unit Tests", () => {
     consoleSpy.mockRestore();
   });
 
-  it("omite la llamada a Make si is_bot_active es false", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+  it("consulta únicamente columnas existentes del contrato 0260", async () => {
+    const selectSpy = vi.fn();
 
     const fakeAdmin = {
       rpc: vi.fn(),
       from: vi.fn().mockImplementation((table: string) => {
         if (table === "connect_conversations") {
           return {
-            select: vi.fn().mockReturnValue({
+            select: selectSpy.mockReturnValue({
               in: vi.fn().mockReturnValue({
                 limit: vi.fn().mockResolvedValue({
-                  data: [{ id: "c-2", is_bot_active: false, handover_state: "BOT_ACTIVE" }],
+                  data: [{ id: "c-2", handover_state: "BOT_ACTIVE" }],
+                  error: null,
                 }),
               }),
             }),
           };
         }
-        return {
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              order: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({ data: [] }),
-              }),
-            }),
-          }),
-        };
+        return {};
       }),
     };
 
@@ -111,58 +104,26 @@ describe("Handover Relay Blocking Unit Tests", () => {
 
     const outcome = await ports.deliver(row);
 
-    expect(outcome.ok).toBe(true);
-    expect(outcome.state).toBe("delivered");
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Relay omitido por Handover activo"));
-
-    consoleSpy.mockRestore();
+    expect(selectSpy).toHaveBeenCalledWith("id, handover_state");
+    expect(outcome).toEqual({ ok: false, state: "misconfigured" });
   });
 
-  it("omite la llamada a Make y activa PAUSED_HUMAN si el último mensaje saliente fue de un operador humano", async () => {
-    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const updateSpy = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: [] }) });
-
+  it("no entrega a Max si no puede acreditar el handover", async () => {
     const fakeAdmin = {
       rpc: vi.fn(),
-      from: vi.fn().mockImplementation((table: string) => {
-        if (table === "connect_conversations") {
-          return {
-            select: vi.fn().mockReturnValue({
-              in: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue({
-                  data: [{ id: "c-3", handover_state: "BOT_ACTIVE", is_bot_active: true }],
-                }),
-              }),
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({
+              data: null,
+              error: { message: "column does not exist" },
             }),
-            update: updateSpy,
-          };
-        }
-        if (table === "connect_messages") {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({
-                    data: [
-                      {
-                        id: "m-1",
-                        author_profile_id: "user-operator-1",
-                        meta: { direction: "outbound", author: "Martín" },
-                        created_at: new Date().toISOString(),
-                      },
-                    ],
-                  }),
-                }),
-              }),
-            }),
-          };
-        }
-        return {};
+          }),
+        }),
       }),
     };
-
     const ports = createSupabaseMakeRelayPorts(fakeAdmin as any);
-    const row = {
+    await expect(ports.deliver({
       id: 3,
       relayKey: "test-key-3",
       rawBody: JSON.stringify({
@@ -170,15 +131,29 @@ describe("Handover Relay Blocking Unit Tests", () => {
       }),
       signatureHeader: "sha256=fake",
       attempts: 0,
+    })).rejects.toThrow("handover_state_unavailable");
+  });
+
+  it("reencola y no entrega a Max si la lectura de handover lanza una excepción", async () => {
+    const fakeAdmin = {
+      rpc: vi.fn(),
+      from: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          in: vi.fn().mockReturnValue({
+            limit: vi.fn().mockRejectedValue(new Error("network unavailable")),
+          }),
+        }),
+      }),
     };
-
-    const outcome = await ports.deliver(row);
-
-    expect(outcome.ok).toBe(true);
-    expect(outcome.state).toBe("delivered");
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Relay omitido: último mensaje saliente de operador humano"));
-    expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ handover_state: "PAUSED_HUMAN" }));
-
-    consoleSpy.mockRestore();
+    const ports = createSupabaseMakeRelayPorts(fakeAdmin as any);
+    await expect(ports.deliver({
+      id: 4,
+      relayKey: "test-key-4",
+      rawBody: JSON.stringify({
+        entry: [{ changes: [{ value: { messages: [{ from: "5491112345678" }] } }] }],
+      }),
+      signatureHeader: "sha256=fake",
+      attempts: 0,
+    })).rejects.toThrow("network unavailable");
   });
 });
