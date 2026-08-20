@@ -432,6 +432,8 @@ export const CONNECT_LINK_ARCHIVE_MIGRATION_FILES: ReadonlySet<string> = new Set
 ]);
 
 export const FINANZAS_MIGRATION_FILES: ReadonlySet<string> = new Set([
+  "0261a_finance_permission_enums.sql",
+  "ROLLBACK_0261a_finance_permission_enums.sql",
   "0262_finance_core_foundation.sql",
   "ROLLBACK_0262_finance_core_foundation.sql",
 ]);
@@ -462,10 +464,11 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<ManifestExclusion> = [
     id: "finanzas-core-foundation",
     matches: (f) => FINANZAS_MIGRATION_FILES.has(f),
     reason:
-      "Módulo Nativo Finanzas: fundación de versiones, supuestos, categorías, " +
-      "centros de costo, proyecciones y bandeja de ingesta con RLS propio. " +
-      "Pertenece al dominio financiero y no integra el cierre WMS vanilla. " +
-      "La exclusión clasifica exactamente el forward 0262 y su script de rollback.",
+      "Módulo Nativo Finanzas: enums RBAC precursores 0261a, y fundación 0262 de " +
+      "versiones, supuestos, categorías, centros de costo, proyecciones y bandeja de " +
+      "ingesta con RLS propio. Pertenece al dominio financiero y no integra el " +
+      "cierre WMS vanilla. La exclusión clasifica exactamente los forwards " +
+      "0261a y 0262 con sus respectivos scripts de rollback.",
   },
   {
     // OC-FIRMANTE-POR-PERMISO · decisión explícita, en entrada PROPIA y por

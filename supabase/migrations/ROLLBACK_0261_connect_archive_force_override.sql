@@ -1,4 +1,11 @@
 -- ROLLBACK_0261_connect_archive_force_override.sql
+-- Remediación: eliminar explícitamente la firma bi-argumento de 0261
+-- antes de restaurar la firma mono-argumento de 0260.
+
+-- 1. Eliminar la firma bi-argumento de 0261
+drop function if exists public.connect_archive_conversation(uuid, boolean);
+
+-- 2. Restaurar la firma mono-argumento de 0260
 create or replace function public.connect_archive_conversation(p_conversation_id uuid)
 returns void
 language plpgsql security definer set search_path = public, pg_temp
@@ -19,3 +26,5 @@ $$;
 
 revoke all on function public.connect_archive_conversation(uuid) from public, anon, authenticated;
 grant execute on function public.connect_archive_conversation(uuid) to authenticated;
+
+notify pgrst, 'reload schema';

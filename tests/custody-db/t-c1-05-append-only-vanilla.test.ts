@@ -88,6 +88,10 @@ const MIGRACIONES_EDITABLES: readonly string[] = [
   // con 55006, así que ninguna migración posterior podía repararla.
   // RETIRAR esta entrada en cuanto 0250a quede aplicada en producción.
   "supabase/migrations/0250a_custody_productive_vision.sql",
+  // Remediación 0261: mergeada en main pero NUNCA aplicada en Supabase (ledger en 0259).
+  // Corrección in-place de sobrecarga ambigua de connect_archive_conversation y su rollback.
+  "supabase/migrations/0261_connect_archive_force_override.sql",
+  "supabase/migrations/ROLLBACK_0261_connect_archive_force_override.sql",
 ];
 
 /**
@@ -348,6 +352,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
     "tests/db/scripts/expected-suite.mjs",
     "tests/db/t-a0-13-run-report.test.ts",
     "tests/db/t-cli-a3-01-nivel-contratado.test.ts",
+    "tests/db/t-0261-0261a-remediation.test.ts",
   ];
 
   it("la base se resuelve a un commit real y NO es HEAD~1 por descarte", () => {
@@ -701,6 +706,8 @@ describe("T-C1-05 · la excepción de edición no es una puerta abierta", () => 
   it("la lista es explícita, acotada y dice cuándo se retira", () => {
     expect(MIGRACIONES_EDITABLES).toEqual([
       "supabase/migrations/0250a_custody_productive_vision.sql",
+      "supabase/migrations/0261_connect_archive_force_override.sql",
+      "supabase/migrations/ROLLBACK_0261_connect_archive_force_override.sql",
     ]);
     const src = readFileSync(
       join(REPO_ROOT, "tests", "custody-db", "t-c1-05-append-only-vanilla.test.ts"),

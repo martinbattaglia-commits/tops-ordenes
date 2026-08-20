@@ -1,8 +1,14 @@
 -- 0261_connect_archive_force_override.sql — Nexus Link · EXP-WA-WEBHOOKS-ARCH-LEGEND-UX24H-V1
 -- ─────────────────────────────────────────────────────────────────────────
 -- Actualizar `connect_archive_conversation` aceptando `p_force boolean DEFAULT false`
+-- Remediación: eliminar explícitamente la sobrecarga mono-argumento previa (0260)
+-- para evitar ambigüedad de resolución de funciones en PostgreSQL y PostgREST.
 -- ─────────────────────────────────────────────────────────────────────────
 
+-- 1. Eliminar la firma anterior de 0260
+drop function if exists public.connect_archive_conversation(uuid);
+
+-- 2. Crear la nueva firma con parámetro force
 create or replace function public.connect_archive_conversation(
   p_conversation_id uuid,
   p_force boolean default false
