@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 228,
-  "no_ejecutables": 38,
+  "ejecutables": 229,
+  "no_ejecutables": 39,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -3118,6 +3118,30 @@
       "ledger_name": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency",
       "provenance": "repo (codex/remediacion-custodia-wms)",
       "motivo": "Inversa l\u00f3gica data-preserving de 0263: retira superficies nuevas, restaura RPC legacy y conserva ledgers de idempotencia y autorizaciones si contienen auditor\u00eda."
+    },
+    {
+      "id": "0264_connect_mark_read_named_arguments.sql",
+      "filename": "0264_connect_mark_read_named_arguments.sql",
+      "sha256": "b26e5ca8bbcd86190a601366b8f3a784c92c00575cbe62f37048688b37a2c7db",
+      "orden": 267,
+      "requires": ["0246_clientes_fase_b_principals_capabilities.sql"],
+      "estado": "active",
+      "ledger_version": "L00267",
+      "ledger_name": "0264_connect_mark_read_named_arguments",
+      "provenance": "repo (codex/hotfix-max-persistence-notifications-rpc-20260820)",
+      "motivo": "Restaura los nombres p_conversation_id y p_up_to_seq del RPC connect_mark_read para resolucion nominal via PostgREST."
+    },
+    {
+      "id": "ROLLBACK_0264_connect_mark_read_named_arguments.sql",
+      "filename": "ROLLBACK_0264_connect_mark_read_named_arguments.sql",
+      "sha256": "d26fe66314c51d35cd2700f8ef36953d028289fa8da287749db8acc82a76526c",
+      "orden": 268,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00268",
+      "ledger_name": "ROLLBACK_0264_connect_mark_read_named_arguments",
+      "provenance": "repo (codex/hotfix-max-persistence-notifications-rpc-20260820)",
+      "motivo": "Inversa exacta de 0264: restaura el wrapper sin nombres de 0246 y conserva sus grants."
     }
   ]
 }

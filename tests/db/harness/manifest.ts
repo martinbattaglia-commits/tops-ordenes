@@ -429,6 +429,8 @@ export const CONNECT_LINK_ARCHIVE_MIGRATION_FILES: ReadonlySet<string> = new Set
   "ROLLBACK_0260_nexus_link_handover_archived.sql",
   "0261_connect_archive_force_override.sql",
   "ROLLBACK_0261_connect_archive_force_override.sql",
+  "0264_connect_mark_read_named_arguments.sql",
+  "ROLLBACK_0264_connect_mark_read_named_arguments.sql",
 ]);
 
 export const FINANZAS_MIGRATION_FILES: ReadonlySet<string> = new Set([
