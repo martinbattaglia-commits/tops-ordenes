@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Icon } from "@/components/Icon";
 import { createSingleFlightGuard } from "@/lib/custody/single-flight";
 import { registerDispatchEgressAction } from "../actions";
@@ -36,13 +37,18 @@ export function DispatchEgressPanel({
   orderId,
   units,
   allAllowed,
+  status,
+  captureAllowed = true,
 }: {
   orderId: string;
   units: DispatchEgressUnit[];
   allAllowed: boolean;
+  status: "required" | "unavailable";
+  /** La evidencia de egreso sólo se captura antes de confirmar el despacho. */
+  captureAllowed?: boolean;
 }) {
   const [archivos, setArchivos] = useState<Record<string, File | null>>({});
-  const [enCurso, setEnCurso] = useState<string | null>(null);
+  const [enCurso, setEnCurso] = useState<Set<string>>(() => new Set());
   const [errores, setErrores] = useState<Record<string, string>>({});
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
   const guard = useMemo(() => createSingleFlightGuard(), []);
@@ -59,14 +65,25 @@ export function DispatchEgressPanel({
         delete n[unitId];
         return n;
       });
-      setEnCurso(unitId);
       try {
         const form = new FormData();
         form.set("file", file);
         form.set("entity_id", unitId);
-        const res = await guard.run(`egreso:${unitId}`, () =>
-          registerDispatchEgressAction(orderId, form),
-        );
+        // El estado visual pertenece al vuelo que ADQUIRIÓ la guardia. Si se
+        // activa antes, un segundo click descartado entra en su propio finally
+        // y borra el indicador mientras el primer upload sigue vivo.
+        const res = await guard.run(`egreso:${unitId}`, async () => {
+          setEnCurso((current) => new Set(current).add(unitId));
+          try {
+            return await registerDispatchEgressAction(orderId, form);
+          } finally {
+            setEnCurso((current) => {
+              const next = new Set(current);
+              next.delete(unitId);
+              return next;
+            });
+          }
+        });
         if (!res) return;
         if (!res.ok) {
           setErrores((e) => ({ ...e, [unitId]: res.error }));
@@ -77,12 +94,23 @@ export function DispatchEgressPanel({
         if (el) el.value = "";
       } catch {
         setErrores((e) => ({ ...e, [unitId]: "No se pudo registrar la fotografía" }));
-      } finally {
-        setEnCurso(null);
       }
     },
     [archivos, guard, orderId],
   );
+
+  if (status === "unavailable") {
+    return (
+      <section className="nx-surface card card-pad mb-4" role="alert" data-egress-unavailable="true">
+        <h2 className="eyebrow-tiny flex items-center gap-1.5">
+          <Icon name="lock" size={12} /> Custodia no verificable
+        </h2>
+        <p className="mt-2 text-xs text-status-warning">
+          No se pudo verificar la liberación de las unidades. El despacho permanece bloqueado; recargá la pantalla o escalá al encargado.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -95,14 +123,16 @@ export function DispatchEgressPanel({
       </h2>
 
       <p className="mt-2 text-xs text-fg-muted">
-        {allAllowed
+        {!captureAllowed && !allAllowed
+          ? "El despacho ya fue confirmado. Para corregir una foto faltante, primero revertí el despacho; la captura sólo se habilita antes de la salida."
+          : allAllowed
           ? "Las unidades bajo custodia están en condiciones de salir."
           : "Sacá la fotografía de cada unidad antes de subirla al transporte."}
       </p>
 
       <div className="mt-3 flex flex-col gap-3">
         {units.map((u) => {
-          const enVuelo = enCurso === u.physicalUnitId;
+          const enVuelo = enCurso.has(u.physicalUnitId);
           const error = errores[u.physicalUnitId];
           return (
             <div
@@ -112,7 +142,20 @@ export function DispatchEgressPanel({
               data-dispatch-allowed={u.dispatchAllowed}
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="font-mono text-xs font-semibold">{u.unitPublicId}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs font-semibold">{u.unitPublicId}</span>
+                  {u.caseId ? (
+                    <Link
+                      href={`/wms/custody/${u.caseId}?dispatchOrderId=${orderId}`}
+                      className="btn btn-ghost btn-sm"
+                      data-cint-link={u.caseId}
+                    >
+                      Abrir {u.casePublicId ?? "CINT"}
+                    </Link>
+                  ) : (
+                    <span className="text-xs text-status-warning">Caso CINT faltante</span>
+                  )}
+                </div>
                 <span className="text-[11px] text-fg-secondary font-mono">{u.sku}</span>
               </div>
 
@@ -142,7 +185,7 @@ export function DispatchEgressPanel({
                 </ul>
               )}
 
-              {!u.hasEgressPhoto && (
+              {!u.hasEgressPhoto && captureAllowed && (
                 <div className="mt-3" data-slot-form="egreso">
                   <label htmlFor={`egreso-${u.physicalUnitId}`} className="text-xs font-medium">
                     Fotografía de egreso <span aria-hidden="true">*</span>

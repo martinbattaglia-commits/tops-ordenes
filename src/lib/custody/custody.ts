@@ -308,6 +308,70 @@ export async function attestCustodyContent(input: AttestContentInput): Promise<s
   return data as string;
 }
 
+export interface PodSignatureAttestationInput {
+  bucket: "custody-pii";
+  storagePath: string;
+  sha256: string;
+  sizeBytes: number;
+  mimeType: string;
+  actorId: string;
+  sessionId: string;
+  shipmentId: string;
+  receiverName: string;
+  receiverDocument?: string | null;
+}
+
+export async function attestCustodyPodSignatureContent(
+  input: PodSignatureAttestationInput,
+): Promise<{ operationId: string; attestationId: string }> {
+  const transport = noRetryTransport();
+  const admin = requireCustodyClient(createCustodyAdminMutationClient(transport), "firma POD");
+  const { data, error } = await admin.rpc("attest_custody_pod_signature_content", {
+    p_bucket: input.bucket,
+    p_storage_path: input.storagePath,
+    p_sha256: input.sha256,
+    p_size_bytes: input.sizeBytes,
+    p_mime_type: input.mimeType,
+    p_actor_id: input.actorId,
+    p_session_id: input.sessionId,
+    p_shipment_id: input.shipmentId,
+    p_receiver_name: input.receiverName,
+    p_receiver_document: input.receiverDocument ?? null,
+  });
+  if (error) throw classifyRpcError(error, "no se pudo autorizar la firma POD", transport.rpcAttempts("attest_custody_pod_signature_content"));
+  const row = data as { operation_id?: unknown; attestation_id?: unknown } | null;
+  const operationId = parseCanonicalUuid(row?.operation_id);
+  const attestationId = parseCanonicalUuid(row?.attestation_id);
+  if (!operationId || !attestationId) throw new Error("Autorización de firma no verificable");
+  return { operationId, attestationId };
+}
+
+export async function attachCustodyPodSignature(input: {
+  operationId: string;
+  shipmentId: string;
+  receiverName: string;
+  receiverDocument?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
+}): Promise<{ operationId: string; evidenceId: string }> {
+  const transport = noRetryTransport();
+  const session = requireCustodyClient(createCustodyMutationClient(transport), "firma POD");
+  const { data, error } = await session.rpc("attach_custody_pod_signature", {
+    p_operation_id: input.operationId,
+    p_shipment_id: input.shipmentId,
+    p_receiver_name: input.receiverName,
+    p_receiver_document: input.receiverDocument ?? null,
+    p_file_name: input.fileName ?? null,
+    p_mime_type: input.mimeType ?? null,
+  });
+  if (error) throw classifyRpcError(error, "no se pudo registrar la firma POD", transport.rpcAttempts("attach_custody_pod_signature"));
+  const row = data as { operation_id?: unknown; evidence_id?: unknown } | null;
+  const operationId = parseCanonicalUuid(row?.operation_id);
+  const evidenceId = parseCanonicalUuid(row?.evidence_id);
+  if (!operationId || !evidenceId) throw new Error("Firma POD no verificable");
+  return { operationId, evidenceId };
+}
+
 /** Revoca una atestación no consumida. Rol interno de servidor. */
 export async function revokeCustodyContentAttestation(attestationId: string): Promise<void> {
   const transport = noRetryTransport();
@@ -782,6 +846,32 @@ export async function generateDeliveryPod(input: GeneratePodInput): Promise<{ po
   });
   if (error) throw new Error(`generateDeliveryPod: ${error.message}`);
   return data as { pod_id: string; public_id: string };
+}
+
+/** Única superficie productiva post-0263. Nunca consume una firma legacy. */
+export async function generateDeliveryPodV2(input: {
+  shipmentId: string;
+  receiverName: string;
+  receiverDocument?: string | null;
+  observations?: string | null;
+  signatureOperationId?: string | null;
+}): Promise<{ pod_id: string; public_id: string }> {
+  const transport = noRetryTransport();
+  const session = requireCustodyClient(createCustodyMutationClient(transport), "POD");
+  const { data, error } = await session.rpc("generate_delivery_pod_v2", {
+    p_shipment_id: input.shipmentId,
+    p_receiver_name: input.receiverName,
+    p_receiver_document: input.receiverDocument ?? null,
+    p_observations: input.observations ?? null,
+    p_signature_operation_id: input.signatureOperationId ?? null,
+  });
+  if (error) throw classifyRpcError(error, "no se pudo generar el POD", transport.rpcAttempts("generate_delivery_pod_v2"));
+  const row = data as { pod_id?: unknown; public_id?: unknown } | null;
+  const podId = parseCanonicalUuid(row?.pod_id);
+  if (!podId || typeof row?.public_id !== "string" || row.public_id.length === 0) {
+    throw new Error("Resultado POD no verificable");
+  }
+  return { pod_id: podId, public_id: row.public_id };
 }
 
 // ===========================================================================

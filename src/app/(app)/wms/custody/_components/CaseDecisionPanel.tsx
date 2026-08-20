@@ -20,9 +20,12 @@ import type { CustodyCaseView } from "@/lib/custody/case-presentation";
 export function CaseDecisionPanel({
   view,
   onDecided,
+  dispatchOrderId,
 }: {
   view: CustodyCaseView;
   onDecided?: (next: CustodyCaseView) => void;
+  /** UUID ya validado por el Server Component; nunca acepta una URL arbitraria. */
+  dispatchOrderId?: string | null;
 }) {
   const [reason, setReason] = useState("");
   const [observations, setObservations] = useState("");
@@ -53,7 +56,9 @@ export function CaseDecisionPanel({
       try {
         // Doble clic: la segunda invocación se descarta acá y, si igual saliera,
         // el CAS de versión la rechaza en la base.
-        const res = await guard.run(`${view.caseId}:${decision}`, () =>
+        // Una sola clave por CASO: liberar y cuarentenar son decisiones
+        // mutuamente excluyentes, no dos canales de escritura concurrentes.
+        const res = await guard.run(view.caseId, () =>
           decideCustodyCaseAction({
             caseId: view.caseId,
             expectedVersion: view.version,
@@ -67,12 +72,18 @@ export function CaseDecisionPanel({
           setError(res.error);
           return;
         }
+        if (res.data && dispatchOrderId) {
+          // Navegación completa: la pantalla force-dynamic de despacho vuelve a
+          // leer el gate autoritativo. No se habilita por estado optimista.
+          window.location.assign(`/wms/despachos/${dispatchOrderId}`);
+          return;
+        }
         if (res.data) onDecided?.(res.data);
       } finally {
         setSubmitting(false);
       }
     },
-    [guard, observations, onDecided, reason, view.caseId, view.version],
+    [dispatchOrderId, guard, observations, onDecided, reason, view.caseId, view.version],
   );
 
   if (decided) {

@@ -554,6 +554,11 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
     "ROLLBACK_0258_custody_evaluated_head_witness.sql",
     "ROLLBACK_0259_purchase_order_signer_by_permission.sql",
+    // Nexus Link handover/archive: inversas lógicas catalogadas junto con sus
+    // forwards, pero excluidas de todo plan de ejecución forward.
+    "ROLLBACK_0260_nexus_link_handover_archived.sql",
+    "ROLLBACK_0261_connect_archive_force_override.sql",
+    "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

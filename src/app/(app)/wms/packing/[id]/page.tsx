@@ -5,6 +5,7 @@ import { listPackBoard } from "@/lib/packing/packing";
 import { ORDER_STATUS_META } from "@/lib/pedidos/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { PackBoard } from "../_components/PackBoard";
+import { getAllocationCustodyVisibility } from "@/lib/custody/operation-visibility";
 
 export const metadata = { title: "Armado de bultos · WMS" };
 export const dynamic = "force-dynamic";
@@ -30,6 +31,11 @@ export default async function PackRoutePage({ params }: { params: { id: string }
     );
   }
   if (!board) notFound();
+
+  const custody = await getAllocationCustodyVisibility([
+    ...board.pending_stops.map((stop) => stop.allocation_id),
+    ...board.units.flatMap((unit) => unit.items.map((item) => item.allocation_id)),
+  ]);
 
   // KPIs por LÍNEA (D1), derivadas del tablero (alcance de packing = pickeado/empacado).
   const pendingLineIds = new Set(board.pending_stops.map((s) => s.order_item_id));
@@ -90,6 +96,8 @@ export default async function PackRoutePage({ params }: { params: { id: string }
         status={board.status}
         pendingStops={board.pending_stops}
         units={board.units}
+        custodyStatus={custody.status}
+        custodyByAllocation={custody.byAllocation}
       />
     </div>
   );

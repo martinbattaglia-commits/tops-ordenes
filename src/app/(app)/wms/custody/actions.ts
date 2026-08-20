@@ -11,16 +11,19 @@ import {
 } from "@/lib/supabase/server";
 import {
   attachCustodyEvidence,
+  attachCustodyPodSignature,
   attestCustodyContent,
+  attestCustodyPodSignatureContent,
   captureCustodyEvidence,
   registerCustodyEvent,
-  generateDeliveryPod,
+  generateDeliveryPodV2,
   getDeliveryPodByShipment,
   redactCustodyEvidence,
   getEvidenceSignedUrl,
   resolveTrustedActor,
   revokeCustodyContentAttestation,
   supabaseStoragePort,
+  verifyStoredContent,
 } from "@/lib/custody/custody";
 import {
   buildCustodyStoragePath,
@@ -84,7 +87,6 @@ import {
 import { generateAndStorePodPdf, getPodPdfEvidenceId } from "@/lib/custody/pod-pdf";
 import type {
   CustodyBucket,
-  GeneratePodInput,
   RegisterEventInput,
 } from "@/lib/custody/types";
 
@@ -97,6 +99,10 @@ import type {
 
 type Result<T = undefined> = { ok: true; data?: T } | { ok: false; error: string };
 
+type ShipmentPodReadiness = {
+  delivered: boolean;
+};
+
 function fail(e: unknown): { ok: false; error: string } {
   return { ok: false, error: e instanceof Error ? e.message : String(e) };
 }
@@ -104,6 +110,45 @@ function fail(e: unknown): { ok: false; error: string } {
 function revalidate(extra?: string): void {
   revalidatePath("/wms/custody");
   if (extra) revalidatePath(extra);
+}
+
+/**
+ * Deriva estado y firma desde filas shipment-scoped. El timeline histórico de
+ * un shipment también agrega eventos de sus bultos; por eso no sirve para
+ * elegir una firma del receptor sin riesgo de cruzar scopes.
+ */
+async function resolveShipmentPodReadiness(
+  shipmentId: string,
+): Promise<ShipmentPodReadiness> {
+  const shipment = parseCanonicalUuid(shipmentId);
+  if (!shipment) throw new Error("Identificador de despacho inválido");
+
+  const session = createClient();
+  if (!session) throw new Error("Supabase no configurado");
+
+  const { data: shipmentRow, error: shipmentError } = await session
+    .from("shipments")
+    .select("id, status, delivered_at")
+    .eq("id", shipment)
+    .maybeSingle();
+  if (shipmentError || !shipmentRow) throw new Error("Despacho no disponible");
+
+  const row = shipmentRow as { status?: string; delivered_at?: string | null };
+  const deliveredAt = typeof row.delivered_at === "string" ? row.delivered_at : null;
+  if (row.status !== "entregado" || !deliveredAt || !Number.isFinite(Date.parse(deliveredAt))) {
+    return { delivered: false };
+  }
+  return { delivered: true };
+}
+
+export async function shipmentPodReadinessAction(
+  shipmentId: string,
+): Promise<Result<ShipmentPodReadiness>> {
+  try {
+    return { ok: true, data: await resolveShipmentPodReadiness(shipmentId) };
+  } catch (e) {
+    return fail(e);
+  }
 }
 
 async function attachPhysicalEvidenceAction(
@@ -152,6 +197,27 @@ export async function attachEvidenceAction(form: FormData): Promise<Result<{ evi
     // porque no se lee.
     const sessionClient = createClient();
     if (!sessionClient) return { ok: false, error: "Supabase no configurado" };
+
+    // Una llamada directa a la Server Action no puede adelantar la firma o la
+    // evidencia de entrega. La UI oculta esos presets, y el servidor vuelve a
+    // comprobar el estado antes de cualquier upload.
+    if (scope === "shipment" && pair.stage === "entrega") {
+      const { data: shipmentRow, error: shipmentError } = await sessionClient
+        .from("shipments")
+        .select("status, delivered_at")
+        .eq("id", entityId)
+        .maybeSingle();
+      const shipment = shipmentRow as { status?: string; delivered_at?: string | null } | null;
+      if (
+        shipmentError ||
+        !shipment ||
+        shipment.status !== "entregado" ||
+        typeof shipment.delivered_at !== "string" ||
+        !Number.isFinite(Date.parse(shipment.delivered_at))
+      ) {
+        return { ok: false, error: "La evidencia de entrega se habilita después de confirmar la entrega" };
+      }
+    }
 
     // Cliente ADMINISTRATIVO obligatorio y separado: Storage y RPC internas.
     // Sin él no hay upload, ni atestación, ni attach — nunca un fallback que
@@ -241,15 +307,64 @@ export async function registerEventAction(input: RegisterEventInput, revalHint?:
  * el POD queda creado y se puede regenerar (regeneratePodPdfAction) sin perder datos.
  */
 export async function generatePodAction(
-  input: GeneratePodInput,
+  form: FormData,
   revalHint?: string
 ): Promise<Result<{ pod_id: string; public_id: string; pdf_path?: string; pdf_warning?: string }>> {
   try {
-    const res = await generateDeliveryPod(input);
+    const shipmentId = parseCanonicalUuid(form.get("shipment_id"));
+    if (!shipmentId) return { ok: false, error: "Identificador de despacho inválido" };
+    const receiverName = String(form.get("receiver_name") ?? "").trim();
+    const receiverDocument = String(form.get("receiver_document") ?? "").trim() || null;
+    const observations = String(form.get("observations") ?? "").trim() || null;
+    if (!receiverName) return { ok: false, error: "Nombre del receptor requerido" };
+    const readiness = await resolveShipmentPodReadiness(shipmentId);
+    if (!readiness.delivered) {
+      return { ok: false, error: "El POD se habilita únicamente después de confirmar la entrega" };
+    }
+    let signatureOperationId: string | null = null;
+    const signature = form.get("signature");
+    if (signature instanceof File && signature.size > 0) {
+      if (signature.size > CUSTODY_EVIDENCE_MAX_BYTES) {
+        return { ok: false, error: "La firma supera el máximo permitido de 8 MiB" };
+      }
+      const bytes = new Uint8Array(await signature.arrayBuffer());
+      const mime = sniffCustodyVisionMime(bytes);
+      if (!mime) return { ok: false, error: "La firma debe ser JPEG, PNG o WebP válido" };
+      const session = createClient();
+      const admin = createAdminClient();
+      if (!session || !admin) return { ok: false, error: "Operación administrativa no disponible" };
+      const actor = await resolveTrustedActor(session);
+      const extension = mime === "image/jpeg" ? "jpg" : mime === "image/png" ? "png" : "webp";
+      const storagePath = buildCustodyStoragePath({
+        scope: "shipment", entityId: shipmentId, stage: "entrega",
+        objectId: randomUUID(), extension,
+      });
+      if (!storagePath) return { ok: false, error: "Ruta de firma no verificable" };
+      const storage = supabaseStoragePort(admin);
+      await storage.upload("custody-pii", storagePath, bytes, mime);
+      const verified = await verifyStoredContent(storage, "custody-pii", storagePath, {
+        sizeBytes: bytes.byteLength,
+        sha256: createHash("sha256").update(Buffer.from(bytes)).digest("hex"),
+      });
+      const authorization = await attestCustodyPodSignatureContent({
+        bucket: "custody-pii", storagePath, sha256: verified.sha256,
+        sizeBytes: verified.sizeBytes, mimeType: mime,
+        actorId: actor.actorId, sessionId: actor.sessionId, shipmentId,
+        receiverName, receiverDocument,
+      });
+      const attached = await attachCustodyPodSignature({
+        operationId: authorization.operationId, shipmentId, receiverName,
+        receiverDocument, fileName: signature.name, mimeType: mime,
+      });
+      signatureOperationId = attached.operationId;
+    }
+    const res = await generateDeliveryPodV2({
+      shipmentId, receiverName, receiverDocument, observations, signatureOperationId,
+    });
     let pdf_path: string | undefined;
     let pdf_warning: string | undefined;
     try {
-      const pdf = await generateAndStorePodPdf(input.shipmentId, { force: true });
+      const pdf = await generateAndStorePodPdf(shipmentId, { force: true });
       pdf_path = pdf?.path;
     } catch (e) {
       pdf_warning = e instanceof Error ? e.message : String(e);

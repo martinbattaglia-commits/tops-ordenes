@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Icon } from "@/components/Icon";
+import { QrCard } from "../../custody/_components/QrCard";
+import { createSingleFlightGuard } from "@/lib/custody/single-flight";
 import type { PositionOption, BusinessUnit } from "@/lib/wms/types";
 import {
   ClientSelector,
@@ -21,6 +23,8 @@ import {
 import { custodyClientLevelAction } from "../actions";
 
 interface ItemRow {
+  /** Identidad sólo de UI: evita que React reasigne un input file a otra línea. */
+  rowKey: string;
   sku: string;
   description: string;
   lot_number: string;
@@ -32,6 +36,7 @@ interface ItemRow {
 }
 
 const EMPTY_ITEM: ItemRow = {
+  rowKey: "row-0",
   sku: "", description: "", lot_number: "", expiration_date: "", quantity: "", position_id: "",
   foto: null,
 };
@@ -46,8 +51,12 @@ export function NewReceptionForm({
   clients: ClientSelectOptionUI[];
 }) {
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const submitGuard = useMemo(() => createSingleFlightGuard(), []);
+  const nextRowId = useRef(1);
+  /** Se conserva hasta obtener un resultado canónico; timeout/retry usa la misma. */
+  const confirmedOperationKey = useRef<string | null>(null);
 
   const [cliente, setCliente] = useState<ClientSelectionState>(EMPTY_CLIENT_SELECTION);
   const [header, setHeader] = useState({
@@ -66,6 +75,7 @@ export function NewReceptionForm({
    */
   const [reforzada, setReforzada] = useState(false);
   const [nivelCliente, setNivelCliente] = useState<1 | 2 | null>(null);
+  const [nivelStatus, setNivelStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [resultado, setResultado] = useState<CreateAndCaptureResult | null>(null);
 
   const isAnmat = header.business_unit === "ANMAT";
@@ -76,21 +86,45 @@ export function NewReceptionForm({
   // pantalla no puede leer el maestro por su cuenta.
   useEffect(() => {
     const id = cliente.client_id;
-    if (!id) { setNivelCliente(null); setReforzada(false); return; }
+    // Se borra inmediatamente el dato del cliente anterior. Mientras la nueva
+    // lectura está en vuelo no hay un nivel operativo que el formulario pueda
+    // afirmar ni usar para habilitar el submit.
+    setNivelCliente(null);
+    setReforzada(false);
+    if (cliente.unlisted) {
+      setNivelCliente(1);
+      setNivelStatus("ready");
+      return;
+    }
+    if (!id) {
+      setNivelStatus("idle");
+      return;
+    }
+    setNivelStatus("loading");
     let vigente = true;
     void custodyClientLevelAction(id).then((r) => {
       if (!vigente) return;
-      const nivel = r.ok && r.data ? r.data : 1;
+      if (!r.ok || !r.data) {
+        setNivelStatus("error");
+        return;
+      }
+      const nivel = r.data;
       setNivelCliente(nivel);
       setReforzada(nivel === 2);
+      setNivelStatus("ready");
     });
     return () => { vigente = false; };
-  }, [cliente.client_id]);
+  }, [cliente.client_id, cliente.unlisted]);
 
   const setItem = (i: number, patch: Partial<ItemRow>) =>
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
-  const addItem = () => setItems((prev) => [...prev, { ...EMPTY_ITEM }]);
-  const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
+  const addItem = () => {
+    const rowKey = `row-${nextRowId.current}`;
+    nextRowId.current += 1;
+    setItems((prev) => [...prev, { ...EMPTY_ITEM, rowKey }]);
+  };
+  const removeItem = (rowKey: string) =>
+    setItems((prev) => prev.filter((item) => item.rowKey !== rowKey));
 
   const itemInvalid = (it: ItemRow) =>
     !it.sku.trim() ||
@@ -100,7 +134,13 @@ export function NewReceptionForm({
     !it.position_id ||
     (isAnmat && (!it.lot_number.trim() || !it.expiration_date));
 
-  const formInvalid = !clientSelectionValid(cliente) || items.length === 0 || items.some(itemInvalid);
+  const nivel2 = nivelCliente === 2 || reforzada;
+  const formInvalid =
+    !clientSelectionValid(cliente) ||
+    nivelStatus !== "ready" ||
+    items.length === 0 ||
+    items.some(itemInvalid) ||
+    (nivel2 && items.some((item) => item.foto === null));
 
   const payload = () => ({
     header: { ...header, ...toClientSelectionPayload(cliente), custody_reforzada: reforzada },
@@ -114,28 +154,44 @@ export function NewReceptionForm({
     })),
   });
 
-  const submit = () =>
-    start(async () => {
+  const submit = () => {
+    void submitGuard.run("create-reception", async () => {
+      setSubmitting(true);
       setErr(null);
+      try {
+        if (nivelStatus !== "ready") {
+          setErr("No se pudo verificar el nivel de custodia del cliente.");
+          return;
+        }
+        if (nivel2 && items.some((item) => item.foto === null)) {
+          setErr("Custodia nivel 2: cada línea requiere su foto de ingreso.");
+          return;
+        }
 
-      // SIN fotos: comportamiento de siempre. Crear y dejar pendiente; confirmar
-      // sigue siendo un acto operativo aparte, desde el listado.
-      if (conFotos === 0) {
-        const r = await createReceptionFull(payload());
-        if (!r.ok) setErr(r.error);
-        else router.push("/wms/recepciones");
-        return;
+        // SIN fotos: comportamiento de siempre. Crear y dejar pendiente; confirmar
+        // sigue siendo un acto operativo aparte, desde el listado.
+        if (conFotos === 0) {
+          const r = await createReceptionFull(payload());
+          if (!r.ok) setErr(r.error);
+          else router.push("/wms/recepciones");
+          return;
+        }
+
+        // CON fotos: hay que confirmar, porque el caso de custodia no existe
+        // hasta que el trigger lo materializa, y ese trigger corre al confirmar.
+        const form = new FormData();
+        if (!confirmedOperationKey.current) confirmedOperationKey.current = crypto.randomUUID();
+        form.set("idempotency_key", confirmedOperationKey.current);
+        form.set("payload", JSON.stringify(payload()));
+        items.forEach((it, i) => { if (it.foto) form.set(`foto-${i}`, it.foto); });
+        const r = await createConfirmAndCaptureAction(form);
+        if (!r.ok) { setErr(r.error); return; }
+        setResultado(r.data ?? null);
+      } finally {
+        setSubmitting(false);
       }
-
-      // CON fotos: hay que confirmar, porque el caso de custodia no existe
-      // hasta que el trigger lo materializa, y ese trigger corre al confirmar.
-      const form = new FormData();
-      form.set("payload", JSON.stringify(payload()));
-      items.forEach((it, i) => { if (it.foto) form.set(`foto-${i}`, it.foto); });
-      const r = await createConfirmAndCaptureAction(form);
-      if (!r.ok) { setErr(r.error); return; }
-      setResultado(r.data ?? null);
     });
+  };
 
   return (
     <div className="flex flex-col gap-5 max-w-4xl">
@@ -151,7 +207,16 @@ export function NewReceptionForm({
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Field label="Cliente *">
-            <ClientSelector options={clients} value={cliente} onChange={setCliente} />
+            <ClientSelector
+              options={clients}
+              value={cliente}
+              onChange={(next) => {
+                setCliente(next);
+                setNivelCliente(next.unlisted ? 1 : null);
+                setReforzada(false);
+                setNivelStatus(next.unlisted ? "ready" : next.client_id ? "loading" : "idle");
+              }}
+            />
           </Field>
           <Field label="Business Unit">
             <select className="input w-full" value={header.business_unit}
@@ -183,13 +248,17 @@ export function NewReceptionForm({
             type="checkbox"
             data-custodia="reforzada"
             checked={reforzada}
-            disabled={nivelCliente === 2}
+            disabled={nivelCliente === 2 || nivelStatus !== "ready"}
             onChange={(e) => setReforzada(e.target.checked)}
           />
           Esta mercadería ingresa por custodia digital reforzada
         </label>
         <p className="mt-1 text-xs text-fg-muted">
-          {nivelCliente === 2
+          {nivelStatus === "loading"
+            ? "Verificando el nivel contratado…"
+            : nivelStatus === "error"
+              ? "No se pudo verificar el nivel. El ingreso queda bloqueado para evitar una degradación a nivel 1."
+              : nivelCliente === 2
             ? "El cliente tiene custodia reforzada contratada: todos sus ingresos abren caso."
             : nivelCliente === 1
               ? "El cliente no la tiene contratada. Marcala para elevar SÓLO este ingreso."
@@ -213,7 +282,7 @@ export function NewReceptionForm({
         </div>
         <div className="flex flex-col gap-3">
           {items.map((it, i) => (
-            <div key={i} className="rounded-lg border border-stroke-soft p-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div key={it.rowKey} className="rounded-lg border border-stroke-soft p-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
               <Field label="SKU *"><input className="input w-full" value={it.sku}
                 onChange={(e) => setItem(i, { sku: e.target.value })} /></Field>
               <Field label="Descripción *"><input className="input w-full" value={it.description}
@@ -240,7 +309,7 @@ export function NewReceptionForm({
                   htmlFor={`foto-ingreso-${i}`}
                   className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted"
                 >
-                  Foto de ingreso
+                  Foto de ingreso{nivel2 ? " *" : ""}
                 </label>
                 <input
                   id={`foto-ingreso-${i}`}
@@ -248,13 +317,17 @@ export function NewReceptionForm({
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   capture="environment"
+                  required={nivel2}
+                  aria-required={nivel2}
                   className="input mt-1 w-full"
                   onChange={(e) => setItem(i, { foto: e.target.files?.[0] ?? null })}
                 />
                 <p className="mt-1 text-xs text-fg-muted">
                   {it.foto
                     ? "Lista. Se liga a la unidad al confirmar."
-                    : "Fotografiá el embalaje antes de abrirlo. Opcional."}
+                    : nivel2
+                      ? "Obligatoria para nivel 2. Fotografiá el embalaje antes de abrirlo."
+                      : "Fotografiá el embalaje antes de abrirlo. Opcional para nivel 1."}
                 </p>
               </div>
 
@@ -265,7 +338,7 @@ export function NewReceptionForm({
                   </span>
                 )}
                 {items.length > 1 && (
-                  <button type="button" onClick={() => removeItem(i)} className="btn btn-ghost btn-sm text-status-danger ml-auto">
+                  <button type="button" onClick={() => removeItem(it.rowKey)} className="btn btn-ghost btn-sm text-status-danger ml-auto">
                     <Icon name="trash" size={13} /> Quitar
                   </button>
                 )}
@@ -313,22 +386,41 @@ export function NewReceptionForm({
             {resultado.units.map((u) => (
               <li
                 key={u.physicalUnitId}
-                className="flex flex-wrap items-center gap-2 rounded border border-stroke-soft p-2 text-sm"
+                className="rounded border border-stroke-soft p-3 text-sm"
               >
-                <span className="badge font-mono">{u.unitPublicId}</span>
-                <span className="text-fg-secondary">
-                  {u.sku} · {u.quantity} un.{u.lotNumber ? ` · lote ${u.lotNumber}` : ""}
-                </span>
-                <span className="text-xs text-fg-muted">
-                  {u.custodyLevel === 2 ? "Nivel 2 · reforzada" : "Nivel 1 · universal"}
-                </span>
-                <span className={u.hasIngressPhoto ? "text-xs text-status-success" : "text-xs text-status-warning"}>
-                  {u.hasIngressPhoto ? "foto de ingreso registrada" : "foto de ingreso pendiente"}
-                </span>
-                {u.caseId && (
-                  <Link href={`/wms/custody/${u.caseId}`} className="btn btn-ghost btn-sm ml-auto">
-                    Ver caso {u.casePublicId ?? ""}
-                  </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="badge font-mono">{u.unitPublicId}</span>
+                  <span className="text-fg-secondary">
+                    {u.sku} · {u.quantity} un.{u.lotNumber ? ` · lote ${u.lotNumber}` : ""}
+                  </span>
+                  <span className="text-xs text-fg-muted">
+                    {u.custodyLevel === 2 ? "Nivel 2 · reforzada" : "Nivel 1 · universal"}
+                  </span>
+                  <span className={u.hasIngressPhoto ? "text-xs text-status-success" : "text-xs text-status-warning"}>
+                    {u.hasIngressPhoto ? "foto de ingreso registrada" : "foto de ingreso pendiente"}
+                  </span>
+                  {u.caseId && (
+                    <Link href={`/wms/custody/${u.caseId}`} className="btn btn-ghost btn-sm ml-auto">
+                      Ver caso {u.casePublicId ?? ""}
+                    </Link>
+                  )}
+                </div>
+                {u.custodyLevel === 2 && u.qrDataUrl && u.qrUrl && (
+                  <div className="mt-3 max-w-[260px]" data-qr-cpu={u.physicalUnitId}>
+                    <QrCard
+                      dataUrl={u.qrDataUrl}
+                      url={u.qrUrl}
+                      publicId={u.unitPublicId}
+                      label="QR canónico de la unidad"
+                    />
+                  </div>
+                )}
+                {u.custodyLevel === 2 && (!u.qrDataUrl || !u.qrUrl) && (
+                  <p className="mt-2 text-xs text-status-warning">
+                    {u.caseId
+                      ? "El QR canónico no está disponible todavía. Recuperalo desde la recepción o el caso."
+                      : "Caso CINT faltante: QR bloqueado hasta reconciliar la unidad."}
+                  </p>
                 )}
               </li>
             ))}
@@ -369,9 +461,9 @@ export function NewReceptionForm({
           </button>
           {/* El botón DICE cuál de los dos actos ejecuta. Confirmar mueve stock:
               no puede quedar escondido detrás de un rótulo genérico. */}
-          <button type="button" disabled={pending || formInvalid} onClick={submit}
+          <button type="button" disabled={submitting || formInvalid} onClick={submit}
             className="btn btn-primary btn-sm disabled:opacity-50">
-            {pending
+            {submitting
               ? "Guardando…"
               : conFotos > 0
                 ? "Confirmar recepción y registrar fotos"

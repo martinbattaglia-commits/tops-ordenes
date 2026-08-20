@@ -354,6 +354,8 @@ const CUSTODY_HARNESS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   // en la serie 0036-0039 (PostGIS), fuera del vanilla.
   "0258_custody_evaluated_head_witness.sql",
   "ROLLBACK_0258_custody_evaluated_head_witness.sql",
+  "0263_custody_pod_signature_and_reception_idempotency.sql",
+  "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
 ]);
 
 /**
@@ -557,6 +559,25 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "el rechazo de subidas no finalizadas y el flujo legítimo.",
     },
     {
+    // NEXUS LINK · handover/archive · clasificación administrativa autorizada
+    // por filename EXACTO. Los forwards siguen activos en el catálogo de
+    // linaje; sus inversas lógicas nunca ingresan al plan forward.
+    id: "nexus-link-handover-archive",
+    matches: (f) =>
+      f === "0260_nexus_link_handover_archived.sql" ||
+      f === "ROLLBACK_0260_nexus_link_handover_archived.sql" ||
+      f === "0261_connect_archive_force_override.sql" ||
+      f === "ROLLBACK_0261_connect_archive_force_override.sql",
+    reason:
+      "Dominio Connect/Nexus Link, ajeno al cierre WMS vanilla: 0260 agrega el " +
+      "estado de handover, su trigger y las RPC de handover/archivo sobre la " +
+      "cadena Connect; 0261 redefine el archivo con override forzado y depende " +
+      "también del esquema de connect_tasks. Los dos forwards se clasifican " +
+      "como activos en el catálogo de linaje; ROLLBACK_0260 y ROLLBACK_0261 son " +
+      "inversas lógicas clasificadas pero nunca integran el manifiesto forward. " +
+      "La exclusión es exacta y no absorbe migraciones futuras.",
+    },
+    {
     id: "lineage-recovered-and-correctives",
     // Filename EXACTO, set propio. No absorbe rangos ni prefijos.
     matches: (f) => LINEAGE_RECOVERED_AND_CORRECTIVE_FILES.has(f),
@@ -607,9 +628,9 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "0226 atestación de contenido · 0231 lectura tenant · 0232 lease exclusivo · " +
       "0250/0250a scope físico y visión productiva · 0251 autoridad de decisión y " +
       "evidencia completa · 0252 los dos niveles de custodia · 0253 puerta de egreso · " +
-      "0254 lectura del certificado · 0257 retiro de la creadora heredada · 0258 testigo de la punta evaluada, las siete " +
+      "0254 lectura del certificado · 0257 retiro de la creadora heredada · 0258 testigo de la punta evaluada · 0263 firma POD temporal e idempotencia de recepción, las ocho " +
       "últimas con rollback lógico). " +
-      "Los dieciseis forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
+      "Los diecisiete forwards se cargan en el harness dedicado; los rollbacks lógicos se " +
       "clasifican y prueban aparte y nunca integran un manifiesto forward. " +
       "Se excluye del cierre WMS vanilla porque su cierre de dependencias exige " +
       "PostGIS y la serie 0036-0039, que este manifiesto excluye por diseño para " +
@@ -619,7 +640,7 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "ADVERTENCIA: 0222 modifica `custody_events` (CHECK stage/event_type) y " +
       "reemplaza `attach_custody_evidence`, objetos del dominio de custodia; se " +
       "excluye por la dependencia de PostGIS, NO porque sea ajena. La exclusión " +
-      "es por los VEINTITRÉS filenames exactos de esta serie; cualquier migración que " +
+      "es por los VEINTICINCO filenames exactos de esta serie; cualquier migración que " +
       "no enumere ninguna regla queda sin clasificar y rompe la suite hasta una " +
       "decisión explícita.",
   },

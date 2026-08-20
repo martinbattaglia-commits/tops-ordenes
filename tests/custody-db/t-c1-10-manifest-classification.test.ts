@@ -53,6 +53,7 @@ const CUSTODY_FORWARD_FILES = [
   "0257_custody_legacy_creator_revoke.sql",
   // V4 · el testigo de la punta evaluada + RPC de lectura del documento.
   "0258_custody_evaluated_head_witness.sql",
+  "0263_custody_pod_signature_and_reception_idempotency.sql",
 ];
 
 const CUSTODY_ARTIFACT_FILES = [
@@ -75,11 +76,21 @@ const CUSTODY_ARTIFACT_FILES = [
   "ROLLBACK_0256_clients_custody_level_rpc.sql",
   "ROLLBACK_0257_custody_legacy_creator_revoke.sql",
   "ROLLBACK_0258_custody_evaluated_head_witness.sql",
+  "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
 ];
 
 const dedicated = () =>
   MANIFEST_EXCLUSIONS.find((e) => e.id === "custody-integrity-dedicated-harness");
 const frozen = () => MANIFEST_EXCLUSIONS.find((e) => e.id === "frozen-excluded-snapshot");
+const linkHandover = () =>
+  MANIFEST_EXCLUSIONS.find((e) => e.id === "nexus-link-handover-archive");
+
+const LINK_HANDOVER_ARTIFACT_FILES = [
+  "0260_nexus_link_handover_archived.sql",
+  "ROLLBACK_0260_nexus_link_handover_archived.sql",
+  "0261_connect_archive_force_override.sql",
+  "ROLLBACK_0261_connect_archive_force_override.sql",
+];
 
 describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
   it("vanilla ACTUAL: 31, y valida por completo con 0221-0223 en el árbol", () => {
@@ -92,20 +103,20 @@ describe("T-C1-10 · los DOS manifiestos y sus conteos", () => {
 
   it("cierre HISTÓRICO de custodia: 36", () => {
     const d1d3 = CUSTODY_MIGRATION_MANIFEST.filter((m) => CUSTODY_FORWARD_FILES.includes(m));
-    expect(d1d3).toHaveLength(16);
+    expect(d1d3).toHaveLength(17);
     expect(CUSTODY_MIGRATION_MANIFEST.length - d1d3.length).toBe(36);
     expect(CUSTODY_CLOSURE_SIZE).toBe(36);
   });
 
-  it("manifiesto DEDICADO actual: 52", () => {
-    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(52);
-    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(52);
+  it("manifiesto DEDICADO actual: 53", () => {
+    expect(EXPECTED_CUSTODY_MANIFEST_SIZE).toBe(53);
+    expect(CUSTODY_MIGRATION_MANIFEST).toHaveLength(53);
     expect(() => validateCustodyManifest()).not.toThrow();
   });
 
   // El cierre HISTÓRICO (36) no se mueve: es el pasado. Lo que crece es la
   // serie de forwards gobernados, que con 0258 pasa de quince a dieciséis.
-  it("36 + 16 = 52, y los dieciséis forwards NO están en el vanilla", () => {
+  it("36 + 17 = 53, y los diecisiete forwards NO están en el vanilla", () => {
     expect(CUSTODY_CLOSURE_SIZE + CUSTODY_FORWARD_FILES.length).toBe(
       EXPECTED_CUSTODY_MANIFEST_SIZE,
     );
@@ -146,7 +157,7 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     expect(frozen()!.matches(f)).toBe(false);
   });
 
-  it("cubre EXACTAMENTE los veinticuatro artefactos del árbol y ninguno más", () => {
+  it("cubre EXACTAMENTE los veinticinco artefactos del árbol y ninguno más", () => {
     const onDisk = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
     const cubiertos = onDisk.filter((f) => dedicated()!.matches(f)).sort();
     expect(cubiertos).toEqual([...CUSTODY_ARTIFACT_FILES].sort());
@@ -195,6 +206,32 @@ describe("T-C1-10 · la exclusión dedicada es separada, exacta y no absorbe nad
     ];
     for (const f of variantes) {
       expect(dedicated()!.matches(f), f).toBe(false);
+      expect(MANIFEST_EXCLUSIONS.some((e) => e.matches(f)), f).toBe(false);
+    }
+  });
+});
+
+describe("T-C1-10 · Nexus Link 0260/0261 queda clasificado de forma exacta", () => {
+  it("documenta forwards activos e inversas fuera del plan forward", () => {
+    expect(linkHandover()).toBeDefined();
+    expect(linkHandover()!.reason).toMatch(/forwards?.*activos?/i);
+    expect(linkHandover()!.reason).toMatch(/inversas? lógicas?/i);
+    expect(linkHandover()!.reason).toMatch(/nunca integran? el manifiesto forward/i);
+  });
+
+  it.each(LINK_HANDOVER_ARTIFACT_FILES)("clasifica %s fuera del vanilla", (f) => {
+    expect(linkHandover()!.matches(f)).toBe(true);
+    expect(WMS_MIGRATION_MANIFEST).not.toContain(f);
+  });
+
+  it("no absorbe variantes ni la numeración 0262 reservada a otro frente", () => {
+    for (const f of [
+      "0260_nexus_link_handover_archived.sql.bak",
+      "0261_connect_archive_force_override.SQL",
+      "0262_nexus_link_future.sql",
+      "supabase/migrations/0260_nexus_link_handover_archived.sql",
+    ]) {
+      expect(linkHandover()!.matches(f), f).toBe(false);
       expect(MANIFEST_EXCLUSIONS.some((e) => e.matches(f)), f).toBe(false);
     }
   });

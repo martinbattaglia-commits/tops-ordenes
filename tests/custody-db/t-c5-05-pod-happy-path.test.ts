@@ -33,6 +33,8 @@ beforeAll(async () => {
   db = new Client({ connectionString: inject("custodyDbUrl") });
   await db.connect();
   s = await baseScenario(db);
+  await actAsServer(db);
+  await grantPermission(db, s.staff, "wms.custody.pod");
 });
 
 afterAll(async () => { await db.end(); });
@@ -166,7 +168,8 @@ async function despachoEntregado(): Promise<{ shipmentId: string; caseId: string
   await db.query(`update public.stock_allocations set status = 'despachada' where id = $1`, [al[0].id]);
 
   // Entrega.
-  await db.query(`update public.shipments set status = 'entregado' where id = $1`, [sh[0].id]);
+  await actAs(db, s.staff);
+  await db.query(`select public.confirm_delivery($1, 'Receptor Sintético')`, [sh[0].id]);
   return { shipmentId: sh[0].id, caseId, unitId };
 }
 
@@ -176,8 +179,8 @@ describe("T-C5-05 · el POD se emite cuando corresponde", () => {
 
     await actAs(db, s.staff);
     const { rows } = await db.query<{ r: Record<string, unknown> }>(
-      `select public.generate_delivery_pod(
-         $1, 'Receptor Sintético', 'DNI', '00000000', null, null, null) as r`,
+      `select public.generate_delivery_pod_v2(
+         $1, 'Receptor Sintético', 'DNI', '00000000', null) as r`,
       [shipmentId],
     );
     expect(rows[0].r).toBeTruthy();
@@ -198,11 +201,81 @@ describe("T-C5-05 · el POD se emite cuando corresponde", () => {
     await actAs(db, s.staff);
     await expect(
       db.query(
-        `select public.generate_delivery_pod(
-           $1, 'Receptor Sintético', 'DNI', '00000000', null, null, null) as r`,
+        `select public.generate_delivery_pod_v2(
+           $1, 'Receptor Sintético', 'DNI', '00000000', null) as r`,
         [shipmentId],
       ),
-    ).rejects.toThrow(/CUSTODY_POD_REQUIRES_DELIVERED_SHIPMENT/);
+    ).rejects.toThrow(/shipment no entregado/);
+  });
+
+  it("3 · firma atestada: MIME, attach y POD son replay-safe y ligados al payload", async () => {
+    const { shipmentId } = await despachoEntregado();
+    const content = `SIGN-${shipmentId}`;
+    const digest = sha(content);
+    const path = `shipment/${shipmentId}/entrega/${uid("sig")}.png`;
+    await actAsServer(db);
+    const { rows: authz } = await db.query<{ r: { operation_id: string } }>(
+      `select public.attest_custody_pod_signature_content(
+        'custody-pii',$1,$2,$3,'image/png',$4::uuid,$5::uuid,$6::uuid,
+        'Receptor Sintético','00000000',900) r`,
+      [path, digest, content.length, s.staff.userId, s.staff.sessionId, shipmentId],
+    );
+    const operationId = authz[0].r.operation_id;
+    await actAsWithSession(db, s.staff, s.staff.sessionId);
+    await expect(db.query(
+      `select public.attach_custody_pod_signature($1,$2,'Receptor Sintético','00000000','firma.png','image/jpeg')`,
+      [operationId, shipmentId],
+    )).rejects.toThrow(/MIME declarado no coincide/);
+    const attach = async () => (await db.query<{ r: Record<string, unknown> }>(
+      `select public.attach_custody_pod_signature($1,$2,'Receptor Sintético','00000000','firma.png','image/png') r`,
+      [operationId, shipmentId],
+    )).rows[0].r;
+    const firstAttach = await attach();
+    expect(await attach()).toEqual(firstAttach);
+
+    const issue = async (observations: string) => (await db.query<{ r: Record<string, unknown> }>(
+      `select public.generate_delivery_pod_v2($1,'Receptor Sintético','00000000',$2,$3) r`,
+      [shipmentId, observations, operationId],
+    )).rows[0].r;
+    const firstPod = await issue("conforme");
+    expect(await issue("conforme")).toEqual(firstPod);
+    await expect(issue("payload alterado")).rejects.toThrow(/shipment ya tiene POD/);
+
+    await actAsServer(db);
+    const { rows } = await db.query<{ mime_type: string; events: string }>(`select
+      e.mime_type,
+      (select count(*) from public.custody_events where shipment_id=$1 and event_type='firmado')::text events
+      from public.custody_evidence e where e.id=$2`,
+      [shipmentId, String(firstAttach.evidence_id)],
+    );
+    expect(rows[0]).toEqual({ mime_type: "image/png", events: "1" });
+
+    await expect(db.query(`update public.delivery_pods set receiver_name='Alterado' where id=$1`,
+      [String(firstPod.pod_id)])).rejects.toThrow(/CUSTODY_POD_IMMUTABLE/);
+    await db.query(`update public.delivery_pods set pod_storage_path='pod/test.pdf' where id=$1`,
+      [String(firstPod.pod_id)]);
+    await expect(db.query(`update public.delivery_pods set pod_storage_path='pod/otro.pdf' where id=$1`,
+      [String(firstPod.pod_id)])).rejects.toThrow(/CUSTODY_POD_IMMUTABLE/);
+
+    const { rows: packing } = await db.query<{ id: string }>(
+      `select id from public.packing_units where shipment_id=$1 limit 1`, [shipmentId],
+    );
+    const c2 = new Client({ connectionString: inject("custodyDbUrl") });
+    await c2.connect();
+    await db.query("begin");
+    try {
+      await db.query(`select pg_advisory_xact_lock(hashtextextended('custody-pod:'||$1::text,0))`, [shipmentId]);
+      let settled = false;
+      const mutation = c2.query(`update public.packing_units set shipment_id=null where id=$1`, [packing[0].id])
+        .finally(() => { settled = true; });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(settled).toBe(false);
+      await db.query("commit");
+      await expect(mutation).rejects.toThrow(/CUSTODY_SHIPMENT_COMPOSITION_FROZEN/);
+    } finally {
+      await db.query("rollback").catch(() => undefined);
+      await c2.end();
+    }
   });
 });
 
@@ -220,7 +293,7 @@ describe("T-C5-05 · el POD se emite cuando corresponde", () => {
  * definición con noción de cantidad, cae en rojo.
  */
 describe("T-C5-05 · el QR de la unidad no afirma POD", () => {
-  it("3 · la resolución por token no informa pod_present, ni antes ni después", async () => {
+  it("4 · la resolución por token no informa pod_present, ni antes ni después", async () => {
     const { shipmentId, unitId } = await despachoEntregado();
 
     await actAsServer(db);
@@ -247,8 +320,8 @@ describe("T-C5-05 · el QR de la unidad no afirma POD", () => {
     expect("pod_present" in antes).toBe(false);
 
     await db.query(
-      `select public.generate_delivery_pod(
-         $1, 'Receptor Sintético', 'DNI', '00000000', null, null, null)`,
+      `select public.generate_delivery_pod_v2(
+         $1, 'Receptor Sintético', 'DNI', '00000000', null)`,
       [shipmentId],
     );
 

@@ -45,7 +45,8 @@ export const CUSTODY_BOOTSTRAP_DIR = resolve(__dirname, "..", "bootstrap");
 // 2-C-2 · 49 → 50 con `0254_custody_certificate_read.sql`.
 // HN-1 · 50 → 51 con `0257_custody_legacy_creator_revoke.sql`.
 // V4 · 51 → 52 con `0258_custody_evaluated_head_witness.sql`.
-export const EXPECTED_CUSTODY_MANIFEST_SIZE = 52;
+// P1 C4 · 52 → 53 con `0263_custody_pod_signature_and_reception_idempotency.sql`.
+export const EXPECTED_CUSTODY_MANIFEST_SIZE = 53;
 
 /** Cierre inventariado ANTES de D1–D3. Se conserva para poder afirmarlo. */
 export const CUSTODY_CLOSURE_SIZE = 36;
@@ -145,6 +146,9 @@ export const CUSTODY_MIGRATION_MANIFEST: readonly string[] = [
   //   `t-c8-01` ejercita las tres piezas: el testigo que sobrevive a la
   //   decisión, el predicado con coalesce y la compuerta de la RPC de lectura.
   "0258_custody_evaluated_head_witness.sql",
+
+  // ── P1 C4 · firma POD temporal + recepción durablemente idempotente ──
+  "0263_custody_pod_signature_and_reception_idempotency.sql",
 ];
 
 export class CustodyManifestError extends Error {
@@ -232,6 +236,9 @@ export const CUSTODY_REQUIRED_OBJECTS = {
     // W22-TER-C · M-2
     "custody_content_attestations",
     "custody_inspection_content_claims",
+    "custody_pod_signature_authorizations",
+    "wms_reception_operations",
+    "wms_reception_ingress_attachments",
     "packing_units",
     "shipments",
     "logistics_orders",
@@ -284,6 +291,17 @@ export const CUSTODY_REQUIRED_OBJECTS = {
     "custody_assert_release_certificate",
     "enforce_custody_release_certificate",
     "enforce_custody_packing_content_freeze",
+    "assert_custody_explicit_access",
+    "custody_shipment_release_snapshot",
+    "custody_pod_receiver_hash",
+    "attest_custody_pod_signature_content",
+    "attach_custody_pod_signature",
+    "generate_delivery_pod_v2",
+    "wms_create_confirm_reception_v1",
+    "attach_wms_reception_ingress_v1",
+    "guard_custody_delivery_pod_immutable",
+    "guard_custody_shipment_composition",
+    "lock_custody_shipment_delivery_boundary",
   ],
   /**
    * §2 · `record_custody_integrity_evaluation` NO figura acá y no es un olvido:
@@ -329,6 +347,12 @@ export const CUSTODY_REQUIRED_OBJECTS = {
     "trg_shipments_custody_release",
     "trg_delivery_pods_custody_release",
     "trg_shipments_custody_final_state",
+    "trg_custody_pod_signature_authorizations_immutable",
+    "trg_custody_pod_signature_authorizations_no_truncate",
+    "trg_custody_delivery_pods_immutable",
+    "trg_custody_delivery_pods_no_truncate",
+    "trg_custody_shipment_composition_frozen",
+    "trg_custody_shipment_delivery_boundary",
   ],
   /** D1: el enum debe contener el valor canónico de inspección humana. */
   enumValues: {

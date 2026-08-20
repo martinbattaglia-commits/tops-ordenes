@@ -4,6 +4,7 @@
  * Render efectivo con `react-dom/client` sobre jsdom, clicks reales y
  * aserciones sobre el DOM resultante. Nada de regex sobre el archivo fuente.
  */
+import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buttonByName, byText, click, render, type } from "./_render";
 
@@ -101,6 +102,24 @@ describe("liberar y cuarentena disparan la acción con el CAS de versión", () =
 });
 
 describe("doble clic", () => {
+  it("liberar y cuarentenar simultáneamente comparten un único vuelo por caso", async () => {
+    let finish!: (value: unknown) => void;
+    decideMock.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const { container, unmount } = await render(<CaseDecisionPanel view={view()} />);
+    await type(container.querySelector("#decision-reason"), "inspección física conforme");
+    const release = buttonByName(container, /Liberar para despacho/) as HTMLButtonElement;
+    const quarantine = buttonByName(container, /Enviar a cuarentena/) as HTMLButtonElement;
+
+    await act(async () => {
+      release.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      quarantine.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+
+    expect(decideMock).toHaveBeenCalledTimes(1);
+    await act(async () => { finish({ ok: true, data: view() }); });
+    await unmount();
+  });
+
   it("dos clicks seguidos ejecutan la acción UNA sola vez", async () => {
     let liberar!: (v: unknown) => void;
     decideMock.mockImplementation(() => new Promise((res) => { liberar = res; }));

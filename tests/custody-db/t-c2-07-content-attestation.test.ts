@@ -512,7 +512,6 @@ describe("T-C2-07 · M2 · superficie y fail-closed", () => {
       { stage: "despacho", eventType: "cargado" },
       { stage: "transporte", eventType: "en_transito" },
       { stage: "entrega", eventType: "foto_entrega" },
-      { stage: "pod", eventType: "pod" },
     ] as const;
     for (const p of pares) {
       const r = await attachEvidence(db, { packingUnitId: s.packingUnitId, ...p });
@@ -520,12 +519,12 @@ describe("T-C2-07 · M2 · superficie y fail-closed", () => {
     }
     // Y comparten contenido sin problema: la regla es SÓLO para la inspección.
     const compartido = "mismo-documento-adjuntado-dos-veces";
-    await attachEvidence(db, { packingUnitId: s.packingUnitId, stage: "pod", eventType: "pod" }, {
+    await attachEvidence(db, { packingUnitId: s.packingUnitId, stage: "entrega", eventType: "foto_entrega" }, {
       content: compartido,
     });
     const segunda = await attachEvidence(
       db,
-      { packingUnitId: s.packingUnitId, stage: "pod", eventType: "pod" },
+      { packingUnitId: s.packingUnitId, stage: "entrega", eventType: "foto_entrega" },
       { content: compartido },
     );
     expect(segunda.evidenceId).toBeTruthy();

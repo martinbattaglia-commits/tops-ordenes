@@ -5,6 +5,8 @@ import { RECEPTION_STATUS_META, type ReceptionRow } from "@/lib/wms/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { fmtDate } from "@/lib/utils";
 import { RowActions } from "./_components/RowActions";
+import { receptionCustodyUnitsAction } from "./actions";
+import { QrCard } from "../custody/_components/QrCard";
 
 export const metadata = { title: "Recepciones · WMS" };
 export const dynamic = "force-dynamic";
@@ -13,7 +15,11 @@ function isParcial(r: ReceptionRow): boolean {
   return r.status === "en_recepcion" && r.received_count > 0 && r.received_count < r.item_count;
 }
 
-export default async function RecepcionesPage() {
+export default async function RecepcionesPage({
+  searchParams,
+}: {
+  searchParams?: { custodia?: string; id?: string };
+}) {
   let rows: ReceptionRow[];
   try {
     rows = await listReceptions();
@@ -28,6 +34,10 @@ export default async function RecepcionesPage() {
   }
 
   const count = (s: string) => rows.filter((r) => r.status === s).length;
+  const selectedReception = searchParams?.custodia ?? searchParams?.id ?? null;
+  const custody = selectedReception
+    ? await receptionCustodyUnitsAction(selectedReception)
+    : null;
 
   return (
     <div className="p-4 lg:p-8 nx-page-fade">
@@ -51,6 +61,64 @@ export default async function RecepcionesPage() {
         <Stat label="Recibidas" value={count("recibida")} sub="cerradas" index={2} />
         <Stat label="Total" value={rows.length} sub="todas" index={3} />
       </div>
+
+      {selectedReception && (
+        <section id="custodia-recepcion" className="nx-surface card card-pad mb-6" aria-labelledby="custodia-recepcion-title">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="eyebrow-tiny">Identidad física recuperable</div>
+              <h2 id="custodia-recepcion-title" className="text-base font-semibold">Unidades de la recepción</h2>
+            </div>
+            <Link href="/wms/recepciones" className="btn btn-ghost btn-sm">Cerrar</Link>
+          </div>
+          {custody && !custody.ok && (
+            <p className="mt-3 text-sm text-status-warning" role="alert">{custody.error}</p>
+          )}
+          {custody?.ok && (custody.data?.length ?? 0) === 0 && (
+            <p className="mt-3 text-sm text-fg-muted">La recepción todavía no materializó unidades físicas.</p>
+          )}
+          {custody?.ok && custody.data && custody.data.length > 0 && (
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {custody.data.map((unit) => (
+                <article key={unit.physicalUnitId} className="rounded border border-stroke-soft p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="badge font-mono">{unit.unitPublicId}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-fg-muted">
+                      Nivel {unit.custodyLevel >= 2 ? "2 · reforzada" : "1 · universal"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-fg-secondary">
+                    {unit.sku} · {unit.quantity.toLocaleString("es-AR")} un.
+                    {unit.lotNumber ? ` · lote ${unit.lotNumber}` : ""}
+                  </p>
+                  {unit.caseId && (
+                    <Link href={`/wms/custody/${unit.caseId}`} className="btn btn-ghost btn-sm mt-2">
+                      Ver caso {unit.casePublicId ?? "CINT"}
+                    </Link>
+                  )}
+                  {unit.custodyLevel >= 2 && unit.qrDataUrl && unit.qrUrl && (
+                    <div className="mt-3" data-qr-cpu={unit.physicalUnitId}>
+                      <QrCard
+                        dataUrl={unit.qrDataUrl}
+                        url={unit.qrUrl}
+                        publicId={unit.unitPublicId}
+                        label="QR canónico de la unidad"
+                      />
+                    </div>
+                  )}
+                  {unit.custodyLevel >= 2 && (!unit.qrDataUrl || !unit.qrUrl) && (
+                    <p className="mt-2 text-xs text-status-warning">
+                      {unit.caseId
+                        ? "QR canónico no disponible."
+                        : "Caso CINT faltante: QR bloqueado hasta reconciliar la unidad."}
+                    </p>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="nx-surface card overflow-hidden">
         <div className="overflow-x-auto">
@@ -154,6 +222,15 @@ export default async function RecepcionesPage() {
                         >
                           PDF
                         </a>
+                        {r.custody_units > 0 && (
+                          <Link
+                            href={`/wms/recepciones?custodia=${r.id}#custodia-recepcion`}
+                            className="btn btn-ghost btn-sm"
+                            title="Recuperar CPU, CINT y QR de esta recepción"
+                          >
+                            Custodia
+                          </Link>
+                        )}
                         <RowActions id={r.id} status={r.status} />
                       </div>
                     </td>

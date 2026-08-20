@@ -6,6 +6,7 @@ import type { PhysicalLocation } from "@/lib/picking/types";
 import { ORDER_STATUS_META } from "@/lib/pedidos/types";
 import { ModuleUnavailable } from "@/components/shell/ModuleUnavailable";
 import { PickStopButton, PickOrderButton } from "../_components/PickingActions";
+import { getAllocationCustodyVisibility } from "@/lib/custody/operation-visibility";
 
 export const metadata = { title: "Ruta de picking · WMS" };
 export const dynamic = "force-dynamic";
@@ -52,6 +53,10 @@ export default async function PickRoutePage({ params }: { params: { id: string }
     );
   }
   if (!route) notFound();
+
+  const custody = await getAllocationCustodyVisibility(
+    route.stops.map((stop) => stop.allocation_id),
+  );
 
   // Métricas por LÍNEA (order_item) derivadas de las paradas vivas.
   const lineIds = new Set(route.stops.map((st) => st.order_item_id));
@@ -114,6 +119,16 @@ export default async function PickRoutePage({ params }: { params: { id: string }
             Recorrido por ubicación física
           </span>
         </div>
+        {custody.status === "unavailable" && (
+          <div className="border-b border-status-warning p-3 text-xs text-status-warning" role="alert">
+            Custodia no verificable: la ruta continúa sin agregar un gate de picking, pero CPU/CINT deben verificarse antes de manipular.
+          </div>
+        )}
+        {custody.status === "available" && Object.values(custody.byAllocation).some((units) => units.length > 0) && (
+          <div className="border-b border-stroke-soft p-3 text-xs text-status-warning">
+            Custodia N2: verificá CPU/CINT antes de manipular. Esta señal no agrega una compuerta de picking.
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="tbl">
             <thead>
@@ -123,6 +138,7 @@ export default async function PickRoutePage({ params }: { params: { id: string }
                 <th>Ubicación</th>
                 <th>SKU</th>
                 <th>Descripción</th>
+                <th>Custodia N2</th>
                 <th>Lote</th>
                 <th className="text-right">Cantidad</th>
                 <th>Estado</th>
@@ -132,6 +148,7 @@ export default async function PickRoutePage({ params }: { params: { id: string }
             <tbody>
               {route.stops.map((st, i) => {
                 const sm = STOP_META[st.status === "pickeada" ? "pickeada" : "reservada"];
+                const custodyUnits = custody.byAllocation[st.allocation_id] ?? [];
                 return (
                   <tr key={st.allocation_id}>
                     <td className="tabular text-xs text-fg-muted">{i + 1}</td>
@@ -149,6 +166,29 @@ export default async function PickRoutePage({ params }: { params: { id: string }
                     </td>
                     <td className="font-mono text-xs font-semibold">{st.sku}</td>
                     <td className="text-sm">{st.description}</td>
+                    <td>
+                      {custody.status === "unavailable" ? (
+                        <span className="text-xs text-status-warning">No verificable</span>
+                      ) : custodyUnits.length === 0 ? (
+                        <span className="text-xs text-fg-muted">—</span>
+                      ) : (
+                        <div className="flex flex-col gap-1" data-custodia-n2={st.allocation_id}>
+                          {custodyUnits.map((unit) => (
+                            <div key={unit.physicalUnitId} className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border border-status-warning text-status-warning">N2</span>
+                              <span className="font-mono text-[10px]">{unit.unitPublicId}</span>
+                              {unit.caseId ? (
+                                <Link href={`/wms/custody/${unit.caseId}`} className="text-[10px] underline">
+                                  {unit.casePublicId ?? "CINT"}
+                                </Link>
+                              ) : (
+                                <span className="text-[10px] text-status-warning">CINT no disponible</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="font-mono text-[11px] text-fg-secondary">{st.lot_number ?? "—"}</td>
                     <td className="text-right tabular">{st.quantity.toLocaleString("es-AR")}</td>
                     <td>
@@ -167,7 +207,7 @@ export default async function PickRoutePage({ params }: { params: { id: string }
               })}
               {route.stops.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="text-center text-fg-muted py-8 text-sm">
+                  <td colSpan={10} className="text-center text-fg-muted py-8 text-sm">
                     Este pedido no tiene reservas para pickear.
                   </td>
                 </tr>

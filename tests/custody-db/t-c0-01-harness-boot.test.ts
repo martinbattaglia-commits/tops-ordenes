@@ -29,9 +29,9 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
     expect(CUSTODY_MIGRATION_MANIFEST.length).toBe(EXPECTED_CUSTODY_MANIFEST_SIZE);
   });
 
-  it("el cierre de custodia son 36 archivos + 16 migraciones gobernadas", () => {
+  it("el cierre de custodia son 36 archivos + 17 migraciones gobernadas", () => {
     const custodyForwards = CUSTODY_MIGRATION_MANIFEST.filter((m) =>
-      /^(?:02(?:2[1-6]|3[12])|0250a?|025[123478])_/.test(m),
+      /^(?:02(?:2[1-6]|3[12])|0250a?|025[123478]|0263)_/.test(m),
     );
     expect(custodyForwards).toEqual([
       "0221_custody_integrity_enums.sql",
@@ -54,6 +54,8 @@ describe("T-C0-01 · arranque del harness de custodia", () => {
       "0257_custody_legacy_creator_revoke.sql",
       // V4 · el testigo de la punta evaluada + RPC de lectura del documento.
       "0258_custody_evaluated_head_witness.sql",
+      // P1 C4 · firma POD temporal + recepción durablemente idempotente.
+      "0263_custody_pod_signature_and_reception_idempotency.sql",
     ]);
     expect(CUSTODY_MIGRATION_MANIFEST.length - custodyForwards.length).toBe(CUSTODY_CLOSURE_SIZE);
   });

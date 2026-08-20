@@ -170,6 +170,47 @@ export interface NewReceptionItemInput {
   position_id?: string | null;
 }
 
+export interface IdempotentConfirmedReceptionResult {
+  version: 1;
+  operationId: string;
+  receptionId: string;
+  itemIds: string[];
+}
+
+/**
+ * Única frontera DB para el alta confirmada: cabecera, líneas, stock,
+ * movimientos y genealogía se confirman o revierten juntos. La clave debe
+ * conservarse ante timeout/reintento; PostgreSQL decide replay vs conflicto.
+ */
+export async function createConfirmedReceptionIdempotent(
+  idempotencyKey: string,
+  payload: Record<string, unknown>,
+): Promise<IdempotentConfirmedReceptionResult> {
+  const supabase = createClient();
+  if (!supabase) throw new Error("Supabase no configurado");
+  const { data, error } = await supabase.rpc("wms_create_confirm_reception_v1", {
+    p_idempotency_key: idempotencyKey,
+    p_payload: payload,
+  });
+  if (error) throw new Error(`createConfirmedReceptionIdempotent: ${error.message}`);
+  const row = data as { version?: unknown; operation_id?: unknown; reception_id?: unknown; item_ids?: unknown } | null;
+  if (
+    row?.version !== 1 ||
+    typeof row.operation_id !== "string" ||
+    typeof row.reception_id !== "string" ||
+    !Array.isArray(row.item_ids) ||
+    row.item_ids.some((id) => typeof id !== "string")
+  ) {
+    throw new Error("Resultado idempotente de recepción no verificable");
+  }
+  return {
+    version: 1,
+    operationId: row.operation_id,
+    receptionId: row.reception_id,
+    itemIds: row.item_ids as string[],
+  };
+}
+
 /**
  * A-6 · La posición es obligatoria, y la validación vive acá.
  *
