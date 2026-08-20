@@ -29,6 +29,7 @@ import {
 import type { ConversationKind, WaProjection } from "@/lib/connect/types";
 import { applyRealtimeEvent, type RealtimeEvent } from "@/lib/connect/realtime-merge";
 import { markReadAction } from "@/lib/connect/adapters/driving/read-actions";
+import { publishConnectReadState } from "@/lib/connect/read-state-events";
 import { createClient } from "@/lib/supabase/client";
 import { useAudioRecorder } from "@/lib/connect/audio/recorder";
 import {
@@ -124,6 +125,8 @@ export function ThreadView({
   const { windowInfo, draftText, setDraftText } = useWa24hWindow(conversationId, lastCustomerMessageAt);
   const [draft, setDraftState] = useState<string>(draftText);
   const [handoverState, setHandoverState] = useState<"BOT_ACTIVE" | "PAUSED_HUMAN">(initialHandoverState);
+  const [handoverPending, setHandoverPending] = useState(false);
+  const [handoverError, setHandoverError] = useState<string | null>(null);
 
   // Sincronizar draft local con el hook useWa24hWindow (preservación de borrador)
   function handleDraftChange(val: string) {
@@ -144,9 +147,20 @@ export function ThreadView({
   const bloqueo = useMemo(() => composerBlockNotice(kind, { readOnly }), [kind, readOnly]);
 
   async function toggleHandoverState() {
+    if (handoverPending) return;
     const nextState = handoverState === "BOT_ACTIVE" ? "PAUSED_HUMAN" : "BOT_ACTIVE";
-    setHandoverState(nextState);
-    await setHandoverStateAction({ conversationId, state: nextState });
+    setHandoverPending(true);
+    setHandoverError(null);
+    try {
+      const result = await setHandoverStateAction({ conversationId, state: nextState });
+      if (!result.ok) {
+        setHandoverError(result.message);
+        return;
+      }
+      setHandoverState(nextState);
+    } finally {
+      setHandoverPending(false);
+    }
   }
 
   async function sendAudio() {
@@ -204,10 +218,12 @@ export function ThreadView({
 
   useEffect(() => {
     setMessages(hydrate(initialMessages));
+    setHandoverState(initialHandoverState);
+    setHandoverError(null);
     sentSeqRef.current = 0;
     setPicks([]);
     setMentionQuery(null);
-  }, [conversationId, hydrate, initialMessages]);
+  }, [conversationId, hydrate, initialHandoverState, initialMessages]);
 
   useEffect(() => scrollToEnd(), [messages.length, scrollToEnd]);
 
@@ -228,8 +244,11 @@ export function ThreadView({
   useEffect(() => {
     const lastSeq = messages.reduce((mx, m) => Math.max(mx, m.seq < Number.MAX_SAFE_INTEGER ? m.seq : 0), 0);
     if (lastSeq > sentSeqRef.current) {
-      sentSeqRef.current = lastSeq;
-      void markReadAction({ conversationId, upToSeq: lastSeq });
+      void markReadAction({ conversationId, upToSeq: lastSeq }).then((result) => {
+        if (!result.ok) return;
+        sentSeqRef.current = Math.max(sentSeqRef.current, lastSeq);
+        publishConnectReadState(conversationId, lastSeq);
+      });
     }
   }, [conversationId, messages]);
 
@@ -329,11 +348,6 @@ export function ThreadView({
       return;
     }
 
-    // Intervención de operador humano en WhatsApp activa PAUSED_HUMAN
-    if (lastCustomerMessageAt && handoverState !== "PAUSED_HUMAN") {
-      setHandoverState("PAUSED_HUMAN");
-    }
-
     const mentions = caps.canMention ? resolveMentions(body, picks, currentUserId) : [];
     const clientMsgId = crypto.randomUUID();
     const optimistic: UiMessage = {
@@ -392,6 +406,12 @@ export function ThreadView({
           };
         }),
       );
+      if (outcome.status === "sent" && Boolean(lastCustomerMessageAt)) {
+        // La migración 0260 persiste PAUSED_HUMAN mediante trigger al insertar
+        // el mensaje del operador. El cliente refleja el estado sólo después
+        // de que el envío fue aceptado; un fallo no puede fingir un handover.
+        setHandoverState("PAUSED_HUMAN");
+      }
     } finally {
       setSending(false);
       enviando.current = false;
@@ -409,6 +429,8 @@ export function ThreadView({
           windowInfo={windowInfo}
           handoverState={handoverState}
           onToggleHandover={toggleHandoverState}
+          handoverPending={handoverPending}
+          handoverError={handoverError}
         />
       )}
 

@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import { canReadInternalChat } from "@/lib/rbac/internal-chat";
+import { canReadWhatsapp } from "@/lib/rbac/nexus-link";
 import { getDepotManagerBoot } from "@/lib/rbac/boot-permissions";
 import { createClient } from "@/lib/supabase/server";
 import { MarkReadUseCase } from "../../application/use-cases";
@@ -22,11 +23,24 @@ export async function markReadAction(raw: unknown): Promise<SimpleResult> {
   if (!supabase) return { ok: true }; // demo: no-op silencioso
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, message: "Sesión no autenticada." };
-  if (!(await canReadInternalChat())) {
-    return { ok: false, message: "Sin permiso (connect.view)." };
-  }
   const parsed = MarkReadSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, message: "Datos inválidos." };
+
+  const { data: conversation, error: conversationError } = await supabase
+    .from("connect_conversations")
+    .select("kind")
+    .eq("id", parsed.data.conversationId)
+    .maybeSingle();
+  if (conversationError || !conversation) {
+    return { ok: false, message: "No se pudo validar la conversación." };
+  }
+
+  const allowed = conversation.kind === "whatsapp"
+    ? await canReadWhatsapp()
+    : await canReadInternalChat();
+  if (!allowed) {
+    return { ok: false, message: "Sin permiso de lectura para este canal." };
+  }
 
   const managerScope = await getDepotManagerBoot();
   if (managerScope.restricted) {

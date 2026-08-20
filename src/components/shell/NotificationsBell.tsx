@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components/Icon";
 import { createClient } from "@/lib/supabase/client";
 import { useRealtimeTable } from "@/lib/supabase/realtime";
+import { CONNECT_READ_STATE_EVENT } from "@/lib/connect/read-state-events";
 import { hrefFor } from "@/lib/notifications/href";
 import {
   CATEGORY_STYLE,
@@ -121,6 +122,12 @@ export function NotificationsBell() {
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  useEffect(() => {
+    const onRead = () => { void load(); };
+    window.addEventListener(CONNECT_READ_STATE_EVENT, onRead);
+    return () => window.removeEventListener(CONNECT_READ_STATE_EVENT, onRead);
   }, [load]);
 
   // C4 · M-8: con el relay de WhatsApp activo, cada INSERT dispararía una

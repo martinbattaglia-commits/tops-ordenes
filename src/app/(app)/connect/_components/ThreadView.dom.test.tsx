@@ -80,6 +80,10 @@ const sendWhatsappTextAction = vi.fn(async () => ({
 vi.mock("@/lib/whatsapp/reply-action", () => ({
   sendWhatsappTextAction: (...a: unknown[]) => sendWhatsappTextAction(...(a as [])),
 }));
+const setHandoverStateAction = vi.fn(async () => ({ ok: true as const }));
+vi.mock("@/lib/whatsapp/handover-action", () => ({
+  setHandoverStateAction: (...a: unknown[]) => setHandoverStateAction(...(a as [])),
+}));
 vi.mock("@/lib/connect/adapters/driving/read-actions", () => ({
   markReadAction: vi.fn(async () => ({ ok: true })),
 }));
@@ -160,6 +164,8 @@ function montar(props: {
   kind: string;
   initialMessages: Message[];
   currentUserId?: string | null;
+  handoverState?: "BOT_ACTIVE" | "PAUSED_HUMAN";
+  lastCustomerMessageAt?: string;
 }) {
   act(() => {
     root.render(
@@ -168,11 +174,61 @@ function montar(props: {
         kind={props.kind as never}
         initialMessages={props.initialMessages}
         currentUserId={props.currentUserId ?? "op-1"}
+        handoverState={props.handoverState}
+        lastCustomerMessageAt={props.lastCustomerMessageAt}
       />,
     );
   });
   return container.textContent ?? "";
 }
+
+describe("HOTFIX · control reversible de Max", () => {
+  const customerAt = "2026-08-20T18:00:00.000Z";
+
+  it("Max activo muestra el botón para tomar la conversación", () => {
+    montar({
+      kind: "whatsapp",
+      initialMessages: [],
+      handoverState: "BOT_ACTIVE",
+      lastCustomerMessageAt: customerAt,
+    });
+    expect(container.textContent).toContain("Max está activo como filtro inicial");
+    expect(container.textContent).toContain("Tomar conversación / Pausar Max");
+  });
+
+  it("persiste PAUSED_HUMAN antes de cambiar la interfaz", async () => {
+    montar({
+      kind: "whatsapp",
+      initialMessages: [],
+      handoverState: "BOT_ACTIVE",
+      lastCustomerMessageAt: customerAt,
+    });
+    const button = [...container.querySelectorAll("button")]
+      .find((item) => item.textContent?.includes("Tomar conversación"))!;
+    await act(async () => { button.click(); });
+    expect(setHandoverStateAction).toHaveBeenCalledWith({
+      conversationId: "11111111-1111-4111-8111-111111111111",
+      state: "PAUSED_HUMAN",
+    });
+    expect(container.textContent).toContain("Conversación tomada — Max está pausado");
+    expect(container.textContent).toContain("Reactivar Max");
+  });
+
+  it("si Supabase rechaza la orden, conserva el estado anterior y muestra el error", async () => {
+    setHandoverStateAction.mockResolvedValueOnce({ ok: false, message: "rechazo controlado" } as never);
+    montar({
+      kind: "whatsapp",
+      initialMessages: [],
+      handoverState: "BOT_ACTIVE",
+      lastCustomerMessageAt: customerAt,
+    });
+    const button = [...container.querySelectorAll("button")]
+      .find((item) => item.textContent?.includes("Tomar conversación"))!;
+    await act(async () => { button.click(); });
+    expect(container.textContent).toContain("Max está activo como filtro inicial");
+    expect(container.textContent).toContain("rechazo controlado");
+  });
+});
 
 /** Proyección sanitizada, tal como la entrega la hidratación server-side. */
 const proj = (over: Record<string, unknown> = {}) => ({

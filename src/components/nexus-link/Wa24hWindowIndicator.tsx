@@ -7,40 +7,69 @@ export function Wa24hWindowIndicator({
   windowInfo,
   handoverState,
   onToggleHandover,
+  handoverPending = false,
+  handoverError,
   onOpenTemplateModal,
 }: {
   windowInfo: WaWindowInfo;
   handoverState?: "BOT_ACTIVE" | "PAUSED_HUMAN";
   onToggleHandover?: () => void;
+  handoverPending?: boolean;
+  handoverError?: string | null;
   onOpenTemplateModal?: () => void;
 }) {
   const isAmber = windowInfo.status === "amber_warning";
   const isRed = windowInfo.status === "red_locked";
 
-  if (!isAmber && !isRed && handoverState !== "PAUSED_HUMAN") {
+  if (!isAmber && !isRed && !handoverState) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-1.5 px-4 py-2 border-b border-stroke-soft bg-bg-surface text-xs">
       {/* Handover state badge */}
-      {handoverState === "PAUSED_HUMAN" && (
-        <div className="flex items-center justify-between gap-2 rounded bg-blue-500/10 px-3 py-1.5 text-blue-600 dark:text-blue-400 font-medium">
+      {handoverState && (
+        <div className={`flex items-center justify-between gap-2 rounded px-3 py-1.5 font-medium ${
+          handoverState === "PAUSED_HUMAN"
+            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+            : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+        }`}>
           <div className="flex items-center gap-1.5">
-            <Icon name="user" size={14} className="text-blue-500" />
-            <span>Operador Humano Activo — Max Bot en estado PAUSED_HUMAN</span>
+            <Icon
+              name={handoverState === "PAUSED_HUMAN" ? "user" : "sparkle"}
+              size={14}
+              className={handoverState === "PAUSED_HUMAN" ? "text-blue-500" : "text-emerald-500"}
+            />
+            <span>
+              {handoverState === "PAUSED_HUMAN"
+                ? "Conversación tomada — Max está pausado"
+                : "Max está activo como filtro inicial"}
+            </span>
           </div>
           {onToggleHandover && (
             <button
               type="button"
               onClick={onToggleHandover}
+              disabled={handoverPending}
               className="text-[11px] font-semibold underline hover:opacity-80"
-              title="Reactivar respuesta automática de Max Bot"
+              title={handoverState === "PAUSED_HUMAN"
+                ? "Reactivar respuesta automática de Max"
+                : "Tomar la conversación y pausar a Max"}
             >
-              Reactivar Max Bot
+              {handoverPending
+                ? "Guardando…"
+                : handoverState === "PAUSED_HUMAN"
+                  ? "Reactivar Max"
+                  : "Tomar conversación / Pausar Max"}
             </button>
           )}
         </div>
+      )}
+
+      {handoverError && (
+        <p role="alert" className="text-[11px] font-medium text-tops-red">
+          No se pudo cambiar el estado de Max: {handoverError}
+        </p>
       )}
 
       {/* Amber Warning Bar (< 3h remaining) */}

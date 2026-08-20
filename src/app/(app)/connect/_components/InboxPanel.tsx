@@ -13,12 +13,41 @@ import {
   CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
 } from "@/lib/notifications/categories";
 import { ConversationList } from "./ConversationList";
+import { CONNECT_READ_STATE_EVENT, type ConnectReadStateDetail } from "@/lib/connect/read-state-events";
 
 const LS_KEY = "nexus-link:inbox-collapsed";
 
 export function InboxPanel({ items }: { items: InboxItem[] }) {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [readSeqByConversation, setReadSeqByConversation] = useState<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    const onRead = (event: Event) => {
+      const detail = (event as CustomEvent<ConnectReadStateDetail>).detail;
+      if (!detail?.conversationId || !Number.isFinite(detail.upToSeq)) return;
+      setReadSeqByConversation((current) => {
+        const next = new Map(current);
+        next.set(
+          detail.conversationId,
+          Math.max(current.get(detail.conversationId) ?? 0, detail.upToSeq),
+        );
+        return next;
+      });
+    };
+    window.addEventListener(CONNECT_READ_STATE_EVENT, onRead);
+    return () => window.removeEventListener(CONNECT_READ_STATE_EVENT, onRead);
+  }, []);
+
+  const visibleItems = items.map((item) => {
+    const localReadSeq = readSeqByConversation.get(item.conversationId);
+    if (localReadSeq === undefined) return item;
+    const effectiveReadSeq = Math.max(item.lastReadSeq, localReadSeq);
+    const unreadCount = item.lastMessageSeq === null
+      ? 0
+      : Math.max(0, item.lastMessageSeq - effectiveReadSeq);
+    return { ...item, lastReadSeq: effectiveReadSeq, unreadCount };
+  });
 
   useEffect(() => {
     try {
@@ -47,7 +76,7 @@ export function InboxPanel({ items }: { items: InboxItem[] }) {
   // chat interno. Ahora son dos cifras separadas, con su color, su icono y su
   // texto accesible, y cuentan MENSAJES pendientes (misma fuente que el resto),
   // no "conversaciones que tienen alguno".
-  const pendientes = items.reduce(
+  const pendientes = visibleItems.reduce(
     (acc, i) => {
       if (i.unreadCount <= 0) return acc;
       const cat = categoryForConversationKind(i.kind);
@@ -95,7 +124,7 @@ export function InboxPanel({ items }: { items: InboxItem[] }) {
             )}
           </button>
         ) : (
-          <ConversationList items={items} onCollapse={toggle} />
+          <ConversationList items={visibleItems} onCollapse={toggle} />
         )}
       </aside>
 
@@ -143,7 +172,7 @@ export function InboxPanel({ items }: { items: InboxItem[] }) {
             />
             <div className="relative flex h-full w-80 max-w-[85vw] flex-col border-l border-stroke-soft bg-bg-surface">
               <ConversationList
-                items={items}
+                items={visibleItems}
                 onCollapse={() => setDrawerOpen(false)}
                 onNavigate={() => setDrawerOpen(false)}
               />
