@@ -41,8 +41,8 @@ vi.mock("@/lib/whatsapp/reply-action", () => ({
     messageId: "synthetic-wa-sent",
   })),
 }));
-vi.mock("@/lib/connect/adapters/driving/read-actions", () => ({
-  markReadAction: vi.fn(async () => ({ ok: true })),
+vi.mock("@/lib/connect/client-mark-read", () => ({
+  markReadInBrowser: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock("@/lib/rbac/nexus-link", () => ({ canChannel: async () => true }));
 vi.mock("@/lib/whatsapp/media-send", () => ({

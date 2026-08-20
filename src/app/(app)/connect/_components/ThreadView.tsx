@@ -28,7 +28,7 @@ import {
 } from "@/lib/connect/realtime-status";
 import type { ConversationKind, WaProjection } from "@/lib/connect/types";
 import { applyRealtimeEvent, type RealtimeEvent } from "@/lib/connect/realtime-merge";
-import { markReadAction } from "@/lib/connect/adapters/driving/read-actions";
+import { markReadInBrowser } from "@/lib/connect/client-mark-read";
 import { publishConnectReadState } from "@/lib/connect/read-state-events";
 import { createClient } from "@/lib/supabase/client";
 import { useAudioRecorder } from "@/lib/connect/audio/recorder";
@@ -243,13 +243,32 @@ export function ThreadView({
 
   useEffect(() => {
     const lastSeq = messages.reduce((mx, m) => Math.max(mx, m.seq < Number.MAX_SAFE_INTEGER ? m.seq : 0), 0);
-    if (lastSeq > sentSeqRef.current) {
-      void markReadAction({ conversationId, upToSeq: lastSeq }).then((result) => {
-        if (!result.ok) return;
-        sentSeqRef.current = Math.max(sentSeqRef.current, lastSeq);
-        publishConnectReadState(conversationId, lastSeq);
-      });
-    }
+    if (lastSeq <= sentSeqRef.current) return;
+
+    let cancelled = false;
+    let retryId: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+
+    const persistRead = async () => {
+      attempt += 1;
+      const result = await markReadInBrowser(conversationId, lastSeq);
+      if (cancelled) return;
+      if (!result.ok) {
+        // Una sesión que termina de hidratar o renueva su token puede fallar
+        // transitoriamente. Reintentamos acotadamente; nunca apagamos el badge
+        // hasta que PostgreSQL confirme la escritura.
+        if (attempt < 3) retryId = setTimeout(() => { void persistRead(); }, 750 * attempt);
+        return;
+      }
+      sentSeqRef.current = Math.max(sentSeqRef.current, lastSeq);
+      publishConnectReadState(conversationId, lastSeq);
+    };
+
+    void persistRead();
+    return () => {
+      cancelled = true;
+      if (retryId) clearTimeout(retryId);
+    };
   }, [conversationId, messages]);
 
   useRealtimeTable(
