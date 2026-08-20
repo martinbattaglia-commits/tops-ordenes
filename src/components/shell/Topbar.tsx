@@ -67,8 +67,8 @@ export default function Topbar({
         <Image
           src="/icons/logo-isologo-primary.png"
           alt="Logística TOPS"
-          width={500}
-          height={500}
+          width={120}
+          height={40}
           priority
           className="w-auto h-10 max-w-[120px] max-h-10 object-contain rounded-md"
         />
