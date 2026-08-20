@@ -56,6 +56,15 @@ describe("0233 · contrato durable del relay", () => {
     expect(route).toMatch(/Math\.min\(Math\.max\(rawLimit, 1\), 1\)/);
   });
 
+  it("el cron llama al deploy exacto en previews y sólo cae a URL en producción", () => {
+    expect(scheduledFunction).toContain(
+      "process.env.DEPLOY_PRIME_URL ?? process.env.URL",
+    );
+    expect(scheduledFunction.indexOf("process.env.DEPLOY_PRIME_URL")).toBeLessThan(
+      scheduledFunction.indexOf("process.env.URL"),
+    );
+  });
+
   it("incluye rollback ejecutable y fail-closed ante una outbox no vacía", () => {
     expect(rollback).toContain("rollback_0233_aborted");
     expect(rollback).toContain("exists (select 1 from public.wa_make_relay_outbox limit 1)");
