@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { canAccess } from "@/lib/rbac/guard";
+import { canChannel } from "@/lib/rbac/nexus-link";
 import { createClient } from "@/lib/supabase/server";
 
 export type HandoverActionResult =
@@ -29,8 +29,17 @@ export async function setHandoverStateAction(raw: unknown): Promise<HandoverActi
     return { ok: false, message: "Sesión no autenticada." };
   }
 
-  if (!(await canAccess("connect.edit")) && !(await canAccess("connect.view"))) {
-    return { ok: false, message: "Sin permiso." };
+  const { data: conversation, error: conversationError } = await supabase
+    .from("connect_conversations")
+    .select("kind")
+    .eq("id", p.data.conversationId)
+    .maybeSingle();
+  if (conversationError || conversation?.kind !== "whatsapp") {
+    return { ok: false, message: "La conversación de WhatsApp no pudo validarse." };
+  }
+
+  if (!(await canChannel("nexus_link.whatsapp.send"))) {
+    return { ok: false, message: "No tenés permiso para operar este canal." };
   }
 
   const { error } = await supabase.rpc("connect_set_handover_state", {
