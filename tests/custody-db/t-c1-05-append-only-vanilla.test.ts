@@ -343,6 +343,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
   // blanca de package.json: nada fuera de ella puede cambiar.
   const VANILLA_AUTHORIZED_CHANGES = [
     "tests/db/harness/manifest.ts",
+    "tests/db/t-a0-10-manifest.test.ts",
     "tests/db/harness/custodia-closure.ts",
     "tests/db/scripts/expected-suite.mjs",
     "tests/db/t-a0-13-run-report.test.ts",

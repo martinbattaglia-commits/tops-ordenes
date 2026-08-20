@@ -443,18 +443,20 @@ export const CLIENTES_PHASE_B_MIGRATION_FILES: ReadonlySet<string> = new Set([
   "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
 ]);
 
-export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
+export interface ManifestExclusion {
   id: string;
   matches: (file: string) => boolean;
   reason: string;
-}> = [
+}
+
+export const MANIFEST_EXCLUSIONS: ReadonlyArray<ManifestExclusion> = [
   {
     id: "connect-link-archive-override",
     matches: (f) => CONNECT_LINK_ARCHIVE_MIGRATION_FILES.has(f),
     reason:
-      "NEXUS Link y Connect: migración 0260 (handover archived) y 0261 (archive force override) " +
-      "con sus respectivos scripts de rollback lógico. Pertenecen al dominio de mensajería y " +
-      "canales Connect y no integran el cierre WMS vanilla.",
+      "NEXUS Link y Connect: los forwards activos 0260 (handover archived) y 0261 " +
+      "(archive force override), junto con sus inversas lógicas, pertenecen al dominio de " +
+      "mensajería y canales Connect; nunca integran el manifiesto forward WMS vanilla.",
   },
   {
     id: "finanzas-core-foundation",
@@ -596,25 +598,6 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
       "0238 a PUBLIC/anon/authenticated/service_role sin cambiar su lógica; " +
       "se verifica contra PostgreSQL real en t-link-b2-01, incluido el binding, " +
       "el rechazo de subidas no finalizadas y el flujo legítimo.",
-    },
-    {
-    // NEXUS LINK · handover/archive · clasificación administrativa autorizada
-    // por filename EXACTO. Los forwards siguen activos en el catálogo de
-    // linaje; sus inversas lógicas nunca ingresan al plan forward.
-    id: "nexus-link-handover-archive",
-    matches: (f) =>
-      f === "0260_nexus_link_handover_archived.sql" ||
-      f === "ROLLBACK_0260_nexus_link_handover_archived.sql" ||
-      f === "0261_connect_archive_force_override.sql" ||
-      f === "ROLLBACK_0261_connect_archive_force_override.sql",
-    reason:
-      "Dominio Connect/Nexus Link, ajeno al cierre WMS vanilla: 0260 agrega el " +
-      "estado de handover, su trigger y las RPC de handover/archivo sobre la " +
-      "cadena Connect; 0261 redefine el archivo con override forzado y depende " +
-      "también del esquema de connect_tasks. Los dos forwards se clasifican " +
-      "como activos en el catálogo de linaje; ROLLBACK_0260 y ROLLBACK_0261 son " +
-      "inversas lógicas clasificadas pero nunca integran el manifiesto forward. " +
-      "La exclusión es exacta y no absorbe migraciones futuras.",
     },
     {
     id: "lineage-recovered-and-correctives",
@@ -770,21 +753,52 @@ export function validateCanonicalManifest(migrationsDir: string = MIGRATIONS_DIR
   }
 
   const onDisk = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
-  const inManifest = new Set(WMS_MIGRATION_MANIFEST);
-  const unclassified = onDisk.filter(
-    (f) => !inManifest.has(f) && !MANIFEST_EXCLUSIONS.some((e) => e.matches(f)),
-  );
-  if (unclassified.length > 0) {
-    throw new ManifestIntegrityError(
-      `hay migraciones sin clasificar (ni en el manifiesto ni en una exclusión ` +
-        `documentada): ${unclassified.join(", ")}. Toda migración nueva exige una ` +
-        `decisión explícita y visible en el diff.`,
-    );
-  }
+  validateMigrationClassification(onDisk);
 
   for (const e of MANIFEST_EXCLUSIONS) {
     if (!e.reason || e.reason.trim().length < 20) {
       throw new ManifestIntegrityError(`la exclusión "${e.id}" carece de justificación.`);
+    }
+  }
+}
+
+/**
+ * Exige una partición total y disjunta del universo SQL: cada archivo debe
+ * pertenecer al manifiesto O a una única exclusión documentada. Los parámetros
+ * explícitos permiten que las pruebas adversariales inyecten superposiciones
+ * sin modificar el estado global ni copiar la lógica del validador.
+ */
+export function validateMigrationClassification(
+  files: readonly string[],
+  manifest: readonly string[] = WMS_MIGRATION_MANIFEST,
+  exclusions: ReadonlyArray<ManifestExclusion> = MANIFEST_EXCLUSIONS,
+): void {
+  const exclusionIds = new Map<string, number>();
+  for (const exclusion of exclusions) {
+    exclusionIds.set(exclusion.id, (exclusionIds.get(exclusion.id) ?? 0) + 1);
+  }
+  const duplicateIds = [...exclusionIds.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([id, count]) => `${id} (${count})`);
+  if (duplicateIds.length > 0) {
+    throw new ManifestIntegrityError(
+      `hay identificadores de exclusión duplicados: ${duplicateIds.join(", ")}.`,
+    );
+  }
+
+  const inManifest = new Set(manifest);
+  for (const file of files) {
+    const manifestMembership = inManifest.has(file);
+    const matchingExclusions = exclusions.filter((exclusion) => exclusion.matches(file));
+    const classificationCount = Number(manifestMembership) + matchingExclusions.length;
+    if (classificationCount !== 1) {
+      const exclusionList = matchingExclusions.map((exclusion) => exclusion.id);
+      throw new ManifestIntegrityError(
+        `clasificación inválida para "${file}": cantidad=${classificationCount}; ` +
+          `manifiesto=${manifestMembership ? "sí" : "no"}; ` +
+          `exclusiones=[${exclusionList.length > 0 ? exclusionList.join(", ") : "ninguna"}]. ` +
+          `Cada migración debe pertenecer exactamente a una clasificación.`,
+      );
     }
   }
 }

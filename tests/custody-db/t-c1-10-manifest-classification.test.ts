@@ -83,7 +83,7 @@ const dedicated = () =>
   MANIFEST_EXCLUSIONS.find((e) => e.id === "custody-integrity-dedicated-harness");
 const frozen = () => MANIFEST_EXCLUSIONS.find((e) => e.id === "frozen-excluded-snapshot");
 const linkHandover = () =>
-  MANIFEST_EXCLUSIONS.find((e) => e.id === "nexus-link-handover-archive");
+  MANIFEST_EXCLUSIONS.find((e) => e.id === "connect-link-archive-override");
 
 const LINK_HANDOVER_ARTIFACT_FILES = [
   "0260_nexus_link_handover_archived.sql",
@@ -219,8 +219,10 @@ describe("T-C1-10 · Nexus Link 0260/0261 queda clasificado de forma exacta", ()
     expect(linkHandover()!.reason).toMatch(/nunca integran? el manifiesto forward/i);
   });
 
-  it.each(LINK_HANDOVER_ARTIFACT_FILES)("clasifica %s fuera del vanilla", (f) => {
+  it.each(LINK_HANDOVER_ARTIFACT_FILES)("clasifica %s exactamente una vez fuera del vanilla", (f) => {
     expect(linkHandover()!.matches(f)).toBe(true);
+    expect(MANIFEST_EXCLUSIONS.filter((entry) => entry.matches(f)).map((entry) => entry.id))
+      .toEqual(["connect-link-archive-override"]);
     expect(WMS_MIGRATION_MANIFEST).not.toContain(f);
   });
 
