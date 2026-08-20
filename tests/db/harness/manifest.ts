@@ -412,6 +412,28 @@ const PR66_PHASE_A_MIGRATION_FILES: ReadonlySet<string> = new Set([
  * verificación funcional vive en su harness PG17 dedicado; no se amplía ningún
  * rango ni se altera el conjunto congelado de FASE A/Custodia.
  */
+/** Módulo Nativo Finanzas · Fundación y Rollback.
+ *
+ * Clasificación exhaustiva por filename exacto de la migración 0262 del
+ * módulo financiero y su script de reversión.
+ */
+/** NEXUS Link & Connect Archive Override · Migraciones 0260 y 0261.
+ *
+ * Clasificación exhaustiva por filename exacto de las migraciones de archivo
+ * y handover de Connect/Link con sus respectivos rollbacks.
+ */
+export const CONNECT_LINK_ARCHIVE_MIGRATION_FILES: ReadonlySet<string> = new Set([
+  "0260_nexus_link_handover_archived.sql",
+  "ROLLBACK_0260_nexus_link_handover_archived.sql",
+  "0261_connect_archive_force_override.sql",
+  "ROLLBACK_0261_connect_archive_force_override.sql",
+]);
+
+export const FINANZAS_MIGRATION_FILES: ReadonlySet<string> = new Set([
+  "0262_finance_core_foundation.sql",
+  "ROLLBACK_0262_finance_core_foundation.sql",
+]);
+
 export const CLIENTES_PHASE_B_MIGRATION_FILES: ReadonlySet<string> = new Set([
   "0246_clientes_fase_b_principals_capabilities.sql",
   "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
@@ -424,6 +446,23 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<{
   matches: (file: string) => boolean;
   reason: string;
 }> = [
+  {
+    id: "connect-link-archive-override",
+    matches: (f) => CONNECT_LINK_ARCHIVE_MIGRATION_FILES.has(f),
+    reason:
+      "NEXUS Link y Connect: migración 0260 (handover archived) y 0261 (archive force override) " +
+      "con sus respectivos scripts de rollback lógico. Pertenecen al dominio de mensajería y " +
+      "canales Connect y no integran el cierre WMS vanilla.",
+  },
+  {
+    id: "finanzas-core-foundation",
+    matches: (f) => FINANZAS_MIGRATION_FILES.has(f),
+    reason:
+      "Módulo Nativo Finanzas: fundación de versiones, supuestos, categorías, " +
+      "centros de costo, proyecciones y bandeja de ingesta con RLS propio. " +
+      "Pertenece al dominio financiero y no integra el cierre WMS vanilla. " +
+      "La exclusión clasifica exactamente el forward 0262 y su script de rollback.",
+  },
   {
     // OC-FIRMANTE-POR-PERMISO · decisión explícita, en entrada PROPIA y por
     // filename EXACTO. No entra al snapshot congelado —que describe el árbol al
