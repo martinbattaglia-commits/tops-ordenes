@@ -225,33 +225,26 @@ const RUTAS_CUSTODIA: readonly RegExp[] = [
 ];
 
 /**
- * ─── EL ANCLA DE LINAJE COMPARTIDA · EXCLUIDA POR ARCHIVO ──────────────────
+ * ─── LAS ANCLAS DE GOBERNANZA COMPARTIDAS · EXCLUIDAS POR ARCHIVO ──────────
  *
- * `t-c4-01-lineage-catalog.test.ts` vive bajo `tests/custody-db/`, pero NO es
- * un archivo de Custodia: es el ANCLA DE LINAJE DE TODO EL REPOSITORIO. Su
- * aserción sobre los rollbacks es una IGUALDAD ESTRICTA entre lo que el
- * catálogo declara y una lista literal, así que **todo frente que agregue una
- * migración con su ROLLBACK está obligado a editarla en el MISMO merge**. No
- * puede diferirlo ni partirlo en dos PR: separarlos rompe la igualdad en uno u
- * otro sentido.
+ * 1. `t-c4-01-lineage-catalog.test.ts` es el ANCLA DE LINAJE DE TODO EL REPOSITORIO.
+ * 2. `t-c1-05-append-only-vanilla.test.ts` es el ANCLA DE MIGRACIONES HISTÓRICAS
+ *    Y `MIGRACIONES_EDITABLES` DE TODO EL REPOSITORIO.
  *
- * Por eso tocarla NO identifica un expediente de Custodia. Sin esta exclusión,
- * un frente ajeno queda atrapado entre dos invariantes mutuamente excluyentes
- * —con las entradas nuevas en la lista falla `t-c1-05`, sin ellas falla
- * `t-c4-01`—, y ninguno de los dos está mal: la clasificación lo estaba.
+ * Ambos archivos son compuertas transversales que cualquier frente autorizado
+ * (ej. remediación in-place de migraciones no aplicadas o registro de nuevos rollbacks)
+ * debe actualizar en su propio PR sin que el guardián lo clasifique falsamente
+ * como perteneciente al dominio Custodia.
  *
- * LA EXCLUSIÓN ES POR ARCHIVO, NO POR CARPETA, y ahí está su seguridad: un
- * expediente REAL de Custodia siempre porta otros marcadores propios —sus
- * migraciones del lease, su `src/lib/custody/`, sus tests de custodia—, así que
- * sacar este único archivo no lo saca de alcance. Excluir la carpeta entera sí
- * lo haría, y por eso no se hace.
+ * LA EXCLUSIÓN ES POR ARCHIVO EXACTO, NUNCA POR CARPETA.
  *
- * MEDIDO sobre el candidato vivo de Custodia (2-A, `a98f08e`, 47 paths): tiene
- * 17 marcadores propios; sacando `t-c4-01` le quedan 16. Sigue en alcance, y el
- * guardián le sigue exigiendo todo lo que promete.
+ * REGLA FAIL-CLOSED: `vanilla-guard.ts` y `t-c5-03-guard-scoping.test.ts` NUNCA
+ * se excluyen; son el motor y la prueba del guard, y su modificación activa
+ * incondicionalmente el alcance de Custodia.
  */
 const RUTAS_CUSTODIA_EXCLUIDAS: readonly string[] = [
   "tests/custody-db/t-c4-01-lineage-catalog.test.ts",
+  "tests/custody-db/t-c1-05-append-only-vanilla.test.ts",
 ];
 
 /**
