@@ -320,8 +320,8 @@ export function ThreadView({
     return true;
   }
 
-  async function sendCustomText(overrideText?: string) {
-    const body = (overrideText ?? draft).trim();
+  async function send() {
+    const body = draft.trim();
     if (!body || enviando.current || sending || readOnly) return;
     enviando.current = true;
     if (!caps.canSendText) {
@@ -330,7 +330,7 @@ export function ThreadView({
     }
 
     // Intervención de operador humano en WhatsApp activa PAUSED_HUMAN
-    if (kind === "whatsapp" && handoverState !== "PAUSED_HUMAN") {
+    if (lastCustomerMessageAt && handoverState !== "PAUSED_HUMAN") {
       setHandoverState("PAUSED_HUMAN");
     }
 
@@ -357,9 +357,7 @@ export function ThreadView({
     };
 
     setMessages((prev) => [...prev, optimistic]);
-    if (!overrideText) {
-      handleDraftChange("");
-    }
+    handleDraftChange("");
     setPicks([]);
     setMentionQuery(null);
     setSending(true);
@@ -401,12 +399,12 @@ export function ThreadView({
   }
 
   // Es la ventana de WhatsApp expirada (red_locked)?
-  const isWaExpired = kind === "whatsapp" && windowInfo.status === "red_locked";
+  const isWaExpired = Boolean(lastCustomerMessageAt) && windowInfo.status === "red_locked";
 
   return (
     <>
       {/* Visual Indicator de Ventana 24h & State Handover */}
-      {kind === "whatsapp" && (
+      {Boolean(lastCustomerMessageAt) && (
         <Wa24hWindowIndicator
           windowInfo={windowInfo}
           handoverState={handoverState}
@@ -510,7 +508,7 @@ export function ThreadView({
         <div className="p-3 border-t border-stroke-soft bg-bg-surface">
           <WaTemplateSelector
             currentDraft={draft}
-            onSelectTemplate={(renderedText) => void sendCustomText(renderedText)}
+            onSelectTemplate={(renderedText) => handleDraftChange(renderedText)}
           />
         </div>
       ) : (
@@ -563,7 +561,7 @@ export function ThreadView({
                     if (mentionQuery !== null && candidates.length > 0) {
                       if (pickMention(candidates[0])) return;
                     }
-                    void sendCustomText();
+                    void send();
                   }
                 }}
                 placeholder="Escribí un mensaje…"
@@ -595,7 +593,7 @@ export function ThreadView({
             )}
             <button
               type="button"
-              onClick={() => void sendCustomText()}
+              onClick={() => void send()}
               disabled={!draft.trim() || sending || !caps.canSendText}
               className={cn("btn btn-sm shrink-0", sendButtonClass(kind))}
               aria-label="Enviar mensaje"

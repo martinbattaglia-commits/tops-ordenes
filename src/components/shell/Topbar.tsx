@@ -70,7 +70,7 @@ export default function Topbar({
           width={500}
           height={500}
           priority
-          className="w-auto h-10 object-contain rounded-md"
+          className="w-auto h-10 max-w-[120px] max-h-10 object-contain rounded-md"
         />
       </Link>
 

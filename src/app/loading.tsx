@@ -1,157 +1,61 @@
-import Image from "next/image";
-
 /**
- * Loading screen global — pantalla de transición entre rutas.
+ * Loading screen global (Root Suspense Fallback).
  *
- * Identidad visual: logo oficial Logística TOPS + wordmark "TOPS NEXUS"
- * + tagline "Sistema Operativo". Estilo Apple Enterprise / Stripe / Arc —
- * sobrio, premium, con halo corporativo azul/rojo y barra de progreso
- * con animación suave (no genérica).
+ * Renderiza de forma ligera y robusta durante la transición inicial o de rutas.
+ * Logo con clases estrictas (w-16 h-16 max-w-[80px] object-contain) para evitar desbordes.
  */
 export default function Loading() {
   return (
-    <div className="loading-shell">
-      <div className="loading-stage">
-        {/* Halo radial de fondo (azul TOPS) */}
-        <div className="loading-halo" aria-hidden />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg-page select-none">
+      <div className="relative flex flex-col items-center gap-4 p-8">
+        {/* Halo radial de fondo */}
+        <div className="absolute inset-0 -z-10 rounded-full bg-tops-blue-900/5 blur-2xl pointer-events-none" aria-hidden />
 
-        {/* Logo oficial con shimmer */}
-        <div className="loading-mark">
-          <Image
-            src="/icons/logo-isologo-primary.png"
-            alt="Logística TOPS"
-            width={140}
-            height={140}
-            priority
-            className="loading-logo"
-          />
+        {/* Logo SVG oficial con tamaño estricto w-16 h-16 max-w-[80px] object-contain */}
+        <div className="relative flex items-center justify-center w-16 h-16 max-w-[80px] max-h-[80px]">
+          <svg
+            viewBox="0 0 100 100"
+            className="w-16 h-16 max-w-[80px] max-h-[80px] object-contain animate-pulse"
+            aria-hidden="true"
+          >
+            <g stroke="#3B4CC8" strokeWidth="8" strokeLinecap="round" fill="none">
+              <line x1="24" y1="24" x2="24" y2="76" />
+              <line x1="76" y1="24" x2="76" y2="76" />
+              <line x1="24" y1="24" x2="76" y2="76" />
+            </g>
+            <g fill="#3B4CC8" stroke="#3B4CC8" strokeWidth="4">
+              <circle cx="24" cy="24" r="8" />
+              <circle cx="76" cy="24" r="8" />
+              <circle cx="24" cy="76" r="8" />
+              <circle cx="76" cy="76" r="8" />
+            </g>
+            <circle cx="50" cy="50" r="6" fill="#C90812" />
+          </svg>
         </div>
 
         {/* Wordmark */}
-        <div className="loading-wordmark">
-          <span className="loading-product">TOPS NEXUS</span>
-          <span className="loading-tagline">Sistema Operativo</span>
+        <div className="flex flex-col items-center gap-0.5 text-center">
+          <span className="text-sm font-black tracking-[0.25em] text-tops-blue-900 dark:text-fg-link">
+            TOPS NEXUS
+          </span>
+          <span className="text-[9px] font-bold uppercase tracking-[0.25em] text-fg-muted">
+            Sistema Operativo
+          </span>
         </div>
 
         {/* Barra de progreso indeterminada */}
-        <div className="loading-track" role="progressbar" aria-label="Cargando">
-          <span className="loading-bar" />
+        <div
+          className="w-40 h-1 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden relative"
+          role="progressbar"
+          aria-label="Cargando"
+        >
+          <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-[#3B4CC8] to-[#C90812] rounded-full animate-pulse" />
         </div>
 
-        <div className="loading-footer">Inicializando módulos · Logística TOPS · Verotin S.A.</div>
+        <div className="text-[10px] uppercase tracking-wider text-fg-muted/70 mt-1">
+          Inicializando módulos · Logística TOPS
+        </div>
       </div>
-
-      <style>{`
-        .loading-shell {
-          position: fixed;
-          inset: 0;
-          display: grid;
-          place-items: center;
-          background:
-            radial-gradient(circle at 30% 20%, rgba(33, 69, 118, 0.08), transparent 55%),
-            radial-gradient(circle at 75% 80%, rgba(201, 8, 18, 0.06), transparent 55%),
-            var(--bg-page, #f7f7fa);
-          z-index: 100;
-        }
-        .loading-stage {
-          position: relative;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 22px;
-          padding: 40px 56px;
-          isolation: isolate;
-        }
-        .loading-halo {
-          position: absolute;
-          inset: -40px;
-          background: radial-gradient(circle at 50% 35%, rgba(5, 5, 85, 0.10), transparent 60%);
-          filter: blur(20px);
-          z-index: -1;
-        }
-        .loading-mark {
-          position: relative;
-          width: 140px;
-          height: 140px;
-          display: grid;
-          place-items: center;
-        }
-        .loading-logo {
-          width: 140px;
-          height: 140px;
-          object-fit: contain;
-          animation: nexus-breathe 2.4s ease-in-out infinite;
-          filter: drop-shadow(0 12px 24px rgba(5, 5, 85, 0.18));
-        }
-        .loading-wordmark {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 4px;
-          margin-top: 4px;
-        }
-        .loading-product {
-          font-size: 20px;
-          font-weight: 900;
-          letter-spacing: 0.22em;
-          color: #050555;
-          background: linear-gradient(110deg, #050555 0%, #214576 35%, #C90812 70%, #050555 100%);
-          background-size: 200% 100%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          animation: nexus-sheen 4s ease-in-out infinite;
-        }
-        .loading-tagline {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.32em;
-          text-transform: uppercase;
-          color: var(--fg-muted, #6b7080);
-        }
-        .loading-track {
-          width: 220px;
-          height: 3px;
-          border-radius: 999px;
-          background: rgba(5, 5, 85, 0.08);
-          overflow: hidden;
-          position: relative;
-        }
-        .loading-bar {
-          position: absolute;
-          inset-block: 0;
-          width: 42%;
-          background: linear-gradient(90deg, transparent, #C90812 30%, #050555 70%, transparent);
-          border-radius: 999px;
-          animation: nexus-slide 1.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-        }
-        .loading-footer {
-          font-size: 10px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--fg-muted, #6b7080);
-          opacity: 0.7;
-          margin-top: 6px;
-        }
-        @keyframes nexus-breathe {
-          0%, 100% { transform: scale(1); opacity: 1; }
-          50% { transform: scale(1.04); opacity: 0.92; }
-        }
-        @keyframes nexus-sheen {
-          0%, 100% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-        }
-        @keyframes nexus-slide {
-          0% { left: -45%; }
-          60% { left: 100%; }
-          100% { left: 100%; }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .loading-logo,
-          .loading-product,
-          .loading-bar { animation: none; }
-        }
-      `}</style>
     </div>
   );
 }

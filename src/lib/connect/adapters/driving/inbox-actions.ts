@@ -36,7 +36,8 @@ export type ArchiveInboxResult =
  * devuelve UNA causa con su redacción humana. El texto del motor no llega a pantalla.
  */
 export async function archiveInboxItemAction(raw: unknown): Promise<ArchiveInboxResult> {
-  const p = z.object({ conversationId: z.string().min(1), force: z.boolean().optional() }).safeParse(raw);
+  const normalized = typeof raw === "string" ? { conversationId: raw } : raw;
+  const p = z.object({ conversationId: z.string().min(1), force: z.boolean().optional() }).safeParse(normalized);
   if (!p.success) return { ok: false, message: "Datos inválidos." };
   const supabase = createClient();
   if (!supabase) return { ok: false, message: "Modo demo: la acción no se persiste." };
@@ -49,7 +50,7 @@ export async function archiveInboxItemAction(raw: unknown): Promise<ArchiveInbox
   const first = await supabase.rpc("connect_archive_entity_thread", { p_conversation_id: p.data.conversationId });
   if (first.error || p.data.force) {
     const fallback = await supabase.rpc("connect_archive_conversation", args);
-    if (fallback.error && !first.error) {
+    if (fallback.error) {
       const { reason, message } = archiveFailureMessage(first.error, fallback.error);
       return { ok: false, message, reason };
     }
