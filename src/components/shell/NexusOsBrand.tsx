@@ -6,8 +6,25 @@
  */
 export function NexusOsBrand() {
   return (
-    <div className="mt-2 flex items-center justify-center gap-2.5">
-      <svg width={36} height={36} viewBox="0 0 100 100" className="h-9 w-9 shrink-0" aria-hidden="true">
+    <div
+      className="mt-2 flex items-center justify-center gap-2.5"
+      style={{ maxWidth: "100%", width: "auto" }}
+    >
+      <svg
+        width={36}
+        height={36}
+        viewBox="0 0 100 100"
+        className="h-9 w-9 shrink-0"
+        aria-hidden="true"
+        style={{
+          width: "36px",
+          height: "36px",
+          maxWidth: "36px",
+          maxHeight: "36px",
+          minWidth: "36px",
+          minHeight: "36px",
+        }}
+      >
         <g stroke="#3B4CC8" strokeWidth="9" strokeLinecap="round" fill="none">
           <line x1="24" y1="24" x2="24" y2="76" />
           <line x1="76" y1="24" x2="76" y2="76" />

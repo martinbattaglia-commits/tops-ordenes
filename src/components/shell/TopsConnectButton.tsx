@@ -12,7 +12,21 @@ const TOPS_CONNECT_URL = "https://connect.logisticatops.com";
 
 function TopsConnectMark({ size = 18 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 100 100" width={size} height={size} aria-hidden="true" style={{ overflow: "visible" }}>
+    <svg
+      viewBox="0 0 100 100"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      style={{
+        overflow: "visible",
+        width: `${size}px`,
+        height: `${size}px`,
+        maxWidth: `${size}px`,
+        maxHeight: `${size}px`,
+        minWidth: `${size}px`,
+        minHeight: `${size}px`,
+      }}
+    >
       <g stroke="#3e62f4" strokeWidth="1.4" opacity="0.5">
         <line x1="14" y1="16" x2="50" y2="8" />
         <line x1="50" y1="8" x2="86" y2="18" />

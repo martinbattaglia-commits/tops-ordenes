@@ -10,6 +10,7 @@ export default function Loading() {
       <div className="flex flex-col items-center gap-3">
         <div
           className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-tops-blue-600 dark:border-neutral-700 dark:border-t-fg-link"
+          style={{ width: "32px", height: "32px", maxWidth: "32px", maxHeight: "32px" }}
           role="status"
           aria-label="Cargando"
         />
