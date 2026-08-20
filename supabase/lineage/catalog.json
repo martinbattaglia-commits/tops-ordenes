@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 227,
-  "no_ejecutables": 37,
+  "ejecutables": 228,
+  "no_ejecutables": 38,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -734,7 +734,7 @@
       "ledger_name": "0061_mi_espacio_permission",
       "provenance": "repo",
       "superseded_by": "0087_mi_espacio_permission_and_grant.sql",
-      "motivo": "Usa el valor de enum `mi_espacio` que recién agrega 0086. En produccion nunca se aplico; 0086+0087 la reemplazaron."
+      "motivo": "Usa el valor de enum `mi_espacio` que reci\u00e9n agrega 0086. En produccion nunca se aplico; 0086+0087 la reemplazaron."
     },
     {
       "id": "0061a_rrhh_modalidad_real.sql",
@@ -2166,7 +2166,7 @@
       "ledger_version": "L00193",
       "ledger_name": "0227_wa_atomic_status",
       "provenance": "repo (main)",
-      "motivo": "WhatsApp/Connect · estado atómico de mensajes. Llega desde main."
+      "motivo": "WhatsApp/Connect \u00b7 estado at\u00f3mico de mensajes. Llega desde main."
     },
     {
       "id": "0228_wa_provenance_backfill.sql",
@@ -2178,7 +2178,7 @@
       "ledger_version": "L00194",
       "ledger_name": "0228_wa_provenance_backfill",
       "provenance": "repo (main)",
-      "motivo": "WhatsApp/Connect · backfill de procedencia. Llega desde main."
+      "motivo": "WhatsApp/Connect \u00b7 backfill de procedencia. Llega desde main."
     },
     {
       "id": "0229_wa_inbound_queue.sql",
@@ -2190,7 +2190,7 @@
       "ledger_version": "L00195",
       "ledger_name": "0229_wa_inbound_queue",
       "provenance": "repo (main)",
-      "motivo": "WhatsApp/Connect · cola inbound. Llega desde main."
+      "motivo": "WhatsApp/Connect \u00b7 cola inbound. Llega desde main."
     },
     {
       "id": "0230_wa_forgery_lockdown.sql",
@@ -2202,7 +2202,7 @@
       "ledger_version": "L00196",
       "ledger_name": "0230_wa_forgery_lockdown",
       "provenance": "repo (main)",
-      "motivo": "WhatsApp/Connect · cierre anti-falsificación. Llega desde main."
+      "motivo": "WhatsApp/Connect \u00b7 cierre anti-falsificaci\u00f3n. Llega desde main."
     },
     {
       "id": "0231_custody_read_tenant_scope.sql",
@@ -2236,7 +2236,7 @@
       "ledger_version": "L00199",
       "ledger_name": "0233_wa_make_relay_outbox",
       "provenance": "repo (main)",
-      "motivo": "WhatsApp Relay · outbox durable Nexus → Make. Llega desde main."
+      "motivo": "WhatsApp Relay \u00b7 outbox durable Nexus \u2192 Make. Llega desde main."
     },
     {
       "id": "ROLLBACK_0233_wa_make_relay_outbox.sql",
@@ -2248,7 +2248,7 @@
       "ledger_version": "L00200",
       "ledger_name": "ROLLBACK_0233_wa_make_relay_outbox",
       "provenance": "repo (main)",
-      "motivo": "Inversa pre-activación de 0233. Script de reversión: NO es forward."
+      "motivo": "Inversa pre-activaci\u00f3n de 0233. Script de reversi\u00f3n: NO es forward."
     },
     {
       "id": "0234_link_notification_badges_tricolor.sql",
@@ -2260,7 +2260,7 @@
       "ledger_version": "L00201",
       "ledger_name": "0234_link_notification_badges_tricolor",
       "provenance": "repo (candidate/link-notif-tricolor-r1)",
-      "motivo": "Nexus Link · contadores reales de no-leidos y campanita de tres colores. Redefine v_connect_inbox / v_connect_unread_total conservando su contrato de columnas y agrega v_link_notification_badges. Solo vistas: no toca datos."
+      "motivo": "Nexus Link \u00b7 contadores reales de no-leidos y campanita de tres colores. Redefine v_connect_inbox / v_connect_unread_total conservando su contrato de columnas y agrega v_link_notification_badges. Solo vistas: no toca datos."
     },
     {
       "id": "ROLLBACK_0234_link_notification_badges_tricolor.sql",
@@ -2286,7 +2286,7 @@
       "ledger_version": "L00203",
       "ledger_name": "0235_link_notification_personal_read",
       "provenance": "repo (candidate/link-notif-tricolor-r1)",
-      "motivo": "Nexus Link · lectura individual de broadcasts (notification_reads + RPC) y aislamiento por destinatario dentro de la vista. Aditiva, sin backfill. Requiere 0234: redefine v_link_notification_badges, que 0234 crea."
+      "motivo": "Nexus Link \u00b7 lectura individual de broadcasts (notification_reads + RPC) y aislamiento por destinatario dentro de la vista. Aditiva, sin backfill. Requiere 0234: redefine v_link_notification_badges, que 0234 crea."
     },
     {
       "id": "ROLLBACK_0235_link_notification_personal_read.sql",
@@ -2339,7 +2339,7 @@
       "ledger_version": "L00207",
       "ledger_name": "0236_nexus_link_channel_capabilities",
       "provenance": "repo (candidate/link-media-fase-b)",
-      "motivo": "Nexus Link · frontera de canal: capacidades nexus_link.internal_chat.* y nexus_link.whatsapp.*, resolvedor nexus_link_can() y filtro de canal dentro de v_connect_inbox. Aditiva: no quita ningun permiso vigente. Requiere 0234, que define la vista que redefine. CORREGIDO en C5 (2026-08-14): la columna real de permissions es label, no name; y module pasa de 'connect' a 'nexus_link_chat'/'nexus_link_whatsapp' (ver 0235a) porque 'connect' ya no tenia action libre bajo unique(module,action)."
+      "motivo": "Nexus Link \u00b7 frontera de canal: capacidades nexus_link.internal_chat.* y nexus_link.whatsapp.*, resolvedor nexus_link_can() y filtro de canal dentro de v_connect_inbox. Aditiva: no quita ningun permiso vigente. Requiere 0234, que define la vista que redefine. CORREGIDO en C5 (2026-08-14): la columna real de permissions es label, no name; y module pasa de 'connect' a 'nexus_link_chat'/'nexus_link_whatsapp' (ver 0235a) porque 'connect' ya no tenia action libre bajo unique(module,action)."
     },
     {
       "id": "ROLLBACK_0236_nexus_link_channel_capabilities.sql",
@@ -2365,7 +2365,7 @@
       "ledger_version": "L00209",
       "ledger_name": "0237_nexus_link_channel_rls",
       "provenance": "repo (candidate/link-media-fase-b)",
-      "motivo": "Nexus Link · frontera de canal ESTRUCTURAL: predicado _connect_channel_allowed en la RLS de mensajes, adjuntos y conversaciones (cierra realtime), en el porton de la signed URL (descarga), en connect_search (busqueda) y en la policy de storage por ruta. Requiere 0236, que define nexus_link_can()."
+      "motivo": "Nexus Link \u00b7 frontera de canal ESTRUCTURAL: predicado _connect_channel_allowed en la RLS de mensajes, adjuntos y conversaciones (cierra realtime), en el porton de la signed URL (descarga), en connect_search (busqueda) y en la policy de storage por ruta. Requiere 0236, que define nexus_link_can()."
     },
     {
       "id": "ROLLBACK_0237_nexus_link_channel_rls.sql",
@@ -2391,7 +2391,7 @@
       "ledger_version": "L00211",
       "ledger_name": "0238_nexus_link_upload_lifecycle",
       "provenance": "repo (candidate/link-media-fase-b)",
-      "motivo": "Nexus Link · ciclo de vida de la subida: tabla connect_pending_uploads, transicion atomica pending→finalized, barrido acotado de pendientes vencidas, trigger que ata el adjunto a su subida finalizada y alineacion de allowed_mime_types del bucket connect-files (HEIC/HEIF/PPTX). Requiere 0237, que define _connect_channel_allowed()."
+      "motivo": "Nexus Link \u00b7 ciclo de vida de la subida: tabla connect_pending_uploads, transicion atomica pending\u2192finalized, barrido acotado de pendientes vencidas, trigger que ata el adjunto a su subida finalizada y alineacion de allowed_mime_types del bucket connect-files (HEIC/HEIF/PPTX). Requiere 0237, que define _connect_channel_allowed()."
     },
     {
       "id": "ROLLBACK_0238_nexus_link_upload_lifecycle.sql",
@@ -2417,7 +2417,7 @@
       "ledger_version": "L00213",
       "ledger_name": "0239_nexus_link_participants_channel_rls",
       "provenance": "repo (candidate/link-media-fase-b)",
-      "motivo": "Cierre de H1: connect_participants.external_ref (el telefono de la contraparte de WhatsApp) se leia sin predicado de canal — 0236/0237 no tocaron esa tabla. Agrega _connect_channel_allowed() (0237, sin funcion nueva) a la policy SELECT, como AND externo sobre _connect_is_member() E is_admin()."
+      "motivo": "Cierre de H1: connect_participants.external_ref (el telefono de la contraparte de WhatsApp) se leia sin predicado de canal \u2014 0236/0237 no tocaron esa tabla. Agrega _connect_channel_allowed() (0237, sin funcion nueva) a la policy SELECT, como AND externo sobre _connect_is_member() E is_admin()."
     },
     {
       "id": "ROLLBACK_0239_nexus_link_participants_channel_rls.sql",
@@ -2467,7 +2467,7 @@
       "ledger_version": "L00217",
       "ledger_name": "0240_clientes_permission_module",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Clientes nativos · agrega el modulo clientes al enum de permisos en una transaccion aislada, antes de materializar capacidades."
+      "motivo": "Clientes nativos \u00b7 agrega el modulo clientes al enum de permisos en una transaccion aislada, antes de materializar capacidades."
     },
     {
       "id": "ROLLBACK_0240_clientes_permission_module.sql",
@@ -2493,7 +2493,7 @@
       "ledger_version": "L00219",
       "ledger_name": "0241_clients_native_master",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Clientes nativos · maestro independiente de Clientify, normalizacion y checksum CUIT fail-closed, busqueda, unicidad canonica y ledger de eventos."
+      "motivo": "Clientes nativos \u00b7 maestro independiente de Clientify, normalizacion y checksum CUIT fail-closed, busqueda, unicidad canonica y ledger de eventos."
     },
     {
       "id": "ROLLBACK_0241_clients_native_master.sql",
@@ -2519,7 +2519,7 @@
       "ledger_version": "L00221",
       "ledger_name": "0242_clients_atomic_mutations",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Clientes nativos · alta, edicion y desactivacion logica con CUIT validado, bloqueo concurrente, CAS, triestado y auditoria en la misma transaccion."
+      "motivo": "Clientes nativos \u00b7 alta, edicion y desactivacion logica con CUIT validado, bloqueo concurrente, CAS, triestado y auditoria en la misma transaccion."
     },
     {
       "id": "ROLLBACK_0242_clients_atomic_mutations.sql",
@@ -2550,7 +2550,7 @@
       "ledger_version": "L00223",
       "ledger_name": "0243_purchase_order_price_lifecycle",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Ordenes de compra · precio conocido, estimado o pendiente; cabecera reconstruida desde lineas, ARS explicito, conciliacion congruente con factura y diferencias auditadas. El CHECK de subtotal conserva con NOT VALID exactamente dos excepciones legacy verificadas, pero sigue rechazando INSERT/UPDATE nuevos incompatibles."
+      "motivo": "Ordenes de compra \u00b7 precio conocido, estimado o pendiente; cabecera reconstruida desde lineas, ARS explicito, conciliacion congruente con factura y diferencias auditadas. El CHECK de subtotal conserva con NOT VALID exactamente dos excepciones legacy verificadas, pero sigue rechazando INSERT/UPDATE nuevos incompatibles."
     },
     {
       "id": "ROLLBACK_0243_purchase_order_price_lifecycle.sql",
@@ -2578,7 +2578,7 @@
       "ledger_version": "L00225",
       "ledger_name": "0244_service_order_pricing_lifecycle",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Ordenes de Servicio · tarifario versionado, precio particular aprobado, moneda explicita, snapshot inmutable, prestacion y facturacion separadas con motivo, autorizador y ledger."
+      "motivo": "Ordenes de Servicio \u00b7 tarifario versionado, precio particular aprobado, moneda explicita, snapshot inmutable, prestacion y facturacion separadas con motivo, autorizador y ledger."
     },
     {
       "id": "ROLLBACK_0244_service_order_pricing_lifecycle.sql",
@@ -2604,7 +2604,7 @@
       "ledger_version": "L00227",
       "ledger_name": "20260815002748_service_unit_m2",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Tarifario OS · agrega m2 al enum en transaccion aislada para poder registrar unidad y cantidad sin fijar un precio."
+      "motivo": "Tarifario OS \u00b7 agrega m2 al enum en transaccion aislada para poder registrar unidad y cantidad sin fijar un precio."
     },
     {
       "id": "ROLLBACK_20260815002748_service_unit_m2.sql",
@@ -2631,7 +2631,7 @@
       "ledger_version": "L00229",
       "ledger_name": "20260815002807_service_tariff_m2_rates",
       "provenance": "repo (candidate/clientes-ordenes-precios-fase-a-r3)",
-      "motivo": "Almacenamiento m2 · registra ambos conceptos como A COTIZAR, rate NULL y requires_quote=true; no incorpora valores orientativos ni conversion de moneda."
+      "motivo": "Almacenamiento m2 \u00b7 registra ambos conceptos como A COTIZAR, rate NULL y requires_quote=true; no incorpora valores orientativos ni conversion de moneda."
     },
     {
       "id": "ROLLBACK_20260815002807_service_tariff_m2_rates.sql",
@@ -2987,7 +2987,7 @@
       "ledger_version": "L00256",
       "ledger_name": "ROLLBACK_0260_nexus_link_handover_archived",
       "provenance": "repo (frente/nexus-link-ui-handover-fix; commit 2d6512e)",
-      "motivo": "Inversa lógica asociada a 0260; no integra el plan forward."
+      "motivo": "Inversa l\u00f3gica asociada a 0260; no integra el plan forward."
     },
     {
       "id": "0261_connect_archive_force_override.sql",
@@ -3002,7 +3002,7 @@
       "ledger_version": "L00257",
       "ledger_name": "0261_connect_archive_force_override",
       "provenance": "repo (frente/meta-wa-complete-engine-and-ux; commit 821873e)",
-      "motivo": "Actualización de connect_archive_conversation aceptando force. Remediación: eliminación explícita de sobrecarga mono-argumento previa (0260)."
+      "motivo": "Actualizaci\u00f3n de connect_archive_conversation aceptando force. Remediaci\u00f3n: eliminaci\u00f3n expl\u00edcita de sobrecarga mono-argumento previa (0260)."
     },
     {
       "id": "ROLLBACK_0261_connect_archive_force_override.sql",
@@ -3014,7 +3014,7 @@
       "ledger_version": "L00258",
       "ledger_name": "ROLLBACK_0261_connect_archive_force_override",
       "provenance": "repo (frente/meta-wa-complete-engine-and-ux; commit 821873e)",
-      "motivo": "Inversa de 0261: eliminación de firma bi-argumento antes de restaurar firma mono-argumento de 0260."
+      "motivo": "Inversa de 0261: eliminaci\u00f3n de firma bi-argumento antes de restaurar firma mono-argumento de 0260."
     },
     {
       "id": "0261a_finance_permission_enums.sql",
@@ -3038,7 +3038,7 @@
       "ledger_version": "L00260",
       "ledger_name": "ROLLBACK_0261a_finance_permission_enums",
       "provenance": "repo (frente/remediacion-0261-0261a)",
-      "motivo": "Inversa lógica no destructiva de 0261a: no-op deliberado conforme a la política canónica de enums en PostgreSQL."
+      "motivo": "Inversa l\u00f3gica no destructiva de 0261a: no-op deliberado conforme a la pol\u00edtica can\u00f3nica de enums en PostgreSQL."
     },
     {
       "id": "0262_finance_core_foundation.sql",
@@ -3067,31 +3067,57 @@
       "motivo": "Inversa logica e idempotente de 0262"
     },
     {
+      "id": "0262a_finance_core_schema_canonical_alignment.sql",
+      "filename": "0262a_finance_core_schema_canonical_alignment.sql",
+      "sha256": "1e4f8589077345bc4cf6f7270c744800c2dce489c1431afda35e35f6fef92c75",
+      "orden": 263,
+      "requires": [
+        "0262_finance_core_foundation.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00263",
+      "ledger_name": "0262a_finance_core_schema_canonical_alignment",
+      "provenance": "repo (frente/remediacion-0262a-finance-canonical-alignment)",
+      "motivo": "Remediacion del incidente de provenance 0262: alineacion canonica dual-state del esquema de Finanzas."
+    },
+    {
+      "id": "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
+      "filename": "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
+      "sha256": "d6d2bb64dc1cbb6b5635217a5857deb7c9d395cfdd3d29079ee681a906f73099",
+      "orden": 264,
+      "requires": [],
+      "estado": "rollback",
+      "ledger_version": "L00264",
+      "ledger_name": "ROLLBACK_0262a_finance_core_schema_canonical_alignment",
+      "provenance": "repo (frente/remediacion-0262a-finance-canonical-alignment)",
+      "motivo": "Inversa logica condicional y fail-closed de 0262a."
+    },
+    {
       "id": "0263_custody_pod_signature_and_reception_idempotency.sql",
       "filename": "0263_custody_pod_signature_and_reception_idempotency.sql",
       "sha256": "ebcd157062c35747fc12925e83ca7e848be726bfb5fee16acd1b5f47632be395",
-      "orden": 263,
+      "orden": 265,
       "requires": [
         "0253_custody_egress_gate.sql",
         "0258_custody_evaluated_head_witness.sql"
       ],
       "estado": "active",
-      "ledger_version": "L00263",
+      "ledger_version": "L00265",
       "ledger_name": "0263_custody_pod_signature_and_reception_idempotency",
       "provenance": "repo (codex/remediacion-custodia-wms)",
-      "motivo": "Endurece firma y POD con capacidad explícita, atestación server-side y snapshot de liberación; retira las vías legacy manipulables y hace atómica e idempotente la creación-confirmación de recepciones WMS."
+      "motivo": "Endurece firma y POD con capacidad expl\u00edcita, atestaci\u00f3n server-side y snapshot de liberaci\u00f3n; retira las v\u00edas legacy manipulables y hace at\u00f3mica e idempotente la creaci\u00f3n-confirmaci\u00f3n de recepciones WMS."
     },
     {
       "id": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
       "filename": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
       "sha256": "263fa1b5e84aae4095c150673124e286a65e297c961d12880ef21a5263e4706b",
-      "orden": 264,
+      "orden": 266,
       "requires": [],
       "estado": "rollback",
-      "ledger_version": "L00264",
+      "ledger_version": "L00266",
       "ledger_name": "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency",
       "provenance": "repo (codex/remediacion-custodia-wms)",
-      "motivo": "Inversa lógica data-preserving de 0263: retira superficies nuevas, restaura RPC legacy y conserva ledgers de idempotencia y autorizaciones si contienen auditoría."
+      "motivo": "Inversa l\u00f3gica data-preserving de 0263: retira superficies nuevas, restaura RPC legacy y conserva ledgers de idempotencia y autorizaciones si contienen auditor\u00eda."
     }
   ]
 }
