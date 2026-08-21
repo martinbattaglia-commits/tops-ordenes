@@ -2,40 +2,29 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { env } from "@/lib/env";
+import { signIn, sendMagicLink } from "./actions";
+import { safeAuthNext } from "@/lib/supabase/auth-recovery-shared";
 
-/**
- * Login form — patrón Supabase Auth client-side estándar.
- * El browser ejecuta signInWithPassword directamente → request visible en
- * DevTools (POST /auth/v1/token) → cookies seteadas automáticamente por
- * @supabase/ssr → middleware del server las lee en la siguiente navegación.
- *
- * NO usa Server Actions porque ocultan el flujo del lado del browser y
- * dificultan debug.
- *
- * NOTA (UI 2026): este componente fue rediseñado visualmente para el nuevo
- * acceso corporativo de TOPS NEXUS. La LÓGICA DE AUTENTICACIÓN es idéntica a
- * la versión previa (signInWithPassword + magic link + recuperación). Solo
- * cambió la capa visual: clases `tn-*` definidas en login-theme.css.
- */
 export default function LoginForm({
   redirectTo,
   initialError,
+  initialInfo,
 }: {
   redirectTo?: string;
   initialError?: string;
+  initialInfo?: string;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(initialInfo ?? null);
   const [loading, setLoading] = useState(false);
   const [granted, setGranted] = useState(false);
   const [emailError, setEmailError] = useState(false);
   const [passError, setPassError] = useState(false);
+  const safeRedirectTo = safeAuthNext(redirectTo);
 
   const isValidEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
@@ -44,7 +33,6 @@ export default function LoginForm({
     setError(null);
     setInfo(null);
 
-    // Validación visual de campos (no toca la lógica de auth)
     let ok = true;
     if (!isValidEmail(email.trim())) {
       setEmailError(true);
@@ -56,49 +44,22 @@ export default function LoginForm({
     }
     if (!ok) return;
 
-    if (env.app.demoMode) {
-      setError(
-        "La app está corriendo en DEMO MODE (NEXT_PUBLIC_DEMO_MODE=1). En este modo no hay autenticación real. Para producción, seteá NEXT_PUBLIC_DEMO_MODE=0 + las keys de Supabase en Netlify."
-      );
-      return;
-    }
-
-    const supabase = createClient();
-    if (!supabase) {
-      setError(
-        "Supabase no está configurado. Falta NEXT_PUBLIC_SUPABASE_URL y/o NEXT_PUBLIC_SUPABASE_ANON_KEY en las env vars de Netlify."
-      );
-      return;
-    }
-
     setLoading(true);
-    // Log claro para debug en DevTools console
-    // eslint-disable-next-line no-console
-    console.log("[TOPS] login start", { email });
-
-    const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
+    const result = await signIn({
+      email: email.trim(),
       password,
+      redirectTo: safeRedirectTo,
     });
 
-    // eslint-disable-next-line no-console
-    console.log("[TOPS] login response", { user: data?.user?.id ?? null, error: authError });
-
-    if (authError) {
+    if (!result.ok) {
       setLoading(false);
-      setError(authError.message);
-      return;
-    }
-    if (!data?.session) {
-      setLoading(false);
-      setError("La autenticación no devolvió sesión. Revisá la configuración del proyecto.");
+      setError(result.error ?? "Credenciales inválidas. Verificá tu correo y contraseña.");
       return;
     }
 
-    // Acceso concedido — feedback premium breve y luego redirect real.
     setLoading(false);
     setGranted(true);
-    router.replace(redirectTo ?? "/dashboard");
+    router.replace(result.redirect ?? safeRedirectTo);
     router.refresh();
   };
 
@@ -111,28 +72,15 @@ export default function LoginForm({
       return;
     }
 
-    if (env.app.demoMode) {
-      setError("Demo mode: los magic links no se envían.");
-      return;
-    }
-
-    const supabase = createClient();
-    if (!supabase) {
-      setError("Supabase no está configurado.");
-      return;
-    }
-
     setLoading(true);
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${redirectTo ?? "/dashboard"}`,
-      },
+    const result = await sendMagicLink({
+      email: email.trim(),
+      redirectTo: safeRedirectTo,
     });
     setLoading(false);
 
-    if (otpError) {
-      setError(otpError.message);
+    if (!result.ok) {
+      setError(result.error ?? "No pudimos procesar la solicitud.");
       return;
     }
     setInfo("Te enviamos un link de acceso a tu casilla. Revisá la bandeja de entrada.");
@@ -251,7 +199,7 @@ export default function LoginForm({
         </div>
       </div>
 
-      {/* Alertas de autenticación (error / acceso denegado / info) */}
+      {/* Alertas de autenticación */}
       {error && (
         <div className="tn-alert tn-danger" role="alert">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">

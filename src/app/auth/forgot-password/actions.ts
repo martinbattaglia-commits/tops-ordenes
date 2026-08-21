@@ -27,18 +27,19 @@ export async function sendPasswordResetLink(
   if (env.app.demoMode) return { ok: true };
 
   const supabase = createClient();
-  if (!supabase) return { ok: false, error: "Supabase no configurado." };
+  if (!supabase) return { ok: false, error: "Error de conexión. Volvé a intentarlo en unos momentos." };
 
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const origin = host ? `${proto}://${host}` : env.app.url;
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
+      redirectTo: `${env.app.url}/auth/recovery`,
+    });
+    if (error) {
+      console.error("[forgot-password] Solicitud recovery finalizada con código:", (error as { code?: string }).code || "auth_notice");
+    }
+  } catch {
+    console.error("[forgot-password] Error de red en solicitud recovery");
+  }
 
-  // El link del email pasa por el callback para canjear el `code` (PKCE) por una
-  // sesión ANTES de llegar al form. Sin este paso `updateUser` falla con
-  // "Auth session missing!" porque no hay sesión establecida.
-  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {
-    redirectTo: `${origin}/api/auth/callback?next=/auth/reset-password`,
-  });
-  if (error) return { ok: false, error: error.message };
+  // Anti-enumeración de usuarios: respuesta indistinguible
   return { ok: true };
 }

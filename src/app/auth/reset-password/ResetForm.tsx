@@ -1,88 +1,41 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Icon } from "@/components/Icon";
-import { createClient } from "@/lib/supabase/client";
-import { env } from "@/lib/env";
+import { completePasswordReset } from "./actions";
 
-export default function ResetForm() {
+export default function ResetForm({
+  authorized,
+  initialError,
+}: {
+  authorized: boolean;
+  initialError?: string;
+}) {
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError ?? null);
+  const [success, setSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
-
-  // Estado del link de recuperación: mientras `checking` resolvemos si la URL
-  // trae una sesión válida; `ready` indica que ya hay sesión para poder guardar.
-  const [checking, setChecking] = useState(true);
-  const [ready, setReady] = useState(false);
-
-  const supabase = useMemo(() => createClient(), []);
-
-  // El cliente de browser (@supabase/ssr) detecta automáticamente el token que
-  // Supabase deja en la URL al volver del email de recuperación —ya sea `?code=`
-  // (PKCE) o `#access_token=...` (hash)— y establece la sesión sincronizándola a
-  // cookies. Esperamos ese evento antes de habilitar el guardado; sin sesión,
-  // updateUser fallaría con "Auth session missing!".
-  useEffect(() => {
-    if (env.app.demoMode) {
-      setReady(true);
-      setChecking(false);
-      return;
-    }
-    if (!supabase) {
-      setError("Supabase no está configurado.");
-      setChecking(false);
-      return;
-    }
-
-    let active = true;
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
-      if (session) {
-        setReady(true);
-        setChecking(false);
-      }
-    });
-
-    // Chequeo inicial por si la sesión ya quedó establecida (p. ej. el callback
-    // ya canjeó el code) antes de montar este componente.
-    supabase.auth.getSession().then(({ data }) => {
-      if (!active) return;
-      if (data.session) setReady(true);
-      setChecking(false);
-    });
-
-    return () => {
-      active = false;
-      sub.subscription.unsubscribe();
-    };
-  }, [supabase]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password.length < 8) return setError("Mínimo 8 caracteres.");
+    if (!authorized) return setError("La sesión de recuperación no es válida. Pedí un enlace nuevo.");
+    if (password.length < 8) return setError("La contraseña debe tener al menos 8 caracteres.");
     if (password !== confirm) return setError("Las contraseñas no coinciden.");
 
     startTransition(async () => {
-      if (env.app.demoMode) {
-        router.replace("/dashboard");
-        router.refresh();
+      const result = await completePasswordReset({ password, confirmation: confirm });
+      if (!result.ok) {
+        if (result.passwordUpdated) setSuccess(true);
+        setError(result.error ?? "No pudimos guardar la contraseña.");
         return;
       }
-      if (!supabase) {
-        setError("Supabase no está configurado.");
-        return;
-      }
-
-      const { error: updErr } = await supabase.auth.updateUser({ password });
-      if (updErr) {
-        setError(updErr.message);
-        return;
-      }
-      router.replace("/dashboard");
+      setSuccess(true);
+      router.replace("/login?reset=success");
       router.refresh();
     });
   };
@@ -125,10 +78,21 @@ export default function ResetForm() {
         />
       </div>
 
-      {!checking && !ready && !error && (
+      {!authorized && !error && (
         <div className="rounded-md bg-status-warning/10 text-status-warning text-sm px-3 py-2 border border-status-warning/20">
-          El link de recuperación es inválido o expiró. Pedí uno nuevo desde
-          «Olvidé mi contraseña».
+          El enlace no contiene una sesión de recuperación válida.
+        </div>
+      )}
+
+      {!authorized && (
+        <Link href="/auth/forgot-password" className="btn btn-secondary w-full text-center">
+          Enviar un nuevo enlace
+        </Link>
+      )}
+
+      {success && (
+        <div className="rounded-md bg-status-success/10 text-status-success text-sm px-3 py-2 border border-status-success/20">
+          Contraseña actualizada. Iniciá sesión con tu nueva contraseña.
         </div>
       )}
 
@@ -141,9 +105,9 @@ export default function ResetForm() {
       <button
         type="submit"
         className="btn btn-primary w-full"
-        disabled={pending || checking || !ready}
+        disabled={pending || !authorized || success}
       >
-        {pending ? "Guardando…" : checking ? "Validando link…" : "Guardar contraseña"}
+        {pending ? "Guardando…" : "Guardar contraseña"}
       </button>
     </form>
   );

@@ -7,6 +7,7 @@ import {
   depotManagerRpcRowValid,
   type DepotManagerRpcRow,
 } from "@/lib/rbac/depot-manager";
+import { authenticatedAuthTransitionAllowed, extractSessionId } from "@/lib/supabase/auth-recovery";
 
 /**
  * Mantiene la sesión refrescada en cada request y bloquea las rutas
@@ -42,6 +43,10 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const sessionId = extractSessionId(session);
 
   const { pathname } = request.nextUrl;
   // Rutas estrictamente públicas. Cuidado al agregar nuevas: cualquier ruta acá
@@ -66,6 +71,10 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     pathname === "/login" ||
     pathname === "/auth/forgot-password" ||
+    pathname === "/auth/recovery" ||
+    pathname === "/auth/recovery/confirm" ||
+    pathname === "/auth/invite" ||
+    pathname === "/auth/invite/confirm" ||
     pathname === "/auth/reset-password" ||
     pathname.startsWith("/api/auth") ||
     pathname === "/api/whatsapp/webhook" ||
@@ -159,6 +168,22 @@ export async function updateSession(request: NextRequest) {
           headers: { "Content-Type": "text/plain; charset=utf-8" },
         });
       }
+
+      // Auth transicional no es superficie empresarial: se habilitan sólo
+      // rutas/métodos exactos y contexto HttpOnly emitido por el servidor.
+      // La identidad depot-manager sigue exigiendo el par UUID+email exacto.
+      if (
+        await authenticatedAuthTransitionAllowed({
+          pathname,
+          method: request.method,
+          cookie: (name) => request.cookies.get(name)?.value,
+          user,
+          sessionId,
+        })
+      ) {
+        return response;
+      }
+
       const { data, error } = await supabase
         .rpc("nexus_depot_manager_scope")
         .single();

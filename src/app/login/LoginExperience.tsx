@@ -23,9 +23,11 @@ const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "
 export default function LoginExperience({
   redirectTo,
   initialError,
+  initialInfo,
 }: {
   redirectTo?: string;
   initialError?: string;
+  initialInfo?: string;
 }) {
   // Splash: por defecto NO bloquea (SSR/no-JS ven el login directo). El cliente
   // decide si mostrarlo según sessionStorage.
@@ -263,7 +265,11 @@ export default function LoginExperience({
           </div>
 
           <div className="tn-form-scroll">
-            <LoginForm redirectTo={redirectTo} initialError={initialError} />
+            <LoginForm
+              redirectTo={redirectTo}
+              initialError={initialError}
+              initialInfo={initialInfo}
+            />
           </div>
         </section>
       </div>
