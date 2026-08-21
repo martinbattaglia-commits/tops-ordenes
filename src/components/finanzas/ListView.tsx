@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { Icon } from "@/components/Icon";
 import type { FinanceUnifiedTransaction, FinanceCurrency } from "@/lib/finanzas/types";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
@@ -16,125 +16,80 @@ export function ListView({
   transactions,
   onSelectTransaction,
 }: ListViewProps) {
-  // Agrupar por fecha
-  const groupsByDate = new Map<string, FinanceUnifiedTransaction[]>();
-  for (const tx of transactions) {
-    const list = groupsByDate.get(tx.date) || [];
-    list.push(tx);
-    groupsByDate.set(tx.date, list);
-  }
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const sortedDates = Array.from(groupsByDate.keys()).sort();
+  const filtered = transactions.filter((tx) => {
+    if (!searchTerm.trim()) return true;
+    const q = searchTerm.toLowerCase();
+    return (
+      tx.concept.toLowerCase().includes(q) ||
+      tx.counterpart?.toLowerCase().includes(q) ||
+      tx.categoryName.toLowerCase().includes(q) ||
+      tx.accountName.toLowerCase().includes(q)
+    );
+  });
 
   return (
-    <div className="space-y-6">
-      {sortedDates.length === 0 ? (
-        <div className="p-8 text-center bg-white rounded-xl border border-[#DDE2EB] text-[#687087]">
-          No hay movimientos registrados para el período seleccionado.
+    <div className="bg-bg-surface rounded-xl border border-stroke-soft shadow-2xs overflow-hidden transition-colors">
+      <div className="p-4 border-b border-stroke-soft bg-bg-surface-alt flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Icon name="search" className="absolute left-3 top-2.5 w-4 h-4 text-fg-muted" />
+          <input
+            type="text"
+            placeholder="Buscar por concepto o cuenta..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-stroke-soft bg-bg-surface text-fg-primary focus:outline-none focus:ring-2 focus:ring-tops-blue-700 dark:focus:ring-blue-400 placeholder:text-fg-muted"
+          />
         </div>
-      ) : (
-        sortedDates.map((dateStr) => {
-          const dayTxs = groupsByDate.get(dateStr) || [];
-          const dayNet = dayTxs.reduce((acc, t) => {
-            if (t.direction === "ingreso") return acc + t.amount;
-            if (t.direction === "egreso") return acc - t.amount;
-            return acc;
-          }, 0);
+        <div className="text-xs text-fg-muted font-semibold">
+          {filtered.length} ítems en vista lista
+        </div>
+      </div>
 
-          return (
-            <div key={dateStr} className="bg-white rounded-xl border border-[#DDE2EB] shadow-xs overflow-hidden">
-              {/* Header de fecha */}
-              <div className="flex items-center justify-between px-5 py-3 bg-[#F4F5F8] border-b border-[#DDE2EB]">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#050555]">
-                    {fmtDate(dateStr)}
-                  </span>
-                  <span className="text-xs text-[#687087]">
-                    ({dayTxs.length} {dayTxs.length === 1 ? "movimiento" : "movimientos"})
-                  </span>
+      <div className="divide-y divide-stroke-soft">
+        {filtered.length === 0 ? (
+          <div className="py-12 text-center text-fg-muted text-xs">
+            No se encontraron transacciones.
+          </div>
+        ) : (
+          filtered.map((tx) => (
+            <div
+              key={tx.id}
+              onClick={() => onSelectTransaction?.(tx)}
+              className="p-4 hover:bg-bg-surface-alt flex items-center justify-between cursor-pointer transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                  tx.direction === "ingreso" ? "bg-emerald-50 text-status-success dark:bg-emerald-950/60 dark:text-emerald-400" :
+                  tx.direction === "egreso" ? "bg-rose-50 text-tops-red dark:bg-rose-950/60 dark:text-rose-400" :
+                  "bg-blue-50 text-tops-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
+                }`}>
+                  {tx.direction === "ingreso" ? "↓" : tx.direction === "egreso" ? "↑" : "⇄"}
                 </div>
-
-                <div className="text-xs font-semibold">
-                  <span className="text-[#687087] mr-1">Neto del día:</span>
-                  <span className={dayNet >= 0 ? "text-[#137333]" : "text-[#C9070D]"}>
-                    {dayNet >= 0 ? "+" : ""}{fmtCurrency(dayNet)}
-                  </span>
+                <div>
+                  <div className="text-xs font-bold text-fg-primary">{tx.concept}</div>
+                  <div className="text-[11px] text-fg-muted mt-0.5">
+                    {fmtDate(tx.date)} · {tx.accountName} ({tx.accountGroup}) · {tx.categoryName}
+                  </div>
                 </div>
               </div>
 
-              {/* Lista de movimientos */}
-              <div className="divide-y divide-[#DDE2EB]">
-                {dayTxs.map((tx) => {
-                  let badgeBg = "bg-[#E6F4EA] text-[#137333]";
-                  if (tx.direction === "egreso") badgeBg = "bg-[#FBE9EA] text-[#C9070D]";
-                  if (tx.direction === "transferencia") badgeBg = "bg-[#E9EEF5] text-[#214576]";
-
-                  return (
-                    <div
-                      key={tx.id}
-                      onClick={() => onSelectTransaction?.(tx)}
-                      className="flex items-center justify-between p-4 hover:bg-[#F4F5F8] cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${badgeBg}`}>
-                          {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : "⇄"}
-                        </div>
-
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-bold text-[#111331]">
-                              {tx.concept}
-                            </span>
-                            {tx.counterpart && (
-                              <span className="text-xs text-[#687087]">· {tx.counterpart}</span>
-                            )}
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-[#E9EEF5] text-[#214576]">
-                              {tx.categoryName}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-3 text-xs text-[#687087] mt-1">
-                            <span>Cuenta: {tx.accountName}</span>
-                            <span>•</span>
-                            <span className="capitalize">{tx.status}</span>
-                            <span>•</span>
-                            <span className="font-medium text-[#050555]">
-                              {tx.isReal ? "Hecho Tesorería" : "Proyección Finanzas"}
-                            </span>
-                            {tx.certainty && (
-                              <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
-                                tx.certainty === "alta" ? "bg-emerald-50 text-emerald-700" :
-                                tx.certainty === "media" ? "bg-amber-50 text-amber-700" :
-                                "bg-rose-50 text-rose-700"
-                              }`}>
-                                Certeza {tx.certainty}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right pl-4">
-                        <div className={`text-base font-bold tabular-nums ${
-                          tx.direction === "ingreso" ? "text-[#137333]" :
-                          tx.direction === "egreso" ? "text-[#C9070D]" :
-                          "text-[#214576]"
-                        }`}>
-                          {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : ""}
-                          {fmtCurrency(tx.amount)}
-                        </div>
-                        <div className="text-[10px] text-[#687087] uppercase font-medium">
-                          {tx.currency}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="text-right">
+                <div className={`text-sm font-bold tabular-nums ${
+                  tx.direction === "ingreso" ? "text-status-success" : "text-tops-red"
+                }`}>
+                  {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : ""}
+                  {currency === "ARS" ? fmtCurrency(tx.amount) : `U$S ${tx.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 })}`}
+                </div>
+                <div className="text-[10px] text-fg-muted font-medium uppercase">
+                  {tx.status}
+                </div>
               </div>
             </div>
-          );
-        })
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }

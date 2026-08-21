@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function FinanzasLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#F4F5F8]">
+    <div className="min-h-screen bg-bg-page text-fg-primary transition-colors duration-200">
       {children}
     </div>
   );

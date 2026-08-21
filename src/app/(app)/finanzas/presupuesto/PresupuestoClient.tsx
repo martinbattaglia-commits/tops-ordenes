@@ -30,10 +30,7 @@ export function PresupuestoClient({
       />
 
       <BudgetPlanView
-        versions={initialVersions}
-        activeVersion={initialActiveVersion}
         categories={initialCategories}
-        assumptions={sampleAssumptions}
         currency={currency}
       />
     </div>

@@ -43,12 +43,11 @@ const FALLBACK_PRICING: ServicePricingPayload = {
   pricesVisible: false,
 };
 
-interface ConceptoLibre {
-  enabled: boolean;
-  label: string;
-  price: number;
-  observ: string;
-}
+import {
+  type ConceptoLibre,
+  type ConceptoLibreItem,
+  normalizeConceptoLibreItems,
+} from "@/lib/orders/concepto-libre";
 
 interface PriceOverride {
   rate: string;
@@ -342,20 +341,25 @@ export default function NewOrderWizard({
       });
     }
     const cl = data.concepto_libre;
-    if (pricing.canAdjust && cl.enabled && cl.label.trim() && cl.price > 0) {
-      out.push({
-        key: "concepto-libre",
-        label: cl.label.trim(),
-        qty_requested: 1,
-        qty_effective: 1,
-        rate: cl.price,
-        unit: "un",
-        subtotal: cl.price,
-        min_applied: false,
-        service_slug: "concepto-libre",
-        category: "personalizado",
-        pricing_kind: "manual",
-        pricing_reason: cl.observ.trim(),
+    if (pricing.canAdjust && cl.enabled) {
+      const items = normalizeConceptoLibreItems(cl);
+      items.forEach((item, index) => {
+        if (item.label.trim() && item.price > 0) {
+          out.push({
+            key: `concepto-libre-${item.id || index}`,
+            label: item.label.trim(),
+            qty_requested: 1,
+            qty_effective: 1,
+            rate: item.price,
+            unit: "un",
+            subtotal: item.price,
+            min_applied: false,
+            service_slug: "concepto-libre",
+            category: "personalizado",
+            pricing_kind: "manual",
+            pricing_reason: item.observ.trim(),
+          });
+        }
       });
     }
     // Bonificaciones comerciales: por cada bonificación cuyo destino siga
@@ -432,9 +436,11 @@ export default function NewOrderWizard({
     if (stepIdx === 1) return Boolean(data.depot && data.operator_id);
     if (stepIdx === 2) {
       const cl = data.concepto_libre;
+      const items = normalizeConceptoLibreItems(cl);
       const conceptoOk =
         pricing.canAdjust &&
-        cl.enabled && cl.label.trim().length > 0 && cl.price > 0 && cl.observ.trim().length >= 3;
+        cl.enabled &&
+        items.some((it) => it.label.trim().length > 0 && it.price > 0 && it.observ.trim().length >= 3);
       const haySeleccion = data.services.length > 0 || data.transports.length > 0 || conceptoOk;
       // R-7 · Este es el wizard COMERCIAL. La cotización pendiente pertenece al
       // flujo operativo del encargado, que usa OperationalOrderWizard: una OS
@@ -549,10 +555,13 @@ export default function NewOrderWizard({
       // observación general de la orden — así no se pierde al guardar
       // (la línea de concepto libre sólo viaja con label/precio).
       const cl = data.concepto_libre;
-      const conceptoObserv =
-        cl.enabled && cl.label.trim() && cl.observ.trim()
-          ? `${cl.label.trim()}: ${cl.observ.trim()}`
-          : "";
+      const items = normalizeConceptoLibreItems(cl);
+      const conceptoObserv = cl.enabled
+        ? items
+            .filter((it) => it.label.trim() && it.observ.trim())
+            .map((it) => `${it.label.trim()}: ${it.observ.trim()}`)
+            .join(" · ")
+        : "";
       const combinedObserv = [data.observ ?? "", conceptoObserv]
         .map((s) => s.trim())
         .filter(Boolean)
@@ -2067,10 +2076,56 @@ function ConceptoLibreSection({
   currency: PricingCurrency;
 }) {
   const [open, setOpen] = useState<boolean>(state.enabled);
-  // Abrir si el concepto se habilita (incluye restauración de borrador).
+  const items = normalizeConceptoLibreItems(state);
+
   useEffect(() => {
     if (state.enabled) setOpen(true);
   }, [state.enabled]);
+
+  const updateItem = (index: number, patch: Partial<ConceptoLibreItem>) => {
+    const updated = [...items];
+    updated[index] = { ...updated[index], ...patch };
+    // Mantenemos sincronizados tanto items como los campos raíz para retrocompatibilidad
+    onChange({
+      items: updated,
+      label: updated[0]?.label ?? "",
+      price: updated[0]?.price ?? 0,
+      observ: updated[0]?.observ ?? "",
+    });
+  };
+
+  const addItem = () => {
+    if (items.length >= 5) return;
+    const newItem: ConceptoLibreItem = {
+      id: `item-${Date.now()}-${items.length + 1}`,
+      label: "",
+      price: 0,
+      observ: "",
+    };
+    const updated = [...items, newItem];
+    onChange({
+      items: updated,
+      label: updated[0]?.label ?? "",
+      price: updated[0]?.price ?? 0,
+      observ: updated[0]?.observ ?? "",
+    });
+  };
+
+  const removeItem = (index: number) => {
+    if (items.length <= 1) return;
+    const updated = items.filter((_, i) => i !== index);
+    onChange({
+      items: updated,
+      label: updated[0]?.label ?? "",
+      price: updated[0]?.price ?? 0,
+      observ: updated[0]?.observ ?? "",
+    });
+  };
+
+  const activeCount = items.filter((it) => it.label.trim() && it.price > 0).length;
+  const totalNeto = items.reduce((s, it) => s + (it.price || 0), 0);
+  const ivaTotal = totalNeto * 0.21;
+  const totalConIva = totalNeto + ivaTotal;
 
   return (
     <div className="mb-3">
@@ -2089,7 +2144,7 @@ function ConceptoLibreSection({
         <span className="flex-1 text-sm font-bold text-fg-primary">Servicios personalizados</span>
         {state.enabled && (
           <span className="text-[10px] font-bold tabular-nums bg-tops-blue-700 text-white px-1.5 py-0.5 rounded">
-            1
+            {activeCount > 0 ? activeCount : items.length}
           </span>
         )}
         <Icon
@@ -2110,88 +2165,148 @@ function ConceptoLibreSection({
       >
         <div className="overflow-hidden" {...(open ? {} : ({ inert: "" } as object))}>
           <div className="pt-2">
-      <div
-        className={cn(
-          "rounded-md border transition-colors duration-150",
-          state.enabled
-            ? "border-tops-blue-700 bg-tops-blue-700/5"
-            : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/30"
-        )}
-      >
-        <button
-          type="button"
-          onClick={onToggle}
-          className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
-        >
-          <div
-            className={cn(
-              "w-5 h-5 rounded border-2 grid place-items-center shrink-0",
-              state.enabled ? "border-tops-blue-700 bg-tops-blue-700" : "border-stroke-strong"
-            )}
-          >
-            {state.enabled && <Icon name="check" size={11} stroke={2.6} className="text-white" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-fg-primary">Concepto libre</div>
-            <div className="text-[11px] text-fg-muted mt-0.5 italic">
-              Permite facturar conceptos no contemplados en el catálogo estándar.
-            </div>
-          </div>
-        </button>
-
-        {state.enabled && (
-          <div className="px-3 pb-3 border-t border-stroke-soft pt-3 space-y-3">
-            <Field label="Concepto" required>
-              <input
-                className="input"
-                placeholder="Ej: Gestión especial, Servicio extraordinario, Honorarios…"
-                value={state.label}
-                onChange={(e) => onChange({ label: e.target.value })}
-                autoFocus
-              />
-            </Field>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Field label="Precio neto sin IVA" required>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted text-sm font-mono">
-                    {currency === "USD" ? "US$" : "$"}
-                  </span>
-                  <input
-                    className="input pl-7 tabular"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step={1000}
-                    placeholder="150000"
-                    value={state.price || ""}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      onChange({ price: Number.isFinite(v) && v >= 0 ? v : 0 });
-                    }}
-                  />
+            <div
+              className={cn(
+                "rounded-md border transition-colors duration-150",
+                state.enabled
+                  ? "border-tops-blue-700 bg-tops-blue-700/5"
+                  : "border-stroke-soft bg-bg-surface hover:border-tops-blue-700/30"
+              )}
+            >
+              <button
+                type="button"
+                onClick={onToggle}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+              >
+                <div
+                  className={cn(
+                    "w-5 h-5 rounded border-2 grid place-items-center shrink-0",
+                    state.enabled ? "border-tops-blue-700 bg-tops-blue-700" : "border-stroke-strong"
+                  )}
+                >
+                  {state.enabled && <Icon name="check" size={11} stroke={2.6} className="text-white" />}
                 </div>
-              </Field>
-              <Field label="Motivo del precio manual" required help="Queda auditado en la OS">
-                <input
-                  className="input"
-                  placeholder="Detalle adicional…"
-                  value={state.observ}
-                  onChange={(e) => onChange({ observ: e.target.value })}
-                />
-              </Field>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-fg-primary">Conceptos Libres (Hasta 5 ítems)</div>
+                  <div className="text-[11px] text-fg-muted mt-0.5 italic">
+                    Permite facturar hasta 5 conceptos independientes no contemplados en el catálogo estándar.
+                  </div>
+                </div>
+              </button>
+
+              {state.enabled && (
+                <div className="px-3 pb-3 border-t border-stroke-soft pt-3 space-y-4">
+                  {/* Lista de hasta 5 conceptos libres */}
+                  {items.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="p-3 bg-bg-surface rounded-lg border border-stroke-soft space-y-3 relative transition-all"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-fg-primary">
+                          Concepto #{idx + 1} de {items.length}
+                        </span>
+                        {items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeItem(idx)}
+                            className="text-[11px] font-bold text-tops-red hover:underline flex items-center gap-1"
+                          >
+                            <Icon name="trash" size={12} />
+                            Eliminar
+                          </button>
+                        )}
+                      </div>
+
+                      <Field label="Concepto / Descripción" required>
+                        <input
+                          className="input"
+                          placeholder="Ej: Gestión especial, Servicio extraordinario, Honorarios…"
+                          value={item.label}
+                          onChange={(e) => updateItem(idx, { label: e.target.value })}
+                          autoFocus={idx === items.length - 1}
+                        />
+                      </Field>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <Field label="Precio neto sin IVA" required>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-muted text-sm font-mono">
+                              {currency === "USD" ? "US$" : "$"}
+                            </span>
+                            <input
+                              className="input pl-7 tabular"
+                              type="number"
+                              inputMode="decimal"
+                              min={0}
+                              step={1000}
+                              placeholder="150000"
+                              value={item.price || ""}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value);
+                                updateItem(idx, { price: Number.isFinite(v) && v >= 0 ? v : 0 });
+                              }}
+                            />
+                          </div>
+                        </Field>
+
+                        <Field label="Motivo del precio manual" required help="Queda auditado en la OS">
+                          <input
+                            className="input"
+                            placeholder="Detalle adicional de auditoría…"
+                            value={item.observ}
+                            onChange={(e) => updateItem(idx, { observ: e.target.value })}
+                          />
+                        </Field>
+                      </div>
+
+                      {item.price > 0 && item.label.trim() && (
+                        <div className="text-xs text-fg-secondary flex items-center justify-between pt-1 border-t border-stroke-soft/60">
+                          <div className="flex items-center gap-1.5 truncate pr-2">
+                            <Icon name="check-circle" size={13} className="text-status-success shrink-0" />
+                            <span className="truncate">
+                              <strong className="text-fg-primary">{item.label.trim()}</strong>
+                            </span>
+                          </div>
+                          <span className="font-bold text-fg-brand tabular shrink-0">
+                            {fmtCurrency(item.price, currency)} neto + IVA ({fmtCurrency(item.price * 1.21, currency)})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Botón para agregar más conceptos hasta 5 */}
+                  {items.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={addItem}
+                      className="w-full py-2 px-3 rounded-lg border-2 border-dashed border-stroke-strong hover:border-tops-blue-700 bg-bg-surface text-xs font-bold text-tops-blue-700 dark:text-blue-400 hover:bg-bg-surface-alt transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Icon name="plus" size={14} />
+                      <span>Agregar otro concepto libre ({items.length}/5)</span>
+                    </button>
+                  )}
+
+                  {/* Resumen Consolidado de Conceptos Libres */}
+                  {activeCount > 0 && (
+                    <div className="p-3 bg-tops-blue-700/5 dark:bg-blue-950/40 rounded-lg border border-tops-blue-700/20 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-bold text-fg-primary">
+                          Total Conceptos Libres ({activeCount} {activeCount === 1 ? "ítem" : "ítems"}):
+                        </span>
+                        <div className="text-[11px] text-fg-muted">
+                          Subtotal neto: {fmtCurrency(totalNeto, currency)} · IVA estimado (21%): {fmtCurrency(ivaTotal, currency)}
+                        </div>
+                      </div>
+                      <div className="text-right font-bold text-sm text-tops-blue-700 dark:text-blue-400 tabular">
+                        {fmtCurrency(totalConIva, currency)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            {state.price > 0 && state.label.trim() && (
-              <div className="text-xs text-fg-secondary flex items-center gap-1.5">
-                <Icon name="check-circle" size={13} className="text-status-success shrink-0" />
-                <span>
-                  Se facturará: <strong className="text-fg-primary">{state.label.trim()}</strong> ·{" "}
-                  <strong className="text-fg-brand tabular">{fmtCurrency(state.price, currency)}</strong> neto + IVA
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
           </div>
         </div>
       </div>
@@ -2199,7 +2314,6 @@ function ConceptoLibreSection({
   );
 }
 
-// ============================================================================
 // Sección: Bonificaciones comerciales (descuentos con trazabilidad)
 // ============================================================================
 
@@ -2871,7 +2985,7 @@ function initial(firstClient?: OrderClientOption): WizardState {
     transports: [],
     transport_urgent: false,
     bonifications: [],
-    concepto_libre: { enabled: false, label: "", price: 0, observ: "" },
+    concepto_libre: { enabled: false, label: "", price: 0, observ: "", items: [{ id: "item-1", label: "", price: 0, observ: "" }] },
     h_start: "08:00",
     h_end: "12:00",
     pallets: 0,

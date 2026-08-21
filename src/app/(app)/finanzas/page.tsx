@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function FinanzasRootPage() {
-  redirect("/finanzas/caja-liquidez");
+  redirect("/finanzas/resumen");
 }

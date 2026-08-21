@@ -33,6 +33,8 @@ export default defineConfig({
       "src/lib/voice/**/*.test.ts",
       // P3-N1B · puente de identidad canónica de cliente (lógica pura, sin IO).
       "src/lib/wms/**/*.test.ts",
+      "src/lib/finanzas/**/*.test.ts",
+      "src/lib/finanzas/**/*.test.tsx",
       // M-3 · pruebas de RENDER real de la UI del hilo. Declaran su propio
       // entorno jsdom por docblock; el resto de la suite sigue en "node".
       // Los paréntesis de `(app)` son sintaxis de grupo en glob: se usa `**`

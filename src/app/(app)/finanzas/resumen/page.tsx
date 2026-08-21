@@ -1,12 +1,15 @@
 import React from "react";
 import { FinanzasResumenClient } from "./FinanzasResumenClient";
-import { getConsolidatedAccountPositions } from "@/lib/finanzas/data";
+import { getConsolidatedAccountPositions, getUnifiedFinanceTransactions } from "@/lib/finanzas/data";
 import { buildProfitAndLoss } from "@/lib/finanzas/engine";
 
 export const dynamic = "force-dynamic";
 
 export default async function FinanzasResumenPage() {
-  const positions = await getConsolidatedAccountPositions();
+  const [positions, transactions] = await Promise.all([
+    getConsolidatedAccountPositions(),
+    getUnifiedFinanceTransactions(),
+  ]);
 
   const demoTransactions = [
     { categoryCode: "ING_FLETES", categoryName: "Ingresos por Fletes y Distribución", categoryType: "ingreso" as const, costCenterLine: "cargas_generales" as const, amount: 48500000 },
@@ -38,6 +41,7 @@ export default async function FinanzasResumenPage() {
       accountPositions={positions}
       pnlArs={pnlArs}
       pnlUsd={pnlUsd}
+      initialTransactions={transactions}
     />
   );
 }

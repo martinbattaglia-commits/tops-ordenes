@@ -2,157 +2,141 @@
 
 import React, { useState } from "react";
 import { Icon } from "@/components/Icon";
-import type { FinanceVersion, FinanceAssumption, FinanceCategory, FinanceCurrency } from "@/lib/finanzas/types";
+import type { FinanceCategory, FinanceCurrency } from "@/lib/finanzas/types";
 import { fmtCurrency } from "@/lib/utils";
 
 interface BudgetPlanViewProps {
-  versions: FinanceVersion[];
-  activeVersion: FinanceVersion | null;
   categories: FinanceCategory[];
-  assumptions: FinanceAssumption[];
   currency: FinanceCurrency;
 }
 
-export function BudgetPlanView({
-  versions,
-  activeVersion,
-  categories,
-  assumptions,
-  currency,
-}: BudgetPlanViewProps) {
-  const [selectedVersionId, setSelectedVersionId] = useState<string>(activeVersion?.id || versions[0]?.id || "");
-  const currentVer = versions.find((v) => v.id === selectedVersionId) || activeVersion;
+export function BudgetPlanView({ categories, currency }: BudgetPlanViewProps) {
+  const [selectedScenario, setSelectedScenario] = useState("base");
+
+  const sampleAmounts: Record<string, number> = {
+    ING_FLETES: 45000000,
+    ING_ALMACEN: 15000000,
+    ING_LOG_FARMACIA: 30000000,
+    EGR_SUELDOS: 27000000,
+    EGR_COMBUSTIBLE: 15000000,
+    EGR_MANTENIMIENTO: 6500000,
+    EGR_SEGUROS: 3200000,
+    EGR_ALQUILERES: 6500000,
+  };
+
+  const multiplier = selectedScenario === "optimista" ? 1.15 : selectedScenario === "pesimista" ? 0.85 : 1.0;
 
   return (
     <div className="space-y-6">
-      {/* Header de Versión y Acciones */}
-      <div className="p-5 bg-white rounded-xl border border-[#DDE2EB] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[#687087]">
-              Planificación Presupuestaria
-            </span>
-            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-              currentVer?.status === "approved" ? "bg-[#E6F4EA] text-[#137333]" :
-              currentVer?.status === "in_review" ? "bg-amber-100 text-amber-800" :
-              "bg-gray-100 text-gray-700"
-            }`}>
-              {currentVer?.status || "Draft"}
-            </span>
-          </div>
-          <h2 className="text-xl font-bold text-[#050555] mt-1">
-            {currentVer?.name || "Presupuesto 2026"}
-          </h2>
-          <p className="text-xs text-[#687087]">
-            Vigencia: {currentVer?.valid_from} al {currentVer?.valid_to}
-          </p>
-        </div>
-
+      {/* Controles de Escenario Presupuestario */}
+      <div className="p-4 bg-bg-surface rounded-xl border border-stroke-soft shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors">
         <div className="flex items-center gap-3">
-          <select
-            value={selectedVersionId}
-            onChange={(e) => setSelectedVersionId(e.target.value)}
-            className="px-3 py-2 text-xs rounded-lg border border-[#DDE2EB] bg-white font-medium text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
-          >
-            {versions.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.code} - {v.name} ({v.status})
-              </option>
-            ))}
-          </select>
+          <div className="w-9 h-9 rounded-lg bg-tops-blue-700/10 dark:bg-blue-950/60 flex items-center justify-center text-tops-blue-700 dark:text-blue-400">
+            <Icon name="trend-up" className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-fg-primary uppercase tracking-wider">
+              Simulador de Escenarios Presupuestarios 2026
+            </h3>
+            <p className="text-xs text-fg-muted">
+              Modelado de supuestos por rubro y volumen proyectado ({currency}).
+            </p>
+          </div>
+        </div>
 
-          <button
-            type="button"
-            className="px-4 py-2 text-xs font-semibold rounded-lg bg-[#050555] text-white hover:bg-[#214576] transition-colors"
-          >
-            + Nueva Versión / Reforecast
-          </button>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-fg-muted font-semibold">Escenario:</span>
+          <div className="inline-flex rounded-lg border border-stroke-soft bg-bg-surface-alt p-1 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setSelectedScenario("pesimista")}
+              className={`px-3 py-1 rounded transition-all ${
+                selectedScenario === "pesimista"
+                  ? "bg-bg-surface text-tops-red shadow-2xs font-bold"
+                  : "text-fg-muted hover:text-fg-primary"
+              }`}
+            >
+              Pesimista (-15%)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedScenario("base")}
+              className={`px-3 py-1 rounded transition-all ${
+                selectedScenario === "base"
+                  ? "bg-bg-surface text-tops-blue-700 dark:text-blue-400 shadow-2xs font-bold"
+                  : "text-fg-muted hover:text-fg-primary"
+              }`}
+            >
+              Base (Plan 2026)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedScenario("optimista")}
+              className={`px-3 py-1 rounded transition-all ${
+                selectedScenario === "optimista"
+                  ? "bg-bg-surface text-status-success shadow-2xs font-bold"
+                  : "text-fg-muted hover:text-fg-primary"
+              }`}
+            >
+              Optimista (+15%)
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Grid de Drivers y Parámetros */}
-      <div className="bg-white rounded-xl border border-[#DDE2EB] shadow-xs overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#DDE2EB] bg-[#F4F5F8] flex items-center justify-between">
-          <h3 className="text-sm font-bold text-[#050555] flex items-center gap-2">
-            <Icon name="calculator" className="w-4 h-4 text-[#214576]" /> Drivers y Parámetros Operativos
-          </h3>
-          <span className="text-xs text-[#687087]">
-            {assumptions.length} drivers configurados
-          </span>
-        </div>
-
-        <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 bg-[#F4F5F8]/60 rounded-lg border border-[#DDE2EB]">
-            <span className="text-[11px] font-semibold text-[#687087] uppercase block">Inflación Proyectada Mensual</span>
-            <div className="text-lg font-bold text-[#111331] mt-1">3.8%</div>
-            <span className="text-[10px] text-[#687087]">Fuente: REM BCRA</span>
-          </div>
-          <div className="p-4 bg-[#F4F5F8]/60 rounded-lg border border-[#DDE2EB]">
-            <span className="text-[11px] font-semibold text-[#687087] uppercase block">Tipo de Cambio USD Oficial</span>
-            <div className="text-lg font-bold text-[#111331] mt-1">$ 1.340,00</div>
-            <span className="text-[10px] text-[#687087]">Fuente: BNA Divisa</span>
-          </div>
-          <div className="p-4 bg-[#F4F5F8]/60 rounded-lg border border-[#DDE2EB]">
-            <span className="text-[11px] font-semibold text-[#687087] uppercase block">Tarifa Promedio Flete M3</span>
-            <div className="text-lg font-bold text-[#111331] mt-1">$ 48.500</div>
-            <span className="text-[10px] text-[#687087]">Cargas Generales</span>
-          </div>
-          <div className="p-4 bg-[#F4F5F8]/60 rounded-lg border border-[#DDE2EB]">
-            <span className="text-[11px] font-semibold text-[#687087] uppercase block">Costo Gasoil / Litro Base</span>
-            <div className="text-lg font-bold text-[#111331] mt-1">$ 1.180,00</div>
-            <span className="text-[10px] text-[#687087]">YPF Mayorista</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Grid de Presupuesto Mensual por Categoría */}
-      <div className="bg-white rounded-xl border border-[#DDE2EB] shadow-xs overflow-hidden">
-        <div className="px-6 py-4 border-b border-[#DDE2EB] bg-[#F4F5F8] flex items-center justify-between">
-          <h3 className="text-sm font-bold text-[#050555]">
-            Matriz de Presupuesto Anual ({currency})
-          </h3>
-          <span className="text-xs text-[#687087]">
-            Consolidado por rubros analíticos
+      {/* Grilla de Presupuesto Anual */}
+      <div className="bg-bg-surface rounded-xl border border-stroke-soft shadow-2xs overflow-hidden transition-colors">
+        <div className="px-6 py-4 border-b border-stroke-soft bg-bg-surface-alt flex items-center justify-between">
+          <h2 className="text-sm font-bold text-fg-primary">
+            Plan Operativo Anual por Rubros y Estacionalidad
+          </h2>
+          <span className="text-xs font-bold text-tops-blue-700 dark:text-blue-400 bg-tops-blue-700/10 dark:bg-blue-950/60 px-2 py-0.5 rounded">
+            Presupuesto Base 2026
           </span>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
-            <thead className="bg-[#F4F5F8] text-[#687087] font-semibold border-b border-[#DDE2EB]">
+            <thead className="bg-bg-surface-alt text-fg-muted font-bold border-b border-stroke-soft uppercase text-[10px]">
               <tr>
-                <th className="py-2.5 px-4">Rubro / Categoría</th>
+                <th className="py-2.5 px-4">Rubro Analítico</th>
                 <th className="py-2.5 px-3">Tipo</th>
-                <th className="py-2.5 px-3 text-right">Ene-26</th>
-                <th className="py-2.5 px-3 text-right">Feb-26</th>
-                <th className="py-2.5 px-3 text-right">Mar-26</th>
-                <th className="py-2.5 px-3 text-right">Abr-26</th>
-                <th className="py-2.5 px-3 text-right">May-26</th>
-                <th className="py-2.5 px-3 text-right">Jun-26</th>
-                <th className="py-2.5 px-4 text-right font-bold text-[#050555]">Total Anual</th>
+                <th className="py-2.5 px-3 text-right">Ene</th>
+                <th className="py-2.5 px-3 text-right">Feb</th>
+                <th className="py-2.5 px-3 text-right">Mar</th>
+                <th className="py-2.5 px-3 text-right">Abr</th>
+                <th className="py-2.5 px-3 text-right">May</th>
+                <th className="py-2.5 px-3 text-right">Jun</th>
+                <th className="py-2.5 px-4 text-right font-bold text-fg-primary">Total Anual</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#DDE2EB]">
-              {categories.map((cat) => {
-                const baseMonthly = cat.category_type === "ingreso" ? 18500000 : 4200000;
+            <tbody className="divide-y divide-stroke-soft">
+              {categories.map((c) => {
+                const base = sampleAmounts[c.code] || 5000000;
+                const baseMonthly = Math.round((base / 12) * multiplier);
                 const annual = baseMonthly * 12;
 
                 return (
-                  <tr key={cat.id} className="hover:bg-[#F4F5F8]/50">
-                    <td className="py-2.5 px-4 font-medium text-[#111331]">{cat.name}</td>
+                  <tr key={c.id} className="hover:bg-bg-surface-alt transition-colors">
+                    <td className="py-2.5 px-4 font-bold text-fg-primary">
+                      {c.name}
+                    </td>
                     <td className="py-2.5 px-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                        cat.category_type === "ingreso" ? "bg-[#E6F4EA] text-[#137333]" : "bg-[#FBE9EA] text-[#C9070D]"
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        c.category_type === "ingreso"
+                          ? "bg-emerald-50 text-status-success dark:bg-emerald-950/60 dark:text-emerald-400"
+                          : "bg-rose-50 text-tops-red dark:bg-rose-950/60 dark:text-rose-400"
                       }`}>
-                        {cat.category_type}
+                        {c.category_type}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular-nums text-[#687087]">{fmtCurrency(baseMonthly)}</td>
-                    <td className="py-2.5 px-3 text-right tabular-nums text-[#687087]">{fmtCurrency(baseMonthly * 1.03)}</td>
-                    <td className="py-2.5 px-3 text-right tabular-nums text-[#687087]">{fmtCurrency(baseMonthly * 1.06)}</td>
-                    <td className="py-2.5 px-3 text-right tabular-nums text-[#687087]">{fmtCurrency(baseMonthly * 1.09)}</td>
-                    <td className="py-2.5 px-3 text-right tabular-nums text-[#687087]">{fmtCurrency(baseMonthly * 1.12)}</td>
-                    <td className="py-2.5 px-3 text-right tabular-nums text-[#687087]">{fmtCurrency(baseMonthly * 1.15)}</td>
-                    <td className="py-2.5 px-4 text-right tabular-nums font-bold text-[#050555] bg-[#F4F5F8]/30">
+                    <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">{fmtCurrency(baseMonthly)}</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">{fmtCurrency(baseMonthly * 1.02)}</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">{fmtCurrency(baseMonthly * 1.05)}</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">{fmtCurrency(baseMonthly * 1.08)}</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">{fmtCurrency(baseMonthly * 1.12)}</td>
+                    <td className="py-2.5 px-3 text-right tabular-nums text-fg-secondary">{fmtCurrency(baseMonthly * 1.15)}</td>
+                    <td className="py-2.5 px-4 text-right tabular-nums font-bold text-fg-primary bg-bg-surface-alt/40">
                       {fmtCurrency(annual)}
                     </td>
                   </tr>

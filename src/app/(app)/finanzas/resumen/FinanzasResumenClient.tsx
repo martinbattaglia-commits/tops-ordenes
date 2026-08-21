@@ -1,22 +1,30 @@
 "use client";
 
 import React, { useState } from "react";
-import { FinanzasHeader } from "@/components/finanzas/FinanzasHeader";
+import { FinanzasHeader, type AccountFilterScope } from "@/components/finanzas/FinanzasHeader";
 import { ExecutiveCockpit } from "@/components/finanzas/ExecutiveCockpit";
-import type { FinanceCurrency, AccountGroupPosition, ProfitAndLossStatement } from "@/lib/finanzas/types";
+import type {
+  FinanceCurrency,
+  AccountGroupPosition,
+  ProfitAndLossStatement,
+  FinanceUnifiedTransaction,
+} from "@/lib/finanzas/types";
 
 interface FinanzasResumenClientProps {
   accountPositions: AccountGroupPosition[];
   pnlArs: ProfitAndLossStatement;
   pnlUsd: ProfitAndLossStatement;
+  initialTransactions?: FinanceUnifiedTransaction[];
 }
 
 export function FinanzasResumenClient({
   accountPositions,
   pnlArs,
   pnlUsd,
+  initialTransactions = [],
 }: FinanzasResumenClientProps) {
   const [currency, setCurrency] = useState<FinanceCurrency>("ARS");
+  const [activeAccountScope, setActiveAccountScope] = useState<AccountFilterScope>("both_banks");
 
   const sampleAlerts = [
     { id: "a1", type: "critical" as const, title: "Vencimiento Pago AFIP Quincenal", detail: "Monto comprometido $ 8.900.000 antes del 22/08 en Banco Galicia." },
@@ -39,12 +47,16 @@ export function FinanzasResumenClient({
         subtitle="Cockpit de dirección: posición consolidada, rentabilidad EBITDA, alertas y agenda de decisiones."
         currentCurrency={currency}
         onCurrencyChange={setCurrency}
+        accountPositions={accountPositions}
+        activeAccountScope={activeAccountScope}
+        onAccountScopeChange={setActiveAccountScope}
       />
 
       <ExecutiveCockpit
         currency={currency}
         accountPositions={accountPositions}
         pnl={activePnl}
+        transactions={initialTransactions}
         alerts={sampleAlerts}
         decisions={sampleDecisions}
       />
