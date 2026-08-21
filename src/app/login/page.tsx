@@ -29,13 +29,18 @@ export const metadata: Metadata = {
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams?: { from?: string; error?: string };
+  searchParams?: { from?: string; error?: string; reset?: string };
 }) {
   return (
     <main className={`tn-login ${inter.variable} ${jetbrains.variable}`}>
       <LoginExperience
         redirectTo={searchParams?.from}
         initialError={searchParams?.error}
+        initialInfo={
+          searchParams?.reset === "success"
+            ? "Contraseña actualizada. Iniciá sesión con tu nueva contraseña."
+            : undefined
+        }
       />
     </main>
   );

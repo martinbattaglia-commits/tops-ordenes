@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import { env } from "@/lib/env";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { sanitizeAuthErrorMessage } from "@/lib/supabase/auth-recovery";
 
 const Schema = z.object({
   email: z.string().email(),
@@ -31,7 +32,7 @@ export async function inviteUser(
   // Verificar que el caller sea admin
   const supabase = createClient();
   const admin = createAdminClient();
-  if (!supabase || !admin) return { ok: false, error: "Supabase no configurado." };
+  if (!supabase || !admin) return { ok: false, error: "Error de conexión con el servidor." };
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "No autenticado." };
@@ -53,13 +54,13 @@ export async function inviteUser(
         role: parsed.data.role,
         invited_by: user.email,
       },
-      // Pasa por el callback para canjear el `code` por sesión antes del form
-      // (si no, el set de contraseña falla con "Auth session missing!").
-      redirectTo: `${env.app.url}/api/auth/callback?next=/auth/reset-password`,
+      redirectTo: `${env.app.url}/auth/invite`,
     });
-  if (invErr) return { ok: false, error: invErr.message };
+  if (invErr) {
+    console.error("[invite-user] Error de invitación:", (invErr as { code?: string }).code || "admin_error");
+    return { ok: false, error: sanitizeAuthErrorMessage(invErr, "No se pudo enviar la invitación. Verificá los datos e intentá nuevamente.") };
+  }
 
-  // Set role en profile (el trigger handle_new_user lo crea con 'operaciones' por default)
   if (invited.user) {
     await admin
       .from("profiles")

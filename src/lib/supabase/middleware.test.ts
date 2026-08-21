@@ -26,16 +26,45 @@ vi.mock("@/lib/env", () => ({ env: envMock }));
 
 // Sesión simulada: `usuario` null = request sin cookie válida, que es exactamente
 // el caso del cron de GitHub Actions.
-const sesion = vi.hoisted(() => ({ usuario: null as unknown }));
+const sesion = vi.hoisted(() => ({
+  usuario: null as unknown,
+  session: null as unknown,
+}));
+const depotScope = vi.hoisted(() => ({
+  data: { is_principal: true, is_authorized: true, depot: "LUJAN" },
+  error: null as Error | null,
+}));
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
-    auth: { getUser: async () => ({ data: { user: sesion.usuario }, error: null }) },
+    auth: {
+      getUser: async () => ({ data: { user: sesion.usuario }, error: null }),
+      getSession: async () => ({
+        data: {
+          session:
+            sesion.session !== undefined && sesion.session !== null
+              ? sesion.session
+              : sesion.usuario
+              ? { id: "default-session-id", user: sesion.usuario }
+              : null,
+        },
+        error: null,
+      }),
+    },
+    rpc: () => ({ single: async () => depotScope }),
   }),
 }));
 
 import { readdirSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { updateSession } from "./middleware";
+import {
+  PASSWORD_INVITE_COOKIE,
+  PASSWORD_INVITE_TOKEN_COOKIE,
+  PASSWORD_RECOVERY_COOKIE,
+  PASSWORD_RECOVERY_TOKEN_COOKIE,
+  createAuthTransitionToken,
+} from "./auth-recovery";
+import { DEPOT_MANAGER_EMAILS } from "@/lib/rbac/depot-manager";
 
 type Resultado = "pasa" | "401" | "redirect-login" | "redirect-dashboard" | `otro-${number}`;
 
@@ -51,6 +80,24 @@ type Resultado = "pasa" | "401" | "redirect-login" | "redirect-dashboard" | `otr
 async function evaluar(pathname: string): Promise<Resultado> {
   const res = await updateSession(
     new NextRequest(new URL(`https://tops-ordenes.netlify.app${pathname}`)),
+  );
+  if (res.status === 401) return "401";
+  if (res.headers.get("location")?.includes("/login")) return "redirect-login";
+  if (res.headers.get("location")?.includes("/dashboard")) return "redirect-dashboard";
+  if (res.status === 200 && res.headers.get("x-middleware-next") === "1") return "pasa";
+  return `otro-${res.status}`;
+}
+
+async function evaluarConContexto(
+  pathname: string,
+  method: "GET" | "POST",
+  cookie?: string,
+): Promise<Resultado> {
+  const res = await updateSession(
+    new NextRequest(new URL(`https://tops-ordenes.netlify.app${pathname}`), {
+      method,
+      headers: cookie ? { cookie } : undefined,
+    }),
   );
   if (res.status === 401) return "401";
   if (res.headers.get("location")?.includes("/login")) return "redirect-login";
@@ -124,6 +171,10 @@ function superficieDeRutas(): string[] {
 const PUBLICAS_ESPERADAS = [
   "/login",
   "/auth/forgot-password",
+  "/auth/recovery",
+  "/auth/recovery/confirm",
+  "/auth/invite",
+  "/auth/invite/confirm",
   "/auth/reset-password",
   "/api/auth/callback",
   "/api/whatsapp/webhook",
@@ -174,6 +225,11 @@ const PRIVADAS_DE_CONTROL: Array<[string, Resultado]> = [
   // páginas → redirect. Igualmente denegada. Matiz preexistente, ajeno a KDW-001.
   ["/API/knowledge/drain", "redirect-login"],
   ["/dashboard", "redirect-login"],
+  ["/auth/recovery/confirm/", "redirect-login"],
+  ["/auth/recovery/confirm/extra", "redirect-login"],
+  ["/auth/invite/confirm/", "redirect-login"],
+  ["/auth/invite/confirm/extra", "redirect-login"],
+  ["/auth/Invite/confirm", "redirect-login"],
   ["/tesoreria", "redirect-login"],
   ["/drive", "redirect-login"],
   ["/settings/users", "redirect-login"],
@@ -194,9 +250,213 @@ const PRIVADAS_DE_CONTROL: Array<[string, Resultado]> = [
 ];
 
 beforeEach(() => {
+  process.env.AUTH_TRANSITION_SECRET = "test-auth-transition-secret-minimum-32-chars-entropy-key";
   sesion.usuario = null;
+  depotScope.data = { is_principal: true, is_authorized: true, depot: "LUJAN" };
+  depotScope.error = null;
   envMock.supabase.configured = true;
   envMock.app.demoMode = false;
+});
+
+describe("middleware · transición Auth × RBAC", () => {
+  it("8-rojo. depot_manager con sesión posterior al OTP alcanza GET y POST del reset", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    const userId = DEPOT_MANAGER_EMAILS[email].userId;
+    const sessionId = "session-merino-valid";
+    sesion.usuario = { id: userId, email };
+    sesion.session = { id: sessionId, user: sesion.usuario };
+    const signedRecovery = await createAuthTransitionToken({ purpose: "recovery", userId, sessionId, userEmail: email });
+    const recoveryContext = `${PASSWORD_RECOVERY_COOKIE}=${signedRecovery}`;
+
+    expect(await evaluarConContexto("/auth/reset-password", "GET", recoveryContext)).toBe("pasa");
+    expect(await evaluarConContexto("/auth/reset-password", "POST", recoveryContext)).toBe("pasa");
+  });
+
+  it("8-rojo-invite. depot_manager invitado alcanza el mismo formulario con contexto invite", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    const userId = DEPOT_MANAGER_EMAILS[email].userId;
+    const sessionId = "session-merino-invite-valid";
+    sesion.usuario = { id: userId, email };
+    sesion.session = { id: sessionId, user: sesion.usuario };
+    const signedInvite = await createAuthTransitionToken({ purpose: "invite", userId, sessionId, userEmail: email });
+
+    expect(
+      await evaluarConContexto(
+        "/auth/reset-password",
+        "GET",
+        `${PASSWORD_INVITE_COOKIE}=${signedInvite}`,
+      ),
+    ).toBe("pasa");
+  });
+
+  it("8-swap. session swapping entre usuarios en middleware bloquea el passthrough a reset", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    const userId = DEPOT_MANAGER_EMAILS[email].userId;
+    const signedRecoveryOther = await createAuthTransitionToken({ purpose: "recovery", userId: "other-user-uuid", sessionId: "session-merino", userEmail: "otro@example.com" });
+
+    // Sesión activa es de Jorge Merino, pero el token pertenece a otro usuario
+    sesion.usuario = { id: userId, email };
+    sesion.session = { id: "session-merino", user: sesion.usuario };
+
+    expect(
+      await evaluarConContexto(
+        "/auth/reset-password",
+        "GET",
+        `${PASSWORD_RECOVERY_COOKIE}=${signedRecoveryOther}`,
+      ),
+    ).toBe("otro-404");
+  });
+
+  it("8-same-user-swap. cambio de session_id del mismo usuario bloquea el passthrough a reset", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    const userId = DEPOT_MANAGER_EMAILS[email].userId;
+    const signedRecoveryUserA = await createAuthTransitionToken({ purpose: "recovery", userId, sessionId: "session-a", userEmail: email });
+
+    // Mismo usuario, pero otra sesión activa
+    sesion.usuario = { id: userId, email };
+    sesion.session = { id: "session-b-new", user: sesion.usuario };
+
+    expect(
+      await evaluarConContexto(
+        "/auth/reset-password",
+        "GET",
+        `${PASSWORD_RECOVERY_COOKIE}=${signedRecoveryUserA}`,
+      ),
+    ).toBe("otro-404");
+  });
+
+  it("8b. confirmaciones requieren el token HttpOnly de su propósito", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    sesion.usuario = { id: DEPOT_MANAGER_EMAILS[email].userId, email };
+
+    expect(
+      await evaluarConContexto(
+        "/auth/recovery/confirm",
+        "GET",
+        `${PASSWORD_RECOVERY_TOKEN_COOKIE}=recovery-token-123`,
+      ),
+    ).toBe("pasa");
+    expect(
+      await evaluarConContexto(
+        "/auth/invite/confirm",
+        "POST",
+        `${PASSWORD_INVITE_TOKEN_COOKIE}=invite-token-123`,
+      ),
+    ).toBe("pasa");
+    expect(await evaluarConContexto("/auth/recovery/confirm", "GET")).toBe("otro-404");
+    expect(
+      await evaluarConContexto(
+        "/auth/recovery/confirm",
+        "GET",
+        `${PASSWORD_INVITE_TOKEN_COOKIE}=invite-token-123`,
+      ),
+    ).toBe("otro-404");
+  });
+
+  it("8b-entry. una sesión previa de depot_manager no bloquea las entradas GET exactas", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    sesion.usuario = { id: DEPOT_MANAGER_EMAILS[email].userId, email };
+
+    expect(await evaluarConContexto("/auth/recovery?token_hash=synthetic", "GET")).toBe("pasa");
+    expect(await evaluarConContexto("/auth/invite?token_hash=synthetic", "GET")).toBe("pasa");
+    expect(await evaluarConContexto("/auth/recovery", "POST")).toBe("otro-404");
+    expect(await evaluarConContexto("/auth/recovery/extra", "GET")).toBe("otro-404");
+  });
+
+  it("8c. sesión normal o marcadores ambiguos no habilitan reset", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    sesion.usuario = { id: DEPOT_MANAGER_EMAILS[email].userId, email };
+
+    expect(await evaluarConContexto("/auth/reset-password", "GET")).toBe("otro-404");
+    expect(
+      await evaluarConContexto(
+        "/auth/reset-password",
+        "GET",
+        `${PASSWORD_RECOVERY_COOKIE}=invalid; ${PASSWORD_INVITE_COOKIE}=invalid`,
+      ),
+    ).toBe("otro-404");
+    expect(
+      await evaluarConContexto(
+        "/auth/reset-password/extra",
+        "GET",
+        `${PASSWORD_RECOVERY_COOKIE}=invalid`,
+      ),
+    ).toBe("otro-404");
+  });
+
+  it("8d. magic callback sigue siendo login normal y no abre reset", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    sesion.usuario = { id: DEPOT_MANAGER_EMAILS[email].userId, email };
+
+    expect(await evaluarConContexto("/api/auth/callback?code=synthetic", "GET")).toBe("pasa");
+    expect(await evaluarConContexto("/api/auth/callback", "POST")).toBe("otro-404");
+    expect(await evaluarConContexto("/auth/reset-password", "GET")).toBe("otro-404");
+  });
+
+  it("8e. el guard operativo conserva RPC, allowlist y par UUID+email exacto", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    const userId = DEPOT_MANAGER_EMAILS[email].userId;
+    const sessionId = "session-valid";
+    sesion.usuario = { id: userId, email };
+    sesion.session = { id: sessionId, user: sesion.usuario };
+
+    expect(await evaluarConContexto("/dashboard", "GET")).toBe("pasa");
+    expect(await evaluarConContexto("/tesoreria", "GET")).toBe("otro-404");
+
+    sesion.usuario = { id: "uuid-equivocado", email };
+    const signedOther = await createAuthTransitionToken({ purpose: "recovery", userId, sessionId, userEmail: email });
+    expect(
+      await evaluarConContexto(
+        "/auth/reset-password",
+        "GET",
+        `${PASSWORD_RECOVERY_COOKIE}=${signedOther}`,
+      ),
+    ).toBe("otro-404");
+  });
+
+  it("8f. una transición Auth no concede acceso operativo aunque la RPC falle", async () => {
+    const email = "despachos-lujan@logisticatops.com" as const;
+    const userId = DEPOT_MANAGER_EMAILS[email].userId;
+    const sessionId = "session-8f-id";
+    sesion.usuario = { id: userId, email };
+    sesion.session = { id: sessionId, user: sesion.usuario };
+    depotScope.error = new Error("rpc unavailable");
+    const signedRecovery = await createAuthTransitionToken({ purpose: "recovery", userId, sessionId, userEmail: email });
+
+    expect(
+      await evaluarConContexto(
+        "/auth/reset-password",
+        "GET",
+        `${PASSWORD_RECOVERY_COOKIE}=${signedRecovery}`,
+      ),
+    ).toBe("pasa");
+    expect(await evaluarConContexto("/dashboard", "GET")).toBe("otro-404");
+  });
+
+  it("8g. otros principals conservan el middleware general; el marcador se valida en page/action", async () => {
+    for (const usuario of [
+      { id: "admin-1", email: "admin@example.test" },
+      { id: "ops-1", email: "ops@example.test" },
+      { id: "sin-rol-1", email: "sin-rol@example.test" },
+    ]) {
+      sesion.usuario = usuario;
+      sesion.session = { id: `session-${usuario.id}`, user: usuario };
+      const recoveryCookie = await createAuthTransitionToken({
+        purpose: "recovery",
+        userId: DEPOT_MANAGER_EMAILS["despachos-lujan@logisticatops.com"].userId,
+        sessionId: "session-other",
+        userEmail: "despachos-lujan@logisticatops.com",
+      });
+      expect(
+        await evaluarConContexto(
+          "/auth/reset-password",
+          "GET",
+          `${PASSWORD_RECOVERY_COOKIE}=${recoveryCookie}`,
+        ),
+        usuario.id,
+      ).toBe("pasa");
+    }
+  });
 });
 
 describe("middleware · allowlist — /api/knowledge/drain (KDW-001)", () => {
@@ -317,6 +577,10 @@ describe("middleware · inventario cerrado del allowlist (KDW-001)", () => {
       "/api/whatsapp/webhook",
       // — páginas públicas —
       "/auth/forgot-password",
+      "/auth/invite",
+      "/auth/invite/confirm",
+      "/auth/recovery",
+      "/auth/recovery/confirm",
       "/auth/reset-password",
       "/compras/validar/muestra",
       "/login",
@@ -362,6 +626,24 @@ describe("middleware · inventario cerrado del allowlist (KDW-001)", () => {
     }
     for (const [ruta, esperado] of PRIVADAS_DE_CONTROL) {
       expect(await evaluar(ruta), ruta).toBe(esperado);
+    }
+  });
+
+  it("7c. recovery e invite públicos son exactos y alcanzables sin sesión", async () => {
+    for (const ruta of [
+      "/auth/recovery",
+      "/auth/recovery/confirm",
+      "/auth/invite",
+      "/auth/invite/confirm",
+    ]) {
+      expect(await evaluar(ruta), ruta).toBe("pasa");
+    }
+    for (const ruta of [
+      "/auth/recovery/confirm/extra",
+      "/auth/invite/confirm/extra",
+      "/auth/Invite/confirm",
+    ]) {
+      expect(await evaluar(ruta), ruta).toBe("redirect-login");
     }
   });
 });
