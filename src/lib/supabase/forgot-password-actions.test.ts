@@ -32,7 +32,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { sendPasswordResetLink } from "./actions";
+import { sendPasswordResetLink } from "@/app/auth/forgot-password/actions";
 
 beforeEach(() => {
   mocks.resetPasswordForEmail.mockReset();

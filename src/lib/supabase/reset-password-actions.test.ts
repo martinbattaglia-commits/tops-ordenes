@@ -27,7 +27,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { completePasswordReset } from "./actions";
+import { completePasswordReset } from "@/app/auth/reset-password/actions";
 import { createAuthTransitionToken } from "@/lib/supabase/auth-recovery";
 
 const TEST_SECRET = "test-auth-transition-secret-minimum-32-chars-entropy-key";

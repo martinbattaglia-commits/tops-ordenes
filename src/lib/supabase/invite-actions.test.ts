@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { confirmInvitation } from "./actions";
+import { confirmInvitation } from "@/app/auth/invite/actions";
 import { verifyAuthTransitionToken } from "@/lib/supabase/auth-recovery";
 
 const TEST_SECRET = "test-auth-transition-secret-minimum-32-chars-entropy-key";

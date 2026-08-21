@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { GET } from "./route";
+import { GET } from "@/app/auth/recovery/route";
 
 describe("GET /auth/recovery", () => {
   it("custodia el token en cookie HttpOnly y limpia la URL", async () => {

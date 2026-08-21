@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { GET } from "./route";
+import { GET } from "@/app/auth/invite/route";
 
 describe("GET /auth/invite", () => {
   it("custodia sólo un token invite y limpia la URL", async () => {

@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { inviteUser } from "./actions";
+import { inviteUser } from "@/app/(app)/settings/users/actions";
 
 beforeEach(() => {
   mocks.inviteUserByEmail.mockReset();

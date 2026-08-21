@@ -31,7 +31,7 @@ vi.mock("@/lib/env", () => ({
   },
 }));
 
-import { signIn, sendMagicLink, signOut } from "./actions";
+import { signIn, sendMagicLink, signOut } from "@/app/login/actions";
 
 beforeEach(() => {
   mocks.signInWithPassword.mockReset();

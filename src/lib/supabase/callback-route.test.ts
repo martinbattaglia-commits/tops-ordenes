@@ -11,7 +11,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { GET } from "./route";
+import { GET } from "@/app/api/auth/callback/route";
 
 const makeRequest = (query: string) =>
   new NextRequest(`https://nexus.logisticatops.com/api/auth/callback?${query}`);
