@@ -11,23 +11,9 @@ import {
 } from "@/lib/finanzas/quicken-importer";
 import { fmtCurrency } from "@/lib/utils";
 
-const SAMPLE_QUICKEN_CSV = `All Transactions Report Created: 2026-08-20 20:45:11 -0300
-Filter Criteria:,All Dates,All ARS Accounts,Any Status
-,"Scheduled","Split","Date","Payee/Security","Category","Amount","Account"
-,"Scheduled",,"2/16/2027","Plan de Pagos ARCA IVA","Impuestos","-3,000,000.00","GALICIA"
-,"Scheduled",,"2/16/2027","Amex Corporativa","tarjetas","-11,000,000.00","SANTANDER RIO"
-,"Scheduled",,"2/16/2027","proveedores","proveedores","-3,500,000.00","SANTANDER RIO"
-,"Scheduled",,"2/14/2027","Sergio Roldan","Sistemas","-211,000.00","SANTANDER RIO"
-,"Scheduled",,"2/14/2027","Camejo","Contadora","-700,990.00","SANTANDER RIO"
-,"Scheduled",,"2/13/2027","Edenor Quartier","martin","-30,000.00","SANTANDER RIO"
-,"Scheduled",,"2/13/2027","Visa GALICIA","tarjetas","-11,000,000.00","GALICIA"
-,"Scheduled",,"2/10/2027","CEMAC","Alquiler de Deposito","-17,006,822.00","SANTANDER RIO"
-,,"2/05/2027","Cobranza Roemmers Farmacia","Fletes","13,297,400.00","GALICIA"
-,,"2/02/2027","Cobro Flete MercadoLibre Lujan","Fletes","5,820,000.00","GALICIA"`;
-
 export function QuickenConsole() {
-  const [csvText, setCsvText] = useState(SAMPLE_QUICKEN_CSV);
-  const [fileName, setFileName] = useState("sample-quicken-export.csv");
+  const [csvText, setCsvText] = useState("");
+  const [fileName, setFileName] = useState("");
   const [fileHash, setFileHash] = useState("");
   const [isComputingHash, setIsComputingHash] = useState(false);
   const [validationResult, setValidationResult] = useState<QuickenValidationResult | null>(null);
@@ -35,8 +21,8 @@ export function QuickenConsole() {
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Mapeos interactivos configurables por el usuario
-  const [categoryMap, setCategoryMap] = useState<Record<string, string>>(QUICKEN_CATEGORY_MAP);
-  const [accountMap, setAccountMap] = useState<Record<string, string>>(QUICKEN_ACCOUNT_MAP);
+  const [categoryMap] = useState<Record<string, string>>(QUICKEN_CATEGORY_MAP);
+  const [accountMap] = useState<Record<string, string>>(QUICKEN_ACCOUNT_MAP);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,7 +38,7 @@ export function QuickenConsole() {
       const res = parseAndValidateQuickenExport(text, hash, file.name);
       setValidationResult(res);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Error al procesar archivo CSV");
+      alert(e instanceof Error ? e.message : "Error al procesar archivo CSV de Quicken");
     } finally {
       setIsComputingHash(false);
     }
@@ -75,11 +61,15 @@ export function QuickenConsole() {
   };
 
   const handleRunDryRun = async () => {
+    if (!csvText.trim()) {
+      alert("Por favor cargá un archivo CSV de Quicken para validar.");
+      return;
+    }
     setIsComputingHash(true);
     try {
       const hash = fileHash || (await computeSHA256(csvText));
       setFileHash(hash);
-      const res = parseAndValidateQuickenExport(csvText, hash, fileName);
+      const res = parseAndValidateQuickenExport(csvText, hash, fileName || "quicken-export.csv");
       setValidationResult(res);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Error al ejecutar Dry-Run");
@@ -94,7 +84,7 @@ export function QuickenConsole() {
       <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 transition-colors">
         <Icon name="lock" className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
         <div className="text-xs text-amber-900 dark:text-amber-200">
-          <span className="font-bold">Política de Migración Histórica Gobernada (Modo Dry-Run Inmutable):</span> Esta consola calcula automáticamente el SHA-256 del archivo de Quicken, detecta preámbulos/BOM y procesa el libro analítico sin persistir escrituras directas en base de datos. La importación definitiva requerirá autorización expresa de Dirección tras la validación de paridad.
+          <span className="font-bold">Política de Migración Histórica Gobernada (Modo Dry-Run Inmutable):</span> Esta consola calcula automáticamente el SHA-256 del archivo seleccionado, procesa el libro analítico sin persistir escrituras directas en la base de datos de producción y protege la confidencialidad de la información. La importación definitiva requerirá autorización expresa de Dirección.
         </div>
       </div>
 
@@ -136,9 +126,11 @@ export function QuickenConsole() {
             <p className="text-[11px] text-fg-muted mt-1">
               o hacé click para seleccionar desde tu equipo
             </p>
-            <div className="text-[10px] text-tops-blue-700 dark:text-blue-400 font-semibold mt-2">
-              Archivo actual: {fileName}
-            </div>
+            {fileName && (
+              <div className="text-[11px] text-tops-blue-700 dark:text-blue-400 font-bold mt-2 truncate">
+                Archivo: {fileName}
+              </div>
+            )}
           </div>
 
           {/* SHA-256 Hash Automático */}
@@ -150,32 +142,37 @@ export function QuickenConsole() {
               <input
                 type="text"
                 readOnly
-                value={fileHash || (isComputingHash ? "Calculando hash criptográfico..." : "9cc4b131e6e483ec1a18bfafce81f737cf9ab8b63f0225a9023fa27525c6bd78")}
+                placeholder="El hash se generará al cargar el archivo..."
+                value={fileHash || (isComputingHash ? "Calculando hash criptográfico..." : "")}
                 className="w-full px-3 py-2 text-[11px] font-mono border border-stroke-soft rounded-lg bg-bg-surface-alt text-fg-primary focus:outline-none"
               />
-              <span className="absolute right-2.5 top-2.5 text-[10px] font-bold text-status-success">
-                ✓ SHA-256
-              </span>
+              {fileHash && (
+                <span className="absolute right-2.5 top-2.5 text-[10px] font-bold text-status-success">
+                  ✓ SHA-256
+                </span>
+              )}
             </div>
           </div>
 
           {/* Editor/Visualizador de contenido CSV */}
-          <div>
-            <label className="block text-fg-secondary text-[10px] font-bold uppercase mb-1">
-              Previsualización de Contenido ({csvText.split("\n").length} líneas)
-            </label>
-            <textarea
-              rows={6}
-              value={csvText.slice(0, 1500) + (csvText.length > 1500 ? "\n... (contenido truncado en vista previa)" : "")}
-              onChange={(e) => setCsvText(e.target.value)}
-              className="w-full px-3 py-2 text-[11px] font-mono border border-stroke-soft rounded-lg bg-bg-surface text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
-            />
-          </div>
+          {csvText && (
+            <div>
+              <label className="block text-fg-secondary text-[10px] font-bold uppercase mb-1">
+                Líneas cargadas ({csvText.split("\n").length.toLocaleString()})
+              </label>
+              <textarea
+                rows={4}
+                readOnly
+                value={csvText.slice(0, 500) + (csvText.length > 500 ? "\n... (contenido protegido y truncado en vista previa)" : "")}
+                className="w-full px-3 py-2 text-[11px] font-mono border border-stroke-soft rounded-lg bg-bg-surface text-fg-primary focus:outline-none opacity-80"
+              />
+            </div>
+          )}
 
           <button
             type="button"
             onClick={handleRunDryRun}
-            disabled={isComputingHash}
+            disabled={isComputingHash || !csvText}
             className="w-full py-2.5 px-4 bg-tops-blue-900 dark:bg-tops-blue-700 hover:bg-tops-blue-700 dark:hover:bg-blue-600 text-white font-bold text-xs rounded-lg transition-all shadow-xs disabled:opacity-50"
           >
             {isComputingHash ? "Procesando e Inspeccionando..." : "🔍 Ejecutar Validación y Dry-Run"}
@@ -268,8 +265,8 @@ export function QuickenConsole() {
 
                     <div className="p-3.5 rounded-xl border border-stroke-soft bg-bg-surface-alt/60">
                       <span className="text-[10px] uppercase font-bold text-fg-muted block mb-1">Rango Temporal</span>
-                      <span className="text-xs font-bold text-fg-primary block truncate">{validationResult.dateRange.min}</span>
-                      <span className="text-xs font-bold text-fg-primary block truncate">al {validationResult.dateRange.max}</span>
+                      <span className="text-xs font-bold text-fg-primary block truncate">{validationResult.dateRange.min || "N/A"}</span>
+                      <span className="text-xs font-bold text-fg-primary block truncate">al {validationResult.dateRange.max || "N/A"}</span>
                     </div>
                   </div>
 
@@ -405,13 +402,13 @@ export function QuickenConsole() {
           ) : (
             <div className="bg-bg-surface rounded-xl border border-stroke-soft p-12 text-center text-fg-muted space-y-3 transition-colors">
               <div className="w-12 h-12 rounded-full bg-tops-blue-700/10 dark:bg-blue-950/60 flex items-center justify-center text-tops-blue-700 dark:text-blue-400 mx-auto">
-                <Icon name="report" className="w-6 h-6" />
+                <Icon name="drive" className="w-6 h-6" />
               </div>
               <h4 className="text-sm font-bold text-fg-primary">
                 Consola Lista para Validación Dry-Run
               </h4>
               <p className="text-xs text-fg-secondary max-w-md mx-auto">
-                Cargá tu archivo exportado de Quicken o ejecutá la validación con la muestra representativa para inspeccionar el balance de sumas, rubros y deduplicación.
+                Cargá tu archivo CSV exportado de Quicken para inspeccionar el balance de sumas, rubros analíticos, deduplicación e idempotencia.
               </p>
             </div>
           )}

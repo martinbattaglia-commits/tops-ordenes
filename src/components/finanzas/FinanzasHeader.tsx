@@ -140,7 +140,11 @@ export function FinanzasHeader({
                   <span className="text-[10px] text-fg-muted uppercase">CC</span>
                 </div>
                 <div className="text-base font-bold text-fg-primary tracking-tight">
-                  {formatAmount(bankSummary.galiciaBalance)}
+                  {bankSummary.hasGaliciaAccount ? (
+                    formatAmount(bankSummary.galiciaBalance)
+                  ) : (
+                    <span className="text-xs text-fg-muted font-normal italic">Saldo no disponible</span>
+                  )}
                 </div>
               </div>
 
@@ -160,7 +164,11 @@ export function FinanzasHeader({
                   <span className="text-[10px] text-fg-muted uppercase">CC</span>
                 </div>
                 <div className="text-base font-bold text-fg-primary tracking-tight">
-                  {formatAmount(bankSummary.santanderBalance)}
+                  {bankSummary.hasSantanderAccount ? (
+                    formatAmount(bankSummary.santanderBalance)
+                  ) : (
+                    <span className="text-xs text-fg-muted font-normal italic">Saldo no disponible</span>
+                  )}
                 </div>
               </div>
 

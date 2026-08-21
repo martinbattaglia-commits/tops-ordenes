@@ -86,7 +86,16 @@ export function InboxView({ items: initialItems, onApproveItem, onDiscardItem }:
           </div>
 
           <div className="divide-y divide-stroke-soft overflow-y-auto max-h-[550px]">
-            {items.map((it) => {
+            {items.length === 0 ? (
+              <div className="p-8 text-center text-fg-muted space-y-2">
+                <Icon name="mail" className="w-8 h-8 text-fg-muted mx-auto mb-1" />
+                <div className="text-xs font-bold text-fg-primary">Sin comprobantes pendientes</div>
+                <p className="text-[11px] text-fg-muted">
+                  Las facturas remitidas a <span className="font-semibold text-fg-secondary">facturas@logisticatops.com</span> aparecerán en esta bandeja tras la sincronización.
+                </p>
+              </div>
+            ) : (
+              items.map((it) => {
               const isSelected = selectedItem?.id === it.id;
               let statusBadge = "bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400";
               if (it.status === "procesado") statusBadge = "bg-emerald-50 text-status-success dark:bg-emerald-950/60 dark:text-emerald-400";
@@ -117,7 +126,7 @@ export function InboxView({ items: initialItems, onApproveItem, onDiscardItem }:
                   </div>
                 </div>
               );
-            })}
+            }))}
           </div>
         </div>
 

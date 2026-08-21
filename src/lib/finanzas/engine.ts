@@ -6,6 +6,7 @@
  */
 
 import type {
+  BankBalancesSummary,
   FinanceUnifiedTransaction,
   FinanceCurrency,
   WeeklyCashflowItem,
@@ -53,18 +54,14 @@ export function convertCurrency(
 export function getBankBalancesSummary(
   accountPositions: AccountGroupPosition[],
   currency: FinanceCurrency
-): {
-  galiciaBalance: number;
-  santanderBalance: number;
-  bothBanksBalance: number;
-  cajaBalance: number;
-  banksAndCashBalance: number;
-  totalBalance: number;
-} {
+): BankBalancesSummary {
   let galicia = 0;
   let santander = 0;
   let caja = 0;
   let total = 0;
+  let hasGalicia = false;
+  let hasSantander = false;
+  let hasCaja = false;
 
   for (const group of accountPositions) {
     for (const acc of group.accounts) {
@@ -75,28 +72,25 @@ export function getBankBalancesSummary(
       const bankUpper = (acc.bankName || "").toUpperCase();
       const nameUpper = (acc.name || "").toUpperCase();
 
-      if (group.group === "caja") {
+      if (group.group === "caja" || nameUpper.includes("CAJA") || bankUpper.includes("CAJA")) {
         caja += bal;
+        hasCaja = true;
       } else if (bankUpper.includes("GALICIA") || nameUpper.includes("GALICIA")) {
         galicia += bal;
+        hasGalicia = true;
       } else if (bankUpper.includes("SANTANDER") || nameUpper.includes("SANTANDER") || bankUpper.includes("RIO")) {
         santander += bal;
+        hasSantander = true;
       }
     }
   }
 
-  // Fallback si los grupos no desglosaron cuentas individuales pero tienen saldo en grupo
-  if (galicia === 0 && santander === 0) {
-    const bancosGrp = accountPositions.find((g) => g.group === "bancos");
-    if (bancosGrp) {
-      const bal = currency === "ARS" ? bancosGrp.arsBalance : bancosGrp.usdBalance;
-      galicia = Math.round(bal * 0.6 * 100) / 100;
-      santander = Math.round(bal * 0.4 * 100) / 100;
-    }
-  }
-
-  const bothBanks = galicia + santander;
+  // REGLA CANÓNICA DE INTEGRIDAD FINANCIERA:
+  // PROHIBIDO inventar la distribución de saldos entre bancos ni aplicar porcentajes arbitrarios como 60/40.
+  // Toda cifra visible debe proceder de cuentas reales identificadas en Supabase.
+  const bothBanks = (hasGalicia ? galicia : 0) + (hasSantander ? santander : 0);
   const banksAndCash = bothBanks + caja;
+  const totalCalculated = total || (currency === "ARS" ? accountPositions.reduce((s, g) => s + g.arsBalance, 0) : accountPositions.reduce((s, g) => s + g.usdBalance, 0));
 
   return {
     galiciaBalance: galicia,
@@ -104,7 +98,10 @@ export function getBankBalancesSummary(
     bothBanksBalance: bothBanks,
     cajaBalance: caja,
     banksAndCashBalance: banksAndCash,
-    totalBalance: total || (currency === "ARS" ? accountPositions.reduce((s, g) => s + g.arsBalance, 0) : accountPositions.reduce((s, g) => s + g.usdBalance, 0)),
+    totalBalance: totalCalculated,
+    hasGaliciaAccount: hasGalicia,
+    hasSantanderAccount: hasSantander,
+    hasCajaAccount: hasCaja,
   };
 }
 
@@ -503,24 +500,16 @@ export function calculateFinanceDashboardMetrics(
     };
   });
 
-  // Si no hay datos históricos suficientes, proyectar valores representativos del P&L
-  if (monthlyComparison.every((m) => m.income === 0 && m.expense === 0)) {
-    const curIncome = pnl.ingresos.total || 42800000;
-    const curExpense = (pnl.costosDirectos.total + pnl.gastosOperativos.total) || 34100000;
-    monthlyComparison.forEach((m, idx) => {
-      const variance = (idx - 6) * 0.04;
-      m.income = Math.round(curIncome * (1 + variance));
-      m.expense = Math.round(curExpense * (1 + variance * 0.8));
-      m.net = m.income - m.expense;
-    });
-  }
+  // REGLA CANÓNICA DE INTEGRIDAD: NUNCA simular datos mensuales ni inventar tendencias.
+  // Si no hay transacciones en un mes, los valores permanecen en 0 y la UI muestra estado vacío si no hay registros.
 
-  // 4. Presupuesto vs Real
-  const budgetedIncome = pnl.ingresos.byCategory.reduce((s, c) => s + c.budgetAmount, 0) || pnl.ingresos.total * 0.95;
+  // 4. Presupuesto vs Real — Procedente estrictamente de líneas presupuestarias reales
+  const budgetedIncome = pnl.ingresos.byCategory.reduce((s, c) => s + c.budgetAmount, 0);
   const actualIncome = pnl.ingresos.total;
-  const budgetedExpense = (pnl.costosDirectos.byCategory.reduce((s, c) => s + c.budgetAmount, 0) +
-    pnl.gastosOperativos.byCategory.reduce((s, c) => s + c.budgetAmount, 0)) || (pnl.costosDirectos.total + pnl.gastosOperativos.total) * 1.05;
+  const budgetedExpense = pnl.costosDirectos.byCategory.reduce((s, c) => s + c.budgetAmount, 0) +
+    pnl.gastosOperativos.byCategory.reduce((s, c) => s + c.budgetAmount, 0);
   const actualExpense = pnl.costosDirectos.total + pnl.gastosOperativos.total;
+  const hasBudgetConfigured = budgetedIncome > 0 || budgetedExpense > 0;
 
   const budgetVsReal = {
     budgetedIncome: Math.round(budgetedIncome),
@@ -529,7 +518,8 @@ export function calculateFinanceDashboardMetrics(
     budgetedExpense: Math.round(budgetedExpense),
     actualExpense: Math.round(actualExpense),
     expenseVariance: Math.round(actualExpense - budgetedExpense),
-    netSurplus: Math.round((actualIncome - actualExpense) - (budgetedIncome - budgetedExpense)),
+    netSurplus: hasBudgetConfigured ? Math.round((actualIncome - actualExpense) - (budgetedIncome - budgetedExpense)) : Math.round(actualIncome - actualExpense),
+    hasBudgetConfigured,
   };
 
   // 5. Evolución de Liquidez (curva diaria de 30 días)

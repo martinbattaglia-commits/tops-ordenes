@@ -61,3 +61,8 @@ lifecycle.json.bak
 # Contienen datos de fixture; nunca deben versionarse.
 /doc-samples/
 *.sample.pdf
+
+# Quicken & Financial exports (never commit)
+*quicken*.csv
+*export*.csv
+*.csv.bak

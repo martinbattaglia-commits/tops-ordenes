@@ -171,28 +171,7 @@ export async function getConsolidatedAccountPositions(): Promise<AccountGroupPos
   }
 
   // Si no hay cuentas registradas en base, asegurar que se muestren los 4 grupos
-  if (bankAccounts.length === 0) {
-    groups.bancos.accounts.push(
-      { id: "demo-galicia", name: "Banco Galicia CC", bankName: "Galicia", currency: "ARS", balance: 14250000, type: "cuenta_corriente" },
-      { id: "demo-santander", name: "Banco Santander CC", bankName: "Santander", currency: "ARS", balance: 8750000, type: "cuenta_corriente" }
-    );
-    groups.bancos.arsBalance = 23000000;
-
-    groups.caja.accounts.push(
-      { id: "demo-caja", name: "Caja Chica Central", bankName: "Caja Central", currency: "ARS", balance: 450000, type: "caja" }
-    );
-    groups.caja.arsBalance = 450000;
-
-    groups.ahorros.accounts.push(
-      { id: "demo-fci", name: "FCI Liquidez Inmediata", bankName: "Galicia Asset", currency: "ARS", balance: 5200000, type: "ahorros" }
-    );
-    groups.ahorros.arsBalance = 5200000;
-
-    groups.tarjetas.accounts.push(
-      { id: "demo-visa", name: "Visa Corporativa Operaciones", bankName: "Santander", currency: "ARS", balance: -820000, type: "tarjeta" }
-    );
-    groups.tarjetas.arsBalance = -820000;
-  }
+  // Si no hay cuentas registradas en base, se retornan los 4 grupos con saldos en 0 sin simular cuentas ficticias.
 
   return Object.values(groups);
 }
@@ -280,24 +259,7 @@ export async function getUnifiedFinanceTransactions(opts?: {
     }
   }
 
-  // Si no hay transacciones en la base de prueba, proveer transacciones representativas
-  if (transactions.length === 0) {
-    const today = new Date();
-    const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const d1 = new Date(today); d1.setDate(d1.getDate() - 3);
-    const d2 = new Date(today); d2.setDate(d2.getDate() - 1);
-    const d3 = new Date(today); d3.setDate(d3.getDate() + 2);
-    const d4 = new Date(today); d4.setDate(d4.getDate() + 5);
-    const d5 = new Date(today); d5.setDate(d5.getDate() + 10);
-
-    transactions.push(
-      { id: "tx-1", date: fmt(d1), direction: "ingreso", concept: "Cobranza Cliente Laboratorios Roemmers", counterpart: "Roemmers S.A.", amount: 5820000, currency: "ARS", accountGroup: "bancos", accountName: "Banco Galicia CC", categoryName: "Ingresos Logística Farmacéutica ANMAT", isReal: true, status: "ejecutado" },
-      { id: "tx-2", date: fmt(d2), direction: "egreso", concept: "Pago Combustible Flota YPF en Ruta", counterpart: "YPF S.A.", amount: 1450000, currency: "ARS", accountGroup: "bancos", accountName: "Banco Santander CC", categoryName: "Combustible y Peajes", isReal: true, status: "ejecutado" },
-      { id: "tx-3", date: fmt(d3), direction: "ingreso", concept: "Cobranza Factura A-0001-00048212 Meli", counterpart: "MercadoLibre S.R.L.", amount: 13297400, currency: "ARS", accountGroup: "bancos", accountName: "Banco Galicia CC", categoryName: "Ingresos por Fletes y Distribución", isReal: false, status: "proyectado", certainty: "alta" },
-      { id: "tx-4", date: fmt(d4), direction: "egreso", concept: "Liquidación Quincenal Sueldos Choferes", counterpart: "Nómina Operativa", amount: 4850000, currency: "ARS", accountGroup: "bancos", accountName: "Banco Galicia CC", categoryName: "Sueldos y Cargas Sociales", isReal: false, status: "comprometido", certainty: "alta" },
-      { id: "tx-5", date: fmt(d5), direction: "transferencia", concept: "Cobertura de Caja Chica Barracas", counterpart: "Transferencia Interna", amount: 350000, currency: "ARS", accountGroup: "caja", accountName: "Caja Central", categoryName: "Transferencia Interna", isReal: false, status: "proyectado", certainty: "media" }
-    );
-  }
+  // Si no hay transacciones en Supabase, se retorna arreglo vacío sin generar movimientos simulados.
 
   // Filtrar por moneda si se solicita
   const filtered = opts?.currency ? transactions.filter(t => t.currency === opts.currency) : transactions;
@@ -316,58 +278,7 @@ export async function listDocumentInbox(): Promise<FinanceDocumentInboxItem[]> {
     .order("received_at", { ascending: false });
 
   if (error) {
-    return [
-      {
-        id: "inbox-1",
-        sender: "facturacion@ypf.com.ar",
-        subject: "Factura A YPF Combustibles 0001-00392819",
-        received_at: "2026-08-19T14:20:00Z",
-        status: "borrador",
-        extracted_data: {
-          monto: 1845200,
-          moneda: "ARS",
-          cuit: "30-54668997-9",
-          proveedor: "YPF S.A.",
-          comprobante: "0001-00392819",
-          fecha_emision: "2026-08-18",
-          fecha_vencimiento: "2026-08-28",
-          concepto: "Combustible Diesel Grado 3 para unidades Scania Luján",
-          categoria_sugerida: "Combustible y Peajes",
-        },
-        raw_email_url: null,
-        attachment_url: "/docs/factura-ypf-sample.pdf",
-        reviewed_by: null,
-        reviewed_at: null,
-        notes: "Ingestado automáticamente vía email inbox",
-        created_at: "2026-08-19T14:20:00Z",
-        updated_at: "2026-08-19T14:20:00Z",
-      },
-      {
-        id: "inbox-2",
-        sender: "cobranzas@neumaticos.com.ar",
-        subject: "Comprobante Servicio Alineación & Cubiertas",
-        received_at: "2026-08-18T10:15:00Z",
-        status: "en_revision",
-        extracted_data: {
-          monto: 720000,
-          moneda: "ARS",
-          cuit: "30-71234567-8",
-          proveedor: "Neumáticos del Sur S.A.",
-          comprobante: "0004-00018241",
-          fecha_emision: "2026-08-17",
-          fecha_vencimiento: "2026-08-27",
-          concepto: "Recambio de 4 cubiertas tractor Iveco",
-          categoria_sugerida: "Mantenimiento de Flota y Edilicio",
-        },
-        raw_email_url: null,
-        attachment_url: "/docs/neumaticos-sample.pdf",
-        reviewed_by: null,
-        reviewed_at: null,
-        notes: "Pendiente de validación por jefe de taller",
-        created_at: "2026-08-18T10:15:00Z",
-        updated_at: "2026-08-18T10:15:00Z",
-      }
-    ];
+    return [];
   }
   return (data ?? []) as FinanceDocumentInboxItem[];
 }

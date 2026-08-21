@@ -278,6 +278,7 @@ export interface FinanceDashboardMetrics {
     actualExpense: number;
     expenseVariance: number;
     netSurplus: number;
+    hasBudgetConfigured: boolean;
   };
   liquidityEvolution: {
     date: string;
@@ -320,4 +321,17 @@ export interface ProfitAndLossStatement {
     margen: number;
     margenPorcentaje: number;
   }[];
+}
+
+
+export interface BankBalancesSummary {
+  galiciaBalance: number;
+  santanderBalance: number;
+  bothBanksBalance: number;
+  cajaBalance: number;
+  banksAndCashBalance: number;
+  totalBalance: number;
+  hasGaliciaAccount: boolean;
+  hasSantanderAccount: boolean;
+  hasCajaAccount: boolean;
 }
