@@ -20,11 +20,12 @@ function isMock(): boolean {
 const MESSAGE_PAGE = 50;
 
 // ───────────────────────── Mappers fila→dominio ─────────────────────────
-function mapConversation(r: ConversationRow): Conversation {
+export function mapConversation(r: ConversationRow): Conversation {
   return {
     id: r.id, contextId: r.context_id, kind: r.kind, slug: r.slug, title: r.title,
     visibility: r.visibility, topic: r.topic, archivedAt: r.archived_at, createdBy: r.created_by,
     lastMessageSeq: r.last_message_seq, lastMessageAt: r.last_message_at, createdAt: r.created_at,
+    handoverState: r.handover_state ?? undefined,
   };
 }
 
@@ -166,7 +167,7 @@ export async function getConversation(conversationId: string): Promise<Conversat
   const { data, error } = await supabase
     .from("connect_conversations")
     .select(
-      "id, context_id, kind, slug, title, visibility, topic, archived_at, created_by, last_message_seq, last_message_at, created_at",
+      "id, context_id, kind, slug, title, visibility, topic, archived_at, created_by, last_message_seq, last_message_at, created_at, handover_state",
     )
     .eq("id", conversationId)
     .maybeSingle();

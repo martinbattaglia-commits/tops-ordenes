@@ -124,6 +124,8 @@ export interface Conversation {
   lastMessageSeq: number | null;
   lastMessageAt: string | null;
   createdAt: string;
+  /** Estado persistido del handover WhatsApp. Ausente en conversaciones legacy/no-WA. */
+  handoverState?: "BOT_ACTIVE" | "PAUSED_HUMAN";
 }
 
 export interface Participant {
@@ -249,6 +251,7 @@ export interface ConversationRow {
   last_message_seq: number | null;
   last_message_at: string | null;
   created_at: string;
+  handover_state?: "BOT_ACTIVE" | "PAUSED_HUMAN" | null;
 }
 
 export interface MessageRow {

@@ -10,9 +10,9 @@
     "alcance": "lectura read-only del ledger productivo; NO incluye estado del esquema"
   },
   "conteos": {
-    "ejecutables_en_catalogo": 228,
+    "ejecutables_en_catalogo": 229,
     "observadas_en_ledger": 98,
-    "inferidas_no_registradas": 130,
+    "inferidas_no_registradas": 131,
     "filas_autorizadas_a_escritura": 0,
     "sondas_ejecutadas": 0
   },
@@ -20,7 +20,7 @@
   "escritura": {
     "sentencia_prevista": "insert into supabase_migrations.schema_migrations(version,name) values (<ledger_version>,<ledger_name>) on conflict (version) do nothing",
     "idempotencia": "on conflict (version) do nothing → una segunda corrida escribe 0 filas",
-    "precondicion": "cada fila exige su sonda ejecutada y autorizada; hoy: 0 de 228",
+    "precondicion": "cada fila exige su sonda ejecutada y autorizada; hoy: 0 de 229",
     "ejecutada": false
   },
   "filas": [
@@ -1843,6 +1843,14 @@
     {
       "ledger_version": "L00265",
       "ledger_name": "0263_custody_pod_signature_and_reception_idempotency",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00267",
+      "ledger_name": "0264_connect_mark_read_named_arguments",
       "estado_ledger": "INFERRED_NOT_REGISTERED",
       "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
       "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",

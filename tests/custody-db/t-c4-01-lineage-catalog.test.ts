@@ -562,6 +562,7 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0262_finance_core_foundation.sql",
     "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
     "ROLLBACK_0263_custody_pod_signature_and_reception_idempotency.sql",
+    "ROLLBACK_0264_connect_mark_read_named_arguments.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 
