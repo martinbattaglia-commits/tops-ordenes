@@ -143,6 +143,9 @@ export interface FinanceDocumentInboxItem {
     fecha_vencimiento?: string;
     concepto?: string;
     categoria_sugerida?: string;
+    subtotal_neto?: number;
+    iva_monto?: number;
+    centro_costo_sugerido?: string;
   };
   raw_email_url: string | null;
   attachment_url: string | null;
@@ -215,6 +218,18 @@ export interface AccountGroupPosition {
   }[];
 }
 
+/** Modelo para el saldo acumulado diario en el calendario */
+export interface DailyCalendarBalance {
+  day: number;
+  date: string;
+  inflows: number;
+  outflows: number;
+  netFlow: number;
+  projectedClosingBalance: number;
+  hasMovements: boolean;
+  transactions: FinanceUnifiedTransaction[];
+}
+
 /** Estructura de Flujo de Fondos Proyectado de 13 Semanas */
 export interface WeeklyCashflowItem {
   weekNumber: number;
@@ -231,6 +246,51 @@ export interface WeeklyCashflowItem {
   outflowsUsd: number;
   netFlowUsd: number;
   finalBalanceUsd: number;
+}
+
+/** Métricas avanzadas para el Dashboard Ejecutivo de Finanzas */
+export interface FinanceDashboardMetrics {
+  expensesByCategory: {
+    code: string;
+    name: string;
+    amount: number;
+    percentage: number;
+    color: string;
+  }[];
+  topPayees: {
+    payee: string;
+    amount: number;
+    sharePercentage: number;
+    txCount: number;
+  }[];
+  monthlyComparison: {
+    period: string; // YYYY-MM
+    label: string;
+    income: number;
+    expense: number;
+    net: number;
+  }[];
+  budgetVsReal: {
+    budgetedIncome: number;
+    actualIncome: number;
+    incomeVariance: number;
+    budgetedExpense: number;
+    actualExpense: number;
+    expenseVariance: number;
+    netSurplus: number;
+    hasBudgetConfigured: boolean;
+  };
+  liquidityEvolution: {
+    date: string;
+    label: string;
+    balance: number;
+    projected: boolean;
+  }[];
+  upcomingMaturities: {
+    days7: { payables: number; receivables: number; net: number };
+    days15: { payables: number; receivables: number; net: number };
+    days30: { payables: number; receivables: number; net: number };
+  };
 }
 
 /** P&L Gerencial */
@@ -261,4 +321,17 @@ export interface ProfitAndLossStatement {
     margen: number;
     margenPorcentaje: number;
   }[];
+}
+
+
+export interface BankBalancesSummary {
+  galiciaBalance: number;
+  santanderBalance: number;
+  bothBanksBalance: number;
+  cajaBalance: number;
+  banksAndCashBalance: number;
+  totalBalance: number;
+  hasGaliciaAccount: boolean;
+  hasSantanderAccount: boolean;
+  hasCajaAccount: boolean;
 }

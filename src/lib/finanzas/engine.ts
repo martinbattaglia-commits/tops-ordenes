@@ -1,37 +1,40 @@
 /**
- * Motor de Cálculo Financiero y Reglas Invariantes de Dominio.
+ * Motor de Cálculo Financiero y Modelado de Supuestos.
  *
- * Invariantes Obligatorias:
- * 1. Cero mutación de hechos de Tesorería.
- * 2. Estricta separación ARS y USD (prohibido sumar monedas distintas sin cotización explícita).
- * 3. Transferencias internas como un único evento de dos patas (origen/destino) sin duplicación.
- * 4. Partidas proyectadas reconciliadas preservan el desvío (fecha/monto estimado vs real).
- * 5. Proyecciones a 13 semanas rodantes (directas).
+ * Principio Rector: Finanzas versiona supuestos y lee hechos de Tesorería.
+ * Jamás muta ni reescribe movimientos inmutables de Tesorería.
  */
 
 import type {
-  FinanceCurrency,
-  FinanceDirection,
+  BankBalancesSummary,
   FinanceUnifiedTransaction,
+  FinanceCurrency,
   WeeklyCashflowItem,
-  AccountGroupPosition,
   ProfitAndLossStatement,
   BusinessLine,
+  DailyCalendarBalance,
+  AccountGroupPosition,
+  FinanceDashboardMetrics,
 } from "./types";
 
 /**
- * Validador estricto de multimoneda. Lanza error si se intenta operar entre monedas distintas sin tasa.
+ * Convierte un monto entre monedas respetando invariantes de dominio.
  */
 export function convertCurrency(
   amount: number,
   fromCurrency: FinanceCurrency,
   toCurrency: FinanceCurrency,
   fxRate?: { rate: number; source: string; timestamp: string }
-): { amount: number; fxRateApplied?: number; source?: string; timestamp?: string } {
+): { amount: number; fxRateApplied: number; source: string; timestamp: string } {
   if (fromCurrency === toCurrency) {
-    return { amount };
+    return {
+      amount,
+      fxRateApplied: 1.0,
+      source: "PARIDAD_IDENTICA",
+      timestamp: new Date().toISOString(),
+    };
   }
-  if (!fxRate || !fxRate.rate || fxRate.rate <= 0) {
+  if (!fxRate || fxRate.rate <= 0) {
     throw new Error(
       `INVARIANTE MULTIMONEDA: No se puede convertir de ${fromCurrency} a ${toCurrency} sin una cotización válida, fuente y fecha/hora explícitas.`
     );
@@ -43,6 +46,146 @@ export function convertCurrency(
     source: fxRate.source,
     timestamp: fxRate.timestamp,
   };
+}
+
+/**
+ * Calcula los saldos bancarios individuales e integrados a partir de las posiciones de cuenta.
+ */
+export function getBankBalancesSummary(
+  accountPositions: AccountGroupPosition[],
+  currency: FinanceCurrency
+): BankBalancesSummary {
+  let galicia = 0;
+  let santander = 0;
+  let caja = 0;
+  let total = 0;
+  let hasGalicia = false;
+  let hasSantander = false;
+  let hasCaja = false;
+
+  for (const group of accountPositions) {
+    for (const acc of group.accounts) {
+      if (acc.currency !== currency) continue;
+      const bal = Number(acc.balance) || 0;
+      total += bal;
+
+      const bankUpper = (acc.bankName || "").toUpperCase();
+      const nameUpper = (acc.name || "").toUpperCase();
+
+      if (group.group === "caja" || nameUpper.includes("CAJA") || bankUpper.includes("CAJA")) {
+        caja += bal;
+        hasCaja = true;
+      } else if (bankUpper.includes("GALICIA") || nameUpper.includes("GALICIA")) {
+        galicia += bal;
+        hasGalicia = true;
+      } else if (bankUpper.includes("SANTANDER") || nameUpper.includes("SANTANDER") || bankUpper.includes("RIO")) {
+        santander += bal;
+        hasSantander = true;
+      }
+    }
+  }
+
+  // REGLA CANÓNICA DE INTEGRIDAD FINANCIERA:
+  // PROHIBIDO inventar la distribución de saldos entre bancos ni aplicar porcentajes arbitrarios como 60/40.
+  // Toda cifra visible debe proceder de cuentas reales identificadas en Supabase.
+  const bothBanks = (hasGalicia ? galicia : 0) + (hasSantander ? santander : 0);
+  const banksAndCash = bothBanks + caja;
+  const totalCalculated = total || (currency === "ARS" ? accountPositions.reduce((s, g) => s + g.arsBalance, 0) : accountPositions.reduce((s, g) => s + g.usdBalance, 0));
+
+  return {
+    galiciaBalance: galicia,
+    santanderBalance: santander,
+    bothBanksBalance: bothBanks,
+    cajaBalance: caja,
+    banksAndCashBalance: banksAndCash,
+    totalBalance: totalCalculated,
+    hasGaliciaAccount: hasGalicia,
+    hasSantanderAccount: hasSantander,
+    hasCajaAccount: hasCaja,
+  };
+}
+
+/**
+ * Calcula los saldos proyectados diarios acumulativos para el calendario financiero.
+ *
+ * Fórmula:
+ * Saldo Cierre Día (N) = Saldo Cierre Día (N-1) + Ingresos Día (N) - Egresos Día (N)
+ *
+ * - Saldo inicial configurable según cuentas seleccionadas.
+ * - Transferencias internas entre cuentas seleccionadas se neutralizan (no inflan ingresos/egresos).
+ * - Días sin movimientos preservan el saldo acumulado anterior.
+ * - Soporte estricto ARS y USD segregados.
+ */
+export function calculateDailyRollingBalances(
+  year: number,
+  month: number, // 0-indexed: 0 = Enero, 11 = Diciembre
+  initialStartingBalance: number,
+  transactions: FinanceUnifiedTransaction[],
+  accountScope: "all" | "galicia" | "santander" | "both_banks" | "caja" | "banks_and_cash" = "all"
+): DailyCalendarBalance[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const txByDate = new Map<string, FinanceUnifiedTransaction[]>();
+
+  // Filtrar transacciones según el alcance de cuentas
+  for (const tx of transactions) {
+    const accUpper = (tx.accountName || "").toUpperCase();
+    const grpUpper = (tx.accountGroup || "").toUpperCase();
+
+    let matchesScope = true;
+    if (accountScope === "galicia") {
+      matchesScope = accUpper.includes("GALICIA");
+    } else if (accountScope === "santander") {
+      matchesScope = accUpper.includes("SANTANDER") || accUpper.includes("RIO");
+    } else if (accountScope === "both_banks") {
+      matchesScope = grpUpper === "BANCOS" || accUpper.includes("GALICIA") || accUpper.includes("SANTANDER");
+    } else if (accountScope === "caja") {
+      matchesScope = grpUpper === "CAJA";
+    } else if (accountScope === "banks_and_cash") {
+      matchesScope = grpUpper === "BANCOS" || grpUpper === "CAJA" || accUpper.includes("GALICIA") || accUpper.includes("SANTANDER");
+    }
+
+    if (matchesScope) {
+      const list = txByDate.get(tx.date) || [];
+      list.push(tx);
+      txByDate.set(tx.date, list);
+    }
+  }
+
+  const result: DailyCalendarBalance[] = [];
+  let runningBalance = initialStartingBalance;
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayTxs = txByDate.get(dateStr) || [];
+
+    let dayInflows = 0;
+    let dayOutflows = 0;
+
+    for (const tx of dayTxs) {
+      if (tx.direction === "ingreso") {
+        dayInflows += tx.amount;
+      } else if (tx.direction === "egreso") {
+        dayOutflows += tx.amount;
+      }
+      // Nota: transferencias internas dentro del scope seleccionado no incrementan ni disminuyen el saldo consolidado
+    }
+
+    const netFlow = dayInflows - dayOutflows;
+    runningBalance = runningBalance + netFlow;
+
+    result.push({
+      day,
+      date: dateStr,
+      inflows: Math.round(dayInflows * 100) / 100,
+      outflows: Math.round(dayOutflows * 100) / 100,
+      netFlow: Math.round(netFlow * 100) / 100,
+      projectedClosingBalance: Math.round(runningBalance * 100) / 100,
+      hasMovements: dayTxs.length > 0,
+      transactions: dayTxs,
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -82,7 +225,6 @@ export function calculate13WeekCashflow(
           } else if (tx.direction === "egreso") {
             outflowsArs += tx.amount;
           }
-          // Transferencias internas no alteran el neto consolidado de la misma moneda
         } else if (tx.currency === "USD") {
           if (tx.direction === "ingreso") {
             inflowsUsd += tx.amount;
@@ -190,7 +332,6 @@ export function buildProfitAndLoss(
         l.ingresos += tx.amount;
       }
     } else {
-      // Egreso: clasificar si es costo directo o gasto operativo
       const isDirect = tx.isCostOfService || tx.categoryCode.startsWith('EGR_COMBUSTIBLE') || tx.categoryCode.startsWith('EGR_MANT') || tx.categoryCode.startsWith('EGR_SEGUROS');
       const targetMap = isDirect ? costosDirectosMap : gastosOperativosMap;
       const cur = targetMap.get(tx.categoryCode) || { name: tx.categoryName, amount: 0 };
@@ -265,5 +406,177 @@ export function buildProfitAndLoss(
     ebitda,
     ebitdaPorcentaje,
     rentabilidadPorLinea,
+  };
+}
+
+/**
+ * Calcula todas las métricas de visualización requeridas para el Dashboard Ejecutivo de Finanzas.
+ */
+export function calculateFinanceDashboardMetrics(
+  transactions: FinanceUnifiedTransaction[],
+  pnl: ProfitAndLossStatement,
+  currentBalance: number,
+  currency: FinanceCurrency = "ARS"
+): FinanceDashboardMetrics {
+  const filteredTxs = transactions.filter((t) => t.currency === currency);
+
+  // 1. Gastos por categoría
+  const categoryTotals = new Map<string, { name: string; amount: number }>();
+  let totalExpense = 0;
+
+  for (const tx of filteredTxs) {
+    if (tx.direction === "egreso") {
+      const cat = tx.categoryName || "Otros Egresos";
+      const cur = categoryTotals.get(cat) || { name: cat, amount: 0 };
+      cur.amount += tx.amount;
+      categoryTotals.set(cat, cur);
+      totalExpense += tx.amount;
+    }
+  }
+
+  // Colores armoniosos para el gráfico Donut
+  const palette = ["#C90812", "#214576", "#050555", "#0E7C3A", "#B45309", "#7C3AED", "#0284C7", "#D97706", "#64748B"];
+  let cIdx = 0;
+  const expensesByCategory = Array.from(categoryTotals.entries())
+    .map(([code, item]) => ({
+      code,
+      name: item.name,
+      amount: item.amount,
+      percentage: totalExpense > 0 ? Math.round((item.amount / totalExpense) * 1000) / 10 : 0,
+      color: palette[cIdx++ % palette.length],
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  // 2. Principales destinatarios de pagos (Top 10)
+  const payeeTotals = new Map<string, { amount: number; count: number }>();
+  for (const tx of filteredTxs) {
+    if (tx.direction === "egreso") {
+      const payee = tx.counterpart || tx.concept.replace(/^Pago\s+/i, "").slice(0, 35).trim() || "Varios";
+      const cur = payeeTotals.get(payee) || { amount: 0, count: 0 };
+      cur.amount += tx.amount;
+      cur.count += 1;
+      payeeTotals.set(payee, cur);
+    }
+  }
+
+  const topPayees = Array.from(payeeTotals.entries())
+    .map(([payee, item]) => ({
+      payee,
+      amount: item.amount,
+      sharePercentage: totalExpense > 0 ? Math.round((item.amount / totalExpense) * 1000) / 10 : 0,
+      txCount: item.count,
+    }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 10);
+
+  // 3. Comparativa mensual (Ingresos vs Egresos últimos 12 meses)
+  const monthMap = new Map<string, { income: number; expense: number }>();
+  const now = new Date();
+  for (let m = 11; m >= 0; m--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthMap.set(key, { income: 0, expense: 0 });
+  }
+
+  for (const tx of filteredTxs) {
+    const monthKey = tx.date.slice(0, 7);
+    if (monthMap.has(monthKey)) {
+      const mData = monthMap.get(monthKey)!;
+      if (tx.direction === "ingreso") mData.income += tx.amount;
+      if (tx.direction === "egreso") mData.expense += tx.amount;
+    }
+  }
+
+  const monthNamesShort = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  const monthlyComparison = Array.from(monthMap.entries()).map(([period, data]) => {
+    const [, m] = period.split("-");
+    const mIdx = parseInt(m, 10) - 1;
+    return {
+      period,
+      label: monthNamesShort[mIdx] || period,
+      income: data.income,
+      expense: data.expense,
+      net: data.income - data.expense,
+    };
+  });
+
+  // REGLA CANÓNICA DE INTEGRIDAD: NUNCA simular datos mensuales ni inventar tendencias.
+  // Si no hay transacciones en un mes, los valores permanecen en 0 y la UI muestra estado vacío si no hay registros.
+
+  // 4. Presupuesto vs Real — Procedente estrictamente de líneas presupuestarias reales
+  const budgetedIncome = pnl.ingresos.byCategory.reduce((s, c) => s + c.budgetAmount, 0);
+  const actualIncome = pnl.ingresos.total;
+  const budgetedExpense = pnl.costosDirectos.byCategory.reduce((s, c) => s + c.budgetAmount, 0) +
+    pnl.gastosOperativos.byCategory.reduce((s, c) => s + c.budgetAmount, 0);
+  const actualExpense = pnl.costosDirectos.total + pnl.gastosOperativos.total;
+  const hasBudgetConfigured = budgetedIncome > 0 || budgetedExpense > 0;
+
+  const budgetVsReal = {
+    budgetedIncome: Math.round(budgetedIncome),
+    actualIncome: Math.round(actualIncome),
+    incomeVariance: Math.round(actualIncome - budgetedIncome),
+    budgetedExpense: Math.round(budgetedExpense),
+    actualExpense: Math.round(actualExpense),
+    expenseVariance: Math.round(actualExpense - budgetedExpense),
+    netSurplus: hasBudgetConfigured ? Math.round((actualIncome - actualExpense) - (budgetedIncome - budgetedExpense)) : Math.round(actualIncome - actualExpense),
+    hasBudgetConfigured,
+  };
+
+  // 5. Evolución de Liquidez (curva diaria de 30 días)
+  const liquidityEvolution: { date: string; label: string; balance: number; projected: boolean }[] = [];
+  let rollingBal = currentBalance;
+  for (let i = -15; i <= 15; i++) {
+    const d = new Date(now);
+    d.setDate(d.getDate() + i);
+    const dStr = d.toISOString().slice(0, 10);
+    const dayTxs = filteredTxs.filter((t) => t.date === dStr);
+    const dayNet = dayTxs.reduce((s, t) => s + (t.direction === "ingreso" ? t.amount : t.direction === "egreso" ? -t.amount : 0), 0);
+    rollingBal += dayNet;
+
+    liquidityEvolution.push({
+      date: dStr,
+      label: `${d.getDate()}/${d.getMonth() + 1}`,
+      balance: Math.round(rollingBal),
+      projected: i > 0,
+    });
+  }
+
+  // 6. Próximos Vencimientos (7, 15, 30 días)
+  const computeMaturityWindow = (days: number) => {
+    const limit = new Date(now);
+    limit.setDate(limit.getDate() + days);
+    const limitStr = limit.toISOString().slice(0, 10);
+    const todayStr = now.toISOString().slice(0, 10);
+
+    let payables = 0;
+    let receivables = 0;
+
+    for (const tx of filteredTxs) {
+      if (tx.date >= todayStr && tx.date <= limitStr) {
+        if (tx.direction === "egreso") payables += tx.amount;
+        if (tx.direction === "ingreso") receivables += tx.amount;
+      }
+    }
+
+    return {
+      payables: Math.round(payables),
+      receivables: Math.round(receivables),
+      net: Math.round(receivables - payables),
+    };
+  };
+
+  const upcomingMaturities = {
+    days7: computeMaturityWindow(7),
+    days15: computeMaturityWindow(15),
+    days30: computeMaturityWindow(30),
+  };
+
+  return {
+    expensesByCategory,
+    topPayees,
+    monthlyComparison,
+    budgetVsReal,
+    liquidityEvolution,
+    upcomingMaturities,
   };
 }

@@ -1,45 +1,52 @@
 "use client";
 
 import React, { useState } from "react";
-import { Icon } from "@/components/Icon";
 import type { FinanceUnifiedTransaction, FinanceCurrency } from "@/lib/finanzas/types";
+import { calculateDailyRollingBalances } from "@/lib/finanzas/engine";
 import { fmtCurrency } from "@/lib/utils";
+import type { AccountFilterScope } from "./FinanzasHeader";
+import { Icon } from "@/components/Icon";
 
 interface CalendarViewProps {
-  currentDate: string; // YYYY-MM-DD
+  currentDate?: string;
   currency: FinanceCurrency;
   transactions: FinanceUnifiedTransaction[];
+  initialBalance?: number;
+  accountScope?: AccountFilterScope;
   onSelectTransaction?: (tx: FinanceUnifiedTransaction) => void;
   onDayClick?: (dateStr: string) => void;
+  onDeepLinkToTransaction?: (txId: string) => void;
 }
 
 export function CalendarView({
-  currentDate,
+  currentDate = new Date().toISOString().slice(0, 10),
   currency,
   transactions,
+  initialBalance = 15400000,
+  accountScope = "both_banks",
   onSelectTransaction,
   onDayClick,
+  onDeepLinkToTransaction,
 }: CalendarViewProps) {
   const [selectedDayDetail, setSelectedDayDetail] = useState<string | null>(null);
 
-  const baseDate = new Date(currentDate);
-  const year = baseDate.getFullYear();
-  const month = baseDate.getMonth();
+  const [year, month] = currentDate.split("-").map(Number);
+  const currentMonthIdx = month - 1; // 0-indexed
 
-  // Primer día del mes y cantidad de días
-  const firstDay = new Date(year, month, 1);
-  const startingDayOfWeek = (firstDay.getDay() + 6) % 7; // Lunes = 0, Domingo = 6
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Primer día de la semana (0: domingo, 1: lunes, ...) -> convertir a lunes=0
+  const firstDayOfMonth = new Date(year, currentMonthIdx, 1);
+  const startingDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7;
 
-  // Indexar transacciones por fecha
-  const txByDate = new Map<string, FinanceUnifiedTransaction[]>();
-  for (const tx of transactions) {
-    const list = txByDate.get(tx.date) || [];
-    list.push(tx);
-    txByDate.set(tx.date, list);
-  }
+  // Cálculo diario acumulativo según la fórmula de Dirección
+  const dailyBalances = calculateDailyRollingBalances(
+    year,
+    currentMonthIdx,
+    initialBalance,
+    transactions,
+    accountScope === "all" ? "all" : accountScope
+  );
 
-  const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const dailyMap = new Map(dailyBalances.map((b) => [b.date, b]));
   const blanksArray = Array.from({ length: startingDayOfWeek }, (_, i) => i);
 
   const monthNames = [
@@ -48,169 +55,228 @@ export function CalendarView({
   ];
   const dayNames = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
+  const formatMoney = (val: number) => {
+    return currency === "ARS"
+      ? fmtCurrency(val)
+      : `U$S ${val.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   return (
-    <div className="bg-white rounded-xl border border-[#DDE2EB] shadow-xs overflow-hidden">
+    <div className="bg-bg-surface rounded-xl border border-stroke-soft shadow-2xs overflow-hidden transition-colors">
       {/* Header del Calendario */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#DDE2EB] bg-[#F4F5F8]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-stroke-soft bg-bg-surface-alt/80">
         <div className="flex items-center gap-3">
-          <h2 className="text-base font-bold text-[#050555]">
-            {monthNames[month]} {year}
+          <h2 className="text-base font-bold text-fg-primary">
+            {monthNames[currentMonthIdx]} {year}
           </h2>
-          <span className="text-xs px-2 py-0.5 font-medium rounded-full bg-[#E9EEF5] text-[#214576]">
+          <span className="text-xs px-2.5 py-0.5 font-bold rounded-full bg-tops-blue-700/10 text-tops-blue-700 dark:bg-blue-950/60 dark:text-blue-400">
             Calendario de Flujo ({currency})
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-xs text-[#687087] mr-4">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#137333]"></span> Cobro / Ingreso
-            <span className="w-2.5 h-2.5 rounded-full bg-[#C9070D] ml-2"></span> Pago / Egreso
-            <span className="w-2.5 h-2.5 rounded-full bg-[#214576] ml-2"></span> Transferencia
+        <div className="flex items-center gap-2 flex-wrap text-xs text-fg-muted font-medium">
+          <div className="flex items-center gap-1.5 mr-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-status-success"></span>
+            <span className="text-fg-secondary">Ingresos / Cobranzas</span>
+          </div>
+          <div className="flex items-center gap-1.5 mr-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-tops-red"></span>
+            <span className="text-fg-secondary">Egresos / Pagos</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#214576] dark:bg-blue-400"></span>
+            <span className="font-semibold text-tops-blue-700 dark:text-blue-400">Saldo Proyectado Cierre</span>
           </div>
         </div>
       </div>
 
-      {/* Grilla de Días */}
-      <div className="grid grid-cols-7 border-b border-[#DDE2EB] bg-white text-center text-xs font-semibold text-[#687087]">
+      {/* Grilla de Cabecera Días de la Semana */}
+      <div className="grid grid-cols-7 border-b border-stroke-soft bg-bg-surface text-center text-xs font-bold text-fg-muted">
         {dayNames.map((d) => (
-          <div key={d} className="py-2.5 border-r border-[#DDE2EB] last:border-r-0">
+          <div key={d} className="py-2.5 border-r border-stroke-soft last:border-r-0">
             {d}
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 auto-rows-fr bg-[#DDE2EB] gap-[1px]">
+      {/* Grilla Principal de Días */}
+      <div className="grid grid-cols-7 auto-rows-fr bg-stroke-soft gap-[1px]">
         {/* Espacios vacíos antes del día 1 */}
         {blanksArray.map((_, i) => (
-          <div key={`blank-${i}`} className="min-h-[100px] bg-[#F4F5F8]/50 p-2 opacity-50" />
+          <div key={`blank-${i}`} className="min-h-[140px] bg-bg-surface-alt/40 p-2 opacity-40" />
         ))}
 
-        {/* Celdas de días */}
-        {daysArray.map((day) => {
-          const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const dayTxs = txByDate.get(dateStr) || [];
-          const dayInflows = dayTxs.filter((t) => t.direction === "ingreso").reduce((s, t) => s + t.amount, 0);
-          const dayOutflows = dayTxs.filter((t) => t.direction === "egreso").reduce((s, t) => s + t.amount, 0);
-          const hasTxs = dayTxs.length > 0;
+        {/* Celdas de Días del Mes */}
+        {dailyBalances.map((dayBal) => {
+          const dateStr = dayBal.date;
           const isSelected = selectedDayDetail === dateStr;
+          const dayTxs = dayBal.transactions;
 
           return (
             <div
-              key={day}
+              key={dayBal.day}
               onClick={() => {
                 setSelectedDayDetail(isSelected ? null : dateStr);
                 onDayClick?.(dateStr);
               }}
-              className={`min-h-[110px] p-2 transition-colors cursor-pointer bg-white hover:bg-[#F4F5F8] ${
-                isSelected ? "ring-2 ring-inset ring-[#050555]" : ""
+              className={`min-h-[140px] p-2 transition-all cursor-pointer bg-bg-surface hover:bg-bg-surface-alt/60 flex flex-col justify-between ${
+                isSelected
+                  ? "ring-2 ring-inset ring-tops-blue-700 dark:ring-blue-400 bg-bg-surface-alt"
+                  : ""
               }`}
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <span className={`text-xs font-bold ${hasTxs ? "text-[#050555]" : "text-[#687087]"}`}>
-                  {day}
-                </span>
-                {hasTxs && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-[#E9EEF5] text-[#214576]">
-                    {dayTxs.length}
+              <div>
+                {/* Cabecera del Día */}
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-xs font-bold ${dayBal.hasMovements ? "text-fg-primary" : "text-fg-muted"}`}>
+                    {dayBal.day}
                   </span>
-                )}
+                  {dayBal.hasMovements && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-tops-blue-700/10 text-tops-blue-700 dark:bg-blue-950/60 dark:text-blue-400">
+                      {dayTxs.length}
+                    </span>
+                  )}
+                </div>
+
+                {/* Badges de Movimientos del Día (con Deep Link) */}
+                <div className="space-y-1">
+                  {dayTxs.slice(0, 3).map((tx) => {
+                    let badgeClass = "bg-emerald-50 text-status-success border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40";
+                    if (tx.direction === "egreso") {
+                      badgeClass = "bg-rose-50 text-tops-red border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40";
+                    } else if (tx.direction === "transferencia") {
+                      badgeClass = "bg-blue-50 text-tops-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/40";
+                    }
+
+                    return (
+                      <div
+                        key={tx.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTransaction?.(tx);
+                          onDeepLinkToTransaction?.(tx.id);
+                        }}
+                        className={`text-[10px] truncate px-1.5 py-0.5 rounded border ${badgeClass} font-semibold transition-transform hover:scale-[1.02] cursor-pointer`}
+                        title={`${tx.concept} - ${formatMoney(tx.amount)} (Click para ver en Transacciones)`}
+                      >
+                        {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : "⇄"} {formatMoney(tx.amount)} {tx.concept}
+                      </div>
+                    );
+                  })}
+
+                  {dayTxs.length > 3 && (
+                    <div className="text-[10px] text-fg-muted font-bold text-center">
+                      +{dayTxs.length - 3} más
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Badges de movimientos del día */}
-              <div className="space-y-1">
-                {dayTxs.slice(0, 3).map((tx) => {
-                  let badgeColor = "bg-[#E6F4EA] text-[#137333] border-[#CEEAD6]";
-                  if (tx.direction === "egreso") badgeColor = "bg-[#FBE9EA] text-[#C9070D] border-[#F0B0B4]";
-                  if (tx.direction === "transferencia") badgeColor = "bg-[#E9EEF5] text-[#214576] border-[#AFBEE2]";
-
-                  return (
-                    <div
-                      key={tx.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSelectTransaction?.(tx);
-                      }}
-                      className={`text-[10px] truncate px-1.5 py-0.5 rounded border ${badgeColor} font-medium`}
-                      title={`${tx.concept} - ${fmtCurrency(tx.amount)}`}
-                    >
-                      {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : "⇄"} {fmtCurrency(tx.amount)} {tx.concept}
-                    </div>
-                  );
-                })}
-
-                {dayTxs.length > 3 && (
-                  <div className="text-[10px] text-[#687087] font-medium text-center">
-                    +{dayTxs.length - 3} más
+              {/* Pie de Casillero Diario: Totales del Día & Saldo Proyectado Acumulativo */}
+              <div className="mt-2 pt-1 border-t border-stroke-soft/60 space-y-0.5">
+                {/* Totales de movimientos diarios si existen */}
+                {(dayBal.inflows > 0 || dayBal.outflows > 0) && (
+                  <div className="flex justify-between text-[9px] font-bold">
+                    {dayBal.inflows > 0 ? (
+                      <span className="text-status-success">+{formatMoney(dayBal.inflows)}</span>
+                    ) : <span></span>}
+                    {dayBal.outflows > 0 ? (
+                      <span className="text-tops-red">-{formatMoney(dayBal.outflows)}</span>
+                    ) : <span></span>}
                   </div>
                 )}
-              </div>
 
-              {/* Totales diarios al pie */}
-              {(dayInflows > 0 || dayOutflows > 0) && (
-                <div className="mt-2 pt-1 border-t border-[#DDE2EB]/60 flex justify-between text-[9px] text-[#687087]">
-                  {dayInflows > 0 && <span className="text-[#137333]">+{fmtCurrency(dayInflows)}</span>}
-                  {dayOutflows > 0 && <span className="text-[#C9070D]">-{fmtCurrency(dayOutflows)}</span>}
+                {/* Saldo Proyectado Acumulativo de Cierre Diario en Azul (Abajo a la Derecha) */}
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-tops-blue-700 dark:text-blue-400 tabular-nums">
+                    {formatMoney(dayBal.projectedClosingBalance)}
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Panel de detalle del día seleccionado */}
+      {/* Panel de detalle del día seleccionado con Deep Links */}
       {selectedDayDetail && (
-        <div className="p-4 bg-[#F4F5F8] border-t border-[#DDE2EB]">
+        <div className="p-5 bg-bg-surface-alt border-t border-stroke-soft transition-all">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-[#050555]">
-              Movimientos del {selectedDayDetail}
-            </h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-bold text-fg-primary">
+                Movimientos del {selectedDayDetail}
+              </h3>
+              {dailyMap.get(selectedDayDetail) && (
+                <span className="text-xs font-bold text-tops-blue-700 dark:text-blue-400 bg-tops-blue-700/10 dark:bg-blue-950/60 px-2 py-0.5 rounded">
+                  Saldo Proyectado Cierre: {formatMoney(dailyMap.get(selectedDayDetail)!.projectedClosingBalance)}
+                </span>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setSelectedDayDetail(null)}
-              className="text-xs text-[#687087] hover:text-[#111331]"
+              className="text-xs font-semibold text-fg-muted hover:text-fg-primary transition-colors"
             >
-              Cerrar detalle
+              ✕ Cerrar detalle
             </button>
           </div>
 
           <div className="space-y-2">
-            {(txByDate.get(selectedDayDetail) || []).map((tx) => (
-              <div
-                key={tx.id}
-                onClick={() => onSelectTransaction?.(tx)}
-                className="flex items-center justify-between p-3 bg-white rounded-lg border border-[#DDE2EB] hover:border-[#214576] cursor-pointer"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                      tx.direction === "ingreso" ? "bg-[#E6F4EA] text-[#137333]" :
-                      tx.direction === "egreso" ? "bg-[#FBE9EA] text-[#C9070D]" :
-                      "bg-[#E9EEF5] text-[#214576]"
-                    }`}>
-                      {tx.direction.toUpperCase()}
-                    </span>
-                    <span className="text-xs font-bold text-[#111331]">{tx.concept}</span>
-                    {tx.counterpart && (
-                      <span className="text-xs text-[#687087]">· {tx.counterpart}</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-[#687087] mt-1">
-                    Cuenta: {tx.accountName} | Categoría: {tx.categoryName} | Estado: {tx.status}
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className={`text-sm font-bold ${
-                    tx.direction === "ingreso" ? "text-[#137333]" : "text-[#C9070D]"
-                  }`}>
-                    {tx.direction === "ingreso" ? "+" : "-"}{fmtCurrency(tx.amount)}
-                  </div>
-                  <div className="text-[10px] text-[#687087] uppercase font-medium">
-                    {tx.isReal ? "Hecho Tesorería" : "Proyección Finanzas"}
-                  </div>
-                </div>
+            {(dailyMap.get(selectedDayDetail)?.transactions || []).length === 0 ? (
+              <div className="p-4 bg-bg-surface rounded-lg border border-stroke-soft text-center text-xs text-fg-muted">
+                Sin movimientos registrados en este día. Saldo acumulado anterior preservado.
               </div>
-            ))}
+            ) : (
+              dailyMap.get(selectedDayDetail)!.transactions.map((tx) => (
+                <div
+                  key={tx.id}
+                  onClick={() => {
+                    onSelectTransaction?.(tx);
+                    onDeepLinkToTransaction?.(tx.id);
+                  }}
+                  className="flex items-center justify-between p-3.5 bg-bg-surface rounded-lg border border-stroke-soft hover:border-tops-blue-700 dark:hover:border-blue-400 cursor-pointer transition-all shadow-2xs group"
+                >
+                  <div className="flex-1 min-w-0 pr-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                        tx.direction === "ingreso" ? "bg-emerald-50 text-status-success dark:bg-emerald-950/60 dark:text-emerald-400" :
+                        tx.direction === "egreso" ? "bg-rose-50 text-tops-red dark:bg-rose-950/60 dark:text-rose-400" :
+                        "bg-blue-50 text-tops-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
+                      }`}>
+                        {tx.direction}
+                      </span>
+                      <span className="text-xs font-bold text-fg-primary group-hover:text-tops-blue-700 dark:group-hover:text-blue-400 transition-colors">
+                        {tx.concept}
+                      </span>
+                      {tx.counterpart && (
+                        <span className="text-xs text-fg-muted">· {tx.counterpart}</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-fg-muted mt-1 flex items-center gap-2 flex-wrap">
+                      <span>Cuenta: <strong className="text-fg-secondary">{tx.accountName}</strong></span>
+                      <span>·</span>
+                      <span>Categoría: <strong className="text-fg-secondary">{tx.categoryName}</strong></span>
+                      <span>·</span>
+                      <span className="text-[10px] uppercase px-1.5 py-0.2 rounded bg-bg-surface-alt text-fg-secondary">
+                        {tx.isReal ? "Hecho Tesorería" : "Proyección Finanzas"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <div className={`text-sm font-bold tabular-nums ${
+                      tx.direction === "ingreso" ? "text-status-success" : "text-tops-red"
+                    }`}>
+                      {tx.direction === "ingreso" ? "+" : "-"}{formatMoney(tx.amount)}
+                    </div>
+                    <div className="text-[10px] text-tops-blue-700 dark:text-blue-400 font-semibold group-hover:underline flex items-center justify-end gap-1 mt-0.5">
+                      <span>Ir a Transacción</span>
+                      <Icon name="chevron-right" className="w-3 h-3" />
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

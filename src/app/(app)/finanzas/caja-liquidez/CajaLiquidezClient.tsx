@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { FinanzasHeader } from "@/components/finanzas/FinanzasHeader";
+import React, { useState, useEffect } from "react";
+import { FinanzasHeader, type AccountFilterScope } from "@/components/finanzas/FinanzasHeader";
 import { AccountGroupCards } from "@/components/finanzas/AccountGroupCards";
 import { CalendarView } from "@/components/finanzas/CalendarView";
 import { ListView } from "@/components/finanzas/ListView";
@@ -17,7 +17,7 @@ import type {
   FinanceCostCenter,
   WeeklyCashflowItem,
 } from "@/lib/finanzas/types";
-import { calculate13WeekCashflow } from "@/lib/finanzas/engine";
+import { calculate13WeekCashflow, getBankBalancesSummary } from "@/lib/finanzas/engine";
 import { Icon } from "@/components/Icon";
 
 interface CajaLiquidezClientProps {
@@ -38,14 +38,43 @@ export function CajaLiquidezClient({
   const [currency, setCurrency] = useState<FinanceCurrency>("ARS");
   const [activeTab, setActiveTab] = useState<"calendario" | "lista" | "transacciones" | "13semanas">("calendario");
   const [selectedGroup, setSelectedGroup] = useState<FinanceAccountGroup | null>(null);
+  const [activeAccountScope, setActiveAccountScope] = useState<AccountFilterScope>("both_banks");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [highlightedTxId, setHighlightedTxId] = useState<string | null>(null);
 
   const [accountGroups] = useState<AccountGroupPosition[]>(initialAccountGroups);
   const [transactions, setTransactions] = useState<FinanceUnifiedTransaction[]>(initialTransactions);
   const [categories] = useState<FinanceCategory[]>(initialCategories);
   const [costCenters] = useState<FinanceCostCenter[]>(initialCostCenters);
   const [weeks13, setWeeks13] = useState<WeeklyCashflowItem[]>(initialWeeks13);
+
+  // Parse deep links from URL search params on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tabParam = urlParams.get("tab");
+      const txParam = urlParams.get("txId");
+
+      if (tabParam === "transacciones" || tabParam === "lista" || tabParam === "calendario" || tabParam === "13semanas") {
+        setActiveTab(tabParam);
+      }
+      if (txParam) {
+        setHighlightedTxId(txParam);
+      }
+    }
+  }, []);
+
+  const handleDeepLinkToTransaction = (txId: string) => {
+    setHighlightedTxId(txId);
+    setActiveTab("transacciones");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", "transacciones");
+      url.searchParams.set("txId", txId);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
 
   const handleCurrencyChange = (newCurr: FinanceCurrency) => {
     setCurrency(newCurr);
@@ -91,6 +120,15 @@ export function CajaLiquidezClient({
     setTransactions((prev) => [newTx, ...prev]);
   };
 
+  // Cálculo del saldo inicial para el calendario según el scope seleccionado
+  const bankSummary = getBankBalancesSummary(accountGroups, currency);
+  let calendarInitialBalance = bankSummary.bothBanksBalance;
+  if (activeAccountScope === "galicia") calendarInitialBalance = bankSummary.galiciaBalance;
+  else if (activeAccountScope === "santander") calendarInitialBalance = bankSummary.santanderBalance;
+  else if (activeAccountScope === "caja") calendarInitialBalance = bankSummary.cajaBalance;
+  else if (activeAccountScope === "banks_and_cash") calendarInitialBalance = bankSummary.banksAndCashBalance;
+  else if (activeAccountScope === "all") calendarInitialBalance = bankSummary.totalBalance;
+
   const filteredTransactions = transactions
     .filter((t) => (currency ? t.currency === currency : true))
     .filter((t) => (selectedGroup ? t.accountGroup === selectedGroup : true));
@@ -105,6 +143,9 @@ export function CajaLiquidezClient({
         selectedDate={selectedDate}
         onDateChange={handleDateChange}
         onNewMovementClick={() => setIsModalOpen(true)}
+        accountPositions={accountGroups}
+        activeAccountScope={activeAccountScope}
+        onAccountScopeChange={setActiveAccountScope}
       />
 
       <AccountGroupCards
@@ -114,15 +155,16 @@ export function CajaLiquidezClient({
         onSelectGroup={setSelectedGroup}
       />
 
+      {/* Selector de Solapas y Filtro Activo */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-        <div className="inline-flex rounded-xl border border-[#DDE2EB] bg-white p-1 shadow-xs">
+        <div className="inline-flex rounded-xl border border-stroke-soft bg-bg-surface p-1 shadow-2xs">
           <button
             type="button"
             onClick={() => setActiveTab("calendario")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === "calendario"
-                ? "bg-[#050555] text-white shadow-xs"
-                : "text-[#687087] hover:text-[#111331] hover:bg-[#F4F5F8]"
+                ? "bg-tops-blue-900 text-white dark:bg-tops-blue-700 shadow-xs"
+                : "text-fg-secondary hover:text-fg-primary hover:bg-bg-surface-alt"
             }`}
           >
             <Icon name="calendar" className="w-4 h-4" />
@@ -132,10 +174,10 @@ export function CajaLiquidezClient({
           <button
             type="button"
             onClick={() => setActiveTab("lista")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === "lista"
-                ? "bg-[#050555] text-white shadow-xs"
-                : "text-[#687087] hover:text-[#111331] hover:bg-[#F4F5F8]"
+                ? "bg-tops-blue-900 text-white dark:bg-tops-blue-700 shadow-xs"
+                : "text-fg-secondary hover:text-fg-primary hover:bg-bg-surface-alt"
             }`}
           >
             <Icon name="menu" className="w-4 h-4" />
@@ -145,10 +187,10 @@ export function CajaLiquidezClient({
           <button
             type="button"
             onClick={() => setActiveTab("transacciones")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === "transacciones"
-                ? "bg-[#050555] text-white shadow-xs"
-                : "text-[#687087] hover:text-[#111331] hover:bg-[#F4F5F8]"
+                ? "bg-tops-blue-900 text-white dark:bg-tops-blue-700 shadow-xs"
+                : "text-fg-secondary hover:text-fg-primary hover:bg-bg-surface-alt"
             }`}
           >
             <Icon name="report" className="w-4 h-4" />
@@ -158,10 +200,10 @@ export function CajaLiquidezClient({
           <button
             type="button"
             onClick={() => setActiveTab("13semanas")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
               activeTab === "13semanas"
-                ? "bg-[#050555] text-white shadow-xs"
-                : "text-[#687087] hover:text-[#111331] hover:bg-[#F4F5F8]"
+                ? "bg-tops-blue-900 text-white dark:bg-tops-blue-700 shadow-xs"
+                : "text-fg-secondary hover:text-fg-primary hover:bg-bg-surface-alt"
             }`}
           >
             <Icon name="trend-up" className="w-4 h-4" />
@@ -170,12 +212,12 @@ export function CajaLiquidezClient({
         </div>
 
         {selectedGroup && (
-          <div className="flex items-center gap-2 text-xs bg-[#E9EEF5] text-[#214576] px-3 py-1.5 rounded-lg font-medium">
+          <div className="flex items-center gap-2 text-xs bg-tops-blue-700/10 dark:bg-blue-950/60 text-tops-blue-700 dark:text-blue-400 px-3 py-1.5 rounded-lg font-bold">
             <span>Filtrando por: <strong className="uppercase">{selectedGroup}</strong></span>
             <button
               type="button"
               onClick={() => setSelectedGroup(null)}
-              className="text-[#C9070D] font-bold ml-1 hover:underline"
+              className="text-tops-red font-bold ml-1 hover:underline"
             >
               Quitar filtro
             </button>
@@ -188,6 +230,9 @@ export function CajaLiquidezClient({
           currentDate={selectedDate}
           currency={currency}
           transactions={filteredTransactions}
+          initialBalance={calendarInitialBalance}
+          accountScope={activeAccountScope}
+          onDeepLinkToTransaction={handleDeepLinkToTransaction}
         />
       )}
 
@@ -202,6 +247,8 @@ export function CajaLiquidezClient({
         <TransactionsView
           currency={currency}
           transactions={filteredTransactions}
+          highlightedTxId={highlightedTxId}
+          onSelectTransaction={(tx) => setHighlightedTxId(tx.id)}
         />
       )}
 

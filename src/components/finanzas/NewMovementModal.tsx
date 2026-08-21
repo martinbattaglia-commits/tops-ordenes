@@ -60,26 +60,25 @@ export function NewMovementModal({
   const [certainty, setCertainty] = useState<FinanceCertaintyLevel>("alta");
   const [recurrenceRule, setRecurrenceRule] = useState<string>("mensual");
   const [notes, setNotes] = useState<string>("");
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const num = parseFloat(amount);
-    if (isNaN(num) || num <= 0) {
-      setErrorMsg("El importe debe ser un número positivo.");
+    const numAmount = parseFloat(amount);
+    if (!numAmount || numAmount <= 0) {
+      alert("Por favor ingresá un monto válido mayor a 0.");
       return;
     }
     if (!concept.trim()) {
-      setErrorMsg("El concepto es obligatorio.");
+      alert("Por favor ingresá un concepto.");
       return;
     }
 
     onSave({
       mode,
       direction,
-      amount: num,
+      amount: numAmount,
       currency,
       accountGroup,
       accountId: accountId || undefined,
@@ -97,328 +96,313 @@ export function NewMovementModal({
     onClose();
   };
 
+  const selectedGroupAccounts = accountGroups.find((g) => g.group === accountGroup)?.accounts || [];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#111331]/50 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl border border-[#DDE2EB] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header del Modal */}
-        <div className="px-6 py-4 border-b border-[#DDE2EB] bg-[#F4F5F8] flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-[#050555]">
-              Nuevo Movimiento Financiero
-            </h2>
-            <p className="text-xs text-[#687087]">
-              {mode === "ejecutado"
-                ? "Registra un hecho real en Tesorería."
-                : "Programa una proyección de flujo en Finanzas sin alterar saldos reales."}
-            </p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div className="bg-bg-surface w-full max-w-2xl rounded-2xl border border-stroke-soft shadow-lg overflow-hidden flex flex-col max-h-[90vh] transition-colors">
+        {/* Header Modal */}
+        <div className="px-6 py-4 border-b border-stroke-soft bg-bg-surface-alt flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-tops-blue-700/10 dark:bg-blue-950/60 flex items-center justify-center text-tops-blue-700 dark:text-blue-400">
+              <Icon name="plus" className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-fg-primary">
+                Nuevo Movimiento Financiero
+              </h2>
+              <p className="text-xs text-fg-muted">
+                Registrar hecho ejecutado, proyección o recurrencia de caja.
+              </p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-[#687087] hover:text-[#111331] hover:bg-white transition-colors"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-fg-muted hover:text-fg-primary hover:bg-bg-surface transition-colors"
           >
-            <Icon name="x" className="w-5 h-5" />
+            ✕
           </button>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs flex-1">
-          {errorMsg && (
-            <div className="p-3 rounded-lg bg-[#FBE9EA] border border-[#F0B0B4] text-[#C9070D] font-medium">
-              {errorMsg}
-            </div>
-          )}
-
+        {/* Formulario con Scroll */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
           {/* Selector de Modo */}
           <div>
-            <label className="block text-[#687087] font-semibold mb-1.5 uppercase tracking-wider text-[10px]">
-              Modo de Operación
+            <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1.5">
+              Tipo de Registro
             </label>
             <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setMode("programado")}
-                className={`py-2 px-3 rounded-lg border font-semibold text-center transition-all ${
-                  mode === "programado"
-                    ? "border-[#050555] bg-[#050555] text-white shadow-xs"
-                    : "border-[#DDE2EB] bg-white text-[#687087] hover:bg-[#F4F5F8]"
-                }`}
-              >
-                📅 Programar Futuro (Finanzas)
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("ejecutado")}
-                className={`py-2 px-3 rounded-lg border font-semibold text-center transition-all ${
-                  mode === "ejecutado"
-                    ? "border-[#214576] bg-[#214576] text-white shadow-xs"
-                    : "border-[#DDE2EB] bg-white text-[#687087] hover:bg-[#F4F5F8]"
-                }`}
-              >
-                ⚡ Registrar Ejecutado (Tesorería)
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("recurrente")}
-                className={`py-2 px-3 rounded-lg border font-semibold text-center transition-all ${
-                  mode === "recurrente"
-                    ? "border-[#050555] bg-[#050555] text-white shadow-xs"
-                    : "border-[#DDE2EB] bg-white text-[#687087] hover:bg-[#F4F5F8]"
-                }`}
-              >
-                🔄 Crear Recurrencia
-              </button>
+              {[
+                { key: "programado", label: "📅 Proyectado / Programado" },
+                { key: "ejecutado", label: "✓ Hecho Ejecutado" },
+                { key: "recurrente", label: "🔁 Recurrente" },
+              ].map((m) => (
+                <button
+                  key={m.key}
+                  type="button"
+                  onClick={() => setMode(m.key as any)}
+                  className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all ${
+                    mode === m.key
+                      ? "border-tops-blue-700 bg-tops-blue-700/10 text-tops-blue-700 dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-400"
+                      : "border-stroke-soft bg-bg-surface text-fg-secondary hover:bg-bg-surface-alt"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Dirección y Moneda */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Dirección
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1.5">
+                Dirección del Flujo
               </label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setDirection("ingreso")}
-                  className={`py-1.5 text-center rounded-lg border font-bold transition-all ${
+                  className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                     direction === "ingreso"
-                      ? "border-[#137333] bg-[#E6F4EA] text-[#137333]"
-                      : "border-[#DDE2EB] bg-white text-[#687087]"
+                      ? "bg-emerald-50 text-status-success border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-700"
+                      : "bg-bg-surface border-stroke-soft text-fg-secondary"
                   }`}
                 >
-                  + Ingreso / Cobro
+                  + Cobro
                 </button>
                 <button
                   type="button"
                   onClick={() => setDirection("egreso")}
-                  className={`py-1.5 text-center rounded-lg border font-bold transition-all ${
+                  className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                     direction === "egreso"
-                      ? "border-[#C9070D] bg-[#FBE9EA] text-[#C9070D]"
-                      : "border-[#DDE2EB] bg-white text-[#687087]"
+                      ? "bg-rose-50 text-tops-red border-rose-300 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-700"
+                      : "bg-bg-surface border-stroke-soft text-fg-secondary"
                   }`}
                 >
-                  - Egreso / Pago
+                  - Pago
                 </button>
                 <button
                   type="button"
                   onClick={() => setDirection("transferencia")}
-                  className={`py-1.5 text-center rounded-lg border font-bold transition-all ${
+                  className={`py-2 text-xs font-bold rounded-lg border transition-all ${
                     direction === "transferencia"
-                      ? "border-[#214576] bg-[#E9EEF5] text-[#214576]"
-                      : "border-[#DDE2EB] bg-white text-[#687087]"
+                      ? "bg-blue-50 text-tops-blue-700 border-blue-300 dark:bg-blue-950/60 dark:text-blue-400 dark:border-blue-700"
+                      : "bg-bg-surface border-stroke-soft text-fg-secondary"
                   }`}
                 >
-                  ⇄ Transferencia
+                  ⇄ Transf.
                 </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Importe y Moneda
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1.5">
+                Moneda & Monto
               </label>
               <div className="flex gap-2">
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as FinanceCurrency)}
+                  className="px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg font-bold text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
+                >
+                  <option value="ARS">ARS ($)</option>
+                  <option value="USD">USD (U$S)</option>
+                </select>
                 <input
                   type="number"
                   step="0.01"
                   placeholder="0.00"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="flex-1 px-3 py-1.5 border border-[#DDE2EB] rounded-lg text-[#111331] font-bold text-sm focus:outline-none focus:ring-2 focus:ring-[#214576]"
-                />
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value as FinanceCurrency)}
-                  className="px-3 py-1.5 border border-[#DDE2EB] rounded-lg bg-white font-bold text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
-                >
-                  <option value="ARS">ARS ($)</option>
-                  <option value="USD">USD (U$S)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Cuenta y Agrupador */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Agrupador de Cuentas
-              </label>
-              <select
-                value={accountGroup}
-                onChange={(e) => setAccountGroup(e.target.value as FinanceAccountGroup)}
-                className="w-full px-3 py-1.5 border border-[#DDE2EB] rounded-lg bg-white text-[#111331] font-medium focus:outline-none focus:ring-2 focus:ring-[#214576]"
-              >
-                <option value="bancos">Bancos (Cuentas Corrientes)</option>
-                <option value="caja">Caja (Efectivo & Chicas)</option>
-                <option value="ahorros">Ahorros / Inversiones</option>
-                <option value="tarjetas">Tarjetas Corporativas</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Fecha y Hora
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="flex-1 px-3 py-1.5 border border-[#DDE2EB] rounded-lg bg-white text-[#111331] font-medium focus:outline-none focus:ring-2 focus:ring-[#214576]"
-                />
-                <input
-                  type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className="w-24 px-2 py-1.5 border border-[#DDE2EB] rounded-lg bg-white text-[#111331] font-medium focus:outline-none focus:ring-2 focus:ring-[#214576]"
+                  className="flex-1 px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg font-bold text-fg-primary text-sm focus:ring-2 focus:ring-tops-blue-700 placeholder:text-fg-muted"
+                  required
                 />
               </div>
             </div>
           </div>
 
           {/* Concepto y Contraparte */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Concepto / Descripción *
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Concepto Principal *
               </label>
               <input
                 type="text"
-                placeholder="Ej. Pago Combustible YPF / Cobranza Factura A"
+                placeholder="Ej: Cobranza Cliente X, Pago Combustible..."
                 value={concept}
                 onChange={(e) => setConcept(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#DDE2EB] rounded-lg text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700 placeholder:text-fg-muted"
+                required
               />
             </div>
 
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Contraparte / Beneficiario
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Cliente / Proveedor / Contraparte
               </label>
               <input
                 type="text"
-                placeholder="Ej. YPF S.A. / MercadoLibre"
+                placeholder="Ej: YPF S.A., Roemmers..."
                 value={counterpart}
                 onChange={(e) => setCounterpart(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#DDE2EB] rounded-lg text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700 placeholder:text-fg-muted"
               />
             </div>
           </div>
 
-          {/* Categoría Analítica y Centro de Costo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Agrupador de Cuenta y Cuenta Específica */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Agrupador de Cuenta
+              </label>
+              <select
+                value={accountGroup}
+                onChange={(e) => setAccountGroup(e.target.value as FinanceAccountGroup)}
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg font-semibold text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
+              >
+                <option value="bancos">Bancos (Galicia / Santander)</option>
+                <option value="caja">Caja (Caja Central / Sucursales)</option>
+                <option value="ahorros">Ahorros e Inversiones (FCI / Plazo Fijo)</option>
+                <option value="tarjetas">Tarjetas Corporativas</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Cuenta Bancaria o Caja
+              </label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
+              >
+                <option value="">Seleccionar cuenta...</option>
+                {selectedGroupAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} ({acc.bankName})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Categoría y Centro de Costo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
                 Categoría Analítica
               </label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#DDE2EB] rounded-lg bg-white text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
               >
-                <option value="">Seleccionar categoría...</option>
+                <option value="">Seleccionar rubro...</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {c.code} - {c.name}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Centro de Costo / Línea de Negocio
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Línea de Negocio / Centro de Costo
               </label>
               <select
                 value={costCenterId}
                 onChange={(e) => setCostCenterId(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#DDE2EB] rounded-lg bg-white text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
               >
-                <option value="">Seleccionar centro de costo...</option>
+                <option value="">Sin asignar / General</option>
                 {costCenters.map((cc) => (
                   <option key={cc.id} value={cc.id}>
-                    {cc.name} ({cc.business_line})
+                    {cc.code} - {cc.name}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Certeza & Recurrencia */}
-          {mode === "programado" && (
+          {/* Fecha, Hora y Nivel de Certeza */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Nivel de Certeza de la Proyección
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Fecha
               </label>
-              <div className="flex gap-3">
-                {(["alta", "media", "baja"] as FinanceCertaintyLevel[]).map((lvl) => (
-                  <label key={lvl} className="flex items-center gap-1.5 text-xs text-[#111331] cursor-pointer">
-                    <input
-                      type="radio"
-                      name="certainty"
-                      value={lvl}
-                      checked={certainty === lvl}
-                      onChange={() => setCertainty(lvl)}
-                    />
-                    <span className="capitalize font-medium">{lvl}</span>
-                  </label>
-                ))}
-              </div>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
+                required
+              />
             </div>
-          )}
 
-          {mode === "recurrente" && (
             <div>
-              <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                Frecuencia de Recurrencia
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Hora
+              </label>
+              <input
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
+              />
+            </div>
+
+            <div>
+              <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+                Nivel de Certeza
               </label>
               <select
-                value={recurrenceRule}
-                onChange={(e) => setRecurrenceRule(e.target.value)}
-                className="w-full px-3 py-1.5 border border-[#DDE2EB] rounded-lg bg-white text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
+                value={certainty}
+                onChange={(e) => setCertainty(e.target.value as FinanceCertaintyLevel)}
+                className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700"
               >
-                <option value="semanal">Semanal (cada 7 días)</option>
-                <option value="quincenal">Quincenal (cada 15 días)</option>
-                <option value="mensual">Mensual (mismo día de cada mes)</option>
-                <option value="bimestral">Bimestral (cada 2 meses)</option>
+                <option value="alta">Alta (Comprometido / Pactado)</option>
+                <option value="media">Media (Estimado)</option>
+                <option value="baja">Baja (Supuesto / Escenario)</option>
               </select>
             </div>
-          )}
+          </div>
 
           {/* Notas */}
           <div>
-            <label className="block text-[#687087] font-semibold mb-1 uppercase tracking-wider text-[10px]">
-              Notas / Observaciones
+            <label className="block text-fg-secondary font-bold uppercase text-[10px] mb-1">
+              Notas y Auditoría
             </label>
             <textarea
               rows={2}
-              placeholder="Detalle adicional, justificación o referencia de factura..."
+              placeholder="Detalle complementario o justificación del supuesto..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-1.5 border border-[#DDE2EB] rounded-lg text-[#111331] focus:outline-none focus:ring-2 focus:ring-[#214576]"
+              className="w-full px-3 py-2 border border-stroke-soft bg-bg-surface rounded-lg text-fg-primary focus:ring-2 focus:ring-tops-blue-700 placeholder:text-fg-muted"
             />
           </div>
-        </form>
 
-        {/* Footer del Modal */}
-        <div className="px-6 py-4 border-t border-[#DDE2EB] bg-[#F4F5F8] flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-[#687087] hover:text-[#111331] rounded-lg border border-[#DDE2EB] bg-white transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            className="px-5 py-2 text-xs font-semibold text-white bg-[#050555] hover:bg-[#214576] rounded-lg shadow-sm transition-all"
-          >
-            Guardar Movimiento
-          </button>
-        </div>
+          {/* Botones de acción */}
+          <div className="pt-4 border-t border-stroke-soft flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-fg-secondary hover:text-fg-primary bg-bg-surface border border-stroke-soft rounded-lg hover:bg-bg-surface-alt transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 text-xs font-bold text-white bg-tops-blue-900 dark:bg-tops-blue-700 hover:bg-tops-blue-700 dark:hover:bg-blue-600 rounded-lg shadow-xs transition-all"
+            >
+              Guardar Movimiento
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
