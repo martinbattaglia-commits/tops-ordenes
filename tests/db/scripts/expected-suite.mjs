@@ -65,6 +65,9 @@ export const EXPECTED_TEST_FILES = [
   // no un cierre sintético), incluidos los dos defectos que ese entorno
   // descubrió en 0236 (columna label, no name; unique(module,action) real).
   "t-link-h1-01-participants-channel-rls.test.ts",
+  // NEXUS-LINK-MAX-RECOVERY: ciclo real 0265/0266, rollback inverso y
+  // reaplicación byte-equivalente de la huella relevante en PostgreSQL 17.
+  "t-link-max-0265-0266-rollback-reapply.test.ts",
   // PR #66 · FASE A: maestro nativo, OC y Ordenes de Servicio. Cada suite
   // monta su cierre de dependencias y ejecuta los SQL productivos en PG17.
   "t-cli-a1-01-clients-search.test.ts",
@@ -128,6 +131,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-link-b1-02-channel-rls.test.ts": 41,
   "t-link-b2-01-upload-lifecycle.test.ts": 44,
   "t-link-h1-01-participants-channel-rls.test.ts": 34,
+  "t-link-max-0265-0266-rollback-reapply.test.ts": 1,
   "t-cli-a1-01-clients-search.test.ts": 38,
   "t-cli-a1-02-clients-master-rollback.test.ts": 10,
   "t-cli-a2-01-atomic-mutations.test.ts": 47,

@@ -1,11 +1,13 @@
 "use client";
 
 // Formulario de Perfil de Usuario (RC1.4 / P2).
-// Permite actualizar presencia, frecuencia de notificaciones y foto de perfil.
-// Fail-closed, sin IA, y con fallback canónico a iniciales.
+// Restaura la funcionalidad completa canónica: Presencia en tiempo real (setPresenceAction),
+// Firma de mensajes con VoiceField, Frecuencia de notificaciones, Tema visual y gestión segura de Avatar.
+// Fail-closed, sin IA, y con limpieza explícita de Object URLs.
 
-import { useState } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import { Icon } from "@/components/Icon";
+import { VoiceField } from "@/components/voice/VoiceField";
 import {
   type PresenceStatus,
   type NotifFreq,
@@ -17,8 +19,28 @@ import {
   THEME_ORDER,
   initialsFrom,
 } from "@/lib/profile/types";
-import { updateMyProfileAction, removeAvatarAction } from "@/lib/profile/actions";
+import {
+  setPresenceAction,
+  updateMyProfileAction,
+  removeAvatarAction,
+} from "@/lib/profile/actions";
 import { Avatar } from "./Avatar";
+
+type Theme = (typeof THEME_ORDER)[number];
+const THEME_LABELS: Record<Theme, string> = {
+  system: "Automático del sistema",
+  light: "Modo Claro",
+  dark: "Modo Oscuro",
+};
+
+const PRESENCE_DOT: Record<PresenceStatus, string> = {
+  online: "bg-emerald-500",
+  idle: "bg-amber-400",
+  busy: "bg-tops-red",
+  offline: "bg-fg-muted",
+};
+
+type Status = { kind: "idle" } | { kind: "ok"; message: string } | { kind: "error"; message: string };
 
 export function ProfileForm({
   profile,
@@ -27,56 +49,107 @@ export function ProfileForm({
   profile: UserProfile;
   onSaved?: (updated: UserProfile) => void;
 }) {
+  const initialTheme: Theme =
+    profile.preferences.theme === "light" || profile.preferences.theme === "dark"
+      ? profile.preferences.theme
+      : "system";
+
+  // Estados de campos del perfil
   const [presence, setPresence] = useState<PresenceStatus>(profile.presence);
   const [notifFreq, setNotifFreq] = useState<NotifFreq>(profile.notifFreq);
-  const [theme, setTheme] = useState<string>(profile.preferences.theme || "system");
+  const [signature, setSignature] = useState<string>(
+    typeof profile.preferences.signature === "string" ? profile.preferences.signature : "",
+  );
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+
+  // Estados de avatar y vista previa
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl);
-  const [preview, setPreview] = useState<string | null>(profile.avatarUrl);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+
+  // Feedback y transiciones
+  const [presenceStatus, setPresenceStatus] = useState<Status>({ kind: "idle" });
+  const [saveStatus, setSaveStatus] = useState<Status>({ kind: "idle" });
+  const [avatarStatus, setAvatarStatus] = useState<Status>({ kind: "idle" });
+  const [presencePending, startPresence] = useTransition();
+  const [savePending, startSave] = useTransition();
+  const [avatarPending, startAvatar] = useTransition();
+
+  // Limpieza segura de Object URL al desmontar o cambiar archivo
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+      }
+    };
+  }, []);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+
     if (file.size > 2 * 1024 * 1024) {
-      setErr("La imagen no puede superar los 2MB.");
+      setAvatarStatus({ kind: "error", message: "La imagen no puede superar los 2MB." });
       return;
     }
     if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setErr("Formato no soportado. Usá JPG, PNG o WebP.");
+      setAvatarStatus({ kind: "error", message: "Formato no soportado. Usá JPG, PNG o WebP." });
       return;
     }
-    const localUrl = URL.createObjectURL(file);
-    setPreview(localUrl);
-    setMsg("Foto seleccionada para vista previa local. El almacenamiento persistente requiere bucket autorizado.");
-  }
 
-  async function handleRemoveAvatar() {
-    setSaving(true);
-    setErr(null);
-    setMsg(null);
-    try {
-      const res = await removeAvatarAction();
-      if (!res.ok) {
-        setErr(res.message);
-        return;
-      }
-      setAvatarUrl(null);
-      setPreview(null);
-      setMsg("Foto de perfil eliminada.");
-    } finally {
-      setSaving(false);
+    // Revocar URL previa si existía
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
     }
+
+    const newObjUrl = URL.createObjectURL(file);
+    objectUrlRef.current = newObjUrl;
+    setLocalPreviewUrl(newObjUrl);
+    setAvatarStatus({
+      kind: "ok",
+      message: "Vista previa local cargada. El almacenamiento persistente requiere bucket de infraestructura autorizado.",
+    });
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setErr(null);
-    setMsg(null);
+  function handleRemoveAvatar() {
+    setAvatarStatus({ kind: "idle" });
+    startAvatar(async () => {
+      // Limpiar preview local si existe
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = null;
+        setLocalPreviewUrl(null);
+      }
 
-    try {
+      const res = await removeAvatarAction();
+      if (res.ok) {
+        setAvatarUrl(null);
+        setAvatarStatus({ kind: "ok", message: "Foto de perfil eliminada." });
+      } else {
+        setAvatarStatus({ kind: "error", message: res.message });
+      }
+    });
+  }
+
+  function onPresenceChange(next: PresenceStatus) {
+    const prev = presence;
+    setPresence(next);
+    setPresenceStatus({ kind: "idle" });
+    startPresence(async () => {
+      const r = await setPresenceAction({ status: next });
+      if (r.ok) {
+        setPresenceStatus({ kind: "ok", message: "Presencia actualizada." });
+      } else {
+        setPresence(prev);
+        setPresenceStatus({ kind: "error", message: r.message });
+      }
+    });
+  }
+
+  function onSave() {
+    setSaveStatus({ kind: "idle" });
+    startSave(async () => {
       const updates: {
         avatarUrl?: string | null;
         notifFreq?: NotifFreq;
@@ -85,11 +158,11 @@ export function ProfileForm({
         notifFreq,
         preferences: {
           ...profile.preferences,
-          theme: theme as "system" | "light" | "dark",
+          signature,
+          theme,
         },
       };
 
-      // Si hay una URL HTTPS válida, se incluye en la persistencia
       if (avatarUrl && avatarUrl.startsWith("https://")) {
         updates.avatarUrl = avatarUrl;
       } else if (avatarUrl === null) {
@@ -97,48 +170,56 @@ export function ProfileForm({
       }
 
       const res = await updateMyProfileAction(updates);
-      if (!res.ok) {
-        setErr(res.message);
-        return;
+      if (res.ok) {
+        setSaveStatus({ kind: "ok", message: "Perfil guardado." });
+        onSaved?.({
+          ...profile,
+          presence,
+          notifFreq,
+          avatarUrl,
+          preferences: {
+            ...profile.preferences,
+            signature,
+            theme,
+          },
+        });
+      } else {
+        setSaveStatus({ kind: "error", message: res.message });
       }
-
-      setMsg("Perfil actualizado correctamente.");
-      onSaved?.({
-        ...profile,
-        presence,
-        notifFreq,
-        avatarUrl: avatarUrl,
-        preferences: {
-          ...profile.preferences,
-          theme: theme as "system" | "light" | "dark",
-        },
-      });
-    } finally {
-      setSaving(false);
-    }
+    });
   }
 
+  const liveInitials = initialsFrom(profile.fullName) || profile.initials;
+  const currentAvatarSrc = localPreviewUrl ?? avatarUrl;
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-lg">
-      {/* Sección Foto de Perfil */}
-      <div className="space-y-3">
-        <label className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
-          Foto de Perfil
-        </label>
-        <div className="flex items-center gap-4">
+    <div className="mx-auto w-full max-w-2xl px-5 py-6 space-y-6">
+      {/* (1) Cabecera con Avatar + Identidad + Selector de Presencia */}
+      <div className="card p-5">
+        <div className="flex items-start gap-4">
           <Avatar
-            src={preview}
+            src={currentAvatarSrc}
             name={profile.fullName}
-            initials={initialsFrom(profile.fullName)}
+            initials={liveInitials}
             size="lg"
           />
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
+
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-base font-bold text-fg-primary">
+              {profile.fullName ?? "Sin nombre"}
+            </h2>
+            {profile.email && <p className="truncate text-sm text-fg-secondary">{profile.email}</p>}
+            <span className="mt-1.5 inline-flex items-center rounded-pill bg-bg-surface-alt px-2.5 py-0.5 text-[11px] font-medium text-fg-secondary">
+              {profile.role}
+            </span>
+
+            {/* Controles de Foto de Perfil */}
+            <div className="mt-3 flex items-center gap-2">
               <label
                 htmlFor="avatar-upload"
-                className="btn btn-secondary btn-sm cursor-pointer"
+                className="btn btn-secondary btn-xs cursor-pointer inline-flex items-center gap-1.5"
               >
-                <Icon name="camera" size={13} />
+                <Icon name="camera" size={12} />
                 <span>Subir foto</span>
                 <input
                   id="avatar-upload"
@@ -148,103 +229,132 @@ export function ProfileForm({
                   className="sr-only"
                 />
               </label>
-              {(preview || avatarUrl) && (
+              {(currentAvatarSrc || localPreviewUrl) && (
                 <button
                   type="button"
                   onClick={handleRemoveAvatar}
-                  disabled={saving}
-                  className="btn btn-ghost btn-sm text-tops-red hover:bg-tops-red/10"
+                  disabled={avatarPending}
+                  className="btn btn-ghost btn-xs text-tops-red hover:bg-tops-red/10 inline-flex items-center gap-1"
                 >
-                  <Icon name="trash" size={13} />
+                  <Icon name="trash" size={12} />
                   <span>Quitar</span>
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-fg-muted">
-              JPG, PNG o WebP hasta 2MB. Si no tenés foto, se muestran tus iniciales ({initialsFrom(profile.fullName)}).
-            </p>
+
+            {avatarStatus.kind === "ok" && (
+              <p role="status" aria-live="polite" className="mt-1.5 text-[11px] text-emerald-500">{avatarStatus.message}</p>
+            )}
+            {avatarStatus.kind === "error" && (
+              <p role="alert" aria-live="assertive" className="mt-1.5 text-[11px] text-tops-red">{avatarStatus.message}</p>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Estado de Presencia */}
-      <div className="space-y-2">
-        <label htmlFor="presence-select" className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
-          Estado de Presencia
-        </label>
-        <select
-          id="presence-select"
-          value={presence}
-          onChange={(e) => setPresence(e.target.value as PresenceStatus)}
-          className="w-full rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary focus:border-tops-red outline-none"
-        >
-          {PRESENCE_ORDER.map((st) => (
-            <option key={st} value={st}>
-              {PRESENCE_LABELS[st]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Frecuencia de Notificaciones */}
-      <div className="space-y-2">
-        <label htmlFor="notif-select" className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
-          Notificaciones por Correo
-        </label>
-        <select
-          id="notif-select"
-          value={notifFreq}
-          onChange={(e) => setNotifFreq(e.target.value as NotifFreq)}
-          className="w-full rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary focus:border-tops-red outline-none"
-        >
-          {NOTIF_ORDER.map((fq) => (
-            <option key={fq} value={fq}>
-              {NOTIF_FREQ_LABELS[fq]}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Tema de Interfaz */}
-      <div className="space-y-2">
-        <label htmlFor="theme-select" className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
-          Tema Visual
-        </label>
-        <select
-          id="theme-select"
-          value={theme}
-          onChange={(e) => setTheme(e.target.value)}
-          className="w-full rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary focus:border-tops-red outline-none"
-        >
-          {THEME_ORDER.map((th) => (
-            <option key={th} value={th}>
-              {th === "system" ? "Automático del sistema" : th === "light" ? "Modo Claro" : "Modo Oscuro"}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Mensajes de Feedback */}
-      {msg && (
-        <div role="status" className="rounded-md bg-emerald-500/10 border border-emerald-500/30 p-3 text-xs text-emerald-600">
-          {msg}
+        {/* Selector de Presencia con transición en tiempo real */}
+        <div className="mt-4 border-t border-stroke-soft pt-4">
+          <label htmlFor="presence-select" className="block text-xs font-medium text-fg-secondary">Presencia</label>
+          <div className="mt-2 flex items-center gap-2.5">
+            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${PRESENCE_DOT[presence]}`} aria-hidden />
+            <select
+              id="presence-select"
+              value={presence}
+              aria-label="Presencia"
+              disabled={presencePending}
+              onChange={(e) => onPresenceChange(e.target.value as PresenceStatus)}
+              className="rounded border border-stroke-soft bg-bg-page px-2 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red disabled:opacity-60"
+            >
+              {PRESENCE_ORDER.map((s) => (
+                <option key={s} value={s}>
+                  {PRESENCE_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </div>
+          {presenceStatus.kind === "ok" && (
+            <p role="status" aria-live="polite" className="mt-1.5 text-xs text-emerald-500">{presenceStatus.message}</p>
+          )}
+          {presenceStatus.kind === "error" && (
+            <p role="alert" aria-live="assertive" className="mt-1.5 text-xs text-tops-red">{presenceStatus.message}</p>
+          )}
         </div>
-      )}
-      {err && (
-        <div role="alert" className="rounded-md bg-tops-red/10 border border-tops-red/30 p-3 text-xs text-tops-red">
-          {err}
-        </div>
-      )}
+      </div>
 
-      {/* Botón Guardar */}
-      <button
-        type="submit"
-        disabled={saving}
-        className="btn btn-nexus w-full flex items-center justify-center gap-2"
-      >
-        <Icon name="check" size={14} />
-        <span>{saving ? "Guardando…" : "Guardar Cambios"}</span>
-      </button>
-    </form>
+      {/* (2) Preferencias del Usuario */}
+      <div className="card p-5">
+        <h3 className="text-sm font-bold text-fg-primary">Preferencias</h3>
+
+        <div className="mt-4 space-y-4">
+          {/* Frecuencia de notificaciones */}
+          <div>
+            <label htmlFor="notif-select" className="block text-xs font-medium text-fg-secondary">
+              Frecuencia de notificaciones
+            </label>
+            <select
+              id="notif-select"
+              value={notifFreq}
+              onChange={(e) => setNotifFreq(e.target.value as NotifFreq)}
+              className="mt-1 w-full rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
+            >
+              {NOTIF_ORDER.map((f) => (
+                <option key={f} value={f}>
+                  {NOTIF_FREQ_LABELS[f]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Firma con VoiceField */}
+          <div>
+            <label htmlFor="signature-input" className="block text-xs font-medium text-fg-secondary">
+              Firma
+            </label>
+            <VoiceField>
+              <textarea
+                id="signature-input"
+                value={signature}
+                onChange={(e) => setSignature(e.target.value)}
+                rows={3}
+                placeholder="Tu firma para mensajes y notificaciones…"
+                className="mt-1 w-full resize-y rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
+              />
+            </VoiceField>
+          </div>
+
+          {/* Tema Visual */}
+          <div>
+            <label htmlFor="theme-select" className="block text-xs font-medium text-fg-secondary">
+              Tema Visual
+            </label>
+            <select
+              id="theme-select"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as Theme)}
+              className="mt-1 w-full rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
+            >
+              {THEME_ORDER.map((t) => (
+                <option key={t} value={t}>
+                  {THEME_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center gap-3 border-t border-stroke-soft pt-4">
+          <button
+            type="button"
+            className="btn btn-nexus btn-sm inline-flex items-center gap-1.5"
+            disabled={savePending}
+            onClick={onSave}
+          >
+            <Icon name="check" size={14} />
+            <span>{savePending ? "Guardando…" : "Guardar Preferencias"}</span>
+          </button>
+          {saveStatus.kind === "ok" && <p role="status" aria-live="polite" className="text-xs text-emerald-500">{saveStatus.message}</p>}
+          {saveStatus.kind === "error" && <p role="alert" aria-live="assertive" className="text-xs text-tops-red">{saveStatus.message}</p>}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Icon } from "@/components/Icon";
 import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
-import { listConversationLinks, getCurrentUserId } from "@/lib/connect/data";
+import { listConversationLinks, getCurrentUserId, getMyParticipantId } from "@/lib/connect/data";
 import { getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
 import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { canChannel } from "@/lib/rbac/nexus-link";
@@ -31,13 +31,14 @@ export default async function ConnectThreadPage({
   // Un único instante por request: se serializa y se reutiliza en SSR y en el
   // primer render del cliente, incluso si la hidratación cruza medianoche.
   const initialNowIso = new Date().toISOString();
-  const [conversation, messages, links, currentUserId, participants] = await Promise.all([
+  const [conversation, messages, links, currentUserId, participants, myParticipantId] = await Promise.all([
     getConversation(params.conversationId),
     listMessages(params.conversationId),
     listConversationLinks(params.conversationId),
     getCurrentUserId(),
     // F4.1B: mencionables (@) — miembros con nombre resuelto (la FK de menciones exige miembros).
     listParticipants(params.conversationId),
+    getMyParticipantId(params.conversationId),
   ]);
   const mentionables = participants
     .filter((m) => m.profileId && m.name)
@@ -86,6 +87,13 @@ export default async function ConnectThreadPage({
         />
       );
     }
+    if (!myParticipantId) {
+      return (
+        <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-fg-muted">
+          No se pudo validar tu membresía en esta conversación.
+        </div>
+      );
+    }
     return (
       <ConversationAdmin
         conversationId={conversation.id}
@@ -102,6 +110,7 @@ export default async function ConnectThreadPage({
         pinned={pinned}
         initialMessages={messages}
         currentUserId={currentUserId}
+        myParticipantId={myParticipantId}
         links={links}
         archiveRedirectTo="/connect"
         initialNowIso={initialNowIso}
@@ -115,6 +124,14 @@ export default async function ConnectThreadPage({
   // corresponde. Un hilo interno no la pide y por eso no la muestra.
   const contactoWa =
     conversation.kind === "whatsapp" ? await getWaContact(conversation.id) : null;
+
+  if (!myParticipantId) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-fg-muted">
+        No se pudo validar tu membresía en esta conversación.
+      </div>
+    );
+  }
 
   // Otras conversaciones (dm / erp / incident / whatsapp / ai): header + hilo (comportamiento actual).
   return (
@@ -171,6 +188,7 @@ export default async function ConnectThreadPage({
         kind={conversation.kind}
         initialMessages={messages}
         currentUserId={currentUserId}
+        myParticipantId={myParticipantId}
         readOnly={!!conversation.archivedAt}
         mentionables={mentionables}
         initialNowIso={initialNowIso}

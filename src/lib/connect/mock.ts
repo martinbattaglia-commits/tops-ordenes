@@ -46,7 +46,7 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
   },
 ];
 
-const MOCK_PARTICIPANT_ID = "p-self";
+export const MOCK_PARTICIPANT_ID = "p-self";
 
 function msg(
   conversationId: string, seq: number, authorId: string, body: string, minsAgo: number,

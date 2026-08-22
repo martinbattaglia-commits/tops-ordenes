@@ -24,7 +24,7 @@ const ROLE_LABEL: Record<MemberRole, string> = { owner: "Dueño", moderator: "Mo
 
 export function ConversationAdmin({
   conversationId, kind, title, topic, slug, contextId, visibility, archivedAt,
-  myRole, isAdmin, members = [], pinned = [], initialMessages = [], currentUserId,
+  myRole, isAdmin, members = [], pinned = [], initialMessages = [], currentUserId, myParticipantId,
   links = [], archiveRedirectTo, initialNowIso,
 }: {
   conversationId: string;
@@ -41,6 +41,7 @@ export function ConversationAdmin({
   pinned?: PinnedItem[];
   initialMessages?: Message[];
   currentUserId?: string | null;
+  myParticipantId: string;
   /** Vínculos ERP (chips de contexto). Opcional — se muestran en la ruta de conversación. */
   links?: ConversationLink[];
   /** A dónde ir tras archivar: /connect/canales (vista de canal) o /connect (ruta de conversación). */
@@ -239,6 +240,7 @@ export function ConversationAdmin({
             kind={kind}
             initialMessages={initialMessages}
             currentUserId={currentUserId ?? null}
+            myParticipantId={myParticipantId}
             initialNowIso={initialNowIso}
             readOnly={archived}
             mentionables={members

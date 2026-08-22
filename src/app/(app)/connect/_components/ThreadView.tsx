@@ -106,6 +106,7 @@ export function ThreadView({
   kind,
   initialMessages,
   currentUserId,
+  myParticipantId,
   readOnly = false,
   mentionables = [],
   initialNowIso,
@@ -116,6 +117,7 @@ export function ThreadView({
   kind: ConversationKind;
   initialMessages: Message[];
   currentUserId: string | null;
+  myParticipantId: string;
   readOnly?: boolean;
   mentionables?: MentionPick[];
   initialNowIso?: string;
@@ -154,30 +156,50 @@ export function ThreadView({
   const caps = useMemo(() => composerCapabilities(kind, { readOnly }), [kind, readOnly]);
   const bloqueo = useMemo(() => composerBlockNotice(kind, { readOnly }), [kind, readOnly]);
 
+  const [reactionError, setReactionError] = useState<string | null>(null);
+  const [inFlightReactions, setInFlightReactions] = useState<Record<string, boolean>>({});
+
   async function toggleHandoverState() {
     if (handoverPending) return;
-    const nextState = handoverState === "BOT_ACTIVE" ? "PAUSED_HUMAN" : "BOT_ACTIVE";
+    const prevState = handoverState;
+    const nextState = prevState === "BOT_ACTIVE" ? "PAUSED_HUMAN" : "BOT_ACTIVE";
     setHandoverPending(true);
     setHandoverError(null);
+    setHandoverState(nextState);
+
     try {
-      const result = await setHandoverStateAction({ conversationId, state: nextState });
+      const result = await setHandoverStateAction({
+        conversationId,
+        state: nextState,
+        expectedState: prevState,
+      });
       if (!result.ok) {
+        setHandoverState(result.actualState ?? prevState);
         setHandoverError(result.message);
-        return;
+      } else {
+        setHandoverState(result.state ?? nextState);
       }
-      setHandoverState(nextState);
+    } catch {
+      setHandoverState(prevState);
+      setHandoverError("Error de conexión al actualizar estado de Max.");
     } finally {
       setHandoverPending(false);
     }
   }
 
   async function toggleReaction(messageId: string, emoji: string) {
+    const opKey = `${messageId}:${emoji}`;
+    if (inFlightReactions[opKey]) return;
+
     const msg = messages.find((x) => x.id === messageId);
     if (!msg) return;
     const existingReaction = msg.reactions?.find((r) => r.emoji === emoji);
     const hadReaction = existingReaction?.myReaction ?? false;
 
-    // Actualización optimista de reacciones
+    setInFlightReactions((prev) => ({ ...prev, [opKey]: true }));
+    setReactionError(null);
+
+    // Actualización optimista quirúrgica
     setMessages((prev) =>
       prev.map((m) => {
         if (m.id !== messageId) return m;
@@ -185,11 +207,11 @@ export function ThreadView({
         const idx = rxList.findIndex((r) => r.emoji === emoji);
         if (hadReaction) {
           if (idx >= 0) {
-            const updatedCount = rxList[idx].count - 1;
-            if (updatedCount <= 0) {
+            const nextCount = rxList[idx].count - 1;
+            if (nextCount <= 0) {
               rxList.splice(idx, 1);
             } else {
-              rxList[idx] = { ...rxList[idx], count: updatedCount, myReaction: false };
+              rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
             }
           }
         } else {
@@ -203,10 +225,73 @@ export function ThreadView({
       }),
     );
 
-    if (hadReaction) {
-      await removeReactionAction({ conversationId, messageId, emoji });
-    } else {
-      await addReactionAction({ conversationId, messageId, emoji });
+    try {
+      const res = hadReaction
+        ? await removeReactionAction({ conversationId, messageId, emoji })
+        : await addReactionAction({ conversationId, messageId, emoji });
+
+      if (!res.ok) {
+        // Rollback quirúrgico exclusivo para la mutación local sin destruir reacciones concurrentes ajenas
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== messageId) return m;
+            const rxList = [...(m.reactions ?? [])];
+            const idx = rxList.findIndex((r) => r.emoji === emoji);
+            if (hadReaction) {
+              if (idx >= 0) {
+                rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+              } else {
+                rxList.push({ id: `${messageId}-${emoji}`, emoji, count: 1, myReaction: true });
+              }
+            } else {
+              if (idx >= 0) {
+                const nextCount = rxList[idx].count - 1;
+                if (nextCount <= 0) {
+                  rxList.splice(idx, 1);
+                } else {
+                  rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
+                }
+              }
+            }
+            return { ...m, reactions: rxList };
+          }),
+        );
+        setReactionError(res.message);
+      } else {
+        setReactionError(null);
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const rxList = [...(m.reactions ?? [])];
+          const idx = rxList.findIndex((r) => r.emoji === emoji);
+          if (hadReaction) {
+            if (idx >= 0) {
+              rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+            } else {
+              rxList.push({ id: `${messageId}-${emoji}`, emoji, count: 1, myReaction: true });
+            }
+          } else {
+            if (idx >= 0) {
+              const nextCount = rxList[idx].count - 1;
+              if (nextCount <= 0) {
+                rxList.splice(idx, 1);
+              } else {
+                rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
+              }
+            }
+          }
+          return { ...m, reactions: rxList };
+        }),
+      );
+      setReactionError("Error de conexión al procesar reacción.");
+    } finally {
+      setInFlightReactions((prev) => {
+        const next = { ...prev };
+        delete next[opKey];
+        return next;
+      });
     }
   }
 
@@ -370,6 +455,93 @@ export function ThreadView({
       );
     },
     { filter: `conversation_id=eq.${conversationId}` },
+  );
+
+  // Realtime: Handover State de la Conversación
+  useRealtimeTable(
+    "connect_conversations",
+    (payload) => {
+      const row = (payload as { new?: { id?: string; handover_state?: "BOT_ACTIVE" | "PAUSED_HUMAN" } })?.new;
+      if (row && row.id === conversationId && row.handover_state) {
+        setHandoverState(row.handover_state);
+      }
+    },
+    { filter: `id=eq.${conversationId}` },
+  );
+
+  // Realtime: Reacciones de Mensajes
+  useRealtimeTable(
+    "connect_message_reactions",
+    (payload) => {
+      const ev = payload as {
+        eventType?: string;
+        new?: { id?: string; message_id?: string; participant_id?: string; emoji?: string };
+        old?: { id?: string; message_id?: string; participant_id?: string; emoji?: string };
+      };
+      const row = ev.new ?? ev.old;
+      if (!row?.message_id || !row?.emoji) return;
+
+      const isOwn = !!(myParticipantId && row.participant_id && row.participant_id === myParticipantId);
+
+      if (ev.eventType === "INSERT") {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== row.message_id) return m;
+            const rxList = [...(m.reactions ?? [])];
+            const idx = rxList.findIndex((r) => r.emoji === row.emoji);
+
+            if (isOwn) {
+              // Confirmación de evento propio: si ya estaba marcado optimistamente, no duplicamos conteo
+              if (idx >= 0) {
+                if (!rxList[idx].myReaction) {
+                  rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+                }
+              } else {
+                rxList.push({ id: row.id ?? `${row.message_id}-${row.emoji}`, emoji: row.emoji!, count: 1, myReaction: true });
+              }
+            } else {
+              // Reacción de otro usuario: incrementamos conteo sin tocar myReaction
+              if (idx >= 0) {
+                rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1 };
+              } else {
+                rxList.push({ id: row.id ?? `${row.message_id}-${row.emoji}`, emoji: row.emoji!, count: 1, myReaction: false });
+              }
+            }
+            return { ...m, reactions: rxList };
+          }),
+        );
+      } else if (ev.eventType === "DELETE") {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== row.message_id) return m;
+            const rxList = [...(m.reactions ?? [])];
+            const idx = rxList.findIndex((r) => r.emoji === row.emoji);
+            if (idx < 0) return m;
+
+            if (isOwn) {
+              // Unreact propio confirmado: si aún estaba marcado como propio, decrementamos
+              if (rxList[idx].myReaction) {
+                const nextCount = rxList[idx].count - 1;
+                if (nextCount <= 0) {
+                  rxList.splice(idx, 1);
+                } else {
+                  rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
+                }
+              }
+            } else {
+              // Unreact de otro usuario: decrementamos conteo sin tocar myReaction
+              const nextCount = rxList[idx].count - 1;
+              if (nextCount <= 0) {
+                rxList.splice(idx, 1);
+              } else {
+                rxList[idx] = { ...rxList[idx], count: nextCount };
+              }
+            }
+            return { ...m, reactions: rxList };
+          }),
+        );
+      }
+    },
   );
 
   function updateMentionQuery(value: string, caret: number) {
@@ -676,6 +848,28 @@ export function ThreadView({
         })}
         <div ref={endRef} />
       </div>
+
+      {/* Aviso accesible de error en reacciones */}
+      {reactionError && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-center justify-between gap-2 border-t border-tops-red/30 bg-tops-red/10 px-4 py-2 text-xs text-tops-red"
+        >
+          <div className="flex items-center gap-1.5">
+            <Icon name="x" size={13} className="text-tops-red shrink-0" />
+            <span>{reactionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReactionError(null)}
+            className="text-tops-red hover:underline text-[11px] font-semibold"
+            aria-label="Cerrar aviso de error en reacción"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {bloqueo ? (
         <div

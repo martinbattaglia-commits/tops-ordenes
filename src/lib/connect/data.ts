@@ -48,3 +48,35 @@ export async function getCurrentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getUser();
   return data.user?.id ?? null;
 }
+
+/**
+ * Id exacto del participante autenticado dentro de una conversación.
+ *
+ * No se infiere desde mensajes: un miembro puede reaccionar antes de haber
+ * escrito. Cualquier fallo de autenticación, consulta o membresía queda
+ * cerrado en null para que la superficie productiva no monte ThreadView.
+ */
+export async function getMyParticipantId(conversationId: string): Promise<string | null> {
+  if (isMock()) {
+    const { MOCK_PARTICIPANT_ID } = await import("./mock");
+    return MOCK_PARTICIPANT_ID;
+  }
+  const supabase = createClient();
+  if (!supabase) return null;
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const uid = authData.user?.id;
+  if (authError || !uid) return null;
+
+  const { data: participant, error } = await supabase
+    .from("connect_participants")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("profile_id", uid)
+    .maybeSingle();
+
+  if (error || typeof participant?.id !== "string" || participant.id.length === 0) {
+    return null;
+  }
+  return participant.id;
+}

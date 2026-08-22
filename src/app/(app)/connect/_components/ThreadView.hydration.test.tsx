@@ -12,8 +12,10 @@ const realtimeHarness = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => null }));
 vi.mock("@/lib/supabase/realtime", () => ({
-  useRealtimeTable: (_table: string, handler: (payload: unknown) => void) => {
-    realtimeHarness.handler = handler;
+  useRealtimeTable: (table: string, handler: (payload: unknown) => void) => {
+    if (table === "connect_messages" || !realtimeHarness.handler) {
+      realtimeHarness.handler = handler;
+    }
   },
 }));
 vi.mock("@/components/voice/VoiceField", () => ({
@@ -110,6 +112,7 @@ function renderThread(
       kind="dm"
       initialMessages={initialMessages}
       currentUserId="synthetic-user"
+      myParticipantId="synthetic-participant"
       initialNowIso={initialNowIso}
     />
   );

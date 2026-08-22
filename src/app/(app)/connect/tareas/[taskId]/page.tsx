@@ -8,7 +8,7 @@ import { getTask, hasTaskAdmin, listTaskFollowers } from "@/lib/connect/read/tas
 import { getIncident } from "@/lib/connect/read/incidents-data";
 import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
 import { listParticipants } from "@/lib/connect/read/channel-data";
-import { getCurrentUserId } from "@/lib/connect/data";
+import { getCurrentUserId, getMyParticipantId } from "@/lib/connect/data";
 import { isOverdue } from "@/lib/connect/domain/task";
 import { timeAgo } from "@/lib/connect/format";
 import { ThreadView } from "../../_components/ThreadView";
@@ -42,13 +42,14 @@ export default async function TaskDetailPage({
     task.incidentId ? getIncident(task.incidentId) : Promise.resolve(null),
   ]);
 
-  const [conversation, messages, participants] = task.conversationId
+  const [conversation, messages, participants, myParticipantId] = task.conversationId
     ? await Promise.all([
         getConversation(task.conversationId),
         listMessages(task.conversationId),
         listParticipants(task.conversationId),
+        getMyParticipantId(task.conversationId),
       ])
-    : [null, [], []];
+    : [null, [], [], null];
   const mentionables = participants
     .filter((m) => m.profileId && m.name)
     .map((m) => ({ profileId: m.profileId as string, name: m.name as string }));
@@ -128,7 +129,7 @@ export default async function TaskDetailPage({
         </div>
       </header>
 
-      {conversation ? (
+      {conversation && myParticipantId ? (
         <ThreadView
           conversationId={conversation.id}
           /* WA-8 · kind real; los hilos de tarea no son WhatsApp y conservan
@@ -136,13 +137,15 @@ export default async function TaskDetailPage({
           kind={conversation.kind}
           initialMessages={messages}
           currentUserId={currentUserId}
+          myParticipantId={myParticipantId}
           readOnly={terminal || !!conversation.archivedAt}
           mentionables={mentionables}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center text-xs text-fg-muted">
-          Esta tarea todavía no tiene conversación. Usá &quot;Iniciar conversación&quot; para
-          comentar o adjuntar fotos.
+          {conversation
+            ? "No se pudo validar tu membresía en esta conversación."
+            : "Esta tarea todavía no tiene conversación. Usá Iniciar conversación para comentar o adjuntar fotos."}
         </div>
       )}
     </div>
