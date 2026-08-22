@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 231,
-  "no_ejecutables": 41,
+  "ejecutables": 232,
+  "no_ejecutables": 42,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -3196,6 +3196,36 @@
       "ledger_name": "ROLLBACK_0266_connect_handover_cas_audit",
       "provenance": "repo (frente/hotfix-link-v2)",
       "motivo": "Inversa data-preserving de 0266: preserva columna handover_by si contiene datos y restaura la funcion connect_set_handover_state a su firma de 0260."
+    },
+    {
+      "id": "0300_finance_treasury_atomic_reconciliation.sql",
+      "filename": "0300_finance_treasury_atomic_reconciliation.sql",
+      "sha256": "e77210cec4b0ba45b728b51a2cd05b7570045da7547aba15ffa3e970570870af",
+      "orden": 273,
+      "requires": [
+        "0055_treasury_security_fix.sql",
+        "0194_treasury_beneficiaries.sql",
+        "0262a_finance_core_schema_canonical_alignment.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00273",
+      "ledger_name": "0300_finance_treasury_atomic_reconciliation",
+      "provenance": "repo (frente/remediacion-tes-fin)",
+      "motivo": "Implementa reconciliacion atomica Finanzas-Tesoreria con idempotencia actor-bound, N:M auditable, autorizacion cruzada y proteccion de campos derivados."
+    },
+    {
+      "id": "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
+      "filename": "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
+      "sha256": "4ce733a2ad358921eb05c134b712a4bbf079e1613cf785e99fd0b05a39b0cddf",
+      "orden": 274,
+      "requires": [
+        "0300_finance_treasury_atomic_reconciliation.sql"
+      ],
+      "estado": "rollback",
+      "ledger_version": "L00274",
+      "ledger_name": "ROLLBACK_0300_finance_treasury_atomic_reconciliation",
+      "provenance": "repo (frente/remediacion-tes-fin)",
+      "motivo": "Inversa ejecutable de 0300: restaura firmas, privilegios y contratos previos preservando el retorno al estado anterior."
     }
   ]
 }

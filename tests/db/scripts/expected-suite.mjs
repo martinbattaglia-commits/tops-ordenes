@@ -80,6 +80,8 @@ export const EXPECTED_TEST_FILES = [
   "t-0261-0261a-remediation.test.ts",
   // Remediación 0262a (alineación canónica dual-state del esquema de Finanzas).
   "t-0262a-finance-canonical-alignment.test.ts",
+  // Reconciliación Atómica Finanzas ↔ Tesorería en PostgreSQL 17 (0300).
+  "t-0300-finance-treasury-atomic-reconciliation.test.ts",
 ];
 
 /**
@@ -140,6 +142,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-pr66-01-order-pricing.test.ts": 19,
   "t-0261-0261a-remediation.test.ts": 9,
   "t-0262a-finance-canonical-alignment.test.ts": 24,
+  "t-0300-finance-treasury-atomic-reconciliation.test.ts": 12,
 });
 
 /**

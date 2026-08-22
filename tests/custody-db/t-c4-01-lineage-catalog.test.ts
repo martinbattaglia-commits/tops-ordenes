@@ -565,6 +565,8 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0264_connect_mark_read_named_arguments.sql",
     "ROLLBACK_0265_connect_reaction_emoji_whitelist.sql",
     "ROLLBACK_0266_connect_handover_cas_audit.sql",
+    // Finanzas ↔ Tesorería: inversa ejecutable y catalogada junto a 0300.
+    "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";
 

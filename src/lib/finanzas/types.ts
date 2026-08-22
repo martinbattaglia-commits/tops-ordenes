@@ -84,6 +84,7 @@ export interface FinanceForecastAdjustment {
   due_date: string | null;
   direction: FinanceDirection;
   amount: number;
+  reconciled_amount?: number;
   currency: FinanceCurrency;
   account_group: FinanceAccountGroup;
   bank_account_id: string | null;
@@ -101,6 +102,16 @@ export interface FinanceForecastAdjustment {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface FinanceForecastReconciliation {
+  id: string;
+  forecast_adjustment_id: string;
+  treasury_movement_id: string;
+  applied_amount: number;
+  reconciled_at: string;
+  reconciled_by: string | null;
+  created_at: string;
 }
 
 export interface FinanceScenario {
@@ -176,6 +187,18 @@ export interface FinanceQuickenImport {
   created_at: string;
 }
 
+/** Vínculo de reconciliación individual para un movimiento de Tesorería (N:M) */
+export interface FinanceMovementReconciliationItem {
+  forecastId: string;
+  forecastConcept: string;
+  forecastCounterpart: string | null;
+  appliedAmount: number;
+  forecastAmount: number;
+  estimatedDate: string;
+  varianceAmount: number; // appliedAmount - forecastAmount
+  varianceDays: number;   // realDate - estimatedDate
+}
+
 /** Modelo unificado para la grilla y vistas de Caja y Liquidez */
 export interface FinanceUnifiedTransaction {
   id: string;
@@ -194,11 +217,14 @@ export interface FinanceUnifiedTransaction {
   status: 'ejecutado' | 'conciliado' | 'proyectado' | 'comprometido';
   certainty?: FinanceCertaintyLevel;
   evidenceUrl?: string | null;
+  reconciliations?: FinanceMovementReconciliationItem[];
   desvio?: {
     estimatedDate?: string;
     estimatedAmount?: number;
     varianceAmount?: number;
     varianceDays?: number;
+    totalAppliedAmount?: number;
+    reconciledForecastsCount?: number;
   };
 }
 

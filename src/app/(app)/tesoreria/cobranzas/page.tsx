@@ -3,6 +3,7 @@ import { CobranzaForm } from "@/components/tesoreria/CobranzaForm";
 import { CuentaCorrienteSecciones } from "@/components/tesoreria/CuentaCorrienteSecciones";
 import { clasificarCuentaCorriente, type CuentaRow } from "@/lib/tesoreria/cuentaCorriente";
 import { listCustomerOpenItems, listCobranzasDetail, listBankAccounts } from "@/lib/tesoreria/data";
+import { listCompatibleForecastAdjustments } from "@/lib/finanzas/data";
 
 export const metadata = { title: "Cobranzas · Tesorería" };
 export const dynamic = "force-dynamic";
@@ -11,10 +12,11 @@ export default async function CobranzasPage() {
   try {
     // Tesorería V3 · Fase 1: el Total General sale del MISMO dataset (`detail`)
     // vía el motor de cuenta corriente (centavos enteros), NO de `current_account`.
-    const [openItems, detail, accounts] = await Promise.all([
+    const [openItems, detail, accounts, forecasts] = await Promise.all([
       listCustomerOpenItems(),
       listCobranzasDetail(),
       listBankAccounts(),
+      listCompatibleForecastAdjustments({ direction: "ingreso" }),
     ]);
 
     const rows: CuentaRow[] = detail.map((d) => ({
@@ -43,7 +45,7 @@ export default async function CobranzasPage() {
           <div>
             <div className="eyebrow-tiny">Finanzas · Tesorería</div>
             <h1 className="page-title">Cobranzas</h1>
-            <p className="page-subtitle">Cuenta corriente de clientes (derivada) y registro de cobros.</p>
+            <p className="page-subtitle">Cuenta corriente de clientes (derivada), registro de cobros y conciliación con Finanzas.</p>
           </div>
         </div>
 
@@ -51,8 +53,13 @@ export default async function CobranzasPage() {
           <CuentaCorrienteSecciones cc={cc} kind="cobranza" />
         </div>
 
-        {/* Registro de cobro */}
-        <CobranzaForm accounts={accounts} openItems={openItems} clientNames={clientNames} />
+        {/* Registro de cobro con selector de previsión de Finanzas */}
+        <CobranzaForm
+          accounts={accounts}
+          openItems={openItems}
+          clientNames={clientNames}
+          forecastAdjustments={forecasts}
+        />
       </div>
     );
   } catch (e) {

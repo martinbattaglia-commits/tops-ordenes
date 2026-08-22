@@ -46,6 +46,7 @@ export function MovimientoOperativoForm({
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(today);
   const [concept, setConcept] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID());
 
   // Beneficiario: id del catálogo, "" (ninguno) o NUEVO (alta implícita).
   const [beneficiaryId, setBeneficiaryId] = useState("");
@@ -84,6 +85,7 @@ export function MovimientoOperativoForm({
         beneficiary_name: creatingNew ? newName : null,
         beneficiary_kind: creatingNew ? newKind : null,
         beneficiary_document: creatingNew ? newDoc : null,
+        idempotency_key: idempotencyKey,
       });
       setMsg({ ok: r.ok, text: r.message });
       if (r.ok) {
@@ -93,6 +95,7 @@ export function MovimientoOperativoForm({
         setNewDoc("");
         // Si se dio de alta un beneficiario, el selector se repuebla al refrescar.
         if (creatingNew) setBeneficiaryId("");
+        setIdempotencyKey(crypto.randomUUID());
         router.refresh();
       }
     });
