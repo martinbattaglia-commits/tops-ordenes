@@ -15,6 +15,7 @@ import { ConversationAdmin } from "./ConversationAdmin";
 
 export function ChannelView({
   channel, myRole, isAdmin = false, members = [], pinned = [], initialMessages = [], currentUserId,
+  myParticipantId,
 }: {
   channel: ChannelItem;
   myRole: MemberRole | null;
@@ -23,6 +24,7 @@ export function ChannelView({
   pinned?: PinnedItem[];
   initialMessages?: Message[];
   currentUserId?: string | null;
+  myParticipantId?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -73,6 +75,14 @@ export function ChannelView({
     );
   }
 
+  if (!myParticipantId) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-fg-muted">
+        No se pudo validar tu membresía en esta conversación.
+      </div>
+    );
+  }
+
   // ── Miembro o admin/superadmin: superficie de administración compartida ───
   return (
     <ConversationAdmin
@@ -90,6 +100,7 @@ export function ChannelView({
       pinned={pinned}
       initialMessages={initialMessages}
       currentUserId={currentUserId}
+      myParticipantId={myParticipantId}
       archiveRedirectTo="/connect/canales"
     />
   );

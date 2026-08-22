@@ -25,9 +25,12 @@ export function useRealtimeTable(
   // `connect_messages` sino en el cursor `last_read_seq` del participante
   // (RPC connect_mark_read). Sin esta tabla los badges verde y amarillo no se
   // apagaban al leer. Ya está publicada en `supabase_realtime` desde 0147.
+  // `connect_conversations` (P1): sincronización realtime del control de Max/handover.
+  // `connect_message_reactions` (P3): sincronización realtime de reacciones.
   table:
     | "orders" | "notifications" | "order_services" | "knowledge_events"
-    | "connect_messages" | "connect_participants" | "notification_reads",
+    | "connect_messages" | "connect_participants" | "notification_reads"
+    | "connect_conversations" | "connect_message_reactions",
   onChange: (payload: {
     eventType: "INSERT" | "UPDATE" | "DELETE";
     new: Record<string, unknown> | null;

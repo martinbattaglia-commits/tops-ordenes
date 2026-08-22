@@ -15,6 +15,7 @@ import {
   CATEGORY_STYLE, categoryAriaLabel, categoryForConversationKind, formatBadgeCount,
 } from "@/lib/notifications/categories";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Avatar } from "./Avatar";
 import { calculateWa24hWindow } from "@/lib/whatsapp/window24h";
 
 const KIND_ICON: Record<ConversationKind, IconName> = {
@@ -247,9 +248,13 @@ export function ConversationList({
                 onClick={onNavigate}
                 className="flex items-start gap-2.5 py-2.5 pl-3 pr-1.5 transition-colors"
               >
-                <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
-                  <Icon name={d.icon} size={15} className={d.color} />
-                </div>
+                {it.kind === "dm" ? (
+                  <Avatar name={d.title} size="sm" className="mt-0.5" />
+                ) : (
+                  <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-bg-surface-alt">
+                    <Icon name={d.icon} size={15} className={d.color} />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-semibold text-fg-primary">
                     {d.title}

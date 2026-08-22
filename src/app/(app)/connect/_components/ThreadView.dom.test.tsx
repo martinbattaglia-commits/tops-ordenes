@@ -174,6 +174,7 @@ function montar(props: {
         kind={props.kind as never}
         initialMessages={props.initialMessages}
         currentUserId={props.currentUserId ?? "op-1"}
+        myParticipantId="participant-current"
         handoverState={props.handoverState}
         lastCustomerMessageAt={props.lastCustomerMessageAt}
       />,
@@ -206,10 +207,10 @@ describe("HOTFIX · control reversible de Max", () => {
     const button = [...container.querySelectorAll("button")]
       .find((item) => item.textContent?.includes("Tomar conversación"))!;
     await act(async () => { button.click(); });
-    expect(setHandoverStateAction).toHaveBeenCalledWith({
+    expect(setHandoverStateAction).toHaveBeenCalledWith(expect.objectContaining({
       conversationId: "11111111-1111-4111-8111-111111111111",
       state: "PAUSED_HUMAN",
-    });
+    }));
     expect(container.textContent).toContain("Conversación tomada — Max está pausado");
     expect(container.textContent).toContain("Reactivar Max");
   });

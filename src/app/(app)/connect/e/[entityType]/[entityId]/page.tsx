@@ -4,7 +4,7 @@ import { isConnectEntityType } from "@/lib/connect/domain/entity-conversation";
 import { getEntityConversation } from "@/lib/connect/read/entity-conversation-data";
 import { listEntity360 } from "@/lib/connect/read/entity360-data";
 import { listMessages } from "@/lib/connect/read/inbox-data";
-import { getCurrentUserId } from "@/lib/connect/data";
+import { getCurrentUserId, getMyParticipantId } from "@/lib/connect/data";
 import { ThreadView } from "../../../_components/ThreadView";
 import { EntityContextPanel } from "../../../_components/EntityContextPanel";
 import { StartEntityConversation } from "../../../_components/StartEntityConversation";
@@ -36,6 +36,7 @@ export default async function EntityConversationPage({
     getCurrentUserId(),
   ]);
   const messages = ref ? await listMessages(ref.conversationId) : [];
+  const myParticipantId = ref ? await getMyParticipantId(ref.conversationId) : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -55,7 +56,7 @@ export default async function EntityConversationPage({
 
       <div className="flex min-h-0 flex-1">
         <div className="flex min-h-0 flex-1 flex-col">
-          {ref ? (
+          {ref && myParticipantId ? (
             /* WA-8 · `getEntityConversation` filtra por `kind = 'erp'`, así que
                esta conversación es 'erp' por construcción, no por suposición:
                conserva el comportamiento Connect completo. */
@@ -64,7 +65,12 @@ export default async function EntityConversationPage({
               kind="erp"
               initialMessages={messages}
               currentUserId={currentUserId}
+              myParticipantId={myParticipantId}
             />
+          ) : ref ? (
+            <div className="m-auto p-8 text-center text-sm text-fg-muted">
+              No se pudo validar tu membresía en esta conversación.
+            </div>
           ) : (
             <StartEntityConversation entityType={entityType} entityId={entityId} />
           )}

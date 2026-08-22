@@ -30,6 +30,7 @@ export interface ComposerDispatchPorts {
     body: string;
     clientMsgId: string;
     mentions: string[];
+    replyTo?: string | null;
   }): Promise<ConnectPostResult>;
 
   sendWhatsappText(input: {
@@ -46,6 +47,8 @@ export interface ComposerDispatchInput {
   clientMsgId: string;
   /** Menciones ya resueltas por el dominio. Se DESCARTAN en el camino WhatsApp. */
   mentions?: string[];
+  /** Mensaje citado/respondido (P3). */
+  replyTo?: string | null;
 }
 
 export type ComposerRoute = "connect" | "whatsapp" | "none";
@@ -83,22 +86,22 @@ export const CONNECT_UNAVAILABLE_MESSAGE =
  *
  *  · `whatsapp` → exactamente una llamada WhatsApp, sin menciones ni adjuntos;
  *  · cualquier otro kind válido → exactamente una llamada Connect, con la
- *    semántica actual intacta (menciones incluidas);
+ *    semántica actual intacta (menciones y citas replyTo incluidas);
  *  · kind ausente o desconocido → CERO acciones.
  */
 export async function dispatchComposerSend(
   input: ComposerDispatchInput,
   ports: ComposerDispatchPorts,
 ): Promise<ComposerOutcome> {
-  const { kind, conversationId, body, clientMsgId } = input;
+  const { kind, conversationId, body, clientMsgId, replyTo } = input;
 
   if (!isConversationKind(kind)) {
     return { route: "none", status: "failed", message: UNKNOWN_KIND_MESSAGE };
   }
 
   if (isWhatsappKind(kind)) {
-    // `mentions` NO se reenvía: el outbound es text-only y una mención interna
-    // no tiene destinatario del otro lado.
+    // `mentions` y `replyTo` NO se reenvían: el outbound de WhatsApp actual es
+    // text-only sin menciones ni threading directo hacia Meta Cloud API.
     let res: WhatsappSendResult;
     try {
       res = await ports.sendWhatsappText({ conversationId, text: body, clientMsgId });
@@ -117,14 +120,25 @@ export async function dispatchComposerSend(
     };
   }
 
+  const connectPayload: {
+    conversationId: string;
+    body: string;
+    clientMsgId: string;
+    mentions: string[];
+    replyTo?: string | null;
+  } = {
+    conversationId,
+    body,
+    clientMsgId,
+    mentions: input.mentions ?? [],
+  };
+  if (replyTo !== undefined) {
+    connectPayload.replyTo = replyTo;
+  }
+
   let res: ConnectPostResult;
   try {
-    res = await ports.postConnectMessage({
-      conversationId,
-      body,
-      clientMsgId,
-      mentions: input.mentions ?? [],
-    });
+    res = await ports.postConnectMessage(connectPayload);
   } catch {
     // Connect sí admite fallo seguro: sin respuesta no hubo confirmación del
     // RPC y no hay un tercero que haya podido recibir el mensaje.

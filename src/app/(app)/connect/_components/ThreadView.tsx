@@ -14,7 +14,7 @@ import { postMessageAction } from "@/lib/connect/adapters/driving/message-action
 import { sendWhatsappTextAction } from "@/lib/whatsapp/reply-action";
 import { dispatchComposerSend } from "@/lib/connect/composer-dispatch";
 import {
-  audioRecorderOptionsFor, composerBlockNotice, composerCapabilities, ownBubbleClass, sendButtonClass,
+  audioRecorderOptionsFor, composerBlockNotice, composerCapabilities, ownBubbleClass, sendButtonClass, isWhatsappKind,
 } from "@/lib/connect/composer-policy";
 import {
   reduceMessageState,
@@ -39,9 +39,16 @@ import { useWa24hWindow } from "@/hooks/useWa24hWindow";
 import { Wa24hWindowIndicator } from "@/components/nexus-link/Wa24hWindowIndicator";
 import { WaTemplateSelector } from "@/components/nexus-link/WaTemplateSelector";
 import { setHandoverStateAction } from "@/lib/whatsapp/handover-action";
+import {
+  SUPPORTED_EMOJIS,
+  addReactionAction,
+  removeReactionAction,
+} from "@/lib/connect/adapters/driving/reaction-actions";
+import { initialsFrom } from "@/lib/profile/types";
 import { AudioPlayer } from "./AudioPlayer";
 import { AttachmentComposer } from "./AttachmentComposer";
 import { MessageAttachments } from "./MessageAttachments";
+import { Avatar } from "./Avatar";
 
 function MicIcon({ size = 15 }: { size?: number }) {
   return (
@@ -99,6 +106,7 @@ export function ThreadView({
   kind,
   initialMessages,
   currentUserId,
+  myParticipantId,
   readOnly = false,
   mentionables = [],
   initialNowIso,
@@ -109,6 +117,7 @@ export function ThreadView({
   kind: ConversationKind;
   initialMessages: Message[];
   currentUserId: string | null;
+  myParticipantId: string;
   readOnly?: boolean;
   mentionables?: MentionPick[];
   initialNowIso?: string;
@@ -127,6 +136,7 @@ export function ThreadView({
   const [handoverState, setHandoverState] = useState<"BOT_ACTIVE" | "PAUSED_HUMAN">(initialHandoverState);
   const [handoverPending, setHandoverPending] = useState(false);
   const [handoverError, setHandoverError] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<UiMessage | null>(null);
 
   // Sincronizar draft local con el hook useWa24hWindow (preservación de borrador)
   function handleDraftChange(val: string) {
@@ -146,20 +156,142 @@ export function ThreadView({
   const caps = useMemo(() => composerCapabilities(kind, { readOnly }), [kind, readOnly]);
   const bloqueo = useMemo(() => composerBlockNotice(kind, { readOnly }), [kind, readOnly]);
 
+  const [reactionError, setReactionError] = useState<string | null>(null);
+  const [inFlightReactions, setInFlightReactions] = useState<Record<string, boolean>>({});
+
   async function toggleHandoverState() {
     if (handoverPending) return;
-    const nextState = handoverState === "BOT_ACTIVE" ? "PAUSED_HUMAN" : "BOT_ACTIVE";
+    const prevState = handoverState;
+    const nextState = prevState === "BOT_ACTIVE" ? "PAUSED_HUMAN" : "BOT_ACTIVE";
     setHandoverPending(true);
     setHandoverError(null);
+    setHandoverState(nextState);
+
     try {
-      const result = await setHandoverStateAction({ conversationId, state: nextState });
+      const result = await setHandoverStateAction({
+        conversationId,
+        state: nextState,
+        expectedState: prevState,
+      });
       if (!result.ok) {
+        setHandoverState(result.actualState ?? prevState);
         setHandoverError(result.message);
-        return;
+      } else {
+        setHandoverState(result.state ?? nextState);
       }
-      setHandoverState(nextState);
+    } catch {
+      setHandoverState(prevState);
+      setHandoverError("Error de conexión al actualizar estado de Max.");
     } finally {
       setHandoverPending(false);
+    }
+  }
+
+  async function toggleReaction(messageId: string, emoji: string) {
+    const opKey = `${messageId}:${emoji}`;
+    if (inFlightReactions[opKey]) return;
+
+    const msg = messages.find((x) => x.id === messageId);
+    if (!msg) return;
+    const existingReaction = msg.reactions?.find((r) => r.emoji === emoji);
+    const hadReaction = existingReaction?.myReaction ?? false;
+
+    setInFlightReactions((prev) => ({ ...prev, [opKey]: true }));
+    setReactionError(null);
+
+    // Actualización optimista quirúrgica
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const rxList = [...(m.reactions ?? [])];
+        const idx = rxList.findIndex((r) => r.emoji === emoji);
+        if (hadReaction) {
+          if (idx >= 0) {
+            const nextCount = rxList[idx].count - 1;
+            if (nextCount <= 0) {
+              rxList.splice(idx, 1);
+            } else {
+              rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
+            }
+          }
+        } else {
+          if (idx >= 0) {
+            rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+          } else {
+            rxList.push({ id: `${messageId}-${emoji}`, emoji, count: 1, myReaction: true });
+          }
+        }
+        return { ...m, reactions: rxList };
+      }),
+    );
+
+    try {
+      const res = hadReaction
+        ? await removeReactionAction({ conversationId, messageId, emoji })
+        : await addReactionAction({ conversationId, messageId, emoji });
+
+      if (!res.ok) {
+        // Rollback quirúrgico exclusivo para la mutación local sin destruir reacciones concurrentes ajenas
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== messageId) return m;
+            const rxList = [...(m.reactions ?? [])];
+            const idx = rxList.findIndex((r) => r.emoji === emoji);
+            if (hadReaction) {
+              if (idx >= 0) {
+                rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+              } else {
+                rxList.push({ id: `${messageId}-${emoji}`, emoji, count: 1, myReaction: true });
+              }
+            } else {
+              if (idx >= 0) {
+                const nextCount = rxList[idx].count - 1;
+                if (nextCount <= 0) {
+                  rxList.splice(idx, 1);
+                } else {
+                  rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
+                }
+              }
+            }
+            return { ...m, reactions: rxList };
+          }),
+        );
+        setReactionError(res.message);
+      } else {
+        setReactionError(null);
+      }
+    } catch {
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m;
+          const rxList = [...(m.reactions ?? [])];
+          const idx = rxList.findIndex((r) => r.emoji === emoji);
+          if (hadReaction) {
+            if (idx >= 0) {
+              rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+            } else {
+              rxList.push({ id: `${messageId}-${emoji}`, emoji, count: 1, myReaction: true });
+            }
+          } else {
+            if (idx >= 0) {
+              const nextCount = rxList[idx].count - 1;
+              if (nextCount <= 0) {
+                rxList.splice(idx, 1);
+              } else {
+                rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
+              }
+            }
+          }
+          return { ...m, reactions: rxList };
+        }),
+      );
+      setReactionError("Error de conexión al procesar reacción.");
+    } finally {
+      setInFlightReactions((prev) => {
+        const next = { ...prev };
+        delete next[opKey];
+        return next;
+      });
     }
   }
 
@@ -223,6 +355,7 @@ export function ThreadView({
     sentSeqRef.current = 0;
     setPicks([]);
     setMentionQuery(null);
+    setReplyingTo(null);
   }, [conversationId, hydrate, initialHandoverState, initialMessages]);
 
   useEffect(() => scrollToEnd(), [messages.length, scrollToEnd]);
@@ -254,9 +387,6 @@ export function ThreadView({
       const result = await markReadInBrowser(conversationId, lastSeq);
       if (cancelled) return;
       if (!result.ok) {
-        // Una sesión que termina de hidratar o renueva su token puede fallar
-        // transitoriamente. Reintentamos acotadamente; nunca apagamos el badge
-        // hasta que PostgreSQL confirme la escritura.
         if (attempt < 3) retryId = setTimeout(() => { void persistRead(); }, 750 * attempt);
         return;
       }
@@ -271,6 +401,7 @@ export function ThreadView({
     };
   }, [conversationId, messages]);
 
+  // Realtime: Mensajes
   useRealtimeTable(
     "connect_messages",
     (payload) => {
@@ -326,6 +457,93 @@ export function ThreadView({
     { filter: `conversation_id=eq.${conversationId}` },
   );
 
+  // Realtime: Handover State de la Conversación
+  useRealtimeTable(
+    "connect_conversations",
+    (payload) => {
+      const row = (payload as { new?: { id?: string; handover_state?: "BOT_ACTIVE" | "PAUSED_HUMAN" } })?.new;
+      if (row && row.id === conversationId && row.handover_state) {
+        setHandoverState(row.handover_state);
+      }
+    },
+    { filter: `id=eq.${conversationId}` },
+  );
+
+  // Realtime: Reacciones de Mensajes
+  useRealtimeTable(
+    "connect_message_reactions",
+    (payload) => {
+      const ev = payload as {
+        eventType?: string;
+        new?: { id?: string; message_id?: string; participant_id?: string; emoji?: string };
+        old?: { id?: string; message_id?: string; participant_id?: string; emoji?: string };
+      };
+      const row = ev.new ?? ev.old;
+      if (!row?.message_id || !row?.emoji) return;
+
+      const isOwn = !!(myParticipantId && row.participant_id && row.participant_id === myParticipantId);
+
+      if (ev.eventType === "INSERT") {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== row.message_id) return m;
+            const rxList = [...(m.reactions ?? [])];
+            const idx = rxList.findIndex((r) => r.emoji === row.emoji);
+
+            if (isOwn) {
+              // Confirmación de evento propio: si ya estaba marcado optimistamente, no duplicamos conteo
+              if (idx >= 0) {
+                if (!rxList[idx].myReaction) {
+                  rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+                }
+              } else {
+                rxList.push({ id: row.id ?? `${row.message_id}-${row.emoji}`, emoji: row.emoji!, count: 1, myReaction: true });
+              }
+            } else {
+              // Reacción de otro usuario: incrementamos conteo sin tocar myReaction
+              if (idx >= 0) {
+                rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1 };
+              } else {
+                rxList.push({ id: row.id ?? `${row.message_id}-${row.emoji}`, emoji: row.emoji!, count: 1, myReaction: false });
+              }
+            }
+            return { ...m, reactions: rxList };
+          }),
+        );
+      } else if (ev.eventType === "DELETE") {
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== row.message_id) return m;
+            const rxList = [...(m.reactions ?? [])];
+            const idx = rxList.findIndex((r) => r.emoji === row.emoji);
+            if (idx < 0) return m;
+
+            if (isOwn) {
+              // Unreact propio confirmado: si aún estaba marcado como propio, decrementamos
+              if (rxList[idx].myReaction) {
+                const nextCount = rxList[idx].count - 1;
+                if (nextCount <= 0) {
+                  rxList.splice(idx, 1);
+                } else {
+                  rxList[idx] = { ...rxList[idx], count: nextCount, myReaction: false };
+                }
+              }
+            } else {
+              // Unreact de otro usuario: decrementamos conteo sin tocar myReaction
+              const nextCount = rxList[idx].count - 1;
+              if (nextCount <= 0) {
+                rxList.splice(idx, 1);
+              } else {
+                rxList[idx] = { ...rxList[idx], count: nextCount };
+              }
+            }
+            return { ...m, reactions: rxList };
+          }),
+        );
+      }
+    },
+  );
+
   function updateMentionQuery(value: string, caret: number) {
     if (!caps.canMention || mentionables.length === 0) {
       setMentionQuery(null);
@@ -369,6 +587,7 @@ export function ThreadView({
 
     const mentions = caps.canMention ? resolveMentions(body, picks, currentUserId) : [];
     const clientMsgId = crypto.randomUUID();
+    const replyToId = replyingTo?.id ?? null;
     const optimistic: UiMessage = {
       id: `tmp-${clientMsgId}`,
       conversationId,
@@ -379,7 +598,12 @@ export function ThreadView({
       kind: "text",
       body,
       bodyFormat: "markdown",
-      replyToMessageId: null,
+      replyToMessageId: replyToId,
+      replyToMessage: replyingTo ? {
+        id: replyingTo.id,
+        authorName: replyingTo.authorName ?? null,
+        body: messageDisplayBody(replyingTo) ?? null,
+      } : null,
       editedAt: null,
       deletedAt: null,
       redacted: false,
@@ -393,11 +617,12 @@ export function ThreadView({
     handleDraftChange("");
     setPicks([]);
     setMentionQuery(null);
+    setReplyingTo(null);
     setSending(true);
 
     try {
       const outcome = await dispatchComposerSend(
-        { kind, conversationId, body, clientMsgId, mentions },
+        { kind, conversationId, body, clientMsgId, mentions, replyTo: replyToId },
         {
           postConnectMessage: (i) => postMessageAction(i),
           sendWhatsappText: (i) => sendWhatsappTextAction(i),
@@ -426,9 +651,6 @@ export function ThreadView({
         }),
       );
       if (outcome.status === "sent" && Boolean(lastCustomerMessageAt)) {
-        // La migración 0260 persiste PAUSED_HUMAN mediante trigger al insertar
-        // el mensaje del operador. El cliente refleja el estado sólo después
-        // de que el envío fue aceptado; un fallo no puede fingir un handover.
         setHandoverState("PAUSED_HUMAN");
       }
     } finally {
@@ -443,7 +665,7 @@ export function ThreadView({
   return (
     <>
       {/* Visual Indicator de Ventana 24h & State Handover */}
-      {Boolean(lastCustomerMessageAt) && (
+      {(Boolean(lastCustomerMessageAt) || isWhatsappKind(kind)) && (
         <Wa24hWindowIndicator
           windowInfo={windowInfo}
           handoverState={handoverState}
@@ -453,7 +675,7 @@ export function ThreadView({
         />
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
           <p className="m-auto text-xs text-fg-muted">Todavía no hay mensajes. Escribí el primero.</p>
         )}
@@ -485,56 +707,169 @@ export function ThreadView({
           return (
             <Fragment key={m.id}>
               {separator}
-            <div className={cn("flex", own ? "justify-end" : "justify-start")}>
               <div
-                className={cn(
-                  "max-w-[72%] rounded-lg px-3 py-2 text-[13px]",
-                  own
-                    ? ownBubbleClass(kind)
-                    : "border border-stroke-soft bg-bg-surface text-fg-primary",
-                )}
+                id={`msg-${m.id}`}
+                className={cn("group/msg relative flex items-start gap-2", own ? "flex-row-reverse" : "flex-row")}
               >
-                {m.authorName && (
-                  <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">
-                    {m.authorName}
-                  </div>
-                )}
-                {m.kind === "audio" ? (
-                  <AudioPlayer messageId={m.id} />
-                ) : (
-                  <div className="whitespace-pre-wrap break-words">
-                    {renderWithMentions(messageDisplayBody(m), mentionNames)}
-                  </div>
-                )}
-                {m.attachments && m.attachments.length > 0 && (
-                  <MessageAttachments attachments={m.attachments} />
-                )}
-                <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
-                  <span>{timeHM(m.createdAt)}</span>
-                  {m.status === "sending" && <span>enviando…</span>}
-                  {m.status === "pending" && (
-                    <span className="text-tops-amber">pendiente de confirmación</span>
+                {/* Avatar foto o iniciales */}
+                <Avatar
+                  src={m.authorAvatarUrl}
+                  name={m.authorName || (own ? "Tú" : "Usuario")}
+                  initials={m.authorName ? initialsFrom(m.authorName) : (own ? "YO" : (isWhatsappKind(kind) ? "WA" : "US"))}
+                  size="sm"
+                  className="mt-0.5"
+                />
+
+                <div
+                  className={cn(
+                    "relative max-w-[72%] rounded-lg px-3 py-2 text-[13px] shadow-sm",
+                    own
+                      ? ownBubbleClass(kind)
+                      : "border border-stroke-soft bg-bg-surface text-fg-primary",
                   )}
-                  {m.status === "failed" && <span className="text-tops-red">no se pudo enviar</span>}
-                  {m.status === "historical" && <span className="text-fg-muted">sin registro de envío</span>}
-                </div>
-                {m.sendError && (
-                  <p
+                >
+                  {/* Floating actions toolbar on hover */}
+                  <div
                     className={cn(
-                      "mt-1 text-[10px]",
-                      m.status === "failed" ? "text-tops-red" : "text-amber-500",
+                      "absolute -top-3 z-10 hidden group-hover/msg:flex items-center gap-1 rounded-full border border-stroke-soft bg-bg-surface px-1.5 py-0.5 shadow-md",
+                      own ? "right-2" : "left-2",
                     )}
                   >
-                    {m.sendError}
-                  </p>
-                )}
+                    {SUPPORTED_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => void toggleReaction(m.id, emoji)}
+                        className="text-xs hover:scale-125 transition-transform p-0.5"
+                        title={`Reaccionar con ${emoji}`}
+                        aria-label={`Reaccionar con ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                    {caps.canSendText && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplyingTo(m);
+                          textareaRef.current?.focus();
+                        }}
+                        className="ml-1 text-fg-muted hover:text-tops-red p-0.5"
+                        title="Responder a este mensaje"
+                        aria-label="Responder a este mensaje"
+                      >
+                        <Icon name="arrow-left" size={12} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Quoted / Replied message preview */}
+                  {m.replyToMessageId && (
+                    <div
+                      className="mb-1.5 rounded border-l-2 border-tops-red bg-bg-surface-alt/70 px-2 py-1 text-xs cursor-pointer hover:bg-bg-surface-alt transition-colors"
+                      onClick={() => {
+                        const target = document.getElementById(`msg-${m.replyToMessageId}`);
+                        if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                    >
+                      <p className="font-semibold text-[11px] text-fg-secondary">
+                        {m.replyToMessage?.authorName ?? "Mensaje citado"}
+                      </p>
+                      <p className="truncate text-[11px] text-fg-muted">
+                        {m.replyToMessage?.body ?? (messages.find((x) => x.id === m.replyToMessageId)?.body || "Mensaje original")}
+                      </p>
+                    </div>
+                  )}
+
+                  {m.authorName && (
+                    <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">
+                      {m.authorName}
+                    </div>
+                  )}
+
+                  {m.kind === "audio" ? (
+                    <AudioPlayer messageId={m.id} />
+                  ) : (
+                    <div className="whitespace-pre-wrap break-words">
+                      {renderWithMentions(messageDisplayBody(m), mentionNames)}
+                    </div>
+                  )}
+
+                  {m.attachments && m.attachments.length > 0 && (
+                    <MessageAttachments attachments={m.attachments} />
+                  )}
+
+                  {/* Emoji Reaction pills */}
+                  {m.reactions && m.reactions.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {m.reactions.map((rx) => (
+                        <button
+                          key={rx.emoji}
+                          type="button"
+                          onClick={() => void toggleReaction(m.id, rx.emoji)}
+                          className={cn(
+                            "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                            rx.myReaction
+                              ? "border-tops-red/50 bg-tops-red/10 text-tops-red"
+                              : "border-stroke-soft bg-bg-surface-alt/70 text-fg-secondary hover:bg-bg-surface-alt",
+                          )}
+                          title={rx.myReaction ? "Quitar mi reacción" : "Agregar reacción"}
+                        >
+                          <span>{rx.emoji}</span>
+                          <span className="text-[10px]">{rx.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
+                    <span>{timeHM(m.createdAt)}</span>
+                    {m.status === "sending" && <span>enviando…</span>}
+                    {m.status === "pending" && (
+                      <span className="text-tops-amber">pendiente de confirmación</span>
+                    )}
+                    {m.status === "failed" && <span className="text-tops-red">no se pudo enviar</span>}
+                    {m.status === "historical" && <span className="text-fg-muted">sin registro de envío</span>}
+                  </div>
+                  {m.sendError && (
+                    <p
+                      className={cn(
+                        "mt-1 text-[10px]",
+                        m.status === "failed" ? "text-tops-red" : "text-amber-500",
+                      )}
+                    >
+                      {m.sendError}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
             </Fragment>
           );
         })}
         <div ref={endRef} />
       </div>
+
+      {/* Aviso accesible de error en reacciones */}
+      {reactionError && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-center justify-between gap-2 border-t border-tops-red/30 bg-tops-red/10 px-4 py-2 text-xs text-tops-red"
+        >
+          <div className="flex items-center gap-1.5">
+            <Icon name="x" size={13} className="text-tops-red shrink-0" />
+            <span>{reactionError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReactionError(null)}
+            className="text-tops-red hover:underline text-[11px] font-semibold"
+            aria-label="Cerrar aviso de error en reacción"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
 
       {bloqueo ? (
         <div
@@ -545,7 +880,6 @@ export function ThreadView({
           {bloqueo.message}
         </div>
       ) : isWaExpired ? (
-        /* Si la ventana de 24h está expirada (red_locked), conmutar a selector de Plantillas Utility conservando borrador */
         <div className="p-3 border-t border-stroke-soft bg-bg-surface">
           <WaTemplateSelector
             currentDraft={draft}
@@ -554,6 +888,25 @@ export function ThreadView({
         </div>
       ) : (
         <div className="relative border-t border-stroke-soft bg-bg-surface px-3 py-2.5">
+          {/* Active Reply Banner */}
+          {replyingTo && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-md border-l-4 border-tops-red bg-bg-surface-alt px-3 py-1.5 text-xs">
+              <div className="min-w-0 flex-1">
+                <span className="font-semibold text-tops-red">Respondiendo a {replyingTo.authorName || "Mensaje"}</span>
+                <p className="truncate text-fg-muted">{messageDisplayBody(replyingTo) || "(adjunto / audio)"}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyingTo(null)}
+                className="p-1 text-fg-muted hover:text-fg-primary rounded"
+                title="Cancelar respuesta"
+                aria-label="Cancelar respuesta"
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          )}
+
           {mentionQuery !== null && candidates.length > 0 && (
             <div
               role="listbox"

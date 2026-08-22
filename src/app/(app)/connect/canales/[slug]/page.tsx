@@ -1,6 +1,6 @@
 import { Icon } from "@/components/Icon";
 import { listMessages } from "@/lib/connect/read/inbox-data";
-import { getCurrentUserId } from "@/lib/connect/data";
+import { getCurrentUserId, getMyParticipantId } from "@/lib/connect/data";
 import { getChannelBySlug, getMyRole, listParticipants, listPinned } from "@/lib/connect/read/channel-data";
 import { getProfileRole } from "@/lib/rbac/boot-permissions";
 import { ChannelView } from "../../_components/ChannelView";
@@ -30,11 +30,12 @@ export default async function ConnectChannelPage({ params }: { params: { slug: s
     return <ChannelView channel={channel} myRole={null} isAdmin={false} currentUserId={null} />;
   }
 
-  const [initialMessages, members, pinned, currentUserId] = await Promise.all([
+  const [initialMessages, members, pinned, currentUserId, myParticipantId] = await Promise.all([
     listMessages(channel.id),
     listParticipants(channel.id),
     listPinned(channel.id),
     getCurrentUserId(),
+    getMyParticipantId(channel.id),
   ]);
 
   return (
@@ -46,6 +47,7 @@ export default async function ConnectChannelPage({ params }: { params: { slug: s
       pinned={pinned}
       initialMessages={initialMessages}
       currentUserId={currentUserId}
+      myParticipantId={myParticipantId}
     />
   );
 }

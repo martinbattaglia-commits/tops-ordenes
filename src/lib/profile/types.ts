@@ -3,6 +3,10 @@
 export type PresenceStatus = "online" | "idle" | "busy" | "offline";
 export type NotifFreq = "instant" | "daily" | "weekly" | "mute";
 
+export const PRESENCE_ORDER = ["online", "idle", "busy", "offline"] as const;
+export const NOTIF_ORDER = ["instant", "daily", "weekly", "mute"] as const;
+export const THEME_ORDER = ["system", "light", "dark"] as const;
+
 export interface UserPreferences {
   theme?: "system" | "light" | "dark";
   locale?: string;

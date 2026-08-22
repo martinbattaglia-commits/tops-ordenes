@@ -8,7 +8,7 @@ import { Icon } from "@/components/Icon";
 import { getIncident, hasIncidentAdmin } from "@/lib/connect/read/incidents-data";
 import { getConversation, listMessages } from "@/lib/connect/read/inbox-data";
 import { listParticipants } from "@/lib/connect/read/channel-data";
-import { getCurrentUserId } from "@/lib/connect/data";
+import { getCurrentUserId, getMyParticipantId } from "@/lib/connect/data";
 import { listTasks } from "@/lib/connect/read/tasks-data";
 import { timeAgo, timeHM } from "@/lib/connect/format";
 import { ThreadView } from "../../_components/ThreadView";
@@ -38,11 +38,12 @@ export default async function IncidentDetailPage({
 
   // hasIncidentAdmin: espejo FAIL-CLOSED del permiso real (no canAccess, que es
   // fail-open con RBAC dormido) — el RPC re-valida cada acción igual.
-  const [conversation, messages, participants, currentUserId, isIncidentAdmin, linkedTasks] = await Promise.all([
+  const [conversation, messages, participants, currentUserId, myParticipantId, isIncidentAdmin, linkedTasks] = await Promise.all([
     getConversation(incident.conversationId),
     listMessages(incident.conversationId),
     listParticipants(incident.conversationId),
     getCurrentUserId(),
+    getMyParticipantId(incident.conversationId),
     hasIncidentAdmin(),
     // F4.3: tareas originadas en este incidente (RLS de tareas aplica).
     listTasks({ vista: "todas", incidentId: incident.id }),
@@ -122,19 +123,20 @@ export default async function IncidentDetailPage({
         </div>
       </header>
 
-      {conversation ? (
+      {conversation && myParticipantId ? (
         <ThreadView
           conversationId={conversation.id}
           /* WA-8 · kind real; los hilos de incidente conservan Connect. */
           kind={conversation.kind}
           initialMessages={messages}
           currentUserId={currentUserId}
+          myParticipantId={myParticipantId}
           readOnly={closed || !!conversation.archivedAt}
           mentionables={mentionables}
         />
       ) : (
         <div className="flex flex-1 items-center justify-center p-8 text-center text-xs text-fg-muted">
-          El hilo del incidente no está disponible.
+          El hilo del incidente no está disponible o no se pudo validar tu membresía.
         </div>
       )}
     </div>
