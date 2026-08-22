@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Icon } from "@/components/Icon";
 import type { FinanceUnifiedTransaction, FinanceCurrency } from "@/lib/finanzas/types";
+import { sortOperationalTransactions } from "@/lib/finanzas/engine";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 
 interface TransactionsViewProps {
@@ -32,7 +33,11 @@ export function TransactionsView({
     }
   }, [highlightedTxId]);
 
-  const filtered = transactions.filter((tx) => {
+  const sortedTransactions = useMemo(() => {
+    return sortOperationalTransactions(transactions);
+  }, [transactions]);
+
+  const filtered = sortedTransactions.filter((tx) => {
     if (directionFilter !== "all" && tx.direction !== directionFilter) return false;
     if (natureFilter === "real" && !tx.isReal) return false;
     if (natureFilter === "projected" && tx.isReal) return false;

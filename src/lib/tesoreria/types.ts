@@ -186,6 +186,14 @@ export interface CustomerOpenItem {
   pagado: number;
   saldo: number;
   estado_cobro: CobroEstado;
+  razon_social?: string | null;
+  counterpart?: string | null;
+  tipo_comprobante?: string | null;
+  punto_venta?: number | null;
+  moneda?: string | null;
+  fecha_emision?: string | null;
+  fch_serv_desde?: string | null;
+  created_at?: string | null;
 }
 
 export interface SupplierOpenItem {

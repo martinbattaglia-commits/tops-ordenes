@@ -580,3 +580,79 @@ export function calculateFinanceDashboardMetrics(
     upcomingMaturities,
   };
 }
+
+/**
+ * Calcula el último día hábil del mes de emisión de una factura.
+ *
+ * Regla Canónica P2:
+ * 1. Extrae año y mes de la fecha de emisión (o referencia de comprobante).
+ * 2. Determina el último día calendario del mes (28/29/30/31).
+ * 3. Excluye sábados (día 6) y domingos (día 0), retrocediendo al viernes inmediato anterior.
+ *
+ * Declaración de límite normativo: Al no existir un calendario oficial verificable de feriados
+ * argentinos en el repositorio, se implementa la exclusión estricta de fin de semana (sábados y domingos).
+ */
+export function getLastBusinessDayOfMonth(dateOrDateStr: string | Date): string {
+  let year: number;
+  let month: number; // 1-12
+
+  if (typeof dateOrDateStr === "string") {
+    const cleanStr = dateOrDateStr.slice(0, 10);
+    const parts = cleanStr.split("-");
+    year = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10);
+  } else {
+    year = dateOrDateStr.getUTCFullYear();
+    month = dateOrDateStr.getUTCMonth() + 1;
+  }
+
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    const now = new Date();
+    year = now.getUTCFullYear();
+    month = now.getUTCMonth() + 1;
+  }
+
+  // Último día calendario del mes: Date.UTC(year, month, 0)
+  const lastDayOfMonth = new Date(Date.UTC(year, month, 0));
+  let day = lastDayOfMonth.getUTCDate();
+  const dayOfWeek = lastDayOfMonth.getUTCDay(); // 0 = Domingo, 6 = Sábado
+
+  if (dayOfWeek === 6) {
+    day -= 1; // Sábado -> Viernes
+  } else if (dayOfWeek === 0) {
+    day -= 2; // Domingo -> Viernes
+  }
+
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * Ordena transacciones para vistas operativas (Lista y Transacciones).
+ *
+ * Regla Canónica P1:
+ * 1. Fecha más reciente primero (orden descendente por fecha).
+ * 2. A igualdad de fecha, creada más recientemente primero (orden descendente por createdAt / timestamp).
+ * 3. Desempate determinista estable.
+ *
+ * NOTA: No altera el orden cronológico natural del Calendario.
+ */
+export function sortOperationalTransactions(
+  transactions: FinanceUnifiedTransaction[]
+): FinanceUnifiedTransaction[] {
+  return [...transactions].sort((a, b) => {
+    // 1. Fecha más reciente primero (descendente)
+    const dateCmp = b.date.localeCompare(a.date);
+    if (dateCmp !== 0) return dateCmp;
+
+    // 2. A igualdad de fecha, creada más recientemente primero (descendente)
+    const aCreated = a.createdAt || a.time || "";
+    const bCreated = b.createdAt || b.time || "";
+    const createdCmp = bCreated.localeCompare(aCreated);
+    if (createdCmp !== 0) return createdCmp;
+
+    // 3. Hechos reales primero, luego desempate determinista por ID
+    if (a.isReal !== b.isReal) return a.isReal ? -1 : 1;
+    return b.id.localeCompare(a.id);
+  });
+}
+
