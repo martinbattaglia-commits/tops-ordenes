@@ -123,3 +123,117 @@ export async function voidForecastAdjustmentAction(
   revalidateFinance();
   return { ok: true, message: "Previsión anulada correctamente." };
 }
+
+export interface QuickenRowRecord {
+  id: string;
+  source_line: number;
+  date: string;
+  scheduled_status: string | null;
+  split_info: string | null;
+  payee: string;
+  category: string;
+  amount: number;
+  direction: "ingreso" | "egreso";
+  account: string;
+  currency: string;
+  is_duplicate: boolean;
+  is_transfer: boolean;
+  transfer_account: string | null;
+  raw_line: string;
+}
+
+export interface QuickenSearchQuery {
+  search?: string;
+  account?: string;
+  year?: string;
+  direction?: string;
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * Consulta filtrada y paginada del repositorio histórico de Quicken.
+ */
+export async function getQuickenHistoryAction(params: QuickenSearchQuery) {
+  const supabase = createClient();
+  if (!supabase) {
+    return { ok: false, message: "Base de datos no disponible", rows: [] as QuickenRowRecord[], total: 0, totalInflows: 0, totalOutflows: 0 };
+  }
+
+  const page = Math.max(1, params.page || 1);
+  const pageSize = Math.min(100, Math.max(10, params.pageSize || 50));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let q = supabase
+    .from("finance_quicken_import_rows")
+    .select(
+      "id, source_line, date, scheduled_status, split_info, payee, category, amount, direction, account, currency, is_duplicate, is_transfer, transfer_account, raw_line",
+      { count: "exact" }
+    );
+
+  if (params.search && params.search.trim()) {
+    const s = params.search.trim();
+    q = q.or(`payee.ilike.%${s}%,category.ilike.%${s}%,account.ilike.%${s}%`);
+  }
+
+  if (params.account && params.account !== "ALL") {
+    q = q.eq("account", params.account);
+  }
+
+  if (params.year && params.year !== "ALL") {
+    q = q.gte("date", `${params.year}-01-01`).lte("date", `${params.year}-12-31`);
+  }
+
+  if (params.direction === "ingreso") {
+    q = q.eq("direction", "ingreso").eq("is_transfer", false);
+  } else if (params.direction === "egreso") {
+    q = q.eq("direction", "egreso").eq("is_transfer", false);
+  } else if (params.direction === "transferencia") {
+    q = q.eq("is_transfer", true);
+  }
+
+  if (params.status && params.status !== "ALL") {
+    if (params.status === "EJECUTADO") {
+      q = q.is("scheduled_status", null);
+    } else {
+      q = q.eq("scheduled_status", params.status);
+    }
+  }
+
+  q = q.order("date", { ascending: false }).range(from, to);
+
+  const { data, count, error } = await q;
+
+  if (error) {
+    return { ok: false, message: error.message, rows: [] as QuickenRowRecord[], total: 0 };
+  }
+
+  return {
+    ok: true,
+    rows: (data || []) as QuickenRowRecord[],
+    total: count || 0,
+    page,
+    pageSize,
+  };
+}
+
+/**
+ * Obtiene el resumen general del lote histórico de Quicken.
+ */
+export async function getQuickenSummaryAction() {
+  const supabase = createClient();
+  if (!supabase) return { ok: false, summary: null };
+
+  const { data, error } = await supabase
+    .from("finance_quicken_imports")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) return { ok: false, summary: null };
+  return { ok: true, summary: data };
+}
+
