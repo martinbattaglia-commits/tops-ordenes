@@ -46,6 +46,7 @@ const ROLLBACKS_CONOCIDOS = [
   "0083_cash_box_rollback.sql",
   "0091_prospeccion_rollback.sql",
   "ROLLBACK_0233_wa_make_relay_outbox.sql",
+  "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
 ];
 
 /**
