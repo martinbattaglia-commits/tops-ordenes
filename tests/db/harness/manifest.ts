@@ -444,6 +444,8 @@ export const FINANZAS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   "ROLLBACK_0262_finance_core_foundation.sql",
   "0262a_finance_core_schema_canonical_alignment.sql",
   "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
+  "0300_finance_treasury_atomic_reconciliation.sql",
+  "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
 ]);
 
 export const CLIENTES_PHASE_B_MIGRATION_FILES: ReadonlySet<string> = new Set([

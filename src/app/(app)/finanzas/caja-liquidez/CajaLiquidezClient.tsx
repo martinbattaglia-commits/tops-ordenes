@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { FinanzasHeader, type AccountFilterScope } from "@/components/finanzas/FinanzasHeader";
 import { AccountGroupCards } from "@/components/finanzas/AccountGroupCards";
 import { CalendarView } from "@/components/finanzas/CalendarView";
@@ -8,17 +8,18 @@ import { ListView } from "@/components/finanzas/ListView";
 import { TransactionsView } from "@/components/finanzas/TransactionsView";
 import { Cashflow13WeeksTable } from "@/components/finanzas/Cashflow13WeeksTable";
 import { NewMovementModal } from "@/components/finanzas/NewMovementModal";
+import { Icon } from "@/components/Icon";
+import { createForecastAdjustmentAction } from "@/lib/finanzas/actions";
 import type {
-  FinanceCurrency,
-  FinanceAccountGroup,
   AccountGroupPosition,
   FinanceUnifiedTransaction,
   FinanceCategory,
   FinanceCostCenter,
   WeeklyCashflowItem,
+  FinanceCurrency,
+  FinanceAccountGroup,
 } from "@/lib/finanzas/types";
-import { calculate13WeekCashflow, getBankBalancesSummary } from "@/lib/finanzas/engine";
-import { Icon } from "@/components/Icon";
+import { calculate13WeekCashflow, getBankBalancesSummary, calculateDailyRollingBalances } from "@/lib/finanzas/engine";
 
 interface CajaLiquidezClientProps {
   initialAccountGroups: AccountGroupPosition[];
@@ -36,11 +37,11 @@ export function CajaLiquidezClient({
   initialWeeks13,
 }: CajaLiquidezClientProps) {
   const [currency, setCurrency] = useState<FinanceCurrency>("ARS");
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [activeTab, setActiveTab] = useState<"calendario" | "lista" | "transacciones" | "13semanas">("calendario");
   const [selectedGroup, setSelectedGroup] = useState<FinanceAccountGroup | null>(null);
   const [activeAccountScope, setActiveAccountScope] = useState<AccountFilterScope>("both_banks");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [highlightedTxId, setHighlightedTxId] = useState<string | null>(null);
 
   const [accountGroups] = useState<AccountGroupPosition[]>(initialAccountGroups);
@@ -49,7 +50,7 @@ export function CajaLiquidezClient({
   const [costCenters] = useState<FinanceCostCenter[]>(initialCostCenters);
   const [weeks13, setWeeks13] = useState<WeeklyCashflowItem[]>(initialWeeks13);
 
-  // Parse deep links from URL search params on mount
+  // Parsear deep link al montar
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
@@ -90,7 +91,12 @@ export function CajaLiquidezClient({
     setWeeks13(calculate13WeekCashflow(newDate, totalArs, totalUsd, transactions));
   };
 
-  const handleSaveMovement = (data: {
+  const handleMonthChange = (newYear: number, newMonthIdx: number) => {
+    const nextDate = `${newYear}-${String(newMonthIdx + 1).padStart(2, "0")}-01`;
+    handleDateChange(nextDate);
+  };
+
+  const handleSaveMovement = async (data: {
     mode: "ejecutado" | "programado" | "recurrente";
     direction: "ingreso" | "egreso" | "transferencia";
     amount: number;
@@ -100,7 +106,32 @@ export function CajaLiquidezClient({
     counterpart?: string;
     date: string;
     certainty: "alta" | "media" | "baja";
+    categoryId?: string;
+    costCenterId?: string;
+    notes?: string;
   }) => {
+    const isRecurring = data.mode === "recurrente";
+    const dir = data.direction === "ingreso" ? "ingreso" : "egreso";
+
+    // Persistir en Supabase si es programado o recurrente
+    if (data.mode === "programado" || data.mode === "recurrente") {
+      await createForecastAdjustmentAction({
+        date: data.date,
+        direction: dir,
+        amount: data.amount,
+        currency: data.currency,
+        account_group: data.accountGroup,
+        concept: data.concept,
+        counterpart: data.counterpart,
+        category_id: data.categoryId,
+        cost_center_id: data.costCenterId,
+        certainty_level: data.certainty,
+        is_recurring: isRecurring,
+        recurrence_rule: isRecurring ? "mensual" : null,
+        notes: data.notes,
+      });
+    }
+
     const newTx: FinanceUnifiedTransaction = {
       id: `manual-${Date.now()}`,
       date: data.date,
@@ -110,8 +141,8 @@ export function CajaLiquidezClient({
       amount: data.amount,
       currency: data.currency,
       accountGroup: data.accountGroup,
-      accountName: data.accountGroup.toUpperCase(),
-      categoryName: "Operativo Manual",
+      accountName: data.accountGroup === "caja" ? "Caja" : data.accountGroup.toUpperCase(),
+      categoryName: data.mode === "recurrente" ? "Previsión Recurrente" : "Previsión Financiera",
       isReal: data.mode === "ejecutado",
       status: data.mode === "ejecutado" ? "ejecutado" : "proyectado",
       certainty: data.certainty,
@@ -120,14 +151,70 @@ export function CajaLiquidezClient({
     setTransactions((prev) => [newTx, ...prev]);
   };
 
-  // Cálculo del saldo inicial para el calendario según el scope seleccionado
+  // Cálculo del saldo inicial para el mes actual
   const bankSummary = getBankBalancesSummary(accountGroups, currency);
-  let calendarInitialBalance = bankSummary.bothBanksBalance;
-  if (activeAccountScope === "galicia") calendarInitialBalance = bankSummary.galiciaBalance;
-  else if (activeAccountScope === "santander") calendarInitialBalance = bankSummary.santanderBalance;
-  else if (activeAccountScope === "caja") calendarInitialBalance = bankSummary.cajaBalance;
-  else if (activeAccountScope === "banks_and_cash") calendarInitialBalance = bankSummary.banksAndCashBalance;
-  else if (activeAccountScope === "all") calendarInitialBalance = bankSummary.totalBalance;
+  let baseInitialBalance = bankSummary.bothBanksBalance;
+  if (activeAccountScope === "galicia") baseInitialBalance = bankSummary.galiciaBalance;
+  else if (activeAccountScope === "santander") baseInitialBalance = bankSummary.santanderBalance;
+  else if (activeAccountScope === "caja") baseInitialBalance = bankSummary.cajaBalance;
+  else if (activeAccountScope === "banks_and_cash") baseInitialBalance = bankSummary.banksAndCashBalance;
+  else if (activeAccountScope === "all") baseInitialBalance = bankSummary.totalBalance;
+
+  // Continuidad matemática de saldos entre meses
+  const calendarInitialBalance = useMemo(() => {
+    const [selYear, selMonth] = selectedDate.split("-").map(Number);
+    const targetYear = selYear || new Date().getFullYear();
+    const targetMonthIdx = (selMonth || new Date().getMonth() + 1) - 1;
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIdx = now.getMonth();
+
+    const monthDiff = (targetYear - currentYear) * 12 + (targetMonthIdx - currentMonthIdx);
+
+    if (monthDiff === 0) {
+      return baseInitialBalance;
+    }
+
+    let rollingBal = baseInitialBalance;
+
+    if (monthDiff > 0) {
+      // Meses futuros: acumular flujos netos proyectados desde el mes actual hasta el anterior al target
+      for (let m = 0; m < monthDiff; m++) {
+        const iterMonth = (currentMonthIdx + m) % 12;
+        const iterYear = currentYear + Math.floor((currentMonthIdx + m) / 12);
+        const days = calculateDailyRollingBalances(
+          iterYear,
+          iterMonth,
+          rollingBal,
+          transactions,
+          activeAccountScope === "all" ? "all" : activeAccountScope
+        );
+        const lastDay = days[days.length - 1];
+        if (lastDay) {
+          rollingBal = lastDay.projectedClosingBalance;
+        }
+      }
+    } else {
+      // Meses pasados: deducir flujos netos
+      for (let m = 0; m > monthDiff; m--) {
+        const iterMonth = (currentMonthIdx + m - 1 + 1200) % 12;
+        const iterYear = currentYear + Math.floor((currentMonthIdx + m - 1) / 12);
+        // Calcular el flujo neto del mes pasado
+        const days = calculateDailyRollingBalances(
+          iterYear,
+          iterMonth,
+          0,
+          transactions,
+          activeAccountScope === "all" ? "all" : activeAccountScope
+        );
+        const netMonth = days.reduce((sum, d) => sum + d.netFlow, 0);
+        rollingBal = rollingBal - netMonth;
+      }
+    }
+
+    return rollingBal;
+  }, [selectedDate, baseInitialBalance, transactions, activeAccountScope]);
 
   const filteredTransactions = transactions
     .filter((t) => (currency ? t.currency === currency : true))
@@ -233,6 +320,7 @@ export function CajaLiquidezClient({
           initialBalance={calendarInitialBalance}
           accountScope={activeAccountScope}
           onDeepLinkToTransaction={handleDeepLinkToTransaction}
+          onMonthChange={handleMonthChange}
         />
       )}
 

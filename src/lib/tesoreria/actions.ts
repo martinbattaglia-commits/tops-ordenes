@@ -6,8 +6,9 @@
  * cliente de sesión → auth.uid() + RLS + has_permission gobiernan autz),
  * traduce el error y revalida. NINGUNA regla financiera vive acá (D1/D5).
  *
- * Toda la lógica financiera (suma=importe, saldo, lock F1, retención, append-
- * only) está en las RPC desplegadas en producción. No duplicar.
+ * Integración Finanzas ↔ Tesorería:
+ * Si se incluye forecast_adjustment_id, reconcilia la previsión vinculando el
+ * movement_id resultante y actualizando su estado a 'reconciliado'.
  */
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -30,6 +31,10 @@ function revalidateTreasury(): void {
   revalidatePath("/tesoreria");
   revalidatePath("/tesoreria/movimientos");
   revalidatePath("/tesoreria/bancos");
+  revalidatePath("/tesoreria/pagos");
+  revalidatePath("/tesoreria/cobranzas");
+  revalidatePath("/finanzas");
+  revalidatePath("/finanzas/caja-liquidez");
 }
 
 export async function registerReceiptAction(input: unknown): Promise<ActionResult> {
@@ -48,8 +53,12 @@ export async function registerReceiptAction(input: unknown): Promise<ActionResul
     p_observations: p.observations ?? null,
     p_attachment: p.attachment ?? null,
     p_allocations: p.allocations, // jsonb: amounts como string → exacto en la RPC
+    p_forecast_adjustment_id: p.forecast_adjustment_id ?? null,
+    p_forecast_applied_amount: p.forecast_applied_amount ? Number(p.forecast_applied_amount) : null,
+    p_idempotency_key: p.idempotency_key,
   });
   if (error) return { ok: false, message: humanizeRpcError(error.message) };
+
   revalidateTreasury();
   return { ok: true, message: "Cobranza registrada.", data };
 }
@@ -70,8 +79,12 @@ export async function registerPaymentAction(input: unknown): Promise<ActionResul
     p_observations: p.observations ?? null,
     p_attachment: p.attachment ?? null,
     p_allocations: p.allocations,
+    p_forecast_adjustment_id: p.forecast_adjustment_id ?? null,
+    p_forecast_applied_amount: p.forecast_applied_amount ? Number(p.forecast_applied_amount) : null,
+    p_idempotency_key: p.idempotency_key,
   });
   if (error) return { ok: false, message: humanizeRpcError(error.message) };
+
   revalidateTreasury();
   return { ok: true, message: "Pago registrado.", data };
 }
@@ -113,8 +126,12 @@ export async function registerOperationalMovementAction(input: unknown): Promise
     p_beneficiary_name: p.beneficiary_name?.trim() || null,
     p_beneficiary_kind: p.beneficiary_kind ?? "tercero",
     p_beneficiary_document: p.beneficiary_document?.trim() || null,
+    p_forecast_adjustment_id: p.forecast_adjustment_id ?? null,
+    p_forecast_applied_amount: p.forecast_applied_amount ? Number(p.forecast_applied_amount) : null,
+    p_idempotency_key: p.idempotency_key,
   });
   if (error) return { ok: false, message: humanizeRpcError(error.message) };
+
   revalidateTreasury();
   return { ok: true, message: "Movimiento operativo registrado.", data };
 }

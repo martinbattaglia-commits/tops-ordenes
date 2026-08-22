@@ -4,6 +4,7 @@
 import { useMemo, useState, useTransition, type FormEvent } from "react";
 import { registerPaymentAction } from "@/lib/tesoreria/actions";
 import { PAYMENT_METHOD_VALUES, type BankAccount, type SupplierOpenItem } from "@/lib/tesoreria/types";
+import type { FinanceForecastAdjustment } from "@/lib/finanzas/types";
 import { fmtMoney } from "@/lib/utils";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -12,12 +13,14 @@ export function PagoForm({
   accounts,
   openItems,
   vendorNames = {},
+  forecastAdjustments = [],
 }: {
   accounts: BankAccount[];
   openItems: SupplierOpenItem[];
   /** vendor_id → nombre comercial (resuelto server-side). El <select> muestra el
    *  nombre, pero sigue enviando el vendor_id: el contrato de la RPC no cambia. */
   vendorNames?: Record<string, string>;
+  forecastAdjustments?: FinanceForecastAdjustment[];
 }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -27,6 +30,9 @@ export function PagoForm({
   const [operation, setOperation] = useState("");
   const [date, setDate] = useState(today);
   const [alloc, setAlloc] = useState<Record<string, string>>({});
+  const [forecastId, setForecastId] = useState<string>("");
+  const [forecastAppliedAmount, setForecastAppliedAmount] = useState<string>("");
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID());
 
   const vendors = useMemo(
     () =>
@@ -37,6 +43,12 @@ export function PagoForm({
   );
   const items = useMemo(() => openItems.filter((i) => i.vendor_id === vendorId), [openItems, vendorId]);
   const amount = useMemo(() => Object.values(alloc).reduce((s, v) => s + (Number(v) || 0), 0), [alloc]);
+
+  // Previsiones de egreso abiertas/programadas
+  const compatibleForecasts = useMemo(
+    () => forecastAdjustments.filter((f) => f.direction === "egreso" && f.status !== "reconciliado" && f.status !== "anulado"),
+    [forecastAdjustments]
+  );
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,9 +65,17 @@ export function PagoForm({
         amount: amount.toFixed(2),
         operation_number: operation || null,
         allocations,
+        forecast_adjustment_id: forecastId || null,
+        forecast_applied_amount: forecastAppliedAmount.trim() ? Number(forecastAppliedAmount).toFixed(2) : null,
+        idempotency_key: idempotencyKey,
       });
       setMsg({ ok: r.ok, text: r.message });
-      if (r.ok) setAlloc({});
+      if (r.ok) {
+        setAlloc({});
+        setForecastId("");
+        setForecastAppliedAmount("");
+        setIdempotencyKey(crypto.randomUUID());
+      }
     });
   }
 
@@ -88,6 +108,46 @@ export function PagoForm({
           <input className="input" value={operation} onChange={(e) => setOperation(e.target.value)} placeholder="Opcional" />
         </label>
       </div>
+
+      {/* Selector de Reconciliación con Previsión Financiera */}
+      {compatibleForecasts.length > 0 && (
+        <div className="grid gap-2 p-3 bg-bg-surface-alt/50 border border-tops-blue-700/30 rounded">
+          <label className="block">
+            <span className="field-label block mb-1.5 text-tops-blue-700 dark:text-blue-400 font-bold">
+              Vincular con Previsión Financiera (Finanzas ↔ Tesorería)
+            </span>
+            <select
+              className="input bg-bg-surface border-tops-blue-700/30"
+              value={forecastId}
+              onChange={(e) => {
+                setForecastId(e.target.value);
+                if (!e.target.value) setForecastAppliedAmount("");
+              }}
+            >
+              <option value="">Sin previsión previa (Pago extraordinario / ad-hoc)</option>
+              {compatibleForecasts.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.date} · {f.concept} ({fmtMoney(Number(f.amount))}) {f.counterpart ? `· ${f.counterpart}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {forecastId && (
+            <label className="block">
+              <span className="field-label block mb-1 text-xs text-fg-muted">
+                Importe a aplicar a la previsión (vacío = importe total del pago)
+              </span>
+              <input
+                className="input text-sm"
+                inputMode="decimal"
+                placeholder="Monto parcial (ej. 2000000.00) o vacío para aplicar importe completo"
+                value={forecastAppliedAmount}
+                onChange={(e) => setForecastAppliedAmount(e.target.value)}
+              />
+            </label>
+          )}
+        </div>
+      )}
 
       {vendorId && (
         <div className="border rounded p-3">

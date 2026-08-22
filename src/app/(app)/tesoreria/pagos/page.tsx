@@ -3,6 +3,7 @@ import { PagoForm } from "@/components/tesoreria/PagoForm";
 import { CuentaCorrienteSecciones } from "@/components/tesoreria/CuentaCorrienteSecciones";
 import { clasificarCuentaCorriente, type CuentaRow } from "@/lib/tesoreria/cuentaCorriente";
 import { listSupplierOpenItems, listPagosDetail, listBankAccounts } from "@/lib/tesoreria/data";
+import { listCompatibleForecastAdjustments } from "@/lib/finanzas/data";
 
 export const metadata = { title: "Pagos · Tesorería" };
 export const dynamic = "force-dynamic";
@@ -11,10 +12,11 @@ export default async function PagosPage() {
   try {
     // Tesorería V3 · Fase 1: mismo motor que Cobranzas (paridad total). El Saldo
     // Neto sale de `detail` (centavos enteros), no de `supplier_current_account`.
-    const [openItems, detail, accounts] = await Promise.all([
+    const [openItems, detail, accounts, forecasts] = await Promise.all([
       listSupplierOpenItems(),
       listPagosDetail(),
       listBankAccounts(),
+      listCompatibleForecastAdjustments({ direction: "egreso" }),
     ]);
 
     const rows: CuentaRow[] = detail.map((d) => ({
@@ -43,7 +45,7 @@ export default async function PagosPage() {
           <div>
             <div className="eyebrow-tiny">Finanzas · Tesorería</div>
             <h1 className="page-title">Pagos</h1>
-            <p className="page-subtitle">Cuenta corriente de proveedores (derivada) y registro de pagos.</p>
+            <p className="page-subtitle">Cuenta corriente de proveedores (derivada), registro de pagos y conciliación con Finanzas.</p>
           </div>
         </div>
 
@@ -51,8 +53,13 @@ export default async function PagosPage() {
           <CuentaCorrienteSecciones cc={cc} kind="pago" />
         </div>
 
-        {/* Registro de pago */}
-        <PagoForm accounts={accounts} openItems={openItems} vendorNames={vendorNames} />
+        {/* Registro de pago con selector de previsión de Finanzas */}
+        <PagoForm
+          accounts={accounts}
+          openItems={openItems}
+          vendorNames={vendorNames}
+          forecastAdjustments={forecasts}
+        />
       </div>
     );
   } catch (e) {

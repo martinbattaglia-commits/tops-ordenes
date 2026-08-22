@@ -40,6 +40,9 @@ export const RegisterReceiptSchema = z.object({
   observations: z.string().trim().max(500).optional().nullable(),
   attachment: z.string().trim().max(500).optional().nullable(),
   allocations: z.array(ReceiptAllocation).min(1, "Se requiere al menos una imputación"),
+  forecast_adjustment_id: UUID.optional().nullable(),
+  forecast_applied_amount: MONEY.optional().nullable(),
+  idempotency_key: UUID,
 });
 export type RegisterReceiptInput = z.infer<typeof RegisterReceiptSchema>;
 
@@ -53,6 +56,9 @@ export const RegisterPaymentSchema = z.object({
   observations: z.string().trim().max(500).optional().nullable(),
   attachment: z.string().trim().max(500).optional().nullable(),
   allocations: z.array(PaymentAllocation).min(1, "Se requiere al menos una imputación"),
+  forecast_adjustment_id: UUID.optional().nullable(),
+  forecast_applied_amount: MONEY.optional().nullable(),
+  idempotency_key: UUID,
 });
 export type RegisterPaymentInput = z.infer<typeof RegisterPaymentSchema>;
 
@@ -78,15 +84,6 @@ export type VoidMovementInput = z.infer<typeof VoidMovementSchema>;
  * inserción, append-only) viven en tesoreria_register_operational_movement.
  * Las transferencias entre cuentas usan el flujo de Transferencias (no acá).
  */
-/**
- * Movimiento operativo (T-004). El beneficiario admite DOS formas excluyentes:
- *   • `beneficiary_id`   → se elige uno existente del catálogo;
- *   • `beneficiary_name` → alta implícita (la RPC hace select-or-create atómico).
- *
- * La OBLIGATORIEDAD por categoría NO se valida acá: vive en la RPC y en el
- * constraint `treasury_movements_beneficiary_required_ck` (0194). Este schema
- * solo valida forma/tipos, como el resto del archivo.
- */
 export const RegisterOperationalMovementSchema = z
   .object({
     date: DATE,
@@ -102,6 +99,9 @@ export const RegisterOperationalMovementSchema = z
       .optional()
       .nullable(),
     beneficiary_document: z.string().trim().max(20).optional().nullable(),
+    forecast_adjustment_id: UUID.optional().nullable(),
+    forecast_applied_amount: MONEY.optional().nullable(),
+    idempotency_key: UUID,
   })
   .refine((v) => !(v.beneficiary_id && v.beneficiary_name?.trim()), {
     message: "Elegí un beneficiario existente o creá uno nuevo, no ambos.",

@@ -16,6 +16,7 @@ interface CalendarViewProps {
   onSelectTransaction?: (tx: FinanceUnifiedTransaction) => void;
   onDayClick?: (dateStr: string) => void;
   onDeepLinkToTransaction?: (txId: string) => void;
+  onMonthChange?: (year: number, month: number) => void;
 }
 
 export function CalendarView({
@@ -27,17 +28,38 @@ export function CalendarView({
   onSelectTransaction,
   onDayClick,
   onDeepLinkToTransaction,
+  onMonthChange,
 }: CalendarViewProps) {
   const [selectedDayDetail, setSelectedDayDetail] = useState<string | null>(null);
 
-  const [year, month] = currentDate.split("-").map(Number);
-  const currentMonthIdx = month - 1; // 0-indexed
+  const [yearStr, monthStr] = currentDate.split("-");
+  const year = parseInt(yearStr, 10) || new Date().getFullYear();
+  const month = parseInt(monthStr, 10) || new Date().getMonth() + 1;
+  const currentMonthIdx = month - 1; // 0-indexed: 0 = Enero, 11 = Diciembre
+
+  // Navegación de Meses
+  const handlePrevMonth = () => {
+    const prevMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
+    const prevYear = currentMonthIdx === 0 ? year - 1 : year;
+    onMonthChange?.(prevYear, prevMonthIdx);
+  };
+
+  const handleNextMonth = () => {
+    const nextMonthIdx = currentMonthIdx === 11 ? 0 : currentMonthIdx + 1;
+    const nextYear = currentMonthIdx === 11 ? year + 1 : year;
+    onMonthChange?.(nextYear, nextMonthIdx);
+  };
+
+  const handleCurrentMonth = () => {
+    const now = new Date();
+    onMonthChange?.(now.getFullYear(), now.getMonth());
+  };
 
   // Primer día de la semana (0: domingo, 1: lunes, ...) -> convertir a lunes=0
   const firstDayOfMonth = new Date(year, currentMonthIdx, 1);
   const startingDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7;
 
-  // Cálculo diario acumulativo según la fórmula de Dirección
+  // Cálculo diario acumulativo según la fórmula canónica
   const dailyBalances = calculateDailyRollingBalances(
     year,
     currentMonthIdx,
@@ -63,10 +85,36 @@ export function CalendarView({
 
   return (
     <div className="bg-bg-surface rounded-xl border border-stroke-soft shadow-2xs overflow-hidden transition-colors">
-      {/* Header del Calendario */}
+      {/* Header del Calendario con Navegación Multimes */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-stroke-soft bg-bg-surface-alt/80">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-bold text-fg-primary">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-bg-surface border border-stroke-soft rounded-lg p-1 shadow-2xs">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="p-1.5 hover:bg-bg-surface-alt rounded text-fg-secondary hover:text-fg-primary transition-colors"
+              title="Mes Anterior"
+            >
+              <Icon name="arrow-left" className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={handleCurrentMonth}
+              className="px-2.5 py-1 text-xs font-bold text-tops-blue-700 dark:text-blue-400 hover:bg-tops-blue-700/10 rounded transition-colors"
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-1.5 hover:bg-bg-surface-alt rounded text-fg-secondary hover:text-fg-primary transition-colors"
+              title="Mes Siguiente"
+            >
+              <Icon name="arrow-right" className="w-4 h-4" />
+            </button>
+          </div>
+
+          <h2 className="text-base font-bold text-fg-primary tracking-tight">
             {monthNames[currentMonthIdx]} {year}
           </h2>
           <span className="text-xs px-2.5 py-0.5 font-bold rounded-full bg-tops-blue-700/10 text-tops-blue-700 dark:bg-blue-950/60 dark:text-blue-400">
@@ -77,15 +125,15 @@ export function CalendarView({
         <div className="flex items-center gap-2 flex-wrap text-xs text-fg-muted font-medium">
           <div className="flex items-center gap-1.5 mr-3">
             <span className="w-2.5 h-2.5 rounded-full bg-status-success"></span>
-            <span className="text-fg-secondary">Ingresos / Cobranzas</span>
+            <span className="text-fg-secondary">Ingresos (+)</span>
           </div>
           <div className="flex items-center gap-1.5 mr-3">
             <span className="w-2.5 h-2.5 rounded-full bg-tops-red"></span>
-            <span className="text-fg-secondary">Egresos / Pagos</span>
+            <span className="text-fg-secondary">Egresos (-)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#214576] dark:bg-blue-400"></span>
-            <span className="font-semibold text-tops-blue-700 dark:text-blue-400">Saldo Proyectado Cierre</span>
+            <span className="font-semibold text-tops-blue-700 dark:text-blue-400">Saldo Proyectado</span>
           </div>
         </div>
       </div>
@@ -128,7 +176,13 @@ export function CalendarView({
               <div>
                 {/* Cabecera del Día */}
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-xs font-bold ${dayBal.hasMovements ? "text-fg-primary" : "text-fg-muted"}`}>
+                  <span
+                    className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                      isSelected
+                        ? "bg-tops-blue-900 text-white dark:bg-tops-blue-700"
+                        : "text-fg-secondary"
+                    }`}
+                  >
                     {dayBal.day}
                   </span>
                   {dayBal.hasMovements && (
@@ -186,7 +240,7 @@ export function CalendarView({
                   </div>
                 )}
 
-                {/* Saldo Proyectado Acumulativo de Cierre Diario en Azul (Abajo a la Derecha) */}
+                {/* Saldo Proyectado Acumulativo de Cierre Diario */}
                 <div className="text-right">
                   <span className="text-[10px] font-bold text-tops-blue-700 dark:text-blue-400 tabular-nums">
                     {formatMoney(dayBal.projectedClosingBalance)}
@@ -260,6 +314,11 @@ export function CalendarView({
                       <span className="text-[10px] uppercase px-1.5 py-0.2 rounded bg-bg-surface-alt text-fg-secondary">
                         {tx.isReal ? "Hecho Tesorería" : "Proyección Finanzas"}
                       </span>
+                      {tx.desvio && tx.desvio.varianceAmount != null && (
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 font-semibold">
+                          Desvío: {tx.desvio.varianceAmount >= 0 ? "+" : ""}{formatMoney(tx.desvio.varianceAmount)} ({tx.desvio.varianceDays ?? 0} días)
+                        </span>
+                      )}
                     </div>
                   </div>
 
