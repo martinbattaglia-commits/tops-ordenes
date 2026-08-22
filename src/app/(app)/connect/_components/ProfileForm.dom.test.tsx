@@ -1,97 +1,109 @@
 /**
  * @vitest-environment jsdom
+ *
+ * Test DOM para ProfileForm (P2).
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { UserProfile } from "@/lib/profile/types";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock("@/components/Icon", () => ({ Icon: () => <span /> }));
-vi.mock("@/components/voice/VoiceField", () => ({
-  VoiceField: (p: { children?: unknown }) => <div>{p.children as never}</div>,
-}));
+vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-const setPresenceAction = vi.fn(async () => ({ ok: true as const }));
-const updateMyProfileAction = vi.fn(async () => ({ ok: true as const }));
-const removeAvatarAction = vi.fn(async () => ({ ok: true as const }));
+const mockUpdateAction = vi.fn().mockResolvedValue({ ok: true });
+const mockRemoveAction = vi.fn().mockResolvedValue({ ok: true });
 
 vi.mock("@/lib/profile/actions", () => ({
-  setPresenceAction: (...a: unknown[]) => setPresenceAction(...(a as [])),
-  updateMyProfileAction: (...a: unknown[]) => updateMyProfileAction(...(a as [])),
-  removeAvatarAction: (...a: unknown[]) => removeAvatarAction(...(a as [])),
+  updateMyProfileAction: (raw: unknown) => mockUpdateAction(raw),
+  removeAvatarAction: () => mockRemoveAction(),
 }));
 
 import { ProfileForm } from "./ProfileForm";
+import type { UserProfile } from "@/lib/profile/types";
 
-let container: HTMLDivElement;
-let root: Root;
+describe("ProfileForm DOM Tests", () => {
+  let container: HTMLDivElement;
+  let root: Root;
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-});
+  const sampleProfile: UserProfile = {
+    id: "user-123",
+    fullName: "Martín Test",
+    email: "martin@tops.com",
+    role: "admin",
+    avatarUrl: null,
+    initials: "MT",
+    presence: "online",
+    notifFreq: "instant",
+    preferences: { theme: "dark" },
+  };
 
-afterEach(() => {
-  act(() => { root.unmount(); });
-  container.remove();
-});
-
-const PROFILE: UserProfile = {
-  id: "user-1",
-  fullName: "Martín Battaglia",
-  email: "martin@topslogistica.com",
-  role: "admin",
-  avatarUrl: "https://ejemplo.com/avatar.jpg",
-  initials: "MB",
-  presence: "online",
-  notifFreq: "instant",
-  preferences: { theme: "dark", signature: "Saludos,\nMartín" },
-};
-
-describe("ProfileForm (P2)", () => {
-  it("renderiza la información del usuario y su avatar", () => {
-    act(() => {
-      root.render(<ProfileForm profile={PROFILE} />);
-    });
-    expect(container.textContent).toContain("Martín Battaglia");
-    expect(container.textContent).toContain("martin@topslogistica.com");
-    expect(container.textContent).toContain("Subir foto");
-    expect(container.textContent).toContain("Quitar foto");
+  beforeEach(() => {
+    vi.clearAllMocks();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
   });
 
-  it("al hacer clic en Quitar foto, invoca removeAvatarAction", async () => {
-    act(() => {
-      root.render(<ProfileForm profile={PROFILE} />);
+  afterEach(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+
+  it("renderiza campos de perfil y fallback de iniciales", async () => {
+    await act(async () => {
+      root.render(<ProfileForm profile={sampleProfile} />);
     });
-    const removeBtn = [...container.querySelectorAll("button")].find(
-      (b) => b.textContent?.includes("Quitar foto"),
-    )!;
+
+    expect(container.textContent).toContain("MT");
+    expect(container.querySelector("#presence-select")).not.toBeNull();
+    expect(container.querySelector("#notif-select")).not.toBeNull();
+    expect(container.querySelector("#theme-select")).not.toBeNull();
+  });
+
+  it("permite cambiar presencia y enviar el formulario", async () => {
+    const onSaved = vi.fn();
+    await act(async () => {
+      root.render(<ProfileForm profile={sampleProfile} onSaved={onSaved} />);
+    });
+
+    const presenceSelect = container.querySelector("#presence-select") as HTMLSelectElement;
+    await act(async () => {
+      presenceSelect.value = "busy";
+      presenceSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const submitBtn = container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    await act(async () => {
+      submitBtn.click();
+    });
+
+    expect(mockUpdateAction).toHaveBeenCalledWith(expect.objectContaining({
+      notifFreq: "instant",
+      preferences: expect.objectContaining({ theme: "dark" }),
+    }));
+  });
+
+  it("permite quitar la foto de perfil invocando removeAvatarAction", async () => {
+    const profileWithAvatar = {
+      ...sampleProfile,
+      avatarUrl: "https://storage.logisticatops.com/avatars/user-123.jpg",
+    };
+    await act(async () => {
+      root.render(<ProfileForm profile={profileWithAvatar} />);
+    });
+
+    const removeBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Quitar"),
+    );
     expect(removeBtn).toBeDefined();
 
     await act(async () => {
-      removeBtn.click();
+      removeBtn?.click();
     });
 
-    expect(removeAvatarAction).toHaveBeenCalled();
-  });
-
-  it("permite guardar los cambios con onSave", async () => {
-    act(() => {
-      root.render(<ProfileForm profile={PROFILE} />);
-    });
-    const saveBtn = [...container.querySelectorAll("button")].find(
-      (b) => b.textContent?.includes("Guardar"),
-    )!;
-
-    await act(async () => {
-      saveBtn.click();
-    });
-
-    expect(updateMyProfileAction).toHaveBeenCalled();
+    expect(mockRemoveAction).toHaveBeenCalled();
   });
 });

@@ -15,10 +15,10 @@ describe("P1 Handover · Robustez, Concurrencia y Resiliencia Adversarial", () =
     vi.restoreAllMocks();
   });
 
-  it("doble clic / reintento rápido: procesa secuencialmente de forma idempotente", async () => {
-    let rpcCalls = 0;
-    const mockRpc = vi.fn().mockImplementation(async () => {
-      rpcCalls++;
+  it("carreras concurrentes (Promise.all): resuelve de forma atómica y confirma estado", async () => {
+    let callCount = 0;
+    const mockRpc = vi.fn().mockImplementation(async (_fn, args: { p_state: string }) => {
+      callCount++;
       return { data: null, error: null };
     });
 
@@ -35,45 +35,18 @@ describe("P1 Handover · Robustez, Concurrencia y Resiliencia Adversarial", () =
     };
     vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
 
-    // Dos invocaciones concurrentes (doble clic)
+    // Carrera de dos solicitudes simultáneas
     const [res1, res2] = await Promise.all([
       setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" }),
-      setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" }),
+      setHandoverStateAction({ conversationId: CONV_ID, state: "BOT_ACTIVE" }),
     ]);
 
-    expect(res1).toEqual({ ok: true });
-    expect(res2).toEqual({ ok: true });
-    expect(rpcCalls).toBe(2);
+    expect(res1).toEqual({ ok: true, state: "PAUSED_HUMAN" });
+    expect(res2).toEqual({ ok: true, state: "BOT_ACTIVE" });
+    expect(callCount).toBe(2);
   });
 
-  it("dos operadores concurrentes: el último estado persistido es canónico", async () => {
-    const executedStates: string[] = [];
-    const mockRpc = vi.fn().mockImplementation(async (_fn, args: { p_state: string }) => {
-      executedStates.push(args.p_state);
-      return { data: null, error: null };
-    });
-
-    const mockSelect = vi.fn().mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
-      }),
-    });
-
-    const mockClient = {
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "op-2" } }, error: null }) },
-      from: vi.fn().mockReturnValue({ select: mockSelect }),
-      rpc: mockRpc,
-    };
-    vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
-
-    // Operador A pausa, Operador B reactiva
-    await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
-    await setHandoverStateAction({ conversationId: CONV_ID, state: "BOT_ACTIVE" });
-
-    expect(executedStates).toEqual(["PAUSED_HUMAN", "BOT_ACTIVE"]);
-  });
-
-  it("pausa mientras existe mensaje entrante: bloquea inmediatamente la entrega a Max", async () => {
+  it("pausa durante procesamiento: bloquea inmediatamente la entrega a Max", async () => {
     const fakeAdmin = {
       rpc: vi.fn(),
       from: vi.fn().mockImplementation((table: string) => {
@@ -105,7 +78,7 @@ describe("P1 Handover · Robustez, Concurrencia y Resiliencia Adversarial", () =
     });
 
     expect(outcome.ok).toBe(true);
-    expect(outcome.state).toBe("delivered"); // Marcado como entregado/omitido para no ciclar en reintentos
+    expect(outcome.state).toBe("delivered"); // Marcado como entregado para no ciclar
   });
 
   it("reactivación sin reprocesar mensajes históricos: mensajes nuevos fluyen al relay", async () => {
@@ -139,17 +112,17 @@ describe("P1 Handover · Robustez, Concurrencia y Resiliencia Adversarial", () =
       attempts: 0,
     });
 
-    // Como no hay endpoint configurado en test env, devuelve misconfigured (relay intentado)
+    // En ambiente test sin URL devuelve misconfigured
     expect(outcome.state).toBe("misconfigured");
   });
 
-  it("fallo de persistencia / red en Supabase es fail-closed y no muta optimistamente", async () => {
+  it("fallo de persistencia / red en Supabase es fail-closed y devuelve error sanitizado", async () => {
     const mockSelect = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
       }),
     });
-    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: { message: "timeout de conexión a BD" } });
+    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: { message: "connection timeout" } });
     const mockClient = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "op-1" } }, error: null }) },
       from: vi.fn().mockReturnValue({ select: mockSelect }),
@@ -158,6 +131,9 @@ describe("P1 Handover · Robustez, Concurrencia y Resiliencia Adversarial", () =
     vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
 
     const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
-    expect(res).toEqual({ ok: false, message: "timeout de conexión a BD" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.message).toBe("No se pudo actualizar el estado de Max. Probá de nuevo.");
+    }
   });
 });

@@ -22,7 +22,6 @@ describe("handover-action · setHandoverStateAction", () => {
   it("devuelve mensaje informativo en modo demo sin supabase", async () => {
     vi.spyOn(serverSupabase, "createClient").mockReturnValue(null as never);
     const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
-    expect(res.ok).toBe(false);
     expect(res).toEqual({ ok: false, message: "Modo demo: no se persiste." });
   });
 
@@ -54,7 +53,7 @@ describe("handover-action · setHandoverStateAction", () => {
     expect(res).toEqual({ ok: false, message: "La conversación de WhatsApp no pudo validarse." });
   });
 
-  it("invoca RPC connect_set_handover_state con parámetros canónicos y devuelve ok", async () => {
+  it("invoca RPC connect_set_handover_state con parámetros canónicos y devuelve ok con estado confirmado", async () => {
     const mockSelect = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
@@ -69,7 +68,7 @@ describe("handover-action · setHandoverStateAction", () => {
     vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
 
     const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
-    expect(res).toEqual({ ok: true });
+    expect(res).toEqual({ ok: true, state: "PAUSED_HUMAN" });
     expect(mockRpc).toHaveBeenCalledWith("connect_set_handover_state", {
       p_conversation_id: CONV_ID,
       p_state: "PAUSED_HUMAN",
@@ -91,20 +90,20 @@ describe("handover-action · setHandoverStateAction", () => {
     vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
 
     const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "BOT_ACTIVE" });
-    expect(res).toEqual({ ok: true });
+    expect(res).toEqual({ ok: true, state: "BOT_ACTIVE" });
     expect(mockRpc).toHaveBeenCalledWith("connect_set_handover_state", {
       p_conversation_id: CONV_ID,
       p_state: "BOT_ACTIVE",
     });
   });
 
-  it("captura y devuelve error de Supabase sin romper la sesión", async () => {
+  it("sanitiza errores de base de datos sin romper la sesión", async () => {
     const mockSelect = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
       }),
     });
-    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: { message: "permiso denegado" } });
+    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: { message: "permission denied for rpc connect_set_handover_state" } });
     const mockClient = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u-1" } }, error: null }) },
       from: vi.fn().mockReturnValue({ select: mockSelect }),
@@ -113,6 +112,6 @@ describe("handover-action · setHandoverStateAction", () => {
     vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
 
     const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
-    expect(res).toEqual({ ok: false, message: "permiso denegado" });
+    expect(res).toEqual({ ok: false, message: "Sin permiso para conmutar el estado de Max en este canal." });
   });
 });

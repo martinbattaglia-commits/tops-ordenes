@@ -22,9 +22,6 @@ describe("P0 Causa Raíz · Demostración y Recuperación de Max Bot en WhatsApp
   });
 
   it("1. Normalización de context_id: resuelve formatos internacionales y variantes argentinas (+54 9)", () => {
-    // Causa raíz 1: Las filas en `connect_conversations` guardaban context_id como `wa:+549...` o `+54...`,
-    // mientras que los webhooks entrantes de Meta entregan `from` en formato numérico variable.
-    // getContextIdCandidates asegura que cualquier variante coincida con la conversación viva.
     const c9 = getContextIdCandidates(RAW_PHONE_AR_WITH_9);
     expect(c9).toContain("wa:5491168239031");
     expect(c9).toContain("wa:+5491168239031");
@@ -37,9 +34,6 @@ describe("P0 Causa Raíz · Demostración y Recuperación de Max Bot en WhatsApp
   });
 
   it("2. Consulta SQL alineada con contrato 0260 (sin columnas inexistentes como is_bot_active)", async () => {
-    // Causa raíz 2: En versiones anteriores, se intentaban consultar columnas que no existen en el
-    // esquema vivo de `connect_conversations` (`is_bot_active`, `assigned_to`), provocando fallo de
-    // PostgREST que interrumpía la cadena de procesamiento.
     const selectSpy = vi.fn();
     const fakeAdmin = {
       rpc: vi.fn(),
@@ -71,7 +65,6 @@ describe("P0 Causa Raíz · Demostración y Recuperación de Max Bot en WhatsApp
       attempts: 0,
     });
 
-    // Se verifica que únicamente se pidan las columnas válidas del contrato
     expect(selectSpy).toHaveBeenCalledWith("id, handover_state");
   });
 
@@ -83,8 +76,6 @@ describe("P0 Causa Raíz · Demostración y Recuperación de Max Bot en WhatsApp
   });
 
   it("4. Reactivación operativa de Max por el operador humano", async () => {
-    // Causa raíz 4: No existía mecanismo en la interfaz ni acción autenticada para pasar
-    // de PAUSED_HUMAN de vuelta a BOT_ACTIVE. `setHandoverStateAction` restaura el control bidireccional.
     const mockSelect = vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnValue({
         maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
@@ -103,7 +94,7 @@ describe("P0 Causa Raíz · Demostración y Recuperación de Max Bot en WhatsApp
       state: "BOT_ACTIVE",
     });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, state: "BOT_ACTIVE" });
     expect(mockRpc).toHaveBeenCalledWith("connect_set_handover_state", {
       p_conversation_id: CONV_ID,
       p_state: "BOT_ACTIVE",

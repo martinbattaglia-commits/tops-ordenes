@@ -1,16 +1,15 @@
 "use client";
 
-// Nexus Link · Perfil de Usuario (RC1.4 / P2). Formulario de preferencias: presencia,
-// avatar (carga local de archivo, URL externa, eliminación), notificaciones, firma y tema.
-// Estado ok/error inline y accesible.
+// Formulario de Perfil de Usuario (RC1.4 / P2).
+// Permite actualizar presencia, frecuencia de notificaciones y foto de perfil.
+// Fail-closed, sin IA, y con fallback canónico a iniciales.
 
-import { useRef, useState, useTransition } from "react";
+import { useState } from "react";
 import { Icon } from "@/components/Icon";
-import { VoiceField } from "@/components/voice/VoiceField";
 import {
-  type UserProfile,
   type PresenceStatus,
   type NotifFreq,
+  type UserProfile,
   PRESENCE_ORDER,
   PRESENCE_LABELS,
   NOTIF_ORDER,
@@ -18,275 +17,234 @@ import {
   THEME_ORDER,
   initialsFrom,
 } from "@/lib/profile/types";
-import {
-  setPresenceAction,
-  updateMyProfileAction,
-  removeAvatarAction,
-} from "@/lib/profile/actions";
+import { updateMyProfileAction, removeAvatarAction } from "@/lib/profile/actions";
 import { Avatar } from "./Avatar";
 
-type Theme = (typeof THEME_ORDER)[number];
-const THEME_LABELS: Record<Theme, string> = { system: "Sistema", light: "Claro", dark: "Oscuro" };
-
-const PRESENCE_DOT: Record<PresenceStatus, string> = {
-  online: "bg-emerald-500",
-  idle: "bg-amber-400",
-  busy: "bg-tops-red",
-  offline: "bg-fg-muted",
-};
-
-const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2MB
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-
-type Status = { kind: "idle" } | { kind: "ok"; message: string } | { kind: "error"; message: string };
-
-export function ProfileForm({ profile }: { profile: UserProfile }) {
-  const initialTheme: Theme =
-    profile.preferences.theme === "light" || profile.preferences.theme === "dark"
-      ? profile.preferences.theme
-      : "system";
-
+export function ProfileForm({
+  profile,
+  onSaved,
+}: {
+  profile: UserProfile;
+  onSaved?: (updated: UserProfile) => void;
+}) {
   const [presence, setPresence] = useState<PresenceStatus>(profile.presence);
-  const [avatarUrl, setAvatarUrl] = useState<string>(profile.avatarUrl ?? "");
   const [notifFreq, setNotifFreq] = useState<NotifFreq>(profile.notifFreq);
-  const [signature, setSignature] = useState<string>(
-    typeof profile.preferences.signature === "string" ? profile.preferences.signature : "",
-  );
-  const [theme, setTheme] = useState<Theme>(initialTheme);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [theme, setTheme] = useState<string>(profile.preferences.theme || "system");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatarUrl);
+  const [preview, setPreview] = useState<string | null>(profile.avatarUrl);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
-  const [presenceStatus, setPresenceStatus] = useState<Status>({ kind: "idle" });
-  const [saveStatus, setSaveStatus] = useState<Status>({ kind: "idle" });
-  const [presencePending, startPresence] = useTransition();
-  const [savePending, startSave] = useTransition();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const trimmedAvatar = avatarUrl.trim();
-
-  function onPresenceChange(next: PresenceStatus) {
-    const prev = presence;
-    setPresence(next);
-    setPresenceStatus({ kind: "idle" });
-    startPresence(async () => {
-      const r = await setPresenceAction({ status: next });
-      if (r.ok) {
-        setPresenceStatus({ kind: "ok", message: "Presencia actualizada." });
-      } else {
-        setPresence(prev);
-        setPresenceStatus({ kind: "error", message: r.message });
-      }
-    });
-  }
-
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setAvatarError(null);
-
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      setAvatarError("Formato no soportado. Usá JPG, PNG o WebP.");
+    if (file.size > 2 * 1024 * 1024) {
+      setErr("La imagen no puede superar los 2MB.");
       return;
     }
-    if (file.size > MAX_AVATAR_BYTES) {
-      setAvatarError("La imagen supera el límite de 2 MB.");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setErr("Formato no soportado. Usá JPG, PNG o WebP.");
       return;
     }
+    const localUrl = URL.createObjectURL(file);
+    setPreview(localUrl);
+    setMsg("Foto seleccionada para vista previa local. El almacenamiento persistente requiere bucket autorizado.");
+  }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setAvatarUrl(reader.result);
+  async function handleRemoveAvatar() {
+    setSaving(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await removeAvatarAction();
+      if (!res.ok) {
+        setErr(res.message);
+        return;
       }
-    };
-    reader.onerror = () => {
-      setAvatarError("No se pudo leer el archivo de imagen.");
-    };
-    reader.readAsDataURL(file);
+      setAvatarUrl(null);
+      setPreview(null);
+      setMsg("Foto de perfil eliminada.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleRemoveAvatar() {
-    setAvatarUrl("");
-    setAvatarError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    startSave(async () => {
-      await removeAvatarAction();
-    });
-  }
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setErr(null);
+    setMsg(null);
 
-  function onSave() {
-    setSaveStatus({ kind: "idle" });
-    startSave(async () => {
-      const r = await updateMyProfileAction({
-        avatarUrl: trimmedAvatar.length > 0 ? trimmedAvatar : null,
+    try {
+      const updates: {
+        avatarUrl?: string | null;
+        notifFreq?: NotifFreq;
+        preferences?: Record<string, unknown>;
+      } = {
         notifFreq,
-        preferences: { ...profile.preferences, signature, theme },
+        preferences: {
+          ...profile.preferences,
+          theme: theme as "system" | "light" | "dark",
+        },
+      };
+
+      // Si hay una URL HTTPS válida, se incluye en la persistencia
+      if (avatarUrl && avatarUrl.startsWith("https://")) {
+        updates.avatarUrl = avatarUrl;
+      } else if (avatarUrl === null) {
+        updates.avatarUrl = null;
+      }
+
+      const res = await updateMyProfileAction(updates);
+      if (!res.ok) {
+        setErr(res.message);
+        return;
+      }
+
+      setMsg("Perfil actualizado correctamente.");
+      onSaved?.({
+        ...profile,
+        presence,
+        notifFreq,
+        avatarUrl: avatarUrl,
+        preferences: {
+          ...profile.preferences,
+          theme: theme as "system" | "light" | "dark",
+        },
       });
-      if (r.ok) setSaveStatus({ kind: "ok", message: "Perfil guardado correctamente." });
-      else setSaveStatus({ kind: "error", message: r.message });
-    });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-5 py-6">
-      {/* (1) Cabecera con avatar + identidad + selector de presencia */}
-      <div className="card p-5">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="relative group">
-            <Avatar
-              src={trimmedAvatar.length > 0 ? trimmedAvatar : null}
-              name={profile.fullName}
-              initials={profile.initials || initialsFrom(profile.fullName)}
-              size="lg"
-            />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-bold text-fg-primary">
-              {profile.fullName ?? "Sin nombre"}
-            </h2>
-            {profile.email && <p className="truncate text-sm text-fg-secondary">{profile.email}</p>}
-            <span className="mt-1.5 inline-flex items-center rounded-pill bg-bg-surface-alt px-2.5 py-0.5 text-[11px] font-medium text-fg-secondary">
-              {profile.role}
-            </span>
-
-            {/* Controles rápidos de foto de perfil */}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp,image/gif"
-                onChange={handleFileSelect}
-                className="sr-only"
-                id="avatar-file-upload"
-              />
+    <form onSubmit={handleSubmit} className="space-y-6 max-w-lg">
+      {/* Sección Foto de Perfil */}
+      <div className="space-y-3">
+        <label className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
+          Foto de Perfil
+        </label>
+        <div className="flex items-center gap-4">
+          <Avatar
+            src={preview}
+            name={profile.fullName}
+            initials={initialsFrom(profile.fullName)}
+            size="lg"
+          />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
               <label
-                htmlFor="avatar-file-upload"
-                className="btn btn-ghost btn-sm text-xs cursor-pointer inline-flex items-center gap-1.5"
+                htmlFor="avatar-upload"
+                className="btn btn-secondary btn-sm cursor-pointer"
               >
                 <Icon name="camera" size={13} />
-                Subir foto
+                <span>Subir foto</span>
+                <input
+                  id="avatar-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleFileChange}
+                  className="sr-only"
+                />
               </label>
-              {trimmedAvatar.length > 0 && (
+              {(preview || avatarUrl) && (
                 <button
                   type="button"
                   onClick={handleRemoveAvatar}
-                  disabled={savePending}
-                  className="btn btn-ghost btn-sm text-xs text-tops-red hover:bg-tops-red/10 inline-flex items-center gap-1.5"
+                  disabled={saving}
+                  className="btn btn-ghost btn-sm text-tops-red hover:bg-tops-red/10"
                 >
                   <Icon name="trash" size={13} />
-                  Quitar foto
+                  <span>Quitar</span>
                 </button>
               )}
             </div>
-            {avatarError && (
-              <p role="alert" className="mt-1.5 text-xs text-tops-red font-medium">
-                {avatarError}
-              </p>
-            )}
+            <p className="text-[11px] text-fg-muted">
+              JPG, PNG o WebP hasta 2MB. Si no tenés foto, se muestran tus iniciales ({initialsFrom(profile.fullName)}).
+            </p>
           </div>
-        </div>
-
-        <div className="mt-4 border-t border-stroke-soft pt-4">
-          <label className="block text-xs font-medium text-fg-secondary">Presencia</label>
-          <div className="mt-2 flex items-center gap-2.5">
-            <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${PRESENCE_DOT[presence]}`} aria-hidden />
-            <select
-              value={presence}
-              aria-label="Presencia"
-              disabled={presencePending}
-              onChange={(e) => onPresenceChange(e.target.value as PresenceStatus)}
-              className="rounded border border-stroke-soft bg-bg-page px-2 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red disabled:opacity-60"
-            >
-              {PRESENCE_ORDER.map((s) => (
-                <option key={s} value={s}>
-                  {PRESENCE_LABELS[s]}
-                </option>
-              ))}
-            </select>
-          </div>
-          {presenceStatus.kind === "ok" && (
-            <p className="mt-1.5 text-xs text-emerald-500">{presenceStatus.message}</p>
-          )}
-          {presenceStatus.kind === "error" && (
-            <p className="mt-1.5 text-xs text-tops-red">{presenceStatus.message}</p>
-          )}
         </div>
       </div>
 
-      {/* Preferencias (guardado explícito) */}
-      <div className="card mt-4 p-5">
-        <h3 className="text-sm font-bold text-fg-primary">Preferencias</h3>
-
-        <div className="mt-4 space-y-4">
-          {/* (2) Avatar URL alternativa */}
-          <label className="block text-xs font-medium text-fg-secondary">
-            URL externa de avatar (opcional)
-            <input
-              type="url"
-              value={avatarUrl.startsWith("data:") ? "" : avatarUrl}
-              onChange={(e) => {
-                setAvatarUrl(e.target.value);
-                setAvatarError(null);
-              }}
-              placeholder="https://…"
-              className="mt-1 w-full rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
-            />
-          </label>
-
-          {/* (3) Frecuencia de notificaciones */}
-          <label className="block text-xs font-medium text-fg-secondary">
-            Frecuencia de notificaciones
-            <select
-              value={notifFreq}
-              onChange={(e) => setNotifFreq(e.target.value as NotifFreq)}
-              className="mt-1 w-full rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
-            >
-              {NOTIF_ORDER.map((f) => (
-                <option key={f} value={f}>
-                  {NOTIF_FREQ_LABELS[f]}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {/* (4) Firma + tema */}
-          <label className="block text-xs font-medium text-fg-secondary">
-            Firma
-            <VoiceField>
-              <textarea
-                value={signature}
-                onChange={(e) => setSignature(e.target.value)}
-                rows={3}
-                placeholder="Tu firma para mensajes y notificaciones…"
-                className="mt-1 w-full resize-y rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
-              />
-            </VoiceField>
-          </label>
-
-          <label className="block text-xs font-medium text-fg-secondary">
-            Tema
-            <select
-              value={theme}
-              onChange={(e) => setTheme(e.target.value as Theme)}
-              className="mt-1 w-full rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
-            >
-              {THEME_ORDER.map((t) => (
-                <option key={t} value={t}>
-                  {THEME_LABELS[t]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="mt-5 flex items-center gap-3 border-t border-stroke-soft pt-4">
-          <button type="button" className="btn btn-nexus btn-sm" disabled={savePending} onClick={onSave}>
-            <Icon name="check" size={14} /> {savePending ? "Guardando…" : "Guardar"}
-          </button>
-          {saveStatus.kind === "ok" && <p className="text-xs text-emerald-500">{saveStatus.message}</p>}
-          {saveStatus.kind === "error" && <p className="text-xs text-tops-red">{saveStatus.message}</p>}
-        </div>
+      {/* Estado de Presencia */}
+      <div className="space-y-2">
+        <label htmlFor="presence-select" className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
+          Estado de Presencia
+        </label>
+        <select
+          id="presence-select"
+          value={presence}
+          onChange={(e) => setPresence(e.target.value as PresenceStatus)}
+          className="w-full rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary focus:border-tops-red outline-none"
+        >
+          {PRESENCE_ORDER.map((st) => (
+            <option key={st} value={st}>
+              {PRESENCE_LABELS[st]}
+            </option>
+          ))}
+        </select>
       </div>
-    </div>
+
+      {/* Frecuencia de Notificaciones */}
+      <div className="space-y-2">
+        <label htmlFor="notif-select" className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
+          Notificaciones por Correo
+        </label>
+        <select
+          id="notif-select"
+          value={notifFreq}
+          onChange={(e) => setNotifFreq(e.target.value as NotifFreq)}
+          className="w-full rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary focus:border-tops-red outline-none"
+        >
+          {NOTIF_ORDER.map((fq) => (
+            <option key={fq} value={fq}>
+              {NOTIF_FREQ_LABELS[fq]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Tema de Interfaz */}
+      <div className="space-y-2">
+        <label htmlFor="theme-select" className="block text-xs font-semibold uppercase tracking-wide text-fg-secondary">
+          Tema Visual
+        </label>
+        <select
+          id="theme-select"
+          value={theme}
+          onChange={(e) => setTheme(e.target.value)}
+          className="w-full rounded-md border border-stroke-soft bg-bg-surface px-3 py-2 text-sm text-fg-primary focus:border-tops-red outline-none"
+        >
+          {THEME_ORDER.map((th) => (
+            <option key={th} value={th}>
+              {th === "system" ? "Automático del sistema" : th === "light" ? "Modo Claro" : "Modo Oscuro"}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Mensajes de Feedback */}
+      {msg && (
+        <div role="status" className="rounded-md bg-emerald-500/10 border border-emerald-500/30 p-3 text-xs text-emerald-600">
+          {msg}
+        </div>
+      )}
+      {err && (
+        <div role="alert" className="rounded-md bg-tops-red/10 border border-tops-red/30 p-3 text-xs text-tops-red">
+          {err}
+        </div>
+      )}
+
+      {/* Botón Guardar */}
+      <button
+        type="submit"
+        disabled={saving}
+        className="btn btn-nexus w-full flex items-center justify-center gap-2"
+      >
+        <Icon name="check" size={14} />
+        <span>{saving ? "Guardando…" : "Guardar Cambios"}</span>
+      </button>
+    </form>
   );
 }
