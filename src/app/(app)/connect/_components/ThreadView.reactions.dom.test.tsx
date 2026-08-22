@@ -59,7 +59,6 @@ const mockAddReaction = vi.fn();
 const mockRemoveReaction = vi.fn();
 
 vi.mock("@/lib/connect/adapters/driving/reaction-actions", () => ({
-  SUPPORTED_EMOJIS: ["👍", "❤️", "😂", "😮", "😢", "🙏"],
   addReactionAction: (raw: unknown) => mockAddReaction(raw),
   removeReactionAction: (raw: unknown) => mockRemoveReaction(raw),
 }));

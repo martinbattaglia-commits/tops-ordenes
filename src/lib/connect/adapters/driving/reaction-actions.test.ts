@@ -6,8 +6,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import {
   addReactionAction,
   removeReactionAction,
-  SUPPORTED_EMOJIS,
 } from "./reaction-actions";
+import { SUPPORTED_EMOJIS } from "@/lib/connect/domain/reactions";
 import * as serverSupabase from "@/lib/supabase/server";
 
 describe("P3 Reacciones · reaction-actions & Database Contract (HIGH 4)", () => {
