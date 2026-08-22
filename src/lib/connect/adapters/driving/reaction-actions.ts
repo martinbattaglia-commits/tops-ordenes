@@ -7,10 +7,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { SUPPORTED_EMOJIS } from "@/lib/connect/domain/reactions";
 import { createClient } from "@/lib/supabase/server";
-
-export const SUPPORTED_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🙏"] as const;
-export type SupportedEmoji = (typeof SUPPORTED_EMOJIS)[number];
 
 const ReactionSchema = z.object({
   conversationId: z.string().min(1),

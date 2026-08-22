@@ -39,8 +39,8 @@ import { useWa24hWindow } from "@/hooks/useWa24hWindow";
 import { Wa24hWindowIndicator } from "@/components/nexus-link/Wa24hWindowIndicator";
 import { WaTemplateSelector } from "@/components/nexus-link/WaTemplateSelector";
 import { setHandoverStateAction } from "@/lib/whatsapp/handover-action";
+import { SUPPORTED_EMOJIS } from "@/lib/connect/domain/reactions";
 import {
-  SUPPORTED_EMOJIS,
   addReactionAction,
   removeReactionAction,
 } from "@/lib/connect/adapters/driving/reaction-actions";
