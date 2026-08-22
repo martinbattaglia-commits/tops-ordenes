@@ -14,7 +14,7 @@ import { postMessageAction } from "@/lib/connect/adapters/driving/message-action
 import { sendWhatsappTextAction } from "@/lib/whatsapp/reply-action";
 import { dispatchComposerSend } from "@/lib/connect/composer-dispatch";
 import {
-  audioRecorderOptionsFor, composerBlockNotice, composerCapabilities, ownBubbleClass, sendButtonClass,
+  audioRecorderOptionsFor, composerBlockNotice, composerCapabilities, ownBubbleClass, sendButtonClass, isWhatsappKind,
 } from "@/lib/connect/composer-policy";
 import {
   reduceMessageState,
@@ -39,9 +39,16 @@ import { useWa24hWindow } from "@/hooks/useWa24hWindow";
 import { Wa24hWindowIndicator } from "@/components/nexus-link/Wa24hWindowIndicator";
 import { WaTemplateSelector } from "@/components/nexus-link/WaTemplateSelector";
 import { setHandoverStateAction } from "@/lib/whatsapp/handover-action";
+import {
+  SUPPORTED_EMOJIS,
+  addReactionAction,
+  removeReactionAction,
+} from "@/lib/connect/adapters/driving/reaction-actions";
+import { initialsFrom } from "@/lib/profile/types";
 import { AudioPlayer } from "./AudioPlayer";
 import { AttachmentComposer } from "./AttachmentComposer";
 import { MessageAttachments } from "./MessageAttachments";
+import { Avatar } from "./Avatar";
 
 function MicIcon({ size = 15 }: { size?: number }) {
   return (
@@ -127,6 +134,7 @@ export function ThreadView({
   const [handoverState, setHandoverState] = useState<"BOT_ACTIVE" | "PAUSED_HUMAN">(initialHandoverState);
   const [handoverPending, setHandoverPending] = useState(false);
   const [handoverError, setHandoverError] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<UiMessage | null>(null);
 
   // Sincronizar draft local con el hook useWa24hWindow (preservación de borrador)
   function handleDraftChange(val: string) {
@@ -160,6 +168,45 @@ export function ThreadView({
       setHandoverState(nextState);
     } finally {
       setHandoverPending(false);
+    }
+  }
+
+  async function toggleReaction(messageId: string, emoji: string) {
+    const msg = messages.find((x) => x.id === messageId);
+    if (!msg) return;
+    const existingReaction = msg.reactions?.find((r) => r.emoji === emoji);
+    const hadReaction = existingReaction?.myReaction ?? false;
+
+    // Actualización optimista de reacciones
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const rxList = [...(m.reactions ?? [])];
+        const idx = rxList.findIndex((r) => r.emoji === emoji);
+        if (hadReaction) {
+          if (idx >= 0) {
+            const updatedCount = rxList[idx].count - 1;
+            if (updatedCount <= 0) {
+              rxList.splice(idx, 1);
+            } else {
+              rxList[idx] = { ...rxList[idx], count: updatedCount, myReaction: false };
+            }
+          }
+        } else {
+          if (idx >= 0) {
+            rxList[idx] = { ...rxList[idx], count: rxList[idx].count + 1, myReaction: true };
+          } else {
+            rxList.push({ id: `${messageId}-${emoji}`, emoji, count: 1, myReaction: true });
+          }
+        }
+        return { ...m, reactions: rxList };
+      }),
+    );
+
+    if (hadReaction) {
+      await removeReactionAction({ conversationId, messageId, emoji });
+    } else {
+      await addReactionAction({ conversationId, messageId, emoji });
     }
   }
 
@@ -223,6 +270,7 @@ export function ThreadView({
     sentSeqRef.current = 0;
     setPicks([]);
     setMentionQuery(null);
+    setReplyingTo(null);
   }, [conversationId, hydrate, initialHandoverState, initialMessages]);
 
   useEffect(() => scrollToEnd(), [messages.length, scrollToEnd]);
@@ -254,9 +302,6 @@ export function ThreadView({
       const result = await markReadInBrowser(conversationId, lastSeq);
       if (cancelled) return;
       if (!result.ok) {
-        // Una sesión que termina de hidratar o renueva su token puede fallar
-        // transitoriamente. Reintentamos acotadamente; nunca apagamos el badge
-        // hasta que PostgreSQL confirme la escritura.
         if (attempt < 3) retryId = setTimeout(() => { void persistRead(); }, 750 * attempt);
         return;
       }
@@ -271,6 +316,7 @@ export function ThreadView({
     };
   }, [conversationId, messages]);
 
+  // Realtime: Mensajes
   useRealtimeTable(
     "connect_messages",
     (payload) => {
@@ -369,6 +415,7 @@ export function ThreadView({
 
     const mentions = caps.canMention ? resolveMentions(body, picks, currentUserId) : [];
     const clientMsgId = crypto.randomUUID();
+    const replyToId = replyingTo?.id ?? null;
     const optimistic: UiMessage = {
       id: `tmp-${clientMsgId}`,
       conversationId,
@@ -379,7 +426,12 @@ export function ThreadView({
       kind: "text",
       body,
       bodyFormat: "markdown",
-      replyToMessageId: null,
+      replyToMessageId: replyToId,
+      replyToMessage: replyingTo ? {
+        id: replyingTo.id,
+        authorName: replyingTo.authorName ?? null,
+        body: messageDisplayBody(replyingTo) ?? null,
+      } : null,
       editedAt: null,
       deletedAt: null,
       redacted: false,
@@ -393,11 +445,12 @@ export function ThreadView({
     handleDraftChange("");
     setPicks([]);
     setMentionQuery(null);
+    setReplyingTo(null);
     setSending(true);
 
     try {
       const outcome = await dispatchComposerSend(
-        { kind, conversationId, body, clientMsgId, mentions },
+        { kind, conversationId, body, clientMsgId, mentions, replyTo: replyToId },
         {
           postConnectMessage: (i) => postMessageAction(i),
           sendWhatsappText: (i) => sendWhatsappTextAction(i),
@@ -426,9 +479,6 @@ export function ThreadView({
         }),
       );
       if (outcome.status === "sent" && Boolean(lastCustomerMessageAt)) {
-        // La migración 0260 persiste PAUSED_HUMAN mediante trigger al insertar
-        // el mensaje del operador. El cliente refleja el estado sólo después
-        // de que el envío fue aceptado; un fallo no puede fingir un handover.
         setHandoverState("PAUSED_HUMAN");
       }
     } finally {
@@ -443,7 +493,7 @@ export function ThreadView({
   return (
     <>
       {/* Visual Indicator de Ventana 24h & State Handover */}
-      {Boolean(lastCustomerMessageAt) && (
+      {(Boolean(lastCustomerMessageAt) || isWhatsappKind(kind)) && (
         <Wa24hWindowIndicator
           windowInfo={windowInfo}
           handoverState={handoverState}
@@ -453,7 +503,7 @@ export function ThreadView({
         />
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto px-4 py-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-4 py-4">
         {messages.length === 0 && (
           <p className="m-auto text-xs text-fg-muted">Todavía no hay mensajes. Escribí el primero.</p>
         )}
@@ -485,51 +535,142 @@ export function ThreadView({
           return (
             <Fragment key={m.id}>
               {separator}
-            <div className={cn("flex", own ? "justify-end" : "justify-start")}>
               <div
-                className={cn(
-                  "max-w-[72%] rounded-lg px-3 py-2 text-[13px]",
-                  own
-                    ? ownBubbleClass(kind)
-                    : "border border-stroke-soft bg-bg-surface text-fg-primary",
-                )}
+                id={`msg-${m.id}`}
+                className={cn("group/msg relative flex items-start gap-2", own ? "flex-row-reverse" : "flex-row")}
               >
-                {m.authorName && (
-                  <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">
-                    {m.authorName}
-                  </div>
-                )}
-                {m.kind === "audio" ? (
-                  <AudioPlayer messageId={m.id} />
-                ) : (
-                  <div className="whitespace-pre-wrap break-words">
-                    {renderWithMentions(messageDisplayBody(m), mentionNames)}
-                  </div>
-                )}
-                {m.attachments && m.attachments.length > 0 && (
-                  <MessageAttachments attachments={m.attachments} />
-                )}
-                <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
-                  <span>{timeHM(m.createdAt)}</span>
-                  {m.status === "sending" && <span>enviando…</span>}
-                  {m.status === "pending" && (
-                    <span className="text-tops-amber">pendiente de confirmación</span>
+                {/* Avatar foto o iniciales */}
+                <Avatar
+                  src={m.authorAvatarUrl}
+                  name={m.authorName || (own ? "Tú" : "Usuario")}
+                  initials={m.authorName ? initialsFrom(m.authorName) : (own ? "YO" : (isWhatsappKind(kind) ? "WA" : "US"))}
+                  size="sm"
+                  className="mt-0.5"
+                />
+
+                <div
+                  className={cn(
+                    "relative max-w-[72%] rounded-lg px-3 py-2 text-[13px] shadow-sm",
+                    own
+                      ? ownBubbleClass(kind)
+                      : "border border-stroke-soft bg-bg-surface text-fg-primary",
                   )}
-                  {m.status === "failed" && <span className="text-tops-red">no se pudo enviar</span>}
-                  {m.status === "historical" && <span className="text-fg-muted">sin registro de envío</span>}
-                </div>
-                {m.sendError && (
-                  <p
+                >
+                  {/* Floating actions toolbar on hover */}
+                  <div
                     className={cn(
-                      "mt-1 text-[10px]",
-                      m.status === "failed" ? "text-tops-red" : "text-amber-500",
+                      "absolute -top-3 z-10 hidden group-hover/msg:flex items-center gap-1 rounded-full border border-stroke-soft bg-bg-surface px-1.5 py-0.5 shadow-md",
+                      own ? "right-2" : "left-2",
                     )}
                   >
-                    {m.sendError}
-                  </p>
-                )}
+                    {SUPPORTED_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => void toggleReaction(m.id, emoji)}
+                        className="text-xs hover:scale-125 transition-transform p-0.5"
+                        title={`Reaccionar con ${emoji}`}
+                        aria-label={`Reaccionar con ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                    {caps.canSendText && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReplyingTo(m);
+                          textareaRef.current?.focus();
+                        }}
+                        className="ml-1 text-fg-muted hover:text-tops-red p-0.5"
+                        title="Responder a este mensaje"
+                        aria-label="Responder a este mensaje"
+                      >
+                        <Icon name="arrow-left" size={12} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Quoted / Replied message preview */}
+                  {m.replyToMessageId && (
+                    <div
+                      className="mb-1.5 rounded border-l-2 border-tops-red bg-bg-surface-alt/70 px-2 py-1 text-xs cursor-pointer hover:bg-bg-surface-alt transition-colors"
+                      onClick={() => {
+                        const target = document.getElementById(`msg-${m.replyToMessageId}`);
+                        if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                    >
+                      <p className="font-semibold text-[11px] text-fg-secondary">
+                        {m.replyToMessage?.authorName ?? "Mensaje citado"}
+                      </p>
+                      <p className="truncate text-[11px] text-fg-muted">
+                        {m.replyToMessage?.body ?? (messages.find((x) => x.id === m.replyToMessageId)?.body || "Mensaje original")}
+                      </p>
+                    </div>
+                  )}
+
+                  {m.authorName && (
+                    <div className="mb-0.5 text-[11px] font-semibold text-fg-secondary">
+                      {m.authorName}
+                    </div>
+                  )}
+
+                  {m.kind === "audio" ? (
+                    <AudioPlayer messageId={m.id} />
+                  ) : (
+                    <div className="whitespace-pre-wrap break-words">
+                      {renderWithMentions(messageDisplayBody(m), mentionNames)}
+                    </div>
+                  )}
+
+                  {m.attachments && m.attachments.length > 0 && (
+                    <MessageAttachments attachments={m.attachments} />
+                  )}
+
+                  {/* Emoji Reaction pills */}
+                  {m.reactions && m.reactions.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {m.reactions.map((rx) => (
+                        <button
+                          key={rx.emoji}
+                          type="button"
+                          onClick={() => void toggleReaction(m.id, rx.emoji)}
+                          className={cn(
+                            "flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                            rx.myReaction
+                              ? "border-tops-red/50 bg-tops-red/10 text-tops-red"
+                              : "border-stroke-soft bg-bg-surface-alt/70 text-fg-secondary hover:bg-bg-surface-alt",
+                          )}
+                          title={rx.myReaction ? "Quitar mi reacción" : "Agregar reacción"}
+                        >
+                          <span>{rx.emoji}</span>
+                          <span className="text-[10px]">{rx.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-fg-muted">
+                    <span>{timeHM(m.createdAt)}</span>
+                    {m.status === "sending" && <span>enviando…</span>}
+                    {m.status === "pending" && (
+                      <span className="text-tops-amber">pendiente de confirmación</span>
+                    )}
+                    {m.status === "failed" && <span className="text-tops-red">no se pudo enviar</span>}
+                    {m.status === "historical" && <span className="text-fg-muted">sin registro de envío</span>}
+                  </div>
+                  {m.sendError && (
+                    <p
+                      className={cn(
+                        "mt-1 text-[10px]",
+                        m.status === "failed" ? "text-tops-red" : "text-amber-500",
+                      )}
+                    >
+                      {m.sendError}
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
             </Fragment>
           );
         })}
@@ -545,7 +686,6 @@ export function ThreadView({
           {bloqueo.message}
         </div>
       ) : isWaExpired ? (
-        /* Si la ventana de 24h está expirada (red_locked), conmutar a selector de Plantillas Utility conservando borrador */
         <div className="p-3 border-t border-stroke-soft bg-bg-surface">
           <WaTemplateSelector
             currentDraft={draft}
@@ -554,6 +694,25 @@ export function ThreadView({
         </div>
       ) : (
         <div className="relative border-t border-stroke-soft bg-bg-surface px-3 py-2.5">
+          {/* Active Reply Banner */}
+          {replyingTo && (
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-md border-l-4 border-tops-red bg-bg-surface-alt px-3 py-1.5 text-xs">
+              <div className="min-w-0 flex-1">
+                <span className="font-semibold text-tops-red">Respondiendo a {replyingTo.authorName || "Mensaje"}</span>
+                <p className="truncate text-fg-muted">{messageDisplayBody(replyingTo) || "(adjunto / audio)"}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyingTo(null)}
+                className="p-1 text-fg-muted hover:text-fg-primary rounded"
+                title="Cancelar respuesta"
+                aria-label="Cancelar respuesta"
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          )}
+
           {mentionQuery !== null && candidates.length > 0 && (
             <div
               role="listbox"

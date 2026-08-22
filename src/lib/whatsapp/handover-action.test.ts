@@ -1,67 +1,118 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const H = vi.hoisted(() => ({
-  kind: "whatsapp",
-  allowed: true,
-  rpc: vi.fn(async () => ({ data: null, error: null })),
-}));
-
+vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/rbac/nexus-link", () => ({
-  canChannel: vi.fn(async () => H.allowed),
-}));
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: () => ({
-    auth: { getUser: async () => ({ data: { user: { id: "operator" } } }) },
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: { kind: H.kind }, error: null }),
-        }),
-      }),
-    }),
-    rpc: H.rpc,
-  }),
-}));
+vi.mock("@/lib/rbac/nexus-link", () => ({ canChannel: vi.fn(async () => true) }));
 
-const { setHandoverStateAction } = await import("./handover-action");
+import { setHandoverStateAction } from "./handover-action";
+import * as serverSupabase from "@/lib/supabase/server";
 
-describe("setHandoverStateAction · control Max por canal", () => {
+describe("handover-action · setHandoverStateAction", () => {
+  const CONV_ID = "11111111-1111-4111-8111-111111111111";
+
   beforeEach(() => {
-    H.kind = "whatsapp";
-    H.allowed = true;
-    H.rpc.mockClear();
+    vi.restoreAllMocks();
   });
 
-  it("persiste el estado solicitado para una conversación WhatsApp autorizada", async () => {
-    const result = await setHandoverStateAction({
-      conversationId: "wa-1",
-      state: "PAUSED_HUMAN",
+  it("rechaza estado desconocido", async () => {
+    const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "DESCONOCIDO" as never });
+    expect(res).toEqual({ ok: false, message: "Parámetros inválidos." });
+  });
+
+  it("devuelve mensaje informativo en modo demo sin supabase", async () => {
+    vi.spyOn(serverSupabase, "createClient").mockReturnValue(null as never);
+    const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
+    expect(res.ok).toBe(false);
+    expect(res).toEqual({ ok: false, message: "Modo demo: no se persiste." });
+  });
+
+  it("rechaza si no hay usuario autenticado", async () => {
+    const mockClient = {
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }) },
+      rpc: vi.fn(),
+    };
+    vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
+
+    const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
+    expect(res).toEqual({ ok: false, message: "Sesión no autenticada." });
+  });
+
+  it("rechaza si la conversación no es de tipo whatsapp", async () => {
+    const mockSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "dm" }, error: null }),
+      }),
     });
-    expect(result).toEqual({ ok: true });
-    expect(H.rpc).toHaveBeenCalledWith("connect_set_handover_state", {
-      p_conversation_id: "wa-1",
+    const mockClient = {
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u-1" } }, error: null }) },
+      from: vi.fn().mockReturnValue({ select: mockSelect }),
+      rpc: vi.fn(),
+    };
+    vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
+
+    const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
+    expect(res).toEqual({ ok: false, message: "La conversación de WhatsApp no pudo validarse." });
+  });
+
+  it("invoca RPC connect_set_handover_state con parámetros canónicos y devuelve ok", async () => {
+    const mockSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
+      }),
+    });
+    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockClient = {
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u-1" } }, error: null }) },
+      from: vi.fn().mockReturnValue({ select: mockSelect }),
+      rpc: mockRpc,
+    };
+    vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
+
+    const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
+    expect(res).toEqual({ ok: true });
+    expect(mockRpc).toHaveBeenCalledWith("connect_set_handover_state", {
+      p_conversation_id: CONV_ID,
       p_state: "PAUSED_HUMAN",
     });
   });
 
-  it("falla cerrado fuera del canal WhatsApp", async () => {
-    H.kind = "dm";
-    const result = await setHandoverStateAction({
-      conversationId: "dm-1",
-      state: "PAUSED_HUMAN",
+  it("permite reactivar a Max con BOT_ACTIVE", async () => {
+    const mockSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
+      }),
     });
-    expect(result.ok).toBe(false);
-    expect(H.rpc).not.toHaveBeenCalled();
+    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: null });
+    const mockClient = {
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u-1" } }, error: null }) },
+      from: vi.fn().mockReturnValue({ select: mockSelect }),
+      rpc: mockRpc,
+    };
+    vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
+
+    const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "BOT_ACTIVE" });
+    expect(res).toEqual({ ok: true });
+    expect(mockRpc).toHaveBeenCalledWith("connect_set_handover_state", {
+      p_conversation_id: CONV_ID,
+      p_state: "BOT_ACTIVE",
+    });
   });
 
-  it("no muta si falta la capacidad exacta de envío WhatsApp", async () => {
-    H.allowed = false;
-    const result = await setHandoverStateAction({
-      conversationId: "wa-1",
-      state: "BOT_ACTIVE",
+  it("captura y devuelve error de Supabase sin romper la sesión", async () => {
+    const mockSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({ data: { kind: "whatsapp" }, error: null }),
+      }),
     });
-    expect(result.ok).toBe(false);
-    expect(H.rpc).not.toHaveBeenCalled();
+    const mockRpc = vi.fn().mockResolvedValue({ data: null, error: { message: "permiso denegado" } });
+    const mockClient = {
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: "u-1" } }, error: null }) },
+      from: vi.fn().mockReturnValue({ select: mockSelect }),
+      rpc: mockRpc,
+    };
+    vi.spyOn(serverSupabase, "createClient").mockReturnValue(mockClient as never);
+
+    const res = await setHandoverStateAction({ conversationId: CONV_ID, state: "PAUSED_HUMAN" });
+    expect(res).toEqual({ ok: false, message: "permiso denegado" });
   });
 });

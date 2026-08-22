@@ -1,24 +1,30 @@
 "use client";
 
-// Perfil de Usuario (RC1.4) — formulario. Sin IA. Interactividad: presencia (write-on-change),
-// avatar, frecuencia de notificaciones, firma y tema (guardado explícito). Estado ok/error inline.
+// Nexus Link · Perfil de Usuario (RC1.4 / P2). Formulario de preferencias: presencia,
+// avatar (carga local de archivo, URL externa, eliminación), notificaciones, firma y tema.
+// Estado ok/error inline y accesible.
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { VoiceField } from "@/components/voice/VoiceField";
 import {
   type UserProfile,
   type PresenceStatus,
   type NotifFreq,
+  PRESENCE_ORDER,
   PRESENCE_LABELS,
+  NOTIF_ORDER,
   NOTIF_FREQ_LABELS,
+  THEME_ORDER,
   initialsFrom,
 } from "@/lib/profile/types";
-import { setPresenceAction, updateMyProfileAction } from "@/lib/profile/actions";
+import {
+  setPresenceAction,
+  updateMyProfileAction,
+  removeAvatarAction,
+} from "@/lib/profile/actions";
+import { Avatar } from "./Avatar";
 
-const PRESENCE_ORDER: PresenceStatus[] = ["online", "idle", "busy", "offline"];
-const NOTIF_ORDER: NotifFreq[] = ["instant", "daily", "weekly", "mute"];
-const THEME_ORDER = ["system", "light", "dark"] as const;
 type Theme = (typeof THEME_ORDER)[number];
 const THEME_LABELS: Record<Theme, string> = { system: "Sistema", light: "Claro", dark: "Oscuro" };
 
@@ -28,6 +34,9 @@ const PRESENCE_DOT: Record<PresenceStatus, string> = {
   busy: "bg-tops-red",
   offline: "bg-fg-muted",
 };
+
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2MB
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 type Status = { kind: "idle" } | { kind: "ok"; message: string } | { kind: "error"; message: string };
 
@@ -44,14 +53,14 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
     typeof profile.preferences.signature === "string" ? profile.preferences.signature : "",
   );
   const [theme, setTheme] = useState<Theme>(initialTheme);
-  const [imgBroken, setImgBroken] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   const [presenceStatus, setPresenceStatus] = useState<Status>({ kind: "idle" });
   const [saveStatus, setSaveStatus] = useState<Status>({ kind: "idle" });
   const [presencePending, startPresence] = useTransition();
   const [savePending, startSave] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const liveInitials = initialsFrom(profile.fullName) || profile.initials;
   const trimmedAvatar = avatarUrl.trim();
 
   function onPresenceChange(next: PresenceStatus) {
@@ -69,6 +78,41 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
     });
   }
 
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarError(null);
+
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      setAvatarError("Formato no soportado. Usá JPG, PNG o WebP.");
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError("La imagen supera el límite de 2 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setAvatarUrl(reader.result);
+      }
+    };
+    reader.onerror = () => {
+      setAvatarError("No se pudo leer el archivo de imagen.");
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleRemoveAvatar() {
+    setAvatarUrl("");
+    setAvatarError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    startSave(async () => {
+      await removeAvatarAction();
+    });
+  }
+
   function onSave() {
     setSaveStatus({ kind: "idle" });
     startSave(async () => {
@@ -77,7 +121,7 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
         notifFreq,
         preferences: { ...profile.preferences, signature, theme },
       });
-      if (r.ok) setSaveStatus({ kind: "ok", message: "Perfil guardado." });
+      if (r.ok) setSaveStatus({ kind: "ok", message: "Perfil guardado correctamente." });
       else setSaveStatus({ kind: "error", message: r.message });
     });
   }
@@ -86,20 +130,15 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
     <div className="mx-auto w-full max-w-2xl px-5 py-6">
       {/* (1) Cabecera con avatar + identidad + selector de presencia */}
       <div className="card p-5">
-        <div className="flex items-start gap-4">
-          {trimmedAvatar.length > 0 && !imgBroken ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={trimmedAvatar}
-              alt={profile.fullName ?? "Avatar"}
-              onError={() => setImgBroken(true)}
-              className="h-16 w-16 shrink-0 rounded-full border border-stroke-soft object-cover"
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="relative group">
+            <Avatar
+              src={trimmedAvatar.length > 0 ? trimmedAvatar : null}
+              name={profile.fullName}
+              initials={profile.initials || initialsFrom(profile.fullName)}
+              size="lg"
             />
-          ) : (
-            <div className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-bg-surface-alt text-lg font-bold text-fg-secondary">
-              {liveInitials}
-            </div>
-          )}
+          </div>
 
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-base font-bold text-fg-primary">
@@ -109,6 +148,41 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
             <span className="mt-1.5 inline-flex items-center rounded-pill bg-bg-surface-alt px-2.5 py-0.5 text-[11px] font-medium text-fg-secondary">
               {profile.role}
             </span>
+
+            {/* Controles rápidos de foto de perfil */}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handleFileSelect}
+                className="sr-only"
+                id="avatar-file-upload"
+              />
+              <label
+                htmlFor="avatar-file-upload"
+                className="btn btn-ghost btn-sm text-xs cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <Icon name="camera" size={13} />
+                Subir foto
+              </label>
+              {trimmedAvatar.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  disabled={savePending}
+                  className="btn btn-ghost btn-sm text-xs text-tops-red hover:bg-tops-red/10 inline-flex items-center gap-1.5"
+                >
+                  <Icon name="trash" size={13} />
+                  Quitar foto
+                </button>
+              )}
+            </div>
+            {avatarError && (
+              <p role="alert" className="mt-1.5 text-xs text-tops-red font-medium">
+                {avatarError}
+              </p>
+            )}
           </div>
         </div>
 
@@ -144,13 +218,16 @@ export function ProfileForm({ profile }: { profile: UserProfile }) {
         <h3 className="text-sm font-bold text-fg-primary">Preferencias</h3>
 
         <div className="mt-4 space-y-4">
-          {/* (2) Avatar URL */}
+          {/* (2) Avatar URL alternativa */}
           <label className="block text-xs font-medium text-fg-secondary">
-            URL de avatar
+            URL externa de avatar (opcional)
             <input
               type="url"
-              value={avatarUrl}
-              onChange={(e) => { setAvatarUrl(e.target.value); setImgBroken(false); }}
+              value={avatarUrl.startsWith("data:") ? "" : avatarUrl}
+              onChange={(e) => {
+                setAvatarUrl(e.target.value);
+                setAvatarError(null);
+              }}
               placeholder="https://…"
               className="mt-1 w-full rounded border border-stroke-soft bg-bg-page px-2.5 py-1.5 text-sm text-fg-primary outline-none focus:border-tops-red"
             />
