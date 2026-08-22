@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 232,
-  "no_ejecutables": 42,
+  "ejecutables": 233,
+  "no_ejecutables": 43,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -3226,6 +3226,36 @@
       "ledger_name": "ROLLBACK_0300_finance_treasury_atomic_reconciliation",
       "provenance": "repo (frente/remediacion-tes-fin)",
       "motivo": "Inversa ejecutable de 0300: restaura firmas, privilegios y contratos previos preservando el retorno al estado anterior."
+    },
+    {
+      "id": "20260822190000_finance_director_exclusive_boundary.sql",
+      "filename": "20260822190000_finance_director_exclusive_boundary.sql",
+      "sha256": "7d034b7c23cb8429b4127d0eb1e98cc2b05a2bd2aed04f6abf79f8d75db87b98",
+      "orden": 275,
+      "requires": [
+        "0246_clientes_fase_b_principals_capabilities.sql",
+        "0262a_finance_core_schema_canonical_alignment.sql",
+        "0300_finance_treasury_atomic_reconciliation.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00275",
+      "ledger_name": "20260822190000_finance_director_exclusive_boundary",
+      "provenance": "repo (frente/arq-release-20260822)",
+      "motivo": "Cierra Finanzas end-to-end a las dos identidades exactas de Dirección mediante RBAC, has_permission, RPC y RLS fail-closed."
+    },
+    {
+      "id": "ROLLBACK_20260822190000_finance_director_exclusive_boundary.sql",
+      "filename": "ROLLBACK_20260822190000_finance_director_exclusive_boundary.sql",
+      "sha256": "f93ec0b9b185643246dadfcd1d0044897c15c6cd3f450fdbbf83699f6c8855f8",
+      "orden": 276,
+      "requires": [
+        "20260822190000_finance_director_exclusive_boundary.sql"
+      ],
+      "estado": "rollback",
+      "ledger_version": "L00276",
+      "ledger_name": "ROLLBACK_20260822190000_finance_director_exclusive_boundary",
+      "provenance": "repo (frente/arq-release-20260822)",
+      "motivo": "Inversa ejecutable de la frontera exclusiva de Finanzas: restaura roles, policies y semántica previa de has_permission."
     }
   ]
 }

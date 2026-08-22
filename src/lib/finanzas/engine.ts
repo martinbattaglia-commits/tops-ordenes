@@ -656,3 +656,7 @@ export function sortOperationalTransactions(
   });
 }
 
+/** Única clasificación visual/operativa de previsiones financieras. */
+export function isProgrammedTransaction(tx: FinanceUnifiedTransaction): boolean {
+  return !tx.isReal || tx.status === "proyectado" || tx.status === "comprometido";
+}

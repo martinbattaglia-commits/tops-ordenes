@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import type { FinanceUnifiedTransaction, FinanceCurrency } from "@/lib/finanzas/types";
-import { calculateDailyRollingBalances } from "@/lib/finanzas/engine";
+import { calculateDailyRollingBalances, isProgrammedTransaction } from "@/lib/finanzas/engine";
 import { fmtCurrency } from "@/lib/utils";
 import type { AccountFilterScope } from "./FinanzasHeader";
 import { Icon } from "@/components/Icon";
@@ -131,6 +131,10 @@ export function CalendarView({
             <span className="w-2.5 h-2.5 rounded-full bg-tops-red"></span>
             <span className="text-fg-secondary">Egresos (-)</span>
           </div>
+          <div className="flex items-center gap-1.5 mr-3">
+            <Icon name="clock" className="w-3 h-3 text-amber-500 dark:text-amber-400" />
+            <span className="text-amber-600 dark:text-amber-400 font-semibold">Programadas</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#214576] dark:bg-blue-400"></span>
             <span className="font-semibold text-tops-blue-700 dark:text-blue-400">Saldo Proyectado</span>
@@ -195,11 +199,25 @@ export function CalendarView({
                 {/* Badges de Movimientos del Día (con Deep Link) */}
                 <div className="space-y-1">
                   {dayTxs.slice(0, 3).map((tx) => {
-                    let badgeClass = "bg-emerald-50 text-status-success border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40";
-                    if (tx.direction === "egreso") {
-                      badgeClass = "bg-rose-50 text-tops-red border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40";
-                    } else if (tx.direction === "transferencia") {
-                      badgeClass = "bg-blue-50 text-tops-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/40";
+                    const isProgrammed = isProgrammedTransaction(tx);
+                    let badgeClass = "";
+
+                    if (isProgrammed) {
+                      if (tx.direction === "egreso") {
+                        badgeClass = "bg-rose-500/10 text-rose-700 border-dashed border-rose-400/80 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-700/80";
+                      } else if (tx.direction === "transferencia") {
+                        badgeClass = "bg-sky-500/10 text-sky-700 border-dashed border-sky-400/80 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-700/80";
+                      } else {
+                        badgeClass = "bg-emerald-500/10 text-emerald-700 border-dashed border-emerald-400/80 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-700/80";
+                      }
+                    } else {
+                      if (tx.direction === "egreso") {
+                        badgeClass = "bg-rose-50 text-tops-red border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40";
+                      } else if (tx.direction === "transferencia") {
+                        badgeClass = "bg-blue-50 text-tops-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/40";
+                      } else {
+                        badgeClass = "bg-emerald-50 text-status-success border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40";
+                      }
                     }
 
                     return (
@@ -210,10 +228,15 @@ export function CalendarView({
                           onSelectTransaction?.(tx);
                           onDeepLinkToTransaction?.(tx.id);
                         }}
-                        className={`text-[10px] truncate px-1.5 py-0.5 rounded border ${badgeClass} font-semibold transition-transform hover:scale-[1.02] cursor-pointer`}
-                        title={`${tx.concept} - ${formatMoney(tx.amount)} (Click para ver en Transacciones)`}
+                        className={`text-[10px] truncate px-1.5 py-0.5 rounded border ${badgeClass} font-semibold transition-transform hover:scale-[1.02] cursor-pointer flex items-center gap-1`}
+                        title={`${tx.concept} - ${formatMoney(tx.amount)} ${isProgrammed ? "(Programado)" : "(Asentado en Tesorería)"}`}
                       >
-                        {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : "⇄"} {formatMoney(tx.amount)} {tx.concept}
+                        {isProgrammed && (
+                          <Icon name="clock" className="w-2.5 h-2.5 shrink-0 text-amber-500 dark:text-amber-400" />
+                        )}
+                        <span className="truncate">
+                          {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : "⇄"} {formatMoney(tx.amount)} {tx.concept}
+                        </span>
                       </div>
                     );
                   })}
@@ -281,7 +304,9 @@ export function CalendarView({
                 Sin movimientos registrados en este día. Saldo acumulado anterior preservado.
               </div>
             ) : (
-              dailyMap.get(selectedDayDetail)!.transactions.map((tx) => (
+              dailyMap.get(selectedDayDetail)!.transactions.map((tx) => {
+                const isProgrammed = isProgrammedTransaction(tx);
+                return (
                 <div
                   key={tx.id}
                   onClick={() => {
@@ -311,8 +336,13 @@ export function CalendarView({
                       <span>·</span>
                       <span>Categoría: <strong className="text-fg-secondary">{tx.categoryName}</strong></span>
                       <span>·</span>
-                      <span className="text-[10px] uppercase px-1.5 py-0.2 rounded bg-bg-surface-alt text-fg-secondary">
-                        {tx.isReal ? "Hecho Tesorería" : "Proyección Finanzas"}
+                      <span className={`text-[10px] uppercase px-2 py-0.5 rounded font-bold inline-flex items-center gap-1 ${
+                        isProgrammed
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-400/30"
+                          : "bg-bg-surface-alt text-fg-secondary"
+                      }`}>
+                        {isProgrammed && <Icon name="clock" className="w-2.5 h-2.5" />}
+                        {isProgrammed ? `Previsión (${tx.status})` : "Hecho Tesorería (Asentado)"}
                       </span>
                       {tx.desvio && tx.desvio.varianceAmount != null && (
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-600 font-semibold">
@@ -323,10 +353,15 @@ export function CalendarView({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className={`text-sm font-bold tabular-nums ${
-                      tx.direction === "ingreso" ? "text-status-success" : "text-tops-red"
+                    <div className={`text-sm font-bold tabular-nums flex items-center justify-end gap-1 ${
+                      isProgrammed
+                        ? "text-amber-600 dark:text-amber-400"
+                        : tx.direction === "ingreso"
+                        ? "text-status-success"
+                        : "text-tops-red"
                     }`}>
-                      {tx.direction === "ingreso" ? "+" : "-"}{formatMoney(tx.amount)}
+                      {isProgrammed && <Icon name="clock" className="w-3.5 h-3.5 text-amber-500" />}
+                      <span>{tx.direction === "ingreso" ? "+" : "-"}{formatMoney(tx.amount)}</span>
                     </div>
                     <div className="text-[10px] text-tops-blue-700 dark:text-blue-400 font-semibold group-hover:underline flex items-center justify-end gap-1 mt-0.5">
                       <span>Ir a Transacción</span>
@@ -334,7 +369,8 @@ export function CalendarView({
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

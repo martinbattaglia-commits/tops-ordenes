@@ -446,6 +446,8 @@ export const FINANZAS_MIGRATION_FILES: ReadonlySet<string> = new Set([
   "ROLLBACK_0262a_finance_core_schema_canonical_alignment.sql",
   "0300_finance_treasury_atomic_reconciliation.sql",
   "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
+  "20260822190000_finance_director_exclusive_boundary.sql",
+  "ROLLBACK_20260822190000_finance_director_exclusive_boundary.sql",
 ]);
 
 export const CLIENTES_PHASE_B_MIGRATION_FILES: ReadonlySet<string> = new Set([
@@ -478,7 +480,8 @@ export const MANIFEST_EXCLUSIONS: ReadonlyArray<ManifestExclusion> = [
       "versiones, supuestos, categorías, centros de costo, proyecciones y bandeja de " +
       "ingesta con RLS propio. Pertenece al dominio financiero y no integra el " +
       "cierre WMS vanilla. La exclusión clasifica exactamente los forwards " +
-      "0261a y 0262 con sus respectivos scripts de rollback.",
+      "0261a, 0262, 0262a, 0300 y el cierre exclusivo de Dirección, con sus " +
+      "respectivos scripts de rollback.",
   },
   {
     // OC-FIRMANTE-POR-PERMISO · decisión explícita, en entrada PROPIA y por

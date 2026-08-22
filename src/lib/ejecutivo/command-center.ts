@@ -5,7 +5,7 @@
  *  - Estado de los 9 sistemas (operativo/degradado/offline)
  *  - Salud corporativa (normal/atención/crítico)
  *  - Alertas críticas (solo excepciones; se omiten si no hay)
- *  - KPIs ejecutivos + KPI maestro (Cash Flow proyectado)
+ *  - KPIs ejecutivos + KPI maestro estrictamente operativo
  *
  * SOLO LECTURA de otros módulos (env, analytics/executive-data, drive). No los modifica.
  * KPIs sin fuente real → value:null → la UI muestra "Dato no disponible" (filosofía honesta del cockpit).
@@ -13,12 +13,8 @@
 import { getExecutiveSnapshot } from "@/lib/analytics/executive-data";
 import { isDriveConfigured } from "@/lib/drive/client";
 import { env } from "@/lib/env";
-import { fmtCurrency } from "@/lib/compras/format";
 import { listFleet, deriveLiveStatus } from "@/lib/tracking/data";
 import { listCamerasSafe } from "@/lib/cctv/hikvision";
-import { listInvoices, getFiscalConfig } from "@/lib/invoicing/data";
-import { isFiscallyValid } from "@/lib/invoicing/fiscal-validity";
-import { signoComprobante } from "@/lib/invoicing/calc";
 
 /** Vehículos online/total desde Tracking (Traccar). null si no hay fuente. */
 async function fleetOnline(): Promise<{ online: number; total: number } | null> {
@@ -42,37 +38,6 @@ async function camerasOnline(): Promise<{ online: number; total: number } | null
     if (total === 0) return null;
     const online = channels.filter((c) => c.enabled).length;
     return { online, total };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Facturación de ventas del mes en curso. null si no hay fuente.
- * H2 (FISCAL-HARDENING): aplica la regla de corte de validez fiscal — solo
- * comprobantes AUTORIZADOS, no anulados y del ambiente vigente; las NC restan.
- */
-async function billingThisMonth(): Promise<number | null> {
-  try {
-    const [inv, config] = await Promise.all([
-      listInvoices({ pageSize: 500 }),
-      getFiscalConfig(),
-    ]);
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    let sum = 0;
-    let matched = 0;
-    for (const row of inv.rows) {
-      if (!isFiscallyValid(row, config.ambiente)) continue;
-      const d = new Date(row.created_at);
-      if (d.getFullYear() === y && d.getMonth() === m) {
-        sum += signoComprobante(row.tipo_comprobante) * Number(row.total ?? 0);
-        matched++;
-      }
-    }
-    // Sin facturas válidas en el mes → null (no inventar $0 como "dato real")
-    return matched > 0 ? sum : 0;
   } catch {
     return null;
   }
@@ -125,11 +90,10 @@ export interface CommandCenter {
 }
 
 export async function getCommandCenter(): Promise<CommandCenter> {
-  const [snap, vehiculos, camaras, facturacionMes] = await Promise.all([
+  const [snap, vehiculos, camaras] = await Promise.all([
     getExecutiveSnapshot(),
     fleetOnline(),
     camerasOnline(),
-    billingThisMonth(),
   ]);
   const driveOk = (() => {
     try {
@@ -194,12 +158,12 @@ export async function getCommandCenter(): Promise<CommandCenter> {
     href: s.href,
   }));
 
-  // ---- KPI maestro: Cash Flow proyectado ----
+  // ---- KPI maestro: salud operativa (sin exposición monetaria) ----
   const master = {
-    label: "Cash Flow Proyectado",
-    value: snap.financiero.ok ? fmtCurrency(snap.financiero.flujoProyectadoAcumulado) : null,
-    pendingReason: snap.financiero.ok ? undefined : "Tesorería no disponible.",
-    href: "/tesoreria/flujo-fondos",
+    label: "Sistemas operativos",
+    value: `${operativeCount}/${totalSystems}`,
+    pendingReason: undefined,
+    href: "/ejecutivo",
   };
 
   // ---- 8 KPIs ejecutivos (grilla 4×2) ----
@@ -209,22 +173,22 @@ export async function getCommandCenter(): Promise<CommandCenter> {
   // y rojo alineados con el dashboard de vacancia (#16a34a / #dc2626).
   const m2 = (n: number) => `${n.toLocaleString("es-AR")} m²`;
   const kpis: ExecKpi[] = [
-    // ── Fila 1 — Financiero + Operativo ──
+    // ── Fila 1 — Rendimiento y Operaciones ──
     {
-      label: "Facturación mensual",
-      value: facturacionMes !== null ? fmtCurrency(facturacionMes) : null,
-      pendingReason: facturacionMes !== null ? undefined : "Facturación no disponible.",
-      href: "/billing",
-      tone: "#16a34a",
-      exec: true,
+      label: "Órdenes en curso",
+      value: snap.operaciones.ok ? `${snap.operaciones.abiertas}` : null,
+      sub: snap.operaciones.ok ? `${snap.operaciones.cerradas} completadas` : null,
+      pendingReason: snap.operaciones.ok ? undefined : "Operaciones no disponible.",
+      href: "/dashboard",
+      tone: "#3b82f6",
     },
     {
-      label: "Cobranza pendiente",
-      value: snap.financiero.ok ? fmtCurrency(snap.financiero.porCobrar) : null,
-      pendingReason: snap.financiero.ok ? undefined : "Tesorería no disponible.",
-      href: "/tesoreria/cobranzas",
-      tone: "#f59e0b",
-      exec: true,
+      label: "Servicios operativos",
+      value: snap.operaciones.ok ? `${snap.operaciones.total}` : null,
+      sub: "Logística TOPS",
+      pendingReason: snap.operaciones.ok ? undefined : "Operaciones no disponible.",
+      href: "/dashboard",
+      tone: "#16a34a",
     },
     {
       label: "Vehículos online",

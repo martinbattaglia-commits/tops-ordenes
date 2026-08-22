@@ -50,6 +50,8 @@ export interface BootPermissions {
   copilot: boolean;
   /** Módulo Contabilidad F6 (contabilidad.view). */
   contabilidad: boolean;
+  /** Módulo Finanzas (privado y exclusivo para Martín / Dirección). */
+  finanzas: boolean;
 }
 
 export interface BootContext {
@@ -64,8 +66,8 @@ export type BootDepotManager =
   | { restricted: true; authorized: false; depot: null; siteLabel: null }
   | { restricted: true; authorized: true; depot: string; siteLabel: string };
 
-const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true, copilot: true, contabilidad: true };
-const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false, copilot: false, contabilidad: false };
+const PERMISSIVE: BootPermissions = { exec: true, sistema: true, rrhhDocs: true, knowledge: true, connect: true, copilot: true, contabilidad: true, finanzas: false };
+const CLOSED: BootPermissions = { exec: false, sistema: false, rrhhDocs: false, knowledge: false, connect: false, copilot: false, contabilidad: false, finanzas: false };
 const STANDARD_DEPOT_MANAGER: BootDepotManager = {
   restricted: false,
   authorized: true,
@@ -75,6 +77,16 @@ const STANDARD_DEPOT_MANAGER: BootDepotManager = {
 
 /** Presupuesto máximo de awaits del boot (F2). */
 const BOOT_BUDGET_MS = 3000;
+
+const FINANCE_DIRECTOR_EMAILS = new Set([
+  "martin@logisticatops.com",
+  "martin.battaglia@logisticatops.com",
+]);
+
+/** Finanzas es privado de Direccion: coincidencia exacta, nunca por prefijo o substring. */
+export function isFinanceDirectorEmail(email: string | null | undefined): boolean {
+  return FINANCE_DIRECTOR_EMAILS.has(email?.trim().toLowerCase() ?? "");
+}
 
 /**
  * `cache()` sólo existe en el React que Next vendorea para el App Router
@@ -161,18 +173,20 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
   ]);
   const copilot = !pilot.error && !!pilot.data;
 
+  const isMartin = isFinanceDirectorEmail(user.email);
+
   if (countErr) {
     // Espejo exacto de la asimetría previa:
     //   checkPermission: error de count → fail-closed (exec=false)
     //   canAccess: error → count null → bootstrap → !enforce
     const open = !env.rbac.enforce;
-    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot, contabilidad: open };
+    return { exec: false, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot, contabilidad: open, finanzas: isMartin };
   }
 
   if ((count ?? 0) === 0) {
-    // Bootstrap per-user (no asignado): permitir salvo RBAC_ENFORCE=1.
+    // Bootstrap per-user (no asignado): permitir salvo RBAC_ENFORCE=1 (finanzas siempre restringido a Martín).
     const open = !env.rbac.enforce;
-    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot, contabilidad: open };
+    return { exec: open, sistema: open, rrhhDocs: open, knowledge: open, connect: open, copilot, contabilidad: open, finanzas: isMartin };
   }
 
   // Asignado → enforcement real con UNA query anidada (set completo de slugs).
@@ -180,7 +194,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     .from("user_roles")
     .select("role:roles(role_permissions(permission:permissions(slug)))")
     .eq("user_id", user.id);
-  if (qErr) return { ...CLOSED, copilot }; // espejo: checkPermission query-failed → 403 · RPC error → false
+  if (qErr) return { ...CLOSED, copilot, finanzas: isMartin }; // espejo: checkPermission query-failed → 403 · RPC error → false
 
   type RowShape = {
     role?: { role_permissions?: Array<{ permission?: { slug: string } }> };
@@ -193,7 +207,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
   }
 
   // has_permission (RPC) incluye fallback `current_role()='admin'` → lo replicamos
-  // SOLO para los flags que antes resolvía el RPC (sistema/rrhhDocs), no para exec.
+  // SOLO para los flags que antes resolvía el RPC (sistema/rrhhDocs), no para exec ni finanzas.
   const isLegacyAdmin = (await getProfileRole()) === "admin";
 
   return {
@@ -204,6 +218,7 @@ const resolveBootPermissions = cache(async (): Promise<BootPermissions> => {
     connect: slugs.has("connect.view") || isLegacyAdmin,
     copilot,
     contabilidad: slugs.has("contabilidad.view") || isLegacyAdmin,
+    finanzas: isMartin,
   };
 });
 

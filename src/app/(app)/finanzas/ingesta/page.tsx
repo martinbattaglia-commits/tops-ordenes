@@ -1,10 +1,5 @@
-import React from "react";
-import { IngestaClient } from "./IngestaClient";
-import { listDocumentInbox } from "@/lib/finanzas/data";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default async function IngestaPage() {
-  const items = await listDocumentInbox();
-  return <IngestaClient initialItems={items} />;
+export default function LegacyFinanceInboxRedirect() {
+  redirect("/tesoreria/inbox");
 }
