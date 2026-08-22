@@ -23,8 +23,8 @@ interface NavItem {
   badge?: string;
   /** Ítem ejecutivo/financiero: sólo visible con permiso ejecutivo (cockpit.view). */
   exec?: boolean;
-  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view) · "copilot" (piloto AI) · "contabilidad" (contabilidad.view). */
-  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad";
+  /** Gate RBAC: "sistema" (sistema.view) · "rrhhDocs" (rrhh.documentacion.view) · "knowledge" (knowledge.admin) · "connect" (connect.view) · "copilot" (piloto AI) · "contabilidad" (contabilidad.view) · "finanzas" (privado Dirección). */
+  gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad" | "finanzas";
   /** Abre el link en nueva pestaña (para assets estáticos o recursos externos). */
   external?: boolean;
 }
@@ -33,8 +33,8 @@ interface Domain {
   id: string;
   label: string;
   items: NavItem[];
-  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge" / "connect" / "contabilidad"). */
-  gate?: "sistema" | "knowledge" | "connect" | "contabilidad";
+  /** Gate RBAC de todo el dominio (ej. "sistema" / "knowledge" / "connect" / "contabilidad" / "finanzas"). */
+  gate?: "sistema" | "knowledge" | "connect" | "contabilidad" | "finanzas";
 }
 
 const OPERATIONAL_DOMAINS: Domain[] = [
@@ -98,7 +98,6 @@ const DOMAINS: Domain[] = [
       { href: "/cctv", label: "Centro de monitoreo", icon: "eye", badge: "Hikvision" },
       { href: "/operaciones/tracking", label: "Tracking de flota", icon: "truck" },
       { href: "/organigrama", label: "Organigrama", icon: "building", gate: "sistema" },
-      { href: "/analytics", label: "Analytics Ejecutivo", icon: "report", exec: true },
       // El manual es material de ayuda para TODOS los usuarios (decisión 2026-07-07):
       // sin gate exec — justamente los roles operativos son quienes más lo necesitan.
       { href: "/manual-nexus/index.html", label: "Manual de usuario", icon: "book", badge: "Docs", external: true },
@@ -207,7 +206,7 @@ const DOMAINS: Domain[] = [
       { href: "/tesoreria/movimientos", label: "Movimientos", icon: "refresh" },
       { href: "/tesoreria/cobranzas", label: "Cobranzas", icon: "download" },
       { href: "/tesoreria/pagos", label: "Pagos", icon: "cart" },
-      { href: "/tesoreria/flujo-fondos", label: "Flujo de fondos", icon: "trend-up" },
+      { href: "/tesoreria/inbox", label: "Bandeja de inbox", icon: "mail", badge: "IA Inbox" },
       { href: "/tesoreria/conciliacion", label: "Conciliación", icon: "check-circle" },
       { href: "/tesoreria/caja-chica", label: "Caja Chica", icon: "wallet" },
     ],
@@ -215,12 +214,14 @@ const DOMAINS: Domain[] = [
   {
     id: "finanzas",
     label: "Finanzas",
+    gate: "finanzas",
     items: [
       { href: "/finanzas/resumen", label: "Resumen Ejecutivo", icon: "dashboard" },
+      { href: "/finanzas/analytics", label: "Analytics Ejecutivo", icon: "report" },
       { href: "/finanzas/caja-liquidez", label: "Caja y Liquidez", icon: "trend-up" },
+      { href: "/finanzas/flujo-fondos", label: "Flujo de fondos", icon: "trend-up" },
       { href: "/finanzas/presupuesto", label: "Planificación y Presupuesto", icon: "calculator" },
       { href: "/finanzas/resultados", label: "Resultados y Rentabilidad", icon: "report" },
-      { href: "/finanzas/ingesta", label: "Bandeja de Ingesta", icon: "mail", badge: "Inbox" },
       { href: "/finanzas/quicken", label: "Importación Quicken", icon: "download", badge: "Histórico" },
     ],
   },
@@ -292,6 +293,8 @@ interface Props {
   canViewCopilot?: boolean;
   /** ¿Mostrar Contabilidad (requiere contabilidad.view)? (default: sí). */
   canViewContabilidad?: boolean;
+  /** ¿Mostrar Finanzas (privado y exclusivo para Martín)? (default: false). */
+  canViewFinanzas?: boolean;
   /** Menú cerrado para Jorge/Juan: sólo superficies expresamente autorizadas. */
   operationalOnly?: boolean;
   operationalSiteLabel?: string | null;
@@ -307,12 +310,13 @@ export default function Sidebar({
   canViewConnect = true,
   canViewCopilot = false, // piloto cerrado: por defecto NO se muestra (fail-closed en display)
   canViewContabilidad = true,
+  canViewFinanzas = false,
   operationalOnly = false,
   operationalSiteLabel = null,
   onNavigate,
 }: Props) {
   // Gate RBAC por ítem/dominio (Estrategia B): oculta lo no permitido.
-  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad") =>
+  const gateAllowed = (gate?: "sistema" | "rrhhDocs" | "knowledge" | "connect" | "copilot" | "contabilidad" | "finanzas") =>
     !gate ||
     (gate === "sistema"
       ? canViewSistema
@@ -324,7 +328,9 @@ export default function Sidebar({
             ? canViewCopilot
             : gate === "contabilidad"
               ? canViewContabilidad
-              : canViewKnowledge);
+              : gate === "finanzas"
+                ? canViewFinanzas
+                : canViewKnowledge);
   const pathname = usePathname();
   const visibleDomains = operationalOnly ? OPERATIONAL_DOMAINS : DOMAINS;
 

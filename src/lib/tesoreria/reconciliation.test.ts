@@ -19,7 +19,10 @@ const mockSupabase = {
   rpc: mockRpc,
   from: vi.fn(),
   auth: {
-    getUser: vi.fn().mockResolvedValue({ data: { user: { id: "test-user-id" } } }),
+    getUser: vi.fn().mockResolvedValue({
+      data: { user: { id: "test-user-id", email: "martin@logisticatops.com" } },
+      error: null,
+    }),
   },
 };
 
@@ -156,6 +159,21 @@ describe("Suite de Reconciliación Atómica Tesorería ↔ Finanzas (NEXUS-FIN-T
         p_reason: "Duplicado",
       });
       expect(mockSupabase.from).not.toHaveBeenCalled();
+    });
+
+    it("rechaza a un usuario no autorizado antes de invocar la RPC financiera", async () => {
+      mockSupabase.auth.getUser.mockResolvedValueOnce({
+        data: { user: { id: "other-user", email: "joseluis@logisticatops.com" } },
+        error: null,
+      });
+
+      const result = await voidForecastAdjustmentAction(
+        "44444444-4444-4444-8444-444444444444",
+        "Intento no autorizado",
+      );
+
+      expect(result).toEqual({ ok: false, message: "Acceso no autorizado." });
+      expect(mockRpc).not.toHaveBeenCalled();
     });
 
     it("registerReceiptAction mapea todos los parámetros incluyendo forecast_adjustment_id, forecast_applied_amount e idempotency_key", async () => {

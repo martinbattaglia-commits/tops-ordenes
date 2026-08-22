@@ -10,9 +10,9 @@
     "alcance": "lectura read-only del ledger productivo; NO incluye estado del esquema"
   },
   "conteos": {
-    "ejecutables_en_catalogo": 232,
+    "ejecutables_en_catalogo": 233,
     "observadas_en_ledger": 98,
-    "inferidas_no_registradas": 134,
+    "inferidas_no_registradas": 135,
     "filas_autorizadas_a_escritura": 0,
     "sondas_ejecutadas": 0
   },
@@ -20,7 +20,7 @@
   "escritura": {
     "sentencia_prevista": "insert into supabase_migrations.schema_migrations(version,name) values (<ledger_version>,<ledger_name>) on conflict (version) do nothing",
     "idempotencia": "on conflict (version) do nothing → una segunda corrida escribe 0 filas",
-    "precondicion": "cada fila exige su sonda ejecutada y autorizada; hoy: 0 de 232",
+    "precondicion": "cada fila exige su sonda ejecutada y autorizada; hoy: 0 de 233",
     "ejecutada": false
   },
   "filas": [
@@ -1875,6 +1875,14 @@
     {
       "ledger_version": "L00273",
       "ledger_name": "0300_finance_treasury_atomic_reconciliation",
+      "estado_ledger": "INFERRED_NOT_REGISTERED",
+      "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
+      "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",
+      "authorized_for_write": false
+    },
+    {
+      "ledger_version": "L00275",
+      "ledger_name": "20260822190000_finance_director_exclusive_boundary",
       "estado_ledger": "INFERRED_NOT_REGISTERED",
       "evidencia": "inferencia: ausente de la evidencia del ledger; NO implica que el objeto no exista",
       "schema_probe": "PROBE_REQUIRED_NOT_EXECUTED",

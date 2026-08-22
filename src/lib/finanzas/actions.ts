@@ -7,6 +7,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { isFinanceDirectorEmail } from "@/lib/rbac/boot-permissions";
 import type {
   FinanceDirection,
   FinanceCurrency,
@@ -45,6 +46,16 @@ function revalidateFinance(): void {
   revalidatePath("/tesoreria");
 }
 
+async function isAuthorizedFinanceDirector(
+  supabase: NonNullable<ReturnType<typeof createClient>>,
+): Promise<boolean> {
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+  return !error && !!user && isFinanceDirectorEmail(user.email);
+}
+
 /**
  * Crea una previsión financiera (transacción programada o recurrente).
  */
@@ -53,6 +64,9 @@ export async function createForecastAdjustmentAction(
 ): Promise<FinanceActionResult<FinanceForecastAdjustment>> {
   const supabase = createClient();
   if (!supabase) return { ok: false, message: "Servicio no disponible." };
+  if (!(await isAuthorizedFinanceDirector(supabase))) {
+    return { ok: false, message: "Acceso no autorizado." };
+  }
 
   if (!input.concept?.trim()) {
     return { ok: false, message: "El concepto es obligatorio." };
@@ -110,6 +124,9 @@ export async function voidForecastAdjustmentAction(
 ): Promise<FinanceActionResult> {
   const supabase = createClient();
   if (!supabase) return { ok: false, message: "Servicio no disponible." };
+  if (!(await isAuthorizedFinanceDirector(supabase))) {
+    return { ok: false, message: "Acceso no autorizado." };
+  }
 
   const { error } = await supabase.rpc("finance_void_forecast", {
     p_forecast_id: forecastId,
@@ -159,6 +176,9 @@ export async function getQuickenHistoryAction(params: QuickenSearchQuery) {
   const supabase = createClient();
   if (!supabase) {
     return { ok: false, message: "Base de datos no disponible", rows: [] as QuickenRowRecord[], total: 0, totalInflows: 0, totalOutflows: 0 };
+  }
+  if (!(await isAuthorizedFinanceDirector(supabase))) {
+    return { ok: false, message: "Acceso no autorizado.", rows: [] as QuickenRowRecord[], total: 0, totalInflows: 0, totalOutflows: 0 };
   }
 
   const page = Math.max(1, params.page || 1);
@@ -225,6 +245,9 @@ export async function getQuickenHistoryAction(params: QuickenSearchQuery) {
 export async function getQuickenSummaryAction() {
   const supabase = createClient();
   if (!supabase) return { ok: false, summary: null };
+  if (!(await isAuthorizedFinanceDirector(supabase))) {
+    return { ok: false, summary: null };
+  }
 
   const { data, error } = await supabase
     .from("finance_quicken_imports")
@@ -236,4 +259,3 @@ export async function getQuickenSummaryAction() {
   if (error) return { ok: false, summary: null };
   return { ok: true, summary: data };
 }
-

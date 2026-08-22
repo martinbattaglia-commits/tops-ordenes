@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   getLastBusinessDayOfMonth,
+  isProgrammedTransaction,
   sortOperationalTransactions,
   calculateDailyRollingBalances,
 } from "./engine";
@@ -32,6 +33,23 @@ describe("NEXUS Finanzas / Tesorería — P1 & P2 Validaciones Canónicas", () =
   // P1 — ORDEN OPERATIVO EN LISTA Y TRANSACCIONES
   // ═══════════════════════════════════════════════════════════════════════════
   describe("P1 — Orden Operativo (Fecha más reciente primero, desempate por creación)", () => {
+    it("usa una única clasificación para previsiones y hechos", () => {
+      const base = {
+        id: "tx",
+        date: "2026-08-22",
+        direction: "ingreso" as const,
+        concept: "Prueba",
+        counterpart: null,
+        amount: 1,
+        currency: "ARS" as const,
+        accountGroup: "bancos" as const,
+        accountName: "Galicia",
+        categoryName: "Ingresos",
+      };
+      expect(isProgrammedTransaction({ ...base, isReal: false, status: "proyectado" })).toBe(true);
+      expect(isProgrammedTransaction({ ...base, isReal: true, status: "comprometido" })).toBe(true);
+      expect(isProgrammedTransaction({ ...base, isReal: true, status: "ejecutado" })).toBe(false);
+    });
     it("ordena transacciones por fecha descendente (la más reciente primero)", () => {
       const txs: FinanceUnifiedTransaction[] = [
         {

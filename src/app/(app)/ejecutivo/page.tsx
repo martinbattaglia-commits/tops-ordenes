@@ -84,7 +84,6 @@ const MODULES: { href: string; icon: IconName; title: string; sub: string; enabl
   { href: "/anmat", icon: "shield", title: "Compliance ANMAT", sub: "RNE · regulatorio" },
   { href: "/operaciones/tracking", icon: "truck", title: "Tracking", sub: "Flota en vivo" },
   { href: "/cctv", icon: "eye", title: "CCTV", sub: "Hikvision NVR" },
-  { href: "/analytics", icon: "report", title: "Analytics", sub: "KPIs corporativos", exec: true },
   { href: "/drive", icon: "drive", title: "Drive Corporativo", sub: "Documental · Google" },
   // { href: "/rrhh", icon: "users", title: "RRHH", sub: "Recursos Humanos", enabled: true },
 ];

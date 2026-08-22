@@ -70,6 +70,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       canViewConnect={perms.connect}
       canViewCopilot={perms.copilot}
       canViewContabilidad={perms.contabilidad}
+      canViewFinanzas={perms.finanzas}
       operationalOnly={depotManager.restricted}
       operationalSiteLabel={depotManager.siteLabel}
     >

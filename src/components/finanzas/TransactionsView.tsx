@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Icon } from "@/components/Icon";
 import type { FinanceUnifiedTransaction, FinanceCurrency } from "@/lib/finanzas/types";
-import { sortOperationalTransactions } from "@/lib/finanzas/engine";
+import { isProgrammedTransaction, sortOperationalTransactions } from "@/lib/finanzas/engine";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 
 interface TransactionsViewProps {
@@ -39,8 +39,9 @@ export function TransactionsView({
 
   const filtered = sortedTransactions.filter((tx) => {
     if (directionFilter !== "all" && tx.direction !== directionFilter) return false;
-    if (natureFilter === "real" && !tx.isReal) return false;
-    if (natureFilter === "projected" && tx.isReal) return false;
+    const isProgrammed = isProgrammedTransaction(tx);
+    if (natureFilter === "real" && isProgrammed) return false;
+    if (natureFilter === "projected" && !isProgrammed) return false;
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       const matchConcept = tx.concept.toLowerCase().includes(q);
@@ -126,9 +127,15 @@ export function TransactionsView({
               </tr>
             ) : (
               filtered.map((tx) => {
+                const isProgrammed = isProgrammedTransaction(tx);
                 let dirColor = "text-status-success";
-                if (tx.direction === "egreso") dirColor = "text-tops-red";
-                if (tx.direction === "transferencia") dirColor = "text-tops-blue-700 dark:text-blue-400";
+                if (isProgrammed) {
+                  dirColor = "text-amber-600 dark:text-amber-400";
+                } else if (tx.direction === "egreso") {
+                  dirColor = "text-tops-red";
+                } else if (tx.direction === "transferencia") {
+                  dirColor = "text-tops-blue-700 dark:text-blue-400";
+                }
 
                 const isHighlighted = highlightedTxId === tx.id;
 
@@ -140,6 +147,8 @@ export function TransactionsView({
                     className={`cursor-pointer transition-all ${
                       isHighlighted
                         ? "bg-tops-blue-700/15 dark:bg-blue-950/70 ring-2 ring-inset ring-tops-blue-700 font-bold"
+                        : isProgrammed
+                        ? "bg-amber-500/[0.02] hover:bg-bg-surface-alt"
                         : "hover:bg-bg-surface-alt"
                     }`}
                   >
@@ -147,11 +156,16 @@ export function TransactionsView({
                       {fmtDate(tx.date)}
                     </td>
                     <td className="py-3 px-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        tx.direction === "ingreso" ? "bg-emerald-50 text-status-success dark:bg-emerald-950/60 dark:text-emerald-400" :
-                        tx.direction === "egreso" ? "bg-rose-50 text-tops-red dark:bg-rose-950/60 dark:text-rose-400" :
-                        "bg-blue-50 text-tops-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-flex items-center gap-1 ${
+                        isProgrammed
+                          ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-400/30"
+                          : tx.direction === "ingreso"
+                          ? "bg-emerald-50 text-status-success dark:bg-emerald-950/60 dark:text-emerald-400"
+                          : tx.direction === "egreso"
+                          ? "bg-rose-50 text-tops-red dark:bg-rose-950/60 dark:text-rose-400"
+                          : "bg-blue-50 text-tops-blue-700 dark:bg-blue-950/60 dark:text-blue-400"
                       }`}>
+                        {isProgrammed && <Icon name="clock" className="w-2.5 h-2.5" />}
                         {tx.direction}
                       </span>
                     </td>
@@ -169,14 +183,26 @@ export function TransactionsView({
                       </span>
                     </td>
                     <td className="py-3 px-3">
-                      <div className="text-[11px] font-bold text-fg-primary">
-                        {tx.isReal ? "Hecho Tesorería" : "Proyección Finanzas"}
+                      <div className="inline-flex items-center gap-1">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase inline-flex items-center gap-1 ${
+                          isProgrammed
+                            ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-400/30"
+                            : "bg-emerald-500/10 text-status-success dark:text-emerald-400 border border-emerald-400/30"
+                        }`}>
+                          {isProgrammed ? <Icon name="clock" className="w-2.5 h-2.5" /> : <Icon name="check" className="w-2.5 h-2.5" />}
+                          {isProgrammed ? "Previsión" : "Hecho Real"}
+                        </span>
                       </div>
-                      <div className="text-[10px] text-fg-muted capitalize">{tx.status}</div>
+                      <div className="text-[10px] text-fg-muted capitalize mt-0.5">{tx.status}</div>
                     </td>
                     <td className={`py-3 px-4 text-right font-bold text-sm tabular-nums ${dirColor}`}>
-                      {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : ""}
-                      {currency === "ARS" ? fmtCurrency(tx.amount) : `U$S ${tx.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 })}`}
+                      <div className="flex items-center justify-end gap-1">
+                        {isProgrammed && <Icon name="clock" className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                        <span>
+                          {tx.direction === "ingreso" ? "+" : tx.direction === "egreso" ? "-" : ""}
+                          {currency === "ARS" ? fmtCurrency(tx.amount) : `U$S ${tx.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 })}`}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 );
