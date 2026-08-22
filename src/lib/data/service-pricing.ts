@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ServiceCatalogItem, ServiceUnit } from "@/lib/types";
 import type { VehicleSpec, VehicleZoneKey } from "@/lib/pricing/vehicles";
 import type { DepotManagerRpcRow } from "@/lib/rbac/depot-manager";
+import { groupClientRateWindows } from "@/components/tarifas/rate-management";
 
 export interface ServiceRatePayload {
   tariffRateId: string;
@@ -25,6 +26,12 @@ export interface ClientServiceRatePayload {
   minBilling: number | null;
 }
 
+export interface ClientServiceRateManagementPayload extends ClientServiceRatePayload {
+  validFrom: string;
+  status: "active" | "scheduled";
+  futureCount: number;
+}
+
 export interface ServicePricingPayload {
   versionId: string | null;
   versionCode: string;
@@ -33,6 +40,7 @@ export interface ServicePricingPayload {
   vehicles: VehicleSpec[];
   generalRates: Record<string, ServiceRatePayload>;
   clientRates: Record<string, Record<string, ClientServiceRatePayload>>;
+  clientRateManagement: Record<string, Record<string, ClientServiceRateManagementPayload>>;
   canAdjust: boolean;
   pricesVisible: boolean;
 }
@@ -79,6 +87,7 @@ function legacyPayload(): ServicePricingPayload {
     vehicles: VEHICLES,
     generalRates,
     clientRates: {},
+    clientRateManagement: {},
     canAdjust: true,
     pricesVisible: true,
   };
@@ -124,6 +133,7 @@ export async function loadServicePricing(): Promise<ServicePricingPayload> {
       vehicles: [],
       generalRates: {},
       clientRates: {},
+      clientRateManagement: {},
       canAdjust: false,
       pricesVisible: false,
     };
@@ -155,10 +165,10 @@ export async function loadServicePricing(): Promise<ServicePricingPayload> {
         .eq("version_id", version.id),
       supabase
         .from("client_service_rates")
-        .select("id, client_id, service_slug, rate, min_qty, min_billing, currency")
+        .select("id, client_id, service_slug, rate, min_qty, min_billing, currency, valid_from, valid_to")
         .eq("currency", version.currency)
-        .lte("valid_from", asOf)
-        .or(`valid_to.is.null,valid_to.gt.${asOf}`),
+        .or(`valid_to.is.null,valid_to.gt.${asOf}`)
+        .order("valid_from", { ascending: true }),
       supabase.rpc("has_permission", { p_slug: "servicios.edit" }),
     ]);
   if (ratesError) throw new Error(`loadServicePricing.rates: ${ratesError.message}`);
@@ -180,16 +190,9 @@ export async function loadServicePricing(): Promise<ServicePricingPayload> {
     };
   }
 
-  const clientRates: ServicePricingPayload["clientRates"] = {};
-  for (const row of overrides ?? []) {
-    const byClient = (clientRates[row.client_id] ??= {});
-    byClient[row.service_slug] = {
-      clientRateId: row.id,
-      rate: Number(row.rate),
-      minQty: row.min_qty == null ? null : Number(row.min_qty),
-      minBilling: row.min_billing == null ? null : Number(row.min_billing),
-    };
-  }
+  const groupedClientRates = groupClientRateWindows(overrides ?? [], asOf);
+  const clientRates = groupedClientRates.current;
+  const clientRateManagement = groupedClientRates.management;
 
   const localVisual = new Map(SERVICES_CATALOG.map((service) => [service.slug, service]));
   const catalog: ServiceCatalogItem[] = Object.entries(generalRates)
@@ -250,6 +253,7 @@ export async function loadServicePricing(): Promise<ServicePricingPayload> {
     vehicles,
     generalRates,
     clientRates,
+    clientRateManagement,
     canAdjust: canAdjust === true,
     pricesVisible: true,
   };

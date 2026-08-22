@@ -39,6 +39,7 @@ const FALLBACK_PRICING: ServicePricingPayload = {
   vehicles: [],
   generalRates: {},
   clientRates: {},
+  clientRateManagement: {},
   canAdjust: false,
   pricesVisible: false,
 };

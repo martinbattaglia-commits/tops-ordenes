@@ -9,6 +9,8 @@ import { EntityConversationButton } from "@/components/connect/EntityConversatio
 import type { CondicionIva } from "@/lib/invoicing/types";
 import { createClient } from "@/lib/supabase/server";
 import { ClientMasterEditor } from "./ClientMasterEditor";
+import { loadServicePricing } from "@/lib/data/service-pricing";
+import { ClientCustomRatesEditor } from "@/components/tarifas/ClientCustomRatesEditor";
 
 export const metadata = { title: "Ficha de cliente" };
 export const dynamic = "force-dynamic";
@@ -68,6 +70,41 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
     ? c.deposito_asignado
     : "";
 
+  let pricing;
+  let pricingUnavailable = false;
+  try {
+    pricing = await loadServicePricing();
+  } catch {
+    pricing = null;
+    pricingUnavailable = true;
+  }
+
+  const clientRatesMap = (pricing?.clientRateManagement && pricing.clientRateManagement[c.id]) ? pricing.clientRateManagement[c.id] : {};
+  const rates = pricing
+    ? [
+        ...pricing.catalog
+          .filter((service) => service.active)
+          .map((service) => ({
+            slug: service.slug,
+            label: service.label,
+            unit: service.unit,
+            category: service.category || "servicios",
+            requiresQuote: service.requires_quote ?? (pricing.generalRates[service.slug]?.requiresQuote ?? false),
+            listRate: pricing.generalRates[service.slug]?.rate ?? null,
+          })),
+        ...Object.entries(pricing.generalRates)
+          .filter(([slug, rate]) => slug.startsWith("transporte:") && rate.category === "transporte")
+          .map(([slug, rate]) => ({
+            slug,
+            label: rate.label,
+            unit: rate.unit,
+            category: "transporte",
+            requiresQuote: rate.requiresQuote,
+            listRate: rate.rate,
+          })),
+      ]
+    : [];
+
   return (
     <div className="p-4 md:p-7 lg:p-8 space-y-6 nx-page-fade max-w-[1200px] mx-auto">
       <div className="flex items-start justify-between gap-4">
@@ -123,6 +160,30 @@ export default async function ClienteFichaPage({ params }: { params: { id: strin
           motivo: "edición de ficha nativa",
         }}
       />
+
+      {/* Precios y Tarifas Personalizadas */}
+      {pricing && (
+        <section className="card p-5">
+          <ClientCustomRatesEditor
+            clientId={c.id}
+            clientName={c.razon ?? ""}
+            clientCuit={c.cuit ?? ""}
+            currency={pricing.currency}
+            canAdjust={pricing.canAdjust}
+            services={rates}
+            clientRates={clientRatesMap}
+            mode="profile"
+          />
+        </section>
+      )}
+      {pricingUnavailable && (
+        <section className="card p-5 border border-amber-500/30 bg-amber-500/5">
+          <h2 className="font-semibold text-amber-700 dark:text-amber-300">Tarifas temporalmente no disponibles</h2>
+          <p className="text-xs text-fg-muted mt-1">
+            No fue posible consultar el tarifario o tus permisos. La ficha del cliente continúa disponible, pero no se realizó ningún cambio de precios.
+          </p>
+        </section>
+      )}
 
       {/* Fiscal & contable (Contadora) */}
       <ClienteFiscalEditor

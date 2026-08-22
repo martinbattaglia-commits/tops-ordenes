@@ -48,6 +48,7 @@ const ROLLBACKS_CONOCIDOS = [
   "ROLLBACK_0233_wa_make_relay_outbox.sql",
   "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
   "ROLLBACK_20260822190000_finance_director_exclusive_boundary.sql",
+  "ROLLBACK_20260822175503_client_service_rate_reset.sql",
 ];
 
 /**

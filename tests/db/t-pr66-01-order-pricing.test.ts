@@ -1543,6 +1543,77 @@ describe("T-PR66-01 · OS versionada, prestada y facturada", () => {
   });
 });
 
+describe("T-PR66-01 · reset y reapertura de tarifas particulares", () => {
+  it("permite volver a personalizar después de un período regido por lista", async () => {
+    const resetCluster = await startEphemeralCluster();
+    const resetDb = await connectGuarded(resetCluster.url);
+    try {
+      await resetDb.query(readFileSync(BOOTSTRAP, "utf8"));
+      for (const file of BASE_FILES) await applyTo(resetDb, file);
+      await resetDb.query(`
+        create or replace function public.ai_docs_redact(p text)
+        returns text language sql immutable as $$ select p $$;
+      `);
+      await applyTo(resetDb, "0243_purchase_order_price_lifecycle.sql");
+      await applyTo(resetDb, "0244_service_order_pricing_lifecycle.sql");
+      await applyTo(resetDb, "20260822175503_client_service_rate_reset.sql");
+
+      await resetDb.query(
+        `insert into auth.users(id,email,raw_user_meta_data)
+         values ($1,'tariff-reset@logisticatops.com','{"full_name":"Tariff Reset"}')`,
+        [ADMIN],
+      );
+      await resetDb.query("update public.profiles set role='admin' where id=$1", [ADMIN]);
+      await resetDb.query(
+        `insert into public.user_roles(user_id,role_id,position_title)
+         select $1,id,'Administrador reset' from public.roles where slug='admin'`,
+        [ADMIN],
+      );
+      const resetClient = (await resetDb.query<{ id: string }>(
+        `insert into public.clients(razon,cuit,activo)
+         values ('Cliente Reset','30-71181219-5',true) returning id`,
+      )).rows[0].id;
+      await resetDb.query("select set_config('request.jwt.claim.sub',$1,false)", [ADMIN]);
+      await resetDb.query("select set_config('request.jwt.claim.role','authenticated',false)");
+      await resetDb.query("select set_config('request.jwt.claims',$1,false)", [
+        JSON.stringify({ sub: ADMIN, role: "authenticated", email: "tariff-reset@logisticatops.com" }),
+      ]);
+      await resetDb.query("set role authenticated");
+      try {
+        const first = await resetDb.query<{ id: string }>(
+          `select public.client_service_rate_set($1,'peon','ARS',25000,null,null,current_date,'Primera tarifa') id`,
+          [resetClient],
+        );
+        expect(first.rows[0].id).toMatch(/^[0-9a-f-]{36}$/);
+        expect((await resetDb.query<{ changed: boolean }>(
+          `select public.client_service_rate_reset($1,'peon','Vuelta temporal a lista') changed`,
+          [resetClient],
+        )).rows[0].changed).toBe(true);
+        const second = await resetDb.query<{ id: string }>(
+          `select public.client_service_rate_set($1,'peon','ARS',27000,null,null,current_date + 1,'Nueva tarifa') id`,
+          [resetClient],
+        );
+        expect(second.rows[0].id).not.toBe(first.rows[0].id);
+      } finally {
+        await resetDb.query("reset role");
+      }
+      const timeline = await resetDb.query<{ valid_to: string | null; next_from: string | null }>(`
+        select valid_to::text,
+               lead(valid_from) over (order by valid_from, id)::text next_from
+          from public.client_service_rates
+         where client_id=$1 and service_slug='peon'
+         order by valid_from, id
+      `, [resetClient]);
+      expect(timeline.rows).toHaveLength(2);
+      expect(timeline.rows[0].valid_to).not.toBe(timeline.rows[0].next_from);
+      expect(timeline.rows[1].valid_to).toBeNull();
+    } finally {
+      await resetDb.end();
+      await resetCluster.teardown();
+    }
+  });
+});
+
 describe("T-PR66-01 · rollback verificable", () => {
   it("revierte en orden, ejecuta rollback propio de m2 y no deja residuos", async () => {
     const rollbackCluster = await startEphemeralCluster();

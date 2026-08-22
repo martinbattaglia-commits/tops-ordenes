@@ -455,6 +455,8 @@ export const CLIENTES_PHASE_B_MIGRATION_FILES: ReadonlySet<string> = new Set([
   "ROLLBACK_0246_clientes_fase_b_principals_capabilities.sql",
   "0249_clientes_fase_b_service_pricing_redaction.sql",
   "ROLLBACK_0249_clientes_fase_b_service_pricing_redaction.sql",
+  "20260822175503_client_service_rate_reset.sql",
+  "ROLLBACK_20260822175503_client_service_rate_reset.sql",
 ]);
 
 export interface ManifestExclusion {

@@ -76,6 +76,10 @@ const tariffPage = readFileSync(
   resolve(process.cwd(), "src/app/(app)/orders/tarifas/page.tsx"),
   "utf8",
 );
+const tariffEditor = readFileSync(
+  resolve(process.cwd(), "src/components/tarifas/ClientCustomRatesEditor.tsx"),
+  "utf8",
+);
 const servicesCatalog = readFileSync(
   resolve(process.cwd(), "src/lib/services-catalog.ts"),
   "utf8",
@@ -192,8 +196,8 @@ describe("service order pricing lifecycle", () => {
     expect(pricingLoader).toContain("valid_to.gt.${asOf}");
     expect(pricingLoader).not.toContain('.eq("active", true)');
     expect(pricingLoader).not.toContain("rate ?? 0");
-    expect(tariffPage).toContain('timeZone: "America/Argentina/Buenos_Aires"');
-    expect(tariffPage).not.toContain("toISOString().slice(0,10)");
+    expect(tariffEditor).toContain('timeZone: "America/Argentina/Buenos_Aires"');
+    expect(tariffEditor).not.toContain("toISOString().slice(0,10)");
   });
 
   it("represents every catalog quote as null, never as a numeric zero", () => {

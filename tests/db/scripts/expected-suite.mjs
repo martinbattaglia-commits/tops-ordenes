@@ -139,7 +139,7 @@ export const EXPECTED_TESTS_PER_FILE = Object.freeze({
   "t-cli-a2-01-atomic-mutations.test.ts": 47,
   "t-cli-a3-01-nivel-contratado.test.ts": 8,
   "t-pr66-a1-purchase-order-integrity.test.ts": 7,
-  "t-pr66-01-order-pricing.test.ts": 19,
+  "t-pr66-01-order-pricing.test.ts": 20,
   "t-0261-0261a-remediation.test.ts": 9,
   "t-0262a-finance-canonical-alignment.test.ts": 24,
   "t-0300-finance-treasury-atomic-reconciliation.test.ts": 12,

@@ -2,8 +2,8 @@
   "$schema": "wms-lineage-catalog/1",
   "principio": "La identidad de una migracion es su FILENAME completo. El prefijo numerico no es la version.",
   "generado_por": "reconciliacion controlada PR66 FASE A + supabase/lineage/verify.mjs",
-  "ejecutables": 233,
-  "no_ejecutables": 43,
+  "ejecutables": 234,
+  "no_ejecutables": 44,
   "archivo_externo": {
     "clase": "APPLIED_REMOTE_ARCHIVE",
     "detalle": "0205-0218 y su evidencia viven fuera del arbol ejecutable. Nunca se ejecutan ni entran a manifests.",
@@ -3256,6 +3256,35 @@
       "ledger_name": "ROLLBACK_20260822190000_finance_director_exclusive_boundary",
       "provenance": "repo (frente/arq-release-20260822)",
       "motivo": "Inversa ejecutable de la frontera exclusiva de Finanzas: restaura roles, policies y semántica previa de has_permission."
+    },
+    {
+      "id": "20260822175503_client_service_rate_reset.sql",
+      "filename": "20260822175503_client_service_rate_reset.sql",
+      "sha256": "7474c449cb181de8958ba5b875d862e186fb845bd6ef1c5c947f8e5498ae52b5",
+      "orden": 277,
+      "requires": [
+        "0244_service_order_pricing_lifecycle.sql",
+        "0249_clientes_fase_b_service_pricing_redaction.sql"
+      ],
+      "estado": "active",
+      "ledger_version": "L00277",
+      "ledger_name": "20260822175503_client_service_rate_reset",
+      "provenance": "repo (frente/arq-release-tarifas-20260822)",
+      "motivo": "Agrega restablecimiento auditable y serializado de tarifas particulares al tarifario general, con autorizacion, cierre de vigencia y cancelacion de sucesoras futuras."
+    },
+    {
+      "id": "ROLLBACK_20260822175503_client_service_rate_reset.sql",
+      "filename": "ROLLBACK_20260822175503_client_service_rate_reset.sql",
+      "sha256": "3e5464a2ec92f807be8ad685a4619e8858ed2a710199912e2af0285794f61d67",
+      "orden": 278,
+      "requires": [
+        "20260822175503_client_service_rate_reset.sql"
+      ],
+      "estado": "rollback",
+      "ledger_version": "L00278",
+      "ledger_name": "ROLLBACK_20260822175503_client_service_rate_reset",
+      "provenance": "repo (frente/arq-release-tarifas-20260822)",
+      "motivo": "Inversa fail-closed del restablecimiento de tarifas: elimina el RPC y restaura la invariante anterior solo si los datos permiten una cola particular abierta valida."
     }
   ]
 }

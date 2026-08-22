@@ -137,14 +137,14 @@ describe("T-A0-13 · reporte de corrida", () => {
     // + 34 (h1-01, cierre de H1: entorno C5 con esquema real derivado de
     // main) de NEXUS-LINK-NOTIFICATIONS-MEDIA-001 = 728; +2 guardas
     // estructurales fail-closed en T-A0-10 = 730; +121 de PR #66 FASE A
-    // (Clientes 38+10+47, OC 7 y ciclo integral OC/OS 19) = 851; +8 de
+    // (Clientes 38+10+47, OC 7 y ciclo integral OC/OS 20) = 852; +8 de
     // CUSTODIA-NIVEL-CONTRATADO (t-cli-a3-01: lo ya materializado no se degrada
-    // cuando el cliente da de baja la custodia, y la puerta de la RPC) = 859;
-    // + 9 de remediación 0261 (desambiguación connect_archive_conversation) y precursora 0261a (enums RBAC Finanzas) = 868;
+    // cuando el cliente da de baja la custodia, y la puerta de la RPC) = 860;
+    // + 9 de remediación 0261 (desambiguación connect_archive_conversation) y precursora 0261a (enums RBAC Finanzas) = 869;
     // + 24 de remediación 0262a (alineación canónica dual-state del esquema de
-    // Finanzas) = 892; +1 ida y vuelta real 0265/0266 = 893;
-    // + 12 de reconciliación atómica Finanzas ↔ Tesorería (t-0300) = 905.
-    expect(EXPECTED_TOTAL_TESTS).toBe(905);
+    // Finanzas) = 893; +1 ida y vuelta real 0265/0266 = 894;
+    // + 12 de reconciliación atómica Finanzas ↔ Tesorería (t-0300) = 906.
+    expect(EXPECTED_TOTAL_TESTS).toBe(906);
   });
 
   it("assert-clean-run exige universo exacto, frescura y total", () => {

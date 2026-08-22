@@ -569,6 +569,7 @@ describe("T-C4-01 · ROLLBACK: la vía coordinada está cerrada", () => {
     "ROLLBACK_0300_finance_treasury_atomic_reconciliation.sql",
     // Frontera exclusiva de Dirección: inversa ejecutable de RBAC, RLS y
     // has_permission, catalogada junto a su forward exacto.
+    "ROLLBACK_20260822175503_client_service_rate_reset.sql",
     "ROLLBACK_20260822190000_finance_director_exclusive_boundary.sql",
   ];
   const OBJETIVO = "ROLLBACK_0233_wa_make_relay_outbox.sql";

@@ -365,6 +365,7 @@ describe("T-C1-05 · INVARIANCIA ACOTADA del harness vanilla (D4 + SCR-WMS-002)"
     "tests/db/t-0262a-finance-canonical-alignment.test.ts",
     "tests/db/t-link-max-0265-0266-rollback-reapply.test.ts",
     "tests/db/t-0300-finance-treasury-atomic-reconciliation.test.ts",
+    "tests/db/t-pr66-01-order-pricing.test.ts",
     "tests/db/bootstrap/00-platform-stub.sql",
   ];
 
