@@ -10,6 +10,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { getLastBusinessDayOfMonth } from "./engine";
 import type {
   FinanceVersion,
   FinanceCategory,
@@ -419,6 +420,7 @@ export function buildUnifiedTransactions(params: BuildUnifiedTransactionsParams)
       categoryName: m.operational_category || (m.type === "cobranza" ? "Cobranzas Clientes" : m.type === "pago_proveedor" ? "Pagos Proveedores" : "Operativo General"),
       isReal: true,
       status: "ejecutado",
+      createdAt: m.created_at || undefined,
       reconciliations: reconciliationItems.length > 0 ? reconciliationItems : undefined,
       desvio,
     });
@@ -460,6 +462,7 @@ export function buildUnifiedTransactions(params: BuildUnifiedTransactionsParams)
         isReal: false,
         status: f.status === "comprometido" || reconciledAmount > 0 ? "comprometido" : "proyectado",
         certainty: f.certainty_level || "alta",
+        createdAt: f.created_at || undefined,
       });
     } else {
       const baseDate = new Date(f.date);
@@ -488,30 +491,64 @@ export function buildUnifiedTransactions(params: BuildUnifiedTransactionsParams)
           isReal: false,
           status: "proyectado",
           certainty: f.certainty_level || "alta",
+          createdAt: f.created_at || undefined,
         });
       }
     }
   }
 
-  // 3. Cuentas por Cobrar Proyectadas
+  // 3. Previsión Automática por Factura Emitida y Pendiente de Cobro (Regla Canónica P2)
   for (const c of customerItems) {
-    if (c.fch_vto_pago && Number(c.saldo) > 0) {
-      transactions.push({
-        id: `c-proj-${c.invoice_id}`,
-        date: c.fch_vto_pago,
-        direction: "ingreso",
-        concept: `Cobranza Factura ${c.numero_comprobante || c.invoice_id.slice(0, 8)}`,
-        counterpart: "Cliente",
-        amount: Number(c.saldo),
-        currency: "ARS",
-        accountGroup: "bancos",
-        accountName: "Banco Galicia / Santander",
-        categoryName: "Ingresos por Fletes y Servicios",
-        isReal: false,
-        status: "proyectado",
-        certainty: "media",
-      });
+    const saldo = Number(c.saldo) || 0;
+    // Si no hay saldo remanente (cobro total o NC total), la previsión queda cerrada
+    if (saldo <= 0) {
+      continue;
     }
+
+    // Fecha: último día hábil del mismo mes de emisión
+    const emissionRef = c.fecha_emision || c.created_at || c.fch_serv_desde || c.fch_vto_pago || new Date().toISOString().slice(0, 10);
+    const scheduledDate = getLastBusinessDayOfMonth(emissionRef);
+
+    const curr: FinanceCurrency = (c.moneda === "USD" || c.moneda === "DOL") ? "USD" : "ARS";
+    const pvStr = c.punto_venta != null ? String(c.punto_venta).padStart(4, "0") + "-" : "";
+    const nroStr = c.numero_comprobante != null
+      ? String(c.numero_comprobante).padStart(8, "0")
+      : (c.invoice_id ? c.invoice_id.slice(0, 8) : "S/N");
+    const tipoCbte = c.tipo_comprobante ? c.tipo_comprobante.replace(/_/g, " ") : "Factura";
+    const cbteLabel = `${tipoCbte} ${pvStr}${nroStr}`;
+    const clientLabel = c.razon_social || c.counterpart || "Cliente";
+
+    const isPartial = Boolean(c.pagado && Number(c.pagado) > 0);
+    const concept = isPartial
+      ? `Previsión Cobranza ${cbteLabel} · ${clientLabel} (Saldo Remanente)`
+      : `Previsión Cobranza ${cbteLabel} · ${clientLabel}`;
+
+    // Estado: si la factura está vencida, mantenerla visible como vencida
+    let status: FinanceUnifiedTransaction["status"] = "proyectado";
+    if (c.estado_cobro === "vencida") {
+      status = "vencida";
+    } else if (isPartial) {
+      status = "comprometido";
+    }
+
+    transactions.push({
+      id: `invoice-forecast-${c.invoice_id}`,
+      date: scheduledDate,
+      direction: "ingreso",
+      concept,
+      counterpart: clientLabel,
+      amount: saldo,
+      currency: curr,
+      accountGroup: "bancos",
+      accountName: "Banco Galicia / Santander",
+      categoryName: "Ingresos por Fletes y Servicios",
+      isReal: false,
+      status,
+      certainty: "alta",
+      createdAt: c.created_at || c.fecha_emision || c.fch_vto_pago || undefined,
+      invoiceId: c.invoice_id,
+      numeroComprobante: c.numero_comprobante ?? undefined,
+    });
   }
 
   // 4. Cuentas por Pagar Proyectadas
@@ -531,11 +568,12 @@ export function buildUnifiedTransactions(params: BuildUnifiedTransactionsParams)
         isReal: false,
         status: "proyectado",
         certainty: "media",
+        createdAt: s.fecha_vencimiento || undefined,
       });
     }
   }
 
-  // Ordenar cronológicamente ascendente (fecha, hechos reales primero)
+  // Ordenar cronológicamente ascendente (fecha, hechos reales primero, id determinista)
   return transactions.sort((a, b) => {
     const cmp = a.date.localeCompare(b.date);
     if (cmp !== 0) return cmp;
@@ -559,6 +597,38 @@ export async function getUnifiedFinanceTransactions(opts?: {
     listFinanceForecastAdjustments().catch(() => []),
     listFinanceForecastReconciliations().catch(() => []),
   ]);
+
+  // Enriquecer customerItems con metadatos de customer_invoices para trazabilidad completa
+  const supabase = createClient();
+  if (supabase && customerItems.length > 0) {
+    try {
+      const invoiceIds = customerItems.map((c) => c.invoice_id).filter(Boolean);
+      if (invoiceIds.length > 0) {
+        const { data: invs } = await supabase
+          .from("customer_invoices")
+          .select("id, client_id, razon_social, tipo_comprobante, punto_venta, numero_comprobante, total, fch_serv_desde, fch_vto_pago, fecha_autorizacion_arca, created_at, moneda, estado_arca, anulada")
+          .in("id", invoiceIds);
+
+        if (invs && invs.length > 0) {
+          const invoiceMap = new Map(invs.map((i) => [i.id, i]));
+          for (const c of customerItems) {
+            const inv = invoiceMap.get(c.invoice_id);
+            if (inv) {
+              if (!c.razon_social && inv.razon_social) c.razon_social = inv.razon_social;
+              if (!c.tipo_comprobante && inv.tipo_comprobante) c.tipo_comprobante = inv.tipo_comprobante;
+              if (c.punto_venta == null && inv.punto_venta != null) c.punto_venta = inv.punto_venta;
+              if (c.numero_comprobante == null && inv.numero_comprobante != null) c.numero_comprobante = inv.numero_comprobante;
+              if (!c.moneda && inv.moneda) c.moneda = inv.moneda;
+              if (!c.fecha_emision) c.fecha_emision = inv.fecha_autorizacion_arca || inv.created_at || inv.fch_serv_desde || null;
+              if (!c.created_at && inv.created_at) c.created_at = inv.created_at;
+            }
+          }
+        }
+      }
+    } catch {
+      // Degradar pacíficamente sin romper si la tabla de facturas no estuviera accesible
+    }
+  }
 
   const all = buildUnifiedTransactions({
     bankAccounts,

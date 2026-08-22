@@ -146,6 +146,7 @@ export function CajaLiquidezClient({
       isReal: data.mode === "ejecutado",
       status: data.mode === "ejecutado" ? "ejecutado" : "proyectado",
       certainty: data.certainty,
+      createdAt: new Date().toISOString(),
     };
 
     setTransactions((prev) => [newTx, ...prev]);

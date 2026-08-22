@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Icon } from "@/components/Icon";
 import type { FinanceUnifiedTransaction, FinanceCurrency } from "@/lib/finanzas/types";
+import { sortOperationalTransactions } from "@/lib/finanzas/engine";
 import { fmtCurrency, fmtDate } from "@/lib/utils";
 
 interface ListViewProps {
@@ -18,7 +19,11 @@ export function ListView({
 }: ListViewProps) {
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filtered = transactions.filter((tx) => {
+  const sortedTransactions = useMemo(() => {
+    return sortOperationalTransactions(transactions);
+  }, [transactions]);
+
+  const filtered = sortedTransactions.filter((tx) => {
     if (!searchTerm.trim()) return true;
     const q = searchTerm.toLowerCase();
     return (

@@ -204,6 +204,7 @@ export interface FinanceUnifiedTransaction {
   id: string;
   date: string;
   time?: string;
+  createdAt?: string;
   direction: FinanceDirection;
   concept: string;
   counterpart: string | null;
@@ -214,9 +215,11 @@ export interface FinanceUnifiedTransaction {
   categoryName: string;
   costCenterName?: string;
   isReal: boolean; // true: Hecho de Tesorería, false: Supuesto/Proyección de Finanzas
-  status: 'ejecutado' | 'conciliado' | 'proyectado' | 'comprometido';
+  status: 'ejecutado' | 'conciliado' | 'proyectado' | 'comprometido' | 'vencida';
   certainty?: FinanceCertaintyLevel;
   evidenceUrl?: string | null;
+  invoiceId?: string | null;
+  numeroComprobante?: number | null;
   reconciliations?: FinanceMovementReconciliationItem[];
   desvio?: {
     estimatedDate?: string;
